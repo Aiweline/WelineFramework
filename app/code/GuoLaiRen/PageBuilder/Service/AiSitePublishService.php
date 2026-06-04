@@ -55,8 +55,17 @@ class AiSitePublishService
         array $pageTypes,
         array $pageTypeLayouts,
         array $virtualPagesByType = [],
-        string $workspaceTrack = AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+        string $workspaceTrack = AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+        array $sharedComponents = []
     ): array {
+        $materializationProfile = $websiteProfile;
+        if ($sharedComponents !== []) {
+            if (!\is_array($materializationProfile['plan_json'] ?? null)) {
+                $materializationProfile['plan_json'] = [];
+            }
+            $materializationProfile['plan_json']['shared_components'] = $sharedComponents;
+        }
+        $this->persistGeneratedSharedComponentsForPublish($virtualThemeId, $sharedComponents);
         $pageTypeLayouts = $this->resolveVirtualThemePublishLayouts(
             $virtualThemeId,
             $pageTypes,
@@ -64,12 +73,16 @@ class AiSitePublishService
         );
         $materialized = $this->materializationService->materialize(
             $websiteId,
-            $websiteProfile,
+            $materializationProfile,
             $pageTypes,
             $pageTypeLayouts,
             $virtualPagesByType
         );
-        $this->sanitizeAiLayoutsForMaterializedPages($materialized['pagebuilder_pages_by_type'] ?? []);
+        $materializedPagesByType = \is_array($materialized['materialized_pages_by_type'] ?? null)
+            ? $materialized['materialized_pages_by_type']
+            : [];
+        $verificationPagesByType = $this->resolvePublishVerificationPagesByType($pageTypes, $materializedPagesByType);
+        $this->sanitizeAiLayoutsForMaterializedPages($verificationPagesByType);
         $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
 
         if ($virtualThemeId > 0 && $this->virtualThemeModel !== null) {
@@ -83,7 +96,7 @@ class AiSitePublishService
                 $config['published_at'] = \date('Y-m-d H:i:s');
                 $config['published_virtual_theme_id'] = $virtualThemeId;
                 $config['publish_workspace_track'] = $workspaceTrack;
-                $config['materialized_pages_by_type'] = $materialized['pagebuilder_pages_by_type'] ?? [];
+                $config['materialized_pages_by_type'] = $materializedPagesByType;
 
                 // 链式 query->update()->fetch() 在部分 Model 委托路径下可能未执行；save() 走标准变更落库
                 $theme->setWebsiteId($websiteId)
@@ -93,10 +106,15 @@ class AiSitePublishService
             }
         }
         $verification = $this->publishVerificationService->assertPublishedPagesRenderable(
-            $materialized['pagebuilder_pages_by_type'] ?? [],
+            $verificationPagesByType,
             $virtualThemeId,
             $workspaceTrack,
-            $websiteProfile
+            $websiteProfile,
+            [
+                'plan_json' => \is_array($materializationProfile['plan_json'] ?? null) ? $materializationProfile['plan_json'] : [],
+                'page_types' => $pageTypes,
+                'shared_components' => $sharedComponents,
+            ]
         );
         FrontendPageController::clearProcessCaches(true);
 
@@ -109,13 +127,39 @@ class AiSitePublishService
         return \array_replace(
             $materialized,
             [
-                'materialized_pages_by_type' => $materialized['pagebuilder_pages_by_type'] ?? [],
+                'materialized_pages_by_type' => $materializedPagesByType,
                 'publish_verification' => $verification,
                 'published_at' => \date('Y-m-d H:i:s'),
                 'published_virtual_theme_id' => $virtualThemeId,
             ],
             $visualUrls
         );
+    }
+
+    /**
+     * @param array<string, mixed> $sharedComponents
+     */
+    private function persistGeneratedSharedComponentsForPublish(int $virtualThemeId, array $sharedComponents): void
+    {
+        if ($virtualThemeId <= 0 || $sharedComponents === []) {
+            return;
+        }
+
+        /** @var AiSiteVirtualThemeService $virtualThemeService */
+        $virtualThemeService = ObjectManager::getInstance(AiSiteVirtualThemeService::class);
+        foreach (['header', 'footer'] as $region) {
+            $component = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
+            if (!$this->isGeneratedSharedComponentPublishable($region, $component)) {
+                continue;
+            }
+            $component['region'] = $region;
+            $component['code'] = $this->resolveGeneratedSharedComponentCode($region, $component);
+            $component['name'] = (string)($component['name'] ?? ($region === 'header' ? 'AI Site Header' : 'AI Site Footer'));
+            if (\trim((string)($component['phtml'] ?? '')) === '') {
+                $component['phtml'] = (string)($component['html'] ?? '');
+            }
+            $virtualThemeService->saveGeneratedSharedComponent($virtualThemeId, $component);
+        }
     }
 
     /**
@@ -155,7 +199,68 @@ class AiSitePublishService
             $resolved[$pageType] = $virtualLayouts[$pageType];
         }
 
+        return $this->preserveIncomingGeneratedSharedLayouts($resolved, $incomingLayouts, $pageTypes);
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param array<string, array<string, mixed>> $resolved
+     * @param array<string, array<string, mixed>> $incomingLayouts
+     * @return array<string, array<string, mixed>>
+     */
+    private function preserveIncomingGeneratedSharedLayouts(array $resolved, array $incomingLayouts, array $pageTypes): array
+    {
+        foreach ($pageTypes as $pageType) {
+            $incoming = \is_array($incomingLayouts[$pageType] ?? null) ? $incomingLayouts[$pageType] : [];
+            if ($incoming === []) {
+                continue;
+            }
+            $layout = \is_array($resolved[$pageType] ?? null) ? $resolved[$pageType] : [];
+            foreach (['header', 'footer'] as $region) {
+                $entry = \is_array($incoming[$region] ?? null) ? $incoming[$region] : [];
+                if (\trim((string)($entry['component'] ?? '')) === '') {
+                    continue;
+                }
+                $layout[$region] = $entry;
+            }
+            $resolved[$pageType] = $layout;
+        }
+
         return $resolved;
+    }
+
+    /**
+     * @param array<string, mixed> $component
+     */
+    private function isGeneratedSharedComponentPublishable(string $region, array $component): bool
+    {
+        if (!\in_array($region, ['header', 'footer'], true) || $component === []) {
+            return false;
+        }
+        if ($this->resolveGeneratedSharedComponentCode($region, $component) === '') {
+            return false;
+        }
+
+        return \trim((string)($component['phtml'] ?? $component['html'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $component
+     */
+    private function resolveGeneratedSharedComponentCode(string $region, array $component): string
+    {
+        foreach ([$component['code'] ?? null, $component['component_code'] ?? null, $component['section_code'] ?? null] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return match ($region) {
+            'header' => 'header/ai-site-header',
+            'footer' => 'footer/ai-site-footer',
+            default => '',
+        };
     }
 
     private function deactivateOtherActiveVirtualThemes(int $websiteId, int $keepVirtualThemeId): void
@@ -367,5 +472,38 @@ class AiSitePublishService
             $page->setAiLayoutArray($sanitized);
             $page->save(true);
         }
+    }
+
+    /**
+     * @param list<string> $requestedPageTypes
+     * @param array<string, array<string, mixed>> $materializedPagesByType
+     * @return array<string, array<string, mixed>>
+     */
+    private function resolvePublishVerificationPagesByType(array $requestedPageTypes, array $materializedPagesByType): array
+    {
+        $pageTypes = [];
+        foreach ($requestedPageTypes as $pageType) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType !== '' && !\in_array($pageType, $pageTypes, true)) {
+                $pageTypes[] = $pageType;
+            }
+        }
+
+        if ($pageTypes === []) {
+            return $materializedPagesByType;
+        }
+
+        $resolved = [];
+        foreach ($pageTypes as $pageType) {
+            if (!\is_array($materializedPagesByType[$pageType] ?? null)) {
+                throw new \RuntimeException((string)__(
+                    'AI publish verification failed: requested page %{1} was not materialized.',
+                    [$pageType]
+                ));
+            }
+            $resolved[$pageType] = $materializedPagesByType[$pageType];
+        }
+
+        return $resolved;
     }
 }

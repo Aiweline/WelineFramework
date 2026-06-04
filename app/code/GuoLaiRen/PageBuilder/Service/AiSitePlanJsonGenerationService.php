@@ -93,24 +93,13 @@ final class AiSitePlanJsonGenerationService
         $policy = $this->policyRegistry()->get();
         $policyRef = $this->policyRegistry()->policyRef();
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $existing = \is_array($scope['plan_json_v2'] ?? null) ? $scope['plan_json_v2'] : [];
 
         $sourcePlan = $this->selectStageOneSourcePlan($planJson);
         if ($sourcePlan === []) {
-            throw new \RuntimeException('PlanJson contract failed: stage-one plan JSON is missing. Regenerate the plan instead of using legacy execution blueprint fallback.');
+            throw new \RuntimeException('PlanJson contract failed: stage-one plan JSON is missing. Regenerate the plan.');
         }
         $sourceSignature = $this->sourceSignature($scope, $sourcePlan);
         $expectedPageTypes = $this->resolvePageTypes($scope, $sourcePlan);
-        if (
-            $this->looksLikePlanJsonV2($existing)
-            && $this->existingContractMatchesCurrentSource($existing, $sourceSignature, $expectedPageTypes)
-        ) {
-            $existingMeta = \is_array($existing['contract_meta'] ?? null) ? $existing['contract_meta'] : [];
-            if (\strtolower(\trim((string)($existingMeta['status'] ?? ''))) === 'confirmed') {
-                return $existing;
-            }
-            return $this->normalizeExistingContract($existing, $scope, $websiteProfile);
-        }
 
         $profile = \array_replace(
             \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
@@ -127,7 +116,7 @@ final class AiSitePlanJsonGenerationService
         ]);
         $primaryGoal = $this->resolvePlanJsonPrimaryGoal($scope, $profile);
         $locale = $this->resolvePlanJsonContentLocale($scope, $profile, $sourcePlan);
-        $contractId = 'plan_json_v2_' . \substr($sourceSignature, 0, 16);
+        $contractId = 'plan_json_' . \substr($sourceSignature, 0, 16);
         $sourceContracts = $this->buildSourceContractRefs($scope, $sourceSignature);
         $sourceOfTruth = $this->planJsonJsonSourceOfTruth(
             [],
@@ -161,7 +150,7 @@ final class AiSitePlanJsonGenerationService
             'contract_meta' => [
                 'id' => $contractId,
                 'version' => PlanJsonContractSchema::VERSION,
-                'type' => 'plan_json_v2',
+                'type' => 'plan_json',
                 'stage' => ContractType::STAGE_STAGE1,
                 'status' => 'draft',
                 'creator' => 'AiSitePlanQueue',
@@ -193,16 +182,15 @@ final class AiSitePlanJsonGenerationService
                 'items' => $contentItems,
             ],
             'pages' => $pages,
-            'block_nodes' => $blocks,
             'source_contracts' => $sourceContracts,
             'permission_matrix' => [
-                'read' => ['policy_ref', 'policy_projection', 'design_manifest', 'content_manifest', 'pages', 'block_nodes'],
+                'read' => ['policy_ref', 'policy_projection', 'design_manifest', 'content_manifest', 'pages'],
                 'create' => ['task_results', 'qa_report', 'repair_patch'],
                 'patch' => ['render_data.*', 'asset_manifest.*', 'content_manifest.items.*', 'qa_gates.*'],
-                'forbidden' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'block_nodes'],
-                'read_only' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'block_nodes'],
+                'forbidden' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages'],
+                'read_only' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages'],
             ],
-            'frozen_fields' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages', 'block_nodes'],
+            'frozen_fields' => ['source_of_truth', 'policy_ref', 'policy_projection', 'design_manifest', 'pages'],
             'mutable_fields' => ['render_data.*', 'asset_manifest.*', 'content_manifest.items.*', 'qa_gates.*'],
             'qa_gates' => [
                 ['id' => 'schema_valid', 'status' => 'pending'],
@@ -216,7 +204,7 @@ final class AiSitePlanJsonGenerationService
             ],
         ];
 
-        AiSiteWorkflowTrace::log('plan_json_v2_contract_built', [
+        AiSiteWorkflowTrace::log('plan_json_contract_built', [
             'contract_id' => $contractId,
             'page_count' => \count($pages),
             'block_count' => \count($blocks),
@@ -225,7 +213,7 @@ final class AiSitePlanJsonGenerationService
             'primary_goal' => $primaryGoal,
         ]);
         if (AiSiteWorkflowTrace::verbose()) {
-            AiSiteWorkflowTrace::json('plan_json_v2_contract_detail', $contract, [
+            AiSiteWorkflowTrace::json('plan_json_contract_detail', $contract, [
                 'contract_id' => $contractId,
             ]);
         }
@@ -250,19 +238,21 @@ final class AiSitePlanJsonGenerationService
                 'theme_alignment_summary' => (string)($page['theme_alignment_summary'] ?? ''),
                 'page_design_plan' => \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : [],
             ];
-            foreach ($this->collectPlanJsonPageBlockNodes($page) as $block) {
+            foreach ($this->collectPlanJsonPageBlocks($page) as $block) {
                 $blockKey = \trim((string)($block['block_key'] ?? ''));
                 if ($blockKey === '') {
                     continue;
                 }
-                $normalizedPage[$blockKey] = [
-                    'block_key' => $blockKey,
-                    'section_code' => (string)($block['section_code'] ?? ''),
-                    'sort_order' => (int)($block['sort_order'] ?? 0),
-                    'status' => 0,
-                    'content' => (string)($block['content'] ?? ''),
-                    'fields' => \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
-                ];
+                $normalizedBlock = $block;
+                $normalizedBlock['block_key'] = $blockKey;
+                $normalizedBlock['section_code'] = (string)($block['section_code'] ?? '');
+                $normalizedBlock['sort_order'] = (int)($block['sort_order'] ?? 0);
+                $normalizedBlock['status'] = AiSitePlanJsonStateService::STATUS_PENDING;
+                $normalizedBlock['content'] = (string)($block['content'] ?? '');
+                if (!\is_array($normalizedBlock['fields'] ?? null)) {
+                    $normalizedBlock['fields'] = \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [];
+                }
+                $normalizedPage[$blockKey] = $normalizedBlock;
             }
             $pages[(string)$pageType] = $normalizedPage;
         }
@@ -283,8 +273,14 @@ final class AiSitePlanJsonGenerationService
      */
     public function PlanJsonArtifacts(array $scope, array $websiteProfile = []): array
     {
-        $stageOne = $this->buildDeterministicStageOnePlan($scope, $websiteProfile);
-        $planJson = $this->PlanJsonJson($stageOne);
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if (!\is_array($planJson['pages'] ?? null) || $planJson['pages'] === []) {
+            if ((int)($scope['fake_mode'] ?? 0) !== 1) {
+                throw new \RuntimeException('PlanJson contract failed: plan_json.pages is missing. Regenerate the plan.');
+            }
+            $planJson = $this->buildFakeStageOnePlanJson($scope, $websiteProfile);
+        }
+        $planJson = $this->planJsonStateService->normalizePlanJson($planJson);
         $contract = $this->buildCurrentStageOneContract($scope, $planJson);
         $validation = $this->stageOneContractValidator->validateFullPlan($planJson, $contract, [
             'validation_page_types' => \array_values(\array_keys(\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [])),
@@ -302,6 +298,290 @@ final class AiSitePlanJsonGenerationService
             'partial_retry_required' => 0,
             'retryable_ai_failures' => [],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @return array<string, mixed>
+     */
+    private function buildFakeStageOnePlanJson(array $scope, array $websiteProfile = []): array
+    {
+        $pageTypes = $this->resolveStageOnePageTypes($scope);
+        if ($pageTypes === []) {
+            $pageTypes = [Page::TYPE_HOME];
+        }
+        $locale = $this->resolveStageOneLocale($scope, $websiteProfile);
+        $siteName = $this->firstNonEmpty([
+            $scope['site_title'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+            $websiteProfile['site_name'] ?? null,
+            $scope['store_name'] ?? null,
+            'Fake Mode Site',
+        ]);
+        $brief = $this->stageOneBriefText($scope, $websiteProfile);
+        if ($brief === '') {
+            $brief = 'Clear product story, practical proof, and a direct next step for visitors.';
+        }
+
+        $contract = $this->stageOneContractService->build($scope, $pageTypes, $locale, $locale, 'stage1');
+        $pages = [];
+        foreach ($pageTypes as $pageType) {
+            $pages[$pageType] = $this->buildFakeStageOnePage($pageType, $scope, $siteName, $brief, $locale);
+        }
+
+        $palette = [
+            'primary' => '#1D4ED8',
+            'secondary' => '#0F766E',
+            'accent' => '#F59E0B',
+            'background' => '#F8FAFC',
+            'body' => '#111827',
+            'button' => '#1D4ED8',
+        ];
+        $planJson = [
+            'confirmed' => 0,
+            'content_locale' => $locale,
+            'requirement_expansion' => [
+                'primary_goal' => $brief,
+                'primary_cta' => 'Start now',
+                'audience' => 'Qualified visitors comparing the offer',
+            ],
+            'site_strategy' => [
+                'site_display_name' => $siteName,
+                'primary_goal' => $brief,
+                'audience' => 'Visitors who need a quick, credible overview before taking action.',
+            ],
+            'theme_style' => [
+                'style_name' => 'Fake Mode Clean Product Site',
+                'tone' => 'Clear, credible, and action oriented.',
+                'layout_direction' => 'Dense but readable sections with strong hierarchy.',
+            ],
+            'palette' => $palette,
+            'theme_design' => [
+                'theme_purpose' => 'Turn the supplied brief into a readable site plan that can be built locally without AI calls.',
+                'style_signature' => 'Clean editorial product layout with compact proof panels and calm surfaces.',
+                'art_direction' => 'Crisp sections, high contrast text, practical imagery guidance, and minimal decoration.',
+                'color_scheme' => $palette,
+                'typography_spacing_radius' => [
+                    'font_family' => 'Inter, system-ui, sans-serif',
+                    'heading_scale' => 'Compact display headings with clear section hierarchy.',
+                    'body_scale' => 'Readable body text with short paragraphs.',
+                    'spacing_scale' => '8px base spacing with larger section rhythm.',
+                    'radius_scale' => '6px content cards and 4px controls.',
+                ],
+                'visual_keywords' => ['clear structure', 'measured contrast', 'conversion proof'],
+                'tone_of_voice' => 'Confident, direct, and practical.',
+                'cta_tone' => 'Low-friction and specific.',
+                'forbidden_styles' => ['generic placeholder copy', 'invented routes', 'oversized decoration'],
+                'selection_reason' => 'Fake mode needs deterministic content that passes the same Stage-1 contract as generated plans.',
+            ],
+            'navigation_plan' => [
+                'header_items' => $this->normalizeStageOneLinks([], $contract, 'navigation_plan.header_items'),
+            ],
+            'footer_plan' => [
+                'featured' => $this->normalizeStageOneLinks([], $contract, 'footer_plan.featured'),
+                'policies' => $this->normalizeStageOneLinks([], $contract, 'footer_plan.policies'),
+            ],
+            'seo_strategy' => [
+                'primary_keywords' => [$siteName, 'trusted service', 'site overview'],
+                'secondary_keywords' => ['customer proof', 'fast start', 'clear offer'],
+                'meta_title_pattern' => $siteName . ' - Clear service overview',
+                'meta_description_pattern' => 'A concise overview with proof, benefits, and the next action.',
+            ],
+            'shared_components' => [
+                'buttons' => ['primary_action', 'secondary_link'],
+                'cards' => ['proof_panel', 'feature_panel'],
+            ],
+            'page_route_contract' => \is_array($contract['page_route_contract'] ?? null) ? $contract['page_route_contract'] : [],
+            'stage1_generation_attempts' => \array_fill_keys($pageTypes, [
+                'success' => true,
+                'attempt_no' => 1,
+                'fake_mode' => 1,
+            ]),
+            'pages' => $pages,
+        ];
+
+        return $this->planJsonStateService->normalizePlanJson($planJson);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildFakeStageOnePage(string $pageType, array $scope, string $siteName, string $brief, string $locale): array
+    {
+        $label = $this->localizedPageTitleFallback($pageType, $siteName, $locale);
+        $page = [
+            'page_type' => $pageType,
+            'title' => $label,
+            'page_title' => $label,
+            'page_goal' => $label . ' presents the offer clearly and moves visitors toward a confident next step.',
+            'theme_alignment_summary' => 'This page uses the shared clean product theme with restrained contrast and practical proof.',
+            'page_design_plan' => [
+                'structure' => 'Ordered sections move from value, to proof, to supporting details, to action.',
+                'density' => 'Compact blocks keep the page scannable while retaining concrete copy.',
+                'handoff' => 'Each direct block node includes its own content, fields, visual signature, and image intent.',
+            ],
+            'primary_keywords' => [$siteName, $label],
+            'secondary_keywords' => ['proof', 'service details', 'next step'],
+            'seo' => [
+                'meta_title' => $label . ' - ' . $siteName,
+                'meta_description' => 'A concise ' . \strtolower($label) . ' page plan for local fake-mode generation.',
+            ],
+            'status' => AiSitePlanJsonStateService::STATUS_PENDING,
+        ];
+
+        foreach ($this->resolveFakeStageOneBlockKeys($pageType, $scope) as $index => $blockKey) {
+            $page[$blockKey] = $this->buildFakeStageOneBlock($pageType, $blockKey, (int)$index, $siteName, $brief);
+        }
+
+        return $page;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<string>
+     */
+    private function resolveFakeStageOneBlockKeys(string $pageType, array $scope): array
+    {
+        $budget = $this->stageOneContractService->resolveBlockBudget($pageType, $scope);
+        $keys = [];
+        foreach (['required', 'optional'] as $bucket) {
+            foreach (\is_array($budget[$bucket] ?? null) ? $budget[$bucket] : [] as $blockKey) {
+                $blockKey = \trim((string)$blockKey);
+                if ($blockKey !== '' && !\in_array($blockKey, $keys, true)) {
+                    $keys[] = $blockKey;
+                }
+            }
+        }
+        $target = \max(1, (int)($budget['target'] ?? \count($keys)));
+        while (\count($keys) < $target) {
+            $keys[] = 'supporting_story_' . ((int)\count($keys) + 1);
+        }
+
+        return \array_slice($keys, 0, $target);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildFakeStageOneBlock(string $pageType, string $blockKey, int $index, string $siteName, string $brief): array
+    {
+        $label = $this->humanizeIdentifier($blockKey);
+        $pageLabel = $this->humanizeIdentifier($pageType);
+        $role = $this->fakeStageOneBlockRole($blockKey, $index);
+        $headline = $this->fakeStageOneHeadline($blockKey, $siteName, $index);
+        $supportingCopy = $label . ' connects ' . $siteName . ' with the visitor need: ' . $brief;
+        $actionLabel = $role === 'cta' ? 'Start now' : 'View details';
+        $compositionPatterns = ['split_intro', 'metric_grid', 'proof_stack', 'process_steps', 'question_panel', 'cta_band', 'editorial_strip'];
+        $composition = $compositionPatterns[$index % \count($compositionPatterns)];
+        $needsImage = $index === 0 || \in_array($role, ['hero', 'proof'], true);
+
+        return [
+            'block_key' => $blockKey,
+            'section_code' => $blockKey,
+            'block_type' => $blockKey,
+            'page_flow_role' => $role,
+            'status' => AiSitePlanJsonStateService::STATUS_PENDING,
+            'sort_order' => ($index + 1) * 10,
+            'title' => $headline,
+            'content' => $supportingCopy,
+            'field_plan' => [
+                [
+                    'field' => 'headline',
+                    'sample' => $headline,
+                    'implementation_note' => 'Primary visible heading for the section.',
+                ],
+                [
+                    'field' => 'supporting_copy',
+                    'sample' => $supportingCopy,
+                    'implementation_note' => 'Short body copy that explains why this section matters.',
+                ],
+                [
+                    'field' => $role === 'cta' ? 'cta_label' : 'proof_detail',
+                    'sample' => $role === 'cta' ? $actionLabel : $pageLabel . ' proof point ' . ((int)$index + 1),
+                    'implementation_note' => 'Concrete action or proof detail used by the block.',
+                ],
+            ],
+            'fields' => [
+                'headline' => $headline,
+                'supporting_copy' => $supportingCopy,
+                $role === 'cta' ? 'cta_label' : 'proof_detail' => $role === 'cta' ? $actionLabel : $pageLabel . ' proof point ' . ((int)$index + 1),
+            ],
+            'execution_script' => [
+                'core_copy' => $supportingCopy,
+                'feature_points' => [
+                    $label . ' keeps the message specific.',
+                    'The section supports local verification without an AI call.',
+                    'The final HTML can be written back to this same block node.',
+                ],
+            ],
+            'design_tags' => [
+                'visual' => $label . ' uses a focused content band with strong text hierarchy.',
+                'motion' => 'Subtle hover states with reduced-motion fallback.',
+                'interaction' => $role === 'cta' ? 'Primary action control is prominent and keyboard reachable.' : 'Cards and links expose clear hover and focus states.',
+                'texture' => 'Soft borders, light surfaces, and restrained shadows.',
+                'responsive' => 'Desktop uses columns where useful; mobile stacks content in source order.',
+                'color_layering' => 'Primary actions use blue, proof surfaces use teal accents, and warnings use amber only sparingly.',
+                'implementation_note' => 'Deterministic fake-mode block used for local queue verification.',
+            ],
+            'visual_signature' => [
+                'composition_pattern' => $composition,
+                'spatial_rhythm' => 'Section rhythm ' . ((int)$index + 1) . ' uses compact vertical spacing and clear grouping.',
+                'media_strategy' => $needsImage ? 'One contextual image or CSS-backed media area supports the copy.' : 'CSS-only motif keeps the section light without image dependency.',
+                'surface_treatment' => 'Flat background with one bordered proof surface and precise spacing.',
+                'interaction_pattern' => $role === 'cta' ? 'Single direct action with visible focus state.' : 'Low-noise reveal states for supporting details.',
+            ],
+            'image_intent' => [
+                'needs_image' => $needsImage,
+                'image_role' => $needsImage ? 'contextual section media' : 'no generated image',
+                'image_subject' => $needsImage ? $siteName . ' service context for ' . $label : 'CSS-only motif for ' . $label,
+                'placement' => $index === 0 ? 'leading media area' : 'inline supporting area',
+                'visual_atmosphere' => 'Clean, practical, and credible.',
+                'image_treatment' => $needsImage ? 'Cropped rectangle with natural lighting and no text baked into the image.' : 'No image; use decorative CSS lines and small icon treatment.',
+                'reuse_policy' => 'Reuse verified assets when available; otherwise render the CSS motif.',
+                'css_motif' => $needsImage ? 'Optional gradient-free frame lines behind media.' : 'CSS-only pattern of fine rules and compact chips.',
+            ],
+            'realtime_content' => [
+                'headline' => $headline,
+                'supporting_copy' => [$supportingCopy],
+                'ctas' => [
+                    ['text' => $actionLabel, 'href' => '/'],
+                ],
+            ],
+        ];
+    }
+
+    private function fakeStageOneBlockRole(string $blockKey, int $index): string
+    {
+        $normalized = \strtolower($blockKey);
+        if ($index === 0 || \str_contains($normalized, 'hero')) {
+            return 'hero';
+        }
+        if (\str_contains($normalized, 'cta') || \str_contains($normalized, 'contact') || \str_contains($normalized, 'newsletter')) {
+            return 'cta';
+        }
+        if (\str_contains($normalized, 'proof') || \str_contains($normalized, 'trust') || \str_contains($normalized, 'rights') || \str_contains($normalized, 'rules')) {
+            return 'proof';
+        }
+        if (\str_contains($normalized, 'faq') || \str_contains($normalized, 'steps') || \str_contains($normalized, 'process')) {
+            return 'guidance';
+        }
+
+        return 'support';
+    }
+
+    private function fakeStageOneHeadline(string $blockKey, string $siteName, int $index): string
+    {
+        $label = $this->humanizeIdentifier($blockKey);
+        if ($index === 0) {
+            return $siteName . ' starts with a clear promise';
+        }
+        if (\str_contains(\strtolower($blockKey), 'cta')) {
+            return 'Take the next step with ' . $siteName;
+        }
+
+        return $label . ' that makes the offer easier to trust';
     }
 
     /**
@@ -485,7 +765,9 @@ final class AiSitePlanJsonGenerationService
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planJson = $this->planJsonStateService->normalizePlanJson($planJson);
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
-        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : ['page_type' => $pageType, 'status' => 0];
+        $page = \is_array($pages[$pageType] ?? null)
+            ? $pages[$pageType]
+            : ['page_type' => $pageType, 'status' => AiSitePlanJsonStateService::STATUS_PENDING];
         $action = \strtolower(\trim($action));
         $blockKey = \trim($blockKey);
         if ($action === 'delete') {
@@ -536,7 +818,7 @@ final class AiSitePlanJsonGenerationService
      * @param list<string> $orderedBlockKeys
      * @return array<string, mixed>
      */
-    public function reorderDraftPlanBlockNodes(array $scope, string $pageType, array $orderedBlockKeys): array
+    public function reorderDraftPlanBlocks(array $scope, string $pageType, array $orderedBlockKeys): array
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planJson = $this->planJsonStateService->normalizePlanJson($planJson);
@@ -585,12 +867,79 @@ final class AiSitePlanJsonGenerationService
     public function prepareStageOnePlanScopeForConfirmation(array $scope): array
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        if ($planJson === [] || !\is_array($planJson['pages'] ?? null) || $planJson['pages'] === []) {
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        if ((int)($scope['fake_mode'] ?? 0) === 1 && ($pages === [] || !$this->stageOnePagesHaveDirectBlocks($pages))) {
+            $planJson = $this->buildFakeStageOnePlanJson(
+                $scope,
+                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : []
+            );
+            $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        }
+        if ($planJson === [] || $pages === []) {
             throw new \RuntimeException('PlanJson confirmation failed: plan_json.pages is missing.');
         }
         $scope['plan_json'] = $this->planJsonStateService->normalizePlanJson($planJson);
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $pages
+     */
+    private function stageOnePagesHaveDirectBlocks(array $pages): bool
+    {
+        foreach ($pages as $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach ($page as $key => $value) {
+                if (!$this->isStageOneDirectBlockKey((string)$key) || !\is_array($value)) {
+                    continue;
+                }
+                if (\trim((string)($value['block_type'] ?? $value['type'] ?? '')) !== '') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function isStageOneDirectBlockKey(string $key): bool
+    {
+        if (\trim($key) === '') {
+            return false;
+        }
+
+        return !\in_array($key, [
+            'page_type',
+            'title',
+            'page_title',
+            'handle',
+            'locale',
+            'status',
+            'meta_title',
+            'meta_description',
+            'meta_keywords',
+            'route_path',
+            'style_code',
+            'style_settings',
+            'seo',
+            'primary_keywords',
+            'secondary_keywords',
+            'page_goal',
+            'page_design_plan',
+            'theme_alignment_summary',
+            'ai_description',
+            'visual_edit_url',
+            'preview_full_url',
+            'virtual_edit_url',
+            'visual_preview_url',
+            'virtual_preview_url',
+            'materialized_page_id',
+            'section_refinements',
+            'last_generated_at',
+        ], true);
     }
 
     /**
@@ -642,17 +991,6 @@ final class AiSitePlanJsonGenerationService
     }
 
     /**
-     * @param array<string, mixed> $contract
-     */
-    private function looksLikePlanJsonV2(array $contract): bool
-    {
-        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
-        return (string)($meta['version'] ?? '') === PlanJsonContractSchema::VERSION
-            && \is_array($contract['pages'] ?? null)
-            && \is_array($contract['block_nodes'] ?? null);
-    }
-
-    /**
      * @param array<string, mixed> $planJson
      * @return array<string, mixed>
      */
@@ -667,109 +1005,6 @@ final class AiSitePlanJsonGenerationService
     private function stageOneSourcePlanHasPages(array $sourcePlan): bool
     {
         return $this->normalizePagesSource($sourcePlan['pages'] ?? null) !== [];
-    }
-
-    /**
-     * @param array<string, mixed> $contract
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $websiteProfile
-     * @return array<string, mixed>
-     */
-    private function normalizeExistingContract(array $contract, array $scope, array $websiteProfile): array
-    {
-        $policy = $this->policyRegistry()->get();
-        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $sourcePlan = $this->selectStageOneSourcePlan($planJson);
-        if ($sourcePlan === []) {
-            throw new \RuntimeException('PlanJson contract failed: stage-one plan JSON is missing. Regenerate the plan instead of using legacy execution blueprint fallback.');
-        }
-        $sourceSignature = $this->sourceSignature($scope, $sourcePlan);
-        $pageTypes = $this->resolvePageTypes($scope, $sourcePlan);
-        $profile = \array_replace(
-            \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-            $websiteProfile
-        );
-        $siteStrategy = \is_array($sourcePlan['site_strategy'] ?? null) ? $sourcePlan['site_strategy'] : [];
-        $siteName = $this->firstNonEmpty([
-            $scope['site_title'] ?? null,
-            $siteStrategy['site_display_name'] ?? null,
-            $profile['site_title'] ?? null,
-            $profile['site_name'] ?? null,
-            $scope['store_name'] ?? null,
-            'AI Site',
-        ]);
-        $primaryGoal = $this->resolvePlanJsonPrimaryGoal($scope, $profile);
-
-        if (!\is_array($contract['site_brief'] ?? null)) {
-            $contract['site_brief'] = [
-                'site_name' => $this->firstNonEmpty([$websiteProfile['site_title'] ?? null, $scope['site_title'] ?? null, 'AI Site']),
-                'primary_goal' => $this->firstNonEmpty([$websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, 'Present the business clearly.']),
-            ];
-        }
-        $contract['source_of_truth'] = $this->planJsonJsonSourceOfTruth(
-            \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [],
-            $scope,
-            $sourcePlan,
-            $sourceSignature,
-            $siteName,
-            $primaryGoal,
-            $pageTypes
-        );
-        $contract['design_manifest'] = $this->stripPlanJsonExplanatoryFields(
-            \array_replace_recursive(
-                $this->planJsonJsonDesignManifest($policy, $sourcePlan),
-                \is_array($contract['design_manifest'] ?? null) ? $contract['design_manifest'] : []
-            )
-        );
-        $locale = $this->resolvePlanJsonContentLocale($scope, $profile, $sourcePlan);
-        [$freshPages, $freshBlocks, $freshContentItems] = $this->buildPageBlockGraph(
-            $scope,
-            $sourcePlan,
-            $siteName,
-            $primaryGoal,
-            $locale
-        );
-        $contract['pages'] = $freshPages;
-        $contract['block_nodes'] = $freshBlocks;
-        $contract['content_manifest'] = [
-            'primary_locale' => $locale,
-            'items' => \array_replace(
-                [
-                    'site.name' => $siteName,
-                    'site.primary_goal' => $primaryGoal,
-                ],
-                $freshContentItems
-            ),
-        ];
-        if (!\is_array($contract['source_contracts'] ?? null) || $contract['source_contracts'] === []) {
-            $contract['source_contracts'] = $this->buildSourceContractRefs($scope, $sourceSignature);
-        }
-        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
-        $meta['type'] = (string)($meta['type'] ?? 'plan_json_v2');
-        $meta['stage'] = (string)($meta['stage'] ?? ContractType::STAGE_STAGE1);
-        $meta['creator'] = (string)($meta['creator'] ?? 'AiSitePlanQueue');
-        $meta['adapter_type'] = (string)($meta['adapter_type'] ?? 'plan_json_contract_v2_2');
-        $contract['contract_meta'] = $meta;
-
-        return $contract;
-    }
-
-    /**
-     * @param array<string, mixed> $contract
-     * @param list<string> $expectedPageTypes
-     */
-    private function existingContractMatchesCurrentSource(array $contract, string $sourceSignature, array $expectedPageTypes): bool
-    {
-        $meta = \is_array($contract['contract_meta'] ?? null) ? $contract['contract_meta'] : [];
-        if (\trim((string)($meta['source_signature'] ?? '')) !== $sourceSignature) {
-            return false;
-        }
-
-        if ($expectedPageTypes === []) {
-            return true;
-        }
-
-        return $this->sameStringSet($this->contractPageTypes($contract), $expectedPageTypes);
     }
 
     /**
@@ -1275,7 +1510,7 @@ final class AiSitePlanJsonGenerationService
         }
 
         return \preg_match(
-            '/(?:鍚堝悓瀛楁|鎻愮ず璇峾JSON|鍙椤甸潰|涓嶈鍑虹幇|绂佹(?:杈撳嚭|鐢熸垚|浣跨敤|鍑虹幇)|涓嶅緱(?:杈撳嚭|鐢熸垚|浣跨敤|鍑虹幇)|涓嶈兘(?:杈撳嚭|鐢熸垚|浣跨敤|鍑虹幇)|蹇呴』浣跨敤|闄や簡?.+浠ュ|language|locale|prompt|contract|field|visible copy|do not|must not|forbidden)/iu',
+            '/(?:闁告艾鐗嗛幃鎾垛偓娑欘殕椤斿瘝闁圭粯鍔楅妵姘辨嫚瀹勭叮SON|闁告瑯鍨甸～鍡樸亜閻㈠憡妗▅濞戞挸绉烽々锕傚礄閾忕懓绠泑缂佸倷鐒﹂??:閺夊牊鎸搁崵鐡呴柣銏㈠枑閸ㄦ畝濞达綀娉曢弫顦㈤柛鎴ｆ楠?|濞戞挸绉寸欢??:閺夊牊鎸搁崵鐡呴柣銏㈠枑閸ㄦ畝濞达綀娉曢弫顦㈤柛鎴ｆ楠?|濞戞挸绉烽崗??:閺夊牊鎸搁崵鐡呴柣銏㈠枑閸ㄦ畝濞达綀娉曢弫顦㈤柛鎴ｆ楠?|闊洤鎳橀妴蹇旀媴鐠恒劍鏆弢闂傚嫨鍊撶花?.+濞寸姰鍎遍ˇ绮卨anguage|locale|prompt|contract|field|visible copy|do not|must not|forbidden)/iu',
             $value
         ) === 1;
     }
@@ -1585,9 +1820,9 @@ final class AiSitePlanJsonGenerationService
             $contentItems[$pageDescriptionKey] = $pageDescription;
 
             $pageBlockIds = [];
-            $pageBlocks = $this->collectPlanJsonPageBlockNodes($page);
+            $pageBlocks = $this->collectPlanJsonPageBlocks($page);
             if ($pageBlocks === []) {
-                throw new \RuntimeException('PlanJson contract failed: page ' . $pageType . ' has no stage-one blocks. Regenerate the plan instead of injecting fallback blocks.');
+                throw new \RuntimeException('PlanJson contract failed: page ' . $pageType . ' has no stage-one blocks. Regenerate the plan.');
             }
 
             foreach ($pageBlocks as $blockIndex => $rawBlock) {
@@ -1657,7 +1892,7 @@ final class AiSitePlanJsonGenerationService
                 'page_design_plan' => $this->stripPlanJsonExplanatoryFields(
                     \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : []
                 ),
-                'block_node_ids' => $pageBlockIds,
+                'block_ids' => $pageBlockIds,
                 'sort_order' => 100 + ((int)$pageIndex * 10),
             ];
         }
@@ -1682,7 +1917,7 @@ final class AiSitePlanJsonGenerationService
         }
 
         return [
-            'source' => 'plan_json_v2_minimal_theme_context',
+            'source' => 'plan_json_minimal_theme_context',
             'theme_rule' => 'use confirmed site design tokens, readable contrast, responsive rhythm, and consistent shared navigation styling',
         ];
     }
@@ -1707,7 +1942,7 @@ final class AiSitePlanJsonGenerationService
         }
 
         return [
-            'source' => 'plan_json_v2_minimal_shared_context',
+            'source' => 'plan_json_minimal_shared_context',
             'site_name' => $siteName,
             'primary_goal' => $primaryGoal,
             'locale' => $locale,
@@ -1931,7 +2166,7 @@ final class AiSitePlanJsonGenerationService
             }
         }
 
-        throw new \RuntimeException('PlanJson contract failed: stage-one page plans are missing. Regenerate the plan instead of injecting fallback pages.');
+        throw new \RuntimeException('PlanJson contract failed: stage-one pages are missing. Regenerate the plan.');
     }
 
     /**
@@ -2048,7 +2283,7 @@ final class AiSitePlanJsonGenerationService
      * @param array<string, mixed> $page
      * @return list<array<string, mixed>>
      */
-    private function collectPlanJsonPageBlockNodes(array $page): array
+    private function collectPlanJsonPageBlocks(array $page): array
     {
         $reservedKeys = [
             'page_id' => true,
@@ -2062,19 +2297,26 @@ final class AiSitePlanJsonGenerationService
             'conversion_role' => true,
             'theme_alignment_summary' => true,
             'page_design_plan' => true,
+            'primary_keywords' => true,
+            'secondary_keywords' => true,
+            'seo' => true,
             'status' => true,
             'sort_order' => true,
+            'blocks' => true,
+            'block_previews' => true,
+            'sections' => true,
+            'components' => true,
         ];
-        $blockNodes = [];
+        $Blocks = [];
         foreach ($page as $key => $value) {
             if (isset($reservedKeys[(string)$key]) || !\is_array($value)) {
                 continue;
             }
             $value['block_key'] = \trim((string)($value['block_key'] ?? $key));
-            $blockNodes[] = $value;
+            $Blocks[] = $value;
         }
 
-        return $blockNodes;
+        return $Blocks;
     }
 
     /**
@@ -2277,7 +2519,7 @@ final class AiSitePlanJsonGenerationService
         if ($copy === '') {
             return '';
         }
-        $parts = \preg_split('/[銆傦紒锛燂紱;.!?\n\r]+/u', $copy) ?: [];
+        $parts = \preg_split('/[闁靛棗鍋婄槐鎺楁晬閻曞倻骞?.!?\n\r]+/u', $copy) ?: [];
         $title = \trim((string)($parts[0] ?? $copy));
         if ($title === '') {
             return '';
@@ -2297,19 +2539,19 @@ final class AiSitePlanJsonGenerationService
 
         $pageType = \strtolower($pageType);
         if (\str_contains($pageType, 'home')) {
-            return '棣栭〉';
+            return 'Home';
         }
         if (\str_contains($pageType, 'about')) {
-            return '鍏充簬鎴戜滑';
+            return 'About';
         }
         if (\str_contains($pageType, 'contact')) {
-            return '鑱旂郴鎴戜滑';
+            return 'Contact';
         }
         if (\str_contains($pageType, 'blog') || \str_contains($pageType, 'article') || \str_contains($pageType, 'resource')) {
-            return '鍐呭璧勮';
+            return 'Resources';
         }
 
-        return $siteName !== '' ? $siteName : '椤甸潰';
+        return $siteName !== '' ? $siteName : 'Page';
     }
 
     private function localizedDefaultCopy(string $locale): string
@@ -2603,6 +2845,17 @@ final class AiSitePlanJsonGenerationService
         return $value !== '' ? $value : 'item';
     }
 
+    private function containsPositiveIntent(string $haystack, string $needle): bool
+    {
+        $haystack = \mb_strtolower(\trim($haystack));
+        $needle = \mb_strtolower(\trim($needle));
+        if ($haystack === '' || $needle === '') {
+            return false;
+        }
+
+        return \str_contains($haystack, $needle);
+    }
+
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $sourcePlan
@@ -2610,7 +2863,6 @@ final class AiSitePlanJsonGenerationService
     private function sourceSignature(array $scope, array $sourcePlan): string
     {
         return \sha1((string)\json_encode([
-            'plan_generated_source_signature' => (string)($scope['plan_generated_source_signature'] ?? ''),
             'source_plan' => $sourcePlan,
         ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
     }
@@ -2621,290 +2873,6 @@ final class AiSitePlanJsonGenerationService
     private function contractSignature(array $contract): string
     {
         return \sha1((string)\json_encode($contract, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR));
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $websiteProfile
-     * @return array<string, mixed>
-     */
-    private function buildDeterministicStageOnePlan(array $scope, array $websiteProfile): array
-    {
-        $pageTypes = $this->resolveStageOnePageTypes($scope);
-        $locale = $this->resolveStageOneLocale($scope, $websiteProfile);
-        $requirementExpansion = $this->buildRequirementExpansion($scope, $websiteProfile, $pageTypes);
-        $root = $this->buildMinimalStageOneRoot($scope, $websiteProfile, $requirementExpansion, $locale);
-        $contract = $this->stageOneContractService->build($scope, $pageTypes, $locale, $locale, 'stage1');
-        foreach ($pageTypes as $pageType) {
-            $root['pages'][$pageType] = $this->buildDeterministicStageOnePage($pageType, $scope, $websiteProfile, $contract, $locale);
-        }
-        $root['stage1_generation_attempts'] = [];
-
-        return $root;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $websiteProfile
-     * @param list<string> $pageTypes
-     * @return array<string, mixed>
-     */
-    private function buildRequirementExpansion(array $scope, array $websiteProfile, array $pageTypes): array
-    {
-        $brief = $this->stageOneBriefText($scope, $websiteProfile);
-        $siteName = $this->resolveStageOneContractSiteDisplayName($scope, [], [], [], $this->resolveStageOneLocale($scope, $websiteProfile));
-        $siteName = $siteName !== '' ? $siteName : 'AI Site';
-        $primaryCta = $this->containsPositiveIntent($brief, 'download') || $this->containsPositiveIntent($brief, 'APK')
-            ? 'Download APK'
-            : 'Contact us';
-        $pageStrategy = [];
-        foreach ($pageTypes as $pageType) {
-            $label = Page::getPageTypes()[$pageType] ?? $this->humanizeIdentifier($pageType);
-            $pageStrategy[] = [
-                'page_type' => $pageType,
-                'intent' => $this->resolvePageGoal($pageType, (string)$label, $this->resolveStageOneLocale($scope, $websiteProfile)),
-                'content_focus' => $brief !== '' ? $brief : ('Explain ' . $label . ' clearly.'),
-                'conversion_role' => $pageType === Page::TYPE_HOME ? 'Primary entry and conversion page.' : 'Support page for the main site journey.',
-            ];
-        }
-
-        return [
-            'original_brief' => $brief,
-            'expanded_brief' => $brief !== '' ? $brief : ($siteName . ' needs a focused, responsive website with clear page goals.'),
-            'planning_summary' => 'Confirmed requirement expansion from step 1: ' . ($brief !== '' ? $brief : 'Use selected page types and the site profile to produce a buildable plan_json tree.'),
-            'site_goal' => $brief !== '' ? $brief : ('Present ' . $siteName . ' clearly and guide visitors to the next action.'),
-            'target_users' => ['Primary website visitors'],
-            'business_context' => (string)($websiteProfile['business_context'] ?? $scope['business_context'] ?? ''),
-            'content_direction' => $brief !== '' ? $brief : 'Use concrete visitor-facing copy and avoid prompt labels.',
-            'conversion_strategy' => 'Use shared navigation, clear proof sections, and a visible final action.',
-            'primary_cta' => $primaryCta,
-            'page_strategy' => $pageStrategy,
-            'technical_direction' => ['Responsive layout', 'Shared Header/Footer', 'plan_json.pages dynamic block nodes'],
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $websiteProfile
-     * @param array<string, mixed> $requirementExpansion
-     * @return array<string, mixed>
-     */
-    private function buildMinimalStageOneRoot(array $scope, array $websiteProfile, array $requirementExpansion, string $locale): array
-    {
-        $siteName = $this->resolveStageOneContractSiteDisplayName($scope, [], [], [], $locale);
-        $siteName = $siteName !== '' ? $siteName : (string)($websiteProfile['site_title'] ?? 'AI Site');
-        $primaryCta = (string)($requirementExpansion['primary_cta'] ?? 'Contact us');
-
-        return [
-            'i18n' => ['locale' => $locale],
-            'content_locale' => $locale,
-            'requirement_expansion' => $requirementExpansion,
-            'site_strategy' => [
-                'site_display_name' => $siteName,
-                'summary' => (string)($requirementExpansion['planning_summary'] ?? ''),
-                'website_type' => (string)($websiteProfile['website_type'] ?? 'business website'),
-                'core_goal' => (string)($requirementExpansion['site_goal'] ?? ''),
-                'target_users' => \implode(', ', \array_map('strval', \is_array($requirementExpansion['target_users'] ?? null) ? $requirementExpansion['target_users'] : [])),
-                'conversion_path' => 'Header CTA -> page proof -> final action',
-                'primary_cta' => $primaryCta,
-            ],
-            'theme_style' => [
-                'name' => 'Clear conversion system',
-                'visual_tone' => 'Polished, readable, responsive, and specific to the visitor goal.',
-                'font_family' => 'Inter, Noto Sans',
-                'selection_reason' => 'Matches the site goal while keeping build output simple and scannable.',
-            ],
-            'palette' => [
-                'name' => 'Balanced trust palette',
-                'primary' => '#123b5d',
-                'secondary' => '#0f766e',
-                'accent' => '#f59e0b',
-                'surface' => '#f8fafc',
-                'text' => '#0f172a',
-                'selection_reason' => 'Uses distinct trust, support, and action colors without a one-note palette.',
-            ],
-            'theme_design' => [
-                'theme_purpose' => 'Make the site goal understandable and actionable.',
-                'style_signature' => 'Clean content rhythm with distinct proof and CTA sections.',
-                'art_direction' => 'Editorial product clarity with layered but restrained surfaces.',
-                'color_scheme' => [
-                    'primary' => '#123b5d',
-                    'secondary' => '#0f766e',
-                    'accent' => '#f59e0b',
-                    'background' => '#f8fafc',
-                    'body' => '#0f172a',
-                    'button' => '#f59e0b',
-                ],
-                'typography_spacing_radius' => [
-                    'font_family' => 'Inter, Noto Sans',
-                    'heading_scale' => 'Hero 48px desktop, 34px mobile; section titles 28px.',
-                    'body_scale' => '16px body with 1.7 line height.',
-                    'spacing_scale' => '80px desktop sections, 40px mobile sections.',
-                    'radius_scale' => '12px cards and 999px primary buttons.',
-                ],
-                'visual_keywords' => ['clear hierarchy', 'trust surfaces', 'direct CTA'],
-                'tone_of_voice' => 'Confident, concrete, and helpful',
-                'cta_tone' => 'Direct and action oriented',
-                'forbidden_styles' => ['generic hero copy', 'placeholder illustrations', 'one-color palette'],
-                'selection_reason' => 'The plan needs buildable sections with visible purpose and reliable copy.',
-            ],
-            'navigation_plan' => [
-                'header_items' => [
-                    ['label' => 'Home', 'href' => '/'],
-                ],
-            ],
-            'footer_plan' => [
-                'featured' => [
-                    ['label' => 'Home', 'href' => '/'],
-                ],
-                'policies' => [
-                    ['label' => 'Home', 'href' => '/'],
-                ],
-            ],
-            'shared_components' => [
-                'header' => [
-                    'component' => 'header',
-                    'title' => $siteName . ' Header',
-                    'goal' => 'Keep brand identity and primary navigation visible.',
-                    'implementation_detail' => 'Responsive header with brand, page links, and primary CTA.',
-                    'realtime_content' => ['headline' => $siteName, 'cta' => [['label' => $primaryCta, 'target' => '/']]],
-                    'editable_fields' => ['brand_name', 'nav_items', 'primary_cta'],
-                    'responsive_rule' => 'Collapse navigation on mobile without hiding the primary action.',
-                ],
-                'footer' => [
-                    'component' => 'footer',
-                    'title' => $siteName . ' Footer',
-                    'goal' => 'Close pages with support links and the next action.',
-                    'implementation_detail' => 'Footer with featured links, policy links, and concise trust copy.',
-                    'realtime_content' => ['headline' => $siteName, 'cta' => [['label' => $primaryCta, 'target' => '/']]],
-                    'editable_fields' => ['footer_links', 'policy_links', 'support_copy'],
-                    'responsive_rule' => 'Stack links and copy on mobile.',
-                ],
-            ],
-            'seo_strategy' => $this->buildSeoStrategy(),
-            'page_type_overviews' => [],
-            'pages' => [],
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $contract
-     * @return array<string, mixed>
-     */
-    private function buildDeterministicStageOnePage(string $pageType, array $scope, array $websiteProfile, array $contract, string $locale): array
-    {
-        unset($websiteProfile);
-        $pageLabel = Page::getPageTypes()[$pageType] ?? $this->humanizeIdentifier($pageType);
-        $pageContract = $this->stageOneContractService->pageContract($contract, $pageType);
-        $blockKeys = \array_values(\array_filter(\array_map('strval', \is_array($pageContract['required_block_keys'] ?? null) ? $pageContract['required_block_keys'] : [])));
-        $optionalKeys = \array_values(\array_filter(\array_map('strval', \is_array($pageContract['recommended_optional_block_keys'] ?? null) ? $pageContract['recommended_optional_block_keys'] : [])));
-        $target = \max(\count($blockKeys), (int)($pageContract['target_block_nodes'] ?? \count($blockKeys)));
-        foreach ($optionalKeys as $optionalKey) {
-            if (\count($blockKeys) >= $target) {
-                break;
-            }
-            if (!\in_array($optionalKey, $blockKeys, true)) {
-                $blockKeys[] = $optionalKey;
-            }
-        }
-        if ($blockKeys === []) {
-            $blockKeys = ['hero', 'details', 'final_cta'];
-        }
-
-        $page = [
-            'page_type' => $pageType,
-            'page_label' => (string)$pageLabel,
-            'page_goal' => $this->resolvePageGoal($pageType, (string)$pageLabel, $locale),
-            'theme_alignment_summary' => $this->resolvePageWhy($pageType, (string)$pageLabel, $locale),
-            'primary_keywords' => [$this->humanizeIdentifier($pageType)],
-            'secondary_keywords' => $this->buildSecondaryKeywords($pageType, (string)$pageLabel),
-            'page_design_plan' => [
-                'layout' => 'responsive narrative sections',
-                'section_flow' => $blockKeys,
-                'content_priority' => 'Lead with value, prove it, answer concerns, and close with an action.',
-            ],
-        ];
-
-        foreach ($blockKeys as $index => $blockKey) {
-            $page[$blockKey] = $this->buildDeterministicStageOneBlock($pageType, $blockKey, $index, $scope, $locale);
-        }
-
-        return $page;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function buildDeterministicStageOneBlock(string $pageType, string $blockKey, int $index, array $scope, string $locale): array
-    {
-        $headline = $this->buildStageOneContractBlockHeadline($pageType, $blockKey, $scope, $locale);
-        $body = $this->stageOneBlockBodyCopy($pageType, $blockKey, $scope, $locale);
-        $motif = \str_replace('_', ' ', $blockKey);
-        $role = \str_contains($blockKey, 'cta') || \str_contains($blockKey, 'download')
-            ? 'cta'
-            : (\str_contains($blockKey, 'trust') || \str_contains($blockKey, 'proof') || \str_contains($blockKey, 'review') ? 'proof' : 'content');
-
-        return [
-            'block_key' => $blockKey,
-            'page_flow_role' => $role,
-            'goal' => $body,
-            'keywords' => \array_values(\array_filter([$this->humanizeIdentifier($pageType), $this->humanizeIdentifier($blockKey)])),
-            'content' => $body,
-            'design_tags' => [
-                'visual' => ['distinct section layout', 'clear headline', 'scannable content'],
-                'motion' => ['subtle reveal', 'button hover'],
-                'interaction' => ['keyboard focus', 'CTA hover state'],
-                'texture' => ['layered surface', 'soft accent band'],
-                'responsive' => ['mobile stacked layout', 'desktop balanced columns'],
-                'color_layering' => 'Use primary, surface, and accent colors differently for ' . $motif . '.',
-                'implementation_note' => 'Keep this block visually distinct from adjacent sections.',
-            ],
-            'visual_signature' => [
-                'composition_pattern' => $motif . ' uses a distinct responsive section pattern.',
-                'spatial_rhythm' => $motif . ' balances headline, body, and supporting details.',
-                'media_strategy' => $this->stageOneNeonCardImageSubject($blockKey),
-                'surface_treatment' => $motif . ' uses a unique surface and elevation treatment.',
-                'interaction_pattern' => $motif . ' includes clear hover and focus feedback.',
-            ],
-            'image_intent' => [
-                'needs_image' => false,
-                'image_role' => 'CSS visual support for ' . $motif . '.',
-                'image_subject' => 'CSS-only ' . $motif . ' website motif.',
-                'placement' => 'Inline with the section content.',
-                'visual_atmosphere' => 'Polished and readable.',
-                'image_treatment' => 'CSS-only cards, bands, badges, or stat surfaces.',
-                'reuse_policy' => 'Do not reuse generated images across blocks.',
-                'css_motif' => 'Unique ' . $motif . ' CSS motif.',
-            ],
-            'field_plan' => [
-                ['field' => 'title', 'sample' => $headline, 'implementation_note' => 'Use as visible section headline.'],
-                ['field' => 'description', 'sample' => $body, 'implementation_note' => 'Use as real visitor-facing body copy.'],
-                ['field' => 'button_text', 'sample' => \str_contains($blockKey, 'download') ? 'Download APK' : 'Learn more', 'implementation_note' => 'Use only when this block has a CTA.'],
-            ],
-            'execution_script' => [
-                'feature_points' => [$headline, $body, 'Keep the next action clear.'],
-                'core_copy' => $body,
-                'typography' => 'Use clear heading and readable body scale.',
-                'style_tone' => 'Confident and helpful.',
-                'background_direction' => 'Use layered surfaces and distinct action accents.',
-            ],
-            'status' => 0,
-            'sort_order' => ($index + 1) * 10,
-        ];
-    }
-
-    private function stageOneBlockBodyCopy(string $pageType, string $blockKey, array $scope, string $locale): string
-    {
-        $brief = $this->stageOneBriefText($scope, []);
-        $label = $this->humanizeIdentifier($blockKey);
-        if ($this->isCjkLocale($locale)) {
-            return $label . ' turns the site brief into concrete visitor copy with clear next steps.';
-        }
-
-        return $brief !== ''
-            ? $label . ' turns the site brief into concrete visitor copy: ' . $this->compactSourceText($brief, 160)
-            : $label . ' presents concrete visitor value and supports the next action.';
     }
 
     /**
@@ -3009,6 +2977,137 @@ final class AiSitePlanJsonGenerationService
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function buildRequirementExpansion(array $scope, array $websiteProfile, array $pageTypes): array
+    {
+        $locale = $this->resolveStageOneLocale($scope, $websiteProfile);
+        $brief = $this->stageOneBriefText($scope, $websiteProfile);
+        $siteTitle = $this->firstNonEmpty([
+            $scope['site_title'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+            $websiteProfile['site_name'] ?? null,
+            'AI Site',
+        ]);
+        $prompt = $this->stageOnePromptAssembler->assemble([
+            'system_task' => [
+                'Stage-1 REQUIREMENT EXPANSION planner: expand the operator brief into a concrete website planning contract.',
+                'Return JSON only as {"requirement_expansion": {...}}. Do not include markdown fences.',
+                'Do not output pages or block plans in this step.',
+            ],
+            'user_inputs' => [
+                'site_title' => $siteTitle,
+                'brief' => $brief,
+                'content_locale' => $locale,
+                'page_types' => \array_values($pageTypes),
+            ],
+            'output_schema' => [
+                'requirement_expansion.original_brief string',
+                'requirement_expansion.expanded_brief string',
+                'requirement_expansion.planning_summary string',
+                'requirement_expansion.site_goal string',
+                'requirement_expansion.target_users list of strings',
+                'requirement_expansion.business_context string',
+                'requirement_expansion.content_direction string',
+                'requirement_expansion.conversion_strategy string',
+                'requirement_expansion.primary_cta string',
+                'requirement_expansion.page_strategy list keyed by page_type, intent, content_focus, conversion_role',
+                'requirement_expansion.technical_direction list of strings',
+            ],
+            'self_check' => [
+                'Every page_strategy item must use one of the selected page_types.',
+                'Use concrete visitor, content, and conversion language. Avoid instructions like write the title.',
+            ],
+        ]);
+
+        $payload = $this->decodeAiJsonPayload($this->callStageOneAiStream($prompt, null, $locale));
+        $expansion = \is_array($payload['requirement_expansion'] ?? null) ? $payload['requirement_expansion'] : $payload;
+
+        return $this->normalizeRequirementExpansion($expansion, $scope, $websiteProfile, $pageTypes);
+    }
+
+    /**
+     * @param array<string, mixed> $expansion
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function normalizeRequirementExpansion(array $expansion, array $scope, array $websiteProfile, array $pageTypes): array
+    {
+        $brief = $this->stageOneBriefText($scope, $websiteProfile);
+        if ($brief === '') {
+            $brief = 'Create a clear, credible website with useful content and a direct next step.';
+        }
+        $siteTitle = $this->firstNonEmpty([
+            $scope['site_title'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+            $websiteProfile['site_name'] ?? null,
+            'AI Site',
+        ]);
+        $expandedBrief = $this->firstNonEmpty([
+            $expansion['expanded_brief'] ?? null,
+            $expansion['summary'] ?? null,
+            $brief,
+        ]);
+
+        $pageStrategy = [];
+        $rawPageStrategy = \is_array($expansion['page_strategy'] ?? null) ? $expansion['page_strategy'] : [];
+        foreach ($rawPageStrategy as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $pageType = \trim((string)($item['page_type'] ?? ''));
+            if ($pageType === '' || !\in_array($pageType, $pageTypes, true)) {
+                continue;
+            }
+            $pageStrategy[] = [
+                'page_type' => $pageType,
+                'intent' => $this->firstNonEmpty([$item['intent'] ?? null, 'Clarify the role of ' . $pageType . ' in the visitor journey.']),
+                'content_focus' => $this->firstNonEmpty([$item['content_focus'] ?? null, $expandedBrief]),
+                'conversion_role' => $this->firstNonEmpty([$item['conversion_role'] ?? null, 'Support the primary website goal.']),
+            ];
+        }
+        foreach ($pageTypes as $pageType) {
+            $exists = false;
+            foreach ($pageStrategy as $item) {
+                if (($item['page_type'] ?? '') === $pageType) {
+                    $exists = true;
+                    break;
+                }
+            }
+            if (!$exists) {
+                $pageStrategy[] = [
+                    'page_type' => $pageType,
+                    'intent' => 'Turn the brief into a useful ' . $pageType . ' experience.',
+                    'content_focus' => $expandedBrief,
+                    'conversion_role' => $pageType === Page::TYPE_HOME ? 'Primary entry and conversion page.' : 'Supporting trust and detail page.',
+                ];
+            }
+        }
+
+        $targetUsers = \is_array($expansion['target_users'] ?? null) ? \array_values($expansion['target_users']) : [];
+        $technicalDirection = \is_array($expansion['technical_direction'] ?? null) ? \array_values($expansion['technical_direction']) : [];
+
+        return [
+            'original_brief' => $this->firstNonEmpty([$expansion['original_brief'] ?? null, $brief]),
+            'expanded_brief' => $expandedBrief,
+            'planning_summary' => $this->firstNonEmpty([$expansion['planning_summary'] ?? null, $siteTitle . ' needs a focused page plan based on the supplied brief.']),
+            'site_goal' => $this->firstNonEmpty([$expansion['site_goal'] ?? null, $expandedBrief]),
+            'target_users' => $targetUsers !== [] ? $targetUsers : ['Visitors matched to the supplied brief'],
+            'business_context' => $this->firstNonEmpty([$expansion['business_context'] ?? null, $siteTitle . ' website planning context.']),
+            'content_direction' => $this->firstNonEmpty([$expansion['content_direction'] ?? null, $expandedBrief]),
+            'conversion_strategy' => $this->firstNonEmpty([$expansion['conversion_strategy'] ?? null, 'Use clear proof, useful detail, and a direct call to action.']),
+            'primary_cta' => $this->firstNonEmpty([$expansion['primary_cta'] ?? null, 'Get started']),
+            'page_strategy' => $pageStrategy,
+            'technical_direction' => $technicalDirection !== [] ? $technicalDirection : ['Responsive layout', 'Accessible semantic sections'],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $requirementExpansion
      * @param array<string, mixed> $contract
      */
@@ -3033,12 +3132,20 @@ final class AiSitePlanJsonGenerationService
             'upstream_artifacts' => [
                 'Confirmed requirement expansion from step 1' => $requirementExpansion,
                 'page_route_contract' => $contract['page_route_contract'] ?? [],
+                'theme_required_fields' => $contract['theme_required_fields'] ?? [],
             ],
             'output_schema' => [
                 'Return keys: i18n, site_strategy, theme_style, palette, theme_design, navigation_plan, footer_plan, shared_components, seo_strategy.',
+                'Do not return only theme_design, only palette, or only navigation/footer. The top-level JSON object must include every root key listed above.',
+                'Complete root theme artifact skeleton: ' . $this->json($this->stageOneThemeRootSkeleton()),
+                'theme_design must include every required field from theme_required_fields.theme_design, especially theme_purpose, style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, tone_of_voice, cta_tone, forbidden_styles, and selection_reason.',
+                'theme_design.typography_spacing_radius must include font_family, heading_scale, body_scale, spacing_scale, and radius_scale.',
+                'Complete theme_design skeleton: ' . $this->json($this->stageOneThemeDesignSkeleton()),
             ],
             'self_check' => [
+                'Before returning JSON, verify the root object has i18n, site_strategy, theme_style, palette, theme_design, navigation_plan, footer_plan, shared_components, and seo_strategy.',
                 'Header/footer href values must be exact internal route paths from page_route_contract, no anchors and no query strings.',
+                'Before returning JSON, verify theme_design.typography_spacing_radius and theme_design.forbidden_styles are present and non-empty.',
             ],
         ]);
     }
@@ -3060,6 +3167,7 @@ final class AiSitePlanJsonGenerationService
         array $previousIssues = []
     ): string {
         $pageContract = $this->stageOneContractService->pageContract($contract, $pageType);
+        $exactBlockKeys = $this->exactStageOnePageBlockKeys($pageContract);
 
         return $this->stageOnePromptAssembler->assemble([
             'system_task' => [
@@ -3067,6 +3175,7 @@ final class AiSitePlanJsonGenerationService
                 'Page type: ' . $pageType,
                 'Attempt ' . $attemptNo . ' of ' . self::STAGE_ONE_PAGE_MAX_AI_ATTEMPTS . '.',
                 'Return JSON only as {"page": {...}}.',
+                'The value of "page" is plan_json.pages.' . $pageType . ' itself, not a single block object and not a wrapper containing ' . $pageType . '.',
             ],
             'user_inputs' => [
                 'site_title' => (string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? ''),
@@ -3080,12 +3189,20 @@ final class AiSitePlanJsonGenerationService
             ],
             'contract_lines' => [
                 'Output path is plan_json.pages.' . $pageType . '.{block_key}.',
+                'Exact dynamic block keys required for this page: ' . $this->json($exactBlockKeys) . '.',
+                'Return all exact dynamic block keys directly inside the "page" object, each exactly once. Do not omit optional keys needed to hit target_blocks.',
+                'Complete page return skeleton: ' . $this->json($this->stageOnePageReturnSkeleton($exactBlockKeys)) . '.',
+                'Forbidden wrappers: do not output plan_json, pages, page, ' . $pageType . ', blocks, sections, components, or markdown around the returned page object.',
+                'Forbidden single-block artifact: the top level of "page" must not contain block_key, page_flow_role, content, design_tags, visual_signature, image_intent, field_plan, execution_script, or execution_core_copy. Those keys belong inside each exact block object only.',
                 'Every required_block_key must appear exactly once as a direct dynamic key under the page.',
                 'Each block must include block_key, page_flow_role, content, design_tags, visual_signature, image_intent, field_plan, and execution_script.',
+                'Field plan hard rule: every block field_plan must be an array of exactly 3 rows. Row fields must be concrete machine keys such as headline, supporting_copy, cta_label, proof_detail, image_brief, or context_detail.',
+                'Field plan copy rule: field_plan.sample must be final visitor-facing copy or a concrete asset brief. Never write instruction text such as write, rewrite, describe, use this field, explain, include, highlight, or mention.',
             ],
             'self_check' => [
-                'Do not output page block arrays.',
-                'Do not add separate legacy planning containers or side-task truth sources.',
+                'Output exactly ' . (string)\count($exactBlockKeys) . ' direct dynamic block keys under plan_json.pages.' . $pageType . ': ' . \implode(', ', $exactBlockKeys) . '.',
+                'Keep every generated field inside plan_json.pages.' . $pageType . '.{block_key}.',
+                'If the draft has top-level visual_signature, image_intent, field_plan, execution_script, or execution_core_copy, discard it and rebuild the full page object with direct block keys.',
             ],
         ]);
     }
@@ -3101,13 +3218,13 @@ final class AiSitePlanJsonGenerationService
         };
 
         if ($this->aiService instanceof AiService) {
-            $this->aiService->generateStream($prompt, $callback, null, 'pagebuilder_stage1_plan', $locale, []);
+            $this->aiService->generateStream($prompt, $callback, null, 'pagebuilder_plan_generation', $locale, []);
         } else {
             w_query('ai', 'generateStream', [
                 'prompt' => $prompt,
                 'on_chunk' => $callback,
                 'model_code' => null,
-                'scenario_code' => 'pagebuilder_stage1_plan',
+                'scenario_code' => 'pagebuilder_plan_generation',
                 'locale' => $locale,
                 'params' => [],
             ]);
@@ -3165,6 +3282,23 @@ final class AiSitePlanJsonGenerationService
         string $locale
     ): array {
         $base = $this->buildMinimalStageOneRoot($scope, $websiteProfile, $requirementExpansion, $locale);
+        foreach ([
+            'i18n',
+            'site_strategy',
+            'theme_style',
+            'palette',
+            'theme_design',
+            'navigation_plan',
+            'footer_plan',
+            'seo_strategy',
+        ] as $sectionKey) {
+            if (!\is_array($payload[$sectionKey] ?? null) || $payload[$sectionKey] === []) {
+                unset($payload[$sectionKey]);
+            }
+        }
+        if (!\is_array($payload['shared_components'] ?? null)) {
+            unset($payload['shared_components']);
+        }
         $payload = \array_replace_recursive($base, $payload);
         $payload['navigation_plan']['header_items'] = $this->normalizeStageOneLinks(
             $payload['navigation_plan']['header_items'] ?? [],
@@ -3184,6 +3318,92 @@ final class AiSitePlanJsonGenerationService
         unset($payload['pages']);
 
         return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $requirementExpansion
+     * @return array<string, mixed>
+     */
+    private function buildMinimalStageOneRoot(array $scope, array $websiteProfile, array $requirementExpansion, string $locale): array
+    {
+        $siteName = $this->firstNonEmpty([
+            $scope['site_title'] ?? null,
+            $websiteProfile['site_title'] ?? null,
+            $websiteProfile['site_name'] ?? null,
+            'AI Site',
+        ]);
+        $primaryGoal = $this->firstNonEmpty([
+            $requirementExpansion['site_goal'] ?? null,
+            $requirementExpansion['expanded_brief'] ?? null,
+            $this->stageOneBriefText($scope, $websiteProfile),
+            'Create a clear, credible website with a direct next step.',
+        ]);
+        $primaryCta = $this->firstNonEmpty([
+            $requirementExpansion['primary_cta'] ?? null,
+            'Get started',
+        ]);
+        $palette = [
+            'primary' => '#1D4ED8',
+            'secondary' => '#0F766E',
+            'accent' => '#F59E0B',
+            'background' => '#F8FAFC',
+            'body' => '#111827',
+            'button' => '#1D4ED8',
+        ];
+
+        return [
+            'confirmed' => 0,
+            'content_locale' => $locale,
+            'site_name' => $siteName,
+            'requirement_expansion' => $requirementExpansion,
+            'site_strategy' => [
+                'site_display_name' => $siteName,
+                'primary_goal' => $primaryGoal,
+                'core_goal' => $primaryGoal,
+                'audience' => $this->firstNonEmpty([$requirementExpansion['target_users'][0] ?? null, 'Visitors matched to the supplied brief']),
+                'content_strategy' => $this->firstNonEmpty([$requirementExpansion['content_direction'] ?? null, $primaryGoal]),
+                'conversion_path' => $this->firstNonEmpty([$requirementExpansion['conversion_strategy'] ?? null, 'Proof, useful detail, and a direct call to action.']),
+                'primary_cta' => $primaryCta,
+            ],
+            'theme_style' => [
+                'style_name' => $siteName . ' generated theme',
+                'tone' => 'Clear, trustworthy, and conversion-aware.',
+                'layout_direction' => 'Responsive sections with strong hierarchy and concise content.',
+            ],
+            'palette' => $palette,
+            'theme_design' => [
+                'theme_purpose' => $primaryGoal,
+                'style_signature' => 'Purposeful editorial landing layout with practical proof and direct action.',
+                'art_direction' => 'Clean sections, strong content hierarchy, and restrained visual emphasis.',
+                'color_scheme' => $palette,
+                'typography_spacing_radius' => [
+                    'font_family' => 'Inter, system-ui, sans-serif',
+                    'heading_scale' => 'Clear page headings with compact hierarchy.',
+                    'body_scale' => 'Readable body text with concise paragraphs.',
+                    'spacing_scale' => '8px base rhythm with generous section spacing.',
+                    'radius_scale' => '6px cards and 4px controls.',
+                ],
+                'visual_keywords' => ['clear hierarchy', 'trust proof', 'direct CTA'],
+                'tone_of_voice' => 'Specific, useful, and confident.',
+                'cta_tone' => 'Direct and low-friction.',
+                'forbidden_styles' => ['generic placeholder copy', 'invented routes', 'oversized decoration'],
+                'selection_reason' => 'Base theme context generated from the requirement expansion.',
+            ],
+            'navigation_plan' => [
+                'header_items' => [],
+            ],
+            'footer_plan' => [
+                'featured' => [],
+                'policies' => [],
+            ],
+            'shared_components' => [],
+            'seo_strategy' => [
+                'site_title' => $siteName,
+                'meta_description' => $primaryGoal,
+            ],
+        ];
     }
 
     /**
@@ -3349,25 +3569,178 @@ final class AiSitePlanJsonGenerationService
      */
     private function normalizeGeneratedStageOnePage(string $pageType, array $page, array $contract, array $scope, string $locale): array
     {
-        $fallback = $this->buildDeterministicStageOnePage($pageType, $scope, [], $contract, $locale);
-        $page = \array_replace($fallback, $page, [
+        unset($contract, $scope, $locale);
+        $page = \array_replace($page, [
             'page_type' => $pageType,
-            'status' => 0,
+            'status' => AiSitePlanJsonStateService::STATUS_PENDING,
         ]);
         foreach ($page as $key => $value) {
             if (!$this->isStageOneDynamicBlockKey((string)$key) || !\is_array($value)) {
                 continue;
             }
-            $fallbackBlock = \is_array($fallback[$key] ?? null)
-                ? $fallback[$key]
-                : $this->buildDeterministicStageOneBlock($pageType, (string)$key, 0, $scope, $locale);
-            $block = \array_replace_recursive($fallbackBlock, $value);
+            $block = $value;
             $block['block_key'] = \trim((string)($block['block_key'] ?? $key));
-            $block['status'] = 0;
+            $block['status'] = AiSitePlanJsonStateService::STATUS_PENDING;
             $page[$key] = $block;
         }
 
         return $page;
+    }
+
+    /**
+     * @param array<string, mixed> $pageContract
+     * @return list<string>
+     */
+    private function exactStageOnePageBlockKeys(array $pageContract): array
+    {
+        $required = \is_array($pageContract['required_block_keys'] ?? null) ? $pageContract['required_block_keys'] : [];
+        $optional = \is_array($pageContract['recommended_optional_block_keys'] ?? null) ? $pageContract['recommended_optional_block_keys'] : [];
+        $target = (int)($pageContract['target_blocks'] ?? 0);
+        if ($target <= 0) {
+            $target = (int)($pageContract['min_blocks'] ?? 0);
+        }
+
+        $keys = [];
+        foreach (\array_merge($required, $optional) as $blockKey) {
+            $blockKey = \trim((string)$blockKey);
+            if ($blockKey === '' || \in_array($blockKey, $keys, true)) {
+                continue;
+            }
+            $keys[] = $blockKey;
+            if ($target > 0 && \count($keys) >= $target) {
+                break;
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stageOneThemeDesignSkeleton(): array
+    {
+        return [
+            'theme_purpose' => 'Visitor goal and business goal for the site.',
+            'style_signature' => 'Distinct layout and visual identity for this brief.',
+            'art_direction' => 'Concrete image, surface, and composition direction.',
+            'color_scheme' => [
+                'primary' => '#1D4ED8',
+                'secondary' => '#0F766E',
+                'accent' => '#F59E0B',
+                'background' => '#F8FAFC',
+                'body' => '#111827',
+                'button' => '#1D4ED8',
+            ],
+            'typography_spacing_radius' => [
+                'font_family' => 'Inter, system-ui, sans-serif',
+                'heading_scale' => 'Clear page headings with compact hierarchy.',
+                'body_scale' => 'Readable body text with concise paragraphs.',
+                'spacing_scale' => '8px base rhythm with generous section spacing.',
+                'radius_scale' => '6px cards and 4px controls.',
+            ],
+            'visual_keywords' => ['clear hierarchy', 'trust proof', 'direct CTA'],
+            'tone_of_voice' => 'Specific, useful, and confident.',
+            'cta_tone' => 'Direct and low-friction.',
+            'forbidden_styles' => ['generic placeholder copy', 'invented routes', 'oversized decoration'],
+            'selection_reason' => 'Theme choices are derived from the current brief and route contract.',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stageOneThemeRootSkeleton(): array
+    {
+        return [
+            'i18n' => [
+                'content_locale' => 'en_US',
+            ],
+            'site_strategy' => [
+                'site_display_name' => 'Current site name',
+                'primary_goal' => 'Primary visitor outcome from the brief.',
+                'audience' => 'Visitors matched to the current brief.',
+            ],
+            'theme_style' => [
+                'style_name' => 'Current brief theme',
+                'tone' => 'Specific tone for the current audience.',
+                'layout_direction' => 'Concrete layout direction for the selected pages.',
+            ],
+            'palette' => [
+                'primary' => '#1D4ED8',
+                'secondary' => '#0F766E',
+                'accent' => '#F59E0B',
+                'background' => '#F8FAFC',
+                'body' => '#111827',
+                'button' => '#1D4ED8',
+            ],
+            'theme_design' => $this->stageOneThemeDesignSkeleton(),
+            'navigation_plan' => [
+                'header_items' => [],
+            ],
+            'footer_plan' => [
+                'featured' => [],
+                'policies' => [],
+            ],
+            'shared_components' => [],
+            'seo_strategy' => [
+                'primary_keywords' => [],
+                'secondary_keywords' => [],
+                'meta_title_pattern' => 'Current site title',
+                'meta_description_pattern' => 'Current site description',
+            ],
+        ];
+    }
+
+    private function json(mixed $value): string
+    {
+        return (string)(\json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '[]');
+    }
+
+    /**
+     * @param list<string> $exactBlockKeys
+     * @return array<string, mixed>
+     */
+    private function stageOnePageReturnSkeleton(array $exactBlockKeys): array
+    {
+        $skeleton = [
+            'page_goal' => 'Visitor-facing goal for this page.',
+            'theme_alignment_summary' => 'Theme fit summary for this page.',
+            'page_design_plan' => [
+                'section_flow' => $exactBlockKeys,
+                'visual_rhythm' => 'Concrete rhythm across the exact block keys.',
+            ],
+        ];
+        foreach ($exactBlockKeys as $blockKey) {
+            $skeleton[$blockKey] = [
+                'block_key' => $blockKey,
+                'page_flow_role' => 'opening|proof|support|conversion|detail',
+                'content' => 'Visitor-facing block copy.',
+                'design_tags' => '{complete object}',
+                'visual_signature' => '{complete object}',
+                'image_intent' => '{complete object}',
+                'field_plan' => [
+                    [
+                        'field' => 'headline',
+                        'sample' => 'Trusted play starts here.',
+                        'implementation_note' => 'Render as the block heading.',
+                    ],
+                    [
+                        'field' => 'supporting_copy',
+                        'sample' => 'Visitors get clear steps, secure cues, and a focused path to the next action.',
+                        'implementation_note' => 'Render below the heading.',
+                    ],
+                    [
+                        'field' => 'context_detail',
+                        'sample' => 'Fast setup, transparent rules, and visible support details.',
+                        'implementation_note' => 'Render as supporting detail.',
+                    ],
+                ],
+                'execution_script' => '{complete object with core_copy}',
+            ];
+        }
+
+        return $skeleton;
     }
 
     /**
@@ -3383,7 +3756,7 @@ final class AiSitePlanJsonGenerationService
         }
         $page = [
             'page_type' => $pageType,
-            'status' => -1,
+            'status' => AiSitePlanJsonStateService::STATUS_FAILED,
             'error' => $message,
             'attempt_no' => $attemptNo,
             'page_goal' => 'Stage-one page generation failed.',
@@ -3393,7 +3766,7 @@ final class AiSitePlanJsonGenerationService
         foreach ($blockKeys as $blockKey) {
             $page[$blockKey] = [
                 'block_key' => $blockKey,
-                'status' => -1,
+                'status' => AiSitePlanJsonStateService::STATUS_FAILED,
                 'error' => $message,
                 'attempt_no' => $attemptNo,
                 'content' => '',
@@ -3465,8 +3838,26 @@ final class AiSitePlanJsonGenerationService
             'secondary_keywords' => true,
             'seo' => true,
             'route' => true,
+            'route_path' => true,
             'slug' => true,
             'path' => true,
+            'layout' => true,
+            'style_code' => true,
+            'style_settings' => true,
+            'design_tokens' => true,
+            'theme_css_ref' => true,
+            'navigation' => true,
+            'menus' => true,
+            'links' => true,
+            'settings' => true,
+            'preview_url' => true,
+            'preview_full_url' => true,
+            'visual_preview_url' => true,
+            'visual_edit_url' => true,
+            'virtual_preview_url' => true,
+            'virtual_edit_url' => true,
+            'section_refinements' => true,
+            'ai_description' => true,
             'updated_at' => true,
         ][$key]);
     }
@@ -3490,6 +3881,14 @@ final class AiSitePlanJsonGenerationService
             }
             if (\trim((string)($page['theme_alignment_summary'] ?? '')) === '') {
                 $page['theme_alignment_summary'] = $this->resolvePageWhy($pageType, $label, $locale);
+            }
+            if (!\is_array($page['page_design_plan'] ?? null) || $page['page_design_plan'] === []) {
+                $page['page_design_plan'] = [
+                    'intent' => (string)($page['page_goal'] ?? $this->resolvePageGoal($pageType, $label, $locale)),
+                    'structure' => 'Use the required direct block keys under plan_json.pages.' . $pageType . ' as the execution order.',
+                    'visual_direction' => (string)($page['theme_alignment_summary'] ?? $this->resolvePageWhy($pageType, $label, $locale)),
+                    'content_direction' => 'Each block should contain concrete visitor-facing copy, proof, and a clear next step when relevant.',
+                ];
             }
             $planJson['pages'][$pageType] = $page;
         }
@@ -3540,18 +3939,6 @@ final class AiSitePlanJsonGenerationService
         return $pageLabel . ' aligns the shared theme with the page role and visitor decision path.';
     }
 
-    /**
-     * @return list<string>
-     */
-    private function buildSecondaryKeywords(string $pageType, string $pageLabel): array
-    {
-        if ($pageType === Page::TYPE_HOME || $pageType === 'home_page') {
-            return [$pageLabel . ' guide', $pageLabel . ' FAQ', 'brand overview', 'core benefits'];
-        }
-
-        return [$pageLabel . ' guide', $pageLabel . ' FAQ', 'brand overview', 'key benefits'];
-    }
-
     private function isEmptyAiStreamCompletionFailure(\Throwable $throwable): bool
     {
         for ($current = $throwable; $current instanceof \Throwable; $current = $current->getPrevious()) {
@@ -3561,8 +3948,6 @@ final class AiSitePlanJsonGenerationService
                 || \str_contains($message, 'completed without content')
                 || \str_contains($message, 'returned no content')
                 || \str_contains($message, 'empty ai stream completion')
-                || \str_contains($message, '未返回任何内容')
-                || \str_contains($message, '瀹屾垚浣嗘湭杩斿洖浠讳綍鍐呭')
             ) {
                 return true;
             }
@@ -3598,44 +3983,6 @@ final class AiSitePlanJsonGenerationService
         }
 
         return 'AI Site';
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     */
-    private function buildStageOneContractBlockHeadline(string $pageType, string $blockKey, array $scope, string $contentLocale): string
-    {
-        unset($scope);
-        $label = $this->humanizeIdentifier($blockKey);
-        if ($this->isChineseLocale($contentLocale)) {
-            return $label . ' 閺嶇绺炬穱鈩冧紖';
-        }
-        if (\str_contains($blockKey, 'download')) {
-            return 'Download with confidence';
-        }
-        if (\str_contains($blockKey, 'trust') || \str_contains($blockKey, 'proof')) {
-            return 'Trust signals visitors can scan';
-        }
-        if (\str_contains($pageType, 'contact')) {
-            return 'Contact paths that feel clear';
-        }
-
-        return $label . ' for the visitor journey';
-    }
-
-    private function stageOneNeonCardImageSubject(string $blockKey): string
-    {
-        if (\str_contains($blockKey, 'hero')) {
-            return 'CSS-only/no generated image: card-game lobby hero scene with layered chips, table rhythm, and focused CTA surfaces.';
-        }
-        if (\str_contains($blockKey, 'trust') || \str_contains($blockKey, 'review')) {
-            return 'CSS-only/no generated image: player trust proof scene with review cards, safety badges, and support cues.';
-        }
-        if (\str_contains($blockKey, 'faq') || \str_contains($blockKey, 'rule')) {
-            return 'CSS-only/no generated image: rules and support scene with accordion rows and help chips.';
-        }
-
-        return 'CSS-only/no generated image: substantial CSS media surface tailored to this block.';
     }
 
     /**

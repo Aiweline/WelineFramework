@@ -82,9 +82,7 @@ class QueueDbWriter extends SseWriter
         'plan_json',
         'task_results',
         'pagebuilder_pages_by_type',
-        'virtual_pages_by_type',
-        'page_type_layouts',
-        'block_nodes',
+        'blocks',
         'component',
         'html',
         'css',
@@ -795,12 +793,24 @@ class QueueDbWriter extends SseWriter
      */
     private function discardTransientStatePayloadFields(array $payload): array
     {
-        unset($payload['snapshot'], $payload['queue_snapshot'], $payload['checkpoint']);
+        unset(
+            $payload['snapshot'],
+            $payload['queue_snapshot'],
+            $payload['checkpoint'],
+            $payload['virtual_pages_by_type'],
+            $payload['page_type_layouts']
+        );
         foreach (['payload', 'details', 'terminal_summary'] as $nestedField) {
             if (!\is_array($payload[$nestedField] ?? null)) {
                 continue;
             }
-            unset($payload[$nestedField]['snapshot'], $payload[$nestedField]['queue_snapshot'], $payload[$nestedField]['checkpoint']);
+            unset(
+                $payload[$nestedField]['snapshot'],
+                $payload[$nestedField]['queue_snapshot'],
+                $payload[$nestedField]['checkpoint'],
+                $payload[$nestedField]['virtual_pages_by_type'],
+                $payload[$nestedField]['page_type_layouts']
+            );
         }
 
         return $payload;
@@ -1083,7 +1093,7 @@ class QueueDbWriter extends SseWriter
             return true;
         }
 
-        foreach (['queue_status', 'status', 'job_status', 'task_status', 'semantic_status'] as $statusKey) {
+        foreach (['queue_status', 'task_status'] as $statusKey) {
             $status = \strtolower(\trim((string)($payload[$statusKey] ?? '')));
             if (\in_array($status, [
                 'done',

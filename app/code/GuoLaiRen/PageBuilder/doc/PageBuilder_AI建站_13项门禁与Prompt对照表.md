@@ -7,7 +7,7 @@
 | 范围 | 有效输入 | 禁止作为真相源 |
 | --- | --- | --- |
 | 页面覆盖 | `plan_json.pages.{page_type}` | 移除页面表、移除阶段契约、移除工作台缓存 |
-| block 执行 | `plan_json.pages.{page_type}.{block_key}.status` | 移除派生任务、历史plan_json block node 工作表 artifact、历史plan_json 生成流程 |
+| block 执行 | `plan_json.pages.{page_type}.{block_key}.status` | 移除派生任务、历史plan_json block 工作表 artifact、历史plan_json 生成流程 |
 | block 内容 | `html`、`phtml`、`fields`、`assets`、`error` | 既有 `pages.{page_type}.{block_key}` |
 | 发布完成 | 所选页面所有动态 block `status=1` | 任何派生 plan 或历史 contract |
 

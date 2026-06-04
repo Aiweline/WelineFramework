@@ -329,14 +329,41 @@ class Core
         $getFallback = $requestMethod === 'HEAD' ? '::GET' : '';
         $defaultRoute = $isPcAdmin ? 'admin' : 'index/index';
 
-        return isset($routers[$url])
-            || isset($routers[$url . $method])
-            || ($getFallback !== '' && isset($routers[$url . $getFallback]))
-            || ($url === '' && (
-                isset($routers[$defaultRoute])
-                || isset($routers[$defaultRoute . $method])
-                || ($getFallback !== '' && isset($routers[$defaultRoute . $getFallback]))
-            ));
+        return self::resolveGeneratedRouterRule($routers, $url, $method, $getFallback, $defaultRoute) !== null;
+    }
+
+    private static function resolveGeneratedRouterRule(
+        array $routers,
+        string $url,
+        string $method,
+        string $getFallback,
+        string $defaultRoute
+    ): ?array {
+        $candidates = [$url, $url . $method];
+        if ($getFallback !== '') {
+            $candidates[] = $url . $getFallback;
+        }
+
+        if (\in_array(\trim($url, '/'), ['', 'index', 'index/index'], true)) {
+            $candidates[] = $defaultRoute;
+            $candidates[] = $defaultRoute . $method;
+            if ($getFallback !== '') {
+                $candidates[] = $defaultRoute . $getFallback;
+            }
+            $candidates[] = '';
+            $candidates[] = $method;
+            if ($getFallback !== '') {
+                $candidates[] = $getFallback;
+            }
+        }
+
+        foreach (\array_unique($candidates) as $candidate) {
+            if (isset($routers[$candidate]) && \is_array($routers[$candidate])) {
+                return $routers[$candidate];
+            }
+        }
+
+        return null;
     }
 
     private static function isStaleEmptyRootRouterCache(
@@ -1090,19 +1117,13 @@ class Core
             $getFallback = $requestMethod === 'HEAD' ? '::GET' : '';
             // 处理空路径：后台请求使用 'admin' 作为默认路由，前端请求使用 'index/index'
             $defaultRoute = $is_pc_admin ? 'admin' : 'index/index';
+            $matchedRouter = self::resolveGeneratedRouterRule($routers, $url, $method, $getFallback, $defaultRoute);
             
             // URL 已经正确保留了 admin/ 前缀（如 admin/login），不再需要 adminPrefixedUrl 补丁
-            if (
-                isset($routers[$url]) || isset($routers[$url . $method]) || 
-                ($getFallback && isset($routers[$url . $getFallback])) ||
-                (empty($url) && (isset($routers[$defaultRoute]) || isset($routers[$defaultRoute . $method]) || ($getFallback && isset($routers[$defaultRoute . $getFallback]))))
-            ) {
+            if ($matchedRouter !== null) {
                 // 优先处理没有请求方法后缀的路由（如 save 而不是 save::POST），这样可以避免需要强制使用 postSave 这样的命名
                 // 对于 HEAD 请求，如果没有专门的 HEAD 路由，则回退到 GET 路由
-                $this->router = $routers[$url] ?? $routers[$url . $method] ?? 
-                    ($getFallback ? ($routers[$url . $getFallback] ?? null) : null) ??
-                    $routers[$defaultRoute] ?? $routers[$defaultRoute . $method] ??
-                    ($getFallback ? ($routers[$defaultRoute . $getFallback] ?? null) : null);
+                $this->router = $matchedRouter;
                 
                 # 缓存路由结果
                 $this->router['type'] = 'pc';

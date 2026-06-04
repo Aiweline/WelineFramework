@@ -1,3 +1,168 @@
+    function renderPublishChecklistModal(payload) {
+        var modal = document.getElementById('pb-ai-publish-checklist-modal');
+        if (!modal) { return null; }
+        var alertEl = modal.querySelector('#pb-ai-publish-checklist-alert');
+        var loadingEl = modal.querySelector('#pb-ai-publish-checklist-loading');
+        var listEl = modal.querySelector('#pb-ai-publish-checklist-items');
+        var rawEl = modal.querySelector('#pb-ai-publish-checklist-raw');
+        var rawWrap = modal.querySelector('#pb-ai-publish-checklist-raw-wrap');
+        var confirmBtn = modal.querySelector('#pb-ai-publish-checklist-confirm');
+        if (loadingEl) { loadingEl.classList.add('d-none'); }
+        if (listEl) { listEl.innerHTML = ''; }
+        var payloadObj = (payload && typeof payload === 'object') ? payload : {};
+        var items = Array.isArray(payloadObj.items) ? payloadObj.items : [];
+        var passed = !!payloadObj.passed;
+        if (alertEl) {
+            alertEl.classList.remove('d-none', 'alert-success', 'alert-warning', 'alert-info');
+            if (!items.length) {
+                alertEl.classList.add('alert-info');
+                alertEl.textContent = messages.publishCheckNoItems || '';
+            } else if (passed) {
+                alertEl.classList.add('alert-success');
+                alertEl.innerHTML = '<i class="mdi mdi-check-circle-outline me-1"></i>' + (messages.publishCheckAllPassedAlert || '');
+            } else {
+                alertEl.classList.add('alert-warning');
+                alertEl.innerHTML = '<i class="mdi mdi-alert-outline me-1"></i>' + (messages.publishCheckFailedAlert || '');
+            }
+        }
+        if (listEl) {
+            items.forEach(function (item) {
+                if (!item || typeof item !== 'object') { return; }
+                var ok = !!item.ok;
+                var li = document.createElement('li');
+                li.className = 'list-group-item d-flex align-items-start gap-2';
+                if (!ok) { li.classList.add('bg-warning', 'bg-opacity-10'); }
+                var iconWrap = document.createElement('span');
+                iconWrap.className = ok ? 'text-success fs-5 lh-1' : 'text-danger fs-5 lh-1';
+                iconWrap.innerHTML = ok
+                    ? '<i class="mdi mdi-check-circle" aria-hidden="true"></i>'
+                    : '<i class="mdi mdi-close-circle" aria-hidden="true"></i>';
+                li.appendChild(iconWrap);
+                var bodyWrap = document.createElement('div');
+                bodyWrap.className = 'flex-fill';
+                var titleEl = document.createElement('div');
+                titleEl.className = 'fw-semibold';
+                titleEl.textContent = String(item.label || item.key || '');
+                bodyWrap.appendChild(titleEl);
+                var descEl = document.createElement('div');
+                descEl.className = 'small text-muted mt-1';
+                var descText = '';
+                if (typeof item.detail === 'string' && item.detail !== '') {
+                    descText = item.detail;
+                } else if (typeof item.message === 'string' && item.message !== '') {
+                    descText = item.message;
+                } else if (typeof item.hint === 'string' && item.hint !== '') {
+                    descText = item.hint;
+                }
+                if (!descText) {
+                    descText = ok ? (messages.publishCheckItemOk || '') : (messages.publishCheckItemFail || '');
+                }
+                descEl.textContent = descText;
+                bodyWrap.appendChild(descEl);
+                if (item.value !== undefined && item.value !== null && item.value !== '') {
+                    if (typeof item.value === 'object') {
+                        if (!ok) {
+                            var valuePre = document.createElement('pre');
+                            valuePre.className = 'small bg-light rounded p-2 mt-2 mb-0';
+                            valuePre.style.maxHeight = '120px';
+                            valuePre.style.overflow = 'auto';
+                            try {
+                                valuePre.textContent = JSON.stringify(item.value, null, 2);
+                            } catch (jsonErr) {
+                                valuePre.textContent = String(item.value);
+                            }
+                            bodyWrap.appendChild(valuePre);
+                        }
+                    } else {
+                        var valueEl = document.createElement('code');
+                        valueEl.className = 'small d-inline-block mt-1';
+                        valueEl.textContent = String(item.value);
+                        bodyWrap.appendChild(valueEl);
+                    }
+                }
+                li.appendChild(bodyWrap);
+                var badge = document.createElement('span');
+                badge.className = ok ? 'badge bg-success-subtle text-success align-self-center' : 'badge bg-danger-subtle text-danger align-self-center';
+                badge.textContent = ok ? (messages.publishCheckItemOk || '') : (messages.publishCheckItemFail || '');
+                li.appendChild(badge);
+                listEl.appendChild(li);
+            });
+        }
+        if (rawEl) { rawEl.textContent = JSON.stringify(payloadObj, null, 2); }
+        if (rawWrap) { rawWrap.open = false; }
+        if (confirmBtn) { confirmBtn.disabled = !passed; }
+        return passed;
+    }
+
+    function openPublishChecklistModalLoading() {
+        var modal = document.getElementById('pb-ai-publish-checklist-modal');
+        if (!modal) { return null; }
+        var loadingEl = modal.querySelector('#pb-ai-publish-checklist-loading');
+        var alertEl = modal.querySelector('#pb-ai-publish-checklist-alert');
+        var listEl = modal.querySelector('#pb-ai-publish-checklist-items');
+        var confirmBtn = modal.querySelector('#pb-ai-publish-checklist-confirm');
+        if (loadingEl) { loadingEl.classList.remove('d-none'); }
+        if (listEl) { listEl.innerHTML = ''; }
+        if (alertEl) { alertEl.classList.add('d-none'); }
+        if (confirmBtn) { confirmBtn.disabled = true; }
+        try {
+            showBootstrapModal(modal);
+            return resolveBootstrapModalInstance(modal);
+        } catch (err) { /* fallthrough */ }
+        modal.classList.add('show');
+        modal.style.display = 'block';
+        return null;
+    }
+
+    function closePublishChecklistModal() {
+        var modal = document.getElementById('pb-ai-publish-checklist-modal');
+        if (!modal) { return; }
+        try {
+            hideBootstrapModal(modal);
+            return;
+        } catch (err) { /* fallthrough */ }
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+    }
+
+    function runPublishChecklistFetchAndRender(forceOpen) {
+        if (!publishCheckUrl) {
+            toast('error', messages.networkError);
+            return Promise.resolve(false);
+        }
+        if (!guardRetryableAiFailuresBeforeProgress(null)) {
+            return Promise.resolve(false);
+        }
+        var modalOpened = false;
+        if (forceOpen) {
+            openPublishChecklistModalLoading();
+            modalOpened = true;
+        }
+        return postForm(publishCheckUrl, { public_id: publicId }).then(function (data) {
+            if (!data || !data.success) {
+                if (modalOpened) { closePublishChecklistModal(); }
+                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                return false;
+            }
+            var payload = (data.data && typeof data.data === 'object') ? data.data : {};
+            var passed = renderPublishChecklistModal(payload);
+            var oldOutput = document.getElementById('pb-ai-publish-check-output');
+            if (oldOutput) {
+                oldOutput.textContent = JSON.stringify(payload, null, 2);
+                oldOutput.classList.add('d-none');
+            }
+            toast(passed ? 'success' : 'warning', passed ? (messages.publishCheckPassed || '') : (messages.publishCheckFailed || ''));
+            return passed;
+        }).catch(function () {
+            if (modalOpened) { closePublishChecklistModal(); }
+            toast('error', messages.networkError);
+            return false;
+        });
+    }
+
+    window.__pbOpenPublishChecklistModal = function () { return runPublishChecklistFetchAndRender(true); };
+    window.__pbClosePublishChecklistModal = closePublishChecklistModal;
+
     function bindPublishStageLogic() {
         syncPublishStartButtonFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
         syncPublishedSiteAccess(latestWorkspaceState || initialWorkspaceState || {});
@@ -78,9 +243,9 @@
                     }
                 }
                 if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-                    var confirmTitle = String(messages.publishCheckModalTitle || '发布前预检清单');
-                    var confirmMessage = String(messages.publishCheckConfirmPrompt || '确认将当前站点正式发布？发布后会覆盖原有线上站点内容。');
-                    var confirmAction = String(messages.publishCheckConfirmAction || '确认发布');
+                    var confirmTitle = String(messages.publishCheckModalTitle || 'Publish checklist');
+                    var confirmMessage = String(messages.publishCheckConfirmPrompt || 'Confirm publishing the current site? This will replace the live site content.');
+                    var confirmAction = String(messages.publishCheckConfirmAction || 'Confirm publish');
                     window.BackendConfirm.show(confirmMessage, {
                         title: confirmTitle,
                         confirmText: confirmAction,
@@ -97,3 +262,22 @@
         }
     }
 
+    window.__pbStageLogic = Object.assign(window.__pbStageLogic || {}, {
+        bindPublishStageLogic: bindPublishStageLogic
+    });
+    bindPublishStageLogic();
+    document.addEventListener('DOMContentLoaded', function () {
+        window.setTimeout(bindPublishStageLogic, 0);
+    });
+    var publishStageAsyncBindAttempts = 0;
+    function bindPublishStageWhenActionsAppear() {
+        publishStageAsyncBindAttempts += 1;
+        if (document.getElementById('pb-ai-run-publish-check') || document.getElementById('pb-ai-start-publish')) {
+            bindPublishStageLogic();
+            return;
+        }
+        if (publishStageAsyncBindAttempts < 20) {
+            window.setTimeout(bindPublishStageWhenActionsAppear, 250);
+        }
+    }
+    window.setTimeout(bindPublishStageWhenActionsAppear, 250);

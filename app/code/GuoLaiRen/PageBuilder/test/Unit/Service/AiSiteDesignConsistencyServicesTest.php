@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Service\AiSiteDesignTokenResolver;
-use GuoLaiRen\PageBuilder\Service\AiSiteDeterministicStylePatchService;
+use GuoLaiRen\PageBuilder\Service\AiSiteContractStylePatchService;
 use GuoLaiRen\PageBuilder\Service\AiSiteLanguageVoiceResolver;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeManifestPolicy;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeCssService;
@@ -35,7 +35,7 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
             'plan_json' => ['pages' => []],
             'virtual_pages_by_type' => [
                 'home_page' => [
-                    'block_nodes' => [
+                    'blocks' => [
                         ['block_id' => 'hero', 'html' => str_repeat('x', 600)],
                     ],
                 ],
@@ -43,8 +43,8 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
         ];
         $dehydrated = $policy->dehydrateScopePaths($scope);
         self::assertSame([], $dehydrated['plan_json']);
-        self::assertArrayNotHasKey('html', $dehydrated['virtual_pages_by_type']['home_page']['block_nodes'][0]);
-        self::assertNotEmpty($dehydrated['virtual_page_index']['home_page']['block_nodes']);
+        self::assertArrayNotHasKey('html', $dehydrated['virtual_pages_by_type']['home_page']['blocks'][0]);
+        self::assertNotEmpty($dehydrated['virtual_page_index']['home_page']['blocks']);
     }
 
     public function testDesignTokenResolverBuildsRootCss(): void
@@ -62,9 +62,9 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
         self::assertStringContainsString('--pb-color-primary:#112233', $css);
     }
 
-    public function testDeterministicFontPatchUsesVarTokens(): void
+    public function testContractFontPatchUsesVarTokens(): void
     {
-        $patch = new AiSiteDeterministicStylePatchService();
+        $patch = new AiSiteContractStylePatchService();
         $css = '#componentId .pb-c-title{font-family:Inter,sans-serif;}';
         $patched = $patch->patchHardcodedFonts($css, ['font_display' => 'X']);
         self::assertStringContainsString('var(--pb-font-display)', $patched);
@@ -75,10 +75,10 @@ final class AiSiteDesignConsistencyServicesTest extends TestCase
     {
         $resolver = new AiSiteLanguageVoiceResolver();
         $lexicon = $resolver->resolveCtaLexicon([
-            'site_strategy' => ['primary_cta' => '立即下载'],
-            'theme_design' => ['cta_tone' => '直接行动'],
+            'site_strategy' => ['primary_cta' => '绔嬪嵆涓嬭浇'],
+            'theme_design' => ['cta_tone' => '鐩存帴琛屽姩'],
         ], 'zh_Hans_CN');
-        self::assertContains('立即下载', $lexicon);
+        self::assertContains('绔嬪嵆涓嬭浇', $lexicon);
         self::assertGreaterThanOrEqual(3, \count($lexicon));
     }
 

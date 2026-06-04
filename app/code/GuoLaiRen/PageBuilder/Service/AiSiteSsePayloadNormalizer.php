@@ -7,7 +7,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 /**
  * SSE payload contract for PageBuilder AI workspace streams.
  *
- * Build execution has one public progress truth source: plan_json block node status
+ * Build execution has one public progress truth source: plan_json block status
  * plus the derived build task summary emitted for display.
  */
 class AiSiteSsePayloadNormalizer
@@ -62,6 +62,8 @@ class AiSiteSsePayloadNormalizer
      */
     public function normalize(array $payload): array
     {
+        unset($payload['job_status']);
+
         if (isset($payload['queue_status']) && \is_string($payload['queue_status'])) {
             $payload['queue_status'] = \strtolower(\trim($payload['queue_status']));
         }

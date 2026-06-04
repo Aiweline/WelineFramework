@@ -49,7 +49,7 @@ class AiSiteScopeCompatibilityService
 
     public function __construct(
         private readonly LayoutConfigNormalizer $layoutConfigNormalizer,
-        private readonly ?AiSiteHtmlBlockNodesBuildService $aiSiteHtmlBlockNodesBuildService = null,
+        private readonly ?AiSiteHtmlBlocksBuildService $aiSiteHtmlBlocksBuildService = null,
         private readonly ?AiSitePlanJsonStateService $planJsonStateService = null,
     ) {
     }
@@ -124,17 +124,6 @@ class AiSiteScopeCompatibilityService
         $normalized['design_direction_match_reason'] = \trim((string)($scope['design_direction_match_reason'] ?? ''));
         $normalized['design_direction_locked'] = $this->normalizeTruthyFlag($scope['design_direction_locked'] ?? 0) ? 1 : 0;
         $normalized['page_types'] = $this->resolveScopedPageTypes($scope);
-        $normalized['page_type_layouts'] = $this->normalizePageTypeLayouts(
-            $scope['page_type_layouts'] ?? [],
-            $normalized['page_types']
-        );
-        $normalized['pagebuilder_pages_by_type'] = $this->normalizePagebuilderPagesByType(
-            $scope['pagebuilder_pages_by_type'] ?? []
-        );
-        $normalized['virtual_pages_by_type'] = $this->normalizeVirtualPagesByType(
-            $scope['virtual_pages_by_type'] ?? [],
-            $normalized['page_types']
-        );
         $normalized['draft_website_id'] = \max(
             (int)($scope['draft_website_id'] ?? 0),
             (int)($scope['website_id'] ?? 0),
@@ -148,17 +137,14 @@ class AiSiteScopeCompatibilityService
             $normalized['build_summary'] = [];
         }
 
-        $selection = $this->resolvePreviewSelection(
-            $normalized['pagebuilder_pages_by_type'],
+        $selection = $this->resolvePlanJsonPreviewSelection(
+            $normalized,
             (int)($scope['preview_page_id'] ?? 0),
             (string)($scope['preview_page_type'] ?? '')
         );
         $normalized['preview_page_id'] = $selection['preview_page_id'];
-        $normalized['preview_page_type'] = $this->resolvePreviewPageType(
-            $normalized['virtual_pages_by_type'],
-            (string)($scope['preview_page_type'] ?? $selection['preview_page_type'])
-        );
-        $normalized['preview_page_options'] = $this->buildPreviewPageOptions($normalized['pagebuilder_pages_by_type']);
+        $normalized['preview_page_type'] = $selection['preview_page_type'];
+        $normalized['preview_page_options'] = $this->buildPlanJsonPreviewPageOptions($normalized);
 
         if (!\is_array($normalized['website_profile'] ?? null)) {
             $normalized['website_profile'] = [];
@@ -172,21 +158,10 @@ class AiSiteScopeCompatibilityService
                 $normalized['website_profile'],
                 $explicitContentLocale
             );
-            $normalized['virtual_pages_by_type'] = $this->localizeVirtualPagesForVisitorLocale(
-                $normalized['virtual_pages_by_type'],
-                $explicitContentLocale,
-                $normalized['website_profile'],
-                $normalized
-            );
             $normalized['locales'] = $this->prependLocaleToList(
                 \is_array($normalized['locales'] ?? null) ? $normalized['locales'] : [],
                 $explicitContentLocale
             );
-        }
-        foreach ($normalized['page_type_layouts'] as $pageType => $layout) {
-            if (\is_array($layout)) {
-                $normalized['page_type_layouts'][$pageType] = $this->localizeSharedLayoutConfigForScope($layout, $normalized, (string)$pageType);
-            }
         }
         $routeContractRaw = \is_array($scope['page_route_contract'] ?? null) ? $scope['page_route_contract'] : [];
         $normalized['page_route_contract'] = $this->getPageRouteContractService()->normalize(
@@ -227,11 +202,6 @@ class AiSiteScopeCompatibilityService
             $scope['theme_css_ref'] = $themeCssService->buildManifestRef($generated);
         }
 
-        $policy = new AiSiteScopeManifestPolicy();
-        $scope['virtual_page_index'] = $policy->buildVirtualPageIndex(
-            \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : []
-        );
-
         return $scope;
     }
 
@@ -254,6 +224,12 @@ class AiSiteScopeCompatibilityService
     public function hasPersistedStageOnePlan(array $scope): bool
     {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if (!empty($scope['fake_mode'])) {
+            $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+            if ($this->stageOnePlanPagesContainBlocks($pages)) {
+                return true;
+            }
+        }
 
         return $this->isUsableStageOnePlanJson($planJson);
     }
@@ -408,19 +384,35 @@ class AiSiteScopeCompatibilityService
             'page_design_plan' => true,
             'theme_alignment_summary' => true,
             'page_context_hash' => true,
-            'block_nodes' => true,
-            'block_nodes' => true,
+            'blocks' => true,
+            'blocks' => true,
             'ordered_block_keys' => true,
             'seo' => true,
             'meta_title' => true,
             'meta_description' => true,
             'meta_keywords' => true,
             'route' => true,
+            'route_path' => true,
             'slug' => true,
             'path' => true,
             'layout' => true,
+            'style_code' => true,
+            'style_settings' => true,
+            'design_tokens' => true,
+            'theme_css_ref' => true,
+            'navigation' => true,
+            'menus' => true,
+            'links' => true,
+            'settings' => true,
+            'preview_url' => true,
+            'preview_full_url' => true,
+            'visual_preview_url' => true,
+            'visual_edit_url' => true,
+            'virtual_preview_url' => true,
+            'virtual_edit_url' => true,
             'sections' => true,
             'section_refinements' => true,
+            'ai_description' => true,
             'content' => true,
             'description' => true,
             'summary' => true,
@@ -448,7 +440,7 @@ class AiSiteScopeCompatibilityService
     }
 
     public const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
-    public const WORKSPACE_TRACK_HTML_BLOCK_NODES = 'html_block_nodes';
+    public const WORKSPACE_TRACK_html_blocks = 'html_blocks';
 
     public function normalizeWorkspaceTrack(string $raw): string
     {
@@ -746,10 +738,6 @@ class AiSiteScopeCompatibilityService
         if (!\is_array($raw)) {
             return [];
         }
-        if (\is_array($raw['pagebuilder_pages_by_type'] ?? null)) {
-            $raw = $raw['pagebuilder_pages_by_type'];
-        }
-
         $pages = [];
         foreach ($raw as $pageType => $pageData) {
             if (!\is_string($pageType) || !\is_array($pageData)) {
@@ -814,9 +802,9 @@ class AiSiteScopeCompatibilityService
         bool $allowAiPlaceholderGeneration = true
     ): array
     {
-        $existing = $this->normalizeVirtualPagesByType($scope['virtual_pages_by_type'] ?? [], $pageTypes);
-        $inputVirtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $layouts = $this->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $existing = [];
+        $inputVirtualPages = [];
+        $layouts = [];
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $siteTitle = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''));
         $contentLocale = $this->resolveContentLocale($scope, $websiteProfile);
@@ -827,7 +815,7 @@ class AiSiteScopeCompatibilityService
             $contentLocale
         );
         $routesByType = $this->getPageRouteContractService()->routesByType($pageRouteContract);
-        $blocksBuilder = $this->aiSiteHtmlBlockNodesBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlockNodesBuildService::class);
+        $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
 
         foreach ($pageTypes as $pageType) {
             $record = $existing[$pageType] ?? $this->normalizeVirtualPageRecord([], $pageType);
@@ -871,8 +859,8 @@ class AiSiteScopeCompatibilityService
             $placeholderBlocks = $allowAiPlaceholderGeneration
                 ? $this->buildWorkspacePlaceholderBlocks($blocksBuilder, $pageType, $websiteProfile, $scope)
                 : [];
-            $record['block_nodes'] = $this->hydrateEditableBlockMetadata(
-                \is_array($record['block_nodes'] ?? null) ? $record['block_nodes'] : [],
+            $record['blocks'] = $this->hydrateEditableBlockMetadata(
+                \is_array($record['blocks'] ?? null) ? $record['blocks'] : [],
                 $placeholderBlocks
             );
             $existing[$pageType] = $record;
@@ -891,7 +879,7 @@ class AiSiteScopeCompatibilityService
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
      */    private function buildWorkspacePlaceholderBlocks(
-        AiSiteHtmlBlockNodesBuildService $blocksBuilder,
+        AiSiteHtmlBlocksBuildService $blocksBuilder,
         string $pageType,
         array $websiteProfile,
         array $scope
@@ -900,7 +888,7 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
-     * 闁硅矇鍐ㄧ厬闁?publish checklist / task plan auto-dispatch 濞村吋姘ㄩ弫銈囨嫚閵夈儱鐏查柡鍌ゅ幖閸犲懐鈧纰嶅Σ鎼佸触閿曗偓閸樻垹鎷嬪灞剧《闂傚啳鍩栭宀勫箳閵娿劎绠婚柕?
+     * 闂佺鐭囬崘銊у幀闂?publish checklist / task plan auto-dispatch 婵炴潙鍚嬪銊╁极閵堝洦瀚氶柕澶堝劚閻忔煡鏌￠崒銈呭箹闁哥姴鎳愰埀顒冾潐绾板秴危閹间礁瑙﹂柨鏇楀亾闁告ɑ鍨归幏瀣潰鐏炲墽銆婇梻鍌氬暢閸╂牠顢欏畝鍕闁靛鍔庣粻濠氭煏?
      *
      * @param array<string, array<string, mixed>> $virtualPagesByType
      * @param list<string> $pageTypes
@@ -915,7 +903,7 @@ class AiSiteScopeCompatibilityService
             if (!\is_array($record)) {
                 return false;
             }
-            $blocks = $record['block_nodes'] ?? null;
+            $blocks = $record['blocks'] ?? null;
             if (!\is_array($blocks) || $blocks === []) {
                 return false;
             }
@@ -1017,6 +1005,106 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
+     * @param array<string,mixed> $scope
+     * @return array{preview_page_id:int,preview_page_type:string}
+     */
+    public function resolvePlanJsonPreviewSelection(array $scope, int $previewPageId = 0, string $previewPageType = ''): array
+    {
+        $pages = $this->resolvePlanJsonPagesByType($scope);
+        $previewPageType = \trim($previewPageType);
+        if ($previewPageType !== '' && isset($pages[$previewPageType])) {
+            return [
+                'preview_page_id' => (int)($pages[$previewPageType]['page_id'] ?? $pages[$previewPageType]['materialized_page_id'] ?? $previewPageId),
+                'preview_page_type' => $previewPageType,
+            ];
+        }
+        if ($previewPageId > 0) {
+            foreach ($pages as $pageType => $page) {
+                if ((int)($page['page_id'] ?? $page['materialized_page_id'] ?? 0) === $previewPageId) {
+                    return [
+                        'preview_page_id' => $previewPageId,
+                        'preview_page_type' => (string)$pageType,
+                    ];
+                }
+            }
+        }
+        if (isset($pages[Page::TYPE_HOME])) {
+            return [
+                'preview_page_id' => (int)($pages[Page::TYPE_HOME]['page_id'] ?? $pages[Page::TYPE_HOME]['materialized_page_id'] ?? 0),
+                'preview_page_type' => Page::TYPE_HOME,
+            ];
+        }
+        foreach ($pages as $pageType => $page) {
+            return [
+                'preview_page_id' => (int)($page['page_id'] ?? $page['materialized_page_id'] ?? 0),
+                'preview_page_type' => (string)$pageType,
+            ];
+        }
+
+        return [
+            'preview_page_id' => 0,
+            'preview_page_type' => '',
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<array{value:int,page_id:int,type:string,label:string,title:string,handle:string}>
+     */
+    public function buildPlanJsonPreviewPageOptions(array $scope): array
+    {
+        $rows = [];
+        foreach ($this->resolvePlanJsonPagesByType($scope) as $pageType => $page) {
+            $pageId = (int)($page['page_id'] ?? $page['materialized_page_id'] ?? 0);
+            $title = \trim((string)($page['title'] ?? $page['name'] ?? $pageType));
+            $handle = \trim((string)($page['handle'] ?? ''));
+            $label = $title !== '' ? $title : (string)$pageType;
+            if ($handle !== '') {
+                $label .= ' (' . $handle . ')';
+            }
+            $rows[] = [
+                'value' => $pageId,
+                'page_id' => $pageId,
+                'type' => (string)$pageType,
+                'title' => $title,
+                'handle' => $handle,
+                'label' => $label,
+            ];
+        }
+
+        \usort($rows, static function (array $left, array $right): int {
+            if ($left['type'] === Page::TYPE_HOME && $right['type'] !== Page::TYPE_HOME) {
+                return -1;
+            }
+            if ($left['type'] !== Page::TYPE_HOME && $right['type'] === Page::TYPE_HOME) {
+                return 1;
+            }
+
+            return \strcmp((string)$left['type'], (string)$right['type']);
+        });
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,array<string,mixed>>
+     */
+    private function resolvePlanJsonPagesByType(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $result = [];
+        foreach ($pages as $pageType => $page) {
+            if (\is_string($pageType) && \is_array($page)) {
+                $result[$pageType] = $page;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * @param array<string, array<string, mixed>> $virtualPagesByType
      */
     public function resolvePreviewPageType(array $virtualPagesByType, string $requestedPageType = ''): string
@@ -1076,6 +1164,8 @@ class AiSiteScopeCompatibilityService
             return $layout;
         }
 
+        $layout = $this->applyPlanJsonSharedComponentsToLayout($layout, $scope);
+
         if (\is_array($layout['header']['config'] ?? null)) {
             $layout['header']['config'] = $this->localizeHeaderLayoutConfig($layout['header']['config'], $locale);
         }
@@ -1084,6 +1174,179 @@ class AiSiteScopeCompatibilityService
         }
 
         return $layout;
+    }
+
+    /**
+     * @param array<string,mixed> $layout
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function applyPlanJsonSharedComponentsToLayout(array $layout, array $scope): array
+    {
+        $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null)
+            ? $scope['plan_json']['shared_components']
+            : [];
+        if ($sharedComponents === []) {
+            return $layout;
+        }
+
+        foreach (['header', 'footer'] as $region) {
+            $component = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
+            if ($component === []) {
+                continue;
+            }
+            if (!\is_array($layout[$region] ?? null)) {
+                $layout[$region] = ['component' => '', 'config' => []];
+            }
+            $componentCode = $this->resolvePlanJsonSharedComponentCode($region, $component);
+            if ($componentCode !== '') {
+                $layout[$region]['component'] = $componentCode;
+            }
+            $planConfig = $this->resolvePlanJsonSharedComponentConfig($component);
+            if ($planConfig !== []) {
+                $currentConfig = \is_array($layout[$region]['config'] ?? null) ? $layout[$region]['config'] : [];
+                $layout[$region]['config'] = $this->applyPlanJsonIdentityToSharedComponentConfig(
+                    \array_replace($currentConfig, $planConfig),
+                    $scope,
+                    $region
+                );
+            }
+        }
+
+        return $layout;
+    }
+
+    /**
+     * @param array<string,mixed> $component
+     */
+    private function resolvePlanJsonSharedComponentCode(string $region, array $component): string
+    {
+        foreach ([$component['code'] ?? null, $component['component_code'] ?? null, $component['section_code'] ?? null] as $candidate) {
+            $code = \trim((string)$candidate);
+            if ($code !== '') {
+                return $code;
+            }
+        }
+
+        return match ($region) {
+            'header' => 'header/ai-site-header',
+            'footer' => 'footer/ai-site-footer',
+            default => '',
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $component
+     * @return array<string,mixed>
+     */
+    private function resolvePlanJsonSharedComponentConfig(array $component): array
+    {
+        foreach (['default_config', 'config', 'fields'] as $key) {
+            if (\is_array($component[$key] ?? null) && $component[$key] !== []) {
+                return $component[$key];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function applyPlanJsonIdentityToSharedComponentConfig(array $config, array $scope, string $region): array
+    {
+        $identity = $this->resolvePlanJsonIdentityForSharedComponents($scope);
+        $title = \trim((string)($identity['title'] ?? ''));
+        $tagline = \trim((string)($identity['tagline'] ?? ''));
+        if ($title !== '') {
+            foreach ($region === 'header' ? ['logo.text', 'brand.name', 'site_title', 'title'] : ['brand.name', 'logo.text', 'site_title', 'title'] as $key) {
+                if (\array_key_exists($key, $config)) {
+                    $config[$key] = $title;
+                }
+            }
+        }
+        if ($tagline !== '') {
+            foreach ($region === 'header' ? ['content.subtitle', 'site_tagline', 'tagline'] : ['brand.description', 'content.subtitle', 'site_tagline', 'tagline'] as $key) {
+                if (\array_key_exists($key, $config)) {
+                    $config[$key] = $tagline;
+                }
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array{title:string,tagline:string}
+     */
+    private function resolvePlanJsonIdentityForSharedComponents(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $siteBrief = \is_array($planJson['site_brief'] ?? null) ? $planJson['site_brief'] : [];
+        $sharedPrompt = \is_array($planJson['shared_prompt_context'] ?? null) ? $planJson['shared_prompt_context'] : [];
+        $themeContext = \is_array($planJson['theme_context_snapshot'] ?? null) ? $planJson['theme_context_snapshot'] : [];
+        $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $home = \is_array($pages['home_page'] ?? null) ? $pages['home_page'] : [];
+
+        $title = $this->safeVisitorTextForLocale($this->pickString(
+            $planJson['site_title'] ?? null,
+            $planJson['site_name'] ?? null,
+            $sharedPrompt['site_display_name'] ?? null,
+            $sharedPrompt['site_title'] ?? null,
+            $themeContext['site_display_name'] ?? null,
+            $themeContext['site_title'] ?? null,
+            $siteBrief['site_title'] ?? null,
+            $siteBrief['site_name'] ?? null,
+            $siteBrief['title'] ?? null,
+            $siteBrief['name'] ?? null,
+            $home['meta_title'] ?? null,
+            $home['page_title'] ?? null,
+            $home['title'] ?? null,
+            $home['name'] ?? null
+        ), $this->resolveContentLocale($scope, \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : []));
+        if ($this->isGenericPlanJsonIdentityText($title)) {
+            $title = '';
+        }
+        $tagline = $this->safeVisitorTextForLocale($this->pickString(
+            $planJson['site_tagline'] ?? null,
+            $planJson['tagline'] ?? null,
+            $sharedPrompt['site_tagline'] ?? null,
+            $sharedPrompt['tagline'] ?? null,
+            $themeContext['site_tagline'] ?? null,
+            $themeContext['tagline'] ?? null,
+            $siteBrief['site_tagline'] ?? null,
+            $siteBrief['tagline'] ?? null,
+            $siteBrief['summary'] ?? null,
+            $requirementExpansion['site_goal'] ?? null
+        ), $this->resolveContentLocale($scope, \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : []));
+
+        return ['title' => $title, 'tagline' => $tagline];
+    }
+
+    private function isGenericPlanJsonIdentityText(string $value): bool
+    {
+        $value = \strtolower(\trim((string)\preg_replace('/\s+/u', ' ', $value)));
+
+        return \in_array($value, ['home', 'home page', 'homepage', 'index', 'landing page'], true);
+    }
+
+    private function pickString(mixed ...$candidates): string
+    {
+        foreach ($candidates as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $value = \trim((string)$candidate);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -1158,9 +1421,12 @@ class AiSiteScopeCompatibilityService
         $resolvedType = \trim((string)($data['page_type'] ?? $data['type'] ?? $pageType));
         $label = (string)(Page::getPageTypes()[$resolvedType] ?? $resolvedType);
 
-        $blocks = $data['block_nodes'] ?? null;
-        if (!\is_array($blocks) && isset($data['ai_layout']['block_nodes']) && \is_array($data['ai_layout']['block_nodes'])) {
-            $blocks = $data['ai_layout']['block_nodes'];
+        $blocks = $data['blocks'] ?? null;
+        if (!\is_array($blocks) && isset($data['ai_layout']['blocks']) && \is_array($data['ai_layout']['blocks'])) {
+            $blocks = $data['ai_layout']['blocks'];
+        }
+        if (!\is_array($blocks) || $blocks === []) {
+            $blocks = $this->extractCanonicalPlanJsonBlocksFromPageRecord($data);
         }
         $blocks = \is_array($blocks) ? $this->normalizeBlocksList($blocks) : [];
 
@@ -1181,8 +1447,36 @@ class AiSiteScopeCompatibilityService
             'last_generated_at' => \trim((string)($data['last_generated_at'] ?? '')),
             'materialized_page_id' => (int)($data['materialized_page_id'] ?? 0),
             'section_refinements' => $this->normalizeStringMap($data['section_refinements'] ?? []),
-            'block_nodes' => $blocks,
+            'blocks' => $blocks,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return list<array<string, mixed>>
+     */
+    private function extractCanonicalPlanJsonBlocksFromPageRecord(array $data): array
+    {
+        $blocks = [];
+        foreach ($data as $key => $node) {
+            if (!\is_string($key) || !$this->isStageOneDynamicBlockKey($key) || !\is_array($node)) {
+                continue;
+            }
+            if (\array_key_exists('status', $node) && (int)$node['status'] !== 1) {
+                continue;
+            }
+            $html = \trim((string)($node['html'] ?? $node['html_content'] ?? $node['phtml'] ?? ''));
+            if ($html === '') {
+                continue;
+            }
+            $block = $node;
+            $block['block_id'] = \trim((string)($block['block_id'] ?? $block['block_key'] ?? $key));
+            $block['block_key'] = \trim((string)($block['block_key'] ?? $key));
+            $block['html'] = $html;
+            $blocks[] = $block;
+        }
+
+        return $blocks;
     }
 
     /**
@@ -1311,7 +1605,7 @@ class AiSiteScopeCompatibilityService
     private function hydrateEditableBlockMetadata(array $existingBlocks, array $defaultBlocks): array
     {
         if ($defaultBlocks === []) {
-            $blocksBuilder = $this->aiSiteHtmlBlockNodesBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlockNodesBuildService::class);
+            $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
 
             return \array_values(\array_map(
                 static fn(array $block): array => $blocksBuilder->hydrateGeneratedBlockMetadata($block),
@@ -1332,7 +1626,7 @@ class AiSiteScopeCompatibilityService
         }
 
         $hydrated = [];
-        $blocksBuilder = $this->aiSiteHtmlBlockNodesBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlockNodesBuildService::class);
+        $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
         foreach ($existingBlocks as $block) {
             if (!\is_array($block)) {
                 continue;
@@ -1380,7 +1674,7 @@ class AiSiteScopeCompatibilityService
             if (!\is_array($b)) {
                 continue;
             }
-            if (AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($b)) {
+            if (AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($b)) {
                 continue;
             }
             $bid = \trim((string)($b['block_id'] ?? ''));
@@ -1749,16 +2043,16 @@ class AiSiteScopeCompatibilityService
             return '';
         }
 
-        if (\preg_match('/\bhi(?:[_-]IN)?\b|Hindi|Hindustani|Devanagari|闁告婢樺﹢瀵告嫚閻″懘宕￠弶鎸庡嬀闁哄倸娅夐柛妤佹緲鐎瑰磭鎷犻悺鍛殽閻忓被浠ч崯韬插妴椤ㄦ帒鏆ラ敂娈挎當|閸熷墎浜撮妵鐔锋殽閸屾洏浜為崯灏佸亾/iu', $text) === 1) {
+        if (\preg_match('/\bhi(?:[_-]IN)?\b|Hindi|Hindustani|Devanagari|闂佸憡顨嗗妯猴耿鐎靛憡瀚氶柣鈥虫嚇瀹曪繝寮堕幐搴″瑎闂佸搫鍊稿▍澶愭煕濡や焦绶查悗鐟扮－閹风娀鎮洪崨顓熸闁诲繐琚禒褔宕煬鎻掑Υ妞ゃ劍甯掗弳銉╂晜濞堟寧鐣秥闁哥喎澧庢禍鎾Φ閻旈攱娈介柛灞炬磸娴滅偤宕亸浣镐壕/iu', $text) === 1) {
             return 'hi_IN';
         }
-        if (\preg_match('/\bth(?:[_-]TH)?\b|Thai|婵炲濯介顣㈡繛澶屽閺嬪剟閸犳梻濮憰鍡楁灃閳硅壈顩崰娆忓缁楁艾鏋?iu', $text) === 1) {
+        if (\preg_match('/\bth(?:[_-]TH)?\b|Thai|濠电偛顦版刊浠嬵敋椤ｃ垺绻涙径灞筋暭闁哄鍓熼柛鐘虫⒒婵亞鎲伴崱妤佺亙闁崇澹堥々顐﹀窗濞嗗繐顏＄紒妤佽壘閺?iu', $text) === 1) {
             return 'th_TH';
         }
-        if (\preg_match('/\bzh(?:[_-](?:Hans|CN|SG))?\b|缂佺姭鍋撳ù锝嗘尫閼垫垿寮崳鐔哥▔椤撶喐鐎畖Chinese/iu', $text) === 1) {
+        if (\preg_match('/\bzh(?:[_-](?:Hans|CN|SG))?\b|缂備胶濮崑鎾趁归敐鍡樺矮闁煎灚鍨垮顒勫闯閻斿摜鈻旀い鎾跺枑閻庣晼Chinese/iu', $text) === 1) {
             return 'zh_Hans_CN';
         }
-        if (\preg_match('/\bru(?:[_-]RU)?\b|Russian|濞ｅ洤瀚顣㈢憸澶庮槻鐟滃顦板▔缁樺櫜濞?iu', $text) === 1) {
+        if (\preg_match('/\bru(?:[_-]RU)?\b|Russian|婵烇絽娲ょ€氼垶顢氶。銏㈡喐婢跺寒妲婚悷婊冾儓椤︽澘鈻旂紒妯烘珳婵?iu', $text) === 1) {
             return 'ru_RU';
         }
 

@@ -91,6 +91,38 @@
     /**
      * 获取当前货币代码
      */
+    function isBackendLocalizedPath(pathParts) {
+        const config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+        if (config.area === 'backend' || (config.theme && config.theme.area === 'backend')) {
+            return true;
+        }
+        const backendKey = String((config.url && config.url.adminArea) || '');
+        if (backendKey && pathParts.some(part => String(part).toLowerCase() === backendKey.toLowerCase())) {
+            return true;
+        }
+        return document.documentElement
+            && document.documentElement.getAttribute('data-theme') === 'backend'
+            && pathParts.length > 0;
+    }
+
+    function buildCurrencyUrlFromPath(pathOnly, search, currency, lang) {
+        const currencyPattern = /^[A-Z]{3}$/;
+        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const pathParts = String(pathOnly || '/').split('/').filter(Boolean);
+        const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
+        const safeSearch = sanitizeSwitchSearch(search || '');
+
+        if (isBackendLocalizedPath(pathParts) && filteredParts.length > 0) {
+            const prefix = filteredParts.shift();
+            return '/' + prefix + '/' + currency + '/' + lang +
+                (filteredParts.length ? '/' + filteredParts.join('/') : '') +
+                safeSearch;
+        }
+
+        const cleanPath = filteredParts.length ? '/' + filteredParts.join('/') : '';
+        return '/' + currency + '/' + lang + cleanPath + safeSearch;
+    }
+
     function getCurrentCurrency() {
         const cookieCurrency = readCookieValue('WELINE_USER_CURRENCY');
         if (cookieCurrency) {
@@ -204,13 +236,8 @@
                     }
 
                     // 移除路径中的货币代码和语言代码
-                    const currencyPattern = /^[A-Z]{3}$/;
-                    const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-                    const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-                    const cleanPath = '/' + filteredParts.join('/');
-
                     // 构建新 URL：/[currency]/[lang]/path（保持语言）
-                    const currencyUrl = '/' + currencyCode + '/' + currentLang + cleanPath + (search ? '?' + search : '');
+                    const currencyUrl = buildCurrencyUrlFromPath(pathOnly, search ? '?' + search : '', currencyCode, currentLang);
                     option.setAttribute('href', currencyUrl);
                 }
             });
@@ -284,13 +311,8 @@
         }
 
         // 移除路径中的货币代码和语言代码
-        const currencyPattern = /^[A-Z]{3}$/;
-        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-        const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-        const cleanPath = '/' + filteredParts.join('/');
-
         // 构建新 URL：/[currency]/[lang]/path（保持语言）
-        const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + sanitizeSwitchSearch(window.location.search || '');
+        const currencyUrl = buildCurrencyUrlFromPath(currentPath, window.location.search || '', currency, currentLang);
 
         // 保存货币偏好
         writeCurrencyPreference(currency);

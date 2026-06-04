@@ -91,8 +91,22 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
     {
         $session = $this->createStub(AiSiteAgentSession::class);
         $scope = [
-            'page_types' => [Page::TYPE_HOME],
-            'virtual_pages_by_type' => [],
+            'plan_json' => [
+                'confirmed' => 1,
+                'pages' => [
+                    Page::TYPE_HOME => [
+                        'title' => 'Demo Home',
+                        'handle' => '',
+                        'locale' => 'en_US',
+                        'style_code' => 'default',
+                        'style_settings' => [],
+                        'hero' => [
+                            'status' => 0,
+                            'fields' => [],
+                        ],
+                    ],
+                ],
+            ],
         ];
 
         $virtualLayoutService = $this->createMock(AiSiteVirtualLayoutService::class);
@@ -123,27 +137,6 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
             ->with($scope, '')
             ->willReturn('en_US');
         $scopeCompatibility->expects(self::once())
-            ->method('resolveScopedPageTypes')
-            ->with($scope)
-            ->willReturn([Page::TYPE_HOME]);
-        $scopeCompatibility->expects(self::once())
-            ->method('buildVirtualPagesByType')
-            ->with([Page::TYPE_HOME], $scope, false)
-            ->willReturn([
-                Page::TYPE_HOME => [
-                    'title' => 'Demo Home',
-                    'handle' => '',
-                    'locale' => 'en_US',
-                    'style_code' => 'default',
-                    'style_settings' => [],
-                    'block_nodes' => [],
-                ],
-            ]);
-        $scopeCompatibility->expects(self::once())
-            ->method('resolvePreviewPageType')
-            ->with($this->isType('array'), Page::TYPE_HOME)
-            ->willReturn(Page::TYPE_HOME);
-        $scopeCompatibility->expects(self::once())
             ->method('localizeSharedLayoutConfigForScope')
             ->with([], $scope, Page::TYPE_HOME)
             ->willReturn([]);
@@ -160,17 +153,151 @@ final class AiSiteAgentWorkspacePreviewServiceTest extends TestCase
         self::assertIsArray($context);
         self::assertSame(22, $context['virtual_theme_id']);
         self::assertSame(Page::TYPE_HOME, $context['page']->getData(Page::schema_fields_TYPE));
+        self::assertSame(0, $context['plan_json_pages'][Page::TYPE_HOME]['hero']['status'] ?? null);
     }
 
-    public function testBuildPreviewContextFallsBackToMaterializedAiHtmlBlockNodesWhenSessionBlocksAreCompacted(): void
+    public function testBuildPreviewContextFallsBackToVirtualThemeLayoutWhenPlanJsonPagesAreMissing(): void
+    {
+        $session = $this->createStub(AiSiteAgentSession::class);
+        $scope = [
+            'site_title' => 'Demo Site',
+            'plan_json' => [
+                'confirmed' => 1,
+                'pages' => [],
+            ],
+        ];
+        $layout = [
+            'header' => ['component' => 'header/ai-site-header', 'config' => []],
+            'content' => [
+                ['code' => 'content/fake-hero', 'enabled' => true, 'config' => []],
+            ],
+            'footer' => ['component' => 'footer/ai-site-footer', 'config' => []],
+        ];
+
+        $virtualLayoutService = $this->createMock(AiSiteVirtualLayoutService::class);
+        $virtualLayoutService->expects(self::once())
+            ->method('loadContext')
+            ->with('demo-public', 8, Page::TYPE_HOME)
+            ->willReturn([
+                'session' => $session,
+                'scope' => $scope,
+                'virtual_theme_id' => 22,
+            ]);
+        $virtualLayoutService->expects(self::once())
+            ->method('getResolvedLayout')
+            ->with(22, Page::TYPE_HOME)
+            ->willReturn($layout);
+
+        $scopeCompatibility = $this->createMock(AiSiteScopeCompatibilityService::class);
+        $scopeCompatibility->expects(self::once())
+            ->method('normalizeScope')
+            ->with($scope)
+            ->willReturn($scope);
+        $scopeCompatibility->expects(self::once())
+            ->method('normalizePreviewContentLocale')
+            ->with($scope, '')
+            ->willReturn($scope);
+        $scopeCompatibility->expects(self::once())
+            ->method('resolvePreviewContentLocale')
+            ->with($scope, '')
+            ->willReturn('en_US');
+        $scopeCompatibility->expects(self::once())
+            ->method('localizeSharedLayoutConfigForScope')
+            ->with($layout, $scope, Page::TYPE_HOME)
+            ->willReturn($layout);
+
+        $service = new AiSiteAgentWorkspacePreviewService(
+            $this->createStub(AiSiteAgentSessionService::class),
+            $scopeCompatibility,
+            $virtualLayoutService,
+            $this->createStub(PageRenderService::class),
+        );
+
+        $context = $service->buildPreviewContext(8, 'demo-public', Page::TYPE_HOME);
+
+        self::assertIsArray($context);
+        self::assertSame(Page::RENDER_MODE_THEME, $context['page']->getData(Page::schema_fields_RENDER_MODE));
+        self::assertSame('virtual_theme_layout', $context['plan_json_pages'][Page::TYPE_HOME]['preview_source'] ?? null);
+        self::assertSame('Demo Site', $context['page']->getData(Page::schema_fields_TITLE));
+    }
+
+    public function testBuildPreviewContextCanUseVirtualThemeIdFromPreviewUrlWhenScopeContextIsIncomplete(): void
+    {
+        $scope = [
+            'site_title' => 'URL Theme Site',
+            'plan_json' => [
+                'confirmed' => 1,
+                'pages' => [],
+            ],
+        ];
+        $session = $this->createStub(AiSiteAgentSession::class);
+        $session->method('getScopeArray')->willReturn($scope);
+        $layout = [
+            'header' => ['component' => 'header/ai-site-header', 'config' => []],
+            'content' => [
+                ['code' => 'content/url-theme-hero', 'enabled' => true, 'config' => []],
+            ],
+            'footer' => ['component' => 'footer/ai-site-footer', 'config' => []],
+        ];
+
+        $sessionService = $this->createMock(AiSiteAgentSessionService::class);
+        $sessionService->expects(self::once())
+            ->method('loadByPublicId')
+            ->with('demo-public', 8)
+            ->willReturn($session);
+        $sessionService->expects(self::once())
+            ->method('loadScopeForStage')
+            ->with($session, AiSiteAgentSession::STAGE_VISUAL_EDIT, ['plan_json'])
+            ->willReturn($scope);
+
+        $virtualLayoutService = $this->createMock(AiSiteVirtualLayoutService::class);
+        $virtualLayoutService->expects(self::once())
+            ->method('loadContext')
+            ->with('demo-public', 8, Page::TYPE_HOME)
+            ->willReturn(null);
+        $virtualLayoutService->expects(self::once())
+            ->method('getResolvedLayout')
+            ->with(784, Page::TYPE_HOME)
+            ->willReturn($layout);
+
+        $scopeCompatibility = $this->createMock(AiSiteScopeCompatibilityService::class);
+        $scopeCompatibility->expects(self::exactly(2))
+            ->method('normalizeScope')
+            ->willReturnArgument(0);
+        $scopeCompatibility->expects(self::exactly(2))
+            ->method('normalizePreviewContentLocale')
+            ->willReturnArgument(0);
+        $scopeCompatibility->expects(self::once())
+            ->method('resolvePreviewContentLocale')
+            ->willReturn('en_US');
+        $scopeCompatibility->expects(self::once())
+            ->method('localizeSharedLayoutConfigForScope')
+            ->willReturn($layout);
+
+        $service = new AiSiteAgentWorkspacePreviewService(
+            $sessionService,
+            $scopeCompatibility,
+            $virtualLayoutService,
+            $this->createStub(PageRenderService::class),
+        );
+
+        $context = $service->buildPreviewContext(8, 'demo-public', Page::TYPE_HOME, '', '', 784);
+
+        self::assertIsArray($context);
+        self::assertSame(784, $context['virtual_theme_id']);
+        self::assertSame(Page::RENDER_MODE_THEME, $context['page']->getData(Page::schema_fields_RENDER_MODE));
+        self::assertSame('virtual_theme_layout', $context['plan_json_pages'][Page::TYPE_HOME]['preview_source'] ?? null);
+    }
+
+    public function testBuildPreviewContextDoesNotUseMaterializedAiHtmlAsTruthSource(): void
     {
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteAgentWorkspacePreviewService.php');
         self::assertIsString($source);
 
-        self::assertStringContainsString('$materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);', $source);
-        self::assertStringContainsString('$virtualPage[\'block_nodes\'] = $virtualBlocks;', $source);
         self::assertStringContainsString('Page::RENDER_MODE_AI_HTML', $source);
-        self::assertStringContainsString('loadMaterializedAiHtmlPreviewPageRow', $source);
+        self::assertStringNotContainsString('resolveMaterializedAiHtmlPreviewData', $source);
+        self::assertStringNotContainsString('loadMaterializedAiHtmlPreviewPageRow', $source);
+        self::assertStringNotContainsString('$materializedPreview', $source);
     }
 
     public function testAiHtmlPreviewKeepsSharedHeaderAndFooter(): void

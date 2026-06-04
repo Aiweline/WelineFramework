@@ -8,6 +8,7 @@
 | --- | --- |
 | [TEMPLATE_SPEC.md](TEMPLATE_SPEC.md) | PageBuilder 模板开发规范 |
 | [COMPONENT_SPEC.md](COMPONENT_SPEC.md) | PageBuilder 组件开发规范 |
+| [AI_RUNTIME_MODE_SPEC.md](AI_RUNTIME_MODE_SPEC.md) | PageBuilder AI 运行模式规范，尤其是 fake 模式边界 |
 
 ## 收录规则
 
@@ -15,4 +16,3 @@
 - 不收录单次问题修复、临时调试、会议式计划和截图验收记录。
 - 若 `doc/` 中的历史文档已经沉淀为长期规则，先合并去重，再迁入本目录。
 - 迁移文档时必须同步检查代码、测试和其他文档中的硬编码路径。
-

@@ -43,7 +43,7 @@ final class PlanJsonContentManifestLinterTest extends TestCase
             'home.hero.cta' => 'Learn more',
             'pricing.cta' => 'Learn more',
         ]);
-        $contract['block_nodes'][0]['content_keys'][] = 'pricing.cta';
+        $contract['pages']['home_page']['hero']['content_keys'][] = 'pricing.cta';
 
         $result = (new PlanJsonContentManifestLinter())->validate($contract);
 
@@ -80,7 +80,7 @@ final class PlanJsonContentManifestLinterTest extends TestCase
         ]);
         $contract['i18n']['primary_locale'] = 'pt_BR';
         $contract['content_manifest']['primary_locale'] = 'pt_BR';
-        $contract['block_nodes'][0]['content_keys'][] = 'home.hero.copy';
+        $contract['pages']['home_page']['hero']['content_keys'][] = 'home.hero.copy';
 
         $result = (new PlanJsonContentManifestLinter())->validate($contract);
 
@@ -113,18 +113,15 @@ final class PlanJsonContentManifestLinterTest extends TestCase
                 'items' => $items,
             ],
             'pages' => [
-                [
+                'home_page' => [
                     'page_id' => 'home',
+                    'page_type' => 'home_page',
                     'title_key' => 'home.title',
                     'description_key' => 'home.desc',
-                    'block_node_ids' => ['home.hero'],
-                ],
-            ],
-            'block_nodes' => [
-                [
-                    'block_id' => 'home.hero',
-                    'page_id' => 'home',
-                    'content_keys' => ['home.hero.title', 'home.hero.cta'],
+                    'hero' => [
+                        'block_id' => 'home.hero',
+                        'content_keys' => ['home.hero.title', 'home.hero.cta'],
+                    ],
                 ],
             ],
         ];

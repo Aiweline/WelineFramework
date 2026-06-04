@@ -42,7 +42,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
         ] as $expectedCode) {
             self::assertStringContainsString($expectedCode, $methodSource);
         }
-        self::assertStringNotContainsString("'code' => 'HTML_BLOCK_NODES_READY'", $methodSource);
+        self::assertStringNotContainsString("'code' => 'HTML_BLOCKS_READY'", $methodSource);
         self::assertStringNotContainsString("'code' => 'SITE_READY'", $methodSource);
     }
 
@@ -72,14 +72,35 @@ final class AiSiteAgentPublishContractTest extends TestCase
         self::assertStringContainsString("\$scope['stage2_publish_readiness'] = \$stageTwoReadiness;", $methodSource);
     }
 
-    public function testPublishOperationIsQueueBacked(): void
+    public function testStageTwoPublishReadinessCountsCanonicalPlanJsonBlocks(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $actualSource = $this->extractMethodSource($source, 'countActualStageTwoMaterializedBlocks');
+        $pageSource = $this->extractMethodSource($source, 'countGeneratedContentBlocksForPage');
+        $sharedSource = $this->extractMethodSource($source, 'countGeneratedSharedBlocks');
 
-        self::assertStringContainsString("'publish' => \\GuoLaiRen\\PageBuilder\\Queue\\AiSitePublishQueue::class", $source);
-        self::assertStringContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'shouldEnqueueOperation'));
-        self::assertStringContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'isAiSiteQueueBackedOperation'));
-        self::assertStringContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'supportsBackgroundOperation'));
+        self::assertStringContainsString('$virtualPages = $this->planJsonPages($scope);', $actualSource);
+        self::assertStringContainsString('$this->planJsonDynamicBlocks($virtualPage)', $pageSource);
+        self::assertStringContainsString("\$scope['plan_json']['shared_components'] ?? null", $sharedSource);
+        self::assertStringContainsString("(int)(\$block['status'] ?? 0) === 1", $pageSource);
+        self::assertStringContainsString("\$block['html'] ?? \$block['html_content'] ?? \$block['phtml'] ?? ''", $pageSource);
+        self::assertStringNotContainsString('$pageTypeLayouts', $actualSource . $sharedSource);
+        self::assertStringNotContainsString("\$virtualPage['blocks']", $pageSource);
+    }
+
+    public function testPublishOperationIsSynchronousAfterGates(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $startSource = $this->extractMethodSource($source, 'handleStartPublish');
+
+        self::assertStringContainsString("\$this->runPublishOperation(\$this->silentSseWriter(), \$fresh, \$adminId)", $startSource);
+        self::assertStringNotContainsString("\$this->startOperation(\n            \$session,\n            \$adminId,\n            'publish'", $startSource);
+        self::assertStringNotContainsString("'publish' => \\GuoLaiRen\\PageBuilder\\Queue\\AiSitePublishQueue::class", $source);
+        self::assertStringNotContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'shouldEnqueueOperation'));
+        self::assertStringNotContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'isAiSiteQueueBackedOperation'));
+        self::assertStringNotContainsString("'image_asset', 'publish'", $this->extractMethodSource($source, 'supportsBackgroundOperation'));
+        self::assertStringContainsString("'plan', 'build'", $this->extractMethodSource($source, 'shouldEnqueueOperation'));
+        self::assertStringContainsString("'plan', 'build'", $this->extractMethodSource($source, 'isAiSiteQueueBackedOperation'));
     }
 
     public function testOperationSseDoesNotRecreateMissingQueueRecord(): void
@@ -156,6 +177,32 @@ final class AiSiteAgentPublishContractTest extends TestCase
         self::assertStringNotContainsString('buildWorkspaceState(', $methodSource);
     }
 
+    public function testWorkspaceStateHydratesCanonicalPlanJsonArtifactForBlockTabs(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $workspaceState = $this->extractMethodSource($source, 'buildWorkspaceState');
+        $artifactKeys = $this->extractConstArraySource($source, 'WORKSPACE_FAST_VIEW_ARTIFACT_KEYS_BY_STAGE');
+
+        self::assertSame(3, \substr_count($artifactKeys, "'plan_json'"));
+        self::assertSame(3, \substr_count($artifactKeys, "'plan_markdown'"));
+        self::assertStringContainsString('$this->workspaceFastViewArtifactKeys(', $workspaceState);
+        self::assertStringNotContainsString("normalizeStage(\$session->getStage()),\n                []", $workspaceState);
+    }
+
+    public function testWorkspaceInitialStatePrunesDesignDirectionSnapshotForInlineScript(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $workspaceSource = $this->extractMethodSource($source, 'workspace');
+        $stateSource = $this->extractMethodSource($source, 'buildWorkspaceState');
+        $pruneSource = $this->extractMethodSource($source, 'pruneWorkspaceDesignDirectionSnapshotForView');
+
+        self::assertStringContainsString('pruneWorkspaceDesignDirectionStateForView($directionState)', $workspaceSource);
+        self::assertStringContainsString('pruneWorkspaceDesignDirectionStateForView($designDirectionState)', $stateSource);
+        self::assertStringContainsString("'match_keywords'", $pruneSource);
+        self::assertStringContainsString("'visual_keywords'", $pruneSource);
+        self::assertStringContainsString("'slimmed_for_view'", $pruneSource);
+    }
+
     public function testAutoResumeBuildQueueIsPersistPathOnly(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
@@ -183,6 +230,24 @@ final class AiSiteAgentPublishContractTest extends TestCase
         self::assertStringContainsString("\$buildQueueOperation => \$buildQueueInfo", $methodSource);
     }
 
+    public function testWorkspacePendingGenerationUsesPlanJsonBlocksNotLegacyLayouts(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php');
+        $workspaceState = $this->extractMethodSource($source, 'buildWorkspaceState');
+        $resolvePending = $this->extractMethodSource($source, 'resolvePendingGenerationPageTypes');
+        $completeGate = $this->extractMethodSource($source, 'isPageTypeGenerationComplete');
+
+        self::assertStringContainsString('$pendingGenerationPageTypes = $this->resolvePendingGenerationPageTypes(', $workspaceState);
+        self::assertStringNotContainsString('$pageTypeLayouts', $resolvePending);
+        self::assertStringNotContainsString('$workspaceTrack', $resolvePending);
+        self::assertStringNotContainsString('$pageTypeLayouts', $completeGate);
+        self::assertStringNotContainsString('normalizeLayoutConfig', $completeGate);
+        self::assertStringNotContainsString("'header'", $completeGate);
+        self::assertStringNotContainsString("'footer'", $completeGate);
+        self::assertStringNotContainsString("'content'", $completeGate);
+        self::assertStringContainsString('$this->planJsonDynamicBlocks($page) !== []', $completeGate);
+    }
+
     private function extractMethodSource(string $source, string $methodName): string
     {
         $start = \strpos($source, 'function ' . $methodName . '(');
@@ -204,5 +269,15 @@ final class AiSiteAgentPublishContractTest extends TestCase
         }
 
         return $next === false ? \substr($source, $start) : \substr($source, $start, $next - $start);
+    }
+
+    private function extractConstArraySource(string $source, string $constName): string
+    {
+        $start = \strpos($source, 'private const ' . $constName . ' = [');
+        self::assertIsInt($start, $constName . ' missing');
+        $end = \strpos($source, "];", $start);
+        self::assertIsInt($end, $constName . ' end missing');
+
+        return \substr($source, $start, $end - $start + 2);
     }
 }

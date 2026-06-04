@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 /**
- * 确定性样式/文案 patch：避免为 font/CTA 类违规整块重生。
+ * Contract style patch for font/CTA quality gates.
  */
-final class AiSiteDeterministicStylePatchService
+final class AiSiteContractStylePatchService
 {
     /**
      * @param array<string, mixed> $designTokens

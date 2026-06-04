@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
-use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
 use GuoLaiRen\PageBuilder\Service\AI\Contract\AiSiteVisualBlockContractRenderer;
 use GuoLaiRen\PageBuilder\Service\AI\MockPage;
@@ -77,7 +76,7 @@ class AiSiteBlockPartialPatchService
 
                 return [
                     'success' => true,
-                    'source' => 'shared_components.' . $sharedRegion,
+                    'source' => 'plan_json.shared_components.' . $sharedRegion,
                     'page_type' => $pageType,
                     'block_id' => $actualBlockId,
                     'requested_block_id' => $blockId,
@@ -95,80 +94,29 @@ class AiSiteBlockPartialPatchService
             }
         }
 
-        $virtualPages = $this->buildTargetVirtualPagesByType($scope, $pageType);
-        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
-        $match = $this->findBlockInBlocks($blocks, $blockId);
-        $source = 'virtual_pages_by_type';
-
+        $match = $this->findPlanJsonBlockInScope($scope, $pageType, $blockId);
         if ($match === null) {
-            $virtualThemeBlock = $this->buildVirtualThemeComponentBlockFromScope($scope, $pageType, $blockId);
-            if ($virtualThemeBlock !== null) {
-                $actualBlockId = \trim((string)($virtualThemeBlock['block_id'] ?? $blockId));
-                $componentCode = $this->resolveBlockComponentCode($virtualThemeBlock);
-
-                return [
-                    'success' => true,
-                    'source' => 'virtual_theme_component',
-                    'page_type' => $pageType,
-                    'block_id' => $actualBlockId,
-                    'requested_block_id' => $blockId,
-                    'component_code' => $componentCode,
-                    'index' => (int)($virtualThemeBlock['_pb_server_layout_index'] ?? -1),
-                    'block' => $virtualThemeBlock,
-                    'type' => (string)($virtualThemeBlock['type'] ?? ''),
-                    'config' => \is_array($virtualThemeBlock['config'] ?? null) ? $virtualThemeBlock['config'] : [],
-                    'html' => (string)($virtualThemeBlock['html'] ?? ''),
-                    'field_schema' => \is_array($virtualThemeBlock['field_schema'] ?? null) ? $virtualThemeBlock['field_schema'] : [],
-                    'template_metadata' => $this->extractTemplateMetadata($virtualThemeBlock),
-                    'page_context' => $this->buildPageContext($scope, $pageType),
-                    'layout_context' => $this->buildLayoutContext($scope, $pageType, $componentCode, $actualBlockId),
-                ];
-            }
-
-            $layoutBlock = $this->buildLayoutContentBlockFromScope($scope, $pageType, $blockId);
-            if ($layoutBlock !== null) {
-                $actualBlockId = \trim((string)($layoutBlock['block_id'] ?? $blockId));
-                $componentCode = $this->resolveBlockComponentCode($layoutBlock);
-
-                return [
-                    'success' => true,
-                    'source' => 'page_type_layouts.content',
-                    'page_type' => $pageType,
-                    'block_id' => $actualBlockId,
-                    'requested_block_id' => $blockId,
-                    'component_code' => $componentCode,
-                    'index' => (int)($layoutBlock['_pb_server_layout_index'] ?? -1),
-                    'block' => $layoutBlock,
-                    'type' => (string)($layoutBlock['type'] ?? ''),
-                    'config' => \is_array($layoutBlock['config'] ?? null) ? $layoutBlock['config'] : [],
-                    'html' => (string)($layoutBlock['html'] ?? ''),
-                    'field_schema' => \is_array($layoutBlock['field_schema'] ?? null) ? $layoutBlock['field_schema'] : [],
-                    'template_metadata' => $this->extractTemplateMetadata($layoutBlock),
-                    'page_context' => $this->buildPageContext($scope, $pageType),
-                    'layout_context' => $this->buildLayoutContext($scope, $pageType, $componentCode, $actualBlockId),
-                ];
-            }
-
-            return $this->error('BLOCK_NOT_FOUND', 'Current block not found.', [
+            return $this->error('BLOCK_NOT_FOUND', 'Current block not found in plan_json.', [
                 'page_type' => $pageType,
                 'block_id' => $blockId,
-                'available_block_ids' => $this->collectBlockIds($blocks),
+                'available_block_ids' => $this->collectPlanJsonBlockIds($scope, $pageType),
             ]);
         }
 
-        $block = \is_array($match['block'] ?? null) ? $match['block'] : [];
+        $blockKey = (string)($match['block_key'] ?? $blockId);
+        $block = $this->planJsonBlockToEditableBlock(\is_array($match['block'] ?? null) ? $match['block'] : [], $blockKey);
         $actualBlockId = \trim((string)($block['block_id'] ?? $blockId));
         $componentCode = $this->resolveBlockComponentCode($block);
 
         return [
             'success' => true,
-            'source' => $source,
+            'source' => 'plan_json.pages.' . $pageType . '.' . $blockKey,
             'page_type' => $pageType,
             'block_id' => $actualBlockId,
             'requested_block_id' => $blockId,
             'component_code' => $componentCode,
-            'index' => (int)($match['index'] ?? -1),
+            'index' => -1,
+            'block_key' => $blockKey,
             'block' => $block,
             'type' => (string)($block['type'] ?? ''),
             'config' => \is_array($block['config'] ?? null) ? $block['config'] : [],
@@ -313,7 +261,7 @@ class AiSiteBlockPartialPatchService
                 'page_type' => $pageType,
                 'block_id' => (string)($candidate['block_id'] ?? $blockId),
                 'component_code' => $this->resolveBlockComponentCode($candidate),
-                'source' => (string)($read['source'] ?? 'shared_components.' . $sharedRegion),
+                'source' => (string)($read['source'] ?? 'plan_json.shared_components.' . $sharedRegion),
                 'scope' => $scope,
                 'before_block' => $beforeBlock,
                 'after_block' => $candidate,
@@ -323,61 +271,26 @@ class AiSiteBlockPartialPatchService
             ];
         }
 
-        if ((string)($read['source'] ?? '') === 'virtual_theme_component') {
-            return $this->applyVirtualThemeComponentReplacement($scope, $pageType, $read, $currentBlock, $candidate, $metadata);
-        }
-        if ((string)($read['source'] ?? '') === 'page_type_layouts.content') {
-            return $this->applyLayoutContentReplacement($scope, $pageType, $read, $currentBlock, $candidate, $metadata);
-        }
-
-        $virtualPages = $this->buildTargetVirtualPagesPreservingScope($scope, $pageType);
-        if (!\is_array($virtualPages[$pageType] ?? null)) {
-            return $this->error('VIRTUAL_PAGE_NOT_FOUND', 'Virtual page not found during replacement.', [
+        $planBlockKey = \trim((string)($read['block_key'] ?? $blockId));
+        if ($planBlockKey === '') {
+            return $this->error('BLOCK_NOT_FOUND', 'Current block key is missing during replacement.', [
                 'page_type' => $pageType,
                 'block_id' => $blockId,
             ]);
         }
-        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
 
-        $match = $this->findBlockInBlocks($blocks, $blockId);
-        if ($match === null) {
-            return $this->error('BLOCK_NOT_FOUND', 'Current block not found during replacement.', [
+        $planMatch = $this->findPlanJsonBlockInScope($scope, $pageType, $planBlockKey);
+        if ($planMatch === null) {
+            return $this->error('BLOCK_NOT_FOUND', 'Current block not found in plan_json during replacement.', [
                 'page_type' => $pageType,
                 'block_id' => $blockId,
-                'available_block_ids' => $this->collectBlockIds($blocks),
+                'available_block_ids' => $this->collectPlanJsonBlockIds($scope, $pageType),
             ]);
         }
 
-        $index = (int)($match['index'] ?? -1);
-        if ($index < 0 || !\array_key_exists($index, $blocks)) {
-            return $this->error('BLOCK_NOT_FOUND', 'Current block index is invalid during replacement.');
-        }
-
-        $beforeIds = $this->collectBlockIds($blocks);
-        $beforeBlock = \is_array($blocks[$index] ?? null) ? $blocks[$index] : [];
-        $blocks[$index] = $candidate;
-        $afterIds = $this->collectBlockIds($blocks);
-        if (\count($beforeIds) !== \count($afterIds)) {
-            return $this->error('BLOCK_BOUNDARY_CHANGED', 'Replacement changed block count.');
-        }
-        foreach ($beforeIds as $position => $id) {
-            if ($position === $index) {
-                continue;
-            }
-            if (($afterIds[$position] ?? null) !== $id) {
-                return $this->error('BLOCK_BOUNDARY_CHANGED', 'Replacement changed other block order.');
-            }
-        }
-
+        $beforeBlock = $this->planJsonBlockToEditableBlock(\is_array($planMatch['block'] ?? null) ? $planMatch['block'] : [], $planBlockKey);
         $createdAt = \date('Y-m-d H:i:s');
-        $virtualPage['block_nodes'] = \array_values($blocks);
-        $virtualPage['last_generated_at'] = $createdAt;
-        $virtualPages[$pageType] = $virtualPage;
-        $scope['virtual_pages_by_type'] = $virtualPages;
-        // 微调编辑期间只存到虚拟主题（scope/session），不落盘到具体页面。
-        // 发布时 publish flow 会将虚拟主题中的 block 拷贝到具体页面。
-        // 编辑数据已安全保存在 session scope 中。
+        $scope = $this->writePlanJsonBlockReplacement($scope, $pageType, $planBlockKey, $candidate, $createdAt);
         $scope['preview_page_type'] = $pageType;
         $scope['plan_json_execution_summary'] = $this->safeSummarize($scope);
         $scope['block_patch_history'] = $this->appendPatchHistory(
@@ -395,7 +308,7 @@ class AiSiteBlockPartialPatchService
             'page_type' => $pageType,
             'block_id' => (string)($candidate['block_id'] ?? $blockId),
             'component_code' => $this->resolveBlockComponentCode($candidate),
-            'source' => (string)($read['source'] ?? 'virtual_pages_by_type'),
+            'source' => 'plan_json.pages.' . $pageType . '.' . $planBlockKey,
             'scope' => $scope,
             'before_block' => $beforeBlock,
             'after_block' => $candidate,
@@ -554,7 +467,7 @@ class AiSiteBlockPartialPatchService
             $result = $this->buildFakeModeReplacementBlock($read, $instruction);
             if ($streamCallback !== null) {
                 $streamCallback('fake_patch', [
-                    'message' => 'Generated deterministic fake-mode block patch.',
+                    'message' => 'Generated fake-mode block patch.',
                     'changed_fields' => $result['changed_fields'],
                 ]);
             }
@@ -804,7 +717,7 @@ class AiSiteBlockPartialPatchService
 
         $block = $currentBlock;
         $block['html'] = $template;
-        if (\array_key_exists(self::META_TEMPLATE_PHTML, $block) || (string)($read['source'] ?? '') === 'virtual_theme_component') {
+        if (\array_key_exists(self::META_TEMPLATE_PHTML, $block)) {
             $block[self::META_TEMPLATE_PHTML] = $template;
         }
         if (!\is_array($block['config'] ?? null)) {
@@ -854,41 +767,6 @@ class AiSiteBlockPartialPatchService
         return false;
     }
 
-    /**
-     * @param array<string, mixed> $scope
-     * @param list<string> $pageTypes
-     * @return array<string, array<string, mixed>>
-     */
-    private function buildVirtualPagesByType(array $scope, array $pageTypes): array
-    {
-        if ($this->scopeCompatibilityService !== null) {
-            return $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
-        }
-
-        return \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-    }
-
-    /**
-     * @return array<string, array<string, mixed>>
-     */
-    private function buildTargetVirtualPagesByType(array $scope, string $pageType): array
-    {
-        return $this->buildVirtualPagesByType($scope, [$pageType]);
-    }
-
-    /**
-     * @return array<string, array<string, mixed>>
-     */
-    private function buildTargetVirtualPagesPreservingScope(array $scope, string $pageType): array
-    {
-        $existing = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $target = $this->buildTargetVirtualPagesByType($scope, $pageType);
-        if (\is_array($target[$pageType] ?? null)) {
-            $existing[$pageType] = $target[$pageType];
-        }
-
-        return $existing;
-    }
 
     private function resolveSharedComponentRegionForBlockId(string $pageType, string $blockId): string
     {
@@ -929,7 +807,9 @@ class AiSiteBlockPartialPatchService
      */
     private function buildSharedComponentBlockFromScope(array $scope, string $region, string $requestedBlockId): ?array
     {
-        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+        $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null)
+            ? $scope['plan_json']['shared_components']
+            : [];
         $component = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
         if ($component === []) {
             return null;
@@ -969,7 +849,8 @@ class AiSiteBlockPartialPatchService
      */
     private function syncSharedComponentReplacement(array $scope, string $region, array $candidate): array
     {
-        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $sharedComponents = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
         $existing = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
         $componentCode = \trim((string)($candidate[self::META_COMPONENT_CODE] ?? $candidate['component_code'] ?? $candidate['block_id'] ?? $existing['code'] ?? ''));
         $sharedComponents[$region] = \array_replace($existing, [
@@ -982,7 +863,9 @@ class AiSiteBlockPartialPatchService
                 ? $candidate['config']
                 : (\is_array($existing['default_config'] ?? null) ? $existing['default_config'] : []),
         ]);
-        $scope['shared_components'] = $sharedComponents;
+        $planJson['shared_components'] = $sharedComponents;
+        $scope['plan_json'] = $planJson;
+        unset($scope['shared_components']);
 
         return $scope;
     }
@@ -1000,7 +883,9 @@ class AiSiteBlockPartialPatchService
         if ($this->virtualThemeService === null) {
             return;
         }
-        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+        $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null)
+            ? $scope['plan_json']['shared_components']
+            : [];
         $component = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
         if ($component === []) {
             return;
@@ -1009,51 +894,6 @@ class AiSiteBlockPartialPatchService
         $this->virtualThemeService->saveGeneratedSharedComponent($themeId, $component);
     }
 
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>|null
-     */
-    private function buildVirtualThemeComponentBlockFromScope(array $scope, string $pageType, string $requestedBlockId): ?array
-    {
-        $themeId = $this->resolveVirtualThemeId($scope);
-        if ($themeId <= 0) {
-            return null;
-        }
-
-        $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $requestedBlockId);
-        $layoutRow = \is_array($layoutMatch['row'] ?? null) ? $layoutMatch['row'] : [];
-        $componentCode = \trim((string)($layoutRow['code'] ?? $layoutRow['component'] ?? $layoutRow['block_id'] ?? $requestedBlockId));
-        if ($componentCode === '') {
-            return null;
-        }
-
-        $component = $this->loadVirtualThemeComponent($themeId, $componentCode);
-        if (!$component instanceof VirtualThemeComponent) {
-            return null;
-        }
-
-        $componentCode = $component->getComponentCode() !== '' ? $component->getComponentCode() : $componentCode;
-        $defaultConfig = $component->getDefaultConfig();
-        $layoutConfig = \is_array($layoutRow['config'] ?? null) ? $layoutRow['config'] : [];
-        $config = \array_replace($defaultConfig, $layoutConfig);
-        $templateContent = $component->getTemplateContent();
-
-        return [
-            'block_id' => $componentCode,
-            'type' => 'ai_generated_virtual_theme_component',
-            'component_code' => $componentCode,
-            'config' => $config,
-            'html' => $templateContent,
-            'field_schema' => [],
-            self::META_COMPONENT_CODE => $componentCode,
-            self::META_REGION => 'content',
-            self::META_TEMPLATE_PHTML => $templateContent,
-            '_pb_server_virtual_theme_id' => $themeId,
-            '_pb_server_layout_index' => (int)($layoutMatch['index'] ?? -1),
-            '_pb_server_component_name' => $component->getName(),
-            '_pb_server_sort_order' => (int)($layoutRow['sort_order'] ?? 0),
-        ];
-    }
 
     /**
      * @param array<string, mixed> $read
@@ -1097,7 +937,7 @@ class AiSiteBlockPartialPatchService
 
         return [
             'block' => $block,
-            'change_summary' => 'Applied deterministic fake-mode block refinement.',
+            'change_summary' => 'Applied fake-mode block refinement.',
             'changed_fields' => ['config.headline', 'html'],
             'reason' => \trim($instruction) !== '' ? 'fake_mode: ' . $this->clipText($instruction, 120) : 'fake_mode',
         ];
@@ -1118,379 +958,120 @@ class AiSiteBlockPartialPatchService
         return '';
     }
 
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>|null
-     */
-    private function buildLayoutContentBlockFromScope(array $scope, string $pageType, string $requestedBlockId): ?array
-    {
-        $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $requestedBlockId);
-        $layoutRow = \is_array($layoutMatch['row'] ?? null) ? $layoutMatch['row'] : [];
-        if ($layoutRow === []) {
-            return null;
-        }
-
-        $componentCode = \trim((string)($layoutRow['code'] ?? $layoutRow['component'] ?? $layoutRow['component_code'] ?? ''));
-        $blockId = \trim((string)($layoutRow['block_id'] ?? $layoutRow['id'] ?? $componentCode));
-        if ($blockId === '') {
-            $blockId = $requestedBlockId;
-        }
-        if ($componentCode === '') {
-            $componentCode = $blockId;
-        }
-
-        return [
-            'block_id' => $blockId,
-            'type' => \trim((string)($layoutRow['type'] ?? 'section')),
-            'component_code' => $componentCode,
-            'code' => $componentCode,
-            'config' => \is_array($layoutRow['config'] ?? null) ? $layoutRow['config'] : [],
-            'html' => (string)($layoutRow['html'] ?? ''),
-            'field_schema' => \is_array($layoutRow['field_schema'] ?? null) ? $layoutRow['field_schema'] : [],
-            self::META_COMPONENT_CODE => $componentCode,
-            self::META_REGION => 'content',
-            self::META_TEMPLATE_PHTML => (string)($layoutRow[self::META_TEMPLATE_PHTML] ?? $layoutRow['template_phtml'] ?? $layoutRow['html'] ?? ''),
-            '_pb_server_layout_index' => (int)($layoutMatch['index'] ?? -1),
-            '_pb_server_sort_order' => (int)($layoutRow['sort_order'] ?? 0),
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $read
-     * @param array<string, mixed> $currentBlock
-     * @param array<string, mixed> $candidate
-     * @param array<string, mixed> $metadata
-     * @return array<string, mixed>
-     */
-    private function applyLayoutContentReplacement(
-        array $scope,
-        string $pageType,
-        array $read,
-        array $currentBlock,
-        array $candidate,
-        array $metadata
-    ): array {
-        $componentCode = $this->resolveBlockComponentCode($candidate);
-        if ($componentCode === '') {
-            $componentCode = \trim((string)($read['component_code'] ?? $read['block_id'] ?? ''));
-        }
-        $requestedBlockId = \trim((string)($read['requested_block_id'] ?? $read['block_id'] ?? $componentCode));
-        $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $requestedBlockId);
-        if ($layoutMatch === null && $componentCode !== '') {
-            $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $componentCode);
-        }
-        $layoutIndex = (int)($layoutMatch['index'] ?? -1);
-        if ($layoutIndex < 0) {
-            return $this->error('BLOCK_NOT_FOUND', 'Current layout block not found during replacement.', [
-                'page_type' => $pageType,
-                'block_id' => $requestedBlockId,
-            ]);
-        }
-
-        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
-        $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
-        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-        if (!\array_key_exists($layoutIndex, $content) || !\is_array($content[$layoutIndex])) {
-            return $this->error('BLOCK_NOT_FOUND', 'Current layout block index is invalid during replacement.', [
-                'page_type' => $pageType,
-                'block_id' => $requestedBlockId,
-            ]);
-        }
-
-        $blockId = \trim((string)($candidate['block_id'] ?? $currentBlock['block_id'] ?? $requestedBlockId));
-        if ($blockId === '') {
-            $blockId = $requestedBlockId;
-        }
-        $config = \is_array($candidate['config'] ?? null) ? $candidate['config'] : [];
-        $fieldSchema = \is_array($candidate['field_schema'] ?? null) ? $candidate['field_schema'] : [];
-        $html = (string)($candidate['html'] ?? '');
-        $createdAt = \date('Y-m-d H:i:s');
-
-        $content[$layoutIndex] = \array_replace($content[$layoutIndex], [
-            'block_id' => $blockId,
-            'code' => $componentCode !== '' ? $componentCode : (string)($content[$layoutIndex]['code'] ?? ''),
-            'component_code' => $componentCode,
-            'type' => (string)($candidate['type'] ?? $currentBlock['type'] ?? 'section'),
-            'config' => $config,
-            'html' => $html,
-            'field_schema' => $fieldSchema,
-            'enabled' => true,
-        ]);
-        $layout['content'] = \array_values($content);
-        $layouts[$pageType] = $layout;
-        $scope['page_type_layouts'] = $layouts;
-
-        $scope = $this->syncVirtualPageBlockIfPresent($scope, $pageType, $requestedBlockId, $candidate, $createdAt);
-        $scope['preview_page_type'] = $pageType;
-        $scope['plan_json_execution_summary'] = $this->safeSummarize($scope);
-        $scope['block_patch_history'] = $this->appendPatchHistory(
-            \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
-            $pageType,
-            $blockId,
-            $currentBlock,
-            $candidate,
-            $metadata,
-            $createdAt
-        );
-
-        return [
-            'success' => true,
-            'page_type' => $pageType,
-            'block_id' => $blockId,
-            'component_code' => $componentCode,
-            'source' => (string)($read['source'] ?? 'page_type_layouts.content'),
-            'scope' => $scope,
-            'before_block' => $currentBlock,
-            'after_block' => $candidate,
-            'change_summary' => \trim((string)($metadata['change_summary'] ?? '')),
-            'changed_fields' => $this->normalizeChangedFields($metadata['changed_fields'] ?? []),
-            'reason' => \trim((string)($metadata['reason'] ?? '')),
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param array<string, mixed> $candidate
-     * @return array<string, mixed>
-     */
-    private function syncVirtualPageBlockIfPresent(
-        array $scope,
-        string $pageType,
-        string $requestedBlockId,
-        array $candidate,
-        string $createdAt
-    ): array {
-        if (!\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
-            return $scope;
-        }
-        $blocks = \is_array($scope['virtual_pages_by_type'][$pageType]['block_nodes'] ?? null)
-            ? $scope['virtual_pages_by_type'][$pageType]['block_nodes']
-            : [];
-        $match = $this->findBlockInBlocks($blocks, $requestedBlockId);
-        if ($match === null) {
-            $componentCode = $this->resolveBlockComponentCode($candidate);
-            if ($componentCode !== '') {
-                $match = $this->findBlockInBlocks($blocks, $componentCode);
-            }
-        }
-        $index = (int)($match['index'] ?? -1);
-        if ($index >= 0 && \array_key_exists($index, $blocks)) {
-            $blocks[$index] = $candidate;
-            $scope['virtual_pages_by_type'][$pageType]['block_nodes'] = \array_values($blocks);
-        }
-        $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = $createdAt;
-
-        return $scope;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function applyVirtualThemeComponentReplacement(
-        array $scope,
-        string $pageType,
-        array $read,
-        array $currentBlock,
-        array $candidate,
-        array $metadata
-    ): array {
-        $themeId = (int)($currentBlock['_pb_server_virtual_theme_id'] ?? $this->resolveVirtualThemeId($scope));
-        if ($themeId <= 0) {
-            return $this->error('VIRTUAL_THEME_NOT_FOUND', 'Virtual theme not found during replacement.', [
-                'page_type' => $pageType,
-                'block_id' => (string)($read['block_id'] ?? ''),
-            ]);
-        }
-
-        $componentCode = $this->resolveBlockComponentCode($candidate);
-        if ($componentCode === '') {
-            $componentCode = \trim((string)($read['component_code'] ?? $read['block_id'] ?? ''));
-        }
-        if ($componentCode === '') {
-            return $this->error('VIRTUAL_THEME_COMPONENT_NOT_FOUND', 'Virtual theme component not found during replacement.', [
-                'page_type' => $pageType,
-                'block_id' => (string)($read['block_id'] ?? ''),
-            ]);
-        }
-
-        $config = \is_array($candidate['config'] ?? null) ? $candidate['config'] : [];
-        $templateContent = $this->resolveVirtualThemeReplacementTemplate($currentBlock, $candidate);
-        if (\trim($templateContent) === '') {
-            return $this->error('BLOCK_VALIDATION_FAILED', 'Replacement block template is empty.', [
-                'page_type' => $pageType,
-                'block_id' => (string)($read['block_id'] ?? ''),
-            ]);
-        }
-
-        $candidate[self::META_COMPONENT_CODE] = $componentCode;
-        $candidate[self::META_REGION] = 'content';
-        $candidate[self::META_TEMPLATE_PHTML] = $templateContent;
-        $renderValidation = $this->validateReplacementRenderable($candidate);
-        if (empty($renderValidation['valid'])) {
-            return $this->error('BLOCK_RENDER_FAILED', 'Replacement block cannot be rendered.', [
-                'page_type' => $pageType,
-                'block_id' => (string)($read['block_id'] ?? ''),
-                'component_code' => $componentCode,
-                'errors' => $renderValidation['errors'],
-            ]);
-        }
-
-        $createdAt = \date('Y-m-d H:i:s');
-        $beforeBlock = $currentBlock;
-
-        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
-        $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
-        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-        $layoutMatch = $this->findVirtualThemeLayoutContentRow($scope, $pageType, $componentCode);
-        $layoutIndex = (int)($layoutMatch['index'] ?? -1);
-        if ($layoutIndex >= 0 && \array_key_exists($layoutIndex, $content) && \is_array($content[$layoutIndex])) {
-            $content[$layoutIndex] = \array_replace($content[$layoutIndex], [
-                'code' => $componentCode,
-                'config' => $config,
-                'enabled' => true,
-            ]);
-            $layout['content'] = \array_values($content);
-            $layouts[$pageType] = $layout;
-            $scope['page_type_layouts'] = $layouts;
-        }
-
-        if (\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
-            $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = $createdAt;
-        }
-        $scope['preview_page_type'] = $pageType;
-        $scope['plan_json_execution_summary'] = $this->safeSummarize($scope);
-        $scope['block_patch_history'] = $this->appendPatchHistory(
-            \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
-            $pageType,
-            $componentCode,
-            $beforeBlock,
-            $candidate,
-            $metadata,
-            $createdAt
-        );
-
-        $this->virtualThemeService()->saveGeneratedContentComponent($themeId, $pageType, [
-            'code' => $componentCode,
-            'name' => (string)($currentBlock['_pb_server_component_name'] ?? $componentCode),
-            'phtml' => $templateContent,
-            'default_config' => $config,
-            'sort_order' => (int)($currentBlock['_pb_server_sort_order'] ?? 0),
-            'key' => $componentCode,
-        ]);
-
-        return [
-            'success' => true,
-            'page_type' => $pageType,
-            'block_id' => $componentCode,
-            'component_code' => $componentCode,
-            'source' => (string)($read['source'] ?? 'virtual_theme_component'),
-            'scope' => $scope,
-            'before_block' => $beforeBlock,
-            'after_block' => $candidate,
-            'change_summary' => \trim((string)($metadata['change_summary'] ?? '')),
-            'changed_fields' => $this->normalizeChangedFields($metadata['changed_fields'] ?? []),
-            'reason' => \trim((string)($metadata['reason'] ?? '')),
-        ];
-    }
 
     /**
      * @param array<string, mixed> $scope
      * @return array{index:int,row:array<string,mixed>}|null
      */
-    private function findVirtualThemeLayoutContentRow(array $scope, string $pageType, string $blockId): ?array
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{block_key:string,block:array<string,mixed>}|null
+     */
+    private function findPlanJsonBlockInScope(array $scope, string $pageType, string $blockId): ?array
     {
-        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
-        $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
-        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-        $match = $this->findBlockInBlocks($content, $blockId);
-        if ($match === null) {
+        $page = \is_array($scope['plan_json']['pages'][$pageType] ?? null)
+            ? $scope['plan_json']['pages'][$pageType]
+            : [];
+        if ($page === []) {
             return null;
         }
 
-        return [
-            'index' => (int)($match['index'] ?? -1),
-            'row' => \is_array($match['block'] ?? null) ? $match['block'] : [],
-        ];
-    }
-
-    private function resolveVirtualThemeId(array $scope): int
-    {
-        $themeId = (int)($scope['virtual_theme_id'] ?? 0);
-        if ($themeId > 0) {
-            return $themeId;
-        }
-        $virtualTheme = \is_array($scope['virtual_theme'] ?? null) ? $scope['virtual_theme'] : [];
-
-        return (int)($virtualTheme['virtual_theme_id'] ?? $virtualTheme['theme_id'] ?? $virtualTheme['id'] ?? 0);
-    }
-
-    private function loadVirtualThemeComponent(int $themeId, string $componentCode): ?VirtualThemeComponent
-    {
-        $candidates = \array_values(\array_unique(\array_filter([
-            \trim($componentCode),
-            \str_starts_with(\trim($componentCode), 'content/') ? '' : 'content/' . \trim($componentCode),
-        ], static fn(string $candidate): bool => $candidate !== '')));
-
-        foreach ($candidates as $candidate) {
-            /** @var VirtualThemeComponent $component */
-            $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
-            $component->clearData()->clearQuery()
-                ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $themeId)
-                ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $candidate)
-                ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
-                ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
-                ->order(VirtualThemeComponent::schema_fields_ID, 'DESC')
-                ->find()
-                ->fetch();
-
-            if ((int)$component->getId() > 0) {
-                return $component;
-            }
-        }
-
-        return null;
-    }
-
-    private function resolveVirtualThemeReplacementTemplate(array $currentBlock, array $candidate): string
-    {
-        $currentTemplate = (string)($currentBlock[self::META_TEMPLATE_PHTML] ?? '');
-        $candidateTemplate = (string)($candidate[self::META_TEMPLATE_PHTML] ?? '');
-        $candidateHtml = (string)($candidate['html'] ?? '');
-        if (\trim($candidateHtml) !== '' && (
-            \trim($candidateTemplate) === ''
-            || $candidateTemplate === $currentTemplate
-            || $candidateHtml !== (string)($currentBlock['html'] ?? '')
-        )) {
-            return $candidateHtml;
-        }
-        if (\trim($candidateTemplate) !== '') {
-            return $candidateTemplate;
-        }
-
-        return $candidateHtml;
-    }
-
-    /**
-     * @param list<mixed> $blocks
-     * @return array{index:int,block:array<string,mixed>}|null
-     */
-    private function findBlockInBlocks(array $blocks, string $blockId): ?array
-    {
         $needles = $this->normalizeLookupCandidates($blockId);
-        foreach ($blocks as $index => $block) {
-            if (!\is_array($block)) {
+        foreach ($page as $key => $block) {
+            if (!\is_string($key) || !$this->isDynamicPlanBlockKey($key) || !\is_array($block)) {
                 continue;
             }
-            foreach ($this->buildBlockLookupValues($block) as $value) {
+            $values = \array_merge([$key], $this->buildBlockLookupValues($block));
+            foreach ($values as $value) {
                 if (\in_array($this->normalizeLookupKey($value), $needles, true)) {
-                    return ['index' => (int)$index, 'block' => $block];
+                    return ['block_key' => $key, 'block' => $block];
                 }
             }
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<string>
+     */
+    private function collectPlanJsonBlockIds(array $scope, string $pageType): array
+    {
+        $page = \is_array($scope['plan_json']['pages'][$pageType] ?? null)
+            ? $scope['plan_json']['pages'][$pageType]
+            : [];
+        $ids = [];
+        foreach ($page as $key => $block) {
+            if (!\is_string($key) || !$this->isDynamicPlanBlockKey($key) || !\is_array($block)) {
+                continue;
+            }
+            $id = \trim((string)($block['block_id'] ?? $block['block_key'] ?? $key));
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+
+        return \array_values(\array_unique($ids));
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function planJsonBlockToEditableBlock(array $block, string $blockKey): array
+    {
+        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
+        foreach (['fields', 'default_config', 'content', 'data'] as $field) {
+            if (\is_array($block[$field] ?? null)) {
+                $config = \array_replace($config, $block[$field]);
+            }
+        }
+
+        return \array_replace($block, [
+            'block_id' => \trim((string)($block['block_id'] ?? $block['block_key'] ?? $blockKey)),
+            'block_key' => \trim((string)($block['block_key'] ?? $blockKey)),
+            'type' => (string)($block['type'] ?? $block['block_type'] ?? 'ai_generated_section'),
+            'component_code' => (string)($block['component_code'] ?? $block['section_code'] ?? $block['code'] ?? ''),
+            'config' => $config,
+            'html' => (string)($block['html'] ?? $block['html_content'] ?? ''),
+            'field_schema' => \is_array($block['field_schema'] ?? null) ? $block['field_schema'] : [],
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $candidate
+     * @return array<string, mixed>
+     */
+    private function writePlanJsonBlockReplacement(
+        array $scope,
+        string $pageType,
+        string $blockKey,
+        array $candidate,
+        string $createdAt
+    ): array {
+        if (!\is_array($scope['plan_json']['pages'][$pageType][$blockKey] ?? null)) {
+            return $scope;
+        }
+        $current = $scope['plan_json']['pages'][$pageType][$blockKey];
+        $config = \is_array($candidate['config'] ?? null) ? $candidate['config'] : [];
+        $scope['plan_json']['pages'][$pageType][$blockKey] = \array_replace($current, [
+            'block_key' => $blockKey,
+            'block_id' => (string)($candidate['block_id'] ?? $current['block_id'] ?? $blockKey),
+            'block_type' => (string)($candidate['type'] ?? $current['block_type'] ?? $current['type'] ?? 'ai_generated_section'),
+            'type' => (string)($candidate['type'] ?? $current['type'] ?? 'ai_generated_section'),
+            'component_code' => $this->resolveBlockComponentCode($candidate),
+            'fields' => $config,
+            'config' => $config,
+            'html' => (string)($candidate['html'] ?? $current['html'] ?? ''),
+            'field_schema' => \is_array($candidate['field_schema'] ?? null) ? $candidate['field_schema'] : [],
+            'status' => 1,
+            'last_generated_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ]);
+
+        return $scope;
     }
 
     /**
@@ -1726,8 +1307,8 @@ class AiSiteBlockPartialPatchService
      */
     private function buildPageContext(array $scope, string $pageType): array
     {
-        $page = \is_array($scope['virtual_pages_by_type'][$pageType] ?? null)
-            ? $scope['virtual_pages_by_type'][$pageType]
+        $page = \is_array($scope['plan_json']['pages'][$pageType] ?? null)
+            ? $scope['plan_json']['pages'][$pageType]
             : [];
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $contentLocale = '';
@@ -1762,11 +1343,14 @@ class AiSiteBlockPartialPatchService
      */
     private function buildLayoutContext(array $scope, string $pageType, string $componentCode, string $blockId): array
     {
-        $layouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
-        $layout = \is_array($layouts[$pageType] ?? null) ? $layouts[$pageType] : [];
+        $page = \is_array($scope['plan_json']['pages'][$pageType] ?? null)
+            ? $scope['plan_json']['pages'][$pageType]
+            : [];
+        $block = $this->findPlanJsonBlockInScope($scope, $pageType, $blockId);
 
         return [
-            'page_type_layout' => $this->compactPromptValue($layout),
+            'plan_json_page' => $this->compactPromptValue($page),
+            'plan_json_block' => $this->compactPromptValue(\is_array($block['block'] ?? null) ? $block['block'] : []),
             'component_code' => $componentCode,
             'block_id' => $blockId,
         ];
@@ -1814,22 +1398,6 @@ class AiSiteBlockPartialPatchService
         }
 
         return $result;
-    }
-
-    /**
-     * @param list<mixed> $blocks
-     * @return list<string>
-     */
-    private function collectBlockIds(array $blocks): array
-    {
-        $ids = [];
-        foreach ($blocks as $block) {
-            if (\is_array($block)) {
-                $ids[] = \trim((string)($block['block_id'] ?? ''));
-            }
-        }
-
-        return \array_values($ids);
     }
 
     /**
@@ -2517,8 +2085,8 @@ class AiSiteBlockPartialPatchService
             'page_design_plan' => true,
             'theme_alignment_summary' => true,
             'page_context_hash' => true,
-            'block_nodes' => true,
-            'block_nodes' => true,
+            'blocks' => true,
+            'blocks' => true,
             'ordered_block_keys' => true,
             'seo' => true,
             'meta_title' => true,
@@ -2623,7 +2191,7 @@ class AiSiteBlockPartialPatchService
             return $value;
         }
 
-        return \rtrim(\mb_substr($value, 0, \max(1, $limit - 1), 'UTF-8')) . '…';
+        return \rtrim(\mb_substr($value, 0, \max(1, $limit - 3), 'UTF-8')) . '...';
     }
 
     private function jsonParser(): AiResponseJsonParser
@@ -2634,11 +2202,6 @@ class AiSiteBlockPartialPatchService
     private function aiService(): AiService
     {
         return $this->aiService ?? ObjectManager::getInstance(AiService::class);
-    }
-
-    private function virtualThemeService(): AiSiteVirtualThemeService
-    {
-        return $this->virtualThemeService ?? ObjectManager::getInstance(AiSiteVirtualThemeService::class);
     }
 
 }

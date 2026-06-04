@@ -37,8 +37,8 @@ class AiSiteAgentWorkspaceEntryNoticeService
         }
 
         $queueId = (int)($queueState['queue_id'] ?? 0);
-        $queueStatus = \trim((string)($queueState['status'] ?? $queueState['queue_status'] ?? $queueState['job_status'] ?? ''));
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $queueStatus = \trim((string)($queueState['queue_status'] ?? ''));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         $status = $queueStatus !== '' ? $queueStatus : $activeStatus;
         if ($queueId <= 0 || $status === '') {
             return ['show' => false];
@@ -111,7 +111,7 @@ class AiSiteAgentWorkspaceEntryNoticeService
         foreach (['publish', 'image_asset', 'block_partial_patch', 'block_regenerate', 'regenerate_page', 'build', 'plan'] as $operation) {
             $queueInfo = \is_array($queueInfoByOperation[$operation] ?? null) ? $queueInfoByOperation[$operation] : null;
             $queueState = $this->resolveQueueCurrentState($queueInfo);
-            $status = \trim((string)($queueState['status'] ?? $queueState['queue_status'] ?? $queueState['job_status'] ?? ''));
+            $status = \trim((string)($queueState['queue_status'] ?? ''));
             if ($queueInfo !== null && \in_array($status, ['running', 'pending', 'queued', 'error'], true)) {
                 return $operation;
             }

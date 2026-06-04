@@ -28,7 +28,6 @@ final class PlanJsonContractSchema
             'i18n',
             'content_manifest',
             'pages',
-            'block_nodes',
             'permission_matrix',
             'frozen_fields',
             'mutable_fields',

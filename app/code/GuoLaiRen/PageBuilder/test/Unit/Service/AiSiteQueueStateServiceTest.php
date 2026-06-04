@@ -92,8 +92,9 @@ final class AiSiteQueueStateServiceTest extends TestCase
 
         self::assertSame(42, $state['queue_id']);
         self::assertSame('AiSiteBuild-42', $state['name']);
-        self::assertSame('error', $state['status']);
-        self::assertSame('error', $state['job_status'], 'terminal queue status must override content-level job_status');
+        self::assertArrayNotHasKey('status', $state);
+        self::assertArrayNotHasKey('job_status', $state);
+        self::assertSame('error', $state['queue_status'], 'terminal queue status must override content-level queue_status');
         self::assertSame('build.page.home', $state['job_key']);
         self::assertSame('build.page', $state['job_type']);
         self::assertSame('exec-token', $state['token']);
@@ -130,7 +131,8 @@ final class AiSiteQueueStateServiceTest extends TestCase
         self::assertSame(50, $state['token_usage']['output_tokens']);
         self::assertSame(150, $state['token_usage']['total_tokens']);
         self::assertSame(['source' => 'content'], $state['token_usage']['token_cost_meta']);
-        self::assertSame('running', $state['job_status']);
+        self::assertArrayNotHasKey('job_status', $state);
+        self::assertSame('running', $state['queue_status']);
     }
 
     public function testBuildObserverPublicStateKeepsStageOneProgressFromLargeContent(): void

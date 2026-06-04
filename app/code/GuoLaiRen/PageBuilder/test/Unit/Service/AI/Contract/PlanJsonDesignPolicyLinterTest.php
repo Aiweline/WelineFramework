@@ -65,11 +65,14 @@ final class PlanJsonDesignPolicyLinterTest extends TestCase
                     'motion' => ['duration' => '240ms'],
                 ],
             ],
-            'block_nodes' => [
-                [
+            'pages' => [
+                'home_page' => [
+                    'page_type' => 'home_page',
+                    'gallery' => [
                     'block_id' => 'home.gallery',
                     'block_type' => 'image_gallery',
                     'visual' => ['image_integration' => 'masked cards with shared radius'],
+                ],
                 ],
             ],
         ];

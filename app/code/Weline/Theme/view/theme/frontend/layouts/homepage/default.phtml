@@ -1,460 +1,512 @@
 <?php
 /**
- * 布局：首页 - 默认布局
+ * Layout: homepage default.
  *
- * 首页默认布局，简化为 header、content、footer 三大区域
- * content 区域是一个大的 slot 容器，可以放入任意部件或容器（行列布局等）
- * 
- * 字段
- * @meta.name {default="首页默认布局",name="首页默认布局",description="首页默认布局，用于描述布局的名称"}
- * @meta.description {default="首页默认布局，包含 header、content、footer 三大区域",name="首页默认布局描述",description="简化的首页布局，content区域支持自由拖放部件和容器"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录"}
- * @param title {default="首页",name="页面标题",description="页面标题，用于设置页面标题"}
- * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
- * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
- * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
- * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * Keeps the established homepage slot ids while making the default Theme page
+ * complete without any store/catalog module.
  *
- * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
- * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
- * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ * @meta.name {default="Homepage Default",name="Homepage Default",description="Default homepage layout"}
+ * @param.title {default="Home",name="Page Title",description="Page title"}
+ * @param.content {default="",name="Content HTML",description="Main content"}
+ * @param.showHeader {default=true,name="Show Header",description="Whether to render header"}
+ * @param.showFooter {default=true,name="Show Footer",description="Whether to render footer"}
+ * @param.class {default="",name="Extra CSS class",description="Extra CSS class"}
  */
+
 $meta = $this->getData('meta') ?? [];
-// 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
-// 直接使用colors数组，无需重复读取和处理
-$colors = $this->getData('colors') ?? [];
+$class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <style data-theme-inline="layout-homepage-default">
+        .theme-layout-homepage .homepage-main {
+            overflow: hidden;
+        }
+
+        .theme-layout-homepage .homepage-section {
+            padding: clamp(36px, 6vw, 78px) 0;
+        }
+
+        .theme-layout-homepage .homepage-section--soft {
+            background: rgba(255, 255, 255, .62);
+        }
+
+        .theme-layout-homepage .homepage-hero__surface {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, .82fr);
+            gap: clamp(24px, 5vw, 58px);
+            align-items: center;
+            padding: clamp(30px, 5vw, 64px);
+            min-height: clamp(420px, 66vw, 620px);
+        }
+
+        .theme-layout-homepage .homepage-hero__eyebrow {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            min-height: 30px;
+            padding: 0 10px;
+            border-radius: 999px;
+            color: var(--weline-theme-primary, #5b4cf5);
+            background: rgba(91, 76, 245, .1);
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        .theme-layout-homepage .homepage-hero__title {
+            margin: 16px 0 0;
+            font-size: clamp(38px, 6vw, 72px);
+            line-height: 1.02;
+            letter-spacing: 0;
+        }
+
+        .theme-layout-homepage .homepage-hero__lead {
+            max-width: 650px;
+            margin: 18px 0 0;
+            color: var(--weline-theme-muted, #657083);
+            font-size: clamp(17px, 2vw, 20px);
+        }
+
+        .theme-layout-homepage .homepage-hero__actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+
+        .theme-layout-homepage .homepage-hero__panel {
+            display: grid;
+            gap: 14px;
+        }
+
+        .theme-layout-homepage .homepage-hero__metric {
+            padding: 18px;
+        }
+
+        .theme-layout-homepage .homepage-hero__metric strong {
+            display: block;
+            color: var(--weline-theme-text, #172033);
+            font-size: 24px;
+        }
+
+        .theme-layout-homepage .homepage-section__head {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 22px;
+        }
+
+        .theme-layout-homepage .homepage-section__title {
+            margin: 0;
+            font-size: clamp(26px, 4vw, 40px);
+            line-height: 1.1;
+        }
+
+        .theme-layout-homepage .homepage-section__lead {
+            max-width: 620px;
+            margin: 8px 0 0;
+            color: var(--weline-theme-muted, #657083);
+        }
+
+        .theme-layout-homepage .homepage-card-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .theme-layout-homepage .homepage-product-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .theme-layout-homepage .homepage-card,
+        .theme-layout-homepage .homepage-product {
+            padding: 20px;
+        }
+
+        .theme-layout-homepage .homepage-card__icon {
+            display: grid;
+            place-items: center;
+            width: 42px;
+            height: 42px;
+            margin-bottom: 14px;
+            border-radius: 13px;
+            color: #fff;
+            background: linear-gradient(135deg, var(--weline-theme-primary, #5b4cf5), #18a47a);
+        }
+
+        .theme-layout-homepage .homepage-card h3,
+        .theme-layout-homepage .homepage-product h3 {
+            margin: 0 0 8px;
+            font-size: 19px;
+        }
+
+        .theme-layout-homepage .homepage-card p,
+        .theme-layout-homepage .homepage-product p {
+            margin: 0;
+            color: var(--weline-theme-muted, #657083);
+        }
+
+        .theme-layout-homepage .homepage-product__image {
+            display: grid;
+            place-items: center;
+            aspect-ratio: 4 / 3;
+            margin-bottom: 14px;
+            border-radius: 12px;
+            color: var(--weline-theme-primary, #5b4cf5);
+            background: linear-gradient(135deg, rgba(91, 76, 245, .1), rgba(15, 159, 110, .1));
+            font-size: 34px;
+        }
+
+        .theme-layout-homepage .homepage-promo__surface {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 20px;
+            align-items: center;
+            padding: clamp(24px, 4vw, 42px);
+            color: #fff;
+            background: linear-gradient(135deg, #172033, #4738dc);
+        }
+
+        .theme-layout-homepage .homepage-promo__surface h2 {
+            margin: 0;
+            font-size: clamp(24px, 4vw, 40px);
+        }
+
+        .theme-layout-homepage .homepage-promo__surface p {
+            margin: 8px 0 0;
+            color: rgba(255, 255, 255, .78);
+        }
+
+        .theme-layout-homepage .homepage-brand-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .theme-layout-homepage .homepage-brand {
+            display: inline-flex;
+            align-items: center;
+            min-height: 42px;
+            padding: 0 15px;
+            border: 1px solid var(--weline-theme-border, #e3e8ef);
+            border-radius: 999px;
+            background: #fff;
+            font-weight: 800;
+        }
+
+        @media (max-width: 980px) {
+            .theme-layout-homepage .homepage-hero__surface,
+            .theme-layout-homepage .homepage-promo__surface {
+                grid-template-columns: 1fr;
+            }
+
+            .theme-layout-homepage .homepage-card-grid,
+            .theme-layout-homepage .homepage-product-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 620px) {
+            .theme-layout-homepage .homepage-section__head {
+                display: block;
+            }
+
+            .theme-layout-homepage .homepage-card-grid,
+            .theme-layout-homepage .homepage-product-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::head-after</w:hook>
 </head>
-<body>
+<body class="theme-layout-homepage <?= $class ?>">
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::body-start</w:hook>
-    
+
     <div class="weline-page-wrapper">
-        <!-- ========== HEADER 区域（使用 partials，内部已配置 widget slot） ========== -->
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::homepage::header-before</w:hook>
-            
-            <!-- Header 通过 Partials Block 加载，slot 已在 partials/header/default.phtml 中配置 -->
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
-            
             <w:hook>Weline_Theme::frontend::layouts::homepage::header-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
-        <!-- ========== CONTENT 主内容区域 ========== -->
-        <!-- 
-            content 是一个大的 slot 容器，不设置 accept 限制
-            可以容纳任意部件，包括：
-            - 基础容器：行（row）、列（column）、网格（grid）等
-            - 内容部件：Banner、轮播、产品列表等
-            - 容器内部还可以嵌套子容器和部件
-        -->
-        <div class="weline-main-content">
+        <main class="weline-main-content homepage-main" id="homepage-main" data-layout="homepage">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::homepage::content-before</w:hook>
-            
-            <main class="homepage-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="homepage-main" data-layout="homepage">
-                <w:hook>Weline_Theme::frontend::layouts::homepage::main-before</w:hook>
-                
-                <!-- ========== CONTENT SLOT 主内容插槽 ========== -->
-                <!-- 
-                    这是首页唯一的核心 slot，可以容纳任何部件
-                    用户通过主题编辑器拖入行列容器、Banner、产品轮播等部件
-                    行列等基础容器没有 accept 限制，可以被任何 slot 容纳，也可以容纳任何组件
-                -->
-                <w:slot id="content" 
-                        name="内容区域"
-                        accept="layout-homepage-content,layout-default-content,content,container,banner,carousel,product,category"
-                        multiple="true"
-                        reject="header,footer"
-                        position="content"
-                        class="homepage-content-slot">
-                    <w:hook name="Weline_Theme::frontend::layouts::homepage::content">
-                        <if condition="meta.content">
-                            {{meta.content}}
-                        <else/>
-                            <!-- ========== 默认首页部件 ========== -->
-                            <div class="homepage-default-widgets">
-                                
-                                <!-- 1. Hero 轮播图 -->
-                                <w:slot id="homepage-hero"
-                                        name="首页主视觉"
-                                        accept="layout-homepage-hero,hero-slider,promo-banner,banner,carousel"
-                                        exclusive="true"
-                                        multiple="false"
-                                        position="content"
-                                        wrapper="section"
-                                        class="homepage-section section-hero">
-                                    <w:widget type="banner" name="hero-slider" params='{"autoplay":true,"autoplay_speed":5000,"show_dots":true,"show_arrows":true,"height":"500px"}'/>
-                                </w:slot>
-                                
-                                <!-- 2. 推荐产品 -->
-                                <w:slot id="homepage-featured"
-                                        name="首页推荐产品"
-                                        accept="layout-homepage-featured,featured-products,product-carousel,product"
-                                        multiple="true"
-                                        position="content"
-                                        wrapper="section"
-                                        class="homepage-section section-featured">
-                                    <div class="container">
-                                        <w:widget type="product" name="featured-products" params='{"title":"推荐产品","subtitle":"为您精选的优质商品","limit":8,"columns":"4","show_price":true,"show_rating":true,"show_add_to_cart":true,"layout":"grid"}'/>
+
+            <w:slot id="content"
+                    name="Homepage content"
+                    accept="layout-homepage-content,layout-default-content,content,container,banner,carousel,product,category"
+                    multiple="true"
+                    reject="header,footer"
+                    position="content"
+                    class="homepage-content-slot">
+                <w:hook>Weline_Theme::frontend::layouts::homepage::content<else/>
+                <if condition="meta.content">
+                    {{meta.content}}
+                <else/>
+                    <w:slot id="homepage-hero"
+                            name="Homepage hero"
+                            accept="layout-homepage-hero,hero-slider,promo-banner,banner,carousel,hero"
+                            exclusive="true"
+                            multiple="false"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-hero">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::hero<else/>
+                        <div class="weline-container">
+                            <div class="weline-layout-surface homepage-hero__surface">
+                                <div>
+                                    <span class="homepage-hero__eyebrow"><?= __('Weline Default Theme') ?></span>
+                                    <h1 class="homepage-hero__title"><?= htmlspecialchars((string)($meta['title'] ?? __('Build a clean storefront')), ENT_QUOTES, 'UTF-8') ?></h1>
+                                    <p class="homepage-hero__lead"><?= __('A ready homepage with graceful defaults, module hooks, and visual slots for real content.') ?></p>
+                                    <div class="homepage-hero__actions">
+                                        <a class="weline-button" href="/products"><?= __('Browse products') ?></a>
+                                        <a class="weline-button weline-button--ghost" href="/contact"><?= __('Talk to us') ?></a>
                                     </div>
-                                </w:slot>
-                                
-                                <!-- 3. 分类网格 -->
-                                <w:slot id="homepage-categories"
-                                        name="首页分类入口"
-                                        accept="layout-homepage-categories,category-grid,category-list,category"
-                                        multiple="true"
-                                        position="content"
-                                        wrapper="section"
-                                        class="homepage-section section-categories">
-                                    <div class="container">
-                                        <w:widget type="category" name="category-grid" params='{"title":"热门分类","subtitle":"探索我们的商品分类","columns":"4","show_product_count":true}'/>
+                                </div>
+                                <div class="homepage-hero__panel">
+                                    <div class="weline-card homepage-hero__metric">
+                                        <strong>12</strong>
+                                        <span class="weline-muted"><?= __('Ready layout regions') ?></span>
                                     </div>
-                                </w:slot>
-                                
-                                <!-- 4. 新品上市 -->
-                                <w:slot id="homepage-new-arrivals"
-                                        name="首页新品区"
-                                        accept="layout-homepage-new-arrivals,new-arrivals,product-carousel,product"
-                                        multiple="true"
-                                        position="content"
-                                        wrapper="section"
-                                        class="homepage-section section-new-arrivals">
-                                    <div class="container">
-                                        <w:widget type="product" name="new-arrivals" params='{"title":"新品上市","subtitle":"发现最新上架的商品","limit":4,"columns":"4","show_price":true,"show_rating":true}'/>
+                                    <div class="weline-card homepage-hero__metric">
+                                        <strong>5</strong>
+                                        <span class="weline-muted"><?= __('Footer extension slots') ?></span>
                                     </div>
-                                </w:slot>
-                                
-                                <!-- 5. 促销横幅 -->
-                                <w:slot id="homepage-promo"
-                                        name="首页促销横幅"
-                                        accept="layout-homepage-promo,promo-banner,ad-banner,banner"
-                                        exclusive="true"
-                                        multiple="false"
-                                        position="content"
-                                        wrapper="section"
-                                        class="homepage-section section-promo">
-                                    <w:widget type="banner" name="promo-banner" params='{"title":"限时特惠","subtitle":"全场满300减50","button_text":"立即抢购","link":"/promotions","background_color":"#f8f9fa"}'/>
-                                </w:slot>
-                                
-                                <!-- 6. 畅销商品 -->
-                                <w:slot id="homepage-bestsellers"
-                                        name="首页畅销商品"
-                                        accept="layout-homepage-bestsellers,bestsellers,product-carousel,product"
-                                        multiple="true"
-                                        position="content"
-                                        wrapper="section"
-                                        class="homepage-section section-bestsellers">
-                                    <div class="container">
-                                        <w:widget type="product" name="bestsellers" params='{"title":"畅销商品","subtitle":"最受欢迎的热销产品","limit":8,"columns":"4","show_price":true,"show_rating":true,"show_add_to_cart":true}'/>
+                                    <div class="weline-card homepage-hero__metric">
+                                        <strong>0</strong>
+                                        <span class="weline-muted"><?= __('Required commerce modules') ?></span>
                                     </div>
-                                </w:slot>
-                                
-                                <!-- 7. 品牌展示 -->
-                                <w:slot id="homepage-brands"
-                                        name="首页品牌区"
-                                        accept="layout-homepage-brands,brand-logos,content"
-                                        multiple="true"
-                                        position="content"
-                                        wrapper="section"
-                                        class="homepage-section section-brands">
-                                    <div class="container">
-                                        <w:widget type="content" name="brand-logos" params='{"title":"合作品牌","show_title":true}'/>
-                                    </div>
-                                </w:slot>
-                                
-                                <!-- 8. 信任徽章 -->
-                                <w:slot id="homepage-trust"
-                                        name="首页信任徽章"
-                                        accept="layout-homepage-trust,trust-badges,content"
-                                        multiple="true"
-                                        position="content"
-                                        wrapper="section"
-                                        class="homepage-section section-trust">
-                                    <div class="container">
-                                        <w:widget type="content" name="trust-badges" params='{"layout":"horizontal"}'/>
-                                    </div>
-                                </w:slot>
-                                
+                                </div>
                             </div>
-                        </if>
-                    </w:hook>
-                </w:slot>
-                
-                <w:hook>Weline_Theme::frontend::layouts::homepage::main-after</w:hook>
-            </main>
-            
+                        </div>
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-featured"
+                            name="Homepage featured"
+                            accept="layout-homepage-featured,featured-products,product-carousel,product,content,cards"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--soft">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::featured<else/>
+                        <div class="weline-container">
+                            <div class="homepage-section__head">
+                                <div>
+                                    <h2 class="homepage-section__title"><?= __('Featured picks') ?></h2>
+                                    <p class="homepage-section__lead"><?= __('Use product, banner, or content widgets here when real data is available.') ?></p>
+                                </div>
+                                <a class="weline-button weline-button--ghost" href="/products"><?= __('View all') ?></a>
+                            </div>
+                            <div class="homepage-product-grid">
+                                <?php foreach ([__('Starter Kit'), __('Modern Pack'), __('Growth Bundle'), __('Studio Set')] as $index => $label): ?>
+                                    <article class="weline-card homepage-product">
+                                        <div class="homepage-product__image"><i class="ri-box-3-line"></i></div>
+                                        <h3><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></h3>
+                                        <p><?= __('Default product placeholder. Replace with module data or widgets.') ?></p>
+                                    </article>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-categories"
+                            name="Homepage categories"
+                            accept="layout-homepage-categories,category-grid,category-list,category,content,cards"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::categories<else/>
+                        <div class="weline-container">
+                            <div class="homepage-section__head">
+                                <div>
+                                    <h2 class="homepage-section__title"><?= __('Explore sections') ?></h2>
+                                    <p class="homepage-section__lead"><?= __('Default cards keep the page useful before a category module is installed.') ?></p>
+                                </div>
+                            </div>
+                            <div class="homepage-card-grid">
+                                <article class="weline-card homepage-card">
+                                    <span class="homepage-card__icon"><i class="ri-layout-masonry-line"></i></span>
+                                    <h3><?= __('Collections') ?></h3>
+                                    <p><?= __('Curated groups for product or content modules.') ?></p>
+                                </article>
+                                <article class="weline-card homepage-card">
+                                    <span class="homepage-card__icon"><i class="ri-flashlight-line"></i></span>
+                                    <h3><?= __('Promotions') ?></h3>
+                                    <p><?= __('Seasonal banners, offers, or announcement widgets.') ?></p>
+                                </article>
+                                <article class="weline-card homepage-card">
+                                    <span class="homepage-card__icon"><i class="ri-customer-service-2-line"></i></span>
+                                    <h3><?= __('Services') ?></h3>
+                                    <p><?= __('Support blocks, guides, and contact entry points.') ?></p>
+                                </article>
+                            </div>
+                        </div>
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-promo"
+                            name="Homepage promotion"
+                            accept="layout-homepage-promo,promo-banner,banner,content"
+                            exclusive="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-promo">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::promo<else/>
+                        <div class="weline-container">
+                            <div class="weline-layout-surface homepage-promo__surface">
+                                <div>
+                                    <h2><?= __('Launch-ready by default') ?></h2>
+                                    <p><?= __('Publish a clean page first, then let modules replace each region with live data.') ?></p>
+                                </div>
+                                <a class="weline-button" href="/contact"><?= __('Get started') ?></a>
+                            </div>
+                        </div>
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-new-arrivals"
+                            name="Homepage new arrivals"
+                            accept="layout-homepage-new-arrivals,new-products,product-list,product,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--soft">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::new-arrivals<else/>
+                        <div class="weline-container">
+                            <div class="homepage-section__head">
+                                <div>
+                                    <h2 class="homepage-section__title"><?= __('Latest updates') ?></h2>
+                                    <p class="homepage-section__lead"><?= __('Use this slot for new products, posts, releases, or campaigns.') ?></p>
+                                </div>
+                            </div>
+                            <div class="homepage-card-grid">
+                                <article class="weline-card homepage-card">
+                                    <h3><?= __('New content') ?></h3>
+                                    <p><?= __('Fresh module output can replace this fallback.') ?></p>
+                                </article>
+                                <article class="weline-card homepage-card">
+                                    <h3><?= __('Featured story') ?></h3>
+                                    <p><?= __('Ideal for CMS, blog, or landing content.') ?></p>
+                                </article>
+                                <article class="weline-card homepage-card">
+                                    <h3><?= __('Active campaign') ?></h3>
+                                    <p><?= __('Drop in a banner or promotion widget.') ?></p>
+                                </article>
+                            </div>
+                        </div>
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-bestsellers"
+                            name="Homepage bestsellers"
+                            accept="layout-homepage-bestsellers,bestseller-products,product-list,product,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::bestsellers<else/>
+                        <div class="weline-container">
+                            <div class="homepage-section__head">
+                                <div>
+                                    <h2 class="homepage-section__title"><?= __('Popular now') ?></h2>
+                                    <p class="homepage-section__lead"><?= __('A neutral region for ranked items, recommended content, or highlights.') ?></p>
+                                </div>
+                            </div>
+                            <div class="homepage-card-grid">
+                                <article class="weline-card homepage-card"><h3><?= __('Top item') ?></h3><p><?= __('Ready for ranking widgets.') ?></p></article>
+                                <article class="weline-card homepage-card"><h3><?= __('Customer choice') ?></h3><p><?= __('Ready for review or recommendation modules.') ?></p></article>
+                                <article class="weline-card homepage-card"><h3><?= __('Editor pick') ?></h3><p><?= __('Ready for curated content.') ?></p></article>
+                            </div>
+                        </div>
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-brands"
+                            name="Homepage brands"
+                            accept="layout-homepage-brands,brand-list,brands,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--soft">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/>
+                        <div class="weline-container">
+                            <div class="homepage-section__head">
+                                <div>
+                                    <h2 class="homepage-section__title"><?= __('Trusted ecosystem') ?></h2>
+                                    <p class="homepage-section__lead"><?= __('Brand, partner, certification, or channel widgets can live here.') ?></p>
+                                </div>
+                            </div>
+                            <div class="homepage-brand-row">
+                                <span class="homepage-brand">Weline</span>
+                                <span class="homepage-brand">Theme</span>
+                                <span class="homepage-brand">Widget</span>
+                                <span class="homepage-brand">Frontend</span>
+                            </div>
+                        </div>
+                        </w:hook>
+                    </w:slot>
+
+                    <w:slot id="homepage-trust"
+                            name="Homepage trust"
+                            accept="layout-homepage-trust,trust-badges,testimonial,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section">
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::trust<else/>
+                        <div class="weline-container">
+                            <div class="homepage-card-grid">
+                                <article class="weline-card homepage-card">
+                                    <span class="homepage-card__icon"><i class="ri-shield-check-line"></i></span>
+                                    <h3><?= __('Reliable') ?></h3>
+                                    <p><?= __('Defaults render without optional commerce dependencies.') ?></p>
+                                </article>
+                                <article class="weline-card homepage-card">
+                                    <span class="homepage-card__icon"><i class="ri-plug-line"></i></span>
+                                    <h3><?= __('Composable') ?></h3>
+                                    <p><?= __('Each important region has a named slot and hook.') ?></p>
+                                </article>
+                                <article class="weline-card homepage-card">
+                                    <span class="homepage-card__icon"><i class="ri-refresh-line"></i></span>
+                                    <h3><?= __('Replaceable') ?></h3>
+                                    <p><?= __('Real module output can replace fallback content cleanly.') ?></p>
+                                </article>
+                            </div>
+                        </div>
+                        </w:hook>
+                    </w:slot>
+                </if>
+                </w:hook>
+            </w:slot>
+
             <w:hook>Weline_Theme::frontend::layouts::homepage::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
-        </div>
-        
-        <!-- ========== FOOTER 区域（使用 partials，内部已配置 widget slot） ========== -->
+        </main>
+
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::homepage::footer-before</w:hook>
-            
-            <!-- Footer 通过 Partials Block 加载，slot 已在 partials/footer/default.phtml 中配置 -->
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
-            
             <w:hook>Weline_Theme::frontend::layouts::homepage::footer-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
         </if>
     </div>
-    
+
     <w:hook>Weline_Theme::frontend::layouts::homepage::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
-    
-    <style>
-    /* ========================================
-       首页布局样式 - 简化版
-       Header、Content、Footer 三大区域
-       ======================================== */
-    
-    /* 页面包裹器 */
-    .weline-page-wrapper {
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-    }
-    
-    /* 主内容区域 */
-    .weline-main-content {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    /* 首页主区域 */
-    .homepage-main {
-        width: 100%;
-        flex: 1;
-    }
-    
-    /* Content Slot - 核心内容插槽 */
-    .homepage-content-slot {
-        min-height: 400px;
-        position: relative;
-    }
-    
-    /* 默认内容样式 */
-    .homepage-default-content {
-        width: 100%;
-        padding: var(--weline-layout-spacing-2xl, 3rem) 0;
-    }
-    
-    /* 默认部件容器样式 */
-    .homepage-default-widgets {
-        width: 100%;
-    }
-    
-    /* 首页区块通用样式 */
-    .homepage-section {
-        padding: 3rem 0;
-    }
-    
-    .homepage-section:first-child {
-        padding-top: 0;
-    }
-    
-    /* Hero 轮播区域 - 无内边距 */
-    .section-hero {
-        padding: 0;
-    }
-    
-    /* 推荐产品区域 */
-    .section-featured {
-        background: var(--weline-layout-surface-secondary, var(--frontend-color-bg-secondary, #f8f9fa));
-    }
-    
-    /* 分类网格区域 */
-    .section-categories {
-        background: var(--weline-layout-surface-primary, var(--frontend-color-bg-primary, #ffffff));
-    }
-    
-    /* 新品上市区域 */
-    .section-new-arrivals {
-        background: var(--weline-layout-surface-secondary, var(--frontend-color-bg-secondary, #f8f9fa));
-    }
-    
-    /* 促销横幅区域 */
-    .section-promo {
-        padding: 0;
-    }
-    
-    /* 畅销商品区域 */
-    .section-bestsellers {
-        background: var(--weline-layout-surface-primary, var(--frontend-color-bg-primary, #ffffff));
-    }
-    
-    /* 品牌展示区域 */
-    .section-brands {
-        background: var(--weline-layout-surface-secondary, var(--frontend-color-bg-secondary, #f8f9fa));
-        padding: calc(var(--weline-layout-spacing-xl, 2rem) + var(--weline-layout-spacing-sm, 0.5rem)) 0;
-    }
-    
-    /* 信任徽章区域 */
-    .section-trust {
-        background: var(--weline-layout-surface-primary, var(--frontend-color-bg-primary, #ffffff));
-        padding: var(--weline-layout-spacing-xl, 2rem) 0;
-        border-top: 1px solid var(--weline-layout-border-color, var(--frontend-color-border-light, #e9ecef));
-    }
-    
-    /* 容器 */
-    .container {
-        max-width: var(--weline-layout-content-max-width, 1440px);
-        margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, 1rem);
-        box-sizing: border-box;
-    }
-    
-    /* 编辑模式样式已移至 editor-mode.css */
-    
-    /* ========================================
-       基础容器系统 - 行列布局
-       这些容器没有 accept 限制，可以容纳任何部件
-       ======================================== */
-    
-    /* 行容器 */
-    .weline-row {
-        display: flex;
-        flex-wrap: wrap;
-        margin: 0 -10px;
-        width: calc(100% + 20px);
-    }
-    
-    /* 列容器 */
-    .weline-col {
-        flex: 1;
-        padding: 10px;
-        min-width: 0;
-    }
-    
-    /* 列宽度变体 */
-    .weline-col-1 { flex: 0 0 8.333%; max-width: 8.333%; }
-    .weline-col-2 { flex: 0 0 16.666%; max-width: 16.666%; }
-    .weline-col-3 { flex: 0 0 25%; max-width: 25%; }
-    .weline-col-4 { flex: 0 0 33.333%; max-width: 33.333%; }
-    .weline-col-5 { flex: 0 0 41.666%; max-width: 41.666%; }
-    .weline-col-6 { flex: 0 0 50%; max-width: 50%; }
-    .weline-col-7 { flex: 0 0 58.333%; max-width: 58.333%; }
-    .weline-col-8 { flex: 0 0 66.666%; max-width: 66.666%; }
-    .weline-col-9 { flex: 0 0 75%; max-width: 75%; }
-    .weline-col-10 { flex: 0 0 83.333%; max-width: 83.333%; }
-    .weline-col-11 { flex: 0 0 91.666%; max-width: 91.666%; }
-    .weline-col-12 { flex: 0 0 100%; max-width: 100%; }
-    
-    /* 网格容器 */
-    .weline-grid {
-        display: grid;
-        gap: var(--weline-layout-spacing-xl, 1.25rem);
-    }
-    
-    .weline-grid-2 { grid-template-columns: repeat(2, 1fr); }
-    .weline-grid-3 { grid-template-columns: repeat(3, 1fr); }
-    .weline-grid-4 { grid-template-columns: repeat(4, 1fr); }
-    .weline-grid-5 { grid-template-columns: repeat(5, 1fr); }
-    .weline-grid-6 { grid-template-columns: repeat(6, 1fr); }
-    
-    /* Section 区块容器 */
-    .weline-section {
-        padding: var(--weline-layout-spacing-xl, 2rem) 0;
-    }
-    
-    .weline-section-sm { padding: var(--weline-layout-spacing-md, 1rem) 0; }
-    .weline-section-lg { padding: var(--weline-layout-spacing-3xl, 4rem) 0; }
-    .weline-section-xl { padding: calc(var(--weline-layout-spacing-3xl, 4rem) + var(--weline-layout-spacing-xl, 2rem)) 0; }
-    
-    /* 嵌套 Slot 容器（用于行列内部） */
-    [data-wslot-container] {
-        min-height: 60px;
-        position: relative;
-    }
-    
-    body.editor-mode [data-wslot-container] {
-        border: 1px dashed var(--weline-layout-border-color, #d1d5db);
-        border-radius: var(--weline-layout-radius-md, 4px);
-        padding: 8px;
-    }
-    
-    body.editor-mode [data-wslot-container]:hover {
-        border-color: var(--color-accent, #6366f1);
-        background-color: var(--color-accent-light, rgba(99, 102, 241, 0.03));
-    }
-    
-    /* ========================================
-       响应式设计
-       ======================================== */
-    @media (max-width: 1024px) {
-        .weline-grid-4,
-        .weline-grid-5,
-        .weline-grid-6 {
-            grid-template-columns: repeat(3, 1fr);
-        }
-        
-        .weline-col-3,
-        .weline-col-4 {
-            flex: 0 0 50%;
-            max-width: 50%;
-        }
-    }
-    
-    @media (max-width: 768px) {
-        .homepage-default-content {
-            padding: var(--weline-layout-spacing-xl, 2rem) 0;
-        }
-        
-        .slot-placeholder {
-            padding: 40px 15px;
-            min-height: 200px;
-        }
-        
-        .slot-placeholder .placeholder-icon {
-            font-size: var(--weline-layout-font-size-4xl, 2rem);
-        }
-        
-        .weline-grid-2,
-        .weline-grid-3,
-        .weline-grid-4,
-        .weline-grid-5,
-        .weline-grid-6 {
-            grid-template-columns: repeat(2, 1fr);
-        }
-        
-        .weline-col,
-        .weline-col-3,
-        .weline-col-4,
-        .weline-col-6 {
-            flex: 0 0 100%;
-            max-width: 100%;
-        }
-        
-        .weline-section { padding: var(--weline-layout-spacing-lg, 1.5rem) 0; }
-        .weline-section-lg { padding: calc(var(--weline-layout-spacing-xl, 2rem) + var(--weline-layout-spacing-sm, 0.5rem)) 0; }
-        .weline-section-xl { padding: var(--weline-layout-spacing-3xl, 4rem) 0; }
-    }
-    
-    @media (max-width: 480px) {
-        .weline-grid-2,
-        .weline-grid-3,
-        .weline-grid-4,
-        .weline-grid-5,
-        .weline-grid-6 {
-            grid-template-columns: 1fr;
-        }
-    }
-    </style>
-    
-    <!-- 编辑模式样式和脚本由 ThemeEditor 控制器注入 -->
 </body>
 </html>
-

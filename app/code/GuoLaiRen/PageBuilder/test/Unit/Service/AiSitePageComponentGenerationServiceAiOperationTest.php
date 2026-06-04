@@ -13,6 +13,16 @@ use Weline\Ai\Service\AiService;
  */
 final class AiSitePageComponentGenerationServiceAiOperationTest extends TestCase
 {
+    public static function setUpBeforeClass(): void
+    {
+        if (!\defined('BP')) {
+            \define('BP', \dirname(__DIR__, 7) . \DIRECTORY_SEPARATOR);
+        }
+        if (!\defined('DS')) {
+            \define('DS', \DIRECTORY_SEPARATOR);
+        }
+    }
+
     public function testCallAiOperationGenerateUsesInjectedAiServiceWhenAvailable(): void
     {
         $aiService = $this->createMock(AiService::class);
@@ -89,6 +99,72 @@ final class AiSitePageComponentGenerationServiceAiOperationTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->invokeCallAiOperation($service, 'generateStream', ['prompt' => 'p']);
+    }
+
+    public function testFakeModeGenerateReturnsContractPayloadWithoutCallingInjectedAiService(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::never())->method('generate');
+        $aiService->expects(self::never())->method('generateStream');
+
+        $service = new AiSitePageComponentGenerationService(aiService: $aiService);
+
+        $result = $this->invokeCallAiOperation($service, 'generate', [
+            'prompt' => 'fake block',
+            'test_region' => 'content',
+            'test_default_config' => [
+                'content.title' => 'India card-game APK downloads',
+                'content.copy' => 'Verified local fake content proves the build path.',
+            ],
+            'test_render_context' => [
+                '_scope' => [
+                    'fake_mode' => 1,
+                    'build_execution_mode' => 'local_fake_demo',
+                ],
+                'plan_json_task' => [
+                    'task_key' => 'home_page.hero',
+                    'section_code' => 'hero',
+                ],
+            ],
+        ]);
+
+        self::assertIsString($result);
+        $payload = \json_decode($result, true);
+        self::assertIsArray($payload);
+        self::assertStringContainsString('content.title =>', (string)($payload['extra_fields'] ?? ''));
+        self::assertStringContainsString('$contentTitle = $getConfig', (string)($payload['php_variables'] ?? ''));
+        self::assertStringContainsString('<?= htmlspecialchars($contentTitle', (string)($payload['html_content'] ?? ''));
+        self::assertStringContainsString('India card-game APK downloads', (string)($payload['extra_fields'] ?? ''));
+    }
+
+    public function testFakeModeGenerateStreamPushesContractPayloadWithoutCallingInjectedAiService(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::never())->method('generate');
+        $aiService->expects(self::never())->method('generateStream');
+
+        $service = new AiSitePageComponentGenerationService(aiService: $aiService);
+        $chunks = [];
+
+        $result = $this->invokeCallAiOperation($service, 'generateStream', [
+            'prompt' => 'fake streamed block',
+            'on_chunk' => static function (string $chunk) use (&$chunks): void {
+                $chunks[] = $chunk;
+            },
+            'test_region' => 'content',
+            'test_default_config' => [],
+            'test_render_context' => [
+                '_scope' => ['fake_mode' => 1],
+                'plan_json_task' => ['section_code' => 'proof'],
+            ],
+        ]);
+
+        self::assertSame(['status' => 'fulfilled'], $result);
+        self::assertCount(1, $chunks);
+        $payload = \json_decode($chunks[0], true);
+        self::assertIsArray($payload);
+        self::assertArrayHasKey('html_content', $payload);
+        self::assertStringContainsString('data-pb-ai-action', (string)($payload['html_content'] ?? ''));
     }
 
     private function invokeCallAiOperation(

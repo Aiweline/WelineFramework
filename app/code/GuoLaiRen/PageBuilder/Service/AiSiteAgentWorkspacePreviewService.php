@@ -28,7 +28,7 @@ final class AiSiteAgentWorkspacePreviewService
      *   style_code:string,
      *   locale:string,
      *   virtual_theme_id:int,
-     *   virtual_pages:array<string, array<string, mixed>>
+     *   plan_json_pages:array<string, array<string, mixed>>
      * }|null
      */
     public function buildPreviewContext(
@@ -36,7 +36,8 @@ final class AiSiteAgentWorkspacePreviewService
         string $publicId,
         string $requestedPageType,
         string $requestedStyleCode = '',
-        string $requestedLocale = ''
+        string $requestedLocale = '',
+        int $requestedVirtualThemeId = 0
     ): ?array {
         $publicId = \trim($publicId);
         $requestedPageType = \trim($requestedPageType);
@@ -46,46 +47,45 @@ final class AiSiteAgentWorkspacePreviewService
 
         $context = $this->virtualLayoutService->loadContext($publicId, $adminId, $requestedPageType);
         if ($context === null) {
-            return null;
+            $context = $this->buildUrlVirtualThemePreviewContext(
+                $adminId,
+                $publicId,
+                $requestedPageType,
+                $requestedVirtualThemeId
+            );
+            if ($context === null) {
+                return null;
+            }
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope($context['scope']);
         $scope = $this->scopeCompatibilityService->normalizePreviewContentLocale($scope, $requestedLocale);
         $previewLocale = $this->scopeCompatibilityService->resolvePreviewContentLocale($scope, $requestedLocale);
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
-            $this->scopeCompatibilityService->resolveScopedPageTypes($scope),
-            $scope,
-            false
-        );
-        $pageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
-        if ($pageType === '' || !\is_array($virtualPages[$pageType] ?? null)) {
+        $planJsonPages = $this->resolvePlanJsonPages($scope);
+        $virtualThemeId = \max((int)($context['virtual_theme_id'] ?? 0), $requestedVirtualThemeId);
+        $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $requestedPageType);
+        $layout = $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, $scope, $requestedPageType);
+        if ($planJsonPages === [] && $this->layoutHasPreviewContent($layout)) {
+            $planJsonPages[$requestedPageType] = $this->buildLayoutBackedPreviewPage($requestedPageType, $scope);
+        }
+        $pageType = isset($planJsonPages[$requestedPageType]) ? $requestedPageType : (string)\array_key_first($planJsonPages);
+        if ($pageType === '' || !\is_array($planJsonPages[$pageType] ?? null)) {
             return null;
         }
 
-        $virtualThemeId = (int)($context['virtual_theme_id'] ?? 0);
-        $virtualPage = $virtualPages[$pageType];
-        $styleCode = \trim($requestedStyleCode !== '' ? $requestedStyleCode : (string)($virtualPage['style_code'] ?? 'default'));
+        $planJsonPage = $planJsonPages[$pageType];
+        $styleCode = \trim($requestedStyleCode !== '' ? $requestedStyleCode : (string)($planJsonPage['style_code'] ?? 'default'));
         $styleCode = $styleCode !== '' ? $styleCode : 'default';
-        $locale = \trim($previewLocale !== '' ? $previewLocale : ($requestedLocale !== '' ? $requestedLocale : (string)($virtualPage['locale'] ?? State::getLang())));
+        $locale = \trim($previewLocale !== '' ? $previewLocale : ($requestedLocale !== '' ? $requestedLocale : (string)($planJsonPage['locale'] ?? State::getLang())));
         $locale = $locale !== '' ? $locale : State::getLang();
-        $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
-        $layout = $this->mergePreviewLayoutFromScope($layout, $scope, $pageType);
-        $layout = $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, $scope, $pageType);
-        $virtualBlocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
-        $materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);
-        $materializedBlocks = \is_array($materializedPreview['block_nodes'] ?? null) ? $materializedPreview['block_nodes'] : [];
-        if ($materializedBlocks !== []) {
-            $virtualBlocks = $materializedBlocks;
-            $virtualPage = \array_replace(
-                $virtualPage,
-                \is_array($materializedPreview['page'] ?? null) ? $materializedPreview['page'] : []
-            );
-            $virtualPage['block_nodes'] = $virtualBlocks;
-            $virtualPages[$pageType] = $virtualPage;
+        if ($pageType !== $requestedPageType) {
+            $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
+            $layout = $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, $scope, $pageType);
         }
+        $virtualBlocks = \array_values($this->resolvePlanJsonPageBlocks($planJsonPage));
         $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
-        $pageTitle = $this->sanitizeVisitorTitle((string)($virtualPage['title'] ?? ''), $scope);
-        $metaTitle = $this->sanitizeVisitorTitle((string)($virtualPage['meta_title'] ?? ''), $scope);
+        $pageTitle = $this->sanitizeVisitorTitle((string)($planJsonPage['title'] ?? ''), $scope);
+        $metaTitle = $this->sanitizeVisitorTitle((string)($planJsonPage['meta_title'] ?? ''), $scope);
         if ($metaTitle === '') {
             $metaTitle = $pageTitle;
         }
@@ -100,28 +100,27 @@ final class AiSiteAgentWorkspacePreviewService
             Page::schema_fields_STATUS => Page::STATUS_DRAFT,
             Page::schema_fields_TITLE => $pageTitle,
             Page::schema_fields_NAME => $pageTitle,
-            Page::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
+            Page::schema_fields_HANDLE => (string)($planJsonPage['handle'] ?? ''),
             Page::schema_fields_STYLE => $styleCode,
             Page::schema_fields_TYPE => $pageType,
             Page::schema_fields_CONTENT => '',
             Page::schema_fields_META_TITLE => $metaTitle,
-            Page::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
-            Page::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
-            Page::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
+            Page::schema_fields_META_DESCRIPTION => (string)($planJsonPage['meta_description'] ?? ''),
+            Page::schema_fields_META_KEYWORDS => (string)($planJsonPage['meta_keywords'] ?? ''),
+            Page::schema_fields_AI_DESCRIPTION => (string)($planJsonPage['ai_description'] ?? ''),
             Page::schema_fields_LOCALES => \json_encode([$locale], \JSON_UNESCAPED_UNICODE),
             Page::schema_fields_DEFAULT_LOCALE => $locale,
             Page::schema_fields_STYLE_SETTING => \json_encode([
-                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
+                $styleCode => \is_array($planJsonPage['style_settings'] ?? null) ? $planJsonPage['style_settings'] : [],
             ], \JSON_UNESCAPED_UNICODE),
             Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, \JSON_UNESCAPED_UNICODE),
             Page::schema_fields_RENDER_MODE => $renderMode,
-            Page::schema_fields_AI_LAYOUT => \json_encode(['block_nodes' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
         ]);
         $page->setData('virtual_public_id', $publicId);
         $page->setData('virtual_page_type', $pageType);
         $page->setData('virtual_theme_id', $virtualThemeId);
         $page->setData('virtual_layout_config', $layout);
-        $page->setData('virtual_pages_by_type', $virtualPages);
         if (\is_array($scope['design_tokens'] ?? null) && $scope['design_tokens'] !== []) {
             $page->setData('design_tokens', $scope['design_tokens']);
         }
@@ -139,119 +138,157 @@ final class AiSiteAgentWorkspacePreviewService
             'style_code' => $styleCode,
             'locale' => $locale,
             'virtual_theme_id' => $virtualThemeId,
-            'virtual_pages' => $virtualPages,
+            'plan_json_pages' => $planJsonPages,
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,array<string,mixed>>
+     */
+    private function resolvePlanJsonPages(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $result = [];
+        foreach ($pages as $pageType => $page) {
+            if (\is_string($pageType) && \is_array($page)) {
+                $result[$pageType] = $page;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array{
+     *   session:AiSiteAgentSession,
+     *   scope:array<string, mixed>,
+     *   virtual_theme_id:int,
+     *   page_type:string
+     * }|null
+     */
+    private function buildUrlVirtualThemePreviewContext(
+        int $adminId,
+        string $publicId,
+        string $pageType,
+        int $virtualThemeId
+    ): ?array {
+        if ($virtualThemeId <= 0) {
+            return null;
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return null;
+        }
+
+        $scope = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT, ['plan_json']);
+        if (!\is_array($scope) || $scope === []) {
+            $scope = $session->getScopeArray();
+        }
+        $scope = $this->scopeCompatibilityService->normalizePreviewContentLocale($scope);
+        $scope = $this->scopeCompatibilityService->normalizeScope($scope);
+        $scope['virtual_theme_id'] = $virtualThemeId;
+
+        return [
+            'session' => $session,
+            'scope' => $scope,
+            'virtual_theme_id' => $virtualThemeId,
+            'page_type' => $pageType,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $page
+     * @return array<string,array<string,mixed>>
+     */
+    private function resolvePlanJsonPageBlocks(array $page): array
+    {
+        $blocks = [];
+        foreach ($page as $key => $value) {
+            if (!\is_string($key) || !\is_array($value)) {
+                continue;
+            }
+            if (\in_array($key, [
+                'layout',
+                'page_meta',
+                'meta',
+                'seo',
+                'route',
+                'assets',
+                'style_settings',
+                'design_tokens',
+                'theme_css_ref',
+                'navigation',
+                'menus',
+                'links',
+                'settings',
+                'blocks',
+                'block_previews',
+                'sections',
+                'components',
+            ], true)) {
+                continue;
+            }
+            $html = \trim((string)($value['html'] ?? $value['config']['html_content'] ?? ''));
+            if ($html === '') {
+                continue;
+            }
+            $blocks[$key] = $value;
+        }
+
+        return $blocks;
     }
 
     /**
      * @param array<string,mixed> $layout
+     */
+    private function layoutHasPreviewContent(array $layout): bool
+    {
+        foreach (['header', 'footer'] as $region) {
+            if (\trim((string)($layout[$region]['component'] ?? $layout[$region]['code'] ?? '')) !== '') {
+                return true;
+            }
+        }
+        foreach (($layout['content'] ?? []) as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if (\trim((string)($row['code'] ?? $row['component'] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @param array<string,mixed> $scope
      * @return array<string,mixed>
      */
-    private function mergePreviewLayoutFromScope(array $layout, array $scope, string $pageType): array
+    private function buildLayoutBackedPreviewPage(string $pageType, array $scope): array
     {
-        $pageTypeLayouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
-        $scopeLayout = \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [];
-        foreach (['header', 'footer'] as $region) {
-            $regionLayout = \is_array($scopeLayout[$region] ?? null) ? $scopeLayout[$region] : [];
-            if ($regionLayout === []) {
-                continue;
-            }
-            $layout[$region] = \array_replace_recursive(
-                \is_array($layout[$region] ?? null) ? $layout[$region] : [],
-                $regionLayout
-            );
-        }
-
-        return $layout;
-    }
-
-    /**
-     * @return array{block_nodes?:list<array<string,mixed>>,page?:array<string,mixed>}
-     */
-    private function resolveMaterializedAiHtmlPreviewData(array $scope, string $pageType): array
-    {
-        $pagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType(
-            $scope['pagebuilder_pages_by_type'] ?? []
-        );
-        $pageId = (int)($scope['virtual_pages_by_type'][$pageType]['materialized_page_id'] ?? 0);
-        if ($pageId <= 0) {
-            $pageId = (int)($pagesByType[$pageType]['page_id'] ?? 0);
-        }
-
-        $row = $this->loadMaterializedAiHtmlPreviewPageRow(
-            $pageId,
-            $pageType,
-            (int)($scope['draft_website_id'] ?? $scope['website_id'] ?? 0)
-        );
-        if ($row === []) {
-            return [];
-        }
-        if (\trim((string)($row[Page::schema_fields_RENDER_MODE] ?? '')) !== Page::RENDER_MODE_AI_HTML) {
-            return [];
-        }
-
-        $layout = \json_decode((string)($row[Page::schema_fields_AI_LAYOUT] ?? ''), true);
-        $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
-        $blocks = \array_values(\array_filter($blocks, static function (mixed $block): bool {
-            return \is_array($block)
-                && !AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($block)
-                && \trim((string)($block['html'] ?? $block['config']['html_content'] ?? '')) !== '';
-        }));
-        if ($blocks === []) {
-            return [];
-        }
+        $pageLabels = Page::getPageTypes();
+        $label = (string)($pageLabels[$pageType] ?? $pageType);
+        $siteTitle = $this->sanitizeVisitorTitle((string)(
+            $scope['site_title']
+                ?? $scope['website_profile']['site_title']
+                ?? $scope['site_name']
+                ?? $scope['website_profile']['brand_name']
+                ?? 'Website'
+        ), $scope);
+        $title = $pageType === Page::TYPE_HOME ? $siteTitle : \trim($label . ' - ' . $siteTitle);
 
         return [
-            'block_nodes' => $blocks,
-            'page' => [
-                'page_type' => (string)($row[Page::schema_fields_TYPE] ?? $pageType),
-                'title' => (string)($row[Page::schema_fields_TITLE] ?? $row[Page::schema_fields_NAME] ?? ''),
-                'handle' => (string)($row[Page::schema_fields_HANDLE] ?? ''),
-                'locale' => (string)($row[Page::schema_fields_DEFAULT_LOCALE] ?? ''),
-                'meta_title' => (string)($row[Page::schema_fields_META_TITLE] ?? ''),
-                'meta_description' => (string)($row[Page::schema_fields_META_DESCRIPTION] ?? ''),
-                'meta_keywords' => (string)($row[Page::schema_fields_META_KEYWORDS] ?? ''),
-                'ai_description' => (string)($row[Page::schema_fields_AI_DESCRIPTION] ?? ''),
-                'materialized_page_id' => (int)($row[Page::schema_fields_ID] ?? 0),
-            ],
+            'page_type' => $pageType,
+            'title' => $title !== '' ? $title : $label,
+            'handle' => $pageType === Page::TYPE_HOME ? '' : Page::getDefaultHandleForType($pageType),
+            'locale' => (string)($scope['content_locale'] ?? $scope['website_profile']['content_locale'] ?? State::getLang()),
+            'style_code' => 'default',
+            'status' => 1,
+            'preview_source' => 'virtual_theme_layout',
         ];
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    private function loadMaterializedAiHtmlPreviewPageRow(int $pageId, string $pageType, int $websiteId): array
-    {
-        /** @var Page $pageModel */
-        $pageModel = ObjectManager::make(Page::class);
-        if ($pageId > 0) {
-            $rows = (clone $pageModel)
-                ->clearData()
-                ->clearQuery()
-                ->where(Page::schema_fields_ID, $pageId)
-                ->pagination(1, 1)
-                ->select()
-                ->fetchArray();
-            if (\is_array($rows[0] ?? null)) {
-                return $rows[0];
-            }
-        }
-
-        if ($websiteId <= 0 || $pageType === '') {
-            return [];
-        }
-
-        $rows = (clone $pageModel)
-            ->clearData()
-            ->clearQuery()
-            ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(Page::schema_fields_TYPE, $pageType)
-            ->pagination(1, 1)
-            ->select()
-            ->fetchArray();
-
-        return \is_array($rows[0] ?? null) ? $rows[0] : [];
     }
 
     private function sanitizeVisitorTitle(string $value, array $scope): string
@@ -336,7 +373,7 @@ final class AiSiteAgentWorkspacePreviewService
             if ($session !== null) {
                 $sessionAccessible = true;
                 $scope = $this->scopeCompatibilityService->normalizeScope(
-                    $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+                    $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT, [])
                 );
                 $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
                 $planJsonConfirmed = $this->planJsonStateService()->isConfirmed($planJson);
@@ -356,11 +393,12 @@ final class AiSiteAgentWorkspacePreviewService
      *   style_code:string,
      *   locale:string,
      *   virtual_theme_id:int,
-     *   virtual_pages:array<string, array<string, mixed>>
+     *   plan_json_pages:array<string, array<string, mixed>>
      * } $context
      */
     public function renderPreviewHtml(array $context, bool $visualEditor): string
     {
+        $planJsonPages = \is_array($context['plan_json_pages'] ?? null) ? $context['plan_json_pages'] : [];
         $renderMode = $visualEditor
             ? PageRenderService::MODE_VISUAL
             : PageRenderService::MODE_PREVIEW;
@@ -376,14 +414,14 @@ final class AiSiteAgentWorkspacePreviewService
             $html = $this->getPreviewLinkRewriteService()->rewriteVirtualPreviewLinks(
                 $html,
                 (string)$context['page']->getData('virtual_public_id'),
-                $context['virtual_pages'],
+                $planJsonPages,
                 $context['virtual_theme_id'],
                 true
             );
 
             return $this->injectWorkspacePreviewNavLinks(
                 $html,
-                $context['virtual_pages'],
+                $planJsonPages,
                 (string)$context['page']->getData('virtual_public_id'),
                 $context['virtual_theme_id']
             );
@@ -392,7 +430,7 @@ final class AiSiteAgentWorkspacePreviewService
         return $this->getPreviewLinkRewriteService()->rewriteVirtualPreviewLinks(
             $html,
             (string)$context['page']->getData('virtual_public_id'),
-            $context['virtual_pages'],
+            $planJsonPages,
             $context['virtual_theme_id']
         );
     }

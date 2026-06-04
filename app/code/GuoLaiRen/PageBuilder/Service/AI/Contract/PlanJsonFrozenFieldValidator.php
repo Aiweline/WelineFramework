@@ -12,7 +12,6 @@ final class PlanJsonFrozenFieldValidator
         'policy_projection',
         'design_manifest',
         'pages',
-        'block_nodes',
         'permission_matrix',
         'frozen_fields',
     ];

@@ -25,5 +25,6 @@ final class ThemePartialMarkersTest extends TestCase
         $this->assertFileExists($path);
         $html = (string)file_get_contents($path);
         $this->assertStringContainsString('theme-partial:footer option=default', $html);
+        $this->assertStringNotContainsString('getFooter()->getHtml()', $html);
     }
 }
