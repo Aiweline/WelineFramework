@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
-use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use PHPUnit\Framework\TestCase;
 
-final class AiSiteExecutionBlueprintServiceRefundPolicyGoalRepairTest extends TestCase
+final class AiSitePlanJsonGenerationServiceRefundPolicyGoalRepairTest extends TestCase
 {
     public function testChinesePageGoalHelpersAlwaysReturnStrings(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSitePlanJsonGenerationService(new AiSitePageBlueprintService());
         $goalMethod = new \ReflectionMethod($service, 'resolvePageGoal');
         $goalMethod->setAccessible(true);
         $whyMethod = new \ReflectionMethod($service, 'resolvePageWhy');
@@ -37,7 +37,7 @@ final class AiSiteExecutionBlueprintServiceRefundPolicyGoalRepairTest extends Te
 
     public function testRepairAiStageOnePlanJsonBeforeValidationReplacesPromptLikeRefundPolicyGoal(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSitePlanJsonGenerationService(new AiSitePageBlueprintService());
         $method = new \ReflectionMethod($service, 'repairAiStageOnePlanJsonBeforeValidation');
         $method->setAccessible(true);
 
@@ -47,8 +47,7 @@ final class AiSiteExecutionBlueprintServiceRefundPolicyGoalRepairTest extends Te
                     'page_label' => 'Refund Policy',
                     'page_goal' => 'Deliver clear and actionable page content for visitors.',
                     'theme_alignment_summary' => 'Refund Policy follows shared_prompt_context and keeps policy copy scannable.',
-                    'blocks' => [
-                        [
+                    'refund_overview' => [
                             'block_key' => 'refund-overview',
                             'content' => 'Explain refund windows, proof requirements, and request routes for customers.',
                             'field_plan' => [
@@ -64,7 +63,6 @@ final class AiSiteExecutionBlueprintServiceRefundPolicyGoalRepairTest extends Te
                                     'Link the next action to the support request path.',
                                 ],
                             ],
-                        ],
                     ],
                 ],
             ],
@@ -96,7 +94,7 @@ final class AiSiteExecutionBlueprintServiceRefundPolicyGoalRepairTest extends Te
 
     public function testRepairAiStageOnePlanJsonBeforeValidationReplacesOldChineseRefundPolicyGoal(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSitePlanJsonGenerationService(new AiSitePageBlueprintService());
         $repairMethod = new \ReflectionMethod($service, 'repairAiStageOnePlanJsonBeforeValidation');
         $repairMethod->setAccessible(true);
         $weakMethod = new \ReflectionMethod($service, 'isWeakStageOnePageGoal');
@@ -108,8 +106,7 @@ final class AiSiteExecutionBlueprintServiceRefundPolicyGoalRepairTest extends Te
                     'page_label' => '退款政策',
                     'page_goal' => '为访客提供清晰且可执行的页面内容。',
                     'theme_alignment_summary' => '退款政策保持清晰、可信、可快速扫描。',
-                    'blocks' => [
-                        [
+                    'refund_overview' => [
                             'block_key' => 'refund-overview',
                             'content' => '清楚说明退款条件、处理时效和申请入口。',
                             'field_plan' => [
@@ -125,7 +122,6 @@ final class AiSiteExecutionBlueprintServiceRefundPolicyGoalRepairTest extends Te
                                     '提供联系支持或提交申请的下一步。',
                                 ],
                             ],
-                        ],
                     ],
                 ],
             ],

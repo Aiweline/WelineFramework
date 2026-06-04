@@ -12,8 +12,8 @@ use GuoLaiRen\PageBuilder\Model\VirtualThemeLayout;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * PageBuilder AI 建站虚拟主题服务
- * 所有数据存储在 PageBuilder 自有的表中，不依赖 Weline\Theme 模块
+ * PageBuilder AI 寤虹珯铏氭嫙涓婚鏈嶅姟
+ * 鎵€鏈夋暟鎹瓨鍌ㄥ湪 PageBuilder 鑷湁鐨勮〃涓紝涓嶄緷璧?Weline\Theme 妯″潡
  */
 class AiSiteVirtualThemeService
 {
@@ -240,7 +240,7 @@ class AiSiteVirtualThemeService
     }
 
     /**
-     * Force rebuild must start from an empty current-theme layout. Old saved
+     * Force rebuild must start from an empty current-theme layout. Prior saved
      * rows are not valid completion evidence for the next AI build run.
      *
      * @param list<string> $pageTypes
@@ -273,7 +273,7 @@ class AiSiteVirtualThemeService
      * Concurrent build batches may carry only the current in-memory page subset.
      * Before appending a newly generated block, merge the already persisted
      * virtual-theme content rows back in so later batches cannot overwrite earlier
-     * generated blocks.
+     * materialized blocks.
      *
      * @param array<string, mixed> $layout
      * @return array<string, mixed>
@@ -500,8 +500,7 @@ class AiSiteVirtualThemeService
     }
 
     /**
-     * 基于真实 AI 生成 header / footer / page sections，并写入虚拟主题组件。
-     *
+     * 鍩轰簬鐪熷疄 AI 鐢熸垚 header / footer / page sections锛屽苟鍐欏叆铏氭嫙涓婚缁勪欢銆?     *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      * @param list<string> $pageTypes

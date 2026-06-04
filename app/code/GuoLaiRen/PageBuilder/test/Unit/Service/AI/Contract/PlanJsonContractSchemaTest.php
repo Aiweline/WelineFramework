@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI\Contract;
 
-use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContractSchema;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PlanJsonContractSchema;
 use PHPUnit\Framework\TestCase;
 
-final class BuildPlanContractSchemaTest extends TestCase
+final class PlanJsonContractSchemaTest extends TestCase
 {
     public function testSchemaExposesV22ContractRequirements(): void
     {
-        $schema = new BuildPlanContractSchema();
+        $schema = new PlanJsonContractSchema();
 
         self::assertSame('2.2', $schema->version());
         self::assertContains('policy_ref', $schema->requiredTopLevelFields());

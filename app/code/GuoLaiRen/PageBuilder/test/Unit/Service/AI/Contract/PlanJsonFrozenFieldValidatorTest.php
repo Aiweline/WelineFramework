@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI\Contract;
 
-use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanFrozenFieldValidator;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PlanJsonFrozenFieldValidator;
 use PHPUnit\Framework\TestCase;
 
-final class BuildPlanFrozenFieldValidatorTest extends TestCase
+final class PlanJsonFrozenFieldValidatorTest extends TestCase
 {
-    public function testBlocksRepairCandidateAgainstBuildPlanFrozenPath(): void
+    public function testBlocksRepairCandidateAgainstPlanJsonFrozenPath(): void
     {
-        $validator = new BuildPlanFrozenFieldValidator();
+        $validator = new PlanJsonFrozenFieldValidator();
 
         $result = $validator->validateRepairCandidatePath('tasks.0.executor', [
-            'frozen_fields' => ['tasks', 'pages', 'blocks'],
+            'frozen_fields' => ['tasks', 'pages', 'block_nodes'],
         ]);
 
         self::assertFalse($result['valid']);
@@ -23,10 +23,10 @@ final class BuildPlanFrozenFieldValidatorTest extends TestCase
 
     public function testAllowsMutableContentManifestItemPath(): void
     {
-        $validator = new BuildPlanFrozenFieldValidator();
+        $validator = new PlanJsonFrozenFieldValidator();
 
         $result = $validator->validateRepairCandidatePath('content_manifest.items.hero.title', [
-            'frozen_fields' => ['tasks', 'pages', 'blocks'],
+            'frozen_fields' => ['tasks', 'pages', 'block_nodes'],
         ]);
 
         self::assertTrue($result['valid']);

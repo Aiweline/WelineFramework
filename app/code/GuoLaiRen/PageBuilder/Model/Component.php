@@ -641,7 +641,7 @@ class Component extends Model
             'errors' => [],
         ];
         
-        // 0. 清理旧格式的组件
+        // 0. 清理既有格式的组件
         // 删除所有该模板下的组件，然后重新注册（确保格式一致）
         $componentsDir = $basePath . 'components/';
         $componentJsonFile = $componentsDir . 'component.json';

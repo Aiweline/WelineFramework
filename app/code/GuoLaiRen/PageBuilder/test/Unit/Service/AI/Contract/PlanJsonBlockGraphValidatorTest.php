@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI\Contract;
 
-use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanBlockGraphValidator;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PlanJsonBlockGraphValidator;
 use PHPUnit\Framework\TestCase;
 
-final class BuildPlanBlockGraphValidatorTest extends TestCase
+final class PlanJsonBlockGraphValidatorTest extends TestCase
 {
     public function testValidPageBlockGraphPasses(): void
     {
-        $result = (new BuildPlanBlockGraphValidator())->validate([
+        $result = (new PlanJsonBlockGraphValidator())->validate([
             'pages' => [
-                ['page_id' => 'home', 'blocks' => ['home.hero', 'home.games']],
+                ['page_id' => 'home', 'block_node_ids' => ['home.hero', 'home.games']],
             ],
-            'blocks' => [
+            'block_nodes' => [
                 ['block_id' => 'home.hero', 'page_id' => 'home'],
                 ['block_id' => 'home.games', 'page_id' => 'home'],
             ],
@@ -26,11 +26,11 @@ final class BuildPlanBlockGraphValidatorTest extends TestCase
 
     public function testRejectsPageReferenceToMissingBlock(): void
     {
-        $result = (new BuildPlanBlockGraphValidator())->validate([
+        $result = (new PlanJsonBlockGraphValidator())->validate([
             'pages' => [
-                ['page_id' => 'home', 'blocks' => ['home.hero']],
+                ['page_id' => 'home', 'block_node_ids' => ['home.hero']],
             ],
-            'blocks' => [],
+            'block_nodes' => [],
         ]);
 
         self::assertFalse($result['valid']);
@@ -39,11 +39,11 @@ final class BuildPlanBlockGraphValidatorTest extends TestCase
 
     public function testRejectsBlockReferenceToMissingPage(): void
     {
-        $result = (new BuildPlanBlockGraphValidator())->validate([
+        $result = (new PlanJsonBlockGraphValidator())->validate([
             'pages' => [
-                ['page_id' => 'home', 'blocks' => []],
+                ['page_id' => 'home', 'block_node_ids' => []],
             ],
-            'blocks' => [
+            'block_nodes' => [
                 ['block_id' => 'about.hero', 'page_id' => 'about'],
             ],
         ]);

@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 /**
- * 页面渲染服务
+ * 椤甸潰娓叉煋鏈嶅姟
  * 
- * 统一渲染逻辑，确保可视化编辑器预览和正式上线页面效果一致
+ * 缁熶竴娓叉煋閫昏緫锛岀‘淇濆彲瑙嗗寲缂栬緫鍣ㄩ瑙堝拰姝ｅ紡涓婄嚎椤甸潰鏁堟灉涓€鑷?
  * 
- * 渲染模式：
- * - visual: 可视化编辑模式（带拖拽插槽容器、组件包装器）
- * - preview: 预览模式（纯净渲染，可查看未发布页面，带预览标记脚本）
- * - live: 正式上线模式（纯净渲染，仅已发布页面）
+ * 娓叉煋妯″紡锛?
+ * - visual: 鍙鍖栫紪杈戞ā寮忥紙甯︽嫋鎷芥彃妲藉鍣ㄣ€佺粍浠跺寘瑁呭櫒锛?
+ * - preview: 棰勮妯″紡锛堢函鍑€娓叉煋锛屽彲鏌ョ湅鏈彂甯冮〉闈紝甯﹂瑙堟爣璁拌剼鏈級
+ * - live: 姝ｅ紡涓婄嚎妯″紡锛堢函鍑€娓叉煋锛屼粎宸插彂甯冮〉闈級
  */
 
 namespace GuoLaiRen\PageBuilder\Service;
@@ -30,10 +30,10 @@ use Weline\Framework\View\Template;
 
 class PageRenderService
 {
-    /** 渲染模式常量 */
-    public const MODE_VISUAL = 'visual';   // 可视化编辑模式
-    public const MODE_PREVIEW = 'preview'; // 预览模式
-    public const MODE_LIVE = 'live';       // 正式上线模式
+    /** 娓叉煋妯″紡甯搁噺 */
+    public const MODE_VISUAL = 'visual';   // 鍙鍖栫紪杈戞ā寮?
+    public const MODE_PREVIEW = 'preview'; // 棰勮妯″紡
+    public const MODE_LIVE = 'live';       // 姝ｅ紡涓婄嚎妯″紡
     
     private LayoutAssembler $layoutAssembler;
     private LayoutOwnerResolver $layoutOwnerResolver;
@@ -46,10 +46,10 @@ class PageRenderService
     private ?Request $request = null;
     private ?Template $template = null;
     
-    /** @var array 模板变量 */
+    /** @var array 妯℃澘鍙橀噺 */
     private array $templateVars = [];
     
-    /** @var array 组件文件映射缓存 */
+    /** @var array 缁勪欢鏂囦欢鏄犲皠缂撳瓨 */
     private static array $componentFilesCache = [];
     
     public function __construct(
@@ -73,7 +73,7 @@ class PageRenderService
     }
     
     /**
-     * 设置请求对象（用于获取参数）
+     * 璁剧疆璇锋眰瀵硅薄锛堢敤浜庤幏鍙栧弬鏁帮級
      */
     public function setRequest(Request $request): self
     {
@@ -82,7 +82,7 @@ class PageRenderService
     }
     
     /**
-     * 获取 Template 实例
+     * 鑾峰彇 Template 瀹炰緥
      */
     private function getTemplate(): Template
     {
@@ -93,7 +93,7 @@ class PageRenderService
     }
     
     /**
-     * 设置模板变量
+     * 璁剧疆妯℃澘鍙橀噺
      */
     private function assign(string $key, $value): void
     {
@@ -102,7 +102,7 @@ class PageRenderService
     }
     
     /**
-     * 渲染模板
+     * 娓叉煋妯℃澘
      */
     private function fetch(string $templatePath): string
     {
@@ -111,13 +111,13 @@ class PageRenderService
     }
     
     /**
-     * 渲染页面
+     * 娓叉煋椤甸潰
      * 
-     * @param Page $page 页面对象
-     * @param string $mode 渲染模式 (visual/preview/live)
-     * @param string|null $locale 语言代码
-     * @param string|null $tempStyleCode 临时样式代码（用于预览）
-     * @return string 渲染后的 HTML
+     * @param Page $page 椤甸潰瀵硅薄
+     * @param string $mode 娓叉煋妯″紡 (visual/preview/live)
+     * @param string|null $locale 璇█浠ｇ爜
+     * @param string|null $tempStyleCode 涓存椂鏍峰紡浠ｇ爜锛堢敤浜庨瑙堬級
+     * @return string 娓叉煋鍚庣殑 HTML
      */
     public function render(
         Page $page,
@@ -142,120 +142,119 @@ class PageRenderService
             $profile['elapsed_ms'] = \round(($now - $profileStart) * 1000, 2);
         };
 
-        // 重置模板变量
+        // 閲嶇疆妯℃澘鍙橀噺
         $this->templateVars = [];
         if ($virtualThemeId !== null && $virtualThemeId > 0) {
             $page->setData('virtual_theme_id', $virtualThemeId);
         }
         
-        // 获取样式代码
+        // 鑾峰彇鏍峰紡浠ｇ爜
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
         
-        // 获取当前语言。发布页没有显式 locale 时，以页面默认语言为准，避免后台 Cookie 污染访客站点。
-        $pageDefaultLocale = \trim((string)$page->getData(Page::schema_fields_DEFAULT_LOCALE));
+        // 鑾峰彇褰撳墠璇█銆傚彂甯冮〉娌℃湁鏄惧紡 locale 鏃讹紝浠ラ〉闈㈤粯璁よ瑷€涓哄噯锛岄伩鍏嶅悗鍙?Cookie 姹℃煋璁垮绔欑偣銆?        $pageDefaultLocale = \trim((string)$page->getData(Page::schema_fields_DEFAULT_LOCALE));
         $currentLocale = $locale ?: ($pageDefaultLocale !== '' ? $pageDefaultLocale : \Weline\Framework\Http\Cookie::getLang());
         
-        // 构建样式配置
+        // 鏋勫缓鏍峰紡閰嶇疆
         $finalSettings = $this->buildStyleSettings($page, $styleCode, $currentLocale, $tempStyleCode);
         $profileMark('style_settings');
         
-        // 检查是否为虚拟页面（id=0，用于模板预览等场景）
+        // 妫€鏌ユ槸鍚︿负铏氭嫙椤甸潰锛坕d=0锛岀敤浜庢ā鏉块瑙堢瓑鍦烘櫙锛?
         $isVirtualPage = !$page->getId();
         
-        // 获取布局配置（通过 LayoutOwnerResolver 统一处理 layout_page_id 和 header/footer 继承）
-        // 可视化编辑模式下允许访问草稿状态首页的 header/footer
-        // 预览时传入 tempStyleCode，使“无自定义布局”时按当前预览样式加载默认 header/footer，避免页面 DB 为 default 时仍显示 default 头部
+        // 鑾峰彇甯冨眬閰嶇疆锛堥€氳繃 LayoutOwnerResolver 缁熶竴澶勭悊 layout_page_id 鍜?header/footer 缁ф壙锛?
+        // 鍙鍖栫紪杈戞ā寮忎笅鍏佽璁块棶鑽夌鐘舵€侀椤电殑 header/footer
+        // 棰勮鏃朵紶鍏?tempStyleCode锛屼娇鈥滄棤鑷畾涔夊竷灞€鈥濇椂鎸夊綋鍓嶉瑙堟牱寮忓姞杞介粯璁?header/footer锛岄伩鍏嶉〉闈?DB 涓?default 鏃朵粛鏄剧ず default 澶撮儴
         $forBackend = ($mode === self::MODE_VISUAL);
         $layoutConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page, $forBackend, $tempStyleCode);
         $profileMark('layout_config');
         
-        // 获取布局拥有者页面ID（用于可视化编辑时传递给脚本）
+        // 鑾峰彇甯冨眬鎷ユ湁鑰呴〉闈D锛堢敤浜庡彲瑙嗗寲缂栬緫鏃朵紶閫掔粰鑴氭湰锛?
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);
         $this->assign('layout_owner_page_id', $layoutOwnerPageId);
         
-        // 获取布局页面信息（如果使用外部布局页面）
+        // 鑾峰彇甯冨眬椤甸潰淇℃伅锛堝鏋滀娇鐢ㄥ閮ㄥ竷灞€椤甸潰锛?
         $layoutPageInfo = $isVirtualPage ? null : $this->layoutOwnerResolver->getLayoutPageInfo($page);
         $this->assign('layout_page_info', $layoutPageInfo);
         $profileMark('layout_owner_info');
         
-        // 获取本地化内容（虚拟页面跳过数据库查询）
+        // 鑾峰彇鏈湴鍖栧唴瀹癸紙铏氭嫙椤甸潰璺宠繃鏁版嵁搴撴煡璇級
         $localizedContent = $isVirtualPage ? null : $this->getLocalizedContent($page, $currentLocale);
         $profileMark('localized_content');
         
-        // 设置模板变量
+        // 璁剧疆妯℃澘鍙橀噺
         $this->assign('page', $page);
         $this->assign('style_settings', $finalSettings);
         $this->assign('style', $finalSettings);
         $this->assign('is_preview', $mode !== self::MODE_LIVE);
-        $this->assign('is_virtual_page', $isVirtualPage); // 标记为虚拟页面
+        $this->assign('is_virtual_page', $isVirtualPage); // 鏍囪涓鸿櫄鎷熼〉闈?
         $this->assign('lang', $currentLocale);
         $this->assign('lang_local', $currentLocale);
         $this->assign('current_locale', $currentLocale);
         $this->assign('layout_config', $layoutConfig);
         $this->assign('render_mode', $mode);
         
-        // 获取导航页面（用于 header 组件）
-        // 虚拟页面返回空数组，避免数据库查询
+        // 鑾峰彇瀵艰埅椤甸潰锛堢敤浜?header 缁勪欢锛?
+        // 铏氭嫙椤甸潰杩斿洖绌烘暟缁勶紝閬垮厤鏁版嵁搴撴煡璇?
         $navigationPages = $isVirtualPage ? [] : $page->getNavigationPages([], 10);
         $this->assign('navigation_pages', $navigationPages);
         $profileMark('navigation_pages');
         
-        // 如果是博客类型页面或布局中包含博客组件，加载博客数据
-        // 虚拟页面跳过博客数据加载
+        // 濡傛灉鏄崥瀹㈢被鍨嬮〉闈㈡垨甯冨眬涓寘鍚崥瀹㈢粍浠讹紝鍔犺浇鍗氬鏁版嵁
+        // 铏氭嫙椤甸潰璺宠繃鍗氬鏁版嵁鍔犺浇
         $hasBlogComponent = $this->hasBlogComponent($layoutConfig);
         if (!$isVirtualPage && ($page->isBlogType() || $hasBlogComponent)) {
             $this->loadBlogData($page);
         }
         $profileMark('blog_data');
         
-        // 渲染 header/content/footer
+        // 娓叉煋 header/content/footer
         $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
         
-        // 获取页面类型
+        // 鑾峰彇椤甸潰绫诲瀷
         $pageType = $page->getData(Page::schema_fields_TYPE);
         
-        // 获取页面类型对应的布局信息
+        // 鑾峰彇椤甸潰绫诲瀷瀵瑰簲鐨勫竷灞€淇℃伅
         $layoutInfo = $this->getLayoutInfoForPageType($styleCode, $pageType);
         $this->assign('page_type', $pageType);
         $this->assign('layout_info', $layoutInfo);
         $profileMark('layout_info');
         
-        // 如果页面没有自定义布局配置，加载该页面类型的默认布局配置
-        // 注意：需要检查区域是否真的有有效组件，而不仅仅是非空数组
+        // 濡傛灉椤甸潰娌℃湁鑷畾涔夊竷灞€閰嶇疆锛屽姞杞借椤甸潰绫诲瀷鐨勯粯璁ゅ竷灞€閰嶇疆
+        // 娉ㄦ剰锛氶渶瑕佹鏌ュ尯鍩熸槸鍚︾湡鐨勬湁鏈夋晥缁勪欢锛岃€屼笉浠呬粎鏄潪绌烘暟缁?
         $hasCustomHeader = $this->regionHasValidComponents($layoutConfig['header'] ?? null);
         $hasCustomContent = $this->regionHasValidComponents($layoutConfig['content'] ?? null);
         $hasCustomFooter = $this->regionHasValidComponents($layoutConfig['footer'] ?? null);
         $hasCustomLayout = $hasCustomHeader || $hasCustomContent || $hasCustomFooter;
         
-        // 如果 header、content 或 footer 没有有效组件，尝试从默认配置加载
+        // 濡傛灉 header銆乧ontent 鎴?footer 娌℃湁鏈夋晥缁勪欢锛屽皾璇曚粠榛樿閰嶇疆鍔犺浇
         if (!$hasCustomHeader || !$hasCustomContent || !$hasCustomFooter) {
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
             
-            // 如果 header 为空，使用默认 header
+            // 濡傛灉 header 涓虹┖锛屼娇鐢ㄩ粯璁?header
             if (!$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
                 $layoutConfig['header'] = $defaultLayoutConfig['header'];
                 $this->assign('using_default_header', true);
             }
             
-            // 如果 content 为空，使用默认 content
+            // 濡傛灉 content 涓虹┖锛屼娇鐢ㄩ粯璁?content
             if (!$hasCustomContent && !empty($defaultLayoutConfig['content'])) {
                 $layoutConfig['content'] = $defaultLayoutConfig['content'];
                 $this->assign('using_default_content', true);
             }
             
-            // 如果 footer 为空，使用默认 footer
+            // 濡傛灉 footer 涓虹┖锛屼娇鐢ㄩ粯璁?footer
             if (!$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
                 $layoutConfig['footer'] = $defaultLayoutConfig['footer'];
                 $this->assign('using_default_footer', true);
             }
             
-            // 更新布局配置
+            // 鏇存柊甯冨眬閰嶇疆
             $this->assign('layout_config', $layoutConfig);
         }
         $profileMark('default_layout_merge');
         
         if (!$hasCustomLayout && $pageType) {
-            // 加载页面类型的默认布局配置
+            // 鍔犺浇椤甸潰绫诲瀷鐨勯粯璁ゅ竷灞€閰嶇疆
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
             
             if (!empty($defaultLayoutConfig['header']) || 
@@ -268,19 +267,19 @@ class PageRenderService
         }
         $profileMark('default_layout_fallback');
         
-        // 检查是否使用组件化渲染
+        // 妫€鏌ユ槸鍚︿娇鐢ㄧ粍浠跺寲娓叉煋
         $useComponentRendering = !empty($layoutConfig) && (
             !empty($layoutConfig['header']) || 
             !empty($layoutConfig['content']) || 
             !empty($layoutConfig['footer'])
         );
         
-        // 调试信息
+        // 璋冭瘯淇℃伅
         $debugInfo = $this->buildDebugInfo($useComponentRendering, $layoutConfig);
         $profileMark('debug_info');
         
         if ($useComponentRendering) {
-            // 使用组件化渲染
+            // 浣跨敤缁勪欢鍖栨覆鏌?
             $headerHtml = $this->renderRegion('header', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
             $profileMark('render_header');
             $contentHtml = $this->renderRegion('content', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode, $localizedContent);
@@ -288,7 +287,7 @@ class PageRenderService
             $footerHtml = $this->renderRegion('footer', $layoutConfig, $styleCode, $page, $finalSettings, $stylePath, $mode);
             $profileMark('render_footer');
         } else {
-            // 使用传统渲染方式
+            // 浣跨敤浼犵粺娓叉煋鏂瑰紡
             $headerHtml = $this->fetch("{$stylePath}/header.phtml");
             $profileMark('render_header');
             $contentHtml = $this->renderTraditionalContent($page, $stylePath, $localizedContent);
@@ -297,12 +296,12 @@ class PageRenderService
             $profileMark('render_footer');
         }
         
-        // 插入自定义代码
+        // 鎻掑叆鑷畾涔変唬鐮?
         $headerHtml = $this->injectHeaderCustomCode($headerHtml, $page);
         $footerHtml = $this->injectFooterCustomCode($footerHtml, $page);
         $profileMark('custom_code');
         
-        // 根据模式处理输出
+        // 鏍规嵁妯″紡澶勭悊杈撳嚭
         $html = $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode, $virtualThemeId);
         $profileMark('finalize_output');
         $profile['total_ms'] = \round((\microtime(true) - $profileStart) * 1000, 2);
@@ -364,14 +363,14 @@ class PageRenderService
     }
     
     /**
-     * 获取页面类型对应的布局模板路径
+     * 鑾峰彇椤甸潰绫诲瀷瀵瑰簲鐨勫竷灞€妯℃澘璺緞
      * 
-     * 根据样式代码和页面类型，查找对应的布局模板文件
-     * 映射关系定义在 style/{styleCode}/layouts/layouts.json 中
+     * 鏍规嵁鏍峰紡浠ｇ爜鍜岄〉闈㈢被鍨嬶紝鏌ユ壘瀵瑰簲鐨勫竷灞€妯℃澘鏂囦欢
+     * 鏄犲皠鍏崇郴瀹氫箟鍦?style/{styleCode}/layouts/layouts.json 涓?
      * 
-     * @param string $styleCode 样式代码
-     * @param string|null $pageType 页面类型
-     * @return string|null 布局模板路径，不存在则返回 null
+     * @param string $styleCode 鏍峰紡浠ｇ爜
+     * @param string|null $pageType 椤甸潰绫诲瀷
+     * @return string|null 甯冨眬妯℃澘璺緞锛屼笉瀛樺湪鍒欒繑鍥?null
      */
     private function getLayoutTemplateForPageType(string $styleCode, ?string $pageType): ?string
     {
@@ -379,7 +378,7 @@ class PageRenderService
             return null;
         }
         
-        // 读取布局配置文件
+        // 璇诲彇甯冨眬閰嶇疆鏂囦欢
         $layoutsJsonPath = $this->pathResolver->getLayoutsJsonPath($styleCode);
         
         if (!file_exists($layoutsJsonPath)) {
@@ -389,7 +388,7 @@ class PageRenderService
         $layoutsConfig = json_decode(file_get_contents($layoutsJsonPath), true);
         
         if (empty($layoutsConfig['layouts'][$pageType])) {
-            // 如果没有对应的布局，检查是否有 fallback
+            // 濡傛灉娌℃湁瀵瑰簲鐨勫竷灞€锛屾鏌ユ槸鍚︽湁 fallback
             $fallback = $layoutsConfig['fallback_layout'] ?? null;
             if ($fallback && !empty($layoutsConfig['layouts'][$fallback])) {
                 $layoutFile = $layoutsConfig['layouts'][$fallback]['file'] ?? null;
@@ -404,10 +403,10 @@ class PageRenderService
             return null;
         }
         
-        // 构建布局模板完整路径
+        // 鏋勫缓甯冨眬妯℃澘瀹屾暣璺緞
         $templatePath = "GuoLaiRen_PageBuilder::style/{$styleCode}/layouts/{$layoutFile}";
         
-        // 验证模板文件是否存在
+        // 楠岃瘉妯℃澘鏂囦欢鏄惁瀛樺湪
         $layoutsPath = $this->pathResolver->getLayoutsPath($styleCode);
         $fullPath = $layoutsPath . '/' . $layoutFile;
         
@@ -419,11 +418,11 @@ class PageRenderService
     }
     
     /**
-     * 获取页面类型对应的布局配置信息
+     * 鑾峰彇椤甸潰绫诲瀷瀵瑰簲鐨勫竷灞€閰嶇疆淇℃伅
      * 
-     * @param string $styleCode 样式代码
-     * @param string|null $pageType 页面类型
-     * @return array|null 布局配置信息
+     * @param string $styleCode 鏍峰紡浠ｇ爜
+     * @param string|null $pageType 椤甸潰绫诲瀷
+     * @return array|null 甯冨眬閰嶇疆淇℃伅
      */
     public function getLayoutInfoForPageType(string $styleCode, ?string $pageType): ?array
     {
@@ -431,7 +430,7 @@ class PageRenderService
             return null;
         }
         
-        // 读取布局配置文件
+        // 璇诲彇甯冨眬閰嶇疆鏂囦欢
         $layoutsJsonPath = $this->pathResolver->getLayoutsJsonPath($styleCode);
         
         if (!file_exists($layoutsJsonPath)) {
@@ -441,7 +440,7 @@ class PageRenderService
         $layoutsConfig = json_decode(file_get_contents($layoutsJsonPath), true);
         
         if (empty($layoutsConfig['layouts'][$pageType])) {
-            // 如果没有对应的布局，使用 fallback
+            // 濡傛灉娌℃湁瀵瑰簲鐨勫竷灞€锛屼娇鐢?fallback
             $fallback = $layoutsConfig['fallback_layout'] ?? null;
             if ($fallback && !empty($layoutsConfig['layouts'][$fallback])) {
                 return [
@@ -461,14 +460,14 @@ class PageRenderService
     }
     
     /**
-     * 获取页面类型的默认布局配置
+     * 鑾峰彇椤甸潰绫诲瀷鐨勯粯璁ゅ竷灞€閰嶇疆
      * 
-     * 简化逻辑：直接使用页面类型代码作为文件名
-     * 例如：blog_post → layouts/default/blog_post.json
+     * 绠€鍖栭€昏緫锛氱洿鎺ヤ娇鐢ㄩ〉闈㈢被鍨嬩唬鐮佷綔涓烘枃浠跺悕
+     * 渚嬪锛歜log_post 鈫?layouts/default/blog_post.json
      * 
-     * @param string $styleCode 样式代码
-     * @param string|null $pageType 页面类型
-     * @return array 默认布局配置 ['header' => [], 'content' => [], 'footer' => []]
+     * @param string $styleCode 鏍峰紡浠ｇ爜
+     * @param string|null $pageType 椤甸潰绫诲瀷
+     * @return array 榛樿甯冨眬閰嶇疆 ['header' => [], 'content' => [], 'footer' => []]
      */
     public function getDefaultLayoutConfigForPageType(string $styleCode, ?string $pageType): array
     {
@@ -482,11 +481,11 @@ class PageRenderService
             return $defaultConfig;
         }
         
-        // 直接使用页面类型代码作为配置文件名
+        // 鐩存帴浣跨敤椤甸潰绫诲瀷浠ｇ爜浣滀负閰嶇疆鏂囦欢鍚?
         $configFilePath = $this->pathResolver->getLayoutConfigPath($styleCode, $pageType);
         
         if (!file_exists($configFilePath)) {
-            // fallback 到 custom_page
+            // fallback 鍒?custom_page
             $configFilePath = $this->pathResolver->getLayoutConfigPath($styleCode, 'custom_page');
             if (!file_exists($configFilePath)) {
                 return $defaultConfig;
@@ -501,11 +500,11 @@ class PageRenderService
         
         $pageConfig = $configData['layout_config'];
         
-        // 处理继承（header/footer 从首页继承）
+        // 澶勭悊缁ф壙锛坔eader/footer 浠庨椤电户鎵匡級
         $inheritRegions = $configData['inherit_regions'] ?? [];
         
         foreach (['header', 'footer'] as $region) {
-            // 如果该区域为空数组且需要继承
+            // 濡傛灉璇ュ尯鍩熶负绌烘暟缁勪笖闇€瑕佺户鎵?
             if (empty($pageConfig[$region]) && isset($inheritRegions[$region])) {
                 $inheritFrom = $inheritRegions[$region];
                 $inheritConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $inheritFrom);
@@ -521,14 +520,14 @@ class PageRenderService
     }
     
     /**
-     * 检查区域配置是否包含有效的组件
+     * 妫€鏌ュ尯鍩熼厤缃槸鍚﹀寘鍚湁鏁堢殑缁勪欢
      * 
-     * 处理两种格式：
-     * 1. 数组格式：[{code: ..., enabled: ...}, ...]
-     * 2. PageLayout 导出格式：{component: ..., config: ...}
+     * 澶勭悊涓ょ鏍煎紡锛?
+     * 1. 鏁扮粍鏍煎紡锛歔{code: ..., enabled: ...}, ...]
+     * 2. PageLayout 瀵煎嚭鏍煎紡锛歿component: ..., config: ...}
      * 
-     * @param mixed $regionConfig 区域配置
-     * @return bool 是否有有效组件
+     * @param mixed $regionConfig 鍖哄煙閰嶇疆
+     * @return bool 鏄惁鏈夋湁鏁堢粍浠?
      */
     private function regionHasValidComponents($regionConfig): bool
     {
@@ -536,7 +535,7 @@ class PageRenderService
             return false;
         }
         
-        // 如果是数组格式 [{code: ...}, ...]
+        // 濡傛灉鏄暟缁勬牸寮?[{code: ...}, ...]
         if (is_array($regionConfig) && isset($regionConfig[0])) {
             foreach ($regionConfig as $component) {
                 if (!empty($component['code']) || !empty($component['component'])) {
@@ -546,12 +545,12 @@ class PageRenderService
             return false;
         }
         
-        // 如果是 PageLayout 导出格式 {component: ..., config: ...}
+        // 濡傛灉鏄?PageLayout 瀵煎嚭鏍煎紡 {component: ..., config: ...}
         if (is_array($regionConfig) && array_key_exists('component', $regionConfig)) {
             return !empty($regionConfig['component']);
         }
         
-        // 如果是单组件格式 {code: ...}
+        // 濡傛灉鏄崟缁勪欢鏍煎紡 {code: ...}
         if (is_array($regionConfig) && isset($regionConfig['code'])) {
             return !empty($regionConfig['code']);
         }
@@ -560,7 +559,7 @@ class PageRenderService
     }
     
     /**
-     * 检查布局配置中是否包含博客组件
+     * 妫€鏌ュ竷灞€閰嶇疆涓槸鍚﹀寘鍚崥瀹㈢粍浠?
      */
     private function hasBlogComponent(array $layoutConfig): bool
     {
@@ -581,23 +580,23 @@ class PageRenderService
     }
     
     /**
-     * 构建样式配置
+     * 鏋勫缓鏍峰紡閰嶇疆
      */
     private function buildStyleSettings(Page $page, string $styleCode, string $currentLocale, ?string $tempStyleCode): array
     {
         $finalSettings = [];
         
-        // 检查是否为虚拟页面
+        // 妫€鏌ユ槸鍚︿负铏氭嫙椤甸潰
         $isVirtualPage = !$page->getId();
         
-        // 加载样式模型获取默认配置
+        // 鍔犺浇鏍峰紡妯″瀷鑾峰彇榛樿閰嶇疆
         $style = clone $this->styleModel;
         $style->clear()
             ->where(Style::schema_fields_CODE, $styleCode)
             ->find()
             ->fetch();
         
-        // 第一步：使用模板默认配置值（最低优先级）
+        // 绗竴姝ワ細浣跨敤妯℃澘榛樿閰嶇疆鍊硷紙鏈€浣庝紭鍏堢骇锛?
         if ($style->getId()) {
             $parsed = $style->parseStyleConfig();
             $styleConfigs = $parsed['configs'] ?? [];
@@ -609,14 +608,14 @@ class PageRenderService
             }
         }
         
-        // 第二步：用页面保存的配置覆盖（中等优先级）
-        // 如果使用临时样式，跳过页面配置（只使用模板默认值）
-        // 虚拟页面也跳过此步骤
+        // 绗簩姝ワ細鐢ㄩ〉闈繚瀛樼殑閰嶇疆瑕嗙洊锛堜腑绛変紭鍏堢骇锛?
+        // 濡傛灉浣跨敤涓存椂鏍峰紡锛岃烦杩囬〉闈㈤厤缃紙鍙娇鐢ㄦā鏉块粯璁ゅ€硷級
+        // 铏氭嫙椤甸潰涔熻烦杩囨姝ラ
         if (!$isVirtualPage && (!$tempStyleCode || $tempStyleCode === $page->getData('style'))) {
             $allStyleSettings = $page->getStyleSetting();
             if ($styleCode && isset($allStyleSettings[$styleCode])) {
                 $rawSettings = $allStyleSettings[$styleCode];
-                // 清理可能存在的三层结构，只保留标量值
+                // 娓呯悊鍙兘瀛樺湪鐨勪笁灞傜粨鏋勶紝鍙繚鐣欐爣閲忓€?
                 foreach ($rawSettings as $key => $value) {
                     if (!is_array($value)) {
                         $finalSettings[$key] = $value;
@@ -625,8 +624,8 @@ class PageRenderService
             }
         }
         
-        // 第三步：用翻译的配置覆盖（最高优先级）
-        // 虚拟页面跳过数据库查询
+        // 绗笁姝ワ細鐢ㄧ炕璇戠殑閰嶇疆瑕嗙洊锛堟渶楂樹紭鍏堢骇锛?
+        // 铏氭嫙椤甸潰璺宠繃鏁版嵁搴撴煡璇?
         if (!$isVirtualPage) {
             $localizedContent = $this->getLocalizedContent($page, $currentLocale);
             if ($localizedContent && !empty($localizedContent['config'])) {
@@ -646,7 +645,7 @@ class PageRenderService
     }
     
     /**
-     * 获取本地化内容
+     * 鑾峰彇鏈湴鍖栧唴瀹?
      */
     private function getLocalizedContent(Page $page, string $locale): ?array
     {
@@ -672,24 +671,24 @@ class PageRenderService
     }
     
     /**
-     * 为博客类型页面加载博客数据
+     * 涓哄崥瀹㈢被鍨嬮〉闈㈠姞杞藉崥瀹㈡暟鎹?
      * 
-     * 优先使用已通过 Template::getInstance()->assign() 预设的数据
-     * 如果没有预设数据，则自动加载
+     * 浼樺厛浣跨敤宸查€氳繃 Template::getInstance()->assign() 棰勮鐨勬暟鎹?
+     * 濡傛灉娌℃湁棰勮鏁版嵁锛屽垯鑷姩鍔犺浇
      */
     private function loadBlogData(Page $page): void
     {
         $pageType = $page->getData(Page::schema_fields_TYPE);
         $template = $this->getTemplate();
         
-        // 检查是否已有预设的博客数据（由控制器预先设置）
+        // 妫€鏌ユ槸鍚﹀凡鏈夐璁剧殑鍗氬鏁版嵁锛堢敱鎺у埗鍣ㄩ鍏堣缃級
         $existingBlogPosts = $template->getData('blog_posts');
         $existingCategories = $template->getData('blog_categories');
         $existingCurrentPost = $template->getData('current_post');
         $existingRelatedPosts = $template->getData('related_posts');
         $existingRecentPosts = $template->getData('recent_posts');
         
-        // 博客文章列表：优先使用预设数据
+        // 鍗氬鏂囩珷鍒楄〃锛氫紭鍏堜娇鐢ㄩ璁炬暟鎹?
         if (!empty($existingBlogPosts)) {
             $this->assign('blog_posts', $existingBlogPosts);
         } else {
@@ -697,7 +696,7 @@ class PageRenderService
             $this->assign('blog_posts', $blogPosts);
         }
         
-        // 博客分类：优先使用预设数据
+        // 鍗氬鍒嗙被锛氫紭鍏堜娇鐢ㄩ璁炬暟鎹?
         if (!empty($existingCategories)) {
             $this->assign('blog_categories', $existingCategories);
         } else {
@@ -705,12 +704,12 @@ class PageRenderService
             $this->assign('blog_categories', $blogCategories);
         }
         
-        // 如果是博客文章详情页，获取当前文章
+        // 濡傛灉鏄崥瀹㈡枃绔犺鎯呴〉锛岃幏鍙栧綋鍓嶆枃绔?
         if ($pageType === Page::TYPE_BLOG || !empty($existingCurrentPost)) {
             if (!empty($existingCurrentPost)) {
                 $this->assign('current_post', $existingCurrentPost);
                 
-                // 相关文章：优先使用预设数据
+                // 鐩稿叧鏂囩珷锛氫紭鍏堜娇鐢ㄩ璁炬暟鎹?
                 if (!empty($existingRelatedPosts)) {
                     $this->assign('related_posts', $existingRelatedPosts);
                 } elseif ($existingCurrentPost) {
@@ -718,13 +717,13 @@ class PageRenderService
                     $this->assign('related_posts', $relatedPosts);
                 }
             } else {
-                // 从 URL 参数获取文章 slug
+                // 浠?URL 鍙傛暟鑾峰彇鏂囩珷 slug
                 $slug = $this->request ? $this->request->getGet('slug') : null;
                 if ($slug) {
                     $currentPost = $this->getBlogPostBySlug($slug);
                     $this->assign('current_post', $currentPost);
                     
-                    // 获取相关文章
+                    // 鑾峰彇鐩稿叧鏂囩珷
                     if ($currentPost) {
                         $relatedPosts = $this->getRelatedBlogPosts($currentPost, 6);
                         $this->assign('related_posts', $relatedPosts);
@@ -733,7 +732,7 @@ class PageRenderService
             }
         }
         
-        // 如果是博客分类页，获取当前分类和分类下的文章
+        // 濡傛灉鏄崥瀹㈠垎绫婚〉锛岃幏鍙栧綋鍓嶅垎绫诲拰鍒嗙被涓嬬殑鏂囩珷
         if ($pageType === Page::TYPE_BLOG_CATEGORY) {
             $categorySlug = $this->request ? $this->request->getGet('category') : null;
             if ($categorySlug) {
@@ -747,7 +746,7 @@ class PageRenderService
             }
         }
         
-        // 最近文章（用于侧边栏）：优先使用预设数据
+        // 鏈€杩戞枃绔狅紙鐢ㄤ簬渚ц竟鏍忥級锛氫紭鍏堜娇鐢ㄩ璁炬暟鎹?
         if (!empty($existingRecentPosts)) {
             $this->assign('recent_posts', $existingRecentPosts);
         } else {
@@ -793,7 +792,7 @@ class PageRenderService
     }
     
     /**
-     * 获取相关博客文章
+     * 鑾峰彇鐩稿叧鍗氬鏂囩珷
      */
     private function getRelatedBlogPosts(array $currentPost, int $limit = 6): array
     {
@@ -811,7 +810,7 @@ class PageRenderService
     }
 
     /**
-     * 渲染区域
+     * 娓叉煋鍖哄煙
      */
     private function renderRegion(
         string $region,
@@ -825,9 +824,9 @@ class PageRenderService
     ): string {
         $regionConfig = $layoutConfig[$region] ?? [];
         
-        // 规范化布局配置结构
-        // PageLayout.exportConfig() 返回 header/footer 为 {component: ..., config: ...}
-        // 但 renderRegionComponents() 期望 [{code: ..., enabled: ..., config: ...}]
+        // 瑙勮寖鍖栧竷灞€閰嶇疆缁撴瀯
+        // PageLayout.exportConfig() 杩斿洖 header/footer 涓?{component: ..., config: ...}
+        // 浣?renderRegionComponents() 鏈熸湜 [{code: ..., enabled: ..., config: ...}]
         if (!empty($regionConfig)) {
             $components = $this->normalizeRegionConfig($region, $regionConfig);
             if (!empty($components)) {
@@ -842,7 +841,7 @@ class PageRenderService
             }
         }
         
-        // 回退到默认模板或自定义内容
+        // 鍥為€€鍒伴粯璁ゆā鏉挎垨鑷畾涔夊唴瀹?
         if ($region === 'content') {
             return $this->renderTraditionalContent($page, $stylePath, $localizedContent);
         }
@@ -851,13 +850,13 @@ class PageRenderService
     }
     
     /**
-     * 规范化区域配置结构
+     * 瑙勮寖鍖栧尯鍩熼厤缃粨鏋?
      * 
-     * 将不同格式的配置转换为统一的组件数组格式
+     * 灏嗕笉鍚屾牸寮忕殑閰嶇疆杞崲涓虹粺涓€鐨勭粍浠舵暟缁勬牸寮?
      * 
-     * @param string $region 区域名称 (header/content/footer)
-     * @param mixed $config 区域配置
-     * @return array 统一格式的组件数组
+     * @param string $region 鍖哄煙鍚嶇О (header/content/footer)
+     * @param mixed $config 鍖哄煙閰嶇疆
+     * @return array 缁熶竴鏍煎紡鐨勭粍浠舵暟缁?
      */
     private function normalizeRegionConfig(string $region, $config): array
     {
@@ -865,12 +864,12 @@ class PageRenderService
             return [];
         }
         
-        // 如果已经是正确的组件数组格式 [{code: ..., ...}, ...]
+        // 濡傛灉宸茬粡鏄纭殑缁勪欢鏁扮粍鏍煎紡 [{code: ..., ...}, ...]
         if (is_array($config) && isset($config[0]) && isset($config[0]['code'])) {
             return $config;
         }
         
-        // 如果是 PageLayout.exportConfig() 格式的 header/footer: {component: ..., config: ...}
+        // 濡傛灉鏄?PageLayout.exportConfig() 鏍煎紡鐨?header/footer: {component: ..., config: ...}
         if (is_array($config) && isset($config['component'])) {
             $component = $config['component'];
             if (empty($component)) {
@@ -885,21 +884,21 @@ class PageRenderService
             ];
         }
         
-        // 如果是带有 code 的单组件配置 {code: ..., config: ...}
+        // 濡傛灉鏄甫鏈?code 鐨勫崟缁勪欢閰嶇疆 {code: ..., config: ...}
         if (is_array($config) && isset($config['code'])) {
             return [$config];
         }
         
-        // content 区域可能直接是组件数组（不需要转换）
+        // content 鍖哄煙鍙兘鐩存帴鏄粍浠舵暟缁勶紙涓嶉渶瑕佽浆鎹級
         if ($region === 'content' && is_array($config)) {
-            // 检查第一个元素是否有 code 或 component 键
+            // 妫€鏌ョ涓€涓厓绱犳槸鍚︽湁 code 鎴?component 閿?
             $firstItem = reset($config);
             if (is_array($firstItem)) {
                 if (isset($firstItem['code'])) {
                     return $config;
                 }
                 if (isset($firstItem['component'])) {
-                    // 转换格式
+                    // 杞崲鏍煎紡
                     return array_map(function($item) {
                         return [
                             'code' => $item['component'] ?? '',
@@ -915,7 +914,7 @@ class PageRenderService
     }
     
     /**
-     * 渲染传统内容（非组件化）
+     * 娓叉煋浼犵粺鍐呭锛堥潪缁勪欢鍖栵級
      */
     private function renderTraditionalContent(Page $page, string $stylePath, ?array $localizedContent): string
     {
@@ -934,7 +933,7 @@ class PageRenderService
     }
     
     /**
-     * 渲染区域组件
+     * 娓叉煋鍖哄煙缁勪欢
      */
     private function renderRegionComponents(
         string $region,
@@ -951,7 +950,7 @@ class PageRenderService
         $html = '';
         $isVisualEditor = ($mode === self::MODE_VISUAL);
         
-        // 组件代码到文件的映射
+        // 缁勪欢浠ｇ爜鍒版枃浠剁殑鏄犲皠
         $componentFiles = $this->getComponentFilesMap($styleCode);
         
         $html .= "<!-- Rendering region: {$region}, styleCode: {$styleCode}, components: " . count($components) . ", mode: {$mode} -->\n";
@@ -968,13 +967,13 @@ class PageRenderService
                 continue;
             }
             
-            // 确定使用哪个模板的组件文件
+            // 纭畾浣跨敤鍝釜妯℃澘鐨勭粍浠舵枃浠?
             $useTemplateCode = $styleCode;
             
-            // 查找组件文件
+            // 鏌ユ壘缁勪欢鏂囦欢
             $componentFile = $componentFiles[$code] ?? null;
             
-            // 🔧 处理 {styleCode}-header/footer 格式
+            // 馃敡 澶勭悊 {styleCode}-header/footer 鏍煎紡
             if (!$componentFile) {
                 if ($code === $styleCode . '-header' || $code === 'header') {
                     $componentFile = $componentFiles['header-nav'] ?? null;
@@ -983,7 +982,7 @@ class PageRenderService
                 }
             }
             
-            // 🔧 处理 Component 模型生成的特殊格式：{styleCode}_header_header, {styleCode}_footer_footer
+            // 馃敡 澶勭悊 Component 妯″瀷鐢熸垚鐨勭壒娈婃牸寮忥細{styleCode}_header_header, {styleCode}_footer_footer
             if (!$componentFile) {
                 if (preg_match('/^' . preg_quote($styleCode, '/') . '_header_header$/i', $code)) {
                     $componentFile = $componentFiles['header-nav'] ?? null;
@@ -992,27 +991,27 @@ class PageRenderService
                 }
             }
             
-            // 🔧 处理下划线格式的组件代码（Component 模型生成的格式）
-            // 例如：tpmst_header_nav -> header-nav
+            // 馃敡 澶勭悊涓嬪垝绾挎牸寮忕殑缁勪欢浠ｇ爜锛圕omponent 妯″瀷鐢熸垚鐨勬牸寮忥級
+            // 渚嬪锛歵pmst_header_nav -> header-nav
             if (!$componentFile && strpos($code, $styleCode . '_') === 0) {
                 $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
                 $codeWithDash = str_replace('_', '-', $codeWithoutPrefix);
                 $componentFile = $componentFiles[$codeWithDash] ?? null;
             }
             
-            // 尝试去掉模板前缀（破折号格式）
+            // 灏濊瘯鍘绘帀妯℃澘鍓嶇紑锛堢牬鎶樺彿鏍煎紡锛?
             if (!$componentFile && strpos($code, $styleCode . '-') === 0) {
                 $codeWithoutPrefix = substr($code, strlen($styleCode) + 1);
                 $componentFile = $componentFiles[$codeWithoutPrefix] ?? null;
             }
             
-            // 🔧 尝试转换下划线为破折号后查找
+            // 馃敡 灏濊瘯杞崲涓嬪垝绾夸负鐮存姌鍙峰悗鏌ユ壘
             if (!$componentFile && str_contains($code, '_')) {
                 $codeWithDash = str_replace('_', '-', $code);
                 $componentFile = $componentFiles[$codeWithDash] ?? null;
             }
             
-            // 尝试从指定的其他模板查找
+            // 灏濊瘯浠庢寚瀹氱殑鍏朵粬妯℃澘鏌ユ壘
             if (!$componentFile && !empty($componentTemplateCode) && $componentTemplateCode !== $styleCode) {
                 $otherComponentFiles = $this->getComponentFilesMap($componentTemplateCode);
                 $componentFile = $otherComponentFiles[$code] ?? null;
@@ -1027,7 +1026,7 @@ class PageRenderService
                 }
             }
             
-            // 如果仍未找到，尝试通过 Component 模型解析（支持数据库注册的组件）
+            // 濡傛灉浠嶆湭鎵惧埌锛屽皾璇曢€氳繃 Component 妯″瀷瑙ｆ瀽锛堟敮鎸佹暟鎹簱娉ㄥ唽鐨勭粍浠讹級
             $componentPath = null;
             if (!$componentFile) {
                 $modelResolution = $this->resolveComponentViaModel($code, $styleCode);
@@ -1062,12 +1061,12 @@ class PageRenderService
                 continue;
             }
             
-            // 构建组件模板路径（如果未通过 Component 模型解析）
+            // 鏋勫缓缁勪欢妯℃澘璺緞锛堝鏋滄湭閫氳繃 Component 妯″瀷瑙ｆ瀽锛?
             if (!$componentPath) {
                 $componentPath = $this->pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
             }
             
-            // 传递数据到组件
+            // 浼犻€掓暟鎹埌缁勪欢
             $this->assign('page', $page);
             $this->assign('style', $styleSettings);
             $this->assign('style_settings', $styleSettings);
@@ -1079,12 +1078,12 @@ class PageRenderService
                 if (empty($componentHtml)) {
                     $html .= "<!-- Component {$code} rendered but output is empty -->\n";
                 } else {
-                    // 在可视化编辑器模式下，添加组件包装器
+                    // 鍦ㄥ彲瑙嗗寲缂栬緫鍣ㄦā寮忎笅锛屾坊鍔犵粍浠跺寘瑁呭櫒
                     if ($isVisualEditor) {
                         $escapedCode = htmlspecialchars($code, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                         $escapedRegion = htmlspecialchars($region, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                         $escapedPageType = htmlspecialchars((string)$page->getData(Page::schema_fields_TYPE), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-                        // 存储组件实际所属的模板代码（用于跨模板组件编辑）
+                        // 瀛樺偍缁勪欢瀹為檯鎵€灞炵殑妯℃澘浠ｇ爜锛堢敤浜庤法妯℃澘缁勪欢缂栬緫锛?
                         $escapedStyleCode = htmlspecialchars($useTemplateCode, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
                         $configScript = $this->buildVisualEditorComponentConfigScript(\is_array($config) ? $config : []);
                         $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-component-code=\"{$escapedCode}\" data-block-id=\"{$escapedCode}\" data-page-type=\"{$escapedPageType}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" tabindex=\"0\">" . $this->buildVisualEditorComponentActionsHtml() . $configScript . "{$componentHtml}</div>";
@@ -1103,9 +1102,9 @@ class PageRenderService
     }
     
     /**
-     * 获取组件文件映射
+     * 鑾峰彇缁勪欢鏂囦欢鏄犲皠
      * 
-     * 使用 ComponentResolver 获取组件映射
+     * 浣跨敤 ComponentResolver 鑾峰彇缁勪欢鏄犲皠
      */
     private function renderVirtualThemeComponent(
         string $code,
@@ -1835,14 +1834,14 @@ HTML;
     }
     
     /**
-     * 通过 Component 模型解析组件模板路径
+     * 閫氳繃 Component 妯″瀷瑙ｆ瀽缁勪欢妯℃澘璺緞
      * 
-     * 这是一个备用方法，当 component.json 中找不到组件时使用
-     * 可以支持跨模板组件解析
+     * 杩欐槸涓€涓鐢ㄦ柟娉曪紝褰?component.json 涓壘涓嶅埌缁勪欢鏃朵娇鐢?
+     * 鍙互鏀寔璺ㄦā鏉跨粍浠惰В鏋?
      * 
-     * @param string $componentCode 组件代码
-     * @param string $preferredStyleCode 首选样式代码
-     * @return array|null ['path' => '模板路径', 'style_code' => '实际使用的样式代码']
+     * @param string $componentCode 缁勪欢浠ｇ爜
+     * @param string $preferredStyleCode 棣栭€夋牱寮忎唬鐮?
+     * @return array|null ['path' => '妯℃澘璺緞', 'style_code' => '瀹為檯浣跨敤鐨勬牱寮忎唬鐮?]
      */
     private function resolveComponentViaModel(string $componentCode, string $preferredStyleCode): ?array
     {
@@ -1854,7 +1853,7 @@ HTML;
             
             $componentModel = ObjectManager::getInstance($componentModelClass);
             
-            // 首先尝试在首选样式中查找
+            // 棣栧厛灏濊瘯鍦ㄩ閫夋牱寮忎腑鏌ユ壘
             $component = clone $componentModel;
             $component->clear()
                 ->where($componentModelClass::schema_fields_CODE, $componentCode)
@@ -1867,7 +1866,7 @@ HTML;
                 $styleCode = $component->getData($componentModelClass::schema_fields_STYLE_CODE);
                 
                 if ($path) {
-                    // 如果是相对路径，转换为模板引用
+                    // 濡傛灉鏄浉瀵硅矾寰勶紝杞崲涓烘ā鏉垮紩鐢?
                     if (strpos($path, 'style/') === 0) {
                         return [
                             'path' => "GuoLaiRen_PageBuilder::templates/{$path}",
@@ -1881,7 +1880,7 @@ HTML;
                 }
             }
             
-            // 尝试带样式前缀的组件代码
+            // 灏濊瘯甯︽牱寮忓墠缂€鐨勭粍浠朵唬鐮?
             $prefixedCode = $preferredStyleCode . '-' . $componentCode;
             $component2 = clone $componentModel;
             $component2->clear()
@@ -1915,7 +1914,7 @@ HTML;
     }
     
     /**
-     * 构建调试信息
+     * 鏋勫缓璋冭瘯淇℃伅
      */
     private function buildDebugInfo(bool $useComponentRendering, array $layoutConfig): string
     {
@@ -1927,7 +1926,7 @@ HTML;
     }
     
     /**
-     * 注入 Header 自定义代码
+     * 娉ㄥ叆 Header 鑷畾涔変唬鐮?
      */
     private function injectHeaderCustomCode(string $headerHtml, Page $page): string
     {
@@ -1944,7 +1943,7 @@ HTML;
     }
     
     /**
-     * 注入 Footer 自定义代码
+     * 娉ㄥ叆 Footer 鑷畾涔変唬鐮?
      */
     private function injectFooterCustomCode(string $footerHtml, Page $page): string
     {
@@ -1961,7 +1960,7 @@ HTML;
     }
     
     /**
-     * 最终处理输出
+     * 鏈€缁堝鐞嗚緭鍑?
      */
     private function finalizeOutput(
         string $headerHtml,
@@ -1973,7 +1972,7 @@ HTML;
         string $mode,
         ?int $virtualThemeId = null
     ): string {
-        // 预览标记脚本（preview 和 visual 模式都需要）
+        // 棰勮鏍囪鑴氭湰锛坧review 鍜?visual 妯″紡閮介渶瑕侊級
         $previewBoot = '';
         if ($mode !== self::MODE_LIVE) {
             $previewBoot = '<script>(function(){
@@ -1989,7 +1988,7 @@ HTML;
         }
         
         if ($page->isAiHtmlRenderMode()) {
-            $aiHtml = $this->renderAiHtmlBlocks($page, $mode !== self::MODE_LIVE, $mode === self::MODE_VISUAL);
+            $aiHtml = $this->renderAiHtmlBlockNodes($page, $mode !== self::MODE_LIVE, $mode === self::MODE_VISUAL);
             if ($aiHtml !== '') {
                 if ($mode === self::MODE_VISUAL) {
                     return $this->renderVisualMode($headerHtml, $aiHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
@@ -2000,11 +1999,11 @@ HTML;
         }
 
         if ($mode === self::MODE_VISUAL) {
-            // 可视化编辑器模式：添加插槽容器和拖拽支持
+            // 鍙鍖栫紪杈戝櫒妯″紡锛氭坊鍔犳彃妲藉鍣ㄥ拰鎷栨嫿鏀寔
             return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
         }
         
-        // preview 和 live 模式：纯净输出
+        // preview 鍜?live 妯″紡锛氱函鍑€杈撳嚭
         return $this->renderStandardDocument($headerHtml, $contentHtml, $footerHtml, $previewBoot, $page);
     }
 
@@ -2394,10 +2393,10 @@ body > *{max-width:100%;box-sizing:border-box;}
         }
     }
 
-    private function renderAiHtmlBlocks(Page $page, bool $useDraftLayout = false, bool $visualEditor = false): string
+    private function renderAiHtmlBlockNodes(Page $page, bool $useDraftLayout = false, bool $visualEditor = false): string
     {
         $layout = $page->resolveAiLayoutForFrontend($useDraftLayout);
-        $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+        $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
         if ($blocks === []) {
             return '';
         }
@@ -2408,7 +2407,7 @@ body > *{max-width:100%;box-sizing:border-box;}
             if (!\is_array($block)) {
                 continue;
             }
-            if (AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block)) {
+            if (AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($block)) {
                 continue;
             }
             $blockHtml = \trim((string)($block['html'] ?? $block['config']['html_content'] ?? ''));
@@ -2460,10 +2459,10 @@ body > *{max-width:100%;box-sizing:border-box;}
     }
     
     /**
-     * 渲染可视化编辑器模式
+     * 娓叉煋鍙鍖栫紪杈戝櫒妯″紡
      * 
-     * 统一使用组件化模式：始终构建完整 HTML 结构
-     * header/content/footer 组件只是 HTML 片段，不包含完整的 HTML 文档结构
+     * 缁熶竴浣跨敤缁勪欢鍖栨ā寮忥細濮嬬粓鏋勫缓瀹屾暣 HTML 缁撴瀯
+     * header/content/footer 缁勪欢鍙槸 HTML 鐗囨锛屼笉鍖呭惈瀹屾暣鐨?HTML 鏂囨。缁撴瀯
      */
     private function getComponentActionInlineDispatchJs(): string
     {
@@ -2548,15 +2547,15 @@ JS;
     ): string {
         $dropZoneStyles = $this->getDropZoneStyles();
         
-        // 获取布局拥有者页面ID（用于可视化编辑API调用）
+        // 鑾峰彇甯冨眬鎷ユ湁鑰呴〉闈D锛堢敤浜庡彲瑙嗗寲缂栬緫API璋冪敤锛?
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);
         $dropZoneScripts = $this->getDropZoneScripts((int)$page->getId(), $layoutOwnerPageId);
         
-        // 清理 header/footer 中可能存在的 HTML 文档结构标签（兼容旧模板）
+        // 娓呯悊 header/footer 涓彲鑳藉瓨鍦ㄧ殑 HTML 鏂囨。缁撴瀯鏍囩锛堝吋瀹规棦鏈夋ā鏉匡級
         $headerHtml = $this->cleanHtmlDocumentTags($headerHtml);
         $footerHtml = $this->cleanHtmlDocumentTags($footerHtml);
         
-        // 组件化模式：构建完整 HTML
+        // 缁勪欢鍖栨ā寮忥細鏋勫缓瀹屾暣 HTML
         $pageTitle = $page ? ($page->getData('title') ?: 'Preview') : 'Preview';
         $templateHelper = Template::getInstance();
         $baseCssSource = 'GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css';
@@ -2593,35 +2592,35 @@ JS;
     }
     
     /**
-     * 清理 HTML 文档结构标签
+     * 娓呯悊 HTML 鏂囨。缁撴瀯鏍囩
      * 
-     * 移除组件 HTML 中可能存在的完整文档结构标签；
-     * 提取组件内所有 <style> 到片段前部，并从原位置移除，避免 <style> 出现在 nav 等标签内。
-     * 确保组件只是纯粹的 HTML 片段，且样式集中在片段前部。
+     * 绉婚櫎缁勪欢 HTML 涓彲鑳藉瓨鍦ㄧ殑瀹屾暣鏂囨。缁撴瀯鏍囩锛?
+     * 鎻愬彇缁勪欢鍐呮墍鏈?<style> 鍒扮墖娈靛墠閮紝骞朵粠鍘熶綅缃Щ闄わ紝閬垮厤 <style> 鍑虹幇鍦?nav 绛夋爣绛惧唴銆?
+     * 纭繚缁勪欢鍙槸绾补鐨?HTML 鐗囨锛屼笖鏍峰紡闆嗕腑鍦ㄧ墖娈靛墠閮ㄣ€?
      */
     private function cleanHtmlDocumentTags(string $html): string
     {
-        // 移除 DOCTYPE
+        // 绉婚櫎 DOCTYPE
         $html = preg_replace('/<!DOCTYPE[^>]*>/i', '', $html);
         
-        // 移除 <html> 标签（保留内容）
+        // 绉婚櫎 <html> 鏍囩锛堜繚鐣欏唴瀹癸級
         $html = preg_replace('/<html[^>]*>/i', '', $html);
         $html = preg_replace('/<\/html>/i', '', $html);
         
-        // 提取所有 style 标签（包括组件内部的，如 <nav><style>...</style>）
+        // 鎻愬彇鎵€鏈?style 鏍囩锛堝寘鎷粍浠跺唴閮ㄧ殑锛屽 <nav><style>...</style>锛?
         $styles = '';
         if (preg_match_all('/<style[^>]*>.*?<\/style>/is', $html, $matches)) {
             $styles = implode("\n", $matches[0]);
-            // 从片段中移除这些 style 标签，避免 header 等组件里残留 <style> 导致结构混乱
+            // 浠庣墖娈典腑绉婚櫎杩欎簺 style 鏍囩锛岄伩鍏?header 绛夌粍浠堕噷娈嬬暀 <style> 瀵艰嚧缁撴瀯娣蜂贡
             $html = preg_replace('/<style[^>]*>.*?<\/style>/is', '', $html);
         }
         $html = preg_replace('/<head[^>]*>.*?<\/head>/is', '', $html);
         
-        // 移除 <body> 标签（保留内容）
+        // 绉婚櫎 <body> 鏍囩锛堜繚鐣欏唴瀹癸級
         $html = preg_replace('/<body[^>]*>/i', '', $html);
         $html = preg_replace('/<\/body>/i', '', $html);
         
-        // 将提取的样式放在片段前部，最终插入到插槽内时样式在组件结构之前
+        // 灏嗘彁鍙栫殑鏍峰紡鏀惧湪鐗囨鍓嶉儴锛屾渶缁堟彃鍏ュ埌鎻掓Ы鍐呮椂鏍峰紡鍦ㄧ粍浠剁粨鏋勪箣鍓?
         if (!empty($styles)) {
             $html = $styles . "\n" . trim($html);
         }
@@ -2630,20 +2629,20 @@ JS;
     }
     
     /**
-     * 获取拖拽区域样式
+     * 鑾峰彇鎷栨嫿鍖哄煙鏍峰紡
      * 
-     * 统一使用 inset box-shadow 作为视觉效果，避免 outline 导致的布局问题
+     * 缁熶竴浣跨敤 inset box-shadow 浣滀负瑙嗚鏁堟灉锛岄伩鍏?outline 瀵艰嚧鐨勫竷灞€闂
      */
     private function getDropZoneStyles(): string
     {
         return '<style>
-            /* 拖拽插槽区域 */
+            /* 鎷栨嫿鎻掓Ы鍖哄煙 */
             .pb-slot {
                 position: relative;
                 min-height: 50px;
                 transition: box-shadow 0.2s ease;
             }
-            /* 移除 pb-slot 和 pb-slot-content 的 hover 效果 */
+            /* 绉婚櫎 pb-slot 鍜?pb-slot-content 鐨?hover 鏁堟灉 */
             .pb-slot:hover,
             .pb-slot-content:hover {
                 box-shadow: none !important;
@@ -2653,7 +2652,7 @@ JS;
                 background: rgba(74, 144, 217, 0.05);
             }
             
-            /* 插槽名称标签 */
+            /* 鎻掓Ы鍚嶇О鏍囩 */
             .pb-slot::before {
                 content: attr(data-slot-name);
                 position: absolute;
@@ -2670,13 +2669,13 @@ JS;
                 z-index: 1000;
                 pointer-events: none;
             }
-            /* 移除 hover 时显示标签的效果 */
+            /* 绉婚櫎 hover 鏃舵樉绀烘爣绛剧殑鏁堟灉 */
             .pb-slot:hover::before,
             .pb-slot-content:hover::before {
                 opacity: 0 !important;
             }
             
-            /* 组件包装器（统一样式，适用于所有模板） */
+            /* 缁勪欢鍖呰鍣紙缁熶竴鏍峰紡锛岄€傜敤浜庢墍鏈夋ā鏉匡級 */
             .tpmst-component-wrapper,
             .pb-component-wrapper {
                 position: relative !important;
@@ -2703,14 +2702,14 @@ JS;
                 box-shadow: inset 0 0 0 3px #4a90d9;
             }
             
-            /* 组件拖拽状态 */
+            /* 缁勪欢鎷栨嫿鐘舵€?*/
             .tpmst-component-wrapper.dragging,
             .pb-component-wrapper.dragging {
                 opacity: 0.6;
                 box-shadow: inset 0 0 0 2px rgba(74, 144, 217, 0.8);
             }
             
-            /* 组件操作按钮容器 */
+            /* 缁勪欢鎿嶄綔鎸夐挳瀹瑰櫒 */
             .tpmst-component-wrapper .component-actions,
             .pb-component-wrapper .component-actions {
                 position: absolute !important;
@@ -3078,18 +3077,18 @@ JS;
     }
     
     /**
-     * 获取拖拽区域脚本
+     * 鑾峰彇鎷栨嫿鍖哄煙鑴氭湰
      * 
-     * @param int $pageId 当前页面ID
-     * @param int $layoutOwnerPageId 布局拥有者页面ID（用于API调用）
+     * @param int $pageId 褰撳墠椤甸潰ID
+     * @param int $layoutOwnerPageId 甯冨眬鎷ユ湁鑰呴〉闈D锛堢敤浜嶢PI璋冪敤锛?
      */
     private function getDropZoneScripts(int $pageId, int $layoutOwnerPageId): string
     {
         return '<script>
             (function() {
-                // 可视化编辑器脚本
+                // 鍙鍖栫紪杈戝櫒鑴氭湰
                 window.__PAGEBUILDER_PAGE_ID__ = ' . $pageId . ';
-                // 布局拥有者页面ID（API调用时使用此ID）
+                // 甯冨眬鎷ユ湁鑰呴〉闈D锛圓PI璋冪敤鏃朵娇鐢ㄦID锛?
                 window.__PAGEBUILDER_LAYOUT_OWNER_PAGE_ID__ = ' . $layoutOwnerPageId . ';
                 var pbStandalonePreview = !window.parent || window.parent === window;
                 var pbVirtualEditorEnabled = false;
@@ -3121,7 +3120,7 @@ JS;
                 } catch (err) {
                 }
                 
-                // 初始化拖拽区域
+                // 鍒濆鍖栨嫋鎷藉尯鍩?
                 document.querySelectorAll(".pb-slot").forEach(function(slot) {
                     slot.addEventListener("dragover", function(e) {
                         e.preventDefault();
@@ -3133,7 +3132,7 @@ JS;
                     slot.addEventListener("drop", function(e) {
                         e.preventDefault();
                         this.classList.remove("drag-over");
-                        // 通知父窗口
+                        // 閫氱煡鐖剁獥鍙?
                         if (window.parent && window.parent !== window) {
                             window.parent.postMessage({
                                 type: "pb-component-drop",
@@ -3144,7 +3143,7 @@ JS;
                     });
                 });
                 
-                // 组件选择
+                // 缁勪欢閫夋嫨
                 document.querySelectorAll(".tpmst-component-wrapper").forEach(function(wrapper) {
                     wrapper.addEventListener("click", function(e) {
                         e.stopPropagation();
@@ -3152,7 +3151,7 @@ JS;
                             el.classList.remove("selected");
                         });
                         this.classList.add("selected");
-                        // 通知父窗口
+                        // 閫氱煡鐖剁獥鍙?
                         if (window.parent && window.parent !== window) {
                             window.parent.postMessage({
                                 type: "pb-component-select",
@@ -3885,7 +3884,7 @@ JS;
     }
     
     /**
-     * 清除缓存
+     * 娓呴櫎缂撳瓨
      */
     public static function clearCache(): void
     {

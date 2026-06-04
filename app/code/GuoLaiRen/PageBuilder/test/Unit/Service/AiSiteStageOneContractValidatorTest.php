@@ -12,9 +12,9 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
     public function testVisibleCopyLocaleMismatchIsDiagnosticOnly(): void
     {
         $validator = new AiSiteStageOneContractValidator();
-        $report = $validator->validatePagePlan(
+        $report = $validator->validatePlanJsonPage(
             'home_page',
-            $this->pagePlanWithBlock([
+            $this->planJsonPageWithBlock([
                 'content' => "\u{8FD9}\u{662F}\u{4E0D}\u{5E94}\u{8FDB}\u{5165}\u{8461}\u{8404}\u{7259}\u{8BED}\u{9875}\u{9762}\u{7684}\u{4E2D}\u{6587}\u{6B63}\u{6587}\u{3002}",
                 'field_plan' => [
                     ['field' => 'description', 'sample' => "\u{8FD9}\u{662F}\u{4E2D}\u{6587}\u{5B57}\u{6BB5}\u{793A}\u{4F8B}\u{3002}"],
@@ -34,12 +34,12 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
         );
     }
 
-    public function testMissingBuildPlanBodyCopyIsDiagnosticOnly(): void
+    public function testMissingPlanJsonBodyCopyIsDiagnosticOnly(): void
     {
         $validator = new AiSiteStageOneContractValidator();
-        $report = $validator->validatePagePlan(
+        $report = $validator->validatePlanJsonPage(
             'home_page',
-            $this->pagePlanWithBlock([
+            $this->planJsonPageWithBlock([
                 'content' => '',
                 'field_plan' => [
                     ['field' => 'headline', 'sample' => 'Download safely'],
@@ -62,9 +62,9 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
     public function testDashboardWorkflowSubjectWithBadgeDetailIsNotIconOnly(): void
     {
         $validator = new AiSiteStageOneContractValidator();
-        $report = $validator->validatePagePlan(
+        $report = $validator->validatePlanJsonPage(
             'home_page',
-            $this->pagePlanWithBlock([
+            $this->planJsonPageWithBlock([
                 'image_intent' => [
                     'needs_image' => true,
                     'image_role' => 'hero_image',
@@ -88,9 +88,9 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
     public function testPureIconSubjectDoesNotBlockStructureGate(): void
     {
         $validator = new AiSiteStageOneContractValidator();
-        $report = $validator->validatePagePlan(
+        $report = $validator->validatePlanJsonPage(
             'home_page',
-            $this->pagePlanWithBlock([
+            $this->planJsonPageWithBlock([
                 'image_intent' => [
                     'needs_image' => true,
                     'image_role' => 'hero_image',
@@ -115,9 +115,9 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
     public function testMissingImageIntentObjectStillFailsStructureGate(): void
     {
         $validator = new AiSiteStageOneContractValidator();
-        $report = $validator->validatePagePlan(
+        $report = $validator->validatePlanJsonPage(
             'home_page',
-            $this->pagePlanWithBlock(['image_intent' => null]),
+            $this->planJsonPageWithBlock(['image_intent' => null]),
             $this->singleHeroContract('en_US')
         );
 
@@ -160,7 +160,7 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
                     ],
                 ],
                 'pages' => [
-                    'home_page' => $this->pagePlanWithBlock([]),
+                    'home_page' => $this->planJsonPageWithBlock([]),
                 ],
             ],
             $contract,
@@ -177,16 +177,16 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
      * @param array<string, mixed> $blockPatch
      * @return array<string, mixed>
      */
-    private function pagePlanWithBlock(array $blockPatch): array
+    private function planJsonPageWithBlock(array $blockPatch): array
     {
         return [
             'page_goal' => 'Present the download value.',
             'theme_alignment_summary' => 'Dark gaming landing page.',
             'page_design_plan' => ['layout' => 'hero'],
-            'blocks' => [[
+            'hero' => [
                 ...$this->baseHeroBlock(),
                 ...$blockPatch,
-            ]],
+            ],
         ];
     }
 
@@ -242,9 +242,9 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
             'page_contracts' => [
                 'home_page' => [
                     'page_type' => 'home_page',
-                    'min_blocks' => 1,
-                    'max_blocks' => 1,
-                    'target_blocks' => 1,
+                    'min_block_nodes' => 1,
+                    'max_block_nodes' => 1,
+                    'target_block_nodes' => 1,
                     'required_block_keys' => ['hero'],
                     'forbidden_block_keys' => [],
                     'field_plan_count' => 1,

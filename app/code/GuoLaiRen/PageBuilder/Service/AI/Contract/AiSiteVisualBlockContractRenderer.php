@@ -21,10 +21,10 @@ final class AiSiteVisualBlockContractRenderer
         array $pageDesignPlan = []
     ): string {
         $lines = [];
-        $lines[] = 'AI block design guidance: generate one complete visitor-facing PageBuilder block from the current BuildPlan block.';
+        $lines[] = 'AI block design guidance: generate one complete visitor-facing PageBuilder block from the current PlanJson block.';
         $lines[] = '- Structure is binding: return valid JSON, valid HTML/PHTML, css_extra, default_config, semantic root classes, responsive CSS, and no visible internal metadata.';
-        $lines[] = '- Creative fields are open: headings, copy, layout motifs, image treatment, and micro-interactions should follow the BuildPlan intent without being policed by fixed keyword gates.';
-        $lines[] = '- Default style direction when the BuildPlan is silent: dark neon chess/casino atmosphere, luminous card-table surfaces, sharp contrast, electric cyan/magenta/gold accents, polished game-floor tension.';
+        $lines[] = '- Creative fields are open: headings, copy, layout motifs, image treatment, and micro-interactions should follow the PlanJson intent without being policed by fixed keyword gates.';
+        $lines[] = '- Default style direction when the PlanJson is silent: dark neon chess/casino atmosphere, luminous card-table surfaces, sharp contrast, electric cyan/magenta/gold accents, polished game-floor tension.';
         $lines[] = '- Use the current block role exactly. Do not reuse another block role, CTA pattern, image, or card layout simply to satisfy a generic template.';
         $lines[] = '- Visible copy language: ' . ($contentLocale !== '' ? $contentLocale : 'use the workspace default locale') . '. Brand names, product names, URLs, API/APK, and proper nouns may stay as-is.';
         $lines[] = '- Typography: use design-token fonts through var(--pb-font-display) and var(--pb-font-body); avoid hardcoded generic stacks.';
@@ -99,7 +99,7 @@ final class AiSiteVisualBlockContractRenderer
             }
         }
 
-        return $parts === [] ? '' : '- BuildPlan visual signature: ' . \implode('; ', $parts) . '.';
+        return $parts === [] ? '' : '- PlanJson visual signature: ' . \implode('; ', $parts) . '.';
     }
 
     /**

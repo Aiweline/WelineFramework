@@ -22,7 +22,7 @@ final class AiSiteAgentRegeneratePageOperationPorts
      * @param \Closure(array,string,array):array<string,mixed> $markTaskDone
      * @param \Closure(string,int,array,array,array,array):array<string,mixed> $materializeGeneratedPages
      * @param \Closure(array,array):array<string,mixed> $mergeMaterializedPagesIntoScope
-     * @param \Closure(array):array<string,mixed> $summarizeBuildTasks
+     * @param \Closure(array):array<string,mixed> $summarizePlanJsonTasks
      * @param \Closure(int,int,array):void $replaceScope
      * @param \Closure(int,int,int):void $bindVirtualTheme
      * @param \Closure(int,int,string,string,string,array):void $appendWorkspaceEvent
@@ -47,7 +47,7 @@ final class AiSiteAgentRegeneratePageOperationPorts
         public readonly \Closure $markTaskDone,
         public readonly \Closure $materializeGeneratedPages,
         public readonly \Closure $mergeMaterializedPagesIntoScope,
-        public readonly \Closure $summarizeBuildTasks,
+        public readonly \Closure $summarizePlanJsonTasks,
         public readonly \Closure $replaceScope,
         public readonly \Closure $bindVirtualTheme,
         public readonly \Closure $appendWorkspaceEvent,

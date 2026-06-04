@@ -23,12 +23,12 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
 
     public function getName(): string
     {
-        return (string)__('AI 建站工作台 · PageBuilder');
+        return (string)__('AI 寤虹珯宸ヤ綔鍙?路 PageBuilder');
     }
 
     public function getDescription(): string
     {
-        return (string)__('Websites 负责准备信息、域名和镜像工作区，真正的 AI 建站、虚拟主题、页面物化和可视化编辑全部交给 PageBuilder 原生流程。');
+        return (string)__('Websites 璐熻矗鍑嗗淇℃伅銆佸煙鍚嶅拰闀滃儚宸ヤ綔鍖猴紝鐪熸鐨?AI 寤虹珯銆佽櫄鎷熶富棰樸€侀〉闈㈢墿鍖栧拰鍙鍖栫紪杈戝叏閮ㄤ氦缁?PageBuilder 鍘熺敓娴佺▼銆?);
     }
 
     public function isEnabled(): bool
@@ -59,12 +59,12 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
             'preferred_editor' => 'pagebuilder',
             'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
             'provider_authority' => 'pagebuilder_native',
-            /** 与 PageBuilder can_publish 组合：1=域名就绪可发布，0=仅草稿 */
+            /** 涓?PageBuilder can_publish 缁勫悎锛?=鍩熷悕灏辩华鍙彂甯冿紝0=浠呰崏绋?*/
             'site_ready' => (int)($scope['site_ready'] ?? 1),
-            /** virtual_theme | html_blocks，全站二选一轨 */
-            'workspace_track' => \trim((string)($scope['workspace_track'] ?? 'virtual_theme')) !== 'html_blocks'
+            /** virtual_theme | html_block_nodes锛屽叏绔欎簩閫変竴杞?*/
+            'workspace_track' => \trim((string)($scope['workspace_track'] ?? 'virtual_theme')) !== 'html_block_nodes'
                 ? 'virtual_theme'
-                : 'html_blocks',
+                : 'html_block_nodes',
         ];
         if (($context['source'] ?? '') !== '') {
             $resolvedScope['created_from'] = (string)$context['source'];
@@ -77,13 +77,13 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
             : 'prepare';
 
         return [
-            'badge' => (string)__('PageBuilder 扩展'),
+            'badge' => (string)__('PageBuilder 鎵╁睍'),
             'target_url' => $nativeEntryUrl,
-            'target_label' => (string)__('进入 PageBuilder 原生流程'),
-            'workspace_label' => (string)__('创建 Websites 镜像工作区'),
-            'handoff_label' => (string)__('继续到 PageBuilder 原生工作台'),
+            'target_label' => (string)__('杩涘叆 PageBuilder 鍘熺敓娴佺▼'),
+            'workspace_label' => (string)__('鍒涘缓 Websites 闀滃儚宸ヤ綔鍖?),
+            'handoff_label' => (string)__('缁х画鍒?PageBuilder 鍘熺敓宸ヤ綔鍙?),
             'native_entry_url' => $nativeEntryUrl,
-            'welcome_message' => (string)__('已为你创建兼容 PageBuilder 的镜像工作区。这里继续收集站点准备信息，真正的虚拟主题和可视化编辑会在 PageBuilder 中完成。'),
+            'welcome_message' => (string)__('宸蹭负浣犲垱寤哄吋瀹?PageBuilder 鐨勯暅鍍忓伐浣滃尯銆傝繖閲岀户缁敹闆嗙珯鐐瑰噯澶囦俊鎭紝鐪熸鐨勮櫄鎷熶富棰樺拰鍙鍖栫紪杈戜細鍦?PageBuilder 涓畬鎴愩€?),
             'initial_stage' => $initialStage,
             'scope' => $resolvedScope,
             'provider_state' => [
@@ -94,9 +94,9 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
             ],
             'stage_guides' => [
                 'prepare' => [
-                    'description' => (string)__('先完成站点简介、目标域名、注册商选择等准备信息；目标域名补齐前不进入方案生成，然后把流程交给 PageBuilder。'),
-                    'ai_recommendation' => (string)__('AI 会先整理网站级资料输入，进入 PageBuilder 后再一次性生成草稿站点、虚拟主题、页面和可视化预览。'),
-                    'confirm_label' => (string)__('确认准备信息并进入 PageBuilder'),
+                    'description' => (string)__('鍏堝畬鎴愮珯鐐圭畝浠嬨€佺洰鏍囧煙鍚嶃€佹敞鍐屽晢閫夋嫨绛夊噯澶囦俊鎭紱鐩爣鍩熷悕琛ラ綈鍓嶄笉杩涘叆鏂规鐢熸垚锛岀劧鍚庢妸娴佺▼浜ょ粰 PageBuilder銆?),
+                    'ai_recommendation' => (string)__('AI 浼氬厛鏁寸悊缃戠珯绾ц祫鏂欒緭鍏ワ紝杩涘叆 PageBuilder 鍚庡啀涓€娆℃€х敓鎴愯崏绋跨珯鐐广€佽櫄鎷熶富棰樸€侀〉闈㈠拰鍙鍖栭瑙堛€?),
+                    'confirm_label' => (string)__('纭鍑嗗淇℃伅骞惰繘鍏?PageBuilder'),
                     'scope_patch' => [
                         'journey_stage' => 'prepare',
                         'preferred_editor' => 'pagebuilder',
@@ -104,11 +104,11 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                     ],
                 ],
                 'generate' => [
-                    'title' => (string)__('PageBuilder AI 建站'),
-                    'description' => (string)__('从这一步开始由 PageBuilder 原生工作区接管。虚拟主题、页面物化、可视化预览和编辑都以 PageBuilder 状态为准。'),
-                    'ai_recommendation_title' => (string)__('PageBuilder 原生闭环'),
-                    'ai_recommendation' => (string)__('进入 PageBuilder 后执行“虚拟主题编排”，系统会创建或恢复真实草稿站点，批量物化页面，并直接给出 preview/full?visual_editor=1 的真实可视化地址。'),
-                    'confirm_label' => (string)__('继续到 PageBuilder 原生工作台'),
+                    'title' => (string)__('PageBuilder AI 寤虹珯'),
+                    'description' => (string)__('浠庤繖涓€姝ュ紑濮嬬敱 PageBuilder 鍘熺敓宸ヤ綔鍖烘帴绠°€傝櫄鎷熶富棰樸€侀〉闈㈢墿鍖栥€佸彲瑙嗗寲棰勮鍜岀紪杈戦兘浠?PageBuilder 鐘舵€佷负鍑嗐€?),
+                    'ai_recommendation_title' => (string)__('PageBuilder 鍘熺敓闂幆'),
+                    'ai_recommendation' => (string)__('杩涘叆 PageBuilder 鍚庢墽琛屸€滆櫄鎷熶富棰樼紪鎺掆€濓紝绯荤粺浼氬垱寤烘垨鎭㈠鐪熷疄鑽夌绔欑偣锛屾壒閲忕墿鍖栭〉闈紝骞剁洿鎺ョ粰鍑?preview/full?visual_editor=1 鐨勭湡瀹炲彲瑙嗗寲鍦板潃銆?),
+                    'confirm_label' => (string)__('缁х画鍒?PageBuilder 鍘熺敓宸ヤ綔鍙?),
                     'tool_codes' => [
                         'open_pagebuilder_workspace',
                         'open_page_index',
@@ -119,14 +119,14 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                         'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
                     ],
                     'key_points' => [
-                        (string)__('草稿站点会先创建，后续发布仍是同一个 website_id'),
-                        (string)__('虚拟主题和页面都由 PageBuilder 服务层负责写入'),
-                        (string)__('可视化预览与编辑完全复用现有 preview/full 与 page/edit 核心'),
+                        (string)__('鑽夌绔欑偣浼氬厛鍒涘缓锛屽悗缁彂甯冧粛鏄悓涓€涓?website_id'),
+                        (string)__('铏氭嫙涓婚鍜岄〉闈㈤兘鐢?PageBuilder 鏈嶅姟灞傝礋璐ｅ啓鍏?),
+                        (string)__('鍙鍖栭瑙堜笌缂栬緫瀹屽叏澶嶇敤鐜版湁 preview/full 涓?page/edit 鏍稿績'),
                     ],
                 ],
                 'complete' => [
-                    'description' => (string)__('最后在 Websites 里只做镜像确认，真实发布仍针对同一个草稿站点。'),
-                    'ai_recommendation' => (string)__('优先回看镜像工作区里的可视化 iframe 和编辑器入口，确认 URLs 与 PageBuilder 原生工作区保持一致。'),
+                    'description' => (string)__('鏈€鍚庡湪 Websites 閲屽彧鍋氶暅鍍忕‘璁わ紝鐪熷疄鍙戝竷浠嶉拡瀵瑰悓涓€涓崏绋跨珯鐐广€?),
+                    'ai_recommendation' => (string)__('浼樺厛鍥炵湅闀滃儚宸ヤ綔鍖洪噷鐨勫彲瑙嗗寲 iframe 鍜岀紪杈戝櫒鍏ュ彛锛岀‘璁?URLs 涓?PageBuilder 鍘熺敓宸ヤ綔鍖轰繚鎸佷竴鑷淬€?),
                     'tool_codes' => [
                         'open_pagebuilder_workspace',
                         'open_website_management',
@@ -140,8 +140,8 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
             'tools' => [
                 [
                     'code' => 'open_pagebuilder_workspace',
-                    'label' => (string)__('打开 PageBuilder 工作台'),
-                    'description' => (string)__('进入 PageBuilder 原生 AI 建站工作区，继续虚拟主题和可视化编辑流程。'),
+                    'label' => (string)__('鎵撳紑 PageBuilder 宸ヤ綔鍙?),
+                    'description' => (string)__('杩涘叆 PageBuilder 鍘熺敓 AI 寤虹珯宸ヤ綔鍖猴紝缁х画铏氭嫙涓婚鍜屽彲瑙嗗寲缂栬緫娴佺▼銆?),
                     'type' => 'link',
                     'icon' => 'mdi mdi-view-dashboard-edit-outline',
                     'button_class' => 'btn-primary',
@@ -149,8 +149,8 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                 ],
                 [
                     'code' => 'open_domain_management',
-                    'label' => (string)__('管理域名'),
-                    'description' => (string)__('查看或处理 PageBuilder 侧的域名任务。'),
+                    'label' => (string)__('绠＄悊鍩熷悕'),
+                    'description' => (string)__('鏌ョ湅鎴栧鐞?PageBuilder 渚х殑鍩熷悕浠诲姟銆?),
                     'type' => 'link',
                     'icon' => 'mdi mdi-earth-box',
                     'button_class' => 'btn-outline-secondary',
@@ -158,8 +158,8 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                 ],
                 [
                     'code' => 'open_website_management',
-                    'label' => (string)__('管理站点'),
-                    'description' => (string)__('跳到 PageBuilder 的站点管理列表。'),
+                    'label' => (string)__('绠＄悊绔欑偣'),
+                    'description' => (string)__('璺冲埌 PageBuilder 鐨勭珯鐐圭鐞嗗垪琛ㄣ€?),
                     'type' => 'link',
                     'icon' => 'mdi mdi-sitemap-outline',
                     'button_class' => 'btn-outline-secondary',
@@ -167,8 +167,8 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                 ],
                 [
                     'code' => 'open_page_index',
-                    'label' => (string)__('打开页面列表'),
-                    'description' => (string)__('进入 PageBuilder 页面管理界面。'),
+                    'label' => (string)__('鎵撳紑椤甸潰鍒楄〃'),
+                    'description' => (string)__('杩涘叆 PageBuilder 椤甸潰绠＄悊鐣岄潰銆?),
                     'type' => 'link',
                     'icon' => 'mdi mdi-file-document-multiple-outline',
                     'button_class' => 'btn-outline-secondary',
@@ -176,8 +176,8 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                 ],
                 [
                     'code' => 'handoff_scope_site_ready',
-                    'label' => (string)__('写入 site_ready（域名门禁）'),
-                    'description' => (string)__('通过 Websites 会话 merge-scope 写入 site_ready=1 表示域名流程完成；0 时 PageBuilder 仅允许草稿。详见模块 doc 计划-AI建站工作台-Websites侧.md。'),
+                    'label' => (string)__('鍐欏叆 site_ready锛堝煙鍚嶉棬绂侊級'),
+                    'description' => (string)__('閫氳繃 Websites 浼氳瘽 merge-scope 鍐欏叆 site_ready=1 琛ㄧず鍩熷悕娴佺▼瀹屾垚锛? 鏃?PageBuilder 浠呭厑璁歌崏绋裤€傝瑙佹ā鍧?doc 璁″垝-AI寤虹珯宸ヤ綔鍙?Websites渚?md銆?),
                     'type' => 'link',
                     'icon' => 'mdi mdi-web-check',
                     'button_class' => 'btn-outline-secondary',
@@ -185,8 +185,8 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                 ],
                 [
                     'code' => 'handoff_scope_workspace_track',
-                    'label' => (string)__('说明：workspace_track 双轨'),
-                    'description' => (string)__('handoff 可带 workspace_track=html_blocks（默认 HTML 区块）或 virtual_theme（高级虚拟主题）。进入 PageBuilder 工作区后可在「阶段2」卡片切换。'),
+                    'label' => (string)__('璇存槑锛歸orkspace_track 鍙岃建'),
+                    'description' => (string)__('handoff 鍙甫 workspace_track=html_block_nodes锛堥粯璁?HTML 鍖哄潡锛夋垨 virtual_theme锛堥珮绾ц櫄鎷熶富棰橈級銆傝繘鍏?PageBuilder 宸ヤ綔鍖哄悗鍙湪銆岄樁娈?銆嶅崱鐗囧垏鎹€?),
                     'type' => 'link',
                     'icon' => 'mdi mdi-source-branch',
                     'button_class' => 'btn-outline-secondary',
@@ -200,7 +200,7 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
      * @param array<string, mixed>|null $sessionState
      * @param array<string, mixed> $scope
      */
-    private function resolveNativeEntryUrl(?array $sessionState, array $scope, string $legacyUrl): string
+    private function resolveNativeEntryUrl(?array $sessionState, array $scope, string $fallbackUrl): string
     {
         $workspaceUrl = \trim((string)($scope['pagebuilder_workspace_url'] ?? ''));
         if ($workspaceUrl !== '') {
@@ -217,6 +217,6 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
             return $this->url->getBackendUrl('websites/backend/site-builder-agent/pagebuilder-handoff', ['public_id' => $sessionPublicId]);
         }
 
-        return $legacyUrl;
+        return $fallbackUrl;
     }
 }

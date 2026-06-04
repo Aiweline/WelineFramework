@@ -200,7 +200,7 @@ class Page extends FrontendController
         
         $page = null;
 
-        // 预览和 rewrite 解码都优先按 page_id 精准加载页面，避免 handle 歧义导致命中旧模板
+        // 预览和 rewrite 解码都优先按 page_id 精准加载页面，避免 handle 歧义导致命中既有模板
         if ($requestedPageId > 0) {
             if ($isPreview) {
                 $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0');
@@ -225,7 +225,7 @@ class Page extends FrontendController
                 }
             }
         } elseif ($isPreview) {
-            // 预览模式但未带 page_id 时也禁止缓存，避免看到旧模板
+            // 预览模式但未带 page_id 时也禁止缓存，避免看到既有模板
             $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
             $response->setHeader('Pragma', 'no-cache');
             $response->setHeader('Expires', '0');
@@ -371,7 +371,7 @@ class Page extends FrontendController
                 
                 // 使用统一的 PageRenderService 渲染页面
                 // 这确保了可视化编辑器预览和正式上线页面的渲染逻辑完全一致
-                // 预览模式下允许通过 URL 的 style_code 临时覆盖模板，避免编辑器已切换模板但页面尚未保存时仍渲染旧模板
+                // 预览模式下允许通过 URL 的 style_code 临时覆盖模板，避免编辑器已切换模板但页面尚未保存时仍渲染既有模板
                 $tempStyleCode = null;
                 if ($isPreview && $previewStyleCode !== '') {
                     $previewStyle = clone $this->styleModel;

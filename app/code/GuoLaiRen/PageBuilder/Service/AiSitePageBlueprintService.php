@@ -97,7 +97,7 @@ final class AiSitePageBlueprintService
     }
 
     /**
-     * 客户在工作台填写的站点名称（唯一权威来源，不读描述/提示词/BuildPlan）。
+     * 客户在工作台填写的站点名称（唯一权威来源，不读描述/提示词/PlanJson）。
      *
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $scope
@@ -113,7 +113,7 @@ final class AiSitePageBlueprintService
     }
 
     /**
-     * 访客可见站点名：仅用客户填写的 site_title，或从域名推导；禁止用 user_description / brief / BuildPlan 充当标题。
+     * 访客可见站点名：仅用客户填写的 site_title，或从域名推导；禁止用 user_description / brief / PlanJson 充当标题。
      *
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $scope
@@ -137,11 +137,11 @@ final class AiSitePageBlueprintService
     public function buildSiteMarketingSummary(array $websiteProfile, array $scope = []): string
     {
         $siteDisplayName = $this->resolveSiteDisplayName($websiteProfile, $scope);
-        $buildPlanSummary = $this->resolveBuildPlanMarketingSummary($scope);
-        if ($buildPlanSummary !== '') {
-            return $siteDisplayName !== '' && !\str_contains($buildPlanSummary, $siteDisplayName)
-                ? $siteDisplayName . "\n" . $buildPlanSummary
-                : $buildPlanSummary;
+        $PlanJsonSummary = $this->resolvePlanJsonMarketingSummary($scope);
+        if ($PlanJsonSummary !== '') {
+            return $siteDisplayName !== '' && !\str_contains($PlanJsonSummary, $siteDisplayName)
+                ? $siteDisplayName . "\n" . $PlanJsonSummary
+                : $PlanJsonSummary;
         }
         $brief = $this->pickString(
             $websiteProfile['brief_description'] ?? null,
@@ -947,8 +947,8 @@ final class AiSitePageBlueprintService
             return $freshBrief;
         }
 
-        $legacy = \trim((string)($virtualPage['ai_description'] ?? ''));
-        return $this->sanitizeStoredAiDescription($legacy);
+        $stored = \trim((string)($virtualPage['ai_description'] ?? ''));
+        return $this->sanitizeStoredAiDescription($stored);
     }
 
     private function sanitizeStoredAiDescription(string $text): string
@@ -1144,13 +1144,12 @@ final class AiSitePageBlueprintService
     /**
      * @param array<string, mixed> $scope
      */
-    private function resolveBuildPlanSiteDisplayName(array $scope): string
+    private function resolvePlanJsonSiteDisplayName(array $scope): string
     {
-        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $siteBrief = \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [];
-        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
-        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $siteBrief = \is_array($planJson['site_brief'] ?? null) ? $planJson['site_brief'] : [];
+        $source = \is_array($planJson['source_of_truth'] ?? null) ? $planJson['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
         $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
 
         return $this->stripProfileLabelPrefix($this->pickString(
@@ -1163,13 +1162,12 @@ final class AiSitePageBlueprintService
     /**
      * @param array<string, mixed> $scope
      */
-    private function resolveBuildPlanMarketingSummary(array $scope): string
+    private function resolvePlanJsonMarketingSummary(array $scope): string
     {
-        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $siteBrief = \is_array($contract['site_brief'] ?? null) ? $contract['site_brief'] : [];
-        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
-        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $siteBrief = \is_array($planJson['site_brief'] ?? null) ? $planJson['site_brief'] : [];
+        $source = \is_array($planJson['source_of_truth'] ?? null) ? $planJson['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
         $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
         $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
 
@@ -1192,10 +1190,9 @@ final class AiSitePageBlueprintService
      */
     private function resolveScopePrimaryCtaLabel(array $scope, string $pageType, string $pageLabel): string
     {
-        $contract = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $source = \is_array($contract['source_of_truth'] ?? null) ? $contract['source_of_truth'] : [];
-        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $source = \is_array($planJson['source_of_truth'] ?? null) ? $planJson['source_of_truth'] : [];
+        $requirements = \is_array($source['user_requirements'] ?? null) ? $source['user_requirements'] : [];
         $requirementExpansion = \is_array($planJson['requirement_expansion'] ?? null) ? $planJson['requirement_expansion'] : [];
         $siteStrategy = \is_array($planJson['site_strategy'] ?? null) ? $planJson['site_strategy'] : [];
         $raw = $this->pickString(

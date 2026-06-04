@@ -13,10 +13,7 @@ class AiSiteAgentRegeneratePageOperationService
 {
     private const REGENERATE_PAGE_SCOPE_ARTIFACT_KEYS = [
         'plan_json',
-        'build_plan_v2',
-        'plan_projection',
         'content_manifest',
-        'build_workbench',
         'build_contracts',
         'render_data_contract',
         'task_results',
@@ -36,7 +33,7 @@ class AiSiteAgentRegeneratePageOperationService
     ): array {
         ($ports->assertActiveStreamLeaseAlive)($session, $adminId);
         if ($pageType === '') {
-            throw new \RuntimeException((string)__('缺少要重建的页面类型'));
+            throw new \RuntimeException((string)__('Missing page type for regeneration.'));
         }
         /** @var AiSiteAgentSessionService $sessionService */
         $sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
@@ -49,7 +46,7 @@ class AiSiteAgentRegeneratePageOperationService
         );
         $pageTypes = ($ports->resolveScopedPageTypes)($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
-            throw new \RuntimeException((string)__('页面类型不在当前工作区中'));
+            throw new \RuntimeException((string)__('Selected page is not available for regeneration.'));
         }
         $scope['website_profile'] = ($ports->generateProfile)($scope);
         $scope = ($ports->ensureTaskScope)($scope, \is_array($scope['website_profile']) ? $scope['website_profile'] : [], (string)($scope['workspace_track'] ?? ''));
@@ -58,13 +55,13 @@ class AiSiteAgentRegeneratePageOperationService
         $workspaceTrack = ($ports->normalizeWorkspaceTrack)((string)($scope['workspace_track'] ?? ''));
         $pageLabel = (string)((($ports->resolvePageTypeLabels)()[$pageType] ?? $pageType));
 
-        if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
-            ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('正在重建页面：%{page}', ['page' => $pageLabel]), 20, $pageType);
+        if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES) {
+            ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('Regenerating page: {page}', ['page' => $pageLabel]), 20, $pageType);
             $virtualPages = ($ports->buildVirtualPagesByType)($pageTypes, $scope);
             $blueprint = ($ports->buildPageBlueprint)($pageType, $scope, $scope['website_profile']);
             $blocks = ($ports->buildPlaceholderBlocksForPageType)($pageType, $scope['website_profile'], $scope);
             $row = $virtualPages[$pageType] ?? [];
-            $row['blocks'] = $blocks;
+            $row['block_nodes'] = $blocks;
             $row['last_generated_at'] = \date('Y-m-d H:i:s');
             $row['title'] = (string)($blueprint['page_title'] ?? ($row['title'] ?? ''));
             $row['ai_description'] = (string)($blueprint['ai_description'] ?? ($row['ai_description'] ?? ''));
@@ -90,7 +87,7 @@ class AiSiteAgentRegeneratePageOperationService
             $scope['virtual_pages_by_type'] = $virtualPages;
             $scope['preview_page_type'] = $pageType;
             $materialized = ($ports->materializeGeneratedPages)(
-                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
+                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
                 \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
                 $scope['website_profile'],
                 \array_keys($virtualPages),
@@ -98,18 +95,18 @@ class AiSiteAgentRegeneratePageOperationService
                 $virtualPages
             );
             $scope = ($ports->mergeMaterializedPagesIntoScope)($scope, $materialized);
-            $scope['build_plan_execution_summary'] = ($ports->summarizeBuildTasks)($scope);
+            $scope['plan_json_execution_summary'] = ($ports->summarizePlanJsonTasks)($scope);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
-            $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('页面区块已重建')]);
+            $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('Page blocks regenerated')]);
             ($ports->replaceScope)($session->getId(), $adminId, $scope);
-            ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('页面重建完成'), 100, $pageType);
+            ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('Page regeneration complete'), 100, $pageType);
 
             ($ports->appendWorkspaceEvent)(
                 $session->getId(),
                 $adminId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
                 'page_generated',
-                (string)__('页面已重建：%{page}', ['page' => $pageLabel]),
+                (string)__('Page regenerated: {page}', ['page' => $pageLabel]),
                 [
                     'operation' => 'regenerate_page',
                     'page_type' => $pageType,
@@ -119,10 +116,10 @@ class AiSiteAgentRegeneratePageOperationService
                 ]
             );
 
-            return ['message' => (string)__('页面重建完成'), 'page_type' => $pageType, 'virtual_theme_id' => 0];
+            return ['message' => (string)__('Page regeneration complete'), 'page_type' => $pageType, 'virtual_theme_id' => 0];
         }
 
-        ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('正在重建页面：%{page}', ['page' => $pageLabel]), 20, $pageType);
+        ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('Regenerating page: {page}', ['page' => $pageLabel]), 20, $pageType);
         $pageTypeLayouts = ($ports->normalizePageTypeLayouts)($scope['page_type_layouts'] ?? [], $pageTypes);
         $pageTypeLayouts[$pageType] = ($ports->normalizeLayoutConfig)([], $pageType);
 
@@ -160,9 +157,9 @@ class AiSiteAgentRegeneratePageOperationService
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope['preview_page_type'] = $pageType;
         $scope = $this->dropPrePublishMaterializedPagesFromVirtualThemeScope($scope, $session);
-        $scope['build_plan_execution_summary'] = ($ports->summarizeBuildTasks)($scope);
+        $scope['plan_json_execution_summary'] = ($ports->summarizePlanJsonTasks)($scope);
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
-        $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('页面重建完成')]);
+        $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('Page regeneration complete')]);
 
         ($ports->replaceScope)($session->getId(), $adminId, $scope);
         ($ports->bindVirtualTheme)($session->getId(), $adminId, (int)$theme['virtual_theme_id']);
@@ -171,7 +168,7 @@ class AiSiteAgentRegeneratePageOperationService
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'page_generated',
-            (string)__('页面已重建：%{page}', ['page' => $pageLabel]),
+            (string)__('Page regenerated: {page}', ['page' => $pageLabel]),
             [
                 'operation' => 'regenerate_page',
                 'page_type' => $pageType,
@@ -182,8 +179,8 @@ class AiSiteAgentRegeneratePageOperationService
             ]
         );
 
-        ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('页面重建完成，可继续调整组件'), 100, $pageType);
-        return ['message' => (string)__('页面重建完成'), 'page_type' => $pageType, 'virtual_theme_id' => (int)$theme['virtual_theme_id']];
+        ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('Page regeneration complete; you can continue editing components'), 100, $pageType);
+        return ['message' => (string)__('Page regeneration complete'), 'page_type' => $pageType, 'virtual_theme_id' => (int)$theme['virtual_theme_id']];
     }
 
     /**

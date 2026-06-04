@@ -37,11 +37,9 @@ final class AiSiteDesignDirectorServiceTest extends TestCase
             ],
             [
                 'home_page' => [
-                    'blocks' => [
-                        ['page_flow_role' => 'opening'],
-                        ['page_flow_role' => 'proof'],
-                        ['page_flow_role' => 'details'],
-                    ],
+                    'hero' => ['page_flow_role' => 'opening'],
+                    'proof' => ['page_flow_role' => 'proof'],
+                    'details' => ['page_flow_role' => 'details'],
                 ],
             ],
             [
@@ -129,11 +127,9 @@ final class AiSiteDesignDirectorServiceTest extends TestCase
             [],
             [
                 'home_page' => [
-                    'blocks' => [
-                        ['page_flow_role' => 'opening'],
-                        ['page_flow_role' => 'proof'],
-                        ['page_flow_role' => 'details'],
-                    ],
+                    'hero' => ['page_flow_role' => 'opening'],
+                    'proof' => ['page_flow_role' => 'proof'],
+                    'details' => ['page_flow_role' => 'details'],
                 ],
             ]
         );

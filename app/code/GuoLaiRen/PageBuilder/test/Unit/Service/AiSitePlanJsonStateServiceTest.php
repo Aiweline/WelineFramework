@@ -16,27 +16,25 @@ final class AiSitePlanJsonStateServiceTest extends TestCase
         $plan = $service->normalizePlanJson([
             'design' => ['content' => 'Visual direction'],
             'pages' => [
-                'home' => [
-                    'blocks' => [
-                        ['block_key' => 'hero', 'status' => 'generating'],
-                        ['block_key' => 'proof', 'content' => 'Trust proof'],
-                        ['block_key' => 'cta', 'error_message' => 'copy failed'],
-                    ],
+                'home_page' => [
+                    'hero' => ['status' => 'generating'],
+                    'proof' => ['content' => 'Trust proof'],
+                    'cta' => ['error_message' => 'copy failed'],
                 ],
             ],
         ]);
         $summary = $service->buildStatusSummary($plan);
 
-        self::assertSame('done', $plan['design']['status'] ?? null);
-        self::assertSame('running', $plan['pages']['home']['status'] ?? null);
-        self::assertSame('running', $plan['pages']['home']['blocks'][0]['status'] ?? null);
-        self::assertSame('done', $plan['pages']['home']['blocks'][1]['status'] ?? null);
-        self::assertSame('failed', $plan['pages']['home']['blocks'][2]['status'] ?? null);
+        self::assertSame(1, $plan['design']['status'] ?? null);
+        self::assertSame(2, $plan['pages']['home_page']['status'] ?? null);
+        self::assertSame(2, $plan['pages']['home_page']['hero']['status'] ?? null);
+        self::assertSame(1, $plan['pages']['home_page']['proof']['status'] ?? null);
+        self::assertSame(-1, $plan['pages']['home_page']['cta']['status'] ?? null);
         self::assertSame(1, $summary['design']['done']);
         self::assertSame(1, $summary['pages']['running']);
-        self::assertSame(1, $summary['blocks']['running']);
-        self::assertSame(1, $summary['blocks']['done']);
-        self::assertSame(1, $summary['blocks']['failed']);
+        self::assertSame(1, $summary['block_nodes']['running']);
+        self::assertSame(1, $summary['block_nodes']['done']);
+        self::assertSame(1, $summary['block_nodes']['failed']);
     }
 
     public function testFingerprintIsStableWhenNodesHaveNoUpdatedAt(): void
@@ -44,10 +42,8 @@ final class AiSitePlanJsonStateServiceTest extends TestCase
         $service = new AiSitePlanJsonStateService();
         $plan = [
             'pages' => [
-                'home' => [
-                    'blocks' => [
-                        ['block_key' => 'hero', 'status' => 'pending'],
-                    ],
+                'home_page' => [
+                    'hero' => ['status' => 0],
                 ],
             ],
         ];
@@ -63,15 +59,11 @@ final class AiSitePlanJsonStateServiceTest extends TestCase
             'pages' => [
                 [
                     'page_type' => 'home_page',
-                    'blocks' => [
-                        ['block_key' => 'hero', 'content' => 'Home hero'],
-                    ],
+                    'hero' => ['content' => 'Home hero'],
                 ],
                 [
                     'type' => 'about_page',
-                    'blocks' => [
-                        ['block_key' => 'intro', 'content' => 'About intro'],
-                    ],
+                    'intro' => ['content' => 'About intro'],
                 ],
             ],
         ]);
@@ -89,10 +81,47 @@ final class AiSitePlanJsonStateServiceTest extends TestCase
         $service = new AiSitePlanJsonStateService();
 
         $paths = $service->changedPaths(
-            ['pages' => ['home' => ['status' => 'running']]],
-            ['pages' => ['home' => ['status' => 'done']]]
+            ['pages' => ['home_page' => ['hero' => ['status' => 2]]]],
+            ['pages' => ['home_page' => ['hero' => ['status' => 1]]]]
         );
 
-        self::assertContains('plan_json.pages.home.status', $paths);
+        self::assertContains('plan_json.pages.home_page.hero.status', $paths);
+    }
+
+    public function testNormalizeKeepsDynamicBlockNodes(): void
+    {
+        $service = new AiSitePlanJsonStateService(42);
+
+        $plan = $service->normalizePlanJson([
+            'confirmed' => 1,
+            'pages' => [
+                'home_page' => [
+                    'page_type' => 'home_page',
+                    'hero' => ['status' => 0],
+                ],
+            ],
+        ]);
+
+        self::assertSame(1, $plan['confirmed']);
+        self::assertArrayHasKey('hero', $plan['pages']['home_page']);
+    }
+
+    public function testSessionEditorScopePatchPersistsOnlyPlanJsonState(): void
+    {
+        $service = new AiSitePlanJsonStateService(2317);
+
+        $patch = $service->setConfirmedScopePatch([
+            'confirmed' => 0,
+            'pages' => [
+                'home_page' => [
+                    'hero' => ['status' => 0],
+                ],
+            ],
+        ], true);
+
+        self::assertSame(2317, $service->sessionId());
+        self::assertSame(2317, $patch['plan_json_editor']['session_id']);
+        self::assertSame(1, $patch['plan_json']['confirmed']);
+        self::assertSame(0, $patch['plan_json']['pages']['home_page']['hero']['status']);
     }
 }

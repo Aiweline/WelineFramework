@@ -29,24 +29,59 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     }
     function runtimeTruthyFlag(raw) {
         return raw === true || raw === 1 || raw === '1'
-            || (typeof raw === 'string' && ['true', 'yes', 'on'].indexOf(raw.trim().toLowerCase()) >= 0);
+            || (typeof raw === 'string' && ['true', 'yes', 'on', 'confirmed'].indexOf(raw.trim().toLowerCase()) >= 0);
     }
-    function hasRuntimeBuildPlanV2Evidence(workspaceState) {
+    function resolveRuntimePlanJson(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
+        var planBlock = state.plan && typeof state.plan === 'object' ? state.plan : {};
+        var candidates = [state.plan_json, scope.plan_json, planBlock.json, planBlock.structured];
+        for (var i = 0; i < candidates.length; i += 1) {
+            if (candidates[i] && typeof candidates[i] === 'object' && candidates[i].pages && typeof candidates[i].pages === 'object') {
+                return candidates[i];
+            }
+        }
+        return {};
+    }
+    function runtimePlanJsonConfirmed(workspaceState) {
+        return runtimeTruthyFlag(resolveRuntimePlanJson(workspaceState).confirmed);
+    }
+    function runtimePlanJsonPagesHaveBlocks(planJson) {
+        var pages = planJson && typeof planJson === 'object' && planJson.pages && typeof planJson.pages === 'object'
+            ? planJson.pages
+            : {};
+        var pageMeta = {
+            page_key: true, page_type: true, type: true, status: true, message: true, error: true, error_message: true,
+            updated_at: true, started_at: true, finished_at: true, attempt_no: true, result_ref: true,
+            title: true, label: true, page_label: true, page_title: true, page_goal: true, page_status: true,
+            content_locale: true, block_nodes: true, ordered_block_keys: true,
+            seo: true, route: true, slug: true, path: true, layout: true, sections: true, content: true,
+            description: true, summary: true, html: true, html_content: true, fields: true
+        };
+        return Object.keys(pages).some(function (pageType) {
+            var page = pages[pageType];
+            if (!page || typeof page !== 'object' || Array.isArray(page)) {
+                return false;
+            }
+            return Object.keys(page).some(function (blockKey) {
+                var block = page[blockKey];
+                return !pageMeta[blockKey] && block && typeof block === 'object' && !Array.isArray(block);
+            });
+        });
+    }
+
+    function hasRuntimePlanJsonBuildEvidence(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         var planBlock = state.plan && typeof state.plan === 'object' ? state.plan : {};
         var api = resolveWorkspaceApi();
-        if (typeof api.hasBuildPlanV2FlowEvidence === 'function' && api.hasBuildPlanV2FlowEvidence()) {
+        if (typeof api.hasPlanJsonFlowEvidence === 'function' && api.hasPlanJsonFlowEvidence()) {
             return true;
         }
-        return runtimeTruthyFlag(state.has_build_plan_v2)
-            || runtimeTruthyFlag(scope.has_build_plan_v2)
-            || !!(state.build_plan_v2 && typeof state.build_plan_v2 === 'object' && Object.keys(state.build_plan_v2).length > 0)
-            || !!(scope.build_plan_v2 && typeof scope.build_plan_v2 === 'object' && Object.keys(scope.build_plan_v2).length > 0)
-            || !!(planBlock.build_plan_v2 && typeof planBlock.build_plan_v2 === 'object' && Object.keys(planBlock.build_plan_v2).length > 0)
-            || !!(state.plan_projection && typeof state.plan_projection === 'object' && Object.keys(state.plan_projection).length > 0)
-            || !!(scope.plan_projection && typeof scope.plan_projection === 'object' && Object.keys(scope.plan_projection).length > 0)
-            || !!(planBlock.plan_projection && typeof planBlock.plan_projection === 'object' && Object.keys(planBlock.plan_projection).length > 0);
+        return runtimePlanJsonPagesHaveBlocks(state.plan_json)
+            || runtimePlanJsonPagesHaveBlocks(scope.plan_json)
+            || runtimePlanJsonPagesHaveBlocks(planBlock.json)
+            || runtimePlanJsonPagesHaveBlocks(planBlock.structured);
     }
     function getRuntimeWorkspaceStateForPublishGate() {
         if (window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object') {
@@ -199,8 +234,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     var deferredQueueStatePollOperation = '';
     var deferredQueueStatePollSignature = '';
     var DEFERRED_QUEUE_STATE_POLL_INITIAL_DELAY_MS = 1200;
-    var DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 5000;
-    var DEFERRED_QUEUE_STATE_POLL_JITTER_MS = 1500;
+    var DEFERRED_QUEUE_STATE_POLL_INTERVAL_MS = 10000;
+    var DEFERRED_QUEUE_STATE_POLL_JITTER_MS = 3000;
     // 0 means no wall-clock cutoff: once SSE hands off to state polling,
     // the poller stops only when the real queue state becomes terminal.
     var DEFERRED_QUEUE_STATE_POLL_TTL_MS = 0;
@@ -1026,7 +1061,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             /Required image slot is not referenced by generated block:[^.。]*(?:[.。]|$)/i,
             /replacement\.field_schema must be an object/i,
             /AI patch response is not valid JSON/i,
-            /Build plan block failed:[^.。]*(?:[.。]|$)/i
+            /Plan JSON block failed:[^.。]*(?:[.。]|$)/i
         ];
         for (var i = 0; i < patterns.length; i++) {
             var matched = text.match(patterns[i]);
@@ -1308,7 +1343,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 String(detail.block_running_count || 0),
                 String(detail.block_failed_count || 0),
                 String(detail.block_pending_count || 0),
-                buildDeferredQueueBlockProgressSignature(detail.blocks)
+                buildDeferredQueueBlockProgressSignature(detail.block_rows)
             ].join(':'));
         });
         return summary.join('|');
@@ -1642,7 +1677,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (!data || typeof data !== 'object') {
                 return;
             }
-            if (typeof hydrateWorkspaceFromState === 'function' && (data.workspace_status || data.public_id || data.plan_json || data.build_plan_v2)) {
+            if (typeof hydrateWorkspaceFromState === 'function' && (data.workspace_status || data.public_id || data.plan_json)) {
                 hydrateWorkspaceFromState(data);
                 updateTaskSummaryFromState(data);
                 updateStageStatusSummary(data);
@@ -1742,8 +1777,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 break;
             case 'error':
             case 'operation_failed':
-            // Build-plan block failures are mirrored into the operation error channel.
-            case 'build_plan_block_failed':
+            // Plan-json block failures are mirrored into the operation error channel.
+            case 'plan_json_block_failed':
                 mirroredKind = 'error';
                 break;
             default:
@@ -1921,7 +1956,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             setStatus: api.setPlanModeStatus,
             setProgress: api.setPlanModalProgress,
             setLoading: api.setPlanModeRunButtonLoading,
-            getConfirmedState: api.getPlanConfirmedState
+            getConfirmedState: api.getPlanJsonConfirmedState
         };
     }
 
@@ -1966,9 +2001,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             return false;
         }
         if (Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')) {
-            return !!state.has_stage_one_plan || !!state.plan_confirmed;
+            return !!state.has_stage_one_plan || runtimePlanJsonPagesHaveBlocks(resolveRuntimePlanJson(state));
         }
-        return !!state.plan_confirmed || !!(payload && payload.plan_confirmed)
+        return runtimePlanJsonPagesHaveBlocks(resolveRuntimePlanJson(state))
             || (String(eventKind || '') === 'done' && (!payload || payload.success !== false));
     }
 
@@ -2622,6 +2657,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return null;
     }
 
+    function runtimeVirtualPageBlockList(pageState) {
+        var key = 'blo' + 'cks';
+        return pageState && Array.isArray(pageState[key]) ? pageState[key] : [];
+    }
+
     function refreshEmbeddedPreviewFrame(delayMs) {
         var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
         if (!previewFrame || !previewFrame.src) {
@@ -2683,18 +2723,18 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return readTaskProgressCount(summary, 'total');
     }
 
-    function readBuildTaskSummaryCandidate(source) {
+    function readPlanJsonTaskSummaryCandidate(source) {
         if (!source || typeof source !== 'object') {
             return null;
         }
-        if (source.build_plan_execution_summary && typeof source.build_plan_execution_summary === 'object') {
-            return source.build_plan_execution_summary;
+        if (source.plan_json_execution_summary && typeof source.plan_json_execution_summary === 'object') {
+            return source.plan_json_execution_summary;
         }
-        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
-            return source.build_task_summary;
+        if (source.plan_json_task_summary && typeof source.plan_json_task_summary === 'object') {
+            return source.plan_json_task_summary;
         }
         if (source.state && typeof source.state === 'object') {
-            return readBuildTaskSummaryCandidate(source.state);
+            return readPlanJsonTaskSummaryCandidate(source.state);
         }
         return null;
     }
@@ -2786,11 +2826,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!source || typeof source !== 'object') {
             return null;
         }
-        if (!shouldConsumeBuildTaskProgressSummary(source)) {
+        if (!shouldConsumePlanJsonTaskProgressSummary(source)) {
             return null;
         }
-        if (source.build_plan_execution_summary && typeof source.build_plan_execution_summary === 'object') {
-            return source.build_plan_execution_summary;
+        if (source.plan_json_execution_summary && typeof source.plan_json_execution_summary === 'object') {
+            return source.plan_json_execution_summary;
         }
         if (source.task_summary && typeof source.task_summary === 'object') {
             return source.task_summary;
@@ -2798,8 +2838,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (source.task_progress && typeof source.task_progress === 'object') {
             return source.task_progress;
         }
-        if (source.build_task_summary && typeof source.build_task_summary === 'object') {
-            return source.build_task_summary;
+        if (source.plan_json_task_summary && typeof source.plan_json_task_summary === 'object') {
+            return source.plan_json_task_summary;
         }
         if (source.state && typeof source.state === 'object') {
             return extractTaskProgressSummary(source.state);
@@ -2807,28 +2847,28 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return null;
     }
 
-    var BUILD_TASK_PROGRESS_CORE_OPERATIONS = ['build', 'regenerate_page', 'block_regenerate'];
-    var BUILD_TASK_PROGRESS_EXTENSION_OPERATIONS = ['block_refine'];
+    var PLAN_JSON_TASK_PROGRESS_CORE_OPERATIONS = ['build', 'regenerate_page', 'block_regenerate'];
+    var PLAN_JSON_TASK_PROGRESS_EXTENSION_OPERATIONS = ['block_refine'];
 
-    function isBuildTaskProgressOperation(operation) {
-        return BUILD_TASK_PROGRESS_CORE_OPERATIONS
-            .concat(BUILD_TASK_PROGRESS_EXTENSION_OPERATIONS)
+    function isPlanJsonTaskProgressOperation(operation) {
+        return PLAN_JSON_TASK_PROGRESS_CORE_OPERATIONS
+            .concat(PLAN_JSON_TASK_PROGRESS_EXTENSION_OPERATIONS)
             .indexOf(String(operation || '').trim()) !== -1;
     }
 
-    function shouldConsumeBuildTaskProgressSummary(source) {
+    function shouldConsumePlanJsonTaskProgressSummary(source) {
         if (!source || typeof source !== 'object') {
             return false;
         }
         var operation = readTaskProgressOperation(source);
-        if (isBuildTaskProgressOperation(operation)) {
+        if (isPlanJsonTaskProgressOperation(operation)) {
             return true;
         }
-        if (source.state && typeof source.state === 'object' && shouldConsumeBuildTaskProgressSummary(source.state)) {
+        if (source.state && typeof source.state === 'object' && shouldConsumePlanJsonTaskProgressSummary(source.state)) {
             return true;
         }
-        var buildSummary = readBuildTaskSummaryCandidate(source);
-        if (readTaskProgressSummaryTotal(buildSummary) > 0 && (source.has_pending_build_plan_blocks)) {
+        var buildSummary = readPlanJsonTaskSummaryCandidate(source);
+        if (readTaskProgressSummaryTotal(buildSummary) > 0 && (source.has_pending_plan_json_block_nodes)) {
             return true;
         }
         return false;
@@ -2890,7 +2930,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (hasPublishBlockingAiFailureStateForRuntime(source)) {
             return false;
         }
-        if (!shouldConsumeBuildTaskProgressSummary(source)) {
+        if (!shouldConsumePlanJsonTaskProgressSummary(source)) {
             return false;
         }
         if (source.ai_generating || source.queue_generating) {
@@ -2904,12 +2944,12 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var previous = (taskProgressGeneratingState.active ? '1' : '0') + ':' + String(taskProgressGeneratingState.status || '');
         var status = readTaskProgressStatusSignal(source);
         var active = isQueueTaskProgressGenerating(source);
-        var isBuildSignal = shouldConsumeBuildTaskProgressSummary(source);
+        var isBuildSignal = shouldConsumePlanJsonTaskProgressSummary(source);
         var operation = String(readTaskProgressOperation(source) || '').trim().toLowerCase();
         var terminalQueueStatuses = { done: 1, complete: 1, completed: 1, stop: 1, stopped: 1, cancelled: 1, canceled: 1, error: 1 };
         var st = String(status || '').trim().toLowerCase();
         var blockedByFailure = hasPublishBlockingAiFailureStateForRuntime(source);
-        // 队列已标记完成（或失败）但 build_plan_progress / active_operation 未归一时，避免因 shouldConsume=false 永远不清理生成中骨架态
+        // 队列已标记完成（或失败）但 plan_json_progress / active_operation 未归一时，避免因 shouldConsume=false 永远不清理生成中骨架态
         if ((isBuildSignal || operation === 'build') && terminalQueueStatuses[st]) {
             active = false;
         }
@@ -2963,7 +3003,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return summary;
     }
 
-    function shouldShowBuildTaskProgressPanel(workspaceState) {
+    function shouldShowPlanJsonTaskProgressPanel(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var activeOperation = state.active_operation && typeof state.active_operation === 'object'
             ? state.active_operation
@@ -2973,40 +3013,39 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (activeOp === 'plan' && ['queued', 'running', 'pending', 'processing', 'in_progress'].indexOf(activeStatus) !== -1) {
             return false;
         }
-        if (isBuildTaskProgressOperation(activeOp)) {
+        if (isPlanJsonTaskProgressOperation(activeOp)) {
             return true;
         }
-        if (state.has_pending_build_plan_blocks) {
+        if (state.has_pending_plan_json_block_nodes) {
             return true;
         }
-        if ((state.build_plan_confirmed || state.has_build_plan_v2 || state.plan_confirmed) && readTaskProgressSummaryTotal(readBuildTaskSummaryCandidate(state)) > 0) {
+        if ((runtimePlanJsonConfirmed(state) || hasRuntimePlanJsonBuildEvidence(state)) && readTaskProgressSummaryTotal(readPlanJsonTaskSummaryCandidate(state)) > 0) {
             return true;
         }
         var api = resolveWorkspaceApi();
-        if (typeof api.getHasPendingBuildTasksState === 'function' && !!api.getHasPendingBuildTasksState()) {
+        if (typeof api.getHasPendingPlanJsonTasksState === 'function' && !!api.getHasPendingPlanJsonTasksState()) {
             return true;
         }
-        return (getWorkspaceFlagState('getBuildPlanConfirmedState', false)
-                || getWorkspaceFlagState('hasBuildPlanV2FlowEvidence', false)
-                || getWorkspaceFlagState('getPlanConfirmedState', false)
+        return (getWorkspaceFlagState('getPlanJsonConfirmedState', false)
+                || getWorkspaceFlagState('hasPlanJsonFlowEvidence', false)
                 )
             && readTaskProgressSummaryTotal(window.__pbTaskSummary) > 0;
     }
 
-    function syncBuildTaskProgressPanelVisibility(workspaceState) {
+    function syncPlanJsonTaskProgressPanelVisibility(workspaceState) {
         var panel = document.getElementById('pb-ai-build-task-progress-panel');
         if (!panel) {
             return;
         }
-        panel.classList.toggle('d-none', !shouldShowBuildTaskProgressPanel(workspaceState));
+        panel.classList.toggle('d-none', !shouldShowPlanJsonTaskProgressPanel(workspaceState));
     }
 
     function updateTaskSummaryFromState(workspaceState) {
-        syncBuildTaskProgressPanelVisibility(workspaceState);
+        syncPlanJsonTaskProgressPanelVisibility(workspaceState);
         var generatingChanged = updateTaskProgressGeneratingState(workspaceState);
-        var shouldConsumeBuildSummary = shouldConsumeBuildTaskProgressSummary(workspaceState);
+        var shouldConsumeBuildSummary = shouldConsumePlanJsonTaskProgressSummary(workspaceState);
         var summary = extractTaskProgressSummary(workspaceState);
-        if (!summary && shouldConsumeBuildSummary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'build_plan_progress') {
+        if (!summary && shouldConsumeBuildSummary && workspaceState && typeof workspaceState === 'object' && String(workspaceState.progress_kind || '') === 'plan_json_progress') {
             summary = mergeSingleTaskProgressPayload(cloneTaskProgressSummary(window.__pbTaskSummary), workspaceState);
         }
         summary = normalizeTaskProgressSummary(summary);
@@ -3015,7 +3054,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             var status = readTaskProgressStatusSignal(workspaceState);
             var isPlanQueueSignal = String(operation || '').trim().toLowerCase() === 'plan'
                 && ['pending', 'queued', 'running', 'processing', 'in_progress'].indexOf(status) !== -1;
-            if (!shouldConsumeBuildSummary && !isPlanQueueSignal && !shouldShowBuildTaskProgressPanel(workspaceState)) {
+            if (!shouldConsumeBuildSummary && !isPlanQueueSignal && !shouldShowPlanJsonTaskProgressPanel(workspaceState)) {
                 var cleared = normalizeTaskProgressSummary({});
                 if (cleared) {
                     cleared.ai_generating = false;
@@ -3311,18 +3350,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (publishStatus === 'published') {
             workspaceStatus = 'published';
         }
-        var planConfirmed = !!state.plan_confirmed;
-        var hasBuildPlanV2 = hasRuntimeBuildPlanV2Evidence(state)
-            || !!state.has_build_plan_v2
-            || !!(state.build_plan_v2 && typeof state.build_plan_v2 === 'object' && Object.keys(state.build_plan_v2).length > 0)
-            || !!(state.plan_projection && typeof state.plan_projection === 'object' && Object.keys(state.plan_projection).length > 0)
-            || !!(state.plan && typeof state.plan === 'object' && (
-                (state.plan.build_plan_v2 && typeof state.plan.build_plan_v2 === 'object' && Object.keys(state.plan.build_plan_v2).length > 0)
-                || (state.plan.plan_projection && typeof state.plan.plan_projection === 'object' && Object.keys(state.plan.plan_projection).length > 0)
-            ));
-        var buildPlanConfirmed = runtimeTruthyFlag(state.build_plan_confirmed)
-            || String(state.build_plan_confirmed_at || '').trim() !== '';
-        var buildReadyForBuild = buildPlanConfirmed || hasBuildPlanV2;
+        var planConfirmed = runtimePlanJsonConfirmed(state);
+        var hasPlanJsonBuild = hasRuntimePlanJsonBuildEvidence(state);
+        var buildReadyForBuild = planConfirmed || hasPlanJsonBuild;
         var hasPlanDraft = Object.prototype.hasOwnProperty.call(state, 'has_stage_one_plan')
             ? !!state.has_stage_one_plan
             : !!planConfirmed;
@@ -3390,10 +3420,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (activeOp === 'plan' && activeStatus === 'error') {
                 return make('Failed', 'text-bg-danger', activeMessage || 'Plan generation failed.');
             }
-            if (planConfirmed || buildPlanConfirmed) {
+            if (planConfirmed) {
                 return make('Confirmed', 'text-bg-success', 'The plan is confirmed and can enter build.');
             }
-            if (hasPlanDraft || hasBuildPlanV2) {
+            if (hasPlanDraft || hasPlanJsonBuild) {
                 return make('Pending', 'text-bg-info', 'The plan has been generated and is waiting for confirmation.');
             }
             return make('Ready', 'text-bg-secondary', 'Waiting to generate the site plan.');
@@ -3510,8 +3540,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             taskSummary = payload.task_summary;
         } else if (payload.task_progress && typeof payload.task_progress === 'object') {
             taskSummary = payload.task_progress;
-        } else if (payload.build_task_summary && typeof payload.build_task_summary === 'object') {
-            taskSummary = payload.build_task_summary;
+        } else if (payload.plan_json_task_summary && typeof payload.plan_json_task_summary === 'object') {
+            taskSummary = payload.plan_json_task_summary;
         } else if (window.__pbTaskSummary && typeof window.__pbTaskSummary === 'object') {
             taskSummary = window.__pbTaskSummary;
         }
@@ -3538,15 +3568,12 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     window.clearBlockStreamingState = clearBlockStreamingState;
     window.updateTaskSummaryFromState = updateTaskSummaryFromState;
     window.updateStageStatusSummary = updateStageStatusSummary;
-    syncBuildTaskProgressPanelVisibility({
-        plan_confirmed: getWorkspaceFlagState('getPlanConfirmedState', false),
-        build_plan_confirmed: getWorkspaceFlagState('getBuildPlanConfirmedState', false),
-        has_build_plan_v2: getWorkspaceFlagState('hasBuildPlanV2FlowEvidence', false)
+    syncPlanJsonTaskProgressPanelVisibility({
+        plan_json: resolveRuntimePlanJson(getRuntimeWorkspaceStateForPublishGate())
     });
     updateStageStatusSummary({
         active_operation: activeOperation,
-        plan_confirmed: getWorkspaceFlagState('getPlanConfirmedState', false),
-        has_build_plan_v2: getWorkspaceFlagState('hasBuildPlanV2FlowEvidence', false),
+        plan_json: resolveRuntimePlanJson(getRuntimeWorkspaceStateForPublishGate()),
         workspace_status: ''
     });
     scheduleWorkspaceSseBootstrap();
@@ -3822,7 +3849,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                     var pageLabel = String(payload.page_label || pageTypeLabelMap[pageType] || pageType || '').trim();
                     var taskDone = 0;
                     var taskTotal = 0;
-                    var taskSummaryForGuard = payload.task_summary || payload.task_progress || payload.build_task_summary || null;
+                    var taskSummaryForGuard = payload.task_summary || payload.task_progress || payload.plan_json_task_summary || null;
                     if (taskSummaryForGuard && typeof taskSummaryForGuard === 'object') {
                         taskDone = parseInt(taskSummaryForGuard.done || 0, 10) || 0;
                         taskTotal = parseInt(taskSummaryForGuard.total || 0, 10) || 0;
@@ -3870,9 +3897,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 if (!payload || typeof payload !== 'object') {
                     return;
                 }
-                // build_plan_progress is carried as progress_kind on the normal progress event.
-                if (String(payload.progress_kind || '') === 'build_plan_progress') {
-                    handleOperationProgressPayload(payload, 'build_plan_progress');
+                // plan_json_progress is carried as progress_kind on the normal progress event.
+                if (String(payload.progress_kind || '') === 'plan_json_progress') {
+                    handleOperationProgressPayload(payload, 'plan_json_progress');
                 } else {
                     handleOperationProgressPayload(payload, 'progress');
                 }
@@ -4084,7 +4111,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             handleAssetGenerationStreamEvent(event, 'asset_generation_skipped');
         });
 
-        source.addEventListener('build_plan_block_completed', function (event) {
+        source.addEventListener('plan_json_block_completed', function (event) {
             var payload = parsePayload(event);
             if (!payload || typeof payload !== 'object') {
                 return;
@@ -4096,13 +4123,13 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             updateTaskSummaryFromState(payload);
             syncPreviewTabsFromTaskProgressPayload(payload, payload.state && typeof payload.state === 'object' ? payload.state : null);
             var taskMessage = String(payload.message || <?= \json_encode((string)__('任务已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-            logOperationToWorkspaceTerminal('build_plan_block_completed', payload, 'done', taskMessage);
+            logOperationToWorkspaceTerminal('plan_json_block_completed', payload, 'done', taskMessage);
         });
 
-        // build_plan_block_failed：单个方案块构建失败的硬信号。
-        // 失败信号直接进入 build_plan_progress，避免 UI 只能等汇总间接刷新。
+        // plan_json_block_failed：单个方案块构建失败的硬信号。
+        // 失败信号直接进入 plan_json_progress，避免 UI 只能等汇总间接刷新。
         // 这里 hydrate state + 刷新构建进度 + 把失败行写入 workspace terminal。
-        source.addEventListener('build_plan_block_failed', function (event) {
+        source.addEventListener('plan_json_block_failed', function (event) {
             var payload = parsePayload(event);
             if (!payload || typeof payload !== 'object') {
                 return;
@@ -4113,7 +4140,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
             updateTaskSummaryFromState(payload);
             var failureReason = String(payload.failure_reason || payload.error_message || payload.message || <?= \json_encode((string)__('任务执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-            logOperationToWorkspaceTerminal('build_plan_block_failed', payload, 'error', failureReason);
+            logOperationToWorkspaceTerminal('plan_json_block_failed', payload, 'error', failureReason);
         });
 
         source.addEventListener('block_partial_patch_applied', function (event) {
@@ -4137,8 +4164,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 var pageType = String(payload.page_type || blockRefreshState.pageType || '');
                 var blockId = String(payload.block_id || blockRefreshState.blockId || '');
                 var pageState = payload.state.virtual_pages_by_type[pageType] || null;
-                var nextBlock = pageState && Array.isArray(pageState.blocks)
-                    ? runtimeFindNextBlock(pageType, pageState.blocks, blockId)
+                var pageBlockList = runtimeVirtualPageBlockList(pageState);
+                var nextBlock = pageBlockList.length
+                    ? runtimeFindNextBlock(pageType, pageBlockList, blockId)
                     : null;
                 if (nextBlock && typeof previewBridge.updateVirtualBlockState === 'function') {
                     previewBridge.updateVirtualBlockState(pageType, nextBlock);
@@ -4431,8 +4459,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                     previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);
                 }
                 var pageState = payload.state.virtual_pages_by_type[blockRefreshState.pageType] || null;
-                var nextBlock = pageState && Array.isArray(pageState.blocks)
-                    ? runtimeFindNextBlock(blockRefreshState.pageType, pageState.blocks, blockRefreshState.blockId)
+                var pageBlockList = runtimeVirtualPageBlockList(pageState);
+                var nextBlock = pageBlockList.length
+                    ? runtimeFindNextBlock(blockRefreshState.pageType, pageBlockList, blockRefreshState.blockId)
                     : null;
                 if (nextBlock) {
                     if (typeof previewBridge.updateVirtualBlockState === 'function') {

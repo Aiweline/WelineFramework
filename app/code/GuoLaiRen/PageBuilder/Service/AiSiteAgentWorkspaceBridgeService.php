@@ -103,7 +103,7 @@ final class AiSiteAgentWorkspaceBridgeService
             'local_registrar_account_id' => self::LOCAL_REGISTRAR_ACCOUNT_ID,
             'local_root_domains' => [
                 LocalDomainPolicy::TEST_ROOT_DOMAIN,
-                LocalDomainPolicy::LEGACY_LOCAL_TEST_ROOT_DOMAIN,
+                'local.test',
                 LocalDomainPolicy::LOOPBACK_ROOT_DOMAIN,
             ],
         ];

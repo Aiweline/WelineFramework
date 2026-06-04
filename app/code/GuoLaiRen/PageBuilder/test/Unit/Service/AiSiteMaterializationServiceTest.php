@@ -81,7 +81,7 @@ final class AiSiteMaterializationServiceTest extends TestCase
         ], Page::TYPE_HOME)));
     }
 
-    public function testVirtualThemeMaterializationUsesLayoutConfigInsteadOfStaleAiHtmlBlocks(): void
+    public function testVirtualThemeMaterializationUsesLayoutConfigInsteadOfStaleAiHtmlBlockNodes(): void
     {
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteMaterializationService.php');
         self::assertIsString($source);
