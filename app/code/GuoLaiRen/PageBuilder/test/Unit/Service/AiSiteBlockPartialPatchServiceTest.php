@@ -34,34 +34,17 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertSame(['hero', 'features'], $result['details']['available_block_ids']);
     }
 
-    public function testReadCurrentBlockHydratesOnlyTargetPage(): void
+    public function testReadCurrentBlockDoesNotHydrateCompatibilityPages(): void
     {
-        $scopeService = new class extends AiSiteScopeCompatibilityService {
-            /** @var list<list<string>> */
-            public array $requestedPageTypes = [];
-
-            public function __construct()
-            {
-            }
-
-            public function buildVirtualPagesByType(
-                array $pageTypes,
-                array $scope = [],
-                bool $allowAiPlaceholderGeneration = true
-            ): array {
-                $this->requestedPageTypes[] = \array_values($pageTypes);
-                $pages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-
-                return \array_intersect_key($pages, \array_flip($pageTypes));
-            }
-        };
+        $scopeService = $this->createMock(AiSiteScopeCompatibilityService::class);
+        $scopeService->expects(self::never())->method('buildVirtualPagesByType');
         $service = new AiSiteBlockPartialPatchService(scopeCompatibilityService: $scopeService);
         $scope = $this->scopeWithMultiplePages();
 
         $result = $service->readCurrentBlockFromScope($scope, 'home', 'hero');
 
         self::assertTrue($result['success']);
-        self::assertSame([['home']], $scopeService->requestedPageTypes);
+        self::assertSame('plan_json.pages.home.hero', $result['source']);
     }
 
     public function testReadCurrentBlockAcceptsComponentCodeAfterScopeNormalization(): void
@@ -88,7 +71,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertSame([], $result['details']['available_block_ids']);
     }
 
-    public function testApplyReplacementUpdatesLayoutContentSource(): void
+    public function testApplyReplacementRejectsOldLayoutContentSource(): void
     {
         $service = new AiSiteBlockPartialPatchService();
         $scope = [
@@ -116,7 +99,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
             ],
             'virtual_pages_by_type' => [
                 'home_page' => [
-                    'block_nodes' => [],
+                    'blocks' => [],
                 ],
             ],
         ];
@@ -137,17 +120,8 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
 
         $result = $service->applyReplacementBlockToScope($scope, 'home_page', 'hero', $replacement);
 
-        self::assertTrue($result['success'], \json_encode($result, \JSON_UNESCAPED_UNICODE));
-        self::assertSame('page_type_layouts.content', $result['source']);
-        self::assertSame(
-            'New headline',
-            $result['scope']['page_type_layouts']['home_page']['content'][0]['config']['headline'] ?? null
-        );
-        self::assertSame(
-            '<section><h1>New headline</h1></section>',
-            $result['scope']['page_type_layouts']['home_page']['content'][0]['html'] ?? null
-        );
-        self::assertSame([], $result['scope']['virtual_pages_by_type']['home_page']['block_nodes'] ?? null);
+        self::assertFalse($result['success']);
+        self::assertSame('BLOCK_NOT_FOUND', $result['code']);
     }
 
     public function testReadCurrentSharedHeaderComponentFromScope(): void
@@ -157,7 +131,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         $result = $service->readCurrentBlockFromScope($this->sharedScope(), 'home_page', 'header/ai-site-header');
 
         self::assertTrue($result['success']);
-        self::assertSame('shared_components.header', $result['source']);
+        self::assertSame('plan_json.shared_components.header', $result['source']);
         self::assertSame('header/ai-site-header', $result['block_id']);
         self::assertSame('header/ai-site-header', $result['component_code']);
         self::assertSame('Generated header', $result['config']['title'] ?? null);
@@ -177,7 +151,10 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
             'content/home-page-hero-banner'
         );
         $scope = $this->materializedScope(555);
-        $scope['virtual_pages_by_type']['home_page']['block_nodes'] = $currentBlocks;
+        $scope['plan_json']['pages']['home_page'] = [
+            'home-page-hero-banner' => $currentBlocks[0],
+            'home-page-proof' => $currentBlocks[1],
+        ];
         $service = new AiSiteBlockPartialPatchService();
 
         $result = $service->applyReplacementBlockToScope(
@@ -188,7 +165,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         );
 
         self::assertTrue($result['success']);
-        self::assertSame('Patched Materialized Headline', $result['scope']['virtual_pages_by_type']['home_page']['block_nodes'][0]['config']['headline']);
+        self::assertSame('Patched Materialized Headline', $result['scope']['plan_json']['pages']['home_page']['home-page-hero-banner']['config']['headline']);
         self::assertArrayNotHasKey('ai_layout', $result['scope']['pagebuilder_pages_by_type']['home_page']);
     }
 
@@ -205,11 +182,11 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         ]);
 
         self::assertTrue($result['success']);
-        $blocks = $result['scope']['virtual_pages_by_type']['home']['block_nodes'];
+        $blocks = $result['scope']['plan_json']['pages']['home'];
         self::assertCount(2, $blocks);
-        self::assertSame(['hero', 'features'], \array_column($blocks, 'block_id'));
-        self::assertSame('New Headline', $blocks[0]['config']['headline']);
-        self::assertSame('Features', $blocks[1]['config']['headline']);
+        self::assertSame(['hero', 'features'], \array_keys($blocks));
+        self::assertSame('New Headline', $blocks['hero']['config']['headline']);
+        self::assertSame('Features', $blocks['features']['config']['headline']);
         self::assertSame('Updated headline.', $result['scope']['block_patch_history']['home']['hero'][0]['change_summary']);
     }
 
@@ -254,8 +231,9 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         );
 
         self::assertTrue($result['success']);
-        self::assertSame('Refined header', $result['scope']['shared_components']['header']['default_config']['title']);
-        self::assertSame('<header class="hero-header">Refined</header>', $result['scope']['shared_components']['header']['phtml']);
+        self::assertSame('Refined header', $result['scope']['plan_json']['shared_components']['header']['default_config']['title']);
+        self::assertSame('<header class="hero-header">Refined</header>', $result['scope']['plan_json']['shared_components']['header']['phtml']);
+        self::assertArrayNotHasKey('shared_components', $result['scope']);
         self::assertSame('Refined shared header.', $result['scope']['block_patch_history']['home_page']['header/ai-site-header'][0]['change_summary']);
     }
 
@@ -263,36 +241,19 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
     {
         $service = new AiSiteBlockPartialPatchService();
         $scope = $this->scope();
-        $scope['virtual_pages_by_type']['home']['block_nodes'][0]['section_code'] = 'home:content/hero';
+        $scope['plan_json']['pages']['home']['hero']['section_code'] = 'home:content/hero';
         $replacement = $this->block('hero', 'Alias Headline', '<section>Alias Headline</section>', 'content/hero');
 
         $result = $service->applyReplacementBlockToScope($scope, 'home', 'home:content/hero', $replacement);
 
         self::assertTrue($result['success']);
-        self::assertSame('Alias Headline', $result['scope']['virtual_pages_by_type']['home']['block_nodes'][0]['config']['headline']);
+        self::assertSame('Alias Headline', $result['scope']['plan_json']['pages']['home']['hero']['config']['headline']);
     }
 
     public function testReplaceCurrentBlockPreservesOtherPagesWithoutHydratingThem(): void
     {
-        $scopeService = new class extends AiSiteScopeCompatibilityService {
-            /** @var list<list<string>> */
-            public array $requestedPageTypes = [];
-
-            public function __construct()
-            {
-            }
-
-            public function buildVirtualPagesByType(
-                array $pageTypes,
-                array $scope = [],
-                bool $allowAiPlaceholderGeneration = true
-            ): array {
-                $this->requestedPageTypes[] = \array_values($pageTypes);
-                $pages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-
-                return \array_intersect_key($pages, \array_flip($pageTypes));
-            }
-        };
+        $scopeService = $this->createMock(AiSiteScopeCompatibilityService::class);
+        $scopeService->expects(self::never())->method('buildVirtualPagesByType');
         $service = new AiSiteBlockPartialPatchService(scopeCompatibilityService: $scopeService);
         $scope = $this->scopeWithMultiplePages();
         $replacement = $this->block('hero', 'New Headline', '<section>New Headline</section>');
@@ -300,8 +261,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         $result = $service->applyReplacementBlockToScope($scope, 'home', 'hero', $replacement);
 
         self::assertTrue($result['success']);
-        self::assertSame([['home'], ['home']], $scopeService->requestedPageTypes);
-        self::assertSame('About headline', $result['scope']['virtual_pages_by_type']['about']['block_nodes'][0]['config']['headline']);
+        self::assertSame('About headline', $result['scope']['plan_json']['pages']['about']['about-hero']['config']['headline']);
     }
 
     public function testReadCurrentBlockCompactsPageContextForPrompt(): void
@@ -311,7 +271,7 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         $scope['website_profile'] = [
             'business_name' => 'Patch Test',
             'long_description' => \str_repeat('x', 1000),
-            'chinese_description' => \str_repeat('转化', 400),
+            'chinese_description' => \str_repeat('杞寲', 400),
             'virtual_pages_by_type' => ['should_not' => 'leak'],
         ];
 
@@ -672,12 +632,11 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
     {
         return [
             'page_types' => ['home'],
-            'virtual_pages_by_type' => [
-                'home' => [
-                    'title' => 'Home',
-                    'block_nodes' => [
-                        $this->block('hero', 'Headline', '<section>Headline</section>', 'content/hero'),
-                        $this->block('features', 'Features', '<section>Features</section>', 'content/features'),
+            'plan_json' => [
+                'pages' => [
+                    'home' => [
+                        'hero' => $this->block('hero', 'Headline', '<section>Headline</section>', 'content/hero'),
+                        'features' => $this->block('features', 'Features', '<section>Features</section>', 'content/features'),
                     ],
                 ],
             ],
@@ -691,11 +650,8 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
     {
         $scope = $this->scope();
         $scope['page_types'] = ['home', 'about'];
-        $scope['virtual_pages_by_type']['about'] = [
-            'title' => 'About',
-            'block_nodes' => [
-                $this->block('about-hero', 'About headline', '<section>About headline</section>', 'content/about-hero'),
-            ],
+        $scope['plan_json']['pages']['about'] = [
+            'about-hero' => $this->block('about-hero', 'About headline', '<section>About headline</section>', 'content/about-hero'),
         ];
 
         return $scope;
@@ -716,11 +672,9 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
                     'handle' => '',
                 ],
             ],
-            'virtual_pages_by_type' => [
-                'home_page' => [
-                    'title' => 'Home',
-                    'materialized_page_id' => $pageId,
-                    'block_nodes' => [],
+            'plan_json' => [
+                'pages' => [
+                    'home_page' => [],
                 ],
             ],
         ];
@@ -771,42 +725,43 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
      */
     private function sharedScope(): array
     {
-        return [
+        $scope = [
             'virtual_theme_id' => 88,
             'page_types' => ['home_page'],
-            'virtual_pages_by_type' => [
-                'home_page' => [
-                    'title' => 'Home',
-                    'block_nodes' => [
-                        $this->block('home-page-hero', 'Headline', '<section>Headline</section>', 'content/home-page-hero'),
-                    ],
-                ],
-            ],
-            'shared_components' => [
-                'header' => [
-                    'code' => 'header/ai-site-header',
-                    'name' => 'AI Site Header',
-                    'region' => 'header',
-                    'phtml' => '<header class="hero-header">Header</header>',
-                    'html' => '<header class="hero-header">Header</header>',
-                    'default_config' => [
-                        'title' => 'Generated header',
-                        '_pb_server_component_code' => 'header/ai-site-header',
-                    ],
-                ],
-                'footer' => [
-                    'code' => 'footer/ai-site-footer',
-                    'name' => 'AI Site Footer',
-                    'region' => 'footer',
-                    'phtml' => '<footer class="site-footer">Footer</footer>',
-                    'html' => '<footer class="site-footer">Footer</footer>',
-                    'default_config' => [
-                        'title' => 'Generated footer',
-                        '_pb_server_component_code' => 'footer/ai-site-footer',
+            'plan_json' => [
+                'pages' => [
+                    'home_page' => [
+                        'home-page-hero' => $this->block('home-page-hero', 'Headline', '<section>Headline</section>', 'content/home-page-hero'),
                     ],
                 ],
             ],
         ];
+        $scope['plan_json']['shared_components'] = [
+            'header' => [
+                'code' => 'header/ai-site-header',
+                'name' => 'AI Site Header',
+                'region' => 'header',
+                'phtml' => '<header class="hero-header">Header</header>',
+                'html' => '<header class="hero-header">Header</header>',
+                'default_config' => [
+                    'title' => 'Generated header',
+                    '_pb_server_component_code' => 'header/ai-site-header',
+                ],
+            ],
+            'footer' => [
+                'code' => 'footer/ai-site-footer',
+                'name' => 'AI Site Footer',
+                'region' => 'footer',
+                'phtml' => '<footer class="site-footer">Footer</footer>',
+                'html' => '<footer class="site-footer">Footer</footer>',
+                'default_config' => [
+                    'title' => 'Generated footer',
+                    '_pb_server_component_code' => 'footer/ai-site-footer',
+                ],
+            ],
+        ];
+
+        return $scope;
     }
 
     /**

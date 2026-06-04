@@ -26,23 +26,19 @@ final class AiSitePlanJsonProjectionServiceTest extends TestCase
                 ],
             ],
             'pages' => [
-                [
+                'home_page' => [
                     'page_id' => 'home_page',
                     'page_type' => 'home_page',
                     'title_key' => 'page.home.title',
                     'description_key' => 'page.home.description',
-                    'block_node_ids' => ['home_page.hero'],
-                ],
-            ],
-            'block_nodes' => [
-                [
+                    'hero' => [
                     'block_id' => 'home_page.hero',
                     'block_type' => 'hero',
                     'content_keys' => ['block.hero.title'],
                     'task_ids' => [],
                 ],
+                ],
             ],
-            'tasks' => [],
             'design_manifest' => [],
             'policy_projection' => [],
         ];
@@ -57,12 +53,12 @@ final class AiSitePlanJsonProjectionServiceTest extends TestCase
         self::assertSame(1, $projection['block_count']);
         self::assertSame(0, $projection['task_count']);
         self::assertSame('premium_web_v1', $projection['design']['policy_id']);
-        $titleKey = (string)$contract['pages'][0]['title_key'];
+        $titleKey = (string)$contract['pages']['home_page']['title_key'];
         $expectedTitle = $contract['content_manifest']['items'][$titleKey];
         if (\is_array($expectedTitle)) {
             $expectedTitle = $expectedTitle['text'] ?? $expectedTitle['value'] ?? '';
         }
         self::assertSame((string)$expectedTitle, $projection['pages'][0]['title']);
-        self::assertSame('hero', $projection['pages'][0]['block_nodes'][0]['type']);
+        self::assertSame('hero', $projection['pages'][0]['blocks'][0]['type']);
     }
 }

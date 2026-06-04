@@ -1,170 +1,46 @@
 <?php
 /**
- * 片段：Head
+ * Theme partial: frontend head.
  *
- * 页面头部区域（meta标签、CSS、JS初始化等）
- * 字段
- * @meta.name {default="Head头部片段",name="Head头部片段",description="Head头部片段，用于描述片段的名称"}
- * @meta.description {default="页面头部区域（meta标签、CSS、JS初始化等）",name="页面头部区域（meta标签、CSS、JS初始化等）",description="页面头部区域（meta标签、CSS、JS初始化等），用于描述片段的用途"}
- * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * Owns the default theme assets, runtime theme config, and a small critical CSS
+ * baseline that keeps every Theme layout readable even when no module hooks are
+ * registered yet.
  *
- * 参数配置说明：
- * - 参数配置由 Block\Partials 在渲染时自动加载
+ * @meta.name {default="Head",name="Head",description="Frontend theme head partial"}
+ * @param.class {default="",name="Extra CSS class",description="Extra CSS class for theme head consumers"}
  */
-// 主题相关数据由 ControllerFetchFileBefore Observer 设置
-$themeData = $this->getData('theme') ?? [];
 
-// 获取 frontend 基础 URL 用于 base 标签
+$themeData = $this->getData('theme') ?? [];
+$area = $themeData['area'] ?? 'frontend';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null;
+$colorMode = $themeData['colorMode'] ?? 'default';
+
 $frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
-?>
-<!-- Base URL 设置：所有相对链接将基于此路径 -->
-<base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
-<!-- Favicon Hook: 允许其他模块通过 hook 提供自定义 favicon -->
-<w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
-<link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
-<link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
-<link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
-</w:hook>
-<w:seo slot="head"/>
-<w:geo slot="head"/>
-<!-- 
-    Theme Head Partial - 只负责加载 Theme 资源
-    注意：
-    - Meta 标签、Favicon 等由 Frontend 模块的 head.phtml 负责
-    - Frontend CSS/JS（loading.css, font-awesome, bootstrap, jquery）由 Frontend 模块负责
-    - Theme 只负责加载 Theme 相关的 CSS 变量、色系、主题 CSS/JS
--->
-<?php
-// 主题相关数据由 ControllerFetchFileBefore Observer 设置
-// 模板中直接使用 theme 对象中的数据，不进行任何提取或获取操作
-$themeData = $this->getData('theme') ?? [];
-
-$area = $themeData['area'] ?? 'frontend';
-$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
-$layoutType = $themeData['layoutType'] ?? null;
-$layoutOption = $themeData['layoutOption'] ?? null;
-$theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
-
-
-// 注意：变量和色盘配置现在通过生成的布局CSS文件加载，不再单独引用
-// 布局CSS文件在编译时自动生成，包含所有CSS变量和色盘配置
-?>
-<!-- 主题CSS（基础样式，不包含变量） -->
-<theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
-<!-- Remix Icon：主题部件与导航统一使用的图标字体 -->
-<link rel="stylesheet" href="<?= htmlspecialchars($this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css')) ?>" type="text/css">
-<?php
-// 加载生成的布局CSS文件（包含所有变量、色盘和布局特定的CSS）
-// 规则：所有主题相关数据（包括主题对象）由 ControllerFetchFileBefore Observer 设置
-$area = $themeData['area'] ?? 'frontend';
-$layoutType = $themeData['layoutType'] ?? null;
-$layoutOption = $themeData['layoutOption'] ?? null;
-$theme = $themeData['theme'] ?? null; // 主题对象（由 Observer 设置）
-
-// 检查布局信息和主题对象是否存在
-if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
-    // 使用LayoutAssetsManager获取CSS URL（使用 Observer 设置的主题对象）
-    try {
-        $layoutAssetsEnabled = (bool)\Weline\Framework\App\Env::getInstance()
-            ->getConfig('theme.layout_assets.enabled', false);
-
-        if ($layoutAssetsEnabled) {
-            $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
-            // 确保布局 CSS 存在（LayoutAssetsGenerator 可能尚未运行）
-            $assetsManager->ensureLayoutCssGenerated($area, $layoutType, $layoutOption, $theme);
-            $cssPath = $assetsManager->getGeneratedCssPath($area, $layoutType, $layoutOption, $theme);
-            $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme, $this);
-            $inlineLayoutCss = '';
-            $maxInlineLayoutCssBytes = 16 * 1024;
-
-            // Small layout bundles are safe to inline for first paint.
-            // Keep the external stylesheet so repeat navigations still benefit from caching.
-            if (is_file($cssPath)) {
-                $cssSize = filesize($cssPath);
-                if ($cssSize !== false && $cssSize > 0 && $cssSize <= $maxInlineLayoutCssBytes) {
-                    $inlineLayoutCss = (string)file_get_contents($cssPath);
-                    if (preg_match('/<\?(?:php|=|\s)/i', $inlineLayoutCss)) {
-                        $inlineLayoutCss = '';
-                    } else {
-                        $inlineLayoutCss = str_replace('</style', '<\\/style', $inlineLayoutCss);
-                    }
-                }
-            }
-            ?>
-<!-- 布局CSS（包含变量、色盘和布局特定样式）：<?= htmlspecialchars($layoutType) ?>/<?= htmlspecialchars($layoutOption) ?> -->
-<?php if ($inlineLayoutCss !== ''): ?>
-<style data-no-extract="true" data-layout-critical="true">
-<?= $inlineLayoutCss ?>
-</style>
-<?php endif; ?>
-<link href="<?= htmlspecialchars($cssUrl) ?>" rel="stylesheet" type="text/css"/>
-<?php
-        } else {
-            $cssVariableInjector = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\CssVariableInjector::class);
-            $themeVariablesCss = $cssVariableInjector->generateCssVariables($area, $theme);
-            if ($themeVariablesCss !== '' && !preg_match('/<\?(?:php|=|\s)/i', $themeVariablesCss)) {
-                $themeVariablesCss = str_replace('</style', '<\\/style', $themeVariablesCss);
-                ?>
-<!-- 主题CSS变量（布局资源提取默认关闭）：<?= htmlspecialchars($layoutType) ?>/<?= htmlspecialchars($layoutOption) ?> -->
-<style data-no-extract="true" data-theme-variables="true">
-<?= $themeVariablesCss ?>
-</style>
-<?php
-            }
-        }
-    } catch (\Exception $e) {
-        // 如果获取URL失败，记录错误
-        if (defined('DEV') && DEV) {
-            try {
-                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
-                if ($logger) {
-                    $logger->error('Head Partial: 无法获取布局CSS URL', [
-                        'layoutType' => $layoutType,
-                        'layoutOption' => $layoutOption,
-                        'error' => $e->getMessage()
-                    ]);
-                }
-            } catch (\Exception $logError) {
-                // 忽略日志错误
-            }
-        }
-    }
-}
-?>
-<!-- 注意：jQuery 等 Frontend JS 由 Frontend 模块的 head.phtml 负责加载 -->
-<?php
-// 获取基础URL和当前语言
 $isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
-
-// 根据环境设置模块配置URL和基础URL
-if ($isDev) {
-    // 开发模式
-    $modulesConfigUrl = '/Weline/Frontend/view/statics/base/weline.modules.js';
-    $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
-} else {
-    // 生产模式
-    $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
-    $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
-}
-
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $currentCurrency = \w_env('user.currency', 'CNY');
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
-$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
 
-$envConfig = [
-    'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
-    'DEV' => DEV,
-    'PROD' => !DEV,
-];
-// API 模块的 workerUrl 由 API 模块内部自动处理，无需在此处配置
+$modulesConfigUrl = $isDev
+    ? '/Weline/Frontend/view/statics/base/weline.modules.js'
+    : '/static/Weline/Frontend/base/weline.modules.js';
+$modulesBaseUrl = $isDev
+    ? '/Weline/Frontend/view/statics/js/weline-api'
+    : '/static/Weline/Frontend/js/weline-api';
+
 $themeConfigPayload = [
-    'env' => $envConfig,
+    'env' => [
+        'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
+        'DEV' => DEV,
+        'PROD' => !DEV,
+    ],
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
-    'assetVersion' => '20260522-dev-cache',
+    'assetVersion' => '20260604-theme-defaults',
     'api' => [
         'workerUrl' => $isDev
             ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
@@ -180,227 +56,415 @@ $themeConfigPayload = [
     'site' => [
         'name' => $siteName,
     ],
-    // i18n 模块配置由 i18n 模块内部自动处理，无需在此处配置
-    // i18n 模块会自动从全局配置读取所需配置，并处理 URL 解析
-    // 模块加载器配置由模块加载器内部自动处理，无需在此处配置
-    // 模块加载器会自动检测环境并生成合适的 URL
-    // API 模块配置由 API 模块内部自动处理，无需在此处配置
-    // API 模块会自动从全局配置读取所需配置，并处理 URL 解析
-    // 如需自定义，可在 api 配置中提供 workerUrl 等配置项
-    // Account 模块配置由 Account 模块内部自动处理，无需在此处配置
-    // Account 模块会自动从全局配置读取所需配置，并处理 URL 解析
     'theme' => [
         'area' => $area,
-        'colorMode' => $welineThemeColorMode,
+        'colorMode' => $colorMode,
         'layoutType' => $layoutType,
         'layoutOption' => $layoutOption,
     ],
 ];
-    
-// 将配置数据序列化为JSON，供外部JS文件使用
+
 $this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
-$this->setData('envConfig', $envConfig);
 ?>
-<!-- Theme配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
+<base href="<?= htmlspecialchars($frontendBaseUrl, ENT_QUOTES, 'UTF-8') ?>">
+
+<w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
+<link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+</w:hook>
+
+<w:seo slot="head"/>
+<w:geo slot="head"/>
+
+<theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
+<link rel="stylesheet" href="<?= htmlspecialchars($this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css'), ENT_QUOTES, 'UTF-8') ?>" type="text/css">
+
+<?php
+if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
+    try {
+        $layoutAssetsEnabled = (bool)\Weline\Framework\App\Env::getInstance()
+            ->getConfig('theme.layout_assets.enabled', false);
+
+        if ($layoutAssetsEnabled) {
+            $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+            $assetsManager->ensureLayoutCssGenerated($area, $layoutType, $layoutOption, $theme);
+            $cssPath = $assetsManager->getGeneratedCssPath($area, $layoutType, $layoutOption, $theme);
+            $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme, $this);
+            $inlineLayoutCss = '';
+
+            if (is_file($cssPath)) {
+                $cssSize = filesize($cssPath);
+                if ($cssSize !== false && $cssSize > 0 && $cssSize <= 16 * 1024) {
+                    $inlineLayoutCss = (string)file_get_contents($cssPath);
+                    if (preg_match('/<\?(?:php|=|\s)/i', $inlineLayoutCss)) {
+                        $inlineLayoutCss = '';
+                    } else {
+                        $inlineLayoutCss = str_replace('</style', '<\\/style', $inlineLayoutCss);
+                    }
+                }
+            }
+            ?>
+<?php if ($inlineLayoutCss !== ''): ?>
+<style data-no-extract="true" data-layout-critical="true">
+<?= $inlineLayoutCss ?>
+</style>
+<?php endif; ?>
+<link href="<?= htmlspecialchars($cssUrl, ENT_QUOTES, 'UTF-8') ?>" rel="stylesheet" type="text/css">
+<?php
+        } else {
+            $cssVariableInjector = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\CssVariableInjector::class);
+            $themeVariablesCss = $cssVariableInjector->generateCssVariables($area, $theme);
+            if ($themeVariablesCss !== '' && !preg_match('/<\?(?:php|=|\s)/i', $themeVariablesCss)) {
+                $themeVariablesCss = str_replace('</style', '<\\/style', $themeVariablesCss);
+                ?>
+<style data-no-extract="true" data-theme-variables="true">
+<?= $themeVariablesCss ?>
+</style>
+<?php
+            }
+        }
+    } catch (\Throwable $e) {
+        if (defined('DEV') && DEV) {
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->error('Theme head could not resolve layout CSS', [
+                        'layoutType' => $layoutType,
+                        'layoutOption' => $layoutOption,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            } catch (\Throwable) {
+            }
+        }
+    }
+}
+?>
+
+<style data-theme-inline="frontend-defaults">
+    :root {
+        --weline-theme-bg: var(--color-bg-primary, #f6f7fb);
+        --weline-theme-surface: var(--color-surface, #ffffff);
+        --weline-theme-surface-soft: var(--color-surface-soft, #f8fafc);
+        --weline-theme-text: var(--color-text-primary, #172033);
+        --weline-theme-muted: var(--color-text-secondary, #657083);
+        --weline-theme-border: var(--color-border, #e3e8ef);
+        --weline-theme-primary: var(--color-primary, #5b4cf5);
+        --weline-theme-primary-strong: var(--color-primary-strong, #4738dc);
+        --weline-theme-success: var(--color-success, #0f9f6e);
+        --weline-theme-danger: var(--color-danger, #e5484d);
+        --weline-theme-warning: var(--color-warning, #d97706);
+        --weline-theme-shadow: 0 18px 48px rgba(23, 32, 51, 0.08);
+        --weline-theme-radius: 14px;
+        --weline-theme-container: 1200px;
+        --weline-theme-page-gap: 24px;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    html {
+        min-height: 100%;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
+    body {
+        min-height: 100vh;
+        margin: 0;
+        color: var(--weline-theme-text);
+        background:
+            radial-gradient(circle at top left, rgba(91, 76, 245, 0.08), transparent 32rem),
+            linear-gradient(180deg, #ffffff 0%, var(--weline-theme-bg) 100%);
+        font-family: var(--font-family-base, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+        font-size: 16px;
+        line-height: 1.55;
+    }
+
+    img,
+    video,
+    iframe {
+        max-width: 100%;
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    a:hover {
+        color: var(--weline-theme-primary);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+        font: inherit;
+    }
+
+    .container,
+    .weline-container {
+        width: min(100% - 32px, var(--weline-theme-container));
+        margin-inline: auto;
+    }
+
+    .weline-page-wrapper,
+    .weline-page {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .weline-main-content,
+    .weline-main {
+        flex: 1;
+        width: 100%;
+    }
+
+    .weline-section {
+        padding: clamp(32px, 5vw, 72px) 0;
+    }
+
+    .weline-section--compact {
+        padding: clamp(20px, 3vw, 40px) 0;
+    }
+
+    .weline-card {
+        background: var(--weline-theme-surface);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-theme-radius);
+        box-shadow: 0 10px 30px rgba(23, 32, 51, 0.06);
+    }
+
+    .weline-card__body {
+        padding: clamp(20px, 3vw, 32px);
+    }
+
+    .weline-page-hero {
+        padding: clamp(40px, 7vw, 88px) 0 clamp(28px, 5vw, 56px);
+    }
+
+    .weline-page-hero__inner {
+        display: grid;
+        gap: 24px;
+        align-items: center;
+    }
+
+    .weline-page-title {
+        margin: 0;
+        color: var(--weline-theme-text);
+        font-size: clamp(30px, 5vw, 56px);
+        line-height: 1.05;
+        letter-spacing: 0;
+    }
+
+    .weline-page-lead {
+        max-width: 680px;
+        margin: 12px 0 0;
+        color: var(--weline-theme-muted);
+        font-size: clamp(16px, 2vw, 19px);
+    }
+
+    .weline-muted {
+        color: var(--weline-theme-muted);
+    }
+
+    .weline-button,
+    .weline-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 18px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: var(--weline-theme-primary);
+        color: #fff;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+    }
+
+    .weline-button:hover,
+    .weline-btn:hover {
+        background: var(--weline-theme-primary-strong);
+        color: #fff;
+        transform: translateY(-1px);
+    }
+
+    .weline-button--ghost,
+    .weline-btn--ghost {
+        background: #fff;
+        color: var(--weline-theme-text);
+        border-color: var(--weline-theme-border);
+    }
+
+    .weline-button--ghost:hover,
+    .weline-btn--ghost:hover {
+        background: var(--weline-theme-surface-soft);
+        color: var(--weline-theme-primary);
+    }
+
+    .weline-grid {
+        display: grid;
+        gap: var(--weline-theme-page-gap);
+    }
+
+    .weline-grid--2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .weline-grid--3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .weline-grid--4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .weline-layout-shell {
+        padding: clamp(24px, 4vw, 52px) 0;
+    }
+
+    .weline-layout-surface {
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid rgba(227, 232, 239, 0.86);
+        border-radius: 18px;
+        box-shadow: var(--weline-theme-shadow);
+        overflow: hidden;
+    }
+
+    .weline-layout-surface__body {
+        padding: clamp(20px, 3vw, 36px);
+    }
+
+    .weline-empty-state {
+        display: grid;
+        place-items: center;
+        min-height: 240px;
+        padding: 32px;
+        text-align: center;
+        color: var(--weline-theme-muted);
+        background: linear-gradient(135deg, rgba(91, 76, 245, 0.06), rgba(15, 159, 110, 0.06));
+        border: 1px dashed var(--weline-theme-border);
+        border-radius: var(--weline-theme-radius);
+    }
+
+    .weline-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-theme-radius);
+        overflow: hidden;
+    }
+
+    .weline-table th,
+    .weline-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--weline-theme-border);
+        text-align: left;
+    }
+
+    .weline-table th {
+        background: var(--weline-theme-surface-soft);
+        color: var(--weline-theme-muted);
+        font-size: 13px;
+        text-transform: uppercase;
+    }
+
+    .weline-form-grid {
+        display: grid;
+        gap: 16px;
+    }
+
+    .weline-field {
+        display: grid;
+        gap: 7px;
+    }
+
+    .weline-field label {
+        color: var(--weline-theme-text);
+        font-weight: 700;
+    }
+
+    .weline-field input,
+    .weline-field textarea,
+    .weline-field select {
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 13px;
+        color: var(--weline-theme-text);
+        background: #fff;
+        border: 1px solid var(--weline-theme-border);
+        border-radius: 10px;
+        outline: none;
+    }
+
+    .weline-field input:focus,
+    .weline-field textarea:focus,
+    .weline-field select:focus {
+        border-color: var(--weline-theme-primary);
+        box-shadow: 0 0 0 3px rgba(91, 76, 245, 0.14);
+    }
+
+    @media (max-width: 900px) {
+        .weline-grid--2,
+        .weline-grid--3,
+        .weline-grid--4 {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .container,
+        .weline-container {
+            width: min(100% - 20px, var(--weline-theme-container));
+        }
+
+        .weline-layout-shell {
+            padding: 18px 0;
+        }
+
+        .weline-layout-surface {
+            border-radius: 12px;
+        }
+    }
+</style>
+
 <script data-no-extract="true">
     (function() {
-        // 合并到全局配置（与Frontend模块的配置合并）
-        // 如果 Frontend 模块的 head.phtml 未运行，手动暴露 modulesConfigUrl
         if (!window.__WelineThemeConfig) {
             window.__WelineThemeConfig = {};
         }
-        // 使用Object.assign合并，保留Frontend模块已设置的配置
-        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+
+        var themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
-        
-        // 关键：确保全局变量 modulesConfigUrl 也被设置，支持 theme.js 直接访问
+
         if (window.__WelineThemeConfig.modulesConfigUrl) {
             window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
         }
+
+        window.addEventListener('message', function(event) {
+            if (!event.data || event.data.type !== 'WELINE_THEME_UPDATE') {
+                return;
+            }
+
+            var cssVars = event.data.cssVars || {};
+            var root = document.documentElement;
+            Object.keys(cssVars).forEach(function(varName) {
+                root.style.setProperty(varName, cssVars[varName]);
+            });
+        });
     })();
 </script>
-<!-- 注意：内联JS已移除，配置初始化由theme.js处理 -->
-<!-- 注意：Token存储管理器、Switcher组件等 Frontend 资源由 Frontend 模块负责加载 -->
-<!-- 主题JS -->
-<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260522-dev-cache"></script>
-<!-- Hook: 允许其他模块在 head 中注入 JS 模块声明 -->
+
+<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260604-theme-defaults"></script>
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>
-<!-- 注意：getHeader()->getHtml() 由 Frontend 模块的 head.phtml 负责 -->
-
-<style>
-/* ========================================
-   Amazon风格 - Head初始化样式
-   ======================================== */
-
-/* 亚马逊风格主题色meta标签支持 */
-/* 这些样式会在编译时提取到布局CSS文件中 */
-
-/* 确保HTML元素使用亚马逊风格的基础设置 */
-html[data-theme="amazon"] {
-    /* 使用亚马逊配色变量 */
-    --amazon-primary: #ff9900;
-    --amazon-nav-dark: #131921;
-    --amazon-nav-secondary: #232f3e;
-    --amazon-text-primary: #111;
-    --amazon-text-secondary: #565959;
-    --amazon-link: #007185;
-    --amazon-link-hover: #c45500;
-    --amazon-bg: #fff;
-    --amazon-bg-secondary: #f3f3f3;
-}
-
-/* 基础字体与字号继承主题变量 */
-html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-/* 确保viewport正确设置和移动端适配 */
-/* 防止移动端缩放，强制响应式布局 */
-html {
-    -webkit-text-size-adjust: 100%;
-    -ms-text-size-adjust: 100%;
-    text-size-adjust: 100%;
-}
-
-/* iOS Safari特定优化 */
-@supports (-webkit-touch-callout: none) {
-    html {
-        -webkit-text-size-adjust: 100%;
-    }
-}
-
-/* 移动端基础优化 */
-@media screen and (max-width: 768px) {
-    body {
-        -webkit-text-size-adjust: 100%;
-        -ms-text-size-adjust: 100%;
-        text-size-adjust: 100%;
-    }
-    
-    /* 防止移动端横向滚动 */
-    * {
-        max-width: 100%;
-    }
-    
-    img, video, iframe {
-        max-width: 100%;
-        height: auto;
-    }
-}
-
-/* 超小屏幕优化 */
-@media screen and (max-width: 480px) {
-    body {
-        -webkit-text-size-adjust: 100%;
-        -ms-text-size-adjust: 100%;
-        text-size-adjust: 100%;
-    }
-}
-
-/* ========================================
-   开发模式：基础样式收集
-   这些样式会被提取系统收集到生成的布局CSS文件中
-   ======================================== */
-
-/* ========================================
-   全局基础样式 - 所有布局共用
-   ======================================== */
-
-/* 基础重置和全局样式（使用主题变量） */
-* {
-    box-sizing: border-box;
-}
-
-html {
-    height: 100%;
-}
-
-body {
-    margin: 0;
-    padding: 0;
-    font-family: var(--weline-layout-font-family, var(--font-family-base, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif));
-    font-size: var(--weline-layout-font-size-base, var(--font-size-base, 1rem));
-    line-height: var(--weline-layout-line-height-normal, var(--line-height-normal, 1.5));
-    color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
-    background-color: var(--weline-layout-surface-primary, var(--color-bg-primary, #fff));
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    min-height: 100vh;
-}
-
-/* 全局页面容器 */
-.weline-page-wrapper {
-    width: 100%;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-}
-
-/* 全局主内容区域（开发模式下需要被收集） */
-.weline-main-content {
-    flex: 1;
-    width: 100%;
-    min-height: 80vh;
-    font: inherit;
-    color: inherit;
-}
-
-/* 全局容器样式 */
-.container {
-    max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
-    margin: 0 auto;
-    padding: 0 var(--weline-layout-content-padding-inline, 1rem);
-    box-sizing: border-box;
-}
-
-/* 全局响应式设计 */
-@media (max-width: 1024px) {
-    .container {
-        padding: 0 0.75rem;
-    }
-}
-
-@media (max-width: 768px) {
-    .container {
-        padding: 0 0.5rem;
-    }
-}
-</style>
-
-<script>
-// Amazon风格 - Head初始化脚本
-(function() {
-    'use strict';
-    
-    // 设置亚马逊主题标识
-    if (!document.documentElement.getAttribute('data-theme')) {
-        // 如果未设置主题，默认使用amazon主题
-        document.documentElement.setAttribute('data-theme', 'amazon');
-    }
-    
-    // 亚马逊风格配置增强
-    if (window.__WelineThemeConfig) {
-        // 添加亚马逊风格特定配置
-        window.__WelineThemeConfig.amazon = {
-            primaryColor: '#ff9900',
-            navDark: '#131921',
-            navSecondary: '#232f3e',
-            linkColor: '#007185',
-            linkHover: '#c45500'
-        };
-    }
-    
-    // 监听来自Visual Editor的postMessage (Live Preview支持)
-    window.addEventListener('message', function(event) {
-        if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
-            const cssVars = event.data.cssVars || {};
-            const root = document.documentElement;
-            for (const [varName, value] of Object.entries(cssVars)) {
-                root.style.setProperty(varName, value);
-            }
-            console.log('[Theme] Live preview updated:', Object.keys(cssVars).length, 'variables');
-        }
-    });
-})();
-</script>
+<w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>

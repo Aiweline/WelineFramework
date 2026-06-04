@@ -32,9 +32,9 @@ final class AiSitePlanJsonStateServiceTest extends TestCase
         self::assertSame(-1, $plan['pages']['home_page']['cta']['status'] ?? null);
         self::assertSame(1, $summary['design']['done']);
         self::assertSame(1, $summary['pages']['running']);
-        self::assertSame(1, $summary['block_nodes']['running']);
-        self::assertSame(1, $summary['block_nodes']['done']);
-        self::assertSame(1, $summary['block_nodes']['failed']);
+        self::assertSame(1, $summary['blocks']['running']);
+        self::assertSame(1, $summary['blocks']['done']);
+        self::assertSame(1, $summary['blocks']['failed']);
     }
 
     public function testFingerprintIsStableWhenNodesHaveNoUpdatedAt(): void
@@ -88,7 +88,7 @@ final class AiSitePlanJsonStateServiceTest extends TestCase
         self::assertContains('plan_json.pages.home_page.hero.status', $paths);
     }
 
-    public function testNormalizeKeepsDynamicBlockNodes(): void
+    public function testNormalizeKeepsDynamicBlocks(): void
     {
         $service = new AiSitePlanJsonStateService(42);
 

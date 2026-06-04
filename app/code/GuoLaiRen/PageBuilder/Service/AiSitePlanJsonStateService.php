@@ -6,10 +6,10 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 final class AiSitePlanJsonStateService
 {
-    private const STATUS_PENDING = 0;
-    private const STATUS_RUNNING = 2;
-    private const STATUS_DONE = 1;
-    private const STATUS_FAILED = -1;
+    public const STATUS_PENDING = 0;
+    public const STATUS_RUNNING = 2;
+    public const STATUS_DONE = 1;
+    public const STATUS_FAILED = -1;
     private const MAX_CHANGED_PATHS = 128;
     private readonly int $sessionId;
 
@@ -100,8 +100,8 @@ final class AiSitePlanJsonStateService
 
     /** @var array<string, true> */
     private const FORBIDDEN_PAGE_KEYS = [
-        'block_nodes' => true,
-        'block_node_previews' => true,
+        'blocks' => true,
+        'block_previews' => true,
     ];
 
     /** @var array<string, true> */
@@ -132,9 +132,11 @@ final class AiSitePlanJsonStateService
         'page_design_plan' => true,
         'theme_alignment_summary' => true,
         'page_context_hash' => true,
-        'block_nodes' => true,
-        'block_node_previews' => true,
+        'blocks' => true,
+        'block_previews' => true,
         'ordered_block_keys' => true,
+        'primary_keywords' => true,
+        'secondary_keywords' => true,
         'seo' => true,
         'meta_title' => true,
         'meta_description' => true,
@@ -349,7 +351,7 @@ final class AiSitePlanJsonStateService
         $summary = [
             'design' => $this->emptyCounter(),
             'pages' => $this->emptyCounter(),
-            'block_nodes' => $this->emptyCounter(),
+            'blocks' => $this->emptyCounter(),
             'total' => $this->emptyCounter(),
             'updated_at' => $this->latestUpdatedAt($planJson),
         ];
@@ -364,12 +366,12 @@ final class AiSitePlanJsonStateService
                 continue;
             }
             $this->countStatus($summary['pages'], $this->normalizeStatus($page['status'] ?? $this->inferPageStatus($page)));
-            foreach ($this->extractDynamicBlockNodes($page) as $block) {
-                $this->countStatus($summary['block_nodes'], $this->normalizeStatus($block['status'] ?? $this->inferNodeStatus($block)));
+            foreach ($this->extractDynamicBlocks($page) as $block) {
+                $this->countStatus($summary['blocks'], $this->normalizeStatus($block['status'] ?? $this->inferNodeStatus($block)));
             }
         }
 
-        foreach (['design', 'pages', 'block_nodes'] as $bucket) {
+        foreach (['design', 'pages', 'blocks'] as $bucket) {
             foreach (self::STATUS_BUCKETS as $status => $_) {
                 $summary['total'][$status] += (int)$summary[$bucket][$status];
             }
@@ -544,7 +546,7 @@ final class AiSitePlanJsonStateService
      */
     private function inferPageStatus(array $page): int
     {
-        $blocks = $this->extractDynamicBlockNodes($page);
+        $blocks = $this->extractDynamicBlocks($page);
         if ($blocks === []) {
             return $this->inferNodeStatus($page);
         }
@@ -658,7 +660,7 @@ final class AiSitePlanJsonStateService
                 continue;
             }
             $visitor($page);
-            foreach ($this->extractDynamicBlockNodes($page) as $block) {
+            foreach ($this->extractDynamicBlocks($page) as $block) {
                 $visitor($block);
             }
         }
@@ -681,7 +683,7 @@ final class AiSitePlanJsonStateService
      * @param array<string, mixed> $page
      * @return list<array<string, mixed>>
      */
-    private function extractDynamicBlockNodes(array $page): array
+    private function extractDynamicBlocks(array $page): array
     {
         $blocks = [];
         foreach ($page as $key => $value) {

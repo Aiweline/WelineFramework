@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 /**
- * 发布前对 AI 区块 HTML 做严格白名单消毒（编辑/预览可更宽，由调用方区分）
+ * 鍙戝竷鍓嶅 AI 鍖哄潡 HTML 鍋氫弗鏍肩櫧鍚嶅崟娑堟瘨锛堢紪杈?棰勮鍙洿瀹斤紝鐢辫皟鐢ㄦ柟鍖哄垎锛?
  */
 final class AiHtmlSanitizerService
 {
@@ -66,7 +66,7 @@ final class AiHtmlSanitizerService
      */
     public function sanitizeAiLayout(array $layout): array
     {
-        $blocks = $layout['block_nodes'] ?? [];
+        $blocks = $layout['blocks'] ?? [];
         if (!\is_array($blocks)) {
             $blocks = [];
         }
@@ -86,6 +86,6 @@ final class AiHtmlSanitizerService
             ];
         }
 
-        return ['block_nodes' => $out];
+        return ['blocks' => $out];
     }
 }

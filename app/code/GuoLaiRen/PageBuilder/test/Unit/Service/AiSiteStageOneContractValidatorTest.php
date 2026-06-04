@@ -242,9 +242,9 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
             'page_contracts' => [
                 'home_page' => [
                     'page_type' => 'home_page',
-                    'min_block_nodes' => 1,
-                    'max_block_nodes' => 1,
-                    'target_block_nodes' => 1,
+                    'min_blocks' => 1,
+                    'max_blocks' => 1,
+                    'target_blocks' => 1,
                     'required_block_keys' => ['hero'],
                     'forbidden_block_keys' => [],
                     'field_plan_count' => 1,

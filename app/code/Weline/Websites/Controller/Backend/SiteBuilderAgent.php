@@ -2601,7 +2601,6 @@ class SiteBuilderAgent extends BackendController
             'visual_edit_url',
             'home_page_id',
             'site_plan',
-            'stage1_contract',
             'page_route_contract',
             'navigation_address_rules',
         ] as $field) {

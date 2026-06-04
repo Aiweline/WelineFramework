@@ -55,13 +55,13 @@ class AiSiteAgentRegeneratePageOperationService
         $workspaceTrack = ($ports->normalizeWorkspaceTrack)((string)($scope['workspace_track'] ?? ''));
         $pageLabel = (string)((($ports->resolvePageTypeLabels)()[$pageType] ?? $pageType));
 
-        if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES) {
+        if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks) {
             ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('Regenerating page: {page}', ['page' => $pageLabel]), 20, $pageType);
             $virtualPages = ($ports->buildVirtualPagesByType)($pageTypes, $scope);
             $blueprint = ($ports->buildPageBlueprint)($pageType, $scope, $scope['website_profile']);
             $blocks = ($ports->buildPlaceholderBlocksForPageType)($pageType, $scope['website_profile'], $scope);
             $row = $virtualPages[$pageType] ?? [];
-            $row['block_nodes'] = $blocks;
+            $row['blocks'] = $blocks;
             $row['last_generated_at'] = \date('Y-m-d H:i:s');
             $row['title'] = (string)($blueprint['page_title'] ?? ($row['title'] ?? ''));
             $row['ai_description'] = (string)($blueprint['ai_description'] ?? ($row['ai_description'] ?? ''));
@@ -84,10 +84,10 @@ class AiSiteAgentRegeneratePageOperationService
                     ['page_type' => $pageType, 'section_code' => $sectionCode]
                 );
             }
-            $scope['virtual_pages_by_type'] = $virtualPages;
+            $scope = $this->replacePlanJsonPages($scope, $virtualPages, (int)$session->getId());
             $scope['preview_page_type'] = $pageType;
             $materialized = ($ports->materializeGeneratedPages)(
-                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                 \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
                 $scope['website_profile'],
                 \array_keys($virtualPages),
@@ -97,7 +97,7 @@ class AiSiteAgentRegeneratePageOperationService
             $scope = ($ports->mergeMaterializedPagesIntoScope)($scope, $materialized);
             $scope['plan_json_execution_summary'] = ($ports->summarizePlanJsonTasks)($scope);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
-            $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('Page blocks regenerated')]);
+            $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['queue_status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('Page blocks regenerated')]);
             ($ports->replaceScope)($session->getId(), $adminId, $scope);
             ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('Page regeneration complete'), 100, $pageType);
 
@@ -120,13 +120,12 @@ class AiSiteAgentRegeneratePageOperationService
         }
 
         ($ports->sendOperationProgress)($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('Regenerating page: {page}', ['page' => $pageLabel]), 20, $pageType);
-        $pageTypeLayouts = ($ports->normalizePageTypeLayouts)($scope['page_type_layouts'] ?? [], $pageTypes);
+        $pageTypeLayouts = ($ports->normalizePageTypeLayouts)([], $pageTypes);
         $pageTypeLayouts[$pageType] = ($ports->normalizeLayoutConfig)([], $pageType);
 
         $theme = $ports->regenerateAiGeneratedVirtualThemePage instanceof \Closure
             ? ($ports->regenerateAiGeneratedVirtualThemePage)($scope, $scope['website_profile'], $pageTypes, $pageTypeLayouts, $pageType, $session->getId())
             : ($ports->ensureAiGeneratedVirtualTheme)($scope, $scope['website_profile'], $pageTypes, $pageTypeLayouts, $session->getId(), false);
-        $scope['page_type_layouts'] = $theme['page_type_layouts'];
         $scope['virtual_theme_id'] = (int)$theme['virtual_theme_id'];
 
         $virtualPages = ($ports->buildVirtualPagesByType)($pageTypes, $scope);
@@ -154,12 +153,12 @@ class AiSiteAgentRegeneratePageOperationService
                 ['page_type' => $pageType, 'section_code' => $sectionCode]
             );
         }
-        $scope['virtual_pages_by_type'] = $virtualPages;
+        $scope = $this->replacePlanJsonPages($scope, $virtualPages, (int)$session->getId());
         $scope['preview_page_type'] = $pageType;
         $scope = $this->dropPrePublishMaterializedPagesFromVirtualThemeScope($scope, $session);
         $scope['plan_json_execution_summary'] = ($ports->summarizePlanJsonTasks)($scope);
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
-        $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('Page regeneration complete')]);
+        $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['queue_status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('Page regeneration complete')]);
 
         ($ports->replaceScope)($session->getId(), $adminId, $scope);
         ($ports->bindVirtualTheme)($session->getId(), $adminId, (int)$theme['virtual_theme_id']);
@@ -193,18 +192,32 @@ class AiSiteAgentRegeneratePageOperationService
             return $scope;
         }
 
-        $scope['pagebuilder_pages_by_type'] = [];
         $scope['materialized_pages_by_type'] = [];
         $scope['preview_page_id'] = 0;
-        if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
-            foreach ($scope['virtual_pages_by_type'] as $pageType => $pageData) {
+        if (\is_array($scope['plan_json']['pages'] ?? null)) {
+            foreach ($scope['plan_json']['pages'] as $pageType => $pageData) {
                 if (!\is_array($pageData)) {
                     continue;
                 }
                 unset($pageData['page_id'], $pageData['materialized_page_id']);
-                $scope['virtual_pages_by_type'][$pageType] = $pageData;
+                $scope['plan_json']['pages'][$pageType] = $pageData;
             }
+            $scope['plan_json'] = (new AiSitePlanJsonStateService((int)$session->getId()))->normalizePlanJson($scope['plan_json']);
         }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,array<string,mixed>> $pagesByType
+     * @return array<string,mixed>
+     */
+    private function replacePlanJsonPages(array $scope, array $pagesByType, int $sessionId = 0): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planJson['pages'] = $pagesByType;
+        $scope['plan_json'] = (new AiSitePlanJsonStateService($sessionId))->normalizePlanJson($planJson);
 
         return $scope;
     }

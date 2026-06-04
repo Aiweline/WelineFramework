@@ -48,7 +48,6 @@ class AiSiteAgentSessionService
         'design_direction_version',
         'design_tokens',
         'language_contract',
-        'virtual_page_index',
         'theme_css_ref',
         'draft_website_id',
         'events',
@@ -57,10 +56,8 @@ class AiSiteAgentSessionService
         'latest_build_failure',
         'locales',
         'materialized_pages_by_type',
-        'page_type_layouts',
         'page_types',
         'page_types_user_customized',
-        'pagebuilder_pages_by_type',
         'pending_generation_page_types',
         'plan_locale',
         'plan_queue_info',
@@ -100,7 +97,6 @@ class AiSiteAgentSessionService
         'target_domain',
         'top_logs',
         'user_description',
-        'virtual_pages_by_type',
         'virtual_theme_id',
         'visual_edit_url',
         'visual_preview_url',
@@ -342,7 +338,6 @@ class AiSiteAgentSessionService
 
     /** @var list<string> */
     public const BUILD_OPERATION_ARTIFACT_KEYS = [
-        'plan_json',
         'content_manifest',
         'build_contracts',
         'render_data_contract',
@@ -491,9 +486,8 @@ class AiSiteAgentSessionService
             $td = \trim((string)$scope['target_domain']);
             $scope['target_domain'] = $td === '' ? '' : \strtolower($td);
         }
-        $scope = $this->manifestPolicy()->dehydrateScopePaths($scope);
         $storage = $this->artifactStorage()->prepareScopeForStorage((int)$session->getId(), $scope, $touchedArtifactKeys);
-        $scopeForStorage = $storage['scope'];
+        $scopeForStorage = $this->manifestPolicy()->dehydrateScopePaths($storage['scope']);
         $artifacts = $storage['artifacts'];
         unset($storage, $scope);
         $this->artifactStorage()->persistArtifacts((int)$session->getId(), $artifacts);
@@ -543,8 +537,7 @@ class AiSiteAgentSessionService
      * @return array{
      *   scope_json_bytes:int,
      *   page_types:list<string>,
-     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
-     *   virtual_pages_by_type:array<string, array<string, mixed>>,
+     *   plan_json_pages:array<string, array<string, mixed>>,
      *   preview_page_id:int,
      *   preview_page_type:string,
      *   workspace_track:string
@@ -565,18 +558,16 @@ class AiSiteAgentSessionService
         $raw = (string)($session->getData(AiSiteAgentSession::schema_fields_SCOPE_JSON) ?? '');
         $scope = $this->loadScopeForStage($session, $this->normalizeStageCode($session->getStage()));
 
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planJsonPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+
         return [
             'scope_json_bytes' => \strlen($raw),
             'page_types' => \array_values(\array_filter(
                 \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [],
                 static fn(mixed $item): bool => \is_string($item) && \trim($item) !== ''
             )),
-            'pagebuilder_pages_by_type' => \is_array($scope['pagebuilder_pages_by_type'] ?? null)
-                ? $scope['pagebuilder_pages_by_type']
-                : [],
-            'virtual_pages_by_type' => \is_array($scope['virtual_pages_by_type'] ?? null)
-                ? $scope['virtual_pages_by_type']
-                : [],
+            'plan_json_pages' => $planJsonPages,
             'preview_page_id' => (int)($scope['preview_page_id'] ?? 0),
             'preview_page_type' => \trim((string)($scope['preview_page_type'] ?? '')),
             'workspace_track' => \trim((string)($scope['workspace_track'] ?? '')),
@@ -615,6 +606,10 @@ class AiSiteAgentSessionService
         $session->setData(AiSiteAgentSession::schema_fields_STAGE, $stage);
         $this->touchUpdateTime($session);
         $session->save();
+        $scope = $this->loadScopeForStage($session, $this->normalizeStageCode($stage), []);
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planJson['state'] = $stage;
+        $this->mergeScope($sessionId, $forAdminUserId, ['plan_json' => $planJson]);
         return true;
     }
 
@@ -1147,8 +1142,7 @@ SQL;
      * @return array{
      *   scope_json_bytes:int,
      *   page_types:list<string>,
-     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
-     *   virtual_pages_by_type:array<string, array<string, mixed>>,
+     *   plan_json_pages:array<string, array<string, mixed>>,
      *   preview_page_id:int,
      *   preview_page_type:string,
      *   workspace_track:string
@@ -1169,8 +1163,7 @@ SQL;
 SELECT
     OCTET_LENGTH(COALESCE(scope_row.raw_scope_json, '')) AS scope_json_bytes,
     COALESCE((scope_row.scope_doc -> 'page_types')::text, '[]') AS page_types_json,
-    COALESCE((scope_row.scope_doc -> 'pagebuilder_pages_by_type')::text, '{}') AS pagebuilder_pages_json,
-    COALESCE((scope_row.scope_doc -> 'virtual_pages_by_type')::text, '{}') AS virtual_pages_json,
+    COALESCE((scope_row.scope_doc -> 'plan_json' -> 'pages')::text, '{}') AS plan_json_pages_json,
     COALESCE(scope_row.scope_doc ->> 'preview_page_type', '') AS preview_page_type,
     COALESCE((scope_row.scope_doc ->> 'preview_page_id')::int, 0) AS preview_page_id,
     COALESCE(scope_row.scope_doc ->> 'workspace_track', '') AS workspace_track
@@ -1200,8 +1193,7 @@ SQL;
         return [
             'scope_json_bytes' => (int)($row['scope_json_bytes'] ?? 0),
             'page_types' => $this->decodeJsonList((string)($row['page_types_json'] ?? '[]')),
-            'pagebuilder_pages_by_type' => $this->decodeJsonMap((string)($row['pagebuilder_pages_json'] ?? '{}')),
-            'virtual_pages_by_type' => $this->decodeJsonMap((string)($row['virtual_pages_json'] ?? '{}')),
+            'plan_json_pages' => $this->decodeJsonMap((string)($row['plan_json_pages_json'] ?? '{}')),
             'preview_page_id' => (int)($row['preview_page_id'] ?? 0),
             'preview_page_type' => \trim((string)($row['preview_page_type'] ?? '')),
             'workspace_track' => \trim((string)($row['workspace_track'] ?? '')),

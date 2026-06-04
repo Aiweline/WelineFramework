@@ -11,25 +11,33 @@ class AiSitePublishVerificationService
 {
     private readonly Page $pageModel;
     private readonly PageRenderService $pageRenderService;
+    /** @var \Closure(string):array{passed:bool,status_code:int,error:string,url:string} */
+    private readonly \Closure $domainProbe;
 
     public function __construct(
         ?Page $pageModel = null,
-        ?PageRenderService $pageRenderService = null
+        ?PageRenderService $pageRenderService = null,
+        ?callable $domainProbe = null
     ) {
         $this->pageModel = $pageModel ?? ObjectManager::getInstance(Page::class);
         $this->pageRenderService = $pageRenderService ?? ObjectManager::getInstance(PageRenderService::class);
+        $this->domainProbe = $domainProbe !== null
+            ? \Closure::fromCallable($domainProbe)
+            : \Closure::fromCallable([$this, 'probeDomainAccessibility']);
     }
 
     /**
      * @param array<string, array<string, mixed>> $pagesByType
      * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $publishContext
      * @return array{passed:bool,pages:array<string,array<string,mixed>>}
      */
     public function assertPublishedPagesRenderable(
         array $pagesByType,
         int $virtualThemeId,
         string $workspaceTrack,
-        array $websiteProfile = []
+        array $websiteProfile = [],
+        array $publishContext = []
     ): array {
         if ($pagesByType === []) {
             throw new \RuntimeException((string)__('AI publish verification failed: no materialized pages were produced.'));
@@ -37,6 +45,22 @@ class AiSitePublishVerificationService
 
         $track = AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
         $reports = [];
+        $domainReport = $this->inspectPublishDomainAccessibility($websiteProfile);
+        if (empty($domainReport['passed'])) {
+            throw new \RuntimeException((string)__(
+                'AI publish verification failed: publish domain is not accessible (%{1}).',
+                [(string)($domainReport['error'] ?? 'domain check failed')]
+            ));
+        }
+
+        $moduleReport = $this->inspectPlanJsonPublishModuleAlignment($pagesByType, $publishContext);
+        if (empty($moduleReport['passed'])) {
+            $reason = \implode('; ', \array_map('strval', $moduleReport['failures'] ?? []));
+            throw new \RuntimeException((string)__(
+                'AI publish verification failed: plan_json module count mismatch (%{1}).',
+                [$reason !== '' ? $reason : 'module count mismatch']
+            ));
+        }
 
         foreach ($pagesByType as $pageType => $row) {
             $pageId = (int)($row['page_id'] ?? 0);
@@ -52,7 +76,7 @@ class AiSitePublishVerificationService
             $html = $this->pageRenderService->render(
                 $page,
                 PageRenderService::MODE_LIVE,
-                null,
+                $this->resolveRenderLocale($page, $websiteProfile),
                 null,
                 $track === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME && $virtualThemeId > 0
                     ? $virtualThemeId
@@ -81,8 +105,351 @@ class AiSitePublishVerificationService
 
         return [
             'passed' => true,
+            'domain' => $domainReport,
+            'module_alignment' => $moduleReport,
             'pages' => $reports,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     * @return array<string, mixed>
+     */
+    private function inspectPublishDomainAccessibility(array $websiteProfile): array
+    {
+        $domain = $this->resolvePublishDomain($websiteProfile);
+        if ($domain === '') {
+            return [
+                'passed' => false,
+                'skipped' => false,
+                'domain' => '',
+                'url' => '',
+                'error' => 'publish domain is empty',
+            ];
+        }
+        if ($this->isLocalPublishDomain($domain)) {
+            return [
+                'passed' => true,
+                'skipped' => true,
+                'domain' => $domain,
+                'url' => '',
+                'error' => '',
+            ];
+        }
+
+        $probe = ($this->domainProbe)($domain);
+        $probe['domain'] = $domain;
+        $probe['skipped'] = false;
+
+        return $probe;
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function resolvePublishDomain(array $websiteProfile): string
+    {
+        foreach ([
+            $websiteProfile['target_domain'] ?? null,
+            $websiteProfile['selected_domain'] ?? null,
+            $websiteProfile['domain'] ?? null,
+            $websiteProfile['site_domain'] ?? null,
+            $websiteProfile['public_domain'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $domain = \strtolower(\trim((string)$candidate));
+            if ($domain === '') {
+                continue;
+            }
+            $host = (string)(\parse_url($domain, \PHP_URL_HOST) ?: $domain);
+            $host = \strtolower(\trim($host));
+            $host = \preg_replace('/:\d+$/', '', $host) ?? $host;
+            if ($host !== '') {
+                return $host;
+            }
+        }
+
+        return '';
+    }
+
+    private function isLocalPublishDomain(string $domain): bool
+    {
+        return $domain === 'localhost'
+            || $domain === '127.0.0.1'
+            || $domain === '::1'
+            || \str_ends_with($domain, '.weline.test')
+            || \str_ends_with($domain, '.local.test')
+            || \str_ends_with($domain, '.localhost');
+    }
+
+    /**
+     * @return array{passed:bool,status_code:int,error:string,url:string}
+     */
+    private function probeDomainAccessibility(string $domain): array
+    {
+        $url = 'https://' . $domain . '/';
+        $result = $this->probeUrl($url);
+        if (!empty($result['passed'])) {
+            return $result;
+        }
+
+        $fallback = $this->probeUrl('http://' . $domain . '/');
+        if (!empty($fallback['passed'])) {
+            return $fallback;
+        }
+
+        return [
+            'passed' => false,
+            'status_code' => (int)($fallback['status_code'] ?: $result['status_code']),
+            'error' => (string)($fallback['error'] ?: $result['error']),
+            'url' => (string)($fallback['url'] ?: $result['url']),
+        ];
+    }
+
+    /**
+     * @return array{passed:bool,status_code:int,error:string,url:string}
+     */
+    private function probeUrl(string $url): array
+    {
+        $headers = @\get_headers($url, true, \stream_context_create([
+            'http' => [
+                'method' => 'GET',
+                'timeout' => 5,
+                'ignore_errors' => true,
+                'follow_location' => 1,
+                'max_redirects' => 3,
+                'user_agent' => 'Weline PageBuilder Publish Gate',
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+            ],
+        ]));
+        if (!\is_array($headers) || !\is_string($headers[0] ?? null)) {
+            return [
+                'passed' => false,
+                'status_code' => 0,
+                'error' => 'domain returned no HTTP response',
+                'url' => $url,
+            ];
+        }
+
+        $statusLine = (string)$headers[0];
+        $statusCode = \preg_match('/\s(\d{3})\s/', $statusLine, $matches) === 1 ? (int)$matches[1] : 0;
+
+        return [
+            'passed' => $statusCode >= 200 && $statusCode < 500,
+            'status_code' => $statusCode,
+            'error' => $statusCode >= 200 && $statusCode < 500 ? '' : ('HTTP ' . $statusCode),
+            'url' => $url,
+        ];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $pagesByType
+     * @param array<string, mixed> $publishContext
+     * @return array<string, mixed>
+     */
+    private function inspectPlanJsonPublishModuleAlignment(array $pagesByType, array $publishContext): array
+    {
+        $planJson = \is_array($publishContext['plan_json'] ?? null) ? $publishContext['plan_json'] : [];
+        $planPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        if ($planPages === []) {
+            return [
+                'passed' => true,
+                'skipped' => true,
+                'expected_page_count' => 0,
+                'actual_page_count' => \count($pagesByType),
+                'expected_blocks_by_page' => [],
+                'actual_blocks_by_page' => [],
+                'failures' => [],
+            ];
+        }
+        $requestedPageTypes = $this->normalizeStringList($publishContext['page_types'] ?? []);
+        if ($requestedPageTypes !== []) {
+            $planPages = \array_intersect_key($planPages, \array_fill_keys($requestedPageTypes, true));
+        }
+
+        $expected = [];
+        foreach ($planPages as $pageType => $page) {
+            if (!\is_string($pageType) || !\is_array($page)) {
+                continue;
+            }
+            $expected[$pageType] = $this->countPlanJsonPublishableBlocks($page);
+        }
+        \ksort($expected);
+
+        $actual = [];
+        foreach ($pagesByType as $pageType => $row) {
+            if (!\is_string($pageType) || !\is_array($row)) {
+                continue;
+            }
+            $actual[$pageType] = $this->countMaterializedPublishBlocks($row);
+        }
+        \ksort($actual);
+
+        $failures = [];
+        if (\count($expected) !== \count($actual)) {
+            $failures[] = \sprintf('expected %d published pages from plan_json, got %d', \count($expected), \count($actual));
+        }
+        foreach (\array_values(\array_unique(\array_merge(\array_keys($expected), \array_keys($actual)))) as $pageType) {
+            $expectedCount = (int)($expected[$pageType] ?? 0);
+            $actualCount = (int)($actual[$pageType] ?? 0);
+            if (!\array_key_exists($pageType, $expected)) {
+                $failures[] = \sprintf('published page %s is not in plan_json', $pageType);
+                continue;
+            }
+            if (!\array_key_exists($pageType, $actual)) {
+                $failures[] = \sprintf('plan_json page %s was not published', $pageType);
+                continue;
+            }
+            if ($expectedCount !== $actualCount) {
+                $failures[] = \sprintf('page %s expected %d published content modules, got %d', $pageType, $expectedCount, $actualCount);
+            }
+        }
+
+        return [
+            'passed' => $failures === [],
+            'skipped' => false,
+            'expected_page_count' => \count($expected),
+            'actual_page_count' => \count($actual),
+            'expected_blocks_by_page' => $expected,
+            'actual_blocks_by_page' => $actual,
+            'failures' => $failures,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     */
+    private function countPlanJsonPublishableBlocks(array $page): int
+    {
+        $count = 0;
+        foreach ($page as $blockKey => $block) {
+            if (!$this->isPlanJsonDynamicBlock($blockKey, $block)) {
+                continue;
+            }
+            if (!$this->planJsonBlockIsEnabled($block)) {
+                continue;
+            }
+            if ((int)($block['status'] ?? 0) !== 1) {
+                continue;
+            }
+            if (\trim((string)($block['html'] ?? $block['html_content'] ?? $block['phtml'] ?? '')) === '') {
+                continue;
+            }
+            $count++;
+        }
+
+        return $count;
+    }
+
+    private function isPlanJsonDynamicBlock(string|int $blockKey, mixed $block): bool
+    {
+        if (!\is_array($block)) {
+            return false;
+        }
+        $key = \trim((string)$blockKey);
+        if ($key === '' || \in_array($key, ['page_type', 'name', 'title', 'label', 'status', 'seo', 'route', 'metadata', 'page_id'], true)) {
+            return false;
+        }
+
+        return \array_key_exists('section_code', $block)
+            || \array_key_exists('component_code', $block)
+            || \array_key_exists('html', $block)
+            || \array_key_exists('html_content', $block)
+            || \array_key_exists('phtml', $block)
+            || \array_key_exists('block_contract', $block)
+            || \array_key_exists('content_plan', $block);
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function planJsonBlockIsEnabled(array $block): bool
+    {
+        if (!\array_key_exists('enabled', $block)) {
+            return true;
+        }
+
+        return !\in_array($block['enabled'], [false, 0, '0', 'false', 'off', 'no'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function countMaterializedPublishBlocks(array $row): int
+    {
+        $blocks = $this->resolveMaterializedBlockNodes($row);
+        $count = 0;
+        foreach ($blocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            if (!$this->planJsonBlockIsEnabled($block)) {
+                continue;
+            }
+            if (\trim((string)($block['html'] ?? $block['html_content'] ?? $block['phtml'] ?? $block['config']['html_content'] ?? '')) === '') {
+                continue;
+            }
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return list<array<string, mixed>>
+     */
+    private function resolveMaterializedBlockNodes(array $row): array
+    {
+        foreach ([$row['block_nodes'] ?? null, $row['blocks'] ?? null] as $candidate) {
+            if (\is_array($candidate)) {
+                return \array_values(\array_filter($candidate, 'is_array'));
+            }
+        }
+
+        $aiLayout = $row['ai_layout'] ?? $row['layout']['ai_layout'] ?? null;
+        if (\is_string($aiLayout) && \trim($aiLayout) !== '') {
+            $decoded = \json_decode($aiLayout, true);
+            if (\is_array($decoded)) {
+                $aiLayout = $decoded;
+            }
+        }
+        if (\is_array($aiLayout['block_nodes'] ?? null)) {
+            return \array_values(\array_filter($aiLayout['block_nodes'], 'is_array'));
+        }
+        if (\is_array($aiLayout['blocks'] ?? null)) {
+            return \array_values(\array_filter($aiLayout['blocks'], 'is_array'));
+        }
+
+        return [];
+    }
+
+    /**
+     * @param mixed $value
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $value): array
+    {
+        if (!\is_array($value)) {
+            return [];
+        }
+        $items = [];
+        foreach ($value as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $item = \trim((string)$item);
+            if ($item !== '') {
+                $items[$item] = true;
+            }
+        }
+
+        return \array_values(\array_keys($items));
     }
 
     private function loadPage(int $pageId): Page
@@ -91,6 +458,29 @@ class AiSitePublishVerificationService
         $page->clearData()->clearQuery()->load($pageId);
 
         return $page;
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function resolveRenderLocale(Page $page, array $websiteProfile): string
+    {
+        foreach ([
+            $page->getData(Page::schema_fields_DEFAULT_LOCALE),
+            $websiteProfile['content_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $websiteProfile['default_language'] ?? null,
+        ] as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return 'en_US';
     }
 
     /**

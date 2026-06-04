@@ -18,7 +18,7 @@ final class AiSiteStageOnePromptContractRenderer
             '- Selected page types: ' . $this->json($contract['page_types'] ?? []) . '.',
             '- Page route contract: ' . $this->json($this->compactRouteContract($contract)) . '.',
             '- Later page_strategy must make every selected page able to satisfy page_contracts: ' . $this->json($this->compactPageContracts($contract)) . '.',
-            '- Later page blocks must carry distinct visual_signature and image_intent objects so plan_json block node work do not reuse one section as another.',
+            '- Later page blocks must carry distinct visual_signature and image_intent objects so plan_json block work does not reuse one section as another.',
             '- Later theme/page prompts require concrete nouns, offers, proof, CTAs, visual cues, and assumptions from the user brief; abstract methodology text is invalid.',
             '- Template/example guard: style templates, component default configs, layout JSON, and examples are structure references only. Later outputs must not copy stale template brands or example copy into visible site plans.',
             '- No extra explanatory keys: do not add fields named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning anywhere unless the current schema explicitly lists the field. Theme selection_reason is allowed only where the theme schema lists it.',
@@ -57,13 +57,20 @@ final class AiSiteStageOnePromptContractRenderer
     public function renderPageContract(array $contract, string $pageType): array
     {
         $pageContract = \is_array($contract['page_contracts'][$pageType] ?? null) ? $contract['page_contracts'][$pageType] : [];
+        $exactBlockKeys = $this->exactBlockKeysForPage($pageContract);
 
         return [
             'STAGE-1 PAGE CONTRACT (structural contract is non-negotiable; visual/copy guidance is diagnostic unless required structure is missing):',
             '- Contract version/hash: ' . $this->contractId($contract) . '.',
             '- Page contract for ' . $pageType . ': ' . $this->json($pageContract) . '.',
             '- First-pass is mandatory: do not depend on recovery. A response that needs repair is not accepted for first-pass validation even if the repaired page later passes.',
-            '- Block count contract: emit exactly target_block_nodes when present; otherwise emit min_block_nodes. Do not stop after required blocks when optional blocks are needed to reach target_block_nodes, and never exceed max_block_nodes.',
+            '- Output shape contract: return exactly one JSON object representing plan_json.pages.' . $pageType . '; do not wrap it in plan_json, pages, page, ' . $pageType . ', blocks, sections, components, or markdown.',
+            '- Forbidden wrapper key: a top-level "' . $pageType . '" key inside this returned page object is invalid because it is not a block_key in this page contract. Put dynamic blocks directly under plan_json.pages.' . $pageType . '.',
+            '- Exact dynamic block keys to output for target_blocks: ' . $this->json($exactBlockKeys) . '. These keys must appear directly at the returned object top level, each exactly once.',
+            '- Returned page top-level keys should be page_goal, theme_alignment_summary, page_design_plan, and the exact dynamic block keys above. Do not add a nested page-type object to hold blocks.',
+            '- Complete page return skeleton (copy this top-level shape, then fill every block object completely): ' . $this->json($this->pageReturnSkeleton($exactBlockKeys)) . '.',
+            '- Invalid single-block response rule: never return a single block object at the page top level. Top-level keys named block_key, page_flow_role, content, design_tags, visual_signature, image_intent, field_plan, or execution_script mean you returned one block instead of plan_json.pages.' . $pageType . ' and the response will fail.',
+            '- Block count contract: emit exactly target_blocks when present; otherwise emit min_blocks. Do not stop after required blocks when optional blocks are needed to reach target_blocks, and never exceed max_blocks.',
             '- Build handoff contract: Stage 1 block count, block_key order, visual_signature, and image_intent become the build blueprint source of truth. Do not add temporary duplicate blocks and do not expect the builder to infer missing blocks.',
             $this->noExtraExplanatoryFieldRule(),
             '- Required block key contract: every required_block_key must appear exactly once. The list is a coverage contract, not a forced visual sequence; choose a natural section order from page_design_plan.section_flow and place CTA/support blocks where the page narrative requires.',
@@ -71,7 +78,7 @@ final class AiSiteStageOnePromptContractRenderer
             '- Recommended optional blocks to use after required keys: ' . $this->json(\is_array($pageContract['recommended_optional_block_keys'] ?? null) ? $pageContract['recommended_optional_block_keys'] : []) . '.',
             '- Block key lock: required_block_keys are exact machine keys, not labels. Do not translate, pluralize, rename, or replace them with synonyms such as featured_articles, content_list, story_cards, details, overview, list, grid, or cards.',
             '- The page object must include page_goal, theme_alignment_summary, page_design_plan, and non-empty dynamic block objects keyed directly by block_key under the page (for example pages.home_page.hero). Do not return a blocks array as the persisted page state.',
-            '- Blocks must stay within min/max, include every required block_key exactly once, hit target_block_nodes exactly when present, avoid generic block_key values, and keep block_key unique within the page.',
+            '- Blocks must stay within min/max, include every required block_key exactly once, hit target_blocks exactly when present, avoid generic block_key values, and keep block_key unique within the page.',
             '- Every block must include the required structural fields: content, design_tags, visual_signature, image_intent, exactly ' . AiSiteStageOneContractService::FIELD_PLAN_COUNT . ' field_plan rows, and execution_script.core_copy. Write visitor-facing copy where possible, but the hard gate is structure only; copy wording, image choice, and image count are generation guidance.',
             '- Required design_tags keys for every block: ' . $this->json(\is_array($pageContract['required_design_tag_keys'] ?? null) ? $pageContract['required_design_tag_keys'] : AiSiteStageOneContractService::DESIGN_TAG_KEYS) . '; put implementation_note inside design_tags, not beside it.',
             '- Required visual_signature keys for every block: ' . $this->json(\is_array($pageContract['visual_signature_keys'] ?? null) ? $pageContract['visual_signature_keys'] : AiSiteStageOneContractService::VISUAL_SIGNATURE_KEYS) . '. composition_pattern, spatial_rhythm, media_strategy, surface_treatment, and interaction_pattern must each be concrete and non-empty. Static content should still write a block-specific pattern such as "static reading panel; focus-visible links only; no ambient motion" instead of an empty string. Adjacent duplicate checks are quality diagnostics; they should guide variety but must not be treated as a reason to invent unrelated blocks.',
@@ -169,9 +176,12 @@ final class AiSiteStageOnePromptContractRenderer
             '- Page route contract to use for all header/footer hrefs: ' . $this->json($this->compactRouteContract($contract)) . '.',
             '- Validation issues to fix: ' . $this->json($issues) . '.',
             '- Return one complete replacement artifact, not a patch, not only failing blocks, and not an array fragment. The replacement must be self-contained and valid if the previous artifact is discarded.',
+            '- Output shape recovery rule: when repairing a page, return exactly one JSON object representing plan_json.pages.{page_type}. Do not wrap the page in plan_json, pages, page, {page_type}, blocks, sections, components, or markdown.',
+            '- Nested page wrapper failure rule: if validation paths look like pages.{page_type}.{page_type}, or invalid_block_count has actual=1 with target_block_count_mismatch, the response used a page-type wrapper as a fake block. Delete that wrapper and rebuild direct block keys from page_contracts required_block_keys plus recommended_optional_block_keys until target_blocks is reached.',
+            '- Single-block artifact failure rule: if validation paths look like pages.{page_type}.visual_signature.page_flow_role, pages.{page_type}.image_intent.*, pages.{page_type}.field_plan.*, or pages.{page_type}.execution_script.*, the response returned one block object at page top level. Rebuild the whole page object with direct dynamic block keys from page_contracts.',
             $this->noExtraExplanatoryFieldRule(),
             '- Rebuild the whole page dynamic block set when any issue mentions blocks, visual_signature, image_intent, field_plan, or target count. Do not append a partial fixed block to the current page and do not leave any generic filler block behind.',
-            '- Target block count is mandatory during recovery: emit exactly target_block_nodes when present, otherwise min_block_nodes. Every returned dynamic block object must have block_key, page_flow_role, content, complete design_tags, complete visual_signature, complete image_intent, exactly ' . AiSiteStageOneContractService::FIELD_PLAN_COUNT . ' field_plan rows, and execution_script.core_copy.',
+            '- Target block count is mandatory during recovery: emit exactly target_blocks when present, otherwise min_blocks. Every returned dynamic block object must have block_key, page_flow_role, content, complete design_tags, complete visual_signature, complete image_intent, exactly ' . AiSiteStageOneContractService::FIELD_PLAN_COUNT . ' field_plan rows, and execution_script.core_copy.',
             '- Field plan recovery rule: every field_plan.sample must be final visitor-facing copy or a concrete asset brief, never an instruction. Do not start samples with write, rewrite, describe the/this block, describe the/this field, use this field, explain, create, show, include, highlight, mention, 鍥寸粫, 绐佸嚭, 璇存槑, 瀹屽杽, or 浼樺寲. Visitor-facing form hint text such as "Describe your issue..." is allowed only as the final input hint itself; never name the HTML input hint attribute or call it a filler value.',
             '- Visible body recovery rule: every repaired block must have visitor-facing body copy that PlanJson can consume. contact_cta/final_cta/download_cta blocks need a supporting_copy/body sentence plus a separate cta_label/action label; do not return only a button label or layout instruction.',
             '- Do not explain the failure. Do not remove required blocks, field_plan rows, design_tags, visual_signature, image_intent, or core_copy.',
@@ -181,8 +191,8 @@ final class AiSiteStageOnePromptContractRenderer
             '- Link issue codes: missing_link_list, invalid_link_row, link_href_not_exact_route_path, and link_href_not_in_route_contract mean header/footer link rows must be rebuilt as {label, href} with href copied exactly from page_route_contract allowed paths. Do not invent anchors, query strings, domains, or translated slugs.',
             '- Visual issue codes: invalid_visual_signature, adjacent_visual_signature_duplicate, duplicate_block_message, and overused_composition_pattern mean rewrite the affected block with a concrete block-specific composition, spatial rhythm, media strategy, surface treatment, interaction pattern, headline, and core_copy. Do not solve visual diversity by adding unrelated blocks or renaming block keys.',
             '- Image field issue code invalid_image_intent_field means keep the image_intent object and fill the missing/weak field with concrete image role, subject, placement, visual_atmosphere, image_treatment, and reuse_policy. Do not add rationale/reason fields.',
-            '- If any issue code is target_block_count_mismatch, rebuild the page with exactly target_block_nodes entries: required blocks plus recommended optional blocks until the exact target count is reached.',
-            '- If any issue code is missing_required_block_key, required_block_key_coverage_missing, or any path points to a missing block key under pages.{page_type}.{block_key}, rebuild the page block nodes from the page_contract required_block_keys. Include each required key exactly once, keep natural page_design_plan order, and never satisfy the issue by renaming unrelated blocks or deleting optional blocks below target count.',
+            '- If any issue code is target_block_count_mismatch, rebuild the page with exactly target_blocks entries: required blocks plus recommended optional blocks until the exact target count is reached.',
+            '- If any issue code is missing_required_block_key, required_block_key_coverage_missing, or any path points to a missing block key under pages.{page_type}.{block_key}, rebuild the page blocks from the page_contract required_block_keys. Include each required key exactly once, keep natural page_design_plan order, and never satisfy the issue by renaming unrelated blocks or deleting optional blocks below target count.',
             '- During recovery, preserve the page-specific creative direction where possible. Fix the failed contract fields without flattening the page into generic cards or copying examples verbatim.',
             '- If any issue code is icon_only_image_subject, rewrite that block image_intent.image_subject into a concrete scene/product/editorial/interface/environment/people visual. Do not use icon, logo, badge, glyph, symbol, sparkle, avatar, shield mark, coin mark, download arrow, app mark, or line-art subjects for page blocks.',
             '- If any issue code is page_missing_generated_image_intent, treat generated media as a preference, not a hard gate. Return the complete page object with valid image_intent on every block; use needs_image=true only when there is a concrete stable generated image subject, otherwise use a complete CSS-only motif.',
@@ -224,9 +234,9 @@ final class AiSiteStageOnePromptContractRenderer
                 continue;
             }
             $compact[(string)$pageType] = [
-                'min_block_nodes' => (int)($pageContract['min_block_nodes'] ?? 0),
-                'max_block_nodes' => (int)($pageContract['max_block_nodes'] ?? 0),
-                'target_block_nodes' => (int)($pageContract['target_block_nodes'] ?? 0),
+                'min_blocks' => (int)($pageContract['min_blocks'] ?? 0),
+                'max_blocks' => (int)($pageContract['max_blocks'] ?? 0),
+                'target_blocks' => (int)($pageContract['target_blocks'] ?? 0),
                 'required_block_keys' => \is_array($pageContract['required_block_keys'] ?? null) ? $pageContract['required_block_keys'] : [],
                 'recommended_optional_block_keys' => \is_array($pageContract['recommended_optional_block_keys'] ?? null) ? $pageContract['recommended_optional_block_keys'] : [],
                 'field_plan_count' => (int)($pageContract['field_plan_count'] ?? AiSiteStageOneContractService::FIELD_PLAN_COUNT),
@@ -535,5 +545,64 @@ final class AiSiteStageOnePromptContractRenderer
         }
 
         return $skeleton;
+    }
+
+    /**
+     * @param list<string> $exactBlockKeys
+     * @return array<string, mixed>
+     */
+    private function pageReturnSkeleton(array $exactBlockKeys): array
+    {
+        $skeleton = [
+            'page_goal' => 'Visitor-facing goal for this exact page.',
+            'theme_alignment_summary' => 'How this page follows the approved theme.',
+            'page_design_plan' => [
+                'section_flow' => $exactBlockKeys,
+                'visual_rhythm' => 'Concrete page-level rhythm across the exact block keys.',
+            ],
+        ];
+
+        foreach ($exactBlockKeys as $blockKey) {
+            $skeleton[$blockKey] = [
+                'block_key' => $blockKey,
+                'page_flow_role' => 'opening|proof|support|conversion|detail',
+                'content' => 'Visitor-facing block copy.',
+                'design_tags' => '{complete object}',
+                'visual_signature' => '{complete object}',
+                'image_intent' => '{complete object}',
+                'field_plan' => '[exactly 3 rows]',
+                'execution_script' => '{complete object with core_copy}',
+            ];
+        }
+
+        return $skeleton;
+    }
+
+    /**
+     * @param array<string, mixed> $pageContract
+     * @return list<string>
+     */
+    private function exactBlockKeysForPage(array $pageContract): array
+    {
+        $required = \is_array($pageContract['required_block_keys'] ?? null) ? $pageContract['required_block_keys'] : [];
+        $optional = \is_array($pageContract['recommended_optional_block_keys'] ?? null) ? $pageContract['recommended_optional_block_keys'] : [];
+        $target = (int)($pageContract['target_blocks'] ?? 0);
+        if ($target <= 0) {
+            $target = (int)($pageContract['min_blocks'] ?? 0);
+        }
+
+        $keys = [];
+        foreach (\array_merge($required, $optional) as $blockKey) {
+            $blockKey = \trim((string)$blockKey);
+            if ($blockKey === '' || \in_array($blockKey, $keys, true)) {
+                continue;
+            }
+            $keys[] = $blockKey;
+            if ($target > 0 && \count($keys) >= $target) {
+                break;
+            }
+        }
+
+        return $keys;
     }
 }

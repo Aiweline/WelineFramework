@@ -30,11 +30,11 @@ final class AiHtmlSanitizerServiceTest extends TestCase
     {
         $s = new AiHtmlSanitizerService();
         $out = $s->sanitizeAiLayout([
-            'block_nodes' => [
+            'blocks' => [
                 ['block_id' => '', 'type' => 'x', 'html' => '<p>a</p>'],
             ],
         ]);
-        self::assertArrayHasKey('block_nodes', $out);
-        self::assertNotSame('', $out['block_nodes'][0]['block_id'] ?? '');
+        self::assertArrayHasKey('blocks', $out);
+        self::assertNotSame('', $out['blocks'][0]['block_id'] ?? '');
     }
 }

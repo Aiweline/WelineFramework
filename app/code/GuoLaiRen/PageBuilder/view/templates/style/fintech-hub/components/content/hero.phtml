@@ -2,51 +2,51 @@
 /**
  * FinTech Hub - Hero Section Component
  * 
- * 首屏英雄区域，包含标题、描述、CTA按钮和平台统计数据
+ * 棣栧睆鑻遍泟鍖哄煙锛屽寘鍚爣棰樸€佹弿杩般€丆TA鎸夐挳鍜屽钩鍙扮粺璁℃暟鎹?
  * 
  * @var \Weline\Framework\View\Template $this
- * @var array $colors 颜色配置
- * @var array $component_config 组件配置
+ * @var array $colors 棰滆壊閰嶇疆
+ * @var array $component_config 缁勪欢閰嶇疆
  * 
  * @fields_start
  * 
- * group:content => 内容设置
- * content.badge => 顶部徽章文字:text:Trusted by 1M+ Users
- * content.title => 主标题:textarea:The future of digital finance starts here
- * content.description => 描述文字:textarea:Secure payments, smart investments, and global transfers — all in one platform. Experience banking reimagined for the digital age.
+ * group:content => 鍐呭璁剧疆
+ * content.badge => 椤堕儴寰界珷鏂囧瓧:text:Trusted by 1M+ Users
+ * content.title => 涓绘爣棰?textarea:The future of digital finance starts here
+ * content.description => 鎻忚堪鏂囧瓧:textarea:Secure payments, smart investments, and global transfers 鈥?all in one platform. Experience banking reimagined for the digital age.
  * 
- * group:cta => 按钮设置
- * cta.primary_text => 主按钮文字:text:Open Free Account
- * cta.primary_url => 主按钮链接:text:#services
- * cta.secondary_text => 次按钮文字:text:Explore Products
- * cta.secondary_url => 次按钮链接:text:#features
+ * group:cta => 鎸夐挳璁剧疆
+ * cta.primary_text => 涓绘寜閽枃瀛?text:Open Free Account
+ * cta.primary_url => 涓绘寜閽摼鎺?text:#services
+ * cta.secondary_text => 娆℃寜閽枃瀛?text:Explore Products
+ * cta.secondary_url => 娆℃寜閽摼鎺?text:#features
  * 
- * group:stats => 统计数据
- * stats.items => 统计列表:textarea:$2B+|Total Processed\r\n1M+|Active Users\r\n99.99%|Uptime\r\n150+|Countries|格式：数值|标签，一行一个
+ * group:stats => 缁熻鏁版嵁
+ * stats.items => 缁熻鍒楄〃:textarea:$2B+|Total Processed\r\n1M+|Active Users\r\n99.99%|Uptime\r\n150+|Countries|鏍煎紡锛氭暟鍊紎鏍囩锛屼竴琛屼竴涓?
  * 
- * group:visual => 视觉设置
- * visual.show_decoration => 显示装饰效果:select:yes|yes,no
- * visual.show_image => 显示右侧图片:select:yes|yes,no
- * visual.image_url => 图片URL:textarea:|留空使用默认装饰效果
- * visual.image_alt => 图片Alt文字:text:VaultPay digital finance platform
+ * group:visual => 瑙嗚璁剧疆
+ * visual.show_decoration => 鏄剧ず瑁呴グ鏁堟灉:select:yes|yes,no
+ * visual.show_image => 鏄剧ず鍙充晶鍥剧墖:select:yes|yes,no
+ * visual.image_url => 鍥剧墖URL:textarea:|鐣欑┖浣跨敤榛樿瑁呴グ鏁堟灉
+ * visual.image_alt => 鍥剧墖Alt鏂囧瓧:text:VaultPay digital finance platform
  * 
- * group:style => 样式设置
- * style.padding_top => 顶部内边距:number:120|px
- * style.padding_bottom => 底部内边距:number:80|px
- * style.title_size => 标题字号:number:3.5|rem
- * style.desc_size => 描述字号:number:1.25|rem
+ * group:style => 鏍峰紡璁剧疆
+ * style.padding_top => 椤堕儴鍐呰竟璺?number:120|px
+ * style.padding_bottom => 搴曢儴鍐呰竟璺?number:80|px
+ * style.title_size => 鏍囬瀛楀彿:number:3.5|rem
+ * style.desc_size => 鎻忚堪瀛楀彿:number:1.25|rem
  * 
  * @fields_end
  */
 
 $config = $component_config ?? [];
 
-// 确保颜色变量可用
+// 纭繚棰滆壊鍙橀噺鍙敤
 if (!isset($colors) || !is_array($colors)) {
     $colors = [];
 }
 
-// 颜色配置
+// 棰滆壊閰嶇疆
 $heroBg = $colors['hero_bg'] ?? 'linear-gradient(135deg, #0d1b3e 0%, #0a1128 50%, #080b16 100%)';
 $textPrimary = $colors['text_primary'] ?? '#f8fafc';
 $textSecondary = $colors['text_secondary'] ?? '#94a3b8';
@@ -59,19 +59,19 @@ $borderLight = $colors['border_light'] ?? 'rgba(255, 255, 255, 0.08)';
 $badgeBg = $colors['badge_bg'] ?? 'rgba(37, 99, 235, 0.15)';
 $badgeBorder = $colors['badge_border'] ?? 'rgba(37, 99, 235, 0.3)';
 
-// 内容配置
+// 鍐呭閰嶇疆
 $badge = $config['content.badge'] ?? 'Trusted by 1M+ Users';
 $title = $config['content.title'] ?? 'The future of digital finance starts here';
-$description = $config['content.description'] ?? 'Secure payments, smart investments, and global transfers — all in one platform. Experience banking reimagined for the digital age.';
+$description = $config['content.description'] ?? 'Secure payments, smart investments, and global transfers 鈥?all in one platform. Experience banking reimagined for the digital age.';
 
-// CTA配置
+// CTA閰嶇疆
 $primaryBtnText = $config['cta.primary_text'] ?? 'Open Free Account';
 $primaryBtnUrl = $config['cta.primary_url'] ?? '#services';
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Explore Products';
 $secondaryBtnUrl = $config['cta.secondary_url'] ?? '#features';
 
-// 统计数据
-$statsRaw = $config['stats.items'] ?? "\$2B+|Total Processed\n1M+|Active Users\n99.99%|Uptime\n150+|Countries";
+// 缁熻鏁版嵁
+$statsRaw = $config['stats.items'] ?? "$2B+|Total Processed\n1M+|Active Users\n99.99%|Uptime\n150+|Countries";
 $stats = [];
 $lines = preg_split('/[\r\n]+/', $statsRaw);
 foreach ($lines as $line) {
@@ -85,13 +85,13 @@ foreach ($lines as $line) {
     }
 }
 
-// 视觉配置
+// 瑙嗚閰嶇疆
 $showDecoration = ($config['visual.show_decoration'] ?? 'yes') !== 'no';
 $showImage = ($config['visual.show_image'] ?? 'yes') !== 'no';
 $imageUrl = $config['visual.image_url'] ?? '';
 $imageAlt = $config['visual.image_alt'] ?? 'VaultPay digital finance platform';
 
-// 样式配置
+// 鏍峰紡閰嶇疆
 $paddingTop = $config['style.padding_top'] ?? '120';
 $paddingBottom = $config['style.padding_bottom'] ?? '80';
 $titleSize = $config['style.title_size'] ?? '3.5';
@@ -227,7 +227,7 @@ $instanceId = 'fh-hero-' . uniqid();
             border-color: <?= $accentPrimaryLight ?>;
         }
         
-        /* 右侧装饰区域 */
+        /* 鍙充晶瑁呴グ鍖哄煙 */
         #<?= $instanceId ?> .fh-hero-visual {
             position: relative;
             display: flex;
@@ -307,7 +307,7 @@ $instanceId = 'fh-hero-' . uniqid();
             to { transform: rotate(360deg); }
         }
         
-        /* 统计数据区域 */
+        /* 缁熻鏁版嵁鍖哄煙 */
         #<?= $instanceId ?> .fh-hero-stats {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -409,7 +409,7 @@ $instanceId = 'fh-hero-' . uniqid();
     </style>
     
     <div class="fh-hero-container">
-        <!-- 主区域：左侧内容 + 右侧装饰 -->
+        <!-- 涓诲尯鍩燂細宸︿晶鍐呭 + 鍙充晶瑁呴グ -->
         <div class="fh-hero-main">
             <div class="fh-hero-content">
                 <?php if ($badge): ?>
@@ -456,7 +456,7 @@ $instanceId = 'fh-hero-' . uniqid();
             <?php endif; ?>
         </div>
         
-        <!-- 统计数据 -->
+        <!-- 缁熻鏁版嵁 -->
         <?php if (!empty($stats)): ?>
         <div class="fh-hero-stats">
             <?php foreach ($stats as $stat): ?>

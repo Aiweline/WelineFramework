@@ -343,7 +343,7 @@ final class CompactSessions implements CommandInterface
     private function hasActiveOperation(array $scope): bool
     {
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        $operationStatus = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+        $operationStatus = \strtolower(\trim((string)($activeOperation['queue_status'] ?? '')));
         if ($operationStatus !== '' && isset(self::ACTIVE_STATUSES[$operationStatus])) {
             return true;
         }

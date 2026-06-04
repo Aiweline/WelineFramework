@@ -3320,8 +3320,18 @@ class WlsRuntime implements RuntimeInterface
         }
 
         // 每次请求都基于当前解析结果重建完整 URI，避免 Fiber/长连接恢复旧值后污染统一路由缓存键。
-        $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? 'http');
-        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $scheme = (string)($parse['server']['REQUEST_SCHEME'] ?? WelineEnv::get('request.scheme', '') ?: 'http');
+        $host = (string)(
+            ($parse['server']['HTTP_HOST'] ?? null)
+            ?: ($parse['server']['HOST'] ?? null)
+            ?: ($parse['server']['SERVER_NAME'] ?? null)
+            ?: WelineEnv::get('server.http_host', '')
+            ?: WelineEnv::get('server.host', '')
+            ?: WelineEnv::get('server.server_name', '')
+            ?: 'localhost'
+        );
+        WelineEnv::set('request.scheme', $scheme, 'WlsRuntime processUrlParse');
+        WelineEnv::set('server.http_host', $host, 'WlsRuntime processUrlParse');
         $currentUri = $this->normalizeParsedUri($parse['uri'] ?? ($_SERVER['REQUEST_URI'] ?? '/'));
         if ($currentUri === '') {
             $currentUri = '/';
@@ -4065,10 +4075,12 @@ class WlsRuntime implements RuntimeInterface
 
         $scheme = $request?->isSecure() ? 'https' : 'http';
         $host = (string)(
-            ($request?->getServer('HTTP_HOST') ?: null)
+            WelineEnv::get('server.http_host', '')
+            ?: WelineEnv::get('server.host', '')
+            ?: WelineEnv::get('server.server_name', '')
+            ?: ($request?->getServer('HTTP_HOST') ?: null)
             ?: ($request?->getServer('SERVER_NAME') ?: null)
-            ?: ($_SERVER['HTTP_HOST'] ?? null)
-            ?: ($_SERVER['SERVER_NAME'] ?? 'localhost')
+            ?: 'localhost'
         );
         $returnUrl = $scheme . '://' . $host . (str_starts_with($uri, '/') ? $uri : '/' . $uri);
         $query = [

@@ -63,7 +63,7 @@ class AiSiteAgentWorkspaceStateHelperService
             'plan_json' => [
                 'confirmed' => (int)(\is_array($state['plan_json'] ?? null)
                     ? ($state['plan_json']['confirmed'] ?? 0)
-                    : ($scope['plan_json']['confirmed'] ?? 0)),
+                    : 0),
             ],
             'virtual_theme_id' => (int)($state['virtual_theme_id'] ?? 0),
             'plan_json_execution_summary' => $this->resolvePlanJsonExecutionSummary($state),
@@ -103,20 +103,23 @@ class AiSiteAgentWorkspaceStateHelperService
      */
     public function selectVirtualPagesForSse(array $state, array $pageTypes): array
     {
-        $virtualPages = \is_array($state['virtual_pages_by_type'] ?? null) ? $state['virtual_pages_by_type'] : [];
-        if ($virtualPages === []) {
+        $planJson = \is_array($state['plan_json'] ?? null)
+            ? $state['plan_json']
+            : (\is_array($state['scope']['plan_json'] ?? null) ? $state['scope']['plan_json'] : []);
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        if ($pages === []) {
             return [];
         }
 
         $selected = [];
         foreach ($pageTypes as $pageType) {
-            if ($pageType === '' || !isset($virtualPages[$pageType]) || !\is_array($virtualPages[$pageType])) {
+            if ($pageType === '' || !isset($pages[$pageType]) || !\is_array($pages[$pageType])) {
                 continue;
             }
-            $selected[$pageType] = $virtualPages[$pageType];
+            $selected[$pageType] = $pages[$pageType];
         }
 
-        return $this->pruneVirtualPagesByTypeForView($selected);
+        return $this->prunePlanJsonPagesForView($selected);
     }
 
     /**
@@ -276,6 +279,7 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['scope'] = $this->pruneScopeForView($state['scope']);
         }
 
+        $planJson = \is_array($state['plan_json'] ?? null) ? $state['plan_json'] : [];
         $plan = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
         foreach ([
             'json' => 'plan_json',
@@ -284,14 +288,14 @@ class AiSiteAgentWorkspaceStateHelperService
                 $plan[$planKey] = $state[$stateKey];
             }
         }
+        if ($planJson === [] && \is_array($plan['json'] ?? null) && ($plan['json'] ?? []) !== []) {
+            $planJson = $plan['json'];
+        }
+        if ($planJson !== []) {
+            $state['plan_json'] = $this->pruneStageOneStructuredPlanForView($planJson);
+        }
         if ($plan !== []) {
             $state['plan'] = $this->prunePlanForView($plan);
-        }
-        if (\is_array($state['virtual_pages_by_type'] ?? null)) {
-            $state['virtual_pages_by_type'] = $this->pruneVirtualPagesByTypeForView($state['virtual_pages_by_type']);
-        }
-        if (\is_array($state['page_type_layouts'] ?? null)) {
-            $state['page_type_layouts'] = $this->prunePageTypeLayoutsForView($state['page_type_layouts']);
         }
         if (\is_array($state['plan_json_task_summary'] ?? null)) {
             $state['plan_json_task_summary'] = $this->prunePlanJsonTaskSummaryForView($state['plan_json_task_summary']);
@@ -318,7 +322,8 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['plan_confirmed'],
             $state['plan_confirmed_at'],
             $state['plan_markdown'],
-            $state['plan_json'],
+            $state['page_type_layouts'],
+            $state['virtual_pages_by_type'],
             $state['virtual_theme_plan'],
             $state['task_plan'],
             $state['task_plan_markdown'],
@@ -350,7 +355,6 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['retryable_ai_failures'],
             $state['retryable_ai_failure_summary'],
             $state['plan'],
-            $state['page_type_layouts'],
             $state['scope'],
             $state['content_manifest']
         );
@@ -367,10 +371,7 @@ class AiSiteAgentWorkspaceStateHelperService
         $scope = $this->preserveViewMetadataFromHeavyScope($scope);
 
         unset(
-            $scope['pagebuilder_pages_by_type'],
-            $scope['virtual_pages_by_type'],
             $scope['preview_page_options'],
-            $scope['page_type_layouts'],
             $scope['events'],
             $scope['top_logs'],
             $scope['build_summary'],
@@ -380,6 +381,8 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope['pre_publish_visual_urls'],
             $scope['plan_markdown'],
             $scope['plan_json'],
+            $scope['page_type_layouts'],
+            $scope['virtual_pages_by_type'],
             $scope['task_plan'],
             $scope['task_plan_markdown'],
             $scope['task_plan_confirmed'],
@@ -461,7 +464,7 @@ class AiSiteAgentWorkspaceStateHelperService
     private function PlanJsonBlockProgressForView(array $PlanJson): array
     {
         $rows = [];
-        foreach ($this->extractPlanJsonBlockNodesForView($PlanJson) as $block) {
+        foreach ($this->extractPlanJsonBlocksForView($PlanJson) as $block) {
             $execution = \is_array($block['execution'] ?? null) ? $block['execution'] : [];
             $rows[] = [
                 'block_id' => (string)($block['block_id'] ?? $block['id'] ?? ''),
@@ -518,16 +521,16 @@ class AiSiteAgentWorkspaceStateHelperService
             $result['pages'][] = $pageOut;
         }
 
-        $blocks = $this->extractPlanJsonBlockNodesForView($PlanJson);
-        $result['block_nodes'] = [];
+        $blocks = $this->extractPlanJsonBlocksForView($PlanJson);
+        $result['blocks'] = [];
         foreach ($blocks as $block) {
-            if (\count($result['block_nodes']) >= self::VIEW_PLAN_BLOCK_LIMIT) {
+            if (\count($result['blocks']) >= self::VIEW_PLAN_BLOCK_LIMIT) {
                 continue;
             }
-            $result['block_nodes'][] = $this->prunePlanJsonBlockForView($block);
+            $result['blocks'][] = $this->prunePlanJsonBlockForView($block);
         }
         if (\count($blocks) > self::VIEW_PLAN_BLOCK_LIMIT) {
-            $result['block_nodes_truncated'] = \count($blocks) - self::VIEW_PLAN_BLOCK_LIMIT;
+            $result['blocks_truncated'] = \count($blocks) - self::VIEW_PLAN_BLOCK_LIMIT;
         }
 
         if (\is_array($PlanJson['shared_execution'] ?? null)) {
@@ -547,7 +550,7 @@ class AiSiteAgentWorkspaceStateHelperService
      * @param array<string, mixed> $PlanJson
      * @return list<array<string, mixed>>
      */
-    private function extractPlanJsonBlockNodesForView(array $PlanJson): array
+    private function extractPlanJsonBlocksForView(array $PlanJson): array
     {
         $reservedPageKeys = [
             'name' => true,
@@ -660,13 +663,8 @@ class AiSiteAgentWorkspaceStateHelperService
         if ($structured === [] && $json !== []) {
             $structured = $json;
         }
-        $prunedStructured = $this->pruneStageOneStructuredPlanForView($structured);
-
         return [
-            'json' => [],
-            'structured' => $prunedStructured,
             'json_available' => $json !== [],
-            'structured_available' => $structured !== [],
             'slimmed' => true,
         ];
     }
@@ -685,9 +683,18 @@ class AiSiteAgentWorkspaceStateHelperService
             'stage1_queue',
             'queue_jobs',
             'block_index',
-            'plan_block_nodes',
+            'plan_blocks',
+            'asset_manifest',
+            'verified_assets',
+            'reference_images',
         ] as $heavyRootKey) {
             unset($plan[$heavyRootKey]);
+        }
+        if (\is_array($plan['pages'] ?? null)) {
+            $plan['pages'] = $this->prunePlanJsonPagesForInitialView($plan['pages']);
+        }
+        if (\is_array($plan['shared_components'] ?? null)) {
+            $plan['shared_components'] = $this->prunePlanJsonSharedComponentsForInitialView($plan['shared_components']);
         }
 
         $plan = $this->pruneRecursiveViewPayload($plan);
@@ -754,6 +761,19 @@ class AiSiteAgentWorkspaceStateHelperService
             'image_base64' => true,
             'raw' => true,
             'raw_response' => true,
+            'asset_manifest' => true,
+            'verified_assets' => true,
+            'reference_images' => true,
+            'execution_script' => true,
+            'realtime_context' => true,
+            'task_context' => true,
+            'prompt_brief' => true,
+            'brief' => true,
+            'planning_signature' => true,
+            'stage1_validation_contract' => true,
+            'page_design_plan' => true,
+            'image_intent' => true,
+            'design_tags' => true,
         ];
 
         $result = [];
@@ -763,6 +783,126 @@ class AiSiteAgentWorkspaceStateHelperService
                 continue;
             }
             $result[$key] = $this->pruneRecursiveViewPayload($item);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int|string, mixed> $pages
+     * @return array<int|string, mixed>
+     */
+    private function prunePlanJsonPagesForInitialView(array $pages): array
+    {
+        $reservedPageKeys = [
+            'name' => true,
+            'title' => true,
+            'label' => true,
+            'status' => true,
+            'seo' => true,
+            'path' => true,
+            'route' => true,
+            'url' => true,
+            'page_goal' => true,
+            'page_type' => true,
+            'page_title' => true,
+            'updated_at' => true,
+            'ordered_block_keys' => true,
+            'preview_url' => true,
+            'visual_preview_url' => true,
+            'visual_edit_url' => true,
+            'materialized_page_id' => true,
+            'page_id' => true,
+        ];
+        $result = [];
+        foreach ($pages as $pageType => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageOut = [];
+            foreach ($page as $key => $value) {
+                $keyString = \is_int($key) ? (string)$key : (string)$key;
+                if (isset($reservedPageKeys[$keyString])) {
+                    $pageOut[$key] = $this->pruneRecursiveViewPayload($value);
+                    continue;
+                }
+                if (!\is_array($value)) {
+                    continue;
+                }
+                $pageOut[$keyString] = $this->prunePlanJsonDirectBlockForInitialView($value, $keyString, (string)$pageType);
+            }
+            $result[$pageType] = $pageOut;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    private function prunePlanJsonDirectBlockForInitialView(array $block, string $blockKey, string $pageType): array
+    {
+        $result = [
+            'block_key' => (string)($block['block_key'] ?? $blockKey),
+            'page_type' => (string)($block['page_type'] ?? $pageType),
+        ];
+        foreach ([
+            'status',
+            'title',
+            'name',
+            'label',
+            'section_code',
+            'block_type',
+            'component',
+            'component_code',
+            'message',
+            'error',
+            'started_at',
+            'updated_at',
+            'finished_at',
+            'sort_order',
+            'fake_mode',
+        ] as $key) {
+            if (\array_key_exists($key, $block) && !\is_array($block[$key]) && !\is_object($block[$key])) {
+                $result[$key] = \is_string($block[$key]) ? $this->limitViewText((string)$block[$key], 800) : $block[$key];
+            }
+        }
+        foreach (['html', 'html_content', 'phtml'] as $key) {
+            if (\array_key_exists($key, $block) && \is_string($block[$key]) && \trim($block[$key]) !== '') {
+                $result[$key] = $this->limitViewText((string)$block[$key], 12000);
+                break;
+            }
+        }
+        foreach (['content', 'description', 'summary'] as $key) {
+            if (\array_key_exists($key, $block) && \is_string($block[$key]) && \trim($block[$key]) !== '') {
+                $result[$key] = $this->limitViewText((string)$block[$key], 2000);
+            }
+        }
+        foreach (['fields', 'default_config', 'field_schema', 'result_ref'] as $key) {
+            if (\is_array($block[$key] ?? null)) {
+                $result[$key] = $this->pruneRecursiveViewPayload($block[$key]);
+            }
+        }
+        if (\is_array($block['execution'] ?? null)) {
+            $result['execution'] = $this->prunePlanJsonExecutionForView($block['execution']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int|string, mixed> $sharedComponents
+     * @return array<int|string, mixed>
+     */
+    private function prunePlanJsonSharedComponentsForInitialView(array $sharedComponents): array
+    {
+        $result = [];
+        foreach ($sharedComponents as $region => $component) {
+            if (!\is_array($component)) {
+                continue;
+            }
+            $result[$region] = $this->prunePlanJsonDirectBlockForInitialView($component, (string)$region, '');
         }
 
         return $result;
@@ -1068,16 +1208,6 @@ class AiSiteAgentWorkspaceStateHelperService
             return $this->queueInfoBelongsToOperation($queueInfo, $operation) ? $queueInfo : [];
         }
 
-        if ($key !== '') {
-            return [];
-        }
-
-        foreach (['plan_queue_info', 'build_queue_info'] as $fallbackKey) {
-            if (\is_array($state[$fallbackKey] ?? null)) {
-                return $state[$fallbackKey];
-            }
-        }
-
         return [];
     }
 
@@ -1322,10 +1452,8 @@ class AiSiteAgentWorkspaceStateHelperService
         $lastEventId = $this->resolveLastEventId(\is_array($state['events'] ?? null) ? $state['events'] : []);
         $status = $this->normalizeEnvelopeStatus(
             (string)(
-                $queueState['job_status']
-                ?? $queueState['status']
-                ?? $queueState['queue_status']
-                ?? $activeOperation['status']
+                $queueState['queue_status']
+                ?? $activeOperation['queue_status']
                 ?? $state['workspace_status']
                 ?? ''
             )
@@ -1359,10 +1487,10 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
-     * @param array<string, mixed> $virtualPagesByType
+     * @param array<string, mixed> $pagesByType
      * @return array<string, mixed>
      */
-    private function pruneVirtualPagesByTypeForView(array $virtualPagesByType): array
+    private function prunePlanJsonPagesForView(array $pagesByType): array
     {
         $result = [];
         $scalarKeys = [
@@ -1382,7 +1510,7 @@ class AiSiteAgentWorkspaceStateHelperService
             'last_generated_at',
         ];
 
-        foreach ($virtualPagesByType as $pageType => $pageData) {
+        foreach ($pagesByType as $pageType => $pageData) {
             if (!\is_array($pageData)) {
                 continue;
             }
@@ -1393,10 +1521,19 @@ class AiSiteAgentWorkspaceStateHelperService
                 }
             }
             $summary['materialized_page_id'] = (int)($pageData['materialized_page_id'] ?? 0);
-            $blocks = \is_array($pageData['block_nodes'] ?? null) ? $pageData['block_nodes'] : [];
+            $blocks = [];
+            foreach ($pageData as $blockKey => $block) {
+                if (!\is_string($blockKey) || !\is_array($block)) {
+                    continue;
+                }
+                if (\in_array($blockKey, ['layout', 'page_meta', 'meta', 'seo', 'route', 'assets', 'blocks', 'block_previews', 'sections', 'components'], true)) {
+                    continue;
+                }
+                $blocks[$blockKey] = $block;
+            }
             $summary['block_count'] = \count($blocks);
-            $summary['block_nodes'] = $this->pruneVirtualPageBlockNodesForView($blocks);
-            $summary['block_nodes_slimmed'] = true;
+            $summary['blocks'] = $this->prunePlanJsonPageBlocksForView($blocks);
+            $summary['blocks_slimmed'] = true;
             $result[(string)$pageType] = $summary;
         }
 
@@ -1407,7 +1544,7 @@ class AiSiteAgentWorkspaceStateHelperService
      * @param array<int|string, mixed> $blocks
      * @return list<array<string, mixed>>
      */
-    private function pruneVirtualPageBlockNodesForView(array $blocks): array
+    private function prunePlanJsonPageBlocksForView(array $blocks): array
     {
         $result = [];
         foreach ($blocks as $index => $block) {
@@ -1417,9 +1554,10 @@ class AiSiteAgentWorkspaceStateHelperService
             $result[] = [
                 'index' => \is_int($index) ? $index : (string)$index,
                 'type' => (string)($block['type'] ?? ''),
-                'block_id' => (string)($block['block_id'] ?? ''),
+                'block_key' => (string)($block['block_key'] ?? $index),
+                'block_id' => (string)($block['block_id'] ?? $block['section_code'] ?? ''),
                 'region' => (string)($block['_pb_server_region'] ?? $block['region'] ?? ''),
-                'component_code' => (string)($block['_pb_server_component_code'] ?? ''),
+                'component_code' => (string)($block['_pb_server_component_code'] ?? $block['component_code'] ?? ''),
                 'html_available' => \trim((string)($block['html'] ?? '')) !== '',
                 'config_available' => \is_array($block['config'] ?? null) && $block['config'] !== [],
                 'field_schema_available' => \is_array($block['field_schema'] ?? null) && $block['field_schema'] !== [],
@@ -1429,113 +1567,4 @@ class AiSiteAgentWorkspaceStateHelperService
         return $result;
     }
 
-    /**
-     * @param array<string, mixed> $pageTypeLayouts
-     * @return array<string, mixed>
-     */
-    private function prunePageTypeLayoutsForView(array $pageTypeLayouts): array
-    {
-        $result = [];
-        foreach ($pageTypeLayouts as $pageType => $layout) {
-            if (!\is_array($layout)) {
-                continue;
-            }
-            $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
-            $sections = \is_array($layout['sections'] ?? null) ? $layout['sections'] : [];
-            $summary = [
-                'page_type' => (string)($layout['page_type'] ?? $pageType),
-                'label' => (string)($layout['label'] ?? ''),
-                'block_count' => \count($blocks),
-                'section_count' => \count($sections),
-                'slimmed' => true,
-            ];
-            foreach (['version', 'page_id', 'use_original_template'] as $key) {
-                if (\array_key_exists($key, $layout) && !\is_array($layout[$key]) && !\is_object($layout[$key])) {
-                    $summary[$key] = $layout[$key];
-                }
-            }
-            foreach (['header', 'footer'] as $region) {
-                if (\is_array($layout[$region] ?? null)) {
-                    $summary[$region] = $this->prunePageTypeLayoutComponentForView($layout[$region], $region);
-                }
-            }
-            if (\is_array($layout['content'] ?? null)) {
-                $summary['content'] = [];
-                foreach ($layout['content'] as $index => $item) {
-                    if (!\is_array($item)) {
-                        continue;
-                    }
-                    $summary['content'][] = $this->prunePageTypeLayoutComponentForView($item, 'content', $index);
-                }
-            }
-
-            $result[(string)$pageType] = $summary;
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param array<string, mixed> $component
-     * @param int|string|null $index
-     * @return array<string, mixed>
-     */
-    private function prunePageTypeLayoutComponentForView(array $component, string $region, int|string|null $index = null): array
-    {
-        $result = [
-            'region' => $region,
-        ];
-        if ($index !== null) {
-            $result['index'] = \is_int($index) ? $index : (string)$index;
-        }
-
-        foreach ([
-            'code',
-            'component',
-            'name',
-            'label',
-            'title',
-            'instance_id',
-            'style_code',
-            'sort_order',
-            'enabled',
-        ] as $key) {
-            if (!\array_key_exists($key, $component) || \is_array($component[$key]) || \is_object($component[$key])) {
-                continue;
-            }
-            $result[$key] = $component[$key];
-        }
-
-        if (\is_array($component['config'] ?? null)) {
-            $result['config'] = $this->pruneLayoutComponentConfigForView($component['config']);
-        } else {
-            $result['config'] = [];
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param array<string, mixed> $config
-     * @return array<string, mixed>
-     */
-    private function pruneLayoutComponentConfigForView(array $config): array
-    {
-        $result = [];
-        foreach ($config as $key => $value) {
-            if (\is_array($value)) {
-                $nested = $this->pruneLayoutComponentConfigForView($value);
-                if ($nested !== []) {
-                    $result[(string)$key] = $nested;
-                }
-                continue;
-            }
-            if (\is_object($value) || \is_resource($value)) {
-                continue;
-            }
-            $result[(string)$key] = $value;
-        }
-
-        return $result;
-    }
 }

@@ -151,11 +151,11 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('planJson.pages && typeof planJson.pages === \'object\'', $script);
         self::assertStringContainsString('function normalizePlanNodeStatus(status)', $script);
         self::assertStringContainsString('function pickFirstNonEmptyPlanObject()', $script);
-        self::assertStringContainsString('json: pickFirstNonEmptyPlanObject.apply(null, [', $script);
-        self::assertStringContainsString('structured: pickFirstNonEmptyPlanObject.apply(null, [', $script);
-        self::assertStringContainsString('plan.structured,', $script);
-        self::assertStringContainsString('state.plan_json,', $script);
-        self::assertStringContainsString('scope.plan_json', $script);
+        self::assertStringContainsString('var planJson = pickFirstNonEmptyPlanObject(state.plan_json);', $script);
+        self::assertStringContainsString('json: planJson,', $script);
+        self::assertStringContainsString('structured: planJson,', $script);
+        self::assertStringContainsString('pickFirstNonEmptyPlanObject(state.plan_json)', $script);
+        self::assertStringNotContainsString('plan.structured,', $script);
         self::assertStringNotContainsString('state.plan_structured', $script);
         self::assertStringNotContainsString('scope.plan_structured', $script);
         self::assertStringNotContainsString('pickFirstNonEmptyPlanText(plan.markdown', $script);
@@ -195,14 +195,17 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('pages = normalizePlanPreviewPages(pages);', $renderBody);
     }
 
-    public function testVisualEditPreviewTabsHydrateFromVirtualPagesWithoutEntityPageIds(): void
+    public function testVisualEditPreviewTabsHydrateFromPlanJsonPagesWithoutEntityPageIds(): void
     {
         $script = $this->workspaceScript();
         $syncBody = $this->extractFunctionBody($script, 'syncPreviewMetaFromState');
         $urlBody = $this->extractFunctionBody($script, 'buildVisualPageEditorUrl');
 
-        self::assertStringContainsString('Object.keys(workspaceState.virtual_pages_by_type).forEach(function (pageType)', $syncBody);
+        self::assertStringContainsString('var planJsonPages = resolvePlanJsonFromWorkspaceState(workspaceState).pages || {};', $syncBody);
+        self::assertStringContainsString('Object.keys(planJsonPages).forEach(function (pageType)', $syncBody);
         self::assertStringContainsString('upsertPreviewTab(pageType, label || normalizePageTypeLabel(pageType), pageId, shouldActivate);', $syncBody);
+        self::assertStringContainsString('renderMaterializedPlanJsonPages(pagesByType);', $syncBody);
+        self::assertStringNotContainsString('workspaceState.virtual_pages_by_type', $syncBody);
         self::assertStringContainsString("editorUrl.searchParams.set('page_type', String(normalizedPageType));", $urlBody);
         self::assertStringContainsString("editorUrl.searchParams.set('page_id', String(normalizedPageId));", $urlBody);
     }
@@ -382,6 +385,10 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertIsString($deviceStyles);
         self::assertStringContainsString('width: min(390px, 100%);', $deviceStyles);
         self::assertStringContainsString('max-width: 100%;', $deviceStyles);
+        self::assertStringContainsString('flex-wrap: nowrap;', $deviceStyles);
+        self::assertStringContainsString('overflow-x: auto;', $deviceStyles);
+        self::assertStringContainsString('flex: 0 0 auto;', $deviceStyles);
+        self::assertStringContainsString('flex: 1 1 100%;', $deviceStyles);
 
         $script = $this->workspaceScript();
         self::assertStringContainsString("frame.style.width = 'min(390px, 100%)';", $script);
@@ -429,7 +436,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         // 闂傚倸鍊搁崐鐑芥倿閿曚降浜归柛鎰典簽閻捇鎮楅棃娑欐喐缁惧彞绮欓弻鐔煎箲閹伴潧娈紓浣哄У濠㈡﹢鈥﹂崸妤佸殝闂傚牊绋戦～宥夋煟韫囨捇鐛滅紒鐘虫崌閹繝顢曢敃鈧悙濠勬喐鎼淬劌鍚归柛銉墯閻撳繘鏌涢埄鍐炬畼缂佺姾宕甸埀顒侇問閸犳洟宕￠幎鐣屽祦闁糕剝鍑瑰Σ鍓х磼缂併垹骞愰柛瀣尵缁辨捇宕掑顑藉亾閻戣姤鍊块柨鏇楀亾閻撱倖绻濋棃娑氬鐎?plan generation lock闂傚倸鍊烽悞锔锯偓绗涘懐鐭欓柟杈鹃檮閸ゆ劖銇勯弽顐粶缂佺姵鑹鹃妴鎺戭潩閿濆懍澹曢柣搴ゎ潐濞叉﹢鎳濇ィ鍐ㄧ厺閹兼番鍨洪崕鐔兼煥濠靛棙宸濈€规洖鐖煎娲嚒閵堝懍娌梺鍛婂灥缂嶅﹤鐣烽幋锕€宸濇い鏍殔娴滈箖鏌涢…鎴濅簼闁抽攱甯炵槐鎺撴綇閵娿儲璇炲銈冨灪閿曘垽寮澶婄妞ゆ挆鍐╁€梻鍌欐祰瀹曠敻宕戦悙鐢电煓闁硅揪闄勯崕鏃堟煟閹惧磭宀搁柡?plan 闂傚倸鍊烽懗鍫曞箠閹剧粯鍊舵繝闈涚墢閻挾鈧娲栧ú銊х矆婵犲洦鐓涢柛鎰╁妿婢ф盯鏌ｉ幘鍗炲姎闁靛棙甯掗～婵嬫晲閸涱剙顥氶梻鍌欐祰閵嗏偓闁稿鎹囬弻銊モ攽閸℃﹩妫℃繝娈垮灡閹告娊鎮￠锕€鐐婇柕濠忚吂閹峰綊姊虹捄銊ユ瀭闁稿氦灏欓幑銏犫槈濞嗗繒绐為柣搴秵閸嬪棝藝椤曗偓閹泛顫濋鐘电杽闂佸搫鏈粙鎴﹀煝鎼淬劌绠涙い鎺戝€峰鎾绘⒒娴ｅ憡鎯堟俊顐㈩嚟瀵板﹦鎹勯妸銉ョ亰闂佸疇妗ㄧ拋鏌ュ几鎼淬劍鐓欓柟瑙勫姈閻濐亝銇勮箛鏇炴灈闁诡喗顨婇幃娆撴偡閹靛啿浜鹃柡宥冨妿椤╂彃霉閻樺樊鍎忛柣?
         self::assertStringContainsString("rebuildBuildStageBtn.dataset.pbPlanGenerationLockBypass = '1';", $bindBody);
         // 闂傚倸鍊烽懗鍓佸垝椤栫偛绀夋俊銈呮噹缁犵娀鏌熼幑鎰靛殭闁告俺顫夐妵鍕即濡も偓娴滈箖鎮楃憴鍕缂侇喖鐭傞、妯荤附缁嬪灝绐涘銈嗙墬缁酣寮抽悩娴嬫斀闁挎稑瀚禍濂告煕婵犲啰鈽夐柣锝囧厴閹粙妫冨☉妯间喊闂備焦鏋奸弲娑㈠疮椤栨稓顩?schemeRebuild 缂傚倸鍊烽懗鍫曟惞鎼淬劌鐭楅幖娣妼缁愭绻涢幋娆忕労闁轰礁娲幃褰掑炊瑜庨埢鏇㈡煕閵堝棙绀嬮柡灞剧洴閺佸倻鎷犻幓鎺旑啋闁诲氦顫夊ú鏍偉婵傜钃熼柕濞垮劗濡插牊淇婇婵嗕汗闁告棏鍨辩换娑㈠级閹寸姵鐧侀梺鍝勬噽婵挳鎮惧畡鎷旀棃鍩€椤掑嫷鏁囧┑鍌滎焾闁卞洦銇勯幇鈺佺仾妞ゆ柡鍋撻梻鍌氬€烽懗鍓佸垝椤栫偛绀夐柡鍥╁剳閼板潡鏌涘Δ鍐х闯婵炲樊浜滈柨銈嗕繆閵堝倸浜剧紓浣哄У婵炲﹪寮婚弴鐔风窞婵炴垶锕╁ú顓烆渻閵堝懐绠伴柟鑺ョ矌濡叉劙骞掗弬鐐媰闂佸吋浜介崕鏌ュ磿閹剧粯鈷戦柛娑橈工閻撯偓缂備胶绮换鍫ョ嵁閸愨晝顩烽悗锝庡亜娴滄粎绱撴担鍓插創婵炲娲樼粋宥夋晲婢跺鎷洪梺鍛婄箓鐎氱兘宕曡箛娑欏€垫慨妯煎帶婢ф壆绱掓潏銊﹀磳妤犵偞顭囬幏鐘诲矗?
-        self::assertStringContainsString('confirmSchemeRebuild(messages.buildFullRebuildConfirmMessage', $bindBody);
+        self::assertStringContainsString('confirmWorkspaceRebuildAction(messages.buildFullRebuildConfirmMessage', $bindBody);
         self::assertStringContainsString('startFullBuildRebuild(triggerBtn, selectedTypes, {});', $bindBody);
 
         $rebuildBody = $this->extractFunctionBody($script, 'startFullBuildRebuild');
@@ -440,6 +447,11 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $buildBody = $this->extractFunctionBody($script, 'pbAiConfirmGenerateThemeContinue');
         self::assertStringContainsString('if (opts.forceBuildRebuild === true) {', $buildBody);
         self::assertStringContainsString("requestPayload._force_rebuild = '1';", $buildBody);
+
+        $startButtonBody = $this->extractFunctionBody($script, 'startBuildButtonAction');
+        self::assertStringContainsString("stage === 'publish'", $startButtonBody);
+        self::assertStringContainsString('startFullBuildRebuild(triggerBtn, normalizedTypes, opts);', $startButtonBody);
+        self::assertStringContainsString('startBuildButtonAction(startBuildBtn, selectedTypesForBuild, {});', $script);
     }
 
     public function testConfirmPlanButtonChecksOnlyPhaseOneQueueState(): void
@@ -448,10 +460,12 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $body = $this->extractFunctionBody($script, 'isPhaseOneQueueUnfinished');
 
         self::assertStringContainsString('activeOperations.plan', $body);
-        self::assertStringContainsString('state.plan_queue_info', $body);
+        self::assertStringContainsString('state.active_operation', $body);
         self::assertStringContainsString('isWorkspacePlanQueueTerminal(state)', $body);
         self::assertStringContainsString('readQueueStatusForPrompt(item)', $body);
         self::assertStringContainsString('isQueueStatusRunningForUi', $body);
+        self::assertStringContainsString("operation === 'plan'", $body);
+        self::assertStringNotContainsString('state.plan_queue_info', $body);
         self::assertStringNotContainsString('state.task_plan_queue_info', $body);
         self::assertStringNotContainsString('state.build_queue_info', $body);
         self::assertStringNotContainsString('hasAnyRunningQueueForUi()', $body);
@@ -477,8 +491,11 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('if (hasStageOnePlanEvidenceForBlockingCheck(state)) {', $blockingBody);
         self::assertStringContainsString('hasStageOnePlanEvidenceForBlockingCheck(state) && resolveMissingSelectedPlanPageTypes(state).length > 0', $rebuildVisibilityBody);
         self::assertStringContainsString('state.plan_json && state.plan_json.pages', $generatedTypesBody);
-        self::assertStringContainsString('scope.plan_json && scope.plan_json.pages', $generatedTypesBody);
-        self::assertStringContainsString('plan.json && plan.json.pages', $generatedTypesBody);
+        self::assertStringNotContainsString('plan.json && plan.json.pages', $generatedTypesBody);
+        self::assertStringNotContainsString('plan.structured && plan.structured.pages', $generatedTypesBody);
+        self::assertStringNotContainsString('scope.plan_json && scope.plan_json.pages', $generatedTypesBody);
+        self::assertStringNotContainsString('page_type_layouts', $generatedTypesBody);
+        self::assertStringNotContainsString('virtual_pages_by_type', $generatedTypesBody);
         self::assertStringContainsString('var actual = resolveGeneratedPlanPageTypesFromState(state);', $missingPagesBody);
         self::assertStringContainsString('actual.length === 0 && !phaseOnePlanPresentFromWorkspaceState(state) && !hasCurrentPhaseOnePlan()', $missingPagesBody);
         self::assertStringContainsString('var missingFromActual = expected.length > 0 ? expected.filter(function (pageType)', $missingPagesBody);
@@ -645,7 +662,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('var planJson = resolvePlanJsonFromWorkspaceState(state);', $ensureBody);
         self::assertStringContainsString('parseInt(String(planJson.confirmed || 0), 10) === 1', $ensureBody);
         self::assertStringContainsString('startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, Object.assign({}, opts, {}));', $ensureBody);
-        self::assertStringContainsString('var canStartBuildFlow = shouldUsePlanJsonFlow(state);', $syncBody);
+        self::assertStringContainsString('var canStartBuildFlow = hasPlanJsonFlowEvidence(state);', $syncBody);
         self::assertStringContainsString('ensurePlanJsonConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});', $bindBody);
         self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('plan')", $bindBody);
         self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('build')", $bindBody);
@@ -689,8 +706,8 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringNotContainsString('&& $siteReady;', $body);
 
         $operationPayloadBody = $this->extractPhpMethodBody($source, 'buildWorkspaceOperationPayload');
-        self::assertStringContainsString("'page_type_layouts' => \$this->pruneWorkspacePageTypeLayoutsForPayload(\$state)", $operationPayloadBody);
-        self::assertStringContainsString('private function pruneWorkspacePageTypeLayoutsForPayload(array $state): array', $source);
+        self::assertStringNotContainsString("'page_type_layouts' => \$this->pruneWorkspacePageTypeLayoutsForPayload(\$state)", $operationPayloadBody);
+        self::assertStringNotContainsString('pruneWorkspacePageTypeLayoutsForPayload', $operationPayloadBody);
     }
 
     public function testBlockRefineUsesQueuedPartialPatchWithoutRemovedSseFallback(): void
@@ -735,7 +752,8 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("'build', 'visual_edit', 'regenerate_page', 'block_regenerate', 'block_partial_patch', 'block_refine'", $runtime);
         self::assertStringContainsString("source.addEventListener('block_partial_patch_applied'", $runtime);
         self::assertStringContainsString('hydrateWorkspaceFromState(payload.state);', $runtime);
-        self::assertStringContainsString('previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);', $runtime);
+        self::assertStringContainsString('hydrateWorkspaceFromState(payload.state);', $runtime);
+        self::assertStringNotContainsString('previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);', $runtime);
         self::assertStringContainsString('runtimeFindNextBlock(pageType, pageBlockList, blockId)', $runtime);
         self::assertStringContainsString('previewBridge.replaceCurrentBlockHtml(blockRefreshState.pageType, nextBlock)', $runtime);
         self::assertStringContainsString("source.addEventListener('block_partial_patch_failed'", $runtime);
@@ -800,7 +818,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $detailKeysBody = $this->extractFunctionBody($controller, 'getQueuedOperationDetailKeys');
 
         self::assertStringContainsString("'source' => \$readSource,", $readBody);
-        self::assertStringContainsString("\$targetScope = \$readSource === 'virtual_theme_component'", $readBody);
+        self::assertStringContainsString("'plan_json.pages.' . \$pageType . '.' . \$actualBlockId", $readBody);
         self::assertStringContainsString("'source',", $detailKeysBody);
         self::assertStringContainsString("'retry_of_queue_id',", $detailKeysBody);
         self::assertStringContainsString("'retry_source',", $detailKeysBody);
@@ -827,7 +845,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertIsString($source);
         $body = $this->extractFunctionBody($source, 'buildWorkspaceState');
 
-        $virtualPagesAssigned = \strpos($body, '$normalized[\'virtual_pages_by_type\'] = $virtualPagesByType;');
+        $virtualPagesAssigned = \strpos($body, '$planJson[\'pages\'] = $virtualPagesByType;');
         $reconcile = \strpos($body, '$normalized = $this->planJsonTaskService->reconcileGeneratedArtifactsWithTaskState($normalized);');
         $summary = \strpos($body, '$taskSummary = $this->planJsonTaskService->summarize($normalized);');
 
@@ -899,7 +917,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
     {
         $script = $this->workspaceScript();
         $definition = \strpos($script, 'function bindPublishStageLogic()');
-        $boot = \strrpos($script, "safeWorkspaceBootStep('publish_stage', bindPublishStageLogic);");
+        $boot = \strrpos($script, "safeWorkspaceBootStep('publish_stage', window.__pbStageLogic.bindPublishStageLogic);");
 
         self::assertIsInt($definition);
         self::assertIsInt($boot);
@@ -908,6 +926,13 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
             $boot,
             'Publish checklist and preview buttons must be bound after the function is defined.'
         );
+        self::assertStringContainsString('bindPublishStageLogic: bindPublishStageLogic', $script);
+        self::assertStringContainsString('bindPublishStageLogic();', $script);
+        self::assertStringContainsString('window.setTimeout(bindPublishStageLogic, 0);', $script);
+        self::assertStringContainsString('function bindPublishStageWhenActionsAppear()', $script);
+        self::assertStringContainsString('publishStageAsyncBindAttempts < 20', $script);
+        self::assertStringContainsString("document.getElementById('pb-ai-run-publish-check') || document.getElementById('pb-ai-start-publish')", $script);
+        self::assertStringNotContainsString('new MutationObserver', $script);
     }
 
     public function testWorkspaceBootBindsCurrentStageActions(): void
@@ -921,9 +946,40 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertLessThan($boot, $definition, 'Stage binding must run after visual-edit handlers are defined.');
         self::assertStringContainsString("if (bootStage === 'visual_edit')", $script);
         self::assertStringContainsString("['pending', 'queued', 'running', 'processing']", $script);
-        self::assertStringContainsString("safeWorkspaceBootStep('visual_edit_stage', bindVisualEditStageLogic);", \substr($script, $boot));
-        self::assertStringContainsString("safeWorkspaceBootStep('plan_stage', bindPlanStageLogic);", \substr($script, $boot));
-        self::assertStringContainsString("safeWorkspaceBootStep('publish_stage', bindPublishStageLogic);", \substr($script, $boot));
+        self::assertStringContainsString("safeWorkspaceBootStep('visual_edit_stage', window.__pbStageLogic.bindVisualEditStageLogic);", \substr($script, $boot));
+        self::assertStringContainsString("safeWorkspaceBootStep('plan_stage', window.__pbStageLogic.bindPlanStageLogic);", \substr($script, $boot));
+        self::assertStringContainsString("safeWorkspaceBootStep('publish_stage', window.__pbStageLogic.bindPublishStageLogic);", \substr($script, $boot));
+    }
+
+    public function testWorkspaceBootRegistersOnlyLoadedStageHandlers(): void
+    {
+        $boot = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main-boot.phtml');
+        self::assertIsString($boot);
+
+        self::assertStringContainsString('window.__pbStageLogic = window.__pbStageLogic || {};', $boot);
+        self::assertStringContainsString("if (typeof bindPlanStageLogic === 'function')", $boot);
+        self::assertStringContainsString("if (typeof bindVisualEditStageLogic === 'function')", $boot);
+        self::assertStringContainsString("if (typeof bindPublishStageLogic === 'function')", $boot);
+        self::assertStringContainsString("safeWorkspaceBootStep('visual_edit_stage', window.__pbStageLogic.bindVisualEditStageLogic);", $boot);
+        self::assertStringContainsString("safeWorkspaceBootStep('publish_stage', window.__pbStageLogic.bindPublishStageLogic);", $boot);
+        self::assertStringContainsString("safeWorkspaceBootStep('plan_stage', window.__pbStageLogic.bindPlanStageLogic);", $boot);
+        self::assertStringNotContainsString('bindPublishStageLogic: bindPublishStageLogic', $boot);
+    }
+
+    public function testStageAsyncBindingUsesBoundedTimersInsteadOfMutationObservers(): void
+    {
+        $plan = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main-stage-plan.phtml');
+        $publish = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main-stage-publish.phtml');
+
+        self::assertIsString($plan);
+        self::assertIsString($publish);
+        self::assertStringContainsString('function bindStageLogicWhenPublishEntryAppears()', $plan);
+        self::assertStringContainsString("document.getElementById('pb-ai-go-publish-stage')", $plan);
+        self::assertStringContainsString('stageLogicAsyncBindAttempts < 20', $plan);
+        self::assertStringContainsString('function bindPublishStageWhenActionsAppear()', $publish);
+        self::assertStringContainsString("document.getElementById('pb-ai-run-publish-check') || document.getElementById('pb-ai-start-publish')", $publish);
+        self::assertStringContainsString('publishStageAsyncBindAttempts < 20', $publish);
+        self::assertStringNotContainsString('new MutationObserver', $plan . $publish);
     }
 
     public function testStartBuildButtonUsesSinglePlanJsonFlow(): void
@@ -934,7 +990,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $resumeBody = $this->extractFunctionBody($script, 'startOrObserveBuildFromVisualEditEntry');
 
         self::assertStringContainsString('var selectedTypes = selectedPageTypes();', $bindBody);
-        self::assertStringContainsString('ensurePlanJsonConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});', $bindBody);
+        self::assertStringContainsString('startBuildButtonAction(startBuildSiteBtn, selectedTypes, {});', $bindBody);
         self::assertStringContainsString('planConfirmedState = !!(state && shouldUsePlanJsonFlow(state));', $continueBody);
         self::assertStringContainsString('window.location.href = resolveWorkspaceRedirectUrl(state);', $continueBody);
         self::assertStringContainsString('renderPlanJsonProjectionSummary(state);', $continueBody);
@@ -978,7 +1034,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('$hasConfirmedPlan = !empty($layoutPlanJson[\'confirmed_at\']) || (int)($layoutPlanJson[\'confirmed\'] ?? 0) === 1;', $layout);
         // build 闂傚倸鍊搁崐鎼佸磹閹间礁鐤柟鎯版閺勩儵鏌″搴″季闁轰礁锕﹂埀顒€鍘滈崑鎾绘煃瑜滈崜姘辩矉瀹ュ宸濆┑鐘插暟缁夊爼姊虹€圭姵銆冪紒鈧担鍝勵棜闁秆勵殕閳锋垿鏌涘☉姗堝姛闁硅櫕鍔曢湁婵犲﹤鎳庢禒婊堟煥?plan_json.confirmed 闂?plan_json.pages block 闂傚倷娴囧畷鍨叏閺夋嚚娲晲婢跺鈧潡鏌ㄩ弴妤€浜鹃梺浼欑到閻忔氨绮悢鐓庣劦妞ゆ帊妞掔换?        self::assertStringContainsString('var planConfirmed = runtimePlanJsonConfirmed(state);', $runtime);
         self::assertStringContainsString('var hasPlanJsonBuild = hasRuntimePlanJsonBuildEvidence(state);', $runtime);
-        self::assertStringContainsString('var buildReadyForBuild = planConfirmed || hasPlanJsonBuild;', $runtime);
+        self::assertStringContainsString('var buildReadyForBuild = planConfirmed;', $runtime);
         self::assertStringContainsString("getWorkspaceFlagState('getPlanJsonConfirmedState', false)", $runtime);
 
         self::assertStringNotContainsString('$showRemovedTaskPlanPanel', $workspace);
@@ -1100,17 +1156,27 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringNotContainsString('retryPhaseTwoTaskPlanGeneration', $script);
     }
 
+    public function testAiSiteAgentJsonErrorCallsKeepMessageAsString(): void
+    {
+        $controller = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
+        self::assertIsString($controller);
+        $normalizedController = \str_replace("\r\n", "\n", $controller);
+
+        self::assertDoesNotMatchRegularExpression('/jsonError\s*\(\s*[^,\n]+,\s*\[/m', $normalizedController);
+        self::assertStringContainsString("'PLAN_JSON_REQUIRED_BEFORE_BUILD',\n                'A confirmed stage-1 plan_json is required before build.',", $normalizedController);
+    }
+
     public function testStartBuildSiteGuardsPlanThenBuildRetryFailures(): void
     {
         $script = $this->workspaceScript();
         $bindBody = $this->extractFunctionBody($script, 'bindPlanStageLogic');
         $idx = \strpos($bindBody, "document.getElementById('pb-ai-start-build-site')");
         self::assertNotFalse($idx, 'start build button binding missing');
-        $snippet = \substr($bindBody, $idx, 1300);
+        $snippet = \substr($bindBody, $idx, 1700);
 
         self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('plan')", $snippet);
         self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('build')", $snippet);
-        self::assertStringContainsString('ensurePlanJsonConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});', $snippet);
+        self::assertStringContainsString('startBuildButtonAction(startBuildSiteBtn, selectedTypes, {});', $snippet);
         self::assertStringNotContainsString("guardRetryableAiFailuresBeforeProgress('task_plan')", $snippet);
     }
 
@@ -1126,7 +1192,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('planConfirmedState = parseInt(String(resolvePlanJsonFromWorkspaceState(workspaceState).confirmed || 0), 10) === 1;', $hydrateBody);
         self::assertStringContainsString('function resolvePlanJsonFromWorkspaceState(workspaceState)', $script);
         self::assertStringContainsString('state.plan_json', $script);
-        self::assertStringContainsString('scope.plan_json', $script);
+        self::assertStringNotContainsString('scope.plan_json', $hydrateBody);
         self::assertStringNotContainsString('syncTaskPlanSseRunningFromWorkspaceState', $script . $runtime);
         self::assertStringNotContainsString('task_plan_queue_info', $script . $runtime);
     }
@@ -1167,10 +1233,9 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $terminalBody = $this->extractFunctionBody($script, 'markBuildOperationTerminalForUi');
         $resetBody = $this->extractFunctionBody($script, 'resetBuildStartUi');
 
-        self::assertStringContainsString('bindPublishRepairButton();', $bindBody);
-        self::assertStringContainsString('bindPublishRepairButton();', $visualEditBindBody);
-        $publishRepairBindBody = $this->extractFunctionBody($script, 'bindPublishRepairButton');
-        self::assertStringContainsString('bindRetryableAiFailureButtons();', $publishRepairBindBody);
+        self::assertStringContainsString('return true;', $bindBody);
+        self::assertStringContainsString('syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {})', $visualEditBindBody);
+        self::assertStringContainsString('function bindRetryableAiFailureButtons()', $script);
         self::assertStringContainsString('bindRetryableAiFailureButtons();', $syncBody);
         self::assertStringContainsString('syncRetryableAiFailureActionGuards(getLatestWorkspaceStateForQueuePrompt());', $syncBody);
         self::assertStringNotContainsString("document.getElementById('pb-ai-rebuild-publish-quality')", $syncBody);
@@ -1195,7 +1260,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('function resolveLivePreviewBridge()', $runtime);
         self::assertStringContainsString('function syncTerminalActiveOperationForRuntimeUi(active)', $runtime);
         self::assertStringContainsString('var workspaceStateUrl =', $runtime);
-        self::assertStringContainsString('function resolveRuntimeQueueInfoKey(operation)', $runtime);
+        self::assertStringContainsString('function queueInfoBelongsToRuntimeOperation(queueInfo, operation)', $runtime);
         self::assertStringContainsString('function startDeferredQueueStatePoll(operation)', $runtime);
         self::assertStringContainsString('return submitWorkspaceForm(workspaceStatePollUrl', $runtime);
         self::assertStringContainsString('shouldSyncUi && !operationResumed', $runtime);
@@ -1254,6 +1319,26 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("workspaceState.workspace_status = 'building';", $syncBody);
         self::assertStringContainsString("readQueueStatusForDeferredState(state, 'build')", $loadBody);
         self::assertStringContainsString("operation: 'build'", $loadBody);
+    }
+
+    public function testPublishStageBuildStatusPrefersScopedOperationOverStaleGlobalQueueStatus(): void
+    {
+        $script = $this->workspaceScript();
+        $resolverBody = $this->extractFunctionBody($script, 'resolveCanonicalQueueInfoFromWorkspaceStateForUi');
+        $collectorBody = $this->extractFunctionBody($script, 'collectPublishBlockingOperationCandidates');
+
+        $scopedStatusPosition = \strpos($resolverBody, 'scopedActive.queue_status');
+        $globalStatusPosition = \strpos($resolverBody, 'state.queue_status');
+
+        self::assertNotFalse($scopedStatusPosition);
+        self::assertNotFalse($globalStatusPosition);
+        self::assertLessThan(
+            $globalStatusPosition,
+            $scopedStatusPosition,
+            'Scoped build operation state must override stale global queue_status before publish gates decide building.'
+        );
+        self::assertStringContainsString('queue_status: readPublishQueueStatus(buildQueueInfo)', $collectorBody);
+        self::assertDoesNotMatchRegularExpression('/(^|[\\s,{])status:\\s*readPublishQueueStatus\\(buildQueueInfo\\)/', $collectorBody);
     }
 
     public function testDeferredQueuePollingUsesFreshProgressStateInsteadOfCachedFallback(): void
@@ -1330,18 +1415,17 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('var op = normalizeRuntimeQueueOperation(operation);', $belongsBody);
         self::assertStringContainsString('var resolvedOperation = resolveRuntimeQueueInfoOperation(queueInfo);', $belongsBody);
         self::assertStringContainsString('return resolvedOperation === op;', $belongsBody);
-        self::assertStringContainsString("op === 'image_asset' || op === 'publish'", $this->extractFunctionBody($runtime, 'resolveRuntimeQueueInfoKey'));
         self::assertStringContainsString('function resolveRuntimeQueueInfoOperation(queueInfo)', $runtime);
         $markerBody = $this->extractFunctionBody($runtime, 'resolveRuntimeQueueOperationMarker');
         self::assertStringContainsString("return 'image_asset';", $markerBody);
         self::assertStringContainsString("return 'publish';", $markerBody);
         self::assertStringNotContainsString("|| marker.indexOf('publish') !== -1", $belongsBody);
-        self::assertStringContainsString('workspaceState[key]', $resolverBody);
-        self::assertStringContainsString('scope[key]', $resolverBody);
-        self::assertStringContainsString('nestedState[key]', $resolverBody);
-        self::assertStringContainsString('scopedActive.queue_info', $resolverBody);
-        self::assertStringContainsString('active.queue_info', $resolverBody);
-        self::assertStringContainsString('workspaceState.queue_info', $resolverBody);
+        self::assertStringContainsString('workspaceState.queue_status', $resolverBody);
+        self::assertStringContainsString('nestedState.queue_status', $resolverBody);
+        self::assertStringContainsString('scopedActive.queue_status', $resolverBody);
+        self::assertStringContainsString('active.queue_status', $resolverBody);
+        self::assertStringNotContainsString('scope[key]', $resolverBody);
+        self::assertStringNotContainsString('queue_info', $resolverBody);
         self::assertStringContainsString('queueInfoBelongsToRuntimeOperation(queueInfo, op)', $resolverBody);
 
         $statusBody = $this->extractFunctionBody($runtime, 'readQueueStatusForDeferredState');

@@ -29,9 +29,7 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
     private const CONTENT_LAST_GATE_AT_KEY = 'last_gate_at';
     private const QUEUE_RESULT_MAX_BYTES = 4096;
     private const QUEUE_RESULT_TRUNCATION_MARKER = '[... queue log truncated ...]';
-    private const PLAN_COMPLETION_GATE_ARTIFACT_KEYS = [
-        'plan_json',
-    ];
+    private const PLAN_COMPLETION_GATE_ARTIFACT_KEYS = [];
     private const PLAN_JSON_PAGE_META_KEYS = [
         'page_key' => true,
         'page_type' => true,
@@ -52,17 +50,33 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         'content_locale' => true,
         'page_design_plan' => true,
         'theme_alignment_summary' => true,
-        'block_nodes' => true,
         'ordered_block_keys' => true,
         'pages' => true,
         'page' => true,
         'plan_json_page' => true,
         'seo' => true,
         'route' => true,
+        'route_path' => true,
         'slug' => true,
         'path' => true,
         'layout' => true,
+        'style_code' => true,
+        'style_settings' => true,
+        'design_tokens' => true,
+        'theme_css_ref' => true,
+        'navigation' => true,
+        'menus' => true,
+        'links' => true,
+        'settings' => true,
+        'preview_url' => true,
+        'preview_full_url' => true,
+        'visual_preview_url' => true,
+        'visual_edit_url' => true,
+        'virtual_preview_url' => true,
+        'virtual_edit_url' => true,
         'sections' => true,
+        'section_refinements' => true,
+        'ai_description' => true,
         'content' => true,
         'description' => true,
         'summary' => true,
@@ -761,7 +775,7 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         }
 
         $matches = [];
-        if (\preg_match_all('/Plan JSON page generation returned no usable block nodes and is waiting for retry:\s*([a-z0-9_]+)/iu', $result, $matches, \PREG_SET_ORDER) > 0) {
+        if (\preg_match_all('/Plan JSON page generation returned no usable blocks and is waiting for retry:\s*([a-z0-9_]+)/iu', $result, $matches, \PREG_SET_ORDER) > 0) {
             foreach ($matches as $match) {
                 $pageType = \trim((string)($match[1] ?? ''));
                 if ($pageType === '') {
@@ -771,7 +785,7 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
                 $existingSummary = \trim((string)($existing['validation_summary'] ?? ''));
                 $failures[$pageType] = $this->buildRecoveredStageOnePageFailure(
                     $pageType,
-                    'Stage-one page fanout returned a plan JSON page without usable block nodes.',
+                    'Stage-one page fanout returned a plan JSON page without usable blocks.',
                     $existingSummary
                 );
             }
@@ -878,6 +892,9 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         );
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($active['status'] ?? ''));
+        if ($activeStatus === '') {
+            $activeStatus = \trim((string)($active['queue_status'] ?? ''));
+        }
         $activeQueueId = (int)($active['queue_id'] ?? 0);
         if (
             (string)($active['operation'] ?? '') === $operation
@@ -892,6 +909,7 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
             'operation' => $operation,
             'execution_token' => $executionToken,
             'status' => 'queued',
+            'queue_status' => 'queued',
             'queue_id' => $queueId,
             'message' => '等待开始',
             'attempt_no' => \max(0, (int)($active['attempt_no'] ?? 0)),
@@ -928,7 +946,8 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
             )
         );
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $pageTypes = $this->resolveCompletedPlanPageTypes($scopeService, $scope, $planJson);
+        $this->assertPlanJsonPagesTree($planJson);
+        $pageTypes = $this->resolveCompletedPlanPageTypes($planJson);
         $planLocale = $this->resolveCompletedPlanLocale($scope, $planJson);
         $sourceSignature = \trim((string)($scope['plan_generated_source_signature'] ?? ''));
         if ($sourceSignature === '') {
@@ -994,28 +1013,8 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
      * @param array<string, mixed> $planJson
      * @return list<string>
      */
-    private function resolveCompletedPlanPageTypes(
-        AiSiteScopeCompatibilityService $scopeService,
-        array $scope,
-        array $planJson
-    ): array {
-        try {
-            $pageTypes = $scopeService->resolveScopedPageTypes($scope);
-        } catch (\Throwable) {
-            $pageTypes = [];
-        }
-
-        foreach ([
-            $pageTypes,
-            $scope['page_types'] ?? null,
-            $planJson['page_types'] ?? null,
-        ] as $candidate) {
-            $normalized = $this->normalizeStringList($candidate);
-            if ($normalized !== []) {
-                return $normalized;
-            }
-        }
-
+    private function resolveCompletedPlanPageTypes(array $planJson): array
+    {
         $fromPages = [];
         foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $key => $page) {
             if (!\is_array($page)) {
@@ -1119,11 +1118,12 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         $scope = $scopeService->normalizeScope(
             $sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
         );
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
 
         if (
             !$forceRebuild
             && !$allowExistingPlan
-            && $scopeService->hasPersistedStageOnePlan($scope)
+            && $this->hasCompletedPlanJsonPagesTree($planJson)
             && !$this->hasPlanCompletionGateFailures($scope)
             && $this->hasPlanCompletionValidationReport($scope)
         ) {
@@ -1162,6 +1162,36 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
     }
 
     /**
+     * @param array<string, mixed> $planJson
+     */
+    private function hasCompletedPlanJsonPagesTree(array $planJson): bool
+    {
+        try {
+            $this->assertPlanJsonPagesTree($planJson);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     */
+    private function assertPlanJsonPagesTree(array $planJson): void
+    {
+        if (!\is_array($planJson['pages'] ?? null) || ($planJson['pages'] ?? []) === []) {
+            throw new \RuntimeException('Stage-one plan completion gate failed: plan_json.pages is missing; regenerate the plan.');
+        }
+
+        $actual = [];
+        $this->collectStageOnePageTypesFromSource($planJson['pages'], $actual);
+        if ($actual === []) {
+            throw new \RuntimeException('Stage-one plan completion gate failed: plan_json.pages has no direct page block nodes; regenerate the plan.');
+        }
+    }
+
+    /**
      * @param array<string, mixed> $scope
      */
     private function persistPlanQueueStopState(
@@ -1176,7 +1206,7 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         if ($active !== []) {
             $active['status'] = $skipAsDone ? 'done' : 'stop';
             $active['message'] = $message;
-            $active['retry_allowed'] = $skipAsDone ? 0 : 1;
+            $active['retry_allowed'] = 0;
             $active['failure_mode'] = $skipAsDone ? '' : 'plan_retry_exhausted';
             $active['queue_waiting_for_scheduler'] = false;
             $active['can_close_stream'] = true;
@@ -1195,15 +1225,10 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
                 'message' => $message,
                 'attempt_no' => \max(0, (int)($active['attempt_no'] ?? 0)),
                 'max_attempts' => self::MAX_PLAN_QUEUE_ATTEMPTS,
-                'retry_allowed' => 1,
+                'retry_allowed' => 0,
                 'updated_at' => \date('Y-m-d H:i:s'),
             ];
-            $scope = $this->markPlanGenerationFailureRetryable(
-                $scope,
-                $active,
-                $message,
-                \max(0, (int)($active['attempt_no'] ?? 0))
-            );
+            $scope = $this->clearPlanGenerationRetryableFailure($scope);
         }
         $sessionService->replaceScope($sessionId, $adminId, $scope);
     }
@@ -1230,6 +1255,7 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
             throw new \RuntimeException('Stage-one plan completion gate failed: plan_json is empty.');
         }
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $this->assertPlanJsonPagesTree($planJson);
         $validationReport = \is_array($scope['stage1_validation_report'] ?? null)
             ? $scope['stage1_validation_report']
             : (\is_array($planJson['stage1_validation_report'] ?? null) ? $planJson['stage1_validation_report'] : []);
@@ -1329,10 +1355,9 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
 
         $directPageType = \trim((string)($pageSource['page_type'] ?? $pageSource['type'] ?? ''));
         if ($directPageType !== '') {
-            if ($this->stageOnePageHasDynamicBlockNodes($pageSource)) {
+            if ($this->stageOnePageHasDynamicBlocks($pageSource)) {
                 $actual[$directPageType] = true;
             }
-            $this->collectNestedStageOnePageTypeBuckets($pageSource, $actual, $depth);
             return;
         }
 
@@ -1344,22 +1369,22 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
             if ($pageType === '' && \is_string($key) && !\ctype_digit($key)) {
                 $pageType = \trim($key);
             }
-            if ($pageType !== '' && $this->stageOnePageHasDynamicBlockNodes($page)) {
+            if ($pageType !== '' && $this->stageOnePageHasDynamicBlocks($page)) {
                 $actual[$pageType] = true;
             }
-            $this->collectNestedStageOnePageTypeBuckets($page, $actual, $depth);
         }
     }
 
     /**
      * @param array<string, mixed> $page
      */
-    private function stageOnePageHasDynamicBlockNodes(array $page): bool
+    private function stageOnePageHasDynamicBlocks(array $page): bool
     {
         foreach ($page as $key => $value) {
             if (!\is_string($key)
                 || isset(self::PLAN_JSON_PAGE_META_KEYS[$key])
                 || !\is_array($value)
+                || !$this->hasStringKey($value)
             ) {
                 continue;
             }
@@ -1371,21 +1396,17 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
     }
 
     /**
-     * @param array<string, mixed> $page
-     * @param array<string, true> $actual
+     * @param array<mixed> $value
      */
-    private function collectNestedStageOnePageTypeBuckets(array $page, array &$actual, int $depth): void
+    private function hasStringKey(array $value): bool
     {
-        foreach (['page', 'plan_json_page'] as $wrapperKey) {
-            if (\is_array($page[$wrapperKey] ?? null)) {
-                $this->collectStageOnePageTypesFromSource($page[$wrapperKey], $actual, $depth + 1);
+        foreach (\array_keys($value) as $key) {
+            if (\is_string($key)) {
+                return true;
             }
         }
-        foreach (['pages'] as $bucketKey) {
-            if (\is_array($page[$bucketKey] ?? null)) {
-                $this->collectStageOnePageTypesFromSource($page[$bucketKey], $actual, $depth + 1);
-            }
-        }
+
+        return false;
     }
 
     /**
@@ -1495,6 +1516,26 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         }
     }
 
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function clearPlanGenerationRetryableFailure(array $scope): array
+    {
+        try {
+            /** @var AiSitePlanJsonTaskService $planJsonTaskService */
+            $planJsonTaskService = ObjectManager::getInstance(AiSitePlanJsonTaskService::class);
+            $planFailures = \is_array($scope[AiSitePlanJsonTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY]['plan']['items'] ?? null)
+                ? $scope[AiSitePlanJsonTaskService::RETRYABLE_AI_FAILURES_SCOPE_KEY]['plan']['items']
+                : [];
+            unset($planFailures['stage1_plan']);
+
+            return $planJsonTaskService->replaceRetryableAiFailures($scope, 'plan', $planFailures);
+        } catch (\Throwable) {
+            return $scope;
+        }
+    }
+
     private function isTransientAiProviderFailure(string $message): bool
     {
         $normalized = \mb_strtolower($message);
@@ -1589,7 +1630,8 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
      */
     private function isAutomaticPlanRetryContent(array $content): bool
     {
-        return !empty($content[self::CONTENT_AUTO_RETRY_SCHEDULED_KEY]);
+        return !empty($content[self::CONTENT_AUTO_RETRY_SCHEDULED_KEY])
+            || \array_key_exists(self::CONTENT_AUTO_ATTEMPT_KEY, $content);
     }
 
     /**

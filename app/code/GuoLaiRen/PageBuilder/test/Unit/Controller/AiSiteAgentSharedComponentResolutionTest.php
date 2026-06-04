@@ -49,12 +49,34 @@ final class AiSiteAgentSharedComponentResolutionTest extends TestCase
 
     public function testSharedComponentRegenerationPersistsGeneratedLayoutsForAllAffectedPages(): void
     {
-        $controllerSource = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php');
+        $controllerSource = \file_get_contents($this->controllerSourcePath());
         self::assertIsString($controllerSource);
 
         self::assertStringContainsString('$affectedPageTypes = $pageTypesAll;', $controllerSource);
         self::assertStringContainsString('$this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypesAll, $pageTypeLayouts);', $controllerSource);
         self::assertStringContainsString('$this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);', $controllerSource);
         self::assertStringContainsString('$this->virtualThemeService->saveGeneratedPageLayout($virtualThemeId, $pageType, $pageTypeLayouts[$pageType]);', $controllerSource);
+    }
+
+    public function testBlockConfigSaveUsesExistingVirtualLayoutAsBase(): void
+    {
+        $controllerSource = \file_get_contents($this->controllerSourcePath());
+        self::assertIsString($controllerSource);
+
+        self::assertStringContainsString(
+            '$pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope[\'page_type_layouts\'] ?? [], $layoutPageTypes);',
+            $controllerSource
+        );
+        self::assertStringContainsString('$persistedLayout = $this->virtualThemeService->loadGeneratedPageLayout($virtualThemeId, $targetPageType);', $controllerSource);
+        self::assertStringContainsString('$scope[\'page_type_layouts\'] = $pageTypeLayouts;', $controllerSource);
+        self::assertStringNotContainsString(
+            '$pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts([], $layoutPageTypes);',
+            $controllerSource
+        );
+    }
+
+    private function controllerSourcePath(): string
+    {
+        return \dirname(__DIR__, 3) . '/Controller/Backend/AiSiteAgent.php';
     }
 }

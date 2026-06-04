@@ -45,7 +45,7 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
             $siteDesignSystem
         );
 
-        $blocks = $this->dynamicPageBlockNodes($assembled['pages']['home_page'] ?? []);
+        $blocks = $this->dynamicPageBlocks($assembled['pages']['home_page'] ?? []);
         self::assertCount(5, $blocks);
 
         $morphologies = \array_map(static fn (array $block): string => (string)($block['block_contract']['morphology_id'] ?? ''), $blocks);
@@ -152,7 +152,7 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
         $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $planJsonPages);
 
         $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $planJsonPages, $siteDesignSystem);
-        $blocks = $this->dynamicPageBlockNodes($assembled['pages']['home_page'] ?? []);
+        $blocks = $this->dynamicPageBlocks($assembled['pages']['home_page'] ?? []);
 
         foreach ($blocks as $block) {
             self::assertFalse($block['image_intent']['needs_image'] ?? true);
@@ -183,7 +183,7 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
         $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $planJsonPages);
 
         $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $planJsonPages, $siteDesignSystem);
-        $blocks = $this->dynamicPageBlockNodes($assembled['pages']['home_page'] ?? []);
+        $blocks = $this->dynamicPageBlocks($assembled['pages']['home_page'] ?? []);
 
         $subjectsByKey = [];
         foreach ($blocks as $block) {
@@ -224,7 +224,7 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
         $siteDesignSystem = (new AiSiteDesignDirectorService())->materialize($scope, [], [], $planJsonPages);
 
         $assembled = (new AiSiteBlockContractAssemblerService())->assemble($scope, [], [], $planJsonPages, $siteDesignSystem);
-        $blocks = $this->dynamicPageBlockNodes($assembled['pages']['home_page'] ?? []);
+        $blocks = $this->dynamicPageBlocks($assembled['pages']['home_page'] ?? []);
         $block = $blocks[0] ?? [];
         $media = \is_array($block['block_contract']['media_strategy'] ?? null)
             ? $block['block_contract']['media_strategy']
@@ -241,7 +241,7 @@ final class AiSiteBlockContractAssemblerServiceTest extends TestCase
      * @param array<string, mixed> $page
      * @return list<array<string, mixed>>
      */
-    private function dynamicPageBlockNodes(array $page): array
+    private function dynamicPageBlocks(array $page): array
     {
         $blocks = [];
         foreach ($page as $key => $node) {

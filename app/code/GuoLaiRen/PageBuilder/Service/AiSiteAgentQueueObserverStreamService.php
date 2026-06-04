@@ -100,13 +100,13 @@ class AiSiteAgentQueueObserverStreamService
     }
 
     /**
-     * 根据 queue_info 归一 activeOperation.status / message / updated_at。
+     * 根据 queue_info 归一 activeOperation.queue_status / message / updated_at。
      *
      * 规则（与原控制器 `reconcileActiveOperationWithQueueInfo` 一致）：
      *  - operation 不匹配 / 非 queued|running / 无队列状态 ⇒ 原样返回；
-     *  - queue status = 'error' ⇒ active_operation.status='error'，message 取 process → result_log → i18n 兜底；
-     *  - queue status = 'done' ⇒ active_operation.status='done'，message 按 operation 分支 i18n 兜底。
-     *  - queue status ∈ {stop, stopped, cancelled, canceled} ⇒ active_operation.status='cancelled'，避免被误读为成功完成。
+     *  - queue status = 'error' ⇒ active_operation.queue_status='error'，message 取 process → result_log → i18n 兜底；
+     *  - queue status = 'done' ⇒ active_operation.queue_status='done'，message 按 operation 分支 i18n 兜底。
+     *  - queue status ∈ {stop, stopped, cancelled, canceled} ⇒ active_operation.queue_status='cancelled'，避免被误读为成功完成。
      *
      * @param array<string, mixed> $activeOperation
      * @param array<string, mixed>|null $queueInfo
@@ -146,14 +146,14 @@ class AiSiteAgentQueueObserverStreamService
         $queueState = $this->resolveQueueCurrentState($queueInfo);
         if (
             \trim((string)($activeOperation['operation'] ?? '')) !== $operation
-            || !\in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running', 'done', 'error', 'stop', 'cancelled', 'canceled'], true)
+            || !\in_array(\trim((string)($activeOperation['queue_status'] ?? '')), ['queued', 'running', 'done', 'error', 'stop', 'cancelled', 'canceled'], true)
             || $queueState === []
         ) {
             return $activeOperation;
         }
 
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-        $queueStatus = \strtolower(\trim((string)($queueState['status'] ?? $queueState['queue_status'] ?? $queueState['job_status'] ?? '')));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
+        $queueStatus = \strtolower(\trim((string)($queueState['queue_status'] ?? '')));
         $semanticStatus = \strtolower(\trim((string)($queueState['semantic_status'] ?? '')));
         $queueDone = \in_array($queueStatus, ['done', 'complete', 'completed'], true)
             || \in_array($semanticStatus, ['done', 'complete', 'completed'], true);
@@ -176,7 +176,7 @@ class AiSiteAgentQueueObserverStreamService
             if ($queueId > 0) {
                 $activeOperation['queue_id'] = $queueId;
             }
-            $activeOperation['status'] = 'cancelled';
+            $activeOperation['queue_status'] = 'cancelled';
             $activeOperation['semantic_status'] = 'cancelled';
             $activeOperation['message'] = \trim((string)($queueInfo['message'] ?? $queueInfo['process'] ?? '')) !== ''
                 ? \trim((string)($queueInfo['message'] ?? $queueInfo['process'] ?? ''))
@@ -189,8 +189,8 @@ class AiSiteAgentQueueObserverStreamService
             return $activeOperation;
         }
         if (\in_array($queueStatus, ['pending', 'queued', 'running', 'processing'], true)) {
-            $activeOperation['status'] = \in_array($queueStatus, ['running', 'processing'], true) ? 'running' : 'queued';
-            $activeOperation['semantic_status'] = $activeOperation['status'];
+            $activeOperation['queue_status'] = \in_array($queueStatus, ['running', 'processing'], true) ? 'running' : 'queued';
+            $activeOperation['semantic_status'] = $activeOperation['queue_status'];
             $activeOperation['retry_allowed'] = 0;
             $activeOperation['queue_terminal_recovered'] = 0;
             $queueId = (int)($queueState['queue_id'] ?? 0);
@@ -225,15 +225,16 @@ class AiSiteAgentQueueObserverStreamService
                 'result' => (string)($queueInfo['result_log'] ?? ''),
             ];
             $queueMessage = \trim($this->queueObserverHelperService()->resolveMessage($queueRowForMessage, false));
-            $activeOperation['status'] = 'error';
+            $activeOperation['queue_status'] = 'error';
+            $activeOperation['semantic_status'] = 'error';
             $activeOperation['message'] = $queueMessage !== '' ? $queueMessage : (string)__('队列执行失败，请重试。');
             $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
             $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
         } elseif (\in_array($queueStatus, ['done', 'complete', 'completed', 'stop', 'stopped', 'cancelled', 'canceled'], true)) {
-            $activeOperation['status'] = \in_array($queueStatus, ['done', 'complete', 'completed'], true) ? 'done' : 'cancelled';
-            $activeOperation['semantic_status'] = $activeOperation['status'];
+            $activeOperation['queue_status'] = \in_array($queueStatus, ['done', 'complete', 'completed'], true) ? 'done' : 'cancelled';
+            $activeOperation['semantic_status'] = $activeOperation['queue_status'];
             $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
-            if ($activeOperation['status'] === 'done') {
+            if ($activeOperation['queue_status'] === 'done') {
                 $activeOperation['retry_allowed'] = 0;
                 $activeOperation['queue_terminal_recovered'] = 0;
                 $currentMessage = \trim((string)($activeOperation['message'] ?? ''));
@@ -249,10 +250,10 @@ class AiSiteAgentQueueObserverStreamService
             }
             if (\trim((string)($activeOperation['message'] ?? '')) === '') {
                 $activeOperation['message'] = match ($operation) {
-                    'build' => $activeOperation['status'] === 'cancelled'
+                    'build' => $activeOperation['queue_status'] === 'cancelled'
                         ? (string)__('生成主题队列已取消。')
                         : (string)__('生成主题队列已完成。'),
-                    default => $activeOperation['status'] === 'cancelled'
+                    default => $activeOperation['queue_status'] === 'cancelled'
                         ? (string)__('建站方案队列已取消。')
                         : (string)__('建站方案队列已完成。'),
                 };
@@ -287,7 +288,7 @@ class AiSiteAgentQueueObserverStreamService
                 'module' => ($queueState['module'] !== '' ? (string)$queueState['module'] : '-'),
             ]),
             (string)__('状态：%{status}；调度 PID：%{pid}', [
-                'status' => (string)$queueState['status'],
+                'status' => (string)$queueState['queue_status'],
                 'pid' => (string)$queueState['pid'],
             ]),
             (string)__('类型 ID：%{tid}；完成标记：%{fin}', [
@@ -307,7 +308,7 @@ class AiSiteAgentQueueObserverStreamService
                 : (string)__('会话 public_id（脱敏）：%{h}', ['h' => (string)$queueState['public_id_hint']]);
         }
 
-        $queueStatus = \trim((string)($queueState['status'] ?? ''));
+        $queueStatus = \trim((string)($queueState['queue_status'] ?? ''));
         $queuePid = (int)($queueState['pid'] ?? 0);
         $waitingForScheduler = $this->isQueueWaitingForSystemScheduler($queueStatus, $queuePid);
         $schedulerWaitMessage = $this->buildSystemSchedulerWaitMessage((int)($queueState['queue_id'] ?? 0));
@@ -322,7 +323,7 @@ class AiSiteAgentQueueObserverStreamService
             'queue_info' => $queueInfo,
             'operation' => $operation,
             'queue_id' => (int)$queueState['queue_id'],
-            'queue_status' => (string)$queueState['status'],
+            'queue_status' => (string)$queueState['queue_status'],
             'token_usage' => $tokenUsage,
             'progress_kind' => 'queue_info',
             'observer_detail' => true,

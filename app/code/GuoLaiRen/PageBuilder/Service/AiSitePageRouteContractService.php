@@ -274,17 +274,10 @@ final class AiSitePageRouteContractService
             return '';
         }
 
-        foreach ([
-            $scope['pagebuilder_pages_by_type'][$pageType]['handle'] ?? null,
-            $scope['virtual_pages_by_type'][$pageType]['handle'] ?? null,
-        ] as $candidate) {
-            if (!\is_scalar($candidate)) {
-                continue;
-            }
-            $handle = $this->normalizeHandle((string)$candidate);
-            if ($handle !== '') {
-                return $handle;
-            }
+        $page = \is_array($scope['plan_json']['pages'][$pageType] ?? null) ? $scope['plan_json']['pages'][$pageType] : [];
+        $handle = $this->normalizeHandle((string)($page['handle'] ?? ''));
+        if ($handle !== '') {
+            return $handle;
         }
 
         return Page::getDefaultHandleForType($pageType);
@@ -295,12 +288,8 @@ final class AiSitePageRouteContractService
      */
     private function resolveLabel(string $pageType, array $scope): string
     {
-        foreach ([
-            $scope['pagebuilder_pages_by_type'][$pageType]['title'] ?? null,
-            $scope['virtual_pages_by_type'][$pageType]['title'] ?? null,
-            $scope['pagebuilder_pages_by_type'][$pageType]['name'] ?? null,
-            $scope['virtual_pages_by_type'][$pageType]['name'] ?? null,
-        ] as $candidate) {
+        $page = \is_array($scope['plan_json']['pages'][$pageType] ?? null) ? $scope['plan_json']['pages'][$pageType] : [];
+        foreach ([$page['title'] ?? null, $page['name'] ?? null] as $candidate) {
             if (\is_scalar($candidate) && \trim((string)$candidate) !== '') {
                 return \trim((string)$candidate);
             }
