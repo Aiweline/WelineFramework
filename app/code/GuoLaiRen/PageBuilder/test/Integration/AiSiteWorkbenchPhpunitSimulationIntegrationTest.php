@@ -228,9 +228,9 @@ class AiSiteWorkbenchPhpunitSimulationIntegrationTest extends AbstractAiSiteWork
         }
         self::assertStringContainsString('<!DOCTYPE', $liveHtml);
         self::assertStringNotContainsString(
-            'Test environment uses deterministic section markup so build and publish flows stay stable.',
+            'Test environment uses local section markup so build and publish flows stay stable.',
             $liveHtml,
-            'Real AI mode should not render deterministic test stub marker.'
+            'Real AI mode should not render local test stub marker.'
         );
         while (\ob_get_level() > 0) {
             \ob_end_clean();

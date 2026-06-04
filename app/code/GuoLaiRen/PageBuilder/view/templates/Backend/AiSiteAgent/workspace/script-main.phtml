@@ -19,7 +19,7 @@ $embeddedVisualUrl = (string)($embeddedVisualUrl ?? '');
 $previewPageType = (string)($previewPageType ?? ($state['preview_page_type'] ?? ''));
 $previewPageId = (int)($previewPageId ?? ($state['preview_page_id'] ?? 0));
 $planJsonTaskSummary = \is_array($planJsonTaskSummary ?? null) ? $planJsonTaskSummary : [];
-$initialVirtualPagesByTypeState = \is_array($initialVirtualPagesByTypeState ?? null) ? $initialVirtualPagesByTypeState : [];
+$initialPlanJsonPagesByTypeState = \is_array($initialPlanJsonPagesByTypeState ?? null) ? $initialPlanJsonPagesByTypeState : [];
 $pbAiPhaseOnePlanPresent = (bool)($pbAiPhaseOnePlanPresent ?? false);
 $mergeScopeUrl = (string)($mergeScopeUrl ?? '');
 $setStageUrl = (string)($setStageUrl ?? '');
@@ -47,13 +47,53 @@ $guidedUrl = (string)($guidedUrl ?? '');
 $domainPurchaseSseUrl = (string)($domainPurchaseSseUrl ?? '');
 $domainPurchaseState = \is_array($domainPurchaseState ?? null) ? $domainPurchaseState : [];
 $pbAiScriptJsonFlags = \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR;
-$pbAiScriptJsonHexFlags = \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT;
+$pbAiScriptJsonHexFlags = \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT | \JSON_THROW_ON_ERROR;
 $pbAiScriptJson = static function (mixed $value, int $flags = 0): string {
     return \json_encode($value, $flags !== 0 ? $flags : \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
 };
 $scriptChunkData = \array_merge(
     \is_array($workspaceTplData ?? null) ? $workspaceTplData : [],
     [
+        'activeOperation' => $activeOperation,
+        'activeOperationStatus' => $activeOperationStatus,
+        'confirmPlanUrl' => $confirmPlanUrl,
+        'currentStage' => $currentStage,
+        'displayPagesByType' => $displayPagesByType,
+        'domainPurchaseSseUrl' => $domainPurchaseSseUrl,
+        'domainPurchaseState' => $domainPurchaseState,
+        'guidedUi' => $guidedUi,
+        'guidedUrl' => $guidedUrl,
+        'initialPlanJsonPagesByTypeState' => $initialPlanJsonPagesByTypeState,
+        'mergeScopeUrl' => $mergeScopeUrl,
+        'mutatePlanBlockUrl' => $mutatePlanBlockUrl,
+        'pageTypeLabels' => $pageTypeLabels,
+        'pageTypesUserCustomized' => $pageTypesUserCustomized,
+        'planJsonTaskSummary' => $planJsonTaskSummary,
+        'planSseUrl' => $planSseUrl,
+        'previewFullUrl' => $previewFullUrl,
+        'previewPageId' => $previewPageId,
+        'previewPageType' => $previewPageType,
+        'publishCheckUrl' => $publishCheckUrl,
+        'publicId' => $publicId,
+        'refinePlanPageUrl' => $refinePlanPageUrl,
+        'resumeBuildUrl' => $resumeBuildUrl,
+        'runVirtualThemeUrl' => $runVirtualThemeUrl,
+        'scope' => $scope,
+        'selectedPageTypesSafe' => $selectedPageTypesSafe,
+        'setStageUrl' => $setStageUrl,
+        'sortPlanBlocksUrl' => $sortPlanBlocksUrl,
+        'startPatchBlockUrl' => $startPatchBlockUrl,
+        'startPlanUrl' => $startPlanUrl,
+        'startRefineComponentUrl' => $startRefineComponentUrl,
+        'startRegeneratePageUrl' => $startRegeneratePageUrl,
+        'state' => $state,
+        'switchPreviewPageUrl' => $switchPreviewPageUrl,
+        'updateBlockConfigUrl' => $updateBlockConfigUrl,
+        'visualEditUrl' => $visualEditUrl,
+        'visualPreviewUrl' => $visualPreviewUrl,
+        'displayPagesByType' => $displayPagesByType,
+        'initialPlanJsonPagesByTypeState' => $initialPlanJsonPagesByTypeState,
+        'pageTypesUserCustomized' => $pageTypesUserCustomized,
         'pbAiScriptJson' => $pbAiScriptJson,
         'pbAiScriptJsonHexFlags' => $pbAiScriptJsonHexFlags,
     ]

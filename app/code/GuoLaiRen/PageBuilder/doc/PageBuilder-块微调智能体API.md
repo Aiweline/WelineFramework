@@ -24,7 +24,7 @@
 2. 从工作区状态或预览 DOM 中确定目标 `page_type`、`block_id`，必要时传入 `component_code` 作为兜底。
 3. 调用 `post-start-patch-block` 启动块微调任务。
 4. 使用返回的 `stream_url` 建立 SSE 连接，或定期调用 `post-workspace-state` 轮询状态。
-5. 当任务状态为 `done`，从工作区状态的 `virtual_pages_by_type`、`page_type_layouts`、`block_patch_history` 或预览页面读取更新后的 block。
+5. 当任务状态为 `done`，从工作区状态的 `plan_json.pages`、`block_patch_history` 或预览页面读取更新后的 block。
 6. 当任务状态为 `error/failed/fail`，展示 `message`，并可调用 `post-retry-ai-operation` 重试同一失败操作。
 
 ## 启动块微调
@@ -147,14 +147,14 @@ curl -X POST "https://example.com/backend/pagebuilder/backend/ai-site-agent/post
 
 - 启动微调前：获取当前 `page_type`、目标 block 列表、`active_operation`。
 - SSE 断开后：恢复当前任务状态。
-- 微调完成后：读取最新 `virtual_pages_by_type`、`page_type_layouts`、`block_patch_history`、预览页面信息。
+- 微调完成后：读取最新 `plan_json.pages`、`block_patch_history`、预览页面信息。
 
 调用方判断任务完成的核心字段是：
 
 | 字段 | 说明 |
 | --- | --- |
 | `data.active_operation.operation` | 当前或最近 AI 操作，块微调为 `block_partial_patch`。 |
-| `data.active_operation.status` | `queued/running/done/error/failed/fail/cancelled` 等状态。 |
+| `data.active_operation.queue_status` | `queued/running/done/error/failed/fail/cancelled` 等状态。 |
 | `data.active_operation.queue_id` | 对应队列 ID。 |
 | `data.active_operation.progress_percent` | 进度百分比。 |
 | `data.build_queue_info` | 队列快照、进程和结果摘要，存在时可用于排查。 |

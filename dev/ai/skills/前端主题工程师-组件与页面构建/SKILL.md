@@ -29,6 +29,7 @@ This skill builds frontend components and page assembly units such as blocks, ta
 
 - Build reusable rendering units with proper framework registration and naming.
 - Keep component CSS and JS self-contained and scoped.
+- Manage user attention deliberately: make the primary function, next action, or decision point visually obvious within the first scan, while keeping secondary controls quieter.
 - Follow PageBuilder structure for themes, components, colors, and layout assets.
 - Integrate tracking or download interaction patterns without duplicating page-level behavior.
 - Trace visible UI injection through the real hook host or taglib host instead of inferring from visible header/footer chrome alone.
@@ -39,12 +40,13 @@ This skill builds frontend components and page assembly units such as blocks, ta
 1. Identify whether the task is a block, taglib, widget, PageBuilder component, or page-conversion request.
 2. Read the matching source skill material and confirm the expected directory layout.
 3. For browser-visible UI work, always run or equivalently execute the `ui-ux-pro-max` design-system search and translate its output into Weline-safe visual constraints.
-4. Implement the component with the correct registration path, template path, and metadata.
-5. Scope CSS and JS to the component root and prefer local project assets or inline extraction-friendly assets.
-6. For taglibs or hook-driven UI, verify the final contract at the host level: where the hook is rendered, how the JS is triggered, and which attributes define grouping or scope.
-7. For PageBuilder, keep theme prefixes, component metadata, color schemes, and shared partials aligned.
-8. For tracking-related UI, use the approved pixel-marking pattern instead of custom duplicate tracking code.
-9. Validate on the rendered page, including interactions if the component is stateful.
+4. Define the attention path before coding: primary information, primary action, secondary actions, empty/error state action, and what should not compete for attention.
+5. Implement the component with the correct registration path, template path, and metadata.
+6. Scope CSS and JS to the component root and prefer local project assets or inline extraction-friendly assets.
+7. For taglibs or hook-driven UI, verify the final contract at the host level: where the hook is rendered, how the JS is triggered, and which attributes define grouping or scope.
+8. For PageBuilder, keep theme prefixes, component metadata, color schemes, and shared partials aligned.
+9. For tracking-related UI, use the approved pixel-marking pattern instead of custom duplicate tracking code.
+10. Validate on the rendered page, including interactions if the component is stateful.
 
 # Weline Rules
 
@@ -76,6 +78,7 @@ This skill builds frontend components and page assembly units such as blocks, ta
 # Validation
 
 - Confirm the component can be reached through the real page or page-builder flow.
+- Confirm the page or component has a clear visual priority: the main function/action is immediately noticeable, secondary actions do not visually overpower it, and empty/error states still point to the next useful action.
 - Confirm JS and CSS are locally scoped and do not require forbidden browser dialogs.
 - Confirm interactive requests use the Theme `theme.js` / `weline-api` worker route instead of direct browser-side HTTP calls.
 - Confirm tracking markup or download hooks do not double-report events.

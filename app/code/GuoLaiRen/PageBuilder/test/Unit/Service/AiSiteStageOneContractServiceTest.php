@@ -17,7 +17,7 @@ final class AiSiteStageOneContractServiceTest extends TestCase
             'brief_description' => $brief,
             'user_description' => $brief,
             'source_truth_contract' => [
-                'required_home_block_nodes' => ['hero'],
+                'required_home_blocks' => ['hero'],
                 'must_not_do' => [
                     'Do not use excluded user term as visible site category, CTA, copy, or visual style: APK',
                     'Do not use excluded user term as visible site category, CTA, copy, or visual style: casino',

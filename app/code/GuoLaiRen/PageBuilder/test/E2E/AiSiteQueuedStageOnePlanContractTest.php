@@ -154,7 +154,7 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
             $calls,
             static fn(array $call): bool => \str_contains((string)($call['prompt'] ?? ''), 'Page type:')
         ));
-        self::assertCount(0, $requirementCalls, \json_encode($calls, \JSON_UNESCAPED_UNICODE));
+        self::assertCount(1, $requirementCalls, \json_encode($calls, \JSON_UNESCAPED_UNICODE));
         self::assertCount(1, $themeCalls, \json_encode($calls, \JSON_UNESCAPED_UNICODE));
         self::assertGreaterThanOrEqual(2, \count($pageCalls), \json_encode($calls, \JSON_UNESCAPED_UNICODE));
         self::assertStringContainsString('Confirmed requirement expansion from step 1', (string)$themeCalls[0]['prompt']);
@@ -270,17 +270,13 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
         self::assertIsArray($planJson['shared_components']['footer'] ?? null);
         self::assertNotSame('', (string)($planJson['shared_components']['header']['goal'] ?? ''));
         self::assertNotSame('', (string)($planJson['shared_components']['footer']['goal'] ?? ''));
-        self::assertIsArray($planJson['page_type_overviews'] ?? null);
-
         foreach ([Page::TYPE_HOME, Page::TYPE_ABOUT] as $pageType) {
-            $overview = \is_array($planJson['page_type_overviews'][$pageType] ?? null) ? $planJson['page_type_overviews'][$pageType] : [];
+            $page = \is_array($planJson['pages'][$pageType] ?? null) ? $planJson['pages'][$pageType] : [];
+            $overview = \is_array($page['page_design_plan'] ?? null) ? $page['page_design_plan'] : [];
             self::assertNotSame([], $overview, $pageType . ' overview must be generated.');
-            self::assertNotSame('', \trim((string)($overview['page_role'] ?? '')), $pageType . ' page_role must exist.');
-            self::assertNotSame('', \trim((string)($overview['content_focus'] ?? '')), $pageType . ' content_focus must exist.');
-            self::assertNotSame('', \trim((string)($overview['theme_color_application'] ?? '')), $pageType . ' theme_color_application must exist.');
-            self::assertNotSame('', \trim((string)($overview['section_layering_hint'] ?? '')), $pageType . ' section_layering_hint must exist.');
-            self::assertNotSame('', \trim((string)($overview['interaction_intent'] ?? '')), $pageType . ' interaction_intent must exist.');
-            self::assertNotSame('', \trim((string)($overview['differentiation_note'] ?? '')), $pageType . ' differentiation_note must exist.');
+            self::assertNotSame('', \trim((string)($overview['intent'] ?? '')), $pageType . ' intent must exist.');
+            self::assertNotSame('', \trim((string)($overview['content_direction'] ?? '')), $pageType . ' content_direction must exist.');
+            self::assertNotSame('', \trim((string)($overview['visual_direction'] ?? '')), $pageType . ' visual_direction must exist.');
         }
 
         self::assertIsArray($planJson['pages'][Page::TYPE_HOME] ?? null);

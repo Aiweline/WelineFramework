@@ -1,0 +1,137 @@
+﻿"========== 企业邮箱 DNS 检测 ==========","========== 企业邮箱 DNS 检测 =========="
+"✔ %{1}","✔ %{1}"
+"✖ %{1}","✖ %{1}"
+"检测企业邮箱 DNS 记录","检测企业邮箱 DNS 记录"
+"检测 MX/SPF/DKIM/DMARC 记录是否存在","检测 MX/SPF/DKIM/DMARC 记录是否存在"
+邮箱域名,"Mail domain"
+邮件服务主机名,邮件服务主机名
+"========== 企业邮箱环境检测 ==========","========== 企业邮箱环境检测 =========="
+平台：%{1},平台：%{1}
+引擎：%{1},引擎：%{1}
+"✖ %{1}：%{2}","✖ %{1}：%{2}"
+未满足,未满足
+"企业邮箱运行环境已满足 ✔","企业邮箱运行环境已满足 ✔"
+检测企业邮箱服务环境,检测企业邮箱服务环境
+"检测 Stalwart、系统服务、关键端口等企业邮箱环境状态","检测 Stalwart、系统服务、关键端口等企业邮箱环境状态"
+"========== 企业邮箱安装计划 ==========","========== 企业邮箱安装计划 =========="
+安装完成,安装完成
+安装未执行,安装未执行
+脚本：%{1},脚本：%{1}
+安装或展示企业邮箱服务依赖,安装或展示企业邮箱服务依赖
+展示或执行企业邮箱服务原生安装计划,展示或执行企业邮箱服务原生安装计划
+确认执行安装准备动作,确认执行安装准备动作
+服务重启命令已执行,服务重启命令已执行
+重启企业邮箱服务,重启企业邮箱服务
+"重启 Stalwart 服务","重启 Stalwart 服务"
+服务启动命令已执行,服务启动命令已执行
+启动企业邮箱服务,启动企业邮箱服务
+"启动 Stalwart 服务","启动 Stalwart 服务"
+"========== 企业邮箱服务状态 ==========","========== 企业邮箱服务状态 =========="
+"Stalwart 服务状态正常","Stalwart 服务状态正常"
+"Stalwart 服务状态异常或未安装","Stalwart 服务状态异常或未安装"
+无输出,无输出
+查看企业邮箱服务状态,查看企业邮箱服务状态
+"查看 Stalwart 服务状态","查看 Stalwart 服务状态"
+服务停止命令已执行,服务停止命令已执行
+停止企业邮箱服务,停止企业邮箱服务
+"停止 Stalwart 服务","停止 Stalwart 服务"
+域名和邮件主机名不能为空,域名和邮件主机名不能为空
+邮箱域名已存在,邮箱域名已存在
+邮箱域名已创建,邮箱域名已创建
+域名和邮箱地址不能为空,域名和邮箱地址不能为空
+邮箱域名不存在,邮箱域名不存在
+邮箱地址必须属于所选域名,邮箱地址必须属于所选域名
+邮箱账号已存在,邮箱账号已存在
+邮箱账号已创建,邮箱账号已创建
+域名状态参数无效,域名状态参数无效
+邮箱域名状态已更新,邮箱域名状态已更新
+请先登录,"Please sign in first"
+操作成功,"Operation succeeded"
+操作失败,"Operation failed"
+"由邮件引擎生成 DKIM 公钥后填写","由邮件引擎生成 DKIM 公钥后填写"
+邮箱服务尚未开启，请等待站点管理员完成邮件服务环境配置。,"Mail service is not enabled yet. Please wait for the site administrator to finish configuring the mail service environment."
+"邮箱账号只能使用小写字母、数字、点、下划线和短横线，长度为 2 到 63 位。","Mailbox names may only use lowercase letters, numbers, dots, underscores, and hyphens, and must be 2 to 63 characters long."
+请选择已开启的邮箱域名,"Please choose an enabled mail domain"
+您已经申请过该邮箱账号,"You have already applied for this mailbox account"
+该邮箱账号已被占用,"This mailbox account is already taken"
+邮箱账号申请已提交，管理员同步邮件服务后即可使用。,"Your mailbox application has been submitted. It can be used after an administrator syncs it to the mail service."
+不支持的邮箱账号状态,"Unsupported mailbox account status"
+邮箱账号不存在,"Mailbox account does not exist"
+邮箱账号已暂停,"Mailbox account has been suspended"
+邮箱账号已恢复为待同步状态,"Mailbox account has been restored to pending sync"
+"下载 stalwart-x86_64-pc-windows-msvc.zip","下载 stalwart-x86_64-pc-windows-msvc.zip"
+"解压 stalwart.exe 到 C:\Program Files\Stalwart\bin","解压 stalwart.exe 到 C:\Program Files\Stalwart\bin"
+"安装 NSSM 并注册 Stalwart Windows 服务","安装 NSSM 并注册 Stalwart Windows 服务"
+"生成 etc\config.json 并设置服务自启动","生成 etc\config.json 并设置服务自启动"
+"启动服务后读取 8080/admin 初始化状态","启动服务后读取 8080/admin 初始化状态"
+"下载 Stalwart Linux 二进制","下载 Stalwart Linux 二进制"
+"创建 /opt/stalwart/{bin,etc,data,logs}","创建 /opt/stalwart/{bin,etc,data,logs}"
+"生成 Stalwart 配置文件","生成 Stalwart 配置文件"
+"注册 systemd 服务","注册 systemd 服务"
+"启动服务并检测 SMTP/IMAP/Admin 端口","启动服务并检测 SMTP/IMAP/Admin 端口"
+"Stalwart 可执行文件","Stalwart 可执行文件"
+"SMTP 25 端口","SMTP 25 端口"
+"SMTP Submission 587 端口","SMTP Submission 587 端口"
+"IMAP 143 端口","IMAP 143 端口"
+"IMAPS 993 端口","IMAPS 993 端口"
+"Stalwart Admin 8080 端口","Stalwart Admin 8080 端口"
+"NSSM Windows 服务包装器","NSSM Windows 服务包装器"
+"systemd 服务管理","systemd 服务管理"
+安装脚本不存在：%{1},安装脚本不存在：%{1}
+"真实安装脚本已准备，但为避免误改系统服务，请先通过 env:install stalwart-mail-server -y 执行框架依赖安装入口。","真实安装脚本已准备，但为避免误改系统服务，请先通过 env:install stalwart-mail-server -y 执行框架依赖安装入口。"
+不支持的服务动作：%{1},不支持的服务动作：%{1}
+"127.0.0.1:%{1} 可连接","127.0.0.1:%{1} 可连接"
+我的邮箱,"My Mail"
+申请和管理企业邮箱账号,"Apply for and manage business mailboxes"
+企业邮箱,企业邮箱
+系统服务,系统服务
+邮件服务环境,邮件服务环境
+底层引擎：%{1}，平台：%{2},底层引擎：%{1}，平台：%{2}
+检测项,检测项
+状态,状态
+详情,详情
+通过,通过
+待处理,待处理
+原生安装计划,原生安装计划
+创建邮箱域名,创建邮箱域名
+邮件主机名,邮件主机名
+"默认容量 MB","默认容量 MB"
+创建域名,创建域名
+创建邮箱账号,创建邮箱账号
+域名,域名
+请选择域名,请选择域名
+邮箱地址,邮箱地址
+显示名称,"Display name"
+管理员,管理员
+"容量 MB","容量 MB"
+创建账号,创建账号
+"DNS 检测","DNS 检测"
+检测,检测
+类型,类型
+主机,主机
+建议值,建议值
+存在,存在
+未检测到,未检测到
+客户端配置,客户端配置
+输入域名和邮件主机名后显示客户端连接配置。,输入域名和邮件主机名后显示客户端连接配置。
+主机名,主机名
+操作,操作
+开启,开启
+停用,停用
+待同步,"Pending sync"
+邮箱账号,"Mailbox account"
+邮箱,邮箱
+名称,名称
+容量,容量
+已启用,Active
+已暂停,Suspended
+邮箱服务尚未开启,"Mail service is not enabled"
+站点管理员需要先完成原生邮件服务安装、端口检测，并开启至少一个邮箱域名后，用户才能申请企业邮箱账号。,"The site administrator must install the native mail service, verify the required ports, and enable at least one mail domain before users can apply for mailbox accounts."
+暂无可申请域名,"No available mail domains"
+当前没有已开启的邮箱域名，请稍后再试。,"No mail domains are currently enabled. Please try again later."
+仅支持小写字母、数字、点、下划线和短横线。,"Only lowercase letters, numbers, dots, underscores, and hyphens are supported."
+例如：业务邮箱,"For example: business mailbox"
+申请邮箱账号,"Apply for mailbox"
+您还没有申请邮箱账号。,"You have not applied for any mailbox accounts yet."
+暂停,Suspend
+恢复,Resume

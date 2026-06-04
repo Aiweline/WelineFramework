@@ -1,8 +1,13 @@
-    window.__pbStageLogic = {
-        bindPlanStageLogic: bindPlanStageLogic,
-        bindVisualEditStageLogic: bindVisualEditStageLogic,
-        bindPublishStageLogic: bindPublishStageLogic
-    };
+    window.__pbStageLogic = window.__pbStageLogic || {};
+    if (typeof bindPlanStageLogic === 'function') {
+        window.__pbStageLogic.bindPlanStageLogic = bindPlanStageLogic;
+    }
+    if (typeof bindVisualEditStageLogic === 'function') {
+        window.__pbStageLogic.bindVisualEditStageLogic = bindVisualEditStageLogic;
+    }
+    if (typeof bindPublishStageLogic === 'function') {
+        window.__pbStageLogic.bindPublishStageLogic = bindPublishStageLogic;
+    }
 
     function showWorkspaceEntryQueueNotice(workspaceState) {
         var notice = workspaceState && typeof workspaceState === 'object' && workspaceState.workspace_entry_notice
@@ -96,11 +101,11 @@
     });
     var bootStage = String(currentStageCode || currentWorkspaceStage || '').trim().toLowerCase();
     if (bootStage === 'visual_edit') {
-        safeWorkspaceBootStep('visual_edit_stage', bindVisualEditStageLogic);
+        safeWorkspaceBootStep('visual_edit_stage', window.__pbStageLogic.bindVisualEditStageLogic);
     } else if (bootStage === 'publish') {
-        safeWorkspaceBootStep('publish_stage', bindPublishStageLogic);
+        safeWorkspaceBootStep('publish_stage', window.__pbStageLogic.bindPublishStageLogic);
     } else {
-        safeWorkspaceBootStep('plan_stage', bindPlanStageLogic);
+        safeWorkspaceBootStep('plan_stage', window.__pbStageLogic.bindPlanStageLogic);
     }
     safeWorkspaceBootStep('plan_reload_reconciliation', function () {
         window.setTimeout(runPlanReloadReconciliation, 180);

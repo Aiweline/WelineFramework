@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 /*
- * 组件服务类 - 负责组件相关的业务逻辑
+ * 缁勪欢鏈嶅姟绫?- 璐熻矗缁勪欢鐩稿叧鐨勪笟鍔￠€昏緫
  * 
- * 支持以下组件来源：
- * 1. 模板专属组件（style/{template}/components/）
- * 2. 共享组件（style/_shared/components/）
- * 3. 其他模板的兼容组件
+ * 鏀寔浠ヤ笅缁勪欢鏉ユ簮锛?
+ * 1. 妯℃澘涓撳睘缁勪欢锛坰tyle/{template}/components/锛?
+ * 2. 鍏变韩缁勪欢锛坰tyle/_shared/components/锛?
+ * 3. 鍏朵粬妯℃澘鐨勫吋瀹圭粍浠?
  * 
- * 遵循单一职责原则(SRP)
+ * 閬靛惊鍗曚竴鑱岃矗鍘熷垯(SRP)
  */
 
 namespace GuoLaiRen\PageBuilder\Service;
@@ -24,7 +24,7 @@ class ComponentService
     private Component $componentModel;
     private ComponentValidator $componentValidator;
     
-    // 共享组件模板代码
+    // 鍏变韩缁勪欢妯℃澘浠ｇ爜
     public const SHARED_STYLE_CODE = '_shared';
     
     public function __construct()
@@ -34,12 +34,12 @@ class ComponentService
     }
     
     /**
-     * 扫描并注册模板组件（包含验证）
+     * 鎵弿骞舵敞鍐屾ā鏉跨粍浠讹紙鍖呭惈楠岃瘉锛?
      * 
-     * @param string $styleCode 模板代码
-     * @param bool $validateFirst 是否先验证后扫描
-     * @param bool $throwOnError 验证失败时是否抛出异常
-     * @return array 扫描结果，包含验证信息
+     * @param string $styleCode 妯℃澘浠ｇ爜
+     * @param bool $validateFirst 鏄惁鍏堥獙璇佸悗鎵弿
+     * @param bool $throwOnError 楠岃瘉澶辫触鏃舵槸鍚︽姏鍑哄紓甯?
+     * @return array 鎵弿缁撴灉锛屽寘鍚獙璇佷俊鎭?
      */
     public function scanAndRegister(string $styleCode, bool $validateFirst = true, bool $throwOnError = false): array
     {
@@ -52,29 +52,29 @@ class ComponentService
             return $result;
         }
         
-        // 先进行验证
+        // 鍏堣繘琛岄獙璇?
         if ($validateFirst) {
             $validation = $this->componentValidator->validateTemplate($styleCode, $throwOnError);
             $result['validation'] = $validation;
             
-            // 如果有错误且不是强制模式，返回警告但仍继续扫描
+            // 濡傛灉鏈夐敊璇笖涓嶆槸寮哄埗妯″紡锛岃繑鍥炶鍛婁絾浠嶇户缁壂鎻?
             if (!$validation['valid'] && !$throwOnError) {
-                w_log_error("[ComponentService] 模板 {$styleCode} 组件验证有错误: " . implode('; ', $validation['errors']));
+                w_log_error("[ComponentService] 妯℃澘 {$styleCode} 缁勪欢楠岃瘉鏈夐敊璇? " . implode('; ', $validation['errors']));
             }
         }
         
-        // 执行扫描
+        // 鎵ц鎵弿
         $result['scan'] = Component::scanAndRegister($styleCode);
         
         return $result;
     }
     
     /**
-     * 验证模板组件配置
+     * 楠岃瘉妯℃澘缁勪欢閰嶇疆
      * 
-     * @param string $styleCode 模板代码
-     * @param bool $throwOnError 是否在出错时抛出异常
-     * @return array 验证结果
+     * @param string $styleCode 妯℃澘浠ｇ爜
+     * @param bool $throwOnError 鏄惁鍦ㄥ嚭閿欐椂鎶涘嚭寮傚父
+     * @return array 楠岃瘉缁撴灉
      */
     public function validateTemplate(string $styleCode, bool $throwOnError = false): array
     {
@@ -82,12 +82,12 @@ class ComponentService
     }
     
     /**
-     * 验证布局配置中的组件引用
+     * 楠岃瘉甯冨眬閰嶇疆涓殑缁勪欢寮曠敤
      * 
-     * @param array $layoutConfig 布局配置
-     * @param string $styleCode 模板代码
-     * @param bool $throwOnError 是否在出错时抛出异常
-     * @return array 验证结果
+     * @param array $layoutConfig 甯冨眬閰嶇疆
+     * @param string $styleCode 妯℃澘浠ｇ爜
+     * @param bool $throwOnError 鏄惁鍦ㄥ嚭閿欐椂鎶涘嚭寮傚父
+     * @return array 楠岃瘉缁撴灉
      */
     public function validateLayoutConfig(array $layoutConfig, string $styleCode, bool $throwOnError = false): array
     {
@@ -95,10 +95,10 @@ class ComponentService
     }
     
     /**
-     * 生成验证报告
+     * 鐢熸垚楠岃瘉鎶ュ憡
      * 
-     * @param string $styleCode 模板代码
-     * @return string 格式化的验证报告
+     * @param string $styleCode 妯℃澘浠ｇ爜
+     * @return string 鏍煎紡鍖栫殑楠岃瘉鎶ュ憡
      */
     public function generateValidationReport(string $styleCode): string
     {
@@ -106,7 +106,7 @@ class ComponentService
     }
     
     /**
-     * 扫描并注册所有模板的组件（包括共享组件）
+     * 鎵弿骞舵敞鍐屾墍鏈夋ā鏉跨殑缁勪欢锛堝寘鎷叡浜粍浠讹級
      */
     public function scanAndRegisterAll(): array
     {
@@ -133,17 +133,17 @@ class ComponentService
     }
     
     /**
-     * 获取模板的组件列表（包含共享组件）
+     * 鑾峰彇妯℃澘鐨勭粍浠跺垪琛紙鍖呭惈鍏变韩缁勪欢锛?
      * 
-     * @param string $styleCode 模板代码
-     * @param bool $includeCompatible 是否包含兼容组件
+     * @param string $styleCode 妯℃澘浠ｇ爜
+     * @param bool $includeCompatible 鏄惁鍖呭惈鍏煎缁勪欢
      * @return array ['own' => Component[], 'shared' => Component[], 'compatible' => [templateCode => Component[]]]
      */
     public function getComponentsByStyle(string $styleCode, bool $includeCompatible = true): array
     {
         $result = Component::getByStyleCode($styleCode, $includeCompatible, true);
         
-        // 添加共享组件
+        // 娣诲姞鍏变韩缁勪欢
         if ($styleCode !== self::SHARED_STYLE_CODE) {
             $sharedComponents = $this->getSharedComponents();
             $result['shared'] = $sharedComponents;
@@ -153,7 +153,7 @@ class ComponentService
     }
     
     /**
-     * 获取共享组件列表
+     * 鑾峰彇鍏变韩缁勪欢鍒楄〃
      * 
      * @return array Component[]
      */
@@ -170,17 +170,17 @@ class ComponentService
     }
     
     /**
-     * 获取用于可视化构建器的组件数据
+     * 鑾峰彇鐢ㄤ簬鍙鍖栨瀯寤哄櫒鐨勭粍浠舵暟鎹?
      * 
-     * @param string $styleCode 模板代码
-     * @param string|null $layoutCode 布局代码（可选，用于过滤适合的组件）
-     * @param bool $includePreview 是否包含预览HTML（默认true）
-     * @param string|null $pageType 页面类型（可选，用于加载默认布局配置）
-     * @return array 组织好的组件数据
+     * @param string $styleCode 妯℃澘浠ｇ爜
+     * @param string|null $layoutCode 甯冨眬浠ｇ爜锛堝彲閫夛紝鐢ㄤ簬杩囨护閫傚悎鐨勭粍浠讹級
+     * @param bool $includePreview 鏄惁鍖呭惈棰勮HTML锛堥粯璁rue锛?
+     * @param string|null $pageType 椤甸潰绫诲瀷锛堝彲閫夛紝鐢ㄤ簬鍔犺浇榛樿甯冨眬閰嶇疆锛?
+     * @return array 缁勭粐濂界殑缁勪欢鏁版嵁
      */
     public function getComponentsForBuilder(string $styleCode, ?string $layoutCode = null, bool $includePreview = true, ?string $pageType = null): array
     {
-        // 启用输出缓冲，防止模板渲染时的直接输出破坏JSON响应
+        // 鍚敤杈撳嚭缂撳啿锛岄槻姝㈡ā鏉挎覆鏌撴椂鐨勭洿鎺ヨ緭鍑虹牬鍧廕SON鍝嶅簲
         $obLevel = ob_get_level();
         ob_start();
         
@@ -188,30 +188,30 @@ class ComponentService
             $allComponents = $this->getComponentsByStyle($styleCode, true);
             
             $result = [
-                // 当前模板的组件（推荐）- 包含预览
+                // 褰撳墠妯℃澘鐨勭粍浠讹紙鎺ㄨ崘锛? 鍖呭惈棰勮
                 'recommended' => [
-                    'label' => '推荐组件',
-                    'description' => '当前模板专属组件，样式最契合',
+                    'label' => '鎺ㄨ崘缁勪欢',
+                    'description' => '褰撳墠妯℃澘涓撳睘缁勪欢锛屾牱寮忔渶濂戝悎',
                     'components' => $this->toArrayBatch($allComponents['own'] ?? [], $includePreview),
                 ],
-                // 共享组件（通用）- 包含预览
+                // 鍏变韩缁勪欢锛堥€氱敤锛? 鍖呭惈棰勮
                 'shared' => [
-                    'label' => '通用组件',
-                    'description' => '跨模板通用组件',
+                    'label' => '閫氱敤缁勪欢',
+                    'description' => '璺ㄦā鏉块€氱敤缁勪欢',
                     'components' => $this->toArrayBatch($allComponents['shared'] ?? [], $includePreview),
                 ],
-                // 其他模板的兼容组件
+                // 鍏朵粬妯℃澘鐨勫吋瀹圭粍浠?
                 'other_templates' => [],
             ];
             
-            // 整理其他模板的组件（不生成预览，避免跨模板渲染问题）
+            // 鏁寸悊鍏朵粬妯℃澘鐨勭粍浠讹紙涓嶇敓鎴愰瑙堬紝閬垮厤璺ㄦā鏉挎覆鏌撻棶棰橈級
             if (!empty($allComponents['compatible'])) {
                 foreach ($allComponents['compatible'] as $templateCode => $components) {
                     if ($templateCode === self::SHARED_STYLE_CODE) {
-                        continue; // 跳过共享组件（已单独处理）
+                        continue; // 璺宠繃鍏变韩缁勪欢锛堝凡鍗曠嫭澶勭悊锛?
                     }
                     
-                    // 兼容组件不生成预览（避免跨模板渲染导致的输出问题）
+                    // 鍏煎缁勪欢涓嶇敓鎴愰瑙堬紙閬垮厤璺ㄦā鏉挎覆鏌撳鑷寸殑杈撳嚭闂锛?
                     $result['other_templates'][$templateCode] = [
                         'label' => $this->getTemplateName($templateCode),
                         'components' => $this->toArrayBatch($components, false),
@@ -219,21 +219,21 @@ class ComponentService
                 }
             }
             
-            // 如果指定了布局，按区域分组（不为兼容组件生成预览）
+            // 濡傛灉鎸囧畾浜嗗竷灞€锛屾寜鍖哄煙鍒嗙粍锛堜笉涓哄吋瀹圭粍浠剁敓鎴愰瑙堬級
             if ($layoutCode) {
                 $result['by_region'] = $this->groupComponentsByRegion($allComponents, $layoutCode, $includePreview, $styleCode);
             }
             
-            // 按分类分组
+            // 鎸夊垎绫诲垎缁?
             $result['by_category'] = $this->groupComponentsByCategory($allComponents, $includePreview, $styleCode);
             
-            // 如果指定了页面类型，加载该页面类型的默认布局配置
+            // 濡傛灉鎸囧畾浜嗛〉闈㈢被鍨嬶紝鍔犺浇璇ラ〉闈㈢被鍨嬬殑榛樿甯冨眬閰嶇疆
             if ($pageType) {
                 $result['default_layout_config'] = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
                 $result['page_type'] = $pageType;
             }
             
-            // 清理可能的直接输出
+            // 娓呯悊鍙兘鐨勭洿鎺ヨ緭鍑?
             while (ob_get_level() > $obLevel) {
                 ob_get_clean();
             }
@@ -241,7 +241,7 @@ class ComponentService
             return $result;
             
         } catch (\Throwable $e) {
-            // 发生异常时清理输出缓冲
+            // 鍙戠敓寮傚父鏃舵竻鐞嗚緭鍑虹紦鍐?
             while (ob_get_level() > $obLevel) {
                 ob_end_clean();
             }
@@ -250,14 +250,14 @@ class ComponentService
     }
     
     /**
-     * 获取页面类型的默认布局配置
+     * 鑾峰彇椤甸潰绫诲瀷鐨勯粯璁ゅ竷灞€閰嶇疆
      * 
-     * 简化逻辑：直接使用页面类型代码作为文件名
-     * 例如：blog_post → layouts/default/blog_post.json
+     * 绠€鍖栭€昏緫锛氱洿鎺ヤ娇鐢ㄩ〉闈㈢被鍨嬩唬鐮佷綔涓烘枃浠跺悕
+     * 渚嬪锛歜log_post 鈫?layouts/default/blog_post.json
      * 
-     * @param string $styleCode 样式代码
-     * @param string $pageType 页面类型
-     * @return array|null 默认布局配置
+     * @param string $styleCode 鏍峰紡浠ｇ爜
+     * @param string $pageType 椤甸潰绫诲瀷
+     * @return array|null 榛樿甯冨眬閰嶇疆
      */
     public function getDefaultLayoutConfigForPageType(string $styleCode, string $pageType): ?array
     {
@@ -265,11 +265,11 @@ class ComponentService
             return null;
         }
         
-        // 直接使用页面类型代码作为配置文件名
+        // 鐩存帴浣跨敤椤甸潰绫诲瀷浠ｇ爜浣滀负閰嶇疆鏂囦欢鍚?
         $configFilePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/default/{$pageType}.json";
         
         if (!file_exists($configFilePath)) {
-            // fallback 到 custom_page
+            // fallback 鍒?custom_page
             $configFilePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/default/custom_page.json";
             if (!file_exists($configFilePath)) {
                 return null;
@@ -284,11 +284,11 @@ class ComponentService
         
         $pageConfig = $configData['layout_config'];
         
-        // 处理继承（header/footer 从首页继承）
+        // 澶勭悊缁ф壙锛坔eader/footer 浠庨椤电户鎵匡級
         $inheritRegions = $configData['inherit_regions'] ?? [];
         
         foreach (['header', 'footer'] as $region) {
-            // 如果该区域为空数组且需要继承
+            // 濡傛灉璇ュ尯鍩熶负绌烘暟缁勪笖闇€瑕佺户鎵?
             if (empty($pageConfig[$region]) && isset($inheritRegions[$region])) {
                 $inheritFrom = $inheritRegions[$region];
                 $inheritedConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $inheritFrom);
@@ -305,7 +305,7 @@ class ComponentService
     }
     
     /**
-     * 按区域分组组件
+     * 鎸夊尯鍩熷垎缁勭粍浠?
      */
     private function groupComponentsByRegion(array $allComponents, string $layoutCode, bool $includePreview = false, string $currentStyleCode = ''): array
     {
@@ -319,7 +319,7 @@ class ComponentService
             ];
         }
         
-        // 合并所有组件（当前模板 + 共享 + 其他模板）
+        // 鍚堝苟鎵€鏈夌粍浠讹紙褰撳墠妯℃澘 + 鍏变韩 + 鍏朵粬妯℃澘锛?
         $all = [];
         $currentStyleCode = $currentStyleCode ?: (string)($allComponents['style_code'] ?? '');
         $currentStyleName = $currentStyleCode ? $this->getTemplateName($currentStyleCode) : $currentStyleCode;
@@ -335,7 +335,7 @@ class ComponentService
             $item = $this->toArray($component, $includePreview);
             $item['isShared'] = true;
             $item['templateCode'] = self::SHARED_STYLE_CODE;
-            $item['templateName'] = '通用组件';
+            $item['templateName'] = '閫氱敤缁勪欢';
             $all[] = $item;
         }
         foreach ($allComponents['compatible'] ?? [] as $templateCode => $components) {
@@ -360,7 +360,7 @@ class ComponentService
     }
     
     /**
-     * 按分类分组组件
+     * 鎸夊垎绫诲垎缁勭粍浠?
      */
     private function groupComponentsByCategory(array $allComponents, bool $includePreview = false, string $currentStyleCode = ''): array
     {
@@ -374,7 +374,7 @@ class ComponentService
             ];
         }
         
-        // 合并所有组件（当前模板 + 共享 + 其他模板）
+        // 鍚堝苟鎵€鏈夌粍浠讹紙褰撳墠妯℃澘 + 鍏变韩 + 鍏朵粬妯℃澘锛?
         $all = [];
         $currentStyleCode = $currentStyleCode ?: (string)($allComponents['style_code'] ?? '');
         $currentStyleName = $currentStyleCode ? $this->getTemplateName($currentStyleCode) : $currentStyleCode;
@@ -390,7 +390,7 @@ class ComponentService
             $item = $this->toArray($component, $includePreview);
             $item['isShared'] = true;
             $item['templateCode'] = self::SHARED_STYLE_CODE;
-            $item['templateName'] = '通用组件';
+            $item['templateName'] = '閫氱敤缁勪欢';
             $all[] = $item;
         }
         foreach ($allComponents['compatible'] ?? [] as $templateCode => $components) {
@@ -413,7 +413,7 @@ class ComponentService
     }
     
     /**
-     * 分类映射到区域
+     * 鍒嗙被鏄犲皠鍒板尯鍩?
      */
     private function categoryToRegion(string $category): string
     {
@@ -425,23 +425,23 @@ class ComponentService
     }
     
     /**
-     * 根据组件代码获取组件
+     * 鏍规嵁缁勪欢浠ｇ爜鑾峰彇缁勪欢
      * 
-     * 查找顺序：
-     * 1. 如果指定了 styleCode，先精确匹配 code + style_code
-     * 2. 如果没有指定 styleCode 或没找到，尝试只用 code 查找
-     * 3. 如果组件代码是既有格式（带模板前缀），尝试解析并查找
+     * 鏌ユ壘椤哄簭锛?
+     * 1. 濡傛灉鎸囧畾浜?styleCode锛屽厛绮剧‘鍖归厤 code + style_code
+     * 2. 濡傛灉娌℃湁鎸囧畾 styleCode 鎴栨病鎵惧埌锛屽皾璇曞彧鐢?code 鏌ユ壘
+     * 3. 濡傛灉缁勪欢浠ｇ爜鏄棦鏈夋牸寮忥紙甯︽ā鏉垮墠缂€锛夛紝灏濊瘯瑙ｆ瀽骞舵煡鎵?
      * 
-     * @param string $componentCode 组件代码
-     * @param string|null $styleCode 模板代码（可选，推荐传入）
+     * @param string $componentCode 缁勪欢浠ｇ爜
+     * @param string|null $styleCode 妯℃澘浠ｇ爜锛堝彲閫夛紝鎺ㄨ崘浼犲叆锛?
      * @return Component|null
      */
     public function getByCode(string $componentCode, ?string $styleCode = null): ?Component
     {
-        // 标准化组件代码（移除可能的模板前缀，转换下划线为破折号）
+        // 鏍囧噯鍖栫粍浠朵唬鐮侊紙绉婚櫎鍙兘鐨勬ā鏉垮墠缂€锛岃浆鎹笅鍒掔嚎涓虹牬鎶樺彿锛?
         $normalizedCode = $this->normalizeComponentCode($componentCode, $styleCode);
         
-        // 1. 如果指定了 styleCode，先精确匹配
+        // 1. 濡傛灉鎸囧畾浜?styleCode锛屽厛绮剧‘鍖归厤
         if ($styleCode) {
             $component = clone $this->componentModel;
             $component->clear()
@@ -455,7 +455,7 @@ class ComponentService
             }
         }
         
-        // 2. 尝试只用标准化后的 code 查找
+        // 2. 灏濊瘯鍙敤鏍囧噯鍖栧悗鐨?code 鏌ユ壘
         $component = clone $this->componentModel;
         $component->clear()
             ->where(Component::schema_fields_CODE, $normalizedCode)
@@ -467,7 +467,7 @@ class ComponentService
             return $component;
         }
         
-        // 3. 如果还没找到，尝试用原始代码查找（兼容既有格式）
+        // 3. 濡傛灉杩樻病鎵惧埌锛屽皾璇曠敤鍘熷浠ｇ爜鏌ユ壘锛堝吋瀹规棦鏈夋牸寮忥級
         if ($normalizedCode !== $componentCode) {
             $component = clone $this->componentModel;
             $component->clear()
@@ -481,63 +481,63 @@ class ComponentService
             }
         }
         
-        // 4. 尝试模糊匹配（处理可能的格式差异）
+        // 4. 灏濊瘯妯＄硦鍖归厤锛堝鐞嗗彲鑳界殑鏍煎紡宸紓锛?
         $component = $this->fuzzyFindComponent($componentCode, $styleCode);
         
         return $component;
     }
     
     /**
-     * 标准化组件代码
+     * 鏍囧噯鍖栫粍浠朵唬鐮?
      * 
-     * 处理各种格式：
+     * 澶勭悊鍚勭鏍煎紡锛?
      * - sattaking_header_nav -> header-nav
      * - tpmst_content_hero -> content-hero
-     * - header-nav -> header-nav（已是标准格式）
+     * - header-nav -> header-nav锛堝凡鏄爣鍑嗘牸寮忥級
      */
     private function normalizeComponentCode(string $code, ?string $styleCode = null): string
     {
-        // 如果已经是标准格式（包含破折号，不包含下划线），直接返回
+        // 濡傛灉宸茬粡鏄爣鍑嗘牸寮忥紙鍖呭惈鐮存姌鍙凤紝涓嶅寘鍚笅鍒掔嚎锛夛紝鐩存帴杩斿洖
         if (strpos($code, '-') !== false && strpos($code, '_') === false) {
             return strtolower($code);
         }
         
-        // 如果有模板前缀，尝试移除
+        // 濡傛灉鏈夋ā鏉垮墠缂€锛屽皾璇曠Щ闄?
         if ($styleCode && strpos($code, $styleCode . '_') === 0) {
             $withoutPrefix = substr($code, strlen($styleCode) + 1);
             return strtolower(str_replace('_', '-', $withoutPrefix));
         }
         
-        // 尝试检测并移除模板前缀（格式：{styleCode}_{category}_{name}）
+        // 灏濊瘯妫€娴嬪苟绉婚櫎妯℃澘鍓嶇紑锛堟牸寮忥細{styleCode}_{category}_{name}锛?
         if (preg_match('/^([a-z0-9]+)_([a-z]+)_(.+)$/i', $code, $matches)) {
             $category = strtolower($matches[2]);
             $name = str_replace('_', '-', strtolower($matches[3]));
             return "{$category}-{$name}";
         }
         
-        // 只转换下划线为破折号
+        // 鍙浆鎹笅鍒掔嚎涓虹牬鎶樺彿
         return strtolower(str_replace('_', '-', $code));
     }
     
     /**
-     * 模糊查找组件
+     * 妯＄硦鏌ユ壘缁勪欢
      * 
-     * 尝试多种格式匹配
+     * 灏濊瘯澶氱鏍煎紡鍖归厤
      */
     private function fuzzyFindComponent(string $componentCode, ?string $styleCode = null): ?Component
     {
         $possibleCodes = [];
         
-        // 生成可能的代码格式
+        // 鐢熸垚鍙兘鐨勪唬鐮佹牸寮?
         $normalizedCode = strtolower(str_replace('_', '-', $componentCode));
         $possibleCodes[] = $normalizedCode;
         
-        // 如果有模板前缀格式的代码，提取核心部分
+        // 濡傛灉鏈夋ā鏉垮墠缂€鏍煎紡鐨勪唬鐮侊紝鎻愬彇鏍稿績閮ㄥ垎
         if (preg_match('/^([a-z0-9]+)[-_]([a-z]+)[-_](.+)$/i', $componentCode, $matches)) {
             $possibleCodes[] = strtolower($matches[2] . '-' . str_replace('_', '-', $matches[3]));
         }
         
-        // 尝试每种可能的代码
+        // 灏濊瘯姣忕鍙兘鐨勪唬鐮?
         foreach (array_unique($possibleCodes) as $code) {
             $component = clone $this->componentModel;
             $query = $component->clear()->where(Component::schema_fields_CODE, $code);
@@ -557,43 +557,43 @@ class ComponentService
     }
     
     /**
-     * 渲染组件预览（执行完整组件）
+     * 娓叉煋缁勪欢棰勮锛堟墽琛屽畬鏁寸粍浠讹級
      * 
-     * 支持跨模板组件渲染：
-     * 1. 加载组件所属模板的颜色配置
-     * 2. 正确处理组件的静态资源路径
+     * 鏀寔璺ㄦā鏉跨粍浠舵覆鏌擄細
+     * 1. 鍔犺浇缁勪欢鎵€灞炴ā鏉跨殑棰滆壊閰嶇疆
+     * 2. 姝ｇ‘澶勭悊缁勪欢鐨勯潤鎬佽祫婧愯矾寰?
      * 
-     * @param string $componentCode 组件代码
-     * @param array $config 自定义配置（空则使用默认配置）
-     * @param string|null $styleCode 模板代码（可选，用于精确查找组件）
-     * @return string 渲染后的 HTML
+     * @param string $componentCode 缁勪欢浠ｇ爜
+     * @param array $config 鑷畾涔夐厤缃紙绌哄垯浣跨敤榛樿閰嶇疆锛?
+     * @param string|null $styleCode 妯℃澘浠ｇ爜锛堝彲閫夛紝鐢ㄤ簬绮剧‘鏌ユ壘缁勪欢锛?
+     * @return string 娓叉煋鍚庣殑 HTML
      */
     public function renderPreview(string $componentCode, array $config = [], ?string $styleCode = null): string
     {
         $component = $this->getByCode($componentCode, $styleCode);
         
         if (!$component) {
-            throw new \Exception('组件不存在: ' . $componentCode);
+            throw new \Exception('缁勪欢涓嶅瓨鍦? ' . $componentCode);
         }
         
         $styleCode = $component->getData(Component::schema_fields_STYLE_CODE);
         $path = $component->getData(Component::schema_fields_PATH);
         
         if (empty($path)) {
-            throw new \Exception('组件路径未定义: ' . $componentCode);
+            throw new \Exception('缁勪欢璺緞鏈畾涔? ' . $componentCode);
         }
         
-        // 合并默认配置和自定义配置
+        // 鍚堝苟榛樿閰嶇疆鍜岃嚜瀹氫箟閰嶇疆
         $defaultConfig = $component->getDefaultConfig();
         $mergedConfig = array_merge($defaultConfig, $config);
         
-        // 使用框架的模板引擎渲染组件
+        // 浣跨敤妗嗘灦鐨勬ā鏉垮紩鎿庢覆鏌撶粍浠?
         $template = \Weline\Framework\View\Template::getInstance();
         
-        // 加载组件所属模板的颜色配置
+        // 鍔犺浇缁勪欢鎵€灞炴ā鏉跨殑棰滆壊閰嶇疆
         $colors = $this->loadTemplateColors($styleCode);
         
-        // 准备模板变量
+        // 鍑嗗妯℃澘鍙橀噺
         $template->assign('page', null);
         $template->assign('style', $mergedConfig);
         $template->assign('style_settings', $mergedConfig);
@@ -612,85 +612,85 @@ class ComponentService
         $template->assign('colors', $colors);
         $template->assign('template_code', $styleCode);
         
-        // 为预览模式提供示例数据（确保所有组件都能正常显示预览）
+        // 涓洪瑙堟ā寮忔彁渚涚ず渚嬫暟鎹紙纭繚鎵€鏈夌粍浠堕兘鑳芥甯告樉绀洪瑙堬級
         $previewData = $this->getPreviewSampleData($componentCode);
         foreach ($previewData as $key => $value) {
             $template->assign($key, $value);
         }
         
         try {
-            // 检查组件文件是否存在
+            // 妫€鏌ョ粍浠舵枃浠舵槸鍚﹀瓨鍦?
             $fullPath = $component->getFullPath();
             
             if (!file_exists($fullPath)) {
-                throw new \Exception("组件文件不存在: {$path}");
+                throw new \Exception("缁勪欢鏂囦欢涓嶅瓨鍦? {$path}");
             }
             
-            // 使用模块路径格式渲染组件
-            // path 格式类似: style/tpmst/components/header/nav.phtml
+            // 浣跨敤妯″潡璺緞鏍煎紡娓叉煋缁勪欢
+            // path 鏍煎紡绫讳技: style/tpmst/components/header/nav.phtml
             $templatePath = "GuoLaiRen_PageBuilder::templates/{$path}";
             
-            // 启用输出缓冲捕获模板可能的直接输出
+            // 鍚敤杈撳嚭缂撳啿鎹曡幏妯℃澘鍙兘鐨勭洿鎺ヨ緭鍑?
             ob_start();
             $html = $template->fetch($templatePath);
             $directOutput = ob_get_clean();
             
-            // 如果有直接输出，合并到结果中
+            // 濡傛灉鏈夌洿鎺ヨ緭鍑猴紝鍚堝苟鍒扮粨鏋滀腑
             if (!empty($directOutput)) {
                 $html = $directOutput . ($html ?? '');
             }
             
-            // 确保 $html 是字符串
+            // 纭繚 $html 鏄瓧绗︿覆
             if (!is_string($html)) {
                 $html = '';
             }
             
-            // 如果渲染结果为空，返回提示信息
+            // 濡傛灉娓叉煋缁撴灉涓虹┖锛岃繑鍥炴彁绀轰俊鎭?
             if (empty(trim($html))) {
-                return '<div style="padding: 20px; text-align: center; color: #999; font-size: 14px;">组件预览为空</div>';
+                return '<div style="padding: 20px; text-align: center; color: #999; font-size: 14px;">缁勪欢棰勮涓虹┖</div>';
             }
             
             return $html;
             
         } catch (\Throwable $e) {
-            // 返回更友好的错误提示
+            // 杩斿洖鏇村弸濂界殑閿欒鎻愮ず
             $errorMsg = htmlspecialchars($e->getMessage());
             return '<div style="padding: 20px; text-align: center; color: #e74c3c; font-size: 14px; border: 1px dashed #e74c3c; border-radius: 4px; background: #fff5f5;">
-                <p style="margin: 0 0 10px 0;"><strong>组件预览失败</strong></p>
+                <p style="margin: 0 0 10px 0;"><strong>缁勪欢棰勮澶辫触</strong></p>
                 <p style="margin: 0; font-size: 12px; color: #999;">' . $errorMsg . '</p>
             </div>';
         }
     }
     
     /**
-     * 加载模板的颜色配置
+     * 鍔犺浇妯℃澘鐨勯鑹查厤缃?
      * 
-     * @param string $styleCode 模板代码
-     * @return array 颜色配置数组
+     * @param string $styleCode 妯℃澘浠ｇ爜
+     * @return array 棰滆壊閰嶇疆鏁扮粍
      */
     private function loadTemplateColors(string $styleCode): array
     {
         $colors = [];
         
-        // 颜色配置文件路径
+        // 棰滆壊閰嶇疆鏂囦欢璺緞
         $colorFile = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/colors/default.phtml";
         
         if (!file_exists($colorFile)) {
-            // 尝试共享颜色配置
+            // 灏濊瘯鍏变韩棰滆壊閰嶇疆
             $colorFile = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/colors/default.phtml";
         }
         
         if (file_exists($colorFile)) {
             try {
-                // 从颜色配置文件中提取颜色变量
+                // 浠庨鑹查厤缃枃浠朵腑鎻愬彇棰滆壊鍙橀噺
                 $content = file_get_contents($colorFile);
                 
-                // 解析 $colors 数组定义
-                if (preg_match('/\$colors\s*=\s*\[([\s\S]*?)\];/m', $content, $matches)) {
-                    // 尝试通过执行来获取颜色数组
+                // 瑙ｆ瀽 $colors 鏁扮粍瀹氫箟
+                if (preg_match('/$colors\s*=\s*\[([\s\S]*?)\];/m', $content, $matches)) {
+                    // 灏濊瘯閫氳繃鎵ц鏉ヨ幏鍙栭鑹叉暟缁?
                     ob_start();
                     $tempColors = [];
-                    // 安全地执行，只提取颜色变量
+                    // 瀹夊叏鍦版墽琛岋紝鍙彁鍙栭鑹插彉閲?
                     $extractCode = '<?php ' . str_replace('<?php', '', $matches[0]) . ' return $colors;';
                     $tempFile = sys_get_temp_dir() . '/pb_colors_' . md5($styleCode) . '.php';
                     file_put_contents($tempFile, $extractCode);
@@ -699,7 +699,7 @@ class ComponentService
                     ob_end_clean();
                 }
             } catch (\Throwable $e) {
-                // 颜色配置加载失败，使用空数组
+                // 棰滆壊閰嶇疆鍔犺浇澶辫触锛屼娇鐢ㄧ┖鏁扮粍
                 $colors = [];
             }
         }
@@ -708,48 +708,48 @@ class ComponentService
     }
     
     /**
-     * 获取组件的预览 HTML（通过模板渲染获取）
+     * 鑾峰彇缁勪欢鐨勯瑙?HTML锛堥€氳繃妯℃澘娓叉煋鑾峰彇锛?
      * 
-     * @param string $componentCode 组件代码
-     * @return string 预览 HTML
+     * @param string $componentCode 缁勪欢浠ｇ爜
+     * @return string 棰勮 HTML
      */
     public function extractPreviewHtml(Component $component): string
     {
-        // 启用输出缓冲，捕获所有可能的直接输出
+        // 鍚敤杈撳嚭缂撳啿锛屾崟鑾锋墍鏈夊彲鑳界殑鐩存帴杈撳嚭
         ob_start();
         
         try {
             $componentCode = $component->getData(Component::schema_fields_CODE);
             $styleCode = $component->getData(Component::schema_fields_STYLE_CODE);
-            // 直接通过模板渲染获取组件 HTML（使用组件所属模板）
+            // 鐩存帴閫氳繃妯℃澘娓叉煋鑾峰彇缁勪欢 HTML锛堜娇鐢ㄧ粍浠舵墍灞炴ā鏉匡級
             $html = $this->renderPreview($componentCode, [], $styleCode);
             
-            // 获取可能的直接输出
+            // 鑾峰彇鍙兘鐨勭洿鎺ヨ緭鍑?
             ob_get_clean();
             
             if (empty($html)) {
                 return '';
             }
             
-            // 为预览 HTML 添加唯一容器类名（样式隔离）
+            // 涓洪瑙?HTML 娣诲姞鍞竴瀹瑰櫒绫诲悕锛堟牱寮忛殧绂伙級
             $safeCode = preg_replace('/[^a-zA-Z0-9_-]/', '_', $componentCode);
             return '<div class="cp-' . $safeCode . ' component-preview-wrapper">' . $html . '</div>';
             
         } catch (\Throwable $e) {
-            // 清理输出缓冲
+            // 娓呯悊杈撳嚭缂撳啿
             ob_end_clean();
             
-            // 渲染失败时返回错误提示
+            // 娓叉煋澶辫触鏃惰繑鍥為敊璇彁绀?
             $safeCode = preg_replace('/[^a-zA-Z0-9_-]/', '_', $componentCode);
-            return '<div class="cp-' . $safeCode . ' component-preview-error" style="padding:10px;color:#999;font-size:12px;text-align:center;">预览加载失败</div>';
+            return '<div class="cp-' . $safeCode . ' component-preview-error" style="padding:10px;color:#999;font-size:12px;text-align:center;">棰勮鍔犺浇澶辫触</div>';
         }
     }
     
     /**
-     * 将组件模型转换为数组格式
+     * 灏嗙粍浠舵ā鍨嬭浆鎹负鏁扮粍鏍煎紡
      * 
-     * @param Component $component 组件模型
-     * @param bool $includePreview 是否包含预览HTML
+     * @param Component $component 缁勪欢妯″瀷
+     * @param bool $includePreview 鏄惁鍖呭惈棰勮HTML
      */
     public function toArray(Component $component, bool $includePreview = false): array
     {
@@ -758,26 +758,26 @@ class ComponentService
         $category = $component->getData(Component::schema_fields_CATEGORY);
         $componentCode = $component->getData(Component::schema_fields_CODE);
         
-        // 构建缩略图完整路径
+        // 鏋勫缓缂╃暐鍥惧畬鏁磋矾寰?
         $thumbnailUrl = '';
         if ($thumbnail) {
-            // 检查是否已经是完整URL或绝对路径
+            // 妫€鏌ユ槸鍚﹀凡缁忔槸瀹屾暣URL鎴栫粷瀵硅矾寰?
             if (str_starts_with($thumbnail, 'http://') || str_starts_with($thumbnail, 'https://') || str_starts_with($thumbnail, '/')) {
                 $thumbnailUrl = $thumbnail;
             } else {
-                // thumbnail 路径是相对于 style 目录的（如 asset/img/logo.png）
-                // 使用框架方法获取正确的静态资源URL
+                // thumbnail 璺緞鏄浉瀵逛簬 style 鐩綍鐨勶紙濡?asset/img/logo.png锛?
+                // 浣跨敤妗嗘灦鏂规硶鑾峰彇姝ｇ‘鐨勯潤鎬佽祫婧怳RL
                 try {
                     $template = \Weline\Framework\View\Template::getInstance();
                     $thumbnailUrl = $template->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/' . $styleCode . '/' . $thumbnail);
                 } catch (\Throwable $e) {
-                    // 回退到开发模式路径
+                    // 鍥為€€鍒板紑鍙戞ā寮忚矾寰?
                     $thumbnailUrl = '/app/code/GuoLaiRen/PageBuilder/view/templates/style/' . $styleCode . '/' . $thumbnail;
                 }
             }
         }
         
-        // 从 config_schema 中提取 region 和 icon（如果有的话）
+        // 浠?config_schema 涓彁鍙?region 鍜?icon锛堝鏋滄湁鐨勮瘽锛?
         $configSchema = $component->getConfigSchema();
         $region = $configSchema['region'] ?? $this->categoryToRegion($category);
         $icon = $configSchema['icon'] ?? null;
@@ -793,7 +793,7 @@ class ComponentService
             'type' => $component->getData(Component::schema_fields_TYPE),
             'thumbnail' => $thumbnail,
             'thumbnail_url' => $thumbnailUrl,
-            'icon' => $icon, // 组件图标（用于预览缩略图的后备显示）
+            'icon' => $icon, // 缁勪欢鍥炬爣锛堢敤浜庨瑙堢缉鐣ュ浘鐨勫悗澶囨樉绀猴級
             'config_schema' => $configSchema,
             'default_config' => $component->getDefaultConfig(),
             'compatible_styles' => $component->getCompatibleStyles(),
@@ -802,13 +802,13 @@ class ComponentService
             'is_ai_generated' => (bool)$component->getData(Component::schema_fields_IS_AI_GENERATED),
             'sort_order' => (int)$component->getData(Component::schema_fields_SORT_ORDER),
             'preview_html' => '',
-            'preview_html_encoded' => false, // 标记预览HTML是否已编码
+            'preview_html_encoded' => false, // 鏍囪棰勮HTML鏄惁宸茬紪鐮?
         ];
         
-        // 如果需要预览HTML，从组件文件中提取
+        // 濡傛灉闇€瑕侀瑙圚TML锛屼粠缁勪欢鏂囦欢涓彁鍙?
         if ($includePreview) {
             $previewHtml = $this->extractPreviewHtml($component);
-            // 使用 Base64 编码预览HTML，防止特殊字符破坏JSON结构
+            // 浣跨敤 Base64 缂栫爜棰勮HTML锛岄槻姝㈢壒娈婂瓧绗︾牬鍧廕SON缁撴瀯
             $result['preview_html'] = base64_encode($previewHtml);
             $result['preview_html_encoded'] = true;
         }
@@ -817,10 +817,10 @@ class ComponentService
     }
     
     /**
-     * 批量转换组件为数组
+     * 鎵归噺杞崲缁勪欢涓烘暟缁?
      * 
-     * @param array $components 组件数组
-     * @param bool $includePreview 是否包含预览HTML
+     * @param array $components 缁勪欢鏁扮粍
+     * @param bool $includePreview 鏄惁鍖呭惈棰勮HTML
      */
     public function toArrayBatch(array $components, bool $includePreview = false): array
     {
@@ -828,14 +828,14 @@ class ComponentService
     }
     
     /**
-     * 获取模板名称
+     * 鑾峰彇妯℃澘鍚嶇О
      */
     private function getTemplateName(string $styleCode): string
     {
-        // 尝试从 readme.md 或 component.json 获取名称
+        // 灏濊瘯浠?readme.md 鎴?component.json 鑾峰彇鍚嶇О
         $basePath = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/' . $styleCode . '/';
         
-        // 尝试从 component.json 获取
+        // 灏濊瘯浠?component.json 鑾峰彇
         $componentJson = $basePath . 'components/component.json';
         if (file_exists($componentJson)) {
             $content = file_get_contents($componentJson);
@@ -845,93 +845,93 @@ class ComponentService
             }
         }
         
-        // 格式化代码为名称
+        // 鏍煎紡鍖栦唬鐮佷负鍚嶇О
         return ucwords(str_replace(['-', '_'], ' ', $styleCode));
     }
     
     /**
-     * 获取页面已保存的组件配置
+     * 鑾峰彇椤甸潰宸蹭繚瀛樼殑缁勪欢閰嶇疆
      * 
-     * @param int $pageId 页面ID
-     * @return array 组件配置
+     * @param int $pageId 椤甸潰ID
+     * @return array 缁勪欢閰嶇疆
      */
     public function getPageComponents(int $pageId): array
     {
-        // TODO: 从 PageLayout 模型获取页面的组件配置
+        // TODO: 浠?PageLayout 妯″瀷鑾峰彇椤甸潰鐨勭粍浠堕厤缃?
         return [];
     }
     
     /**
-     * 保存页面的组件配置
+     * 淇濆瓨椤甸潰鐨勭粍浠堕厤缃?
      * 
-     * @param int $pageId 页面ID
-     * @param array $components 组件配置
+     * @param int $pageId 椤甸潰ID
+     * @param array $components 缁勪欢閰嶇疆
      * @return bool
      */
     public function savePageComponents(int $pageId, array $components): bool
     {
-        // TODO: 保存到 PageLayout 模型
+        // TODO: 淇濆瓨鍒?PageLayout 妯″瀷
         return true;
     }
     
     /**
-     * 获取预览模式的示例数据
+     * 鑾峰彇棰勮妯″紡鐨勭ず渚嬫暟鎹?
      * 
-     * 为依赖外部数据的组件提供示例数据，确保预览能正常显示
+     * 涓轰緷璧栧閮ㄦ暟鎹殑缁勪欢鎻愪緵绀轰緥鏁版嵁锛岀‘淇濋瑙堣兘姝ｅ父鏄剧ず
      * 
-     * @param string $componentCode 组件代码
-     * @return array 示例数据
+     * @param string $componentCode 缁勪欢浠ｇ爜
+     * @return array 绀轰緥鏁版嵁
      */
     private function getPreviewSampleData(string $componentCode): array
     {
         $sampleData = [];
         
-        // 根据组件代码或类别提供相应的示例数据
+        // 鏍规嵁缁勪欢浠ｇ爜鎴栫被鍒彁渚涚浉搴旂殑绀轰緥鏁版嵁
         $codeNormalized = strtolower(str_replace(['_', '-'], '', $componentCode));
         
-        // 博客相关组件
+        // 鍗氬鐩稿叧缁勪欢
         if (str_contains($codeNormalized, 'blog') || str_contains($codeNormalized, 'post')) {
             $sampleData['blog_posts'] = $this->getSampleBlogPosts();
             $sampleData['blog_categories'] = $this->getSampleBlogCategories();
             $sampleData['recent_posts'] = array_slice($this->getSampleBlogPosts(), 0, 5);
         }
         
-        // 游戏相关组件
+        // 娓告垙鐩稿叧缁勪欢
         if (str_contains($codeNormalized, 'game')) {
             $sampleData['games'] = $this->getSampleGames();
         }
         
-        // 评价/评论相关组件
+        // 璇勪环/璇勮鐩稿叧缁勪欢
         if (str_contains($codeNormalized, 'testimonial') || str_contains($codeNormalized, 'review')) {
             $sampleData['testimonials'] = $this->getSampleTestimonials();
         }
         
-        // FAQ 组件
+        // FAQ 缁勪欢
         if (str_contains($codeNormalized, 'faq')) {
             $sampleData['faq_items'] = $this->getSampleFaqItems();
         }
         
-        // 团队成员组件
+        // 鍥㈤槦鎴愬憳缁勪欢
         if (str_contains($codeNormalized, 'team')) {
             $sampleData['team_members'] = $this->getSampleTeamMembers();
         }
         
-        // 特性/功能组件
+        // 鐗规€?鍔熻兘缁勪欢
         if (str_contains($codeNormalized, 'feature') || str_contains($codeNormalized, 'advantage')) {
             $sampleData['features'] = $this->getSampleFeatures();
         }
         
-        // 合作伙伴/品牌组件
+        // 鍚堜綔浼欎即/鍝佺墝缁勪欢
         if (str_contains($codeNormalized, 'partner') || str_contains($codeNormalized, 'brand') || str_contains($codeNormalized, 'client')) {
             $sampleData['partners'] = $this->getSamplePartners();
         }
         
-        // 价格表组件
+        // 浠锋牸琛ㄧ粍浠?
         if (str_contains($codeNormalized, 'pricing') || str_contains($codeNormalized, 'plan')) {
             $sampleData['pricing_plans'] = $this->getSamplePricingPlans();
         }
         
-        // 统计数字组件
+        // 缁熻鏁板瓧缁勪欢
         if (str_contains($codeNormalized, 'stat') || str_contains($codeNormalized, 'counter')) {
             $sampleData['statistics'] = $this->getSampleStatistics();
         }
@@ -940,7 +940,7 @@ class ComponentService
     }
     
     /**
-     * 示例博客文章数据
+     * 绀轰緥鍗氬鏂囩珷鏁版嵁
      */
     private function getSampleBlogPosts(): array
     {
@@ -1021,7 +1021,7 @@ class ComponentService
     }
     
     /**
-     * 示例博客分类数据
+     * 绀轰緥鍗氬鍒嗙被鏁版嵁
      */
     private function getSampleBlogCategories(): array
     {
@@ -1035,7 +1035,7 @@ class ComponentService
     }
     
     /**
-     * 示例游戏数据
+     * 绀轰緥娓告垙鏁版嵁
      */
     private function getSampleGames(): array
     {
@@ -1076,7 +1076,7 @@ class ComponentService
     }
     
     /**
-     * 示例用户评价数据
+     * 绀轰緥鐢ㄦ埛璇勪环鏁版嵁
      */
     private function getSampleTestimonials(): array
     {
@@ -1109,7 +1109,7 @@ class ComponentService
     }
     
     /**
-     * 示例 FAQ 数据
+     * 绀轰緥 FAQ 鏁版嵁
      */
     private function getSampleFaqItems(): array
     {
@@ -1134,7 +1134,7 @@ class ComponentService
     }
     
     /**
-     * 示例团队成员数据
+     * 绀轰緥鍥㈤槦鎴愬憳鏁版嵁
      */
     private function getSampleTeamMembers(): array
     {
@@ -1167,7 +1167,7 @@ class ComponentService
     }
     
     /**
-     * 示例特性/功能数据
+     * 绀轰緥鐗规€?鍔熻兘鏁版嵁
      */
     private function getSampleFeatures(): array
     {
@@ -1196,7 +1196,7 @@ class ComponentService
     }
     
     /**
-     * 示例合作伙伴数据
+     * 绀轰緥鍚堜綔浼欎即鏁版嵁
      */
     private function getSamplePartners(): array
     {
@@ -1210,7 +1210,7 @@ class ComponentService
     }
     
     /**
-     * 示例价格方案数据
+     * 绀轰緥浠锋牸鏂规鏁版嵁
      */
     private function getSamplePricingPlans(): array
     {
@@ -1240,7 +1240,7 @@ class ComponentService
     }
     
     /**
-     * 示例统计数据
+     * 绀轰緥缁熻鏁版嵁
      */
     private function getSampleStatistics(): array
     {

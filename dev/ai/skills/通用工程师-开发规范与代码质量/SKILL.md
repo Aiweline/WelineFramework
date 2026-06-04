@@ -1,196 +1,79 @@
 ---
 name: 通用工程师-开发规范与代码质量
 description: Shared engineering skill for Weline development standards, safe change boundaries, code quality, documentation duties, and validation evidence.
-version: 1.1.1
+version: 1.2.0
 ---
 
 # Role
 
-This shared skill owns baseline development standards for all WelineFramework engineering work. It keeps changes small, isolated, framework-compliant, documented in the right location, and backed by relevant validation evidence before specialist skills complete their work.
+通用工程师技能是所有 WelineFramework 工程任务的共识技能。它不复制全局规则，只负责把任务落到正确边界、正确角色和可验证结果。
 
 # When To Use
 
-- Use for development standards, code quality, implementation boundaries, safe refactoring, generated-code rules, documentation duties, and validation expectations.
-- Use for keywords such as coding standard, development rules, generated code, module boundary, small change, validation evidence, docs update, fix report, WLS test instance, and repository hygiene.
-- Use when a task crosses multiple roles or when the request is mainly about how work should be implemented rather than one specific subsystem.
-- Use before specialist implementation skills when the task may affect framework stability, business modules, public interfaces, runtime behavior, or user-visible behavior.
-- Use as the collaboration hub when an agent discovers a problem, risk, blocker, unclear ownership, cross-module impact, or validation failure.
+- 任意代码、文档、规则、配置、测试或验证任务。
+- 任务跨多个模块、角色或公共接口。
+- 需要判断最小改动边界、生成产物边界、i18n、文档位置、验证证据或仓库卫生。
+- 发现问题、风险、阻塞、跨角色影响或验证失败，需要通知 `@Weline-技术主管`。
 
-# Source Material
+# Load First
 
-- `dev/ai/global-constraints.md`
 - `AI-ENTRY.md`
-- `AI-README.md`
+- `dev/ai/global-constraints.md`
 - `dev/ai/skills/_index.md`
-- `dev/ai/skills/README.md`
-- `dev/ai/skills/MIGRATION_REPORT.md`
-- `dev/ai/skills/CI发布工程师-环境兼容与命令安全/SKILL.md`
-- Original migration sources referenced by `MIGRATION_REPORT.md`: `code-generation-standards`, `documentation-standards`, `debug-logging`, `windows-command-quoting`, `php84-performance`, `testing`, `module-development`, and `weline-framework-core`.
+- 仅加载命中的专项技能；不要批量读取全部技能。
 
 # Responsibilities
 
-- Enforce `dev/ai/global-constraints.md` and the repository reading order before deep source-code inspection.
-- Keep changes within the correct module or framework boundary.
-- Prefer small, isolated, testable changes over broad rewrites.
-- Never use cross-file batch replace or one-off bulk rewrite scripts; edit source file-by-file with per-occurrence context review (`dev/ai/global-constraints.md` §5.1).
-- Protect generated code, schema conventions, routing conventions, and template constraints.
-- Ensure user-facing text, documentation updates, and validation evidence are handled by the correct role or skill.
-- Decide which specialist skill should own implementation after the shared standards are clear.
-- Maintain the Weline AI agent roster and require Technical Lead notification for discovered problems, blockers, risks, validation failures, and cross-agent ownership issues.
+- 执行总则中的加载策略、任务工作区、禁止项、i18n、前端请求、WLS、验证和交付规则。
+- 定义最小安全改动边界，避免无关重构、批量机械改写和生成产物修补。
+- 判断主责技能：框架核心、业务模块、前端主题、WLS、安全、QA、单测、E2E、CI、文档。
+- 确认改动是否触碰公共接口、权限、安全、数据、运行时或用户可见行为。
+- 要求验证证据贴近改动表面，而不是泛泛声称“已验证”。
+- 发现跨边界问题时，按总则“多智能体协作”通知 `@Weline-技术主管`。
 
 # Workflow
 
-1. Read `AI-ENTRY.md` and `dev/ai/global-constraints.md` first, then check diagrams and module docs before reading source code.
-2. Identify whether the target is framework-level code, a business module, runtime behavior, frontend/theme work, documentation, tests, or automation.
-3. Define the smallest safe change boundary and avoid crossing module ownership unless the task requires it.
-4. Check Weline constraints that apply to the target files, such as generated-code, route, i18n, template, WLS, schema, and documentation rules.
-5. Choose the responsible specialist skill for implementation, testing, documentation, or acceptance.
-6. After implementation, require evidence that matches the affected surface: unit tests, E2E, HTTP validation, WLS validation, command output, or documentation checks.
-7. Report changed behavior, validation evidence, documentation updates, and any remaining risks or skipped checks.
-8. Check whether the task or discovered issue involves another Weline AI agent.
-9. If any issue, risk, blocker, unclear ownership, or cross-boundary impact is found, notify `@Weline-技术主管` using the required problem report format.
+1. 用一句话确认工程目标和验收口径。
+2. 读取入口、总则、技能索引和命中技能。
+3. 定位相关模块、调用链、配置、测试和文档。
+4. 明确最小改动范围、禁止触碰范围和需要的验证入口。
+5. 实施前确认是否需要 GitNexus impact、路由同步、i18n 校验、Browser、WLS 或专项测试。
+6. 实施后运行最贴近改动的验证：单测、集成/路由、HTTP、Browser、WLS、lint/build 或文档检查。
+7. 更新任务记录和必要文档。
+8. 最终报告说明：完成内容、关键文件、验证结果、未验证项、剩余风险。
 
-# Weline Rules
+# Quality Gates
 
-- The single source of shared Weline AI rules is `dev/ai/global-constraints.md`.
-- This skill must not duplicate the full global rule list. Use it to route ownership, enforce code quality, and require validation evidence.
-- Specialist skills may add role-specific constraints, but cross-role rules must be maintained in `dev/ai/global-constraints.md`.
+- 修改源文件前已读相关上下文。
+- 没有覆盖用户已有无关改动。
+- 没有手改生成产物。
+- 没有 direct fetch、硬编码文案、兜底代码、假数据或隐藏开关。
+- 涉及用户可见文案时，i18n source/key 使用简体中文并覆盖 `zh_Hans_CN`、`en_US`。
+- 涉及浏览器可见行为时，Browser 冒烟通过或明确说明阻塞。
+- 涉及运行时、路由、页面或接口行为时，提供可复现命令。
+- 交付结论只基于实际执行的验证。
 
-# Team Collaboration Rules
+# Problem Report
 
-This shared skill is also the collaboration hub for all Weline AI engineering agents.
-
-All engineering agents must know the available Weline specialist agents, understand their ownership boundaries, and notify the Technical Lead when they discover a problem, risk, blocker, unclear ownership, cross-module impact, or validation failure.
-
-## Mandatory Escalation Rule
-
-When any engineering agent discovers a problem during analysis, implementation, testing, validation, documentation, release, or review, it must notify:
-
-`@Weline-技术主管`
-
-The agent must not silently ignore the issue, hide risk, or expand the task scope without reporting the problem first.
-
-Notify `@Weline-技术主管` especially when:
-
-- The issue may affect framework stability, runtime behavior, public interfaces, security, permissions, CI/CD, WLS, frontend behavior, business modules, documentation, or tests.
-- The issue belongs to another specialist agent's ownership area.
-- The issue blocks the current task.
-- The issue is outside the current task scope but may cause future defects.
-- The agent finds conflicting requirements, unclear design intent, missing validation evidence, or risky implementation boundaries.
-- A test, build, command, WLS validation, HTTP validation, E2E validation, or documentation check fails.
-- The agent needs a Technical Lead decision before continuing.
-
-## Problem Report Format
-
-When reporting an issue, use this format:
+发现问题、风险、阻塞、跨角色影响或验证失败时，向 `@Weline-技术主管` 报告以下字段即可：
 
 ```text
 @Weline-技术主管
-
-【发现问题】
-简要说明发现了什么问题。
-
-【发现智能体】
-填写当前发现问题的智能体名称。
-
-【影响范围】
-说明可能影响的模块、框架能力、接口、页面、命令、测试、文档或运行时。
-
-【证据】
-提供文件路径、命令输出、测试结果、日志、页面行为、复现步骤或其他验证证据。
-
-【建议责任智能体】
-建议由哪个专业智能体继续处理。
-
-【是否阻塞当前任务】
-是 / 否。若是，说明阻塞原因。
-
-【建议下一步】
-说明建议的处理方式、验证方式或需要技术主管裁决的问题。
+【发现问题】...
+【发现智能体】...
+【影响范围】...
+【证据】...
+【建议责任智能体】...
+【是否阻塞当前任务】是/否
+【建议下一步】...
 ```
 
-## Weline AI Agent Roster
+# Output Contract
 
-All agents must understand this roster and use it when handing off work or reporting issues.
+最终输出保持简洁，优先包含：
 
-| Agent | Ownership |
-|---|---|
-| `@技术总监` | Technical direction, high-level architecture decisions, second-level acceptance, priority and scope decisions. |
-| `@Weline-技术主管` | Technical coordination, issue triage, ownership assignment, implementation boundary review, cross-agent collaboration, risk handling. |
-| `@Weline-框架核心工程师` | Framework core, DI, ORM/model conventions, routing conventions, generated-code rules, framework-level behavior. |
-| `@Weline-CI发布工程师` | CI/CD, release process, environment compatibility, command safety, build and deployment checks. |
-| `@Weline-QA测试主管` | Test strategy, acceptance criteria, regression risk, quality gate, test coverage planning. |
-| `@Weline-单元测试工程师` | Unit tests, logic-level validation, test fixtures, focused regression tests. |
-| `@Weline-业务模块工程师` | Business module implementation, module boundaries, module README and module-level behavior. |
-| `@Weline-E2E自动化工程师` | Browser flows, user journeys, E2E automation, UI interaction validation. |
-| `@Weline-WLS运行时工程师` | WLS runtime behavior, dedicated WLS test instances, runtime validation, async/runtime-sensitive behavior. |
-| `@Weline-安全权限工程师` | Authentication, authorization, permissions, access control, security-sensitive behavior. |
-| `@Weline-文档知识库工程师` | Documentation, knowledge base, architecture docs, API docs, module docs, fix reports. |
-| `@Weline-前端主题工程师` | Frontend themes, templates, visible UI behavior, frontend interaction constraints, i18n in views. |
-
-Agent instruction files live in `dev/ai/agent/*.md`. Each agent file includes an instruction section and a skill section that points back to the matching `dev/ai/skills/*/SKILL.md` files.
-
-## Cross-Agent Collaboration Protocol
-
-- Before implementation, identify the primary owner agent and any secondary affected agents.
-- If the work crosses ownership boundaries, notify `@Weline-技术主管` before making broad changes.
-- If a problem is found in another agent's area, report it instead of silently fixing it.
-- If the issue is urgent or blocking, mark it clearly as blocking.
-- If the issue is not blocking but relevant, include it in the final report under "Discovered Issues".
-- Do not bypass `@Weline-技术主管` for cross-agent ownership disputes.
-- Do not assign work directly to another specialist unless the ownership is obvious and non-controversial.
-- Keep the current task focused; report adjacent issues instead of expanding scope.
-
-## Collaboration Evidence Required
-
-Every final report should include a collaboration section when any issue, risk, handoff, or cross-agent dependency was found.
-
-Use this format:
-
-```text
-【协作与上报】
-- 是否发现问题：是 / 否
-- 是否已通知 @Weline-技术主管：是 / 否 / 不适用
-- 涉及智能体：
-  - @智能体名称：原因
-- 待技术主管裁决事项：
-  - 无 / 具体事项
-- 后续建议：
-  - 具体下一步
-```
-
-# Inputs Required
-
-- The task goal, affected module or framework area, and expected behavior.
-- Any relevant diagrams, module docs, README entries, or previous migration notes.
-- The files or commands likely to be touched.
-- The validation surface: unit test, HTTP route, WLS instance, browser/E2E flow, CLI command, or documentation review.
-- Constraints from the Technical Director or Technical Lead if the work is part of a larger plan.
-
-# Expected Output
-
-- A standards-compliant implementation plan or completed change boundary.
-- Clear ownership handoff to the appropriate specialist role when implementation is delegated or split.
-- Code changes that avoid generated-code edits, global-state pollution, and unnecessary broad rewrites.
-- Documentation updates in module docs, architecture docs, API docs, or README files where required.
-- Validation evidence tied to the affected behavior, not generic claims.
-- A concise report of changed behavior, tests run, skipped checks, and remaining risk.
-- A collaboration report that records discovered issues, affected agents, whether `@Weline-技术主管` was notified, and any pending ownership or risk decisions.
-
-# Validation
-
-- Confirm the change follows the required reading order and module boundary.
-- Confirm no forbidden files or patterns were introduced, including direct `generated/` edits, `routes.xml`, browser-native dialogs, hardcoded visible text, `.phtml` strict types, WLS `sleep`/`die`/`exit`, or batch replace / bulk script rewrites across source files.
-- Run targeted unit tests when logic changes.
-- Run HTTP or route validation when routes, controllers, APIs, or UI entry points change.
-- Run E2E or browser validation when user flows, forms, interactions, or visible feedback change.
-- Run WLS validation on a dedicated `9502+` instance when runtime behavior is affected, and stop the instance afterward.
-- Check documentation updates when bugs, interfaces, architecture, or operational behavior changed.
-- Confirm that discovered issues, blockers, cross-agent risks, and validation failures were reported to `@Weline-技术主管`.
-- Confirm that the responsible specialist agent was identified when the issue belongs outside the current agent's ownership.
-
-# Constraints
-
-- Do not replace specialist role skills; this skill sets shared standards and routes work to specialists.
-- Do not expand the task scope beyond the requested behavior without explicit technical reason.
-- Do not use broad rewrites where a narrow patch can solve the issue.
+- 完成内容
+- 关键改动
+- 验证结果
+- 未验证项或风险
+- 需要协作/上报时的 `@Weline-技术主管` 记录

@@ -343,7 +343,7 @@ class AiSiteVirtualThemeService
      * @param array<string, mixed> $websiteProfile
      * @param list<string> $pageTypes
      * @param array<string, array<string, mixed>> $pageTypeLayouts
-     * @return array{virtual_theme_id:int,page_type_layouts:array<string, array<string, mixed>>,theme:VirtualTheme}
+     * @return array{virtual_theme_id:int,resolved_layouts:array<string, array<string, mixed>>,theme:VirtualTheme}
      */
     public function ensureVirtualTheme(
         array $scope,
@@ -494,7 +494,7 @@ class AiSiteVirtualThemeService
 
         return [
             'virtual_theme_id' => $themeId,
-            'page_type_layouts' => $resolvedLayouts,
+            'resolved_layouts' => $resolvedLayouts,
             'theme' => $theme,
         ];
     }
@@ -505,7 +505,7 @@ class AiSiteVirtualThemeService
      * @param array<string, mixed> $websiteProfile
      * @param list<string> $pageTypes
      * @param array<string, array<string, mixed>>|int $pageTypeLayouts
-     * @return array{virtual_theme_id:int,page_type_layouts:array<string, array<string, mixed>>,theme:VirtualTheme}
+     * @return array{virtual_theme_id:int,resolved_layouts:array<string, array<string, mixed>>,theme:VirtualTheme}
      */
     public function ensureAiGeneratedVirtualTheme(
         array $scope,
@@ -532,6 +532,8 @@ class AiSiteVirtualThemeService
         $themeId = (int)$theme->getId();
         if ($prebuiltSharedComponents !== []) {
             $sharedComponents = $prebuiltSharedComponents;
+        } elseif ($this->resolveBuiltPlanJsonSharedComponents($scope) !== []) {
+            $sharedComponents = $this->resolveBuiltPlanJsonSharedComponents($scope);
         } elseif (!$regenerateSharedComponents) {
             $sharedComponents = $this->loadSharedComponents($themeId);
             if (
@@ -665,7 +667,7 @@ class AiSiteVirtualThemeService
 
         return [
             'virtual_theme_id' => $themeId,
-            'page_type_layouts' => $resolvedLayouts,
+            'resolved_layouts' => $resolvedLayouts,
             'theme' => $theme,
         ];
     }
@@ -682,7 +684,7 @@ class AiSiteVirtualThemeService
      * @param array<string, mixed> $websiteProfile
      * @param list<string> $pageTypes
      * @param array<string, array<string, mixed>>|int $pageTypeLayouts
-     * @return array{virtual_theme_id:int,page_type_layouts:array<string, array<string, mixed>>,theme:VirtualTheme,page_blueprint:array<string,mixed>,section_count:int}
+     * @return array{virtual_theme_id:int,resolved_layouts:array<string, array<string, mixed>>,theme:VirtualTheme,page_blueprint:array<string,mixed>,section_count:int}
      */
     public function regenerateAiGeneratedVirtualThemePage(
         array $scope,
@@ -716,7 +718,10 @@ class AiSiteVirtualThemeService
             $this->normalizeLayoutMap(\is_array($pageTypeLayouts) ? $pageTypeLayouts : [])
         );
 
-        $sharedComponents = $this->loadSharedComponents($themeId);
+        $sharedComponents = $this->resolveBuiltPlanJsonSharedComponents($scope);
+        if ($sharedComponents === []) {
+            $sharedComponents = $this->loadSharedComponents($themeId);
+        }
         if (!\is_array($sharedComponents['header'] ?? null) || !\is_array($sharedComponents['footer'] ?? null)) {
             $generatedShared = $pageComponentGenerationService->generateSharedComponents($websiteProfile, $scope);
             foreach (['header', 'footer'] as $region) {
@@ -821,7 +826,7 @@ class AiSiteVirtualThemeService
 
         return [
             'virtual_theme_id' => $themeId,
-            'page_type_layouts' => $resolvedLayouts,
+            'resolved_layouts' => $resolvedLayouts,
             'theme' => $theme,
             'page_blueprint' => $blueprint,
             'section_count' => $sectionCount,
@@ -853,6 +858,33 @@ class AiSiteVirtualThemeService
     private function isBlogPageType(string $pageType): bool
     {
         return isset(self::BLOG_PAGE_COMPONENTS[$pageType]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{header?:array<string,mixed>,footer?:array<string,mixed>}
+     */
+    private function resolveBuiltPlanJsonSharedComponents(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $sharedComponents = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
+        $resolved = [];
+        foreach (['header', 'footer'] as $region) {
+            $component = \is_array($sharedComponents[$region] ?? null) ? $sharedComponents[$region] : [];
+            if ($component === []) {
+                continue;
+            }
+            $code = \trim((string)($component['code'] ?? $component['component_code'] ?? ''));
+            $html = \trim((string)($component['html'] ?? $component['html_content'] ?? $component['phtml'] ?? ''));
+            if ($code === '' || $html === '') {
+                continue;
+            }
+            $component['region'] = $region;
+            $component['code'] = $code;
+            $resolved[$region] = $component;
+        }
+
+        return \is_array($resolved['header'] ?? null) && \is_array($resolved['footer'] ?? null) ? $resolved : [];
     }
 
     /**
@@ -1013,9 +1045,10 @@ class AiSiteVirtualThemeService
 
     private function resolvePromptStyleCode(array $scope, string $pageType): string
     {
-        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $styleCode = \trim((string)($virtualPage['style_code'] ?? $scope['style_code'] ?? 'default'));
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $planPage = \is_array($planPages[$pageType] ?? null) ? $planPages[$pageType] : [];
+        $styleCode = \trim((string)($planPage['style_code'] ?? $scope['style_code'] ?? 'default'));
 
         return $styleCode !== '' ? $styleCode : 'default';
     }

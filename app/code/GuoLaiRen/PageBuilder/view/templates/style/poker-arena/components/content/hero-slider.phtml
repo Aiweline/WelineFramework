@@ -6,24 +6,24 @@
  * "Where Champions Play" headline, stats bar
  * 
  * @var \Weline\Framework\View\Template $this
- * @var array $colors 颜色配置
- * @var array $component_config 组件配置
+ * @var array $colors 棰滆壊閰嶇疆
+ * @var array $component_config 缁勪欢閰嶇疆
  * 
  * @fields_start
  * 
- * group:content => 内容设置
- * content.badge => 顶部徽章文字:text:♠ Premium Poker Platform
- * content.title => 主标题:textarea:Where Champions Play
- * content.description => 描述文字:textarea:Experience the thrill of Texas Hold'em, Omaha, and world-class tournaments. Join millions of players at the most trusted poker platform with $10M+ in daily prize pools.
+ * group:content => 鍐呭璁剧疆
+ * content.badge => 椤堕儴寰界珷鏂囧瓧:text:鈾?Premium Poker Platform
+ * content.title => 涓绘爣棰?textarea:Where Champions Play
+ * content.description => 鎻忚堪鏂囧瓧:textarea:Experience the thrill of Texas Hold'em, Omaha, and world-class tournaments. Join millions of players at the most trusted poker platform with $10M+ in daily prize pools.
  * 
- * group:cta => 按钮设置
- * cta.primary_text => 主按钮文字:text:Join Free
- * cta.primary_url => 主按钮链接:text:#register
- * cta.secondary_text => 次按钮文字:text:Download App
- * cta.secondary_url => 次按钮链接:text:#download
+ * group:cta => 鎸夐挳璁剧疆
+ * cta.primary_text => 涓绘寜閽枃瀛?text:Join Free
+ * cta.primary_url => 涓绘寜閽摼鎺?text:#register
+ * cta.secondary_text => 娆℃寜閽枃瀛?text:Download App
+ * cta.secondary_url => 娆℃寜閽摼鎺?text:#download
  * 
- * group:stats => 统计数据
- * stats.items => 统计列表:textarea:$10M+|Prize Pools\r\n500K+|Players\r\n1000+|Daily Tournaments\r\n24/7|Action|格式：数值|标签，一行一个
+ * group:stats => 缁熻鏁版嵁
+ * stats.items => 缁熻鍒楄〃:textarea:$10M+|Prize Pools\r\n500K+|Players\r\n1000+|Daily Tournaments\r\n24/7|Action|鏍煎紡锛氭暟鍊紎鏍囩锛屼竴琛屼竴涓?
  * 
  * @fields_end
  */
@@ -46,7 +46,7 @@ $buttonGoldBg = $colors['button_gold_bg'] ?? 'linear-gradient(135deg, #d97706 0%
 $cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.03)';
 $borderLight = $colors['border_light'] ?? 'rgba(134, 239, 172, 0.1)';
 
-$badge = $config['content.badge'] ?? '♠ Premium Poker Platform';
+$badge = $config['content.badge'] ?? '鈾?Premium Poker Platform';
 $title = $config['content.title'] ?? 'Where Champions Play';
 $description = $config['content.description'] ?? 'Experience the thrill of Texas Hold\'em, Omaha, and world-class tournaments. Join millions of players at the most trusted poker platform with $10M+ in daily prize pools.';
 
@@ -55,7 +55,7 @@ $primaryBtnUrl = $config['cta.primary_url'] ?? '#register';
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Download App';
 $secondaryBtnUrl = $config['cta.secondary_url'] ?? '#download';
 
-$statsRaw = $config['stats.items'] ?? "\$10M+|Prize Pools\n500K+|Players\n1000+|Daily Tournaments\n24/7|Action";
+$statsRaw = $config['stats.items'] ?? "$10M+|Prize Pools\n500K+|Players\n1000+|Daily Tournaments\n24/7|Action";
 $stats = [];
 foreach (preg_split('/[\r\n]+/', $statsRaw) as $line) {
     $line = trim($line);
@@ -274,12 +274,12 @@ $instanceId = 'pa-hero-' . uniqid();
     </style>
     
     <!-- Floating card suit decorations -->
-    <span class="pa-hero-suit">♠</span>
-    <span class="pa-hero-suit">♥</span>
-    <span class="pa-hero-suit">♦</span>
-    <span class="pa-hero-suit">♣</span>
-    <span class="pa-hero-suit">♠</span>
-    <span class="pa-hero-suit">♣</span>
+    <span class="pa-hero-suit">鈾?/span>
+    <span class="pa-hero-suit">鈾?/span>
+    <span class="pa-hero-suit">鈾?/span>
+    <span class="pa-hero-suit">鈾?/span>
+    <span class="pa-hero-suit">鈾?/span>
+    <span class="pa-hero-suit">鈾?/span>
     
     <div class="pa-hero-container">
         <?php if ($badge): ?>

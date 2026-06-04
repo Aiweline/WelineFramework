@@ -85,6 +85,39 @@
         return {};
     }
 
+    function resolveCanonicalQueueInfo(workspaceState, operation) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var op = String(operation || '').trim().toLowerCase();
+        function normalize(candidate) {
+            if (typeof candidate === 'string' || typeof candidate === 'number') {
+                var scalarStatus = String(candidate || '').trim();
+                return scalarStatus !== '' ? { operation: op, queue_status: scalarStatus, status: scalarStatus } : {};
+            }
+            if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+                return {};
+            }
+            if (op && Object.prototype.hasOwnProperty.call(candidate, op)) {
+                return normalize(candidate[op]);
+            }
+            var directStatus = String(candidate.queue_status || '').trim();
+            if (directStatus === '' && !candidate.operation && !candidate.job_type && !candidate.job_key && !candidate.biz_key) {
+                return {};
+            }
+            return sanitizeQueueInfoForMemory(candidate);
+        }
+        var active = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
+        var activeOperations = state.active_operations && typeof state.active_operations === 'object' ? state.active_operations : {};
+        var scopedActive = op && activeOperations[op] && typeof activeOperations[op] === 'object' ? activeOperations[op] : {};
+        var candidates = [state.queue_status, scopedActive.queue_status, active.queue_status, scopedActive, active];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var info = normalize(candidates[i]);
+            if (Object.keys(info).length > 0) {
+                return info;
+            }
+        }
+        return {};
+    }
+
     function resolvePayloadProgressKind(payload) {
         if (!payload || typeof payload !== 'object') {
             return '';
@@ -244,13 +277,13 @@
         var tokenUsage = resolveTokenUsage(info || {});
         var jobKey = (info && (info.job_key || info.biz_key)) || '';
         var jobType = (info && info.job_type) || '';
-        var status = (info && (info.job_status || info.status || info.queue_status)) || '';
+        var status = (info && info.queue_status) || '';
         var token = (info && (info.token || info.execution_token)) || '';
 
         return '<div class="row g-2 mb-2 pb-ai-plan-queue-token-summary" role="list" data-queue-info-list="stage1">'
             + renderQueueSummaryItem('job_key', queueMessages.jobKeyLabel, jobKey, true)
             + renderQueueSummaryItem('job_type', queueMessages.jobTypeLabel, jobType, false)
-            + renderQueueSummaryItem('job_status', queueMessages.statusLabel, status, false)
+            + renderQueueSummaryItem('queue_status', queueMessages.statusLabel, status, false)
             + renderQueueSummaryItem('token', queueMessages.tokenLabel, token, true)
             + renderQueueSummaryItem('input_tokens', queueMessages.inputTokensLabel, formatTokenCount(tokenUsage.input_tokens), false)
             + renderQueueSummaryItem('output_tokens', queueMessages.outputTokensLabel, formatTokenCount(tokenUsage.output_tokens), false)
@@ -566,7 +599,7 @@
 
     function resolvePlanQueueLatestMessage(info) {
         var queueInfo = info && typeof info === 'object' ? info : {};
-        var status = String(queueInfo.semantic_status || queueInfo.job_status || queueInfo.queue_status || queueInfo.status || '').toLowerCase();
+        var status = String(queueInfo.queue_status || '').toLowerCase();
         var active = ['pending', 'queued', 'running', 'processing', 'retrying'].indexOf(status) >= 0;
         var candidates = active
             ? [
@@ -601,9 +634,7 @@
         if (!metaEl || !procEl || !resEl) {
             return;
         }
-        var info = workspaceState && workspaceState.plan_queue_info && typeof workspaceState.plan_queue_info === 'object'
-            ? workspaceState.plan_queue_info
-            : null;
+        var info = resolveCanonicalQueueInfo(workspaceState, 'plan');
         if (!info || typeof info !== 'object' || normalizeQueueId(info.queue_id) <= 0) {
             metaEl.innerHTML = '<div class="alert alert-light border mb-0 small">' + escapeHtml(queueMessages.empty) + '</div>';
             procEl.textContent = '';
@@ -640,7 +671,7 @@
         var latestMessage = resolvePlanQueueLatestMessage(info);
         publishPlanQueueLatestProgressFromInfo(info);
         if (statusEl) {
-            statusEl.textContent = String(info.job_status || info.status || info.queue_status || '').trim();
+            statusEl.textContent = String(info.queue_status || '').trim();
         }
     }
 
@@ -656,7 +687,10 @@
 
     function rememberPlanQueueInfo(info) {
         var state = sanitizeWorkspaceStateForMemory(getLastWorkspaceState());
-        state.plan_queue_info = mergeIncomingPlanQueueInfoWithRememberedProgress(info);
+        state.queue_status = state.queue_status && typeof state.queue_status === 'object' && !Array.isArray(state.queue_status)
+            ? Object.assign({}, state.queue_status)
+            : {};
+        state.queue_status.plan = mergeIncomingPlanQueueInfoWithRememberedProgress(info);
         var remembered = sanitizeWorkspaceStateForMemory(state);
         try {
             window.__pbLastWorkspaceState = remembered;
@@ -675,7 +709,7 @@
             ? workspaceState.active_operation
             : {};
         var op = String(active.operation || '').toLowerCase();
-        var status = String(active.status || '').toLowerCase();
+        var status = String(active.queue_status || '').toLowerCase();
         var shouldOpen = op === 'plan' && ['pending', 'queued', 'running', 'processing'].indexOf(status) >= 0;
         if (shouldOpen && panelEl.dataset.pbUserClosed !== '1') {
             panelEl.open = true;
@@ -737,9 +771,7 @@
         }
 
         var remembered = getLastWorkspaceState();
-        var rememberedInfo = remembered && remembered.plan_queue_info && typeof remembered.plan_queue_info === 'object'
-            ? remembered.plan_queue_info
-            : {};
+        var rememberedInfo = resolveCanonicalQueueInfo(remembered, 'plan');
         var incomingQueueId = normalizeQueueId(incoming.queue_id);
         var rememberedQueueId = normalizeQueueId(rememberedInfo.queue_id);
         if (
@@ -763,17 +795,14 @@
             ['events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'].forEach(function (key) {
                 delete state.scope[key];
             });
-            ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
-                if (state.scope[key] && typeof state.scope[key] === 'object') {
-                    state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);
+        }
+        if (state.queue_status && typeof state.queue_status === 'object' && !Array.isArray(state.queue_status)) {
+            state.queue_status = Object.assign({}, state.queue_status);
+            ['plan', 'build', 'publish'].forEach(function (key) {
+                if (state.queue_status[key] && typeof state.queue_status[key] === 'object') {
+                    state.queue_status[key] = sanitizeQueueInfoForMemory(state.queue_status[key]);
                 }
             });
-        }
-        if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
-            state.plan_queue_info = sanitizeQueueInfoForMemory(state.plan_queue_info);
-        }
-        if (state.build_queue_info && typeof state.build_queue_info === 'object') {
-            state.build_queue_info = sanitizeQueueInfoForMemory(state.build_queue_info);
         }
         return state;
     }
@@ -852,8 +881,11 @@
         if (progressKind !== '' && progressKind !== 'queue_info') {
             return null;
         }
-        if (payload.state && payload.state.plan_queue_info && typeof payload.state.plan_queue_info === 'object') {
-            return mergeIncomingPlanQueueInfoWithRememberedProgress(payload.state.plan_queue_info);
+        var stateQueueInfo = payload.state && typeof payload.state === 'object'
+            ? resolveCanonicalQueueInfo(payload.state, 'plan')
+            : {};
+        if (Object.keys(stateQueueInfo).length > 0) {
+            return mergeIncomingPlanQueueInfoWithRememberedProgress(stateQueueInfo);
         }
         if (payload.queue_info && typeof payload.queue_info === 'object') {
             return mergeIncomingPlanQueueInfoWithRememberedProgress(payload.queue_info);
@@ -863,8 +895,6 @@
             (payload.queue_state && typeof payload.queue_state === 'object')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_id')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_status')
-            || Object.prototype.hasOwnProperty.call(payload, 'job_status')
-            || Object.prototype.hasOwnProperty.call(payload, 'status')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_process')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_log')
             || Object.prototype.hasOwnProperty.call(payload, 'queue_result_delta')
@@ -884,9 +914,7 @@
         }
 
         var state = getLastWorkspaceState();
-        var existing = state.plan_queue_info && typeof state.plan_queue_info === 'object'
-            ? state.plan_queue_info
-            : {};
+        var existing = resolveCanonicalQueueInfo(state, 'plan');
         var queueState = Object.assign({}, existing);
         if (payload.queue_state && typeof payload.queue_state === 'object') {
             queueState = Object.assign(queueState, payload.queue_state);
@@ -903,16 +931,7 @@
             queueState.queue_id = payloadQueueId;
         }
         if (Object.prototype.hasOwnProperty.call(payload, 'queue_status')) {
-            queueState.status = String(payload.queue_status || '');
             queueState.queue_status = String(payload.queue_status || '');
-        }
-        if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
-            queueState.status = String(payload.status || '');
-        }
-        if (Object.prototype.hasOwnProperty.call(payload, 'job_status')) {
-            queueState.job_status = String(payload.job_status || '');
-        } else if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
-            queueState.job_status = String(payload.status || '');
         }
         if (Object.prototype.hasOwnProperty.call(payload, 'queue_pid')) {
             queueState.pid = normalizeQueueId(payload.queue_pid);
@@ -979,7 +998,7 @@
             delta = String(payload.chunk || payload.content || payload.message || '');
         }
         appendLiveQueueLog(delta);
-        var terminalStatus = String(payload.queue_status || payload.job_status || payload.status || queueState.job_status || queueState.status || queueState.queue_status || '').toLowerCase();
+        var terminalStatus = String(payload.queue_status || queueState.queue_status || '').toLowerCase();
         var terminalSummary = '';
         if (Object.prototype.hasOwnProperty.call(payload, 'terminal_summary')) {
             terminalSummary = String(payload.terminal_summary || '');
@@ -1005,10 +1024,9 @@
             name: String(queueState.name || ''),
             module: String(queueState.module || ''),
             biz_key: String(queueState.biz_key || ''),
-            status: String(queueState.status || ''),
-            queue_status: String(queueState.queue_status || queueState.status || ''),
-            job_status: String(queueState.job_status || queueState.status || ''),
-            semantic_status: String(queueState.semantic_status || queueState.job_status || queueState.status || ''),
+            status: String(queueState.queue_status || ''),
+            queue_status: String(queueState.queue_status || ''),
+            semantic_status: String(queueState.semantic_status || ''),
             pid: normalizeQueueId(queueState.pid),
             type_id: normalizeQueueId(queueState.type_id),
             finished: Number(queueState.finished || 0),
@@ -1046,7 +1064,7 @@
         } else if (typeof window.updateStageStatusSummary === 'function') {
             window.updateStageStatusSummary(state);
         }
-        var queueStatus = String(payload.queue_status || payload.job_status || payload.status || info.job_status || info.status || info.queue_status || '').toLowerCase();
+        var queueStatus = String(payload.queue_status || info.queue_status || '').toLowerCase();
         syncPanelOpenState(Object.assign({}, state, {
             active_operation: { operation: 'plan', status: queueStatus || 'running' }
         }));
@@ -1060,8 +1078,12 @@
             return;
         }
         var safeState = sanitizeWorkspaceStateForMemory(workspaceState);
-        if (safeState.plan_queue_info && typeof safeState.plan_queue_info === 'object') {
-            safeState.plan_queue_info = mergeIncomingPlanQueueInfoWithRememberedProgress(safeState.plan_queue_info);
+        var planQueueInfo = resolveCanonicalQueueInfo(safeState, 'plan');
+        if (Object.keys(planQueueInfo).length > 0) {
+            safeState.queue_status = safeState.queue_status && typeof safeState.queue_status === 'object' && !Array.isArray(safeState.queue_status)
+                ? Object.assign({}, safeState.queue_status)
+                : {};
+            safeState.queue_status.plan = mergeIncomingPlanQueueInfoWithRememberedProgress(planQueueInfo);
         }
         try {
             window.__pbLastWorkspaceState = safeState;

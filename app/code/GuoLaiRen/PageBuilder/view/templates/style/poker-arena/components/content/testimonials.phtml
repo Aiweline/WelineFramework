@@ -5,18 +5,18 @@
  * 3 player reviews with star ratings, poker alias, tournament wins
  * 
  * @var \Weline\Framework\View\Template $this
- * @var array $colors 颜色配置
- * @var array $component_config 组件配置
+ * @var array $colors 棰滆壊閰嶇疆
+ * @var array $component_config 缁勪欢閰嶇疆
  * 
  * @fields_start
  * 
- * group:content => 内容设置
- * content.badge => 徽章文字:text:Player Stories
- * content.title => 标题:text:What Our Players Say
- * content.description => 描述:textarea:Join thousands of satisfied players who trust PokerArena for their online poker experience.
+ * group:content => 鍐呭璁剧疆
+ * content.badge => 寰界珷鏂囧瓧:text:Player Stories
+ * content.title => 鏍囬:text:What Our Players Say
+ * content.description => 鎻忚堪:textarea:Join thousands of satisfied players who trust PokerArena for their online poker experience.
  * 
- * group:testimonials => 评价列表
- * testimonials.items => 评价列表:textarea:AceKing_Pro|5|The software is incredibly smooth. I've been playing poker online for 15 years and PokerArena has the best user experience by far. Multi-tabling is a dream.|MTT Champion 2024 • $250K+ Winnings\r\nRiverQueen88|5|Fast cashouts and amazing tournament structures. Won my first major tournament here and the payout was in my account within minutes!|Sit & Go Specialist • 10K+ Games Played\r\nBluffMaster_X|4|Great selection of games and stakes. The VIP program is genuinely rewarding. Only wish they had more Omaha Hi-Lo tables during off-peak hours.|High Stakes Regular • Diamond VIP|格式：昵称|星级|评语|标签
+ * group:testimonials => 璇勪环鍒楄〃
+ * testimonials.items => 璇勪环鍒楄〃:textarea:AceKing_Pro|5|The software is incredibly smooth. I've been playing poker online for 15 years and PokerArena has the best user experience by far. Multi-tabling is a dream.|MTT Champion 2024 鈥?$250K+ Winnings\r\nRiverQueen88|5|Fast cashouts and amazing tournament structures. Won my first major tournament here and the payout was in my account within minutes!|Sit & Go Specialist 鈥?10K+ Games Played\r\nBluffMaster_X|4|Great selection of games and stakes. The VIP program is genuinely rewarding. Only wish they had more Omaha Hi-Lo tables during off-peak hours.|High Stakes Regular 鈥?Diamond VIP|鏍煎紡锛氭樀绉皘鏄熺骇|璇勮|鏍囩
  * 
  * @fields_end
  */
@@ -45,7 +45,7 @@ $badge = $config['content.badge'] ?? 'Player Stories';
 $title = $config['content.title'] ?? 'What Our Players Say';
 $description = $config['content.description'] ?? 'Join thousands of satisfied players who trust PokerArena for their online poker experience.';
 
-$testRaw = $config['testimonials.items'] ?? "AceKing_Pro|5|The software is incredibly smooth. I've been playing poker online for 15 years and PokerArena has the best user experience by far. Multi-tabling is a dream.|MTT Champion 2024 • \$250K+ Winnings\nRiverQueen88|5|Fast cashouts and amazing tournament structures. Won my first major tournament here and the payout was in my account within minutes!|Sit & Go Specialist • 10K+ Games Played\nBluffMaster_X|4|Great selection of games and stakes. The VIP program is genuinely rewarding. Only wish they had more Omaha Hi-Lo tables during off-peak hours.|High Stakes Regular • Diamond VIP";
+$testRaw = $config['testimonials.items'] ?? "AceKing_Pro|5|The software is incredibly smooth. I've been playing poker online for 15 years and PokerArena has the best user experience by far. Multi-tabling is a dream.|MTT Champion 2024 鈥?$250K+ Winnings\nRiverQueen88|5|Fast cashouts and amazing tournament structures. Won my first major tournament here and the payout was in my account within minutes!|Sit & Go Specialist 鈥?10K+ Games Played\nBluffMaster_X|4|Great selection of games and stakes. The VIP program is genuinely rewarding. Only wish they had more Omaha Hi-Lo tables during off-peak hours.|High Stakes Regular 鈥?Diamond VIP";
 
 $testimonials = [];
 foreach (preg_split('/[\r\n]+/', $testRaw) as $line) {

@@ -376,7 +376,7 @@ class AiSiteAgentWorkflowTest extends TestCase
 
         // 最终更新
         $scope['workspace_status'] = 'can_publish';
-        $scope['active_operation']['status'] = 'done';
+        $scope['active_operation']['queue_status'] = 'done';
         $scope['active_operation']['message'] = '主题构建完成';
         $scope['active_operation']['updated_at'] = date('Y-m-d H:i:s');
 

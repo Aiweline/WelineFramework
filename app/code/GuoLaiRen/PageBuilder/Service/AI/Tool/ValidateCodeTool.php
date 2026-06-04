@@ -9,9 +9,9 @@ use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * 代码验证工具
+ * 浠ｇ爜楠岃瘉宸ュ叿
  * 
- * 验证 AI 生成的组件代码是否符合规范（HTML/CSS/JS/PHP 语法、禁止模式等）
+ * 楠岃瘉 AI 鐢熸垚鐨勭粍浠朵唬鐮佹槸鍚︾鍚堣鑼冿紙HTML/CSS/JS/PHP 璇硶銆佺姝㈡ā寮忕瓑锛?
  */
 class ValidateCodeTool implements ToolInterface
 {
@@ -64,11 +64,11 @@ class ValidateCodeTool implements ToolInterface
         $errors = [];
         $warnings = [];
 
-        // AI 智能体传入的是 JSON 字段（html_content、css_content 等），
-        // 不是完整的 phtml 文件，不需要 @component_start 等元数据块。
-        // 仅做字段级验证：禁止模式、括号匹配、CSS 规范等。
+        // AI 鏅鸿兘浣撲紶鍏ョ殑鏄?JSON 瀛楁锛坔tml_content銆乧ss_content 绛夛級锛?
+        // 涓嶆槸瀹屾暣鐨?phtml 鏂囦欢锛屼笉闇€瑕?@component_start 绛夊厓鏁版嵁鍧椼€?
+        // 浠呭仛瀛楁绾ч獙璇侊細绂佹妯″紡銆佹嫭鍙峰尮閰嶃€丆SS 瑙勮寖绛夈€?
 
-        // 验证 HTML（仅检查括号匹配和禁止模式，不检查 @component_start 等结构）
+        // 楠岃瘉 HTML锛堜粎妫€鏌ユ嫭鍙峰尮閰嶅拰绂佹妯″紡锛屼笉妫€鏌?@component_start 绛夌粨鏋勶級
         if (!empty($args['html_content'])) {
             $balanceResult = $validator->checkBalancedTokens($args['html_content']);
             if (!empty($balanceResult['errors'])) {
@@ -76,7 +76,7 @@ class ValidateCodeTool implements ToolInterface
             }
         }
 
-        // 验证 CSS
+        // 楠岃瘉 CSS
         if (!empty($args['css_content'])) {
             $cssResult = $validator->validateCss($args['css_content']);
             if (!empty($cssResult['errors'])) {
@@ -87,7 +87,7 @@ class ValidateCodeTool implements ToolInterface
             }
         }
 
-        // 验证 PHP 变量声明
+        // 楠岃瘉 PHP 鍙橀噺澹版槑
         if (!empty($args['php_variables'])) {
             $phpResult = $validator->validatePhpCode($args['php_variables']);
             if (!empty($phpResult['errors'])) {
@@ -95,14 +95,14 @@ class ValidateCodeTool implements ToolInterface
             }
         }
 
-        // 检查 html_content 中使用的变量是否在 php_variables 中声明
+        // 妫€鏌?html_content 涓娇鐢ㄧ殑鍙橀噺鏄惁鍦?php_variables 涓０鏄?
         $htmlContent = $args['html_content'] ?? '';
         if (!empty($htmlContent)) {
-            preg_match_all('/\\$[a-zA-Z_][a-zA-Z0-9_]*/', $htmlContent, $matches);
+            preg_match_all('/\$[a-zA-Z_][a-zA-Z0-9_]*/', $htmlContent, $matches);
             $usedVars = array_unique($matches[0] ?? []);
             $declaredVars = [];
             if (!empty($args['php_variables'])) {
-                preg_match_all('/^\\s*\\$([a-zA-Z_][a-zA-Z0-9_]*)\\s*=\\s*/m', (string)$args['php_variables'], $declared);
+                preg_match_all('/^\\s*\$([a-zA-Z_][a-zA-Z0-9_]*)\\s*=\\s*/m', (string)$args['php_variables'], $declared);
                 $declaredVars = array_map(fn($v) => '$' . $v, $declared[1] ?? []);
             }
             $baseAllowed = [
@@ -127,12 +127,12 @@ class ValidateCodeTool implements ToolInterface
             }
             if (!empty($missing)) {
                 $errors['php'] = array_merge($errors['php'] ?? [], [
-                    __('PHP 变量未声明：%{1}', [implode(', ', $missing)]),
+                    __('PHP 鍙橀噺鏈０鏄庯細%{1}', [implode(', ', $missing)]),
                 ]);
             }
         }
 
-        // 各字段的禁止模式检查
+        // 鍚勫瓧娈电殑绂佹妯″紡妫€鏌?
         $aiData = [
             'html_content' => $args['html_content'] ?? '',
             'css_content' => $args['css_content'] ?? '',

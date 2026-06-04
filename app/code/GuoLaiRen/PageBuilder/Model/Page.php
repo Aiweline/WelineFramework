@@ -87,7 +87,7 @@ class Page extends Model
     /** 空字符串表示传统主题渲染；ai_html 为 HTML 区块拼接轨 */
     #[Col(type: 'varchar', length: 32, nullable: false, default: '', comment: '前台渲染模式：空=主题，ai_html=区块HTML')]
     public const schema_fields_RENDER_MODE = 'render_mode';
-    #[Col(type: 'text', nullable: true, comment: 'AI 页面区块编辑态 JSON：block_nodes[] 等')]
+    #[Col(type: 'text', nullable: true, comment: 'AI 页面区块编辑态 JSON：blocks[] 等')]
     public const schema_fields_AI_LAYOUT = 'ai_layout';
     #[Col(type: 'text', nullable: true, comment: '历史发布布局缓存（既有字段，当前发布流程清空）')]
     public const schema_fields_AI_PUBLISH_SNAPSHOTS = 'ai_publish_snapshots';
@@ -243,11 +243,11 @@ class Page extends Model
     {
         $raw = $this->getData(self::schema_fields_AI_LAYOUT);
         if ($raw === null || $raw === '') {
-            return ['block_nodes' => []];
+            return ['blocks' => []];
         }
         $decoded = \is_string($raw) ? \json_decode($raw, true) : null;
 
-        return \is_array($decoded) ? $decoded : ['block_nodes' => []];
+        return \is_array($decoded) ? $decoded : ['blocks' => []];
     }
 
     /**

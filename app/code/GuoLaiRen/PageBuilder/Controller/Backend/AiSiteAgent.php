@@ -38,7 +38,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceDebugDefaults;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
 use GuoLaiRen\PageBuilder\Service\AiSitePreviewLinkRewriteService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
-use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlockNodesBuildService;
+use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
 use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use GuoLaiRen\PageBuilder\Service\AI\AiSiteSkillRegistry;
 use GuoLaiRen\PageBuilder\Service\AI\DesignDirection\DesignDirectionService;
@@ -86,15 +86,9 @@ class AiSiteAgent extends BaseController
     private const STREAM_LEASE_TTL_SEC = 60;
     private const WORKSPACE_STREAM_MAX_EVENT_REPLAY = 300;
     private const WORKSPACE_FAST_VIEW_ARTIFACT_KEYS_BY_STAGE = [
-        AiSiteAgentSession::STAGE_PLAN => [
-            'plan_json',
-        ],
-        AiSiteAgentSession::STAGE_VISUAL_EDIT => [
-            'plan_json',
-        ],
-        AiSiteAgentSession::STAGE_PUBLISH => [
-            'plan_json',
-        ],
+        AiSiteAgentSession::STAGE_PLAN => ['plan_json', 'plan_markdown'],
+        AiSiteAgentSession::STAGE_VISUAL_EDIT => ['plan_json', 'plan_markdown'],
+        AiSiteAgentSession::STAGE_PUBLISH => ['plan_json', 'plan_markdown'],
     ];
     private const WORKSPACE_FAST_VIEW_SCOPE_KEYS = [
         '_artifact_refs',
@@ -122,10 +116,8 @@ class AiSiteAgent extends BaseController
         'latest_build_failed',
         'latest_build_failure',
         'locales',
-        'page_type_layouts',
         'page_types',
         'page_types_user_customized',
-        'pagebuilder_pages_by_type',
         'pending_generation_page_types',
         'plan_json',
         'plan_locale',
@@ -153,7 +145,6 @@ class AiSiteAgent extends BaseController
         'target_domain',
         'user_description',
         'verified_assets',
-        'virtual_pages_by_type',
         'virtual_theme_id',
         'visual_edit_url',
         'visual_preview_url',
@@ -184,7 +175,7 @@ class AiSiteAgent extends BaseController
     private readonly AiSiteVirtualThemeService $virtualThemeService;
     private readonly AiSitePublishService $publishService;
     private readonly AiSiteVisualUrlService $visualUrlService;
-    private readonly AiSiteHtmlBlockNodesBuildService $htmlBlockNodesBuildService;
+    private readonly AiSiteHtmlBlocksBuildService $htmlBlocksBuildService;
     private readonly AiSitePageBlueprintService $pageBlueprintService;
     private readonly AiSitePlanJsonGenerationService $planJsonGenerationService;
     private readonly AiSiteAgentStreamCodecService $streamCodecService;
@@ -211,7 +202,7 @@ class AiSiteAgent extends BaseController
         ?AiSiteVirtualThemeService $virtualThemeService = null,
         ?AiSitePublishService $publishService = null,
         ?AiSiteVisualUrlService $visualUrlService = null,
-        ?AiSiteHtmlBlockNodesBuildService $htmlBlockNodesBuildService = null,
+        ?AiSiteHtmlBlocksBuildService $htmlBlocksBuildService = null,
         ?AiSitePageBlueprintService $pageBlueprintService = null,
         ?AiSitePlanJsonGenerationService $planJsonGenerationService = null,
         ?AiSiteAgentStreamCodecService $streamCodecService = null,
@@ -243,8 +234,8 @@ class AiSiteAgent extends BaseController
             ?? ObjectManager::getInstance(AiSitePublishService::class);
         $this->visualUrlService = $visualUrlService
             ?? ObjectManager::getInstance(AiSiteVisualUrlService::class);
-        $this->htmlBlockNodesBuildService = $htmlBlockNodesBuildService
-            ?? ObjectManager::getInstance(AiSiteHtmlBlockNodesBuildService::class);
+        $this->htmlBlocksBuildService = $htmlBlocksBuildService
+            ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
         $this->pageBlueprintService = $pageBlueprintService
             ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
         $this->planJsonGenerationService = $planJsonGenerationService
@@ -340,8 +331,10 @@ class AiSiteAgent extends BaseController
         if (\is_array($viewState['scope'] ?? null)) {
             $viewState['scope'] = $this->applyAutoDesignDirectionToScope($viewState['scope'], $adminId);
             $directionState = $this->designDirectionService()->buildWorkspaceDirectionState($viewState['scope']);
-            $viewState['design_direction'] = $directionState;
-            $viewState['design_direction_snapshot'] = $viewState['scope']['design_direction_snapshot'] ?? [];
+            $viewState['design_direction'] = $this->pruneWorkspaceDesignDirectionStateForView($directionState);
+            $viewState['design_direction_snapshot'] = $this->pruneWorkspaceDesignDirectionSnapshotForView(
+                \is_array($viewState['scope']['design_direction_snapshot'] ?? null) ? $viewState['scope']['design_direction_snapshot'] : []
+            );
             $viewState['design_direction_match_reason'] = (string)($viewState['scope']['design_direction_match_reason'] ?? ($directionState['match_reason'] ?? ''));
         }
         $linkedWebsitesSession = $this->loadExistingLinkedWebsitesMirrorSessionFromScope(
@@ -395,7 +388,7 @@ class AiSiteAgent extends BaseController
         $this->assign('design_direction_match_url', $this->url->getBackendUrlPath('ai/backend/style/post-match'));
         $this->assign('design_direction_manage_url', $this->url->getBackendUrl('ai/backend/style'));
         $this->assign('confirm_plan_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-confirm-plan'));
-        $this->assign('sort_plan_block_nodes_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-plan-blocks'));
+        $this->assign('sort_plan_blocks_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-sort-plan-blocks'));
         $this->assign('mutate_plan_block_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-mutate-plan-block'));
         $this->assign('refine_plan_page_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-refine-plan-page'));
         $this->assign('plan_sse_url', $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'));
@@ -492,21 +485,28 @@ class AiSiteAgent extends BaseController
     {
         $startedAt = \microtime(true);
         $resolveContextStartedAt = \microtime(true);
-        $context = $this->resolveWorkspacePreviewContext();
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->request->getGet('public_id', ''));
+        $requestedPageType = \trim((string)$this->request->getGet('page_type', ''));
+        $context = $this->workspacePreviewService->buildPreviewContext(
+            $adminId,
+            $publicId,
+            $requestedPageType,
+            \trim((string)$this->request->getGet('style_code', '')),
+            \trim((string)$this->request->getGet('locale', '')),
+            (int)$this->request->getGet('virtual_theme_id', 0)
+        );
         $this->logHotPathStage('workspace_preview.resolve_context', $resolveContextStartedAt, [
-            'public_id' => (string)$this->request->getGet('public_id', ''),
-            'page_type' => (string)$this->request->getGet('page_type', ''),
+            'public_id' => $publicId,
+            'page_type' => $requestedPageType,
             'resolved' => $context !== null ? 1 : 0,
         ]);
         if ($context === null) {
-            $adminId = (int)$this->getLoginUserId();
-            $publicId = \trim((string)$this->request->getGet('public_id', ''));
-            $requestedPageType = \trim((string)$this->request->getGet('page_type', ''));
             $html = $this->renderWorkspacePreviewUnavailablePage($adminId, $publicId, $requestedPageType);
             $this->logHotPathStage('workspace_preview.total', $startedAt, [
                 'status' => 404,
-                'public_id' => (string)$this->request->getGet('public_id', ''),
-                'page_type' => (string)$this->request->getGet('page_type', ''),
+                'public_id' => $publicId,
+                'page_type' => $requestedPageType,
             ]);
             throw new ResponseTerminateException(404, $html, ['Content-Type' => 'text/html; charset=UTF-8']);
         }
@@ -541,335 +541,6 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * @return array{
-     *   page:Page,
-     *   style_code:string,
-     *   locale:string,
-     *   virtual_theme_id:int,
-     *   virtual_pages:array<string, array<string, mixed>>
-     * }|null
-     */
-    private function resolveWorkspacePreviewContext(): ?array
-    {
-        $adminId = (int)$this->getLoginUserId();
-        $publicId = \trim((string)$this->request->getGet('public_id', ''));
-        $requestedPageType = \trim((string)$this->request->getGet('page_type', ''));
-        if ($adminId <= 0 || $publicId === '' || $requestedPageType === '') {
-            return null;
-        }
-
-        /** @var \GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService $virtualLayoutService */
-        $virtualLayoutService = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService::class);
-        $context = $virtualLayoutService->loadContext($publicId, $adminId, $requestedPageType);
-        if ($context === null) {
-            return null;
-        }
-
-        $scope = $this->scopeCompatibilityService->normalizeScope($context['scope']);
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
-            $this->scopeCompatibilityService->resolveScopedPageTypes($scope),
-            $scope,
-            false
-        );
-        $pageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
-        if ($pageType === '' || !\is_array($virtualPages[$pageType] ?? null)) {
-            return null;
-        }
-
-        // Comment removed.
-        $virtualThemeId = (int)($context['virtual_theme_id'] ?? 0);
-        $virtualPage = $virtualPages[$pageType];
-        $styleCode = \trim((string)($this->request->getGet('style_code') ?: ($virtualPage['style_code'] ?? 'default')));
-        $styleCode = $styleCode !== '' ? $styleCode : 'default';
-        $locale = \trim((string)($this->request->getGet('locale') ?: ($virtualPage['locale'] ?? State::getLang())));
-        $locale = $locale !== '' ? $locale : State::getLang();
-        $layout = $virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
-        $layout = $this->mergeAiSitePreviewLayoutFromScope($layout, $scope, $pageType);
-        $virtualBlocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
-        $materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);
-        $materializedBlocks = \is_array($materializedPreview['block_nodes'] ?? null) ? $materializedPreview['block_nodes'] : [];
-        if ($materializedBlocks !== []) {
-            $virtualBlocks = $materializedBlocks;
-            $virtualPage = \array_replace(
-                $virtualPage,
-                \is_array($materializedPreview['page'] ?? null) ? $materializedPreview['page'] : []
-            );
-            $virtualPage['block_nodes'] = $virtualBlocks;
-            $virtualPages[$pageType] = $virtualPage;
-        }
-        $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
-        $previewTitle = $this->sanitizeAiSiteVisitorTitle((string)($virtualPage['title'] ?? ''), $scope, $locale);
-        $previewMetaTitle = $this->sanitizeAiSiteVisitorTitle((string)($virtualPage['meta_title'] ?? ''), $scope, $locale);
-        if ($previewMetaTitle === '') {
-            $previewMetaTitle = $previewTitle;
-        }
-
-        $page = ObjectManager::make(Page::class);
-        $page->setData([
-            Page::schema_fields_ID => 0,
-            Page::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
-            Page::schema_fields_PARENT_ID => $pageType === Page::TYPE_HOME ? 0 : 1,
-            Page::schema_fields_LAYOUT_PAGE_ID => 0,
-            Page::schema_fields_STATUS => Page::STATUS_DRAFT,
-            Page::schema_fields_TITLE => $previewTitle,
-            Page::schema_fields_NAME => $previewTitle,
-            Page::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
-            Page::schema_fields_STYLE => $styleCode,
-            Page::schema_fields_TYPE => $pageType,
-            Page::schema_fields_CONTENT => '',
-            Page::schema_fields_META_TITLE => $previewMetaTitle,
-            Page::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
-            Page::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
-            Page::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
-            Page::schema_fields_LOCALES => \json_encode([$locale], \JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_DEFAULT_LOCALE => $locale,
-            Page::schema_fields_STYLE_SETTING => \json_encode([
-                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
-            ], \JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, \JSON_UNESCAPED_UNICODE),
-            Page::schema_fields_RENDER_MODE => $renderMode,
-            Page::schema_fields_AI_LAYOUT => \json_encode(['block_nodes' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
-        ]);
-        $page->setData('virtual_public_id', $publicId);
-        $page->setData('virtual_page_type', $pageType);
-        $page->setData('virtual_theme_id', $virtualThemeId);
-        $page->setData('virtual_layout_config', $layout);
-        $page->setData('virtual_pages_by_type', $virtualPages);
-
-        return [
-            'page' => $page,
-            'style_code' => $styleCode,
-            'locale' => $locale,
-            'virtual_theme_id' => $virtualThemeId,
-            'virtual_pages' => $virtualPages,
-        ];
-    }
-
-    /**
-     * @param array<string,mixed> $layout
-     * @param array<string,mixed> $scope
-     * @return array<string,mixed>
-     */
-    private function mergeAiSitePreviewLayoutFromScope(array $layout, array $scope, string $pageType): array
-    {
-        $pageTypeLayouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
-        $scopeLayout = \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [];
-        foreach (['header', 'footer'] as $region) {
-            $regionLayout = \is_array($scopeLayout[$region] ?? null) ? $scopeLayout[$region] : [];
-            if ($regionLayout === []) {
-                continue;
-            }
-            $layout[$region] = \array_replace_recursive(
-                \is_array($layout[$region] ?? null) ? $layout[$region] : [],
-                $regionLayout
-            );
-        }
-
-        return $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, $scope, $pageType);
-    }
-
-    /**
-     * Comment removed.
-     */
-    /**
-     * @return array{block_nodes?:list<array<string,mixed>>,page?:array<string,mixed>}
-     */
-    private function resolveMaterializedAiHtmlPreviewData(array $scope, string $pageType): array
-    {
-        $pagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType(
-            $scope['pagebuilder_pages_by_type'] ?? []
-        );
-        $pageId = (int)($scope['virtual_pages_by_type'][$pageType]['materialized_page_id'] ?? 0);
-        if ($pageId <= 0) {
-            $pageId = (int)($pagesByType[$pageType]['page_id'] ?? 0);
-        }
-
-        $row = $this->loadMaterializedAiHtmlPreviewPageRow(
-            $pageId,
-            $pageType,
-            (int)($scope['draft_website_id'] ?? $scope['website_id'] ?? 0)
-        );
-        if ($row === []) {
-            return [];
-        }
-        if (\trim((string)($row[Page::schema_fields_RENDER_MODE] ?? '')) !== Page::RENDER_MODE_AI_HTML) {
-            return [];
-        }
-
-        $layout = \json_decode((string)($row[Page::schema_fields_AI_LAYOUT] ?? ''), true);
-        $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
-        $blocks = \array_values(\array_filter($blocks, static function (mixed $block): bool {
-            return \is_array($block)
-                && \trim((string)($block['html'] ?? $block['config']['html_content'] ?? '')) !== '';
-        }));
-        if ($blocks === []) {
-            return [];
-        }
-
-        return [
-            'block_nodes' => $blocks,
-            'page' => [
-                'page_type' => (string)($row[Page::schema_fields_TYPE] ?? $pageType),
-                'title' => (string)($row[Page::schema_fields_TITLE] ?? $row[Page::schema_fields_NAME] ?? ''),
-                'handle' => (string)($row[Page::schema_fields_HANDLE] ?? ''),
-                'locale' => (string)($row[Page::schema_fields_DEFAULT_LOCALE] ?? ''),
-                'meta_title' => (string)($row[Page::schema_fields_META_TITLE] ?? ''),
-                'meta_description' => (string)($row[Page::schema_fields_META_DESCRIPTION] ?? ''),
-                'meta_keywords' => (string)($row[Page::schema_fields_META_KEYWORDS] ?? ''),
-                'ai_description' => (string)($row[Page::schema_fields_AI_DESCRIPTION] ?? ''),
-                'materialized_page_id' => (int)($row[Page::schema_fields_ID] ?? 0),
-            ],
-        ];
-    }
-
-    /**
-     * @return array<string,mixed>
-     */
-    private function loadMaterializedAiHtmlPreviewPageRow(int $pageId, string $pageType, int $websiteId): array
-    {
-        /** @var Page $pageModel */
-        $pageModel = ObjectManager::make(Page::class);
-        if ($pageId > 0) {
-            $rows = (clone $pageModel)
-                ->clearData()
-                ->clearQuery()
-                ->where(Page::schema_fields_ID, $pageId)
-                ->pagination(1, 1)
-                ->select()
-                ->fetchArray();
-            if (\is_array($rows[0] ?? null)) {
-                return $rows[0];
-            }
-        }
-
-        if ($websiteId <= 0 || $pageType === '') {
-            return [];
-        }
-
-        $rows = (clone $pageModel)
-            ->clearData()
-            ->clearQuery()
-            ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(Page::schema_fields_TYPE, $pageType)
-            ->pagination(1, 1)
-            ->select()
-            ->fetchArray();
-
-        return \is_array($rows[0] ?? null) ? $rows[0] : [];
-    }
-
-    private function sanitizeAiSiteVisitorTitle(string $value, array $scope, string $locale = ''): string
-    {
-        $title = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', $value) ?? $value;
-        $title = \preg_replace('/\s+/u', ' ', \trim($title)) ?? \trim($title);
-        $localized = $this->localizeAiSiteGenericVisitorTitle($title, $scope, $locale);
-        if ($localized !== '') {
-            return $localized;
-        }
-        if ($title !== '') {
-            return $title;
-        }
-
-        foreach ([
-            $scope['site_title'] ?? null,
-            $scope['website_profile']['site_title'] ?? null,
-            $scope['site_name'] ?? null,
-            $scope['website_profile']['brand_name'] ?? null,
-        ] as $candidate) {
-            if (!\is_scalar($candidate)) {
-                continue;
-            }
-            $candidateTitle = \preg_replace('/\b(?:website\s*profile|websiteProfile|site\s*profile|profile_json|scope_json|target_domain)\b/iu', '', (string)$candidate) ?? (string)$candidate;
-            $candidateTitle = \preg_replace('/\s+/u', ' ', \trim($candidateTitle)) ?? \trim($candidateTitle);
-            if ($candidateTitle !== '') {
-                return $candidateTitle;
-            }
-        }
-
-        return 'Website';
-    }
-
-    private function localizeAiSiteGenericVisitorTitle(string $title, array $scope, string $explicitLocale = ''): string
-    {
-        $normalizedTitle = \strtolower(\trim($title));
-        $key = match ($normalizedTitle) {
-            'home', 'homepage', "\u{9996}\u{9875}", "\u{4E3B}\u{9875}" => 'home',
-            'about', 'about us', "\u{5173}\u{4E8E}", "\u{5173}\u{4E8E}\u{6211}\u{4EEC}" => 'about',
-            'contact', 'contact us', "\u{8054}\u{7CFB}", "\u{8054}\u{7CFB}\u{6211}\u{4EEC}" => 'contact',
-            'privacy policy', 'privacy', "\u{9690}\u{79C1}\u{653F}\u{7B56}" => 'privacy_policy',
-            'terms of service', 'terms', "\u{670D}\u{52A1}\u{6761}\u{6B3E}", "\u{670D}\u{52A1}\u{6761}\u{6B3E}\u{548C}\u{6761}\u{4EF6}" => 'terms_of_service',
-            default => '',
-        };
-        if ($key === '') {
-            return '';
-        }
-
-        $locale = \trim($explicitLocale);
-        if ($locale === '') {
-            $locale = \trim((string)(
-                $scope['content_locale']
-                    ?? $scope['website_profile']['content_locale']
-                    ?? $scope['default_locale']
-                    ?? $scope['default_language']
-                    ?? $scope['website_profile']['default_locale']
-                    ?? ''
-            ));
-        }
-
-        if (\preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', $locale) === 1) {
-            return match ($key) {
-                'home' => "\u{0939}\u{094B}\u{092E}",
-                'about' => "\u{0939}\u{092E}\u{093E}\u{0930}\u{0947} \u{092C}\u{093E}\u{0930}\u{0947} \u{092E}\u{0947}\u{0902}",
-                'contact' => "\u{0938}\u{0902}\u{092A}\u{0930}\u{094D}\u{0915} \u{0915}\u{0930}\u{0947}\u{0902}",
-                'privacy_policy' => "\u{0917}\u{094B}\u{092A}\u{0928}\u{0940}\u{092F}\u{0924}\u{093E} \u{0928}\u{0940}\u{0924}\u{093F}",
-                'terms_of_service' => "\u{0938}\u{0947}\u{0935}\u{093E} \u{0915}\u{0940} \u{0936}\u{0930}\u{094D}\u{0924}\u{0947}\u{0902}",
-                default => '',
-            };
-        }
-
-        if (\preg_match('/^th(?:[_-]|$)/i', $locale) === 1) {
-            return match ($key) {
-                'home' => 'Home',
-                'about' => 'About',
-                'contact' => 'Contact',
-                'terms_of_service' => 'Terms of Service',
-                default => '',
-            };
-        }
-        if (\preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', $locale) === 1) {
-            return match ($key) {
-                'home' => 'Home',
-                'about' => 'About',
-                'privacy_policy' => 'Privacy Policy',
-                'terms_of_service' => 'Terms of Service',
-                default => '',
-            };
-        }
-        if (\preg_match('/^pt(?:[_-]|$)/i', $locale) === 1) {
-            return match ($key) {
-                'home' => 'Home',
-                'about' => 'Sobre',
-                'contact' => 'Contato',
-                'privacy_policy' => 'Privacy Policy',
-                'terms_of_service' => 'Terms of Service',
-                default => '',
-            };
-        }
-        if (\preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1) {
-            return match ($key) {
-                'home' => 'Home',
-                'about' => 'About',
-                'contact' => 'Contact',
-                'privacy_policy' => 'Privacy Policy',
-                'terms_of_service' => 'Terms of Service',
-                default => '',
-            };
-        }
-
-        return '';
-    }
-
-    /**
      * Return an iframe-safe placeholder when the preview context cannot be resolved.
      */
     private function renderWorkspacePreviewUnavailablePage(int $adminId, string $publicId, string $requestedPageType): string
@@ -890,8 +561,8 @@ class AiSiteAgent extends BaseController
                 $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
                 $activeBuild = \is_array($activeOperations['build'] ?? null) ? $activeOperations['build'] : [];
                 $activeOpName = \strtolower(\trim((string)($activeOperation['operation'] ?? '')));
-                $activeOpStatus = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
-                $buildStatus = \strtolower(\trim((string)($activeBuild['status'] ?? '')));
+                $activeOpStatus = \strtolower(\trim((string)($activeOperation['queue_status'] ?? '')));
+                $buildStatus = \strtolower(\trim((string)($activeBuild['queue_status'] ?? '')));
                 $buildQueueRunning = ($activeOpName === 'build' && \in_array($activeOpStatus, ['pending', 'queued', 'running', 'processing'], true))
                     || \in_array($buildStatus, ['pending', 'queued', 'running', 'processing'], true);
             }
@@ -911,9 +582,9 @@ class AiSiteAgent extends BaseController
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function postSortPlanBlockNodes(): string
+    public function postSortPlanBlocks(): string
     {
-        return $this->handleSortPlanBlockNodes();
+        return $this->handleSortPlanBlocks();
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'Ai Site Agent Api', 'mdi-api', 'PageBuilder AI site agent permission: ai_site_agent_api', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -1218,9 +889,7 @@ class AiSiteAgent extends BaseController
                 'registrar_account_id' => 0,
                 'page_types' => [],
                 'recommended_pages' => [],
-                'pagebuilder_pages_by_type' => [],
-                'virtual_pages_by_type' => [],
-                'page_type_layouts' => [],
+                'materialized_pages_by_type' => [],
                 'site_profile_manual' => [],
                 'active_operation' => [],
                 'build_summary' => [],
@@ -2031,6 +1700,7 @@ class AiSiteAgent extends BaseController
         if ($targetDomain === '') {
             return $this->jsonError(
                 'TARGET_DOMAIN_REQUIRED',
+                'Target domain is required before planning.',
                 ['target_domain']
             );
         }
@@ -2114,7 +1784,7 @@ class AiSiteAgent extends BaseController
         $requestedRound = \max(1, (int)$this->getRequestBodyValue('round', 1));
         $activeOperation = \is_array($currentScope['active_operation'] ?? null) ? $currentScope['active_operation'] : [];
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
-        $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeOperationStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         if (
             $activeOperationName === 'plan'
             && \in_array($activeOperationStatus, ['queued', 'running'], true)
@@ -2338,7 +2008,9 @@ class AiSiteAgent extends BaseController
         }
         $scope = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $scope);
         $planConfirmationPrepared = $this->planJsonGenerationService->prepareStageOnePlanScopeForConfirmation($scope);
-        $scope = \is_array($planConfirmationPrepared['scope'] ?? null) ? $planConfirmationPrepared['scope'] : $scope;
+        $scope = \is_array($planConfirmationPrepared['scope'] ?? null)
+            ? $planConfirmationPrepared['scope']
+            : (\is_array($planConfirmationPrepared) ? $planConfirmationPrepared : $scope);
         $planConfirmationStage1Validation = \is_array($planConfirmationPrepared['stage1_validation'] ?? null)
             ? $planConfirmationPrepared['stage1_validation']
             : [];
@@ -2351,6 +2023,7 @@ class AiSiteAgent extends BaseController
             $summary = $this->planJsonTaskService->summarizeRetryableAiFailures($scope, 'plan');
             return $this->jsonError(
                 'RETRYABLE_AI_FAILURES_PENDING',
+                'Retryable AI failures must be retried before continuing.',
                 ['public_id'],
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
@@ -2455,6 +2128,11 @@ class AiSiteAgent extends BaseController
         $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
         if (!$confirmOnly) {
             $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+            $confirmedPlanJson = \is_array($scopePatch['plan_json'] ?? null) ? $scopePatch['plan_json'] : [];
+            if ($confirmedPlanJson !== []) {
+                $confirmedPlanJson['state'] = AiSiteAgentSession::STAGE_VISUAL_EDIT;
+                $this->sessionService->mergeScope($session->getId(), $adminId, ['plan_json' => $confirmedPlanJson]);
+            }
         }
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $this->appendWorkspaceEvent(
@@ -2525,7 +2203,7 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage(
                 $session,
                 AiSiteAgentSession::STAGE_PLAN,
-                ['plan_json']
+                []
             )
         );
         $this->sendSseContractError(
@@ -2877,6 +2555,7 @@ class AiSiteAgent extends BaseController
             \error_log('[AiSiteStartBuild] failed: ' . $throwable->getMessage() . ' in ' . $throwable->getFile() . ':' . $throwable->getLine());
             return $this->jsonError(
                 'START_BUILD_FAILED',
+                (string)__('Failed to start build.'),
                 self::PARAMS_PUBLIC_ID
             );
         }
@@ -2935,6 +2614,7 @@ class AiSiteAgent extends BaseController
             $summary = $this->planJsonTaskService->summarizeRetryableAiFailures($mergedScope, 'plan');
             return $this->jsonError(
                 'RETRYABLE_AI_FAILURES_PENDING',
+                'Retryable AI failures must be retried before continuing.',
                 ['public_id'],
                 ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
             );
@@ -2942,6 +2622,7 @@ class AiSiteAgent extends BaseController
         if (!$this->isPlanJsonReadyForBuild($mergedScope)) {
             return $this->jsonError(
                 'PLAN_JSON_REQUIRED_BEFORE_BUILD',
+                'A confirmed stage-1 plan_json is required before build.',
                 ['public_id', 'plan_json']
             );
         }
@@ -3130,7 +2811,7 @@ class AiSiteAgent extends BaseController
             'label' => $label !== '' ? $label : (string)($slot['label'] ?? ''),
             'job_key' => $this->buildAiSiteQueueJobKey((int)$session->getId(), $jobType . ':' . $safeSlot),
             'job_type' => $jobType,
-            'status' => 'queued',
+            'queue_status' => 'queued',
         ]);
         $bizKey = $this->buildAiSiteAssetQueueBizKey((int)$session->getId(), $normalizedSlotId);
         $queueName = 'PageBuilder image asset ' . \substr($safeSlot, 0, 96);
@@ -3147,7 +2828,7 @@ class AiSiteAgent extends BaseController
         );
         $operationScope = $this->writeActiveOperationStateToScope($operationScope, [
             'operation' => 'image_asset',
-            'status' => 'queued',
+            'queue_status' => 'queued',
             'execution_token' => $effectiveExecutionToken,
             'token' => $effectiveExecutionToken,
             'queue_id' => $queueId,
@@ -3553,7 +3234,7 @@ class AiSiteAgent extends BaseController
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function PlanJsonJsonDraftScopePatch(array $scope): array
+    private function PlanJsonPageValidationScopePatch(array $scope): array
     {
         $coverage = $this->planJsonTaskServiceForRead()->inspectConfirmedPlanJsonPageTypeCoverage($scope);
         $missingPages = \is_array($coverage['missing_page_types'] ?? null) ? $coverage['missing_page_types'] : [];
@@ -3707,7 +3388,7 @@ class AiSiteAgent extends BaseController
             $sectionRefinements[$componentCode] = $instruction;
             $virtualPage['section_refinements'] = $sectionRefinements;
             $virtualPages[$pageType] = $virtualPage;
-            $scopePatch['virtual_pages_by_type'] = $virtualPages;
+            $scopePatch['plan_json'] = $this->withPlanJsonPages($scope, $virtualPages)['plan_json'];
         }
 
         $label = $componentLabel !== '' ? $componentLabel : $componentCode;
@@ -3747,8 +3428,8 @@ class AiSiteAgent extends BaseController
                 'instruction' => $instruction,
                 'shared_region' => $sharedRegion,
                 'target_scope' => $sharedRegion !== ''
-                    ? ('shared_components.' . $sharedRegion)
-                    : ('virtual_pages_by_type.' . $pageType . '.sections.' . $componentCode),
+                    ? ('plan_json.shared_components.' . $sharedRegion)
+                    : ('plan_json.pages.' . $pageType . '.' . $componentCode),
             ]
         ));
     }
@@ -3799,11 +3480,9 @@ class AiSiteAgent extends BaseController
             ? $componentLabel
             : ($actualComponentCode !== '' ? $actualComponentCode : $actualBlockId);
         $readSource = \trim((string)($read['source'] ?? ''));
-        $targetScope = $readSource === 'virtual_theme_component'
-            ? ('page_type_layouts.' . $pageType . '.content.' . ($actualComponentCode !== '' ? $actualComponentCode : $actualBlockId))
-            : (\str_starts_with($readSource, 'shared_components.')
-                ? $readSource
-                : ('virtual_pages_by_type.' . $pageType . '.' . $actualBlockId));
+        $targetScope = \str_starts_with($readSource, 'plan_json.shared_components.')
+            ? $readSource
+            : ('plan_json.pages.' . $pageType . '.' . $actualBlockId);
         $details = [
             'stage_scope' => 'build',
             'action' => 'partial_patch',
@@ -3876,6 +3555,7 @@ class AiSiteAgent extends BaseController
             if (!$this->planJsonTaskService->hasConfirmedPlanJsonForBuild($buildScope)) {
                 return $this->jsonError(
                     'PLAN_JSON_REQUIRED_BEFORE_BUILD',
+                    'A confirmed stage-1 plan_json is required before build.',
                     ['public_id', 'plan_json']
                 );
             }
@@ -4198,8 +3878,8 @@ class AiSiteAgent extends BaseController
         foreach ($componentCodes as $index => $componentCode) {
             $sharedRegion = $this->resolveSharedComponentRegionForComponentCode($pageType, $componentCode);
             $targetScope = $sharedRegion !== ''
-                ? ('shared_components.' . $sharedRegion)
-                : ('virtual_pages_by_type.' . $pageType . '.sections.' . $componentCode);
+                ? ('plan_json.shared_components.' . $sharedRegion)
+                : ('plan_json.pages.' . $pageType . '.' . $componentCode);
             $label = $index === 0 && \trim($componentLabel) !== '' ? \trim($componentLabel) : $componentCode;
 
             if ($instruction !== '') {
@@ -4238,7 +3918,7 @@ class AiSiteAgent extends BaseController
                 $scopePatch['shared_component_refinements'] = $sharedRefinements;
             }
             if (\is_array($virtualPages)) {
-                $scopePatch['virtual_pages_by_type'] = $virtualPages;
+                $scopePatch['plan_json'] = $this->withPlanJsonPages($scope, $virtualPages)['plan_json'];
             }
         }
 
@@ -4269,7 +3949,7 @@ class AiSiteAgent extends BaseController
                 'section_codes' => $componentCodes,
                 'task_key' => $firstComponent,
                 'task_keys' => $componentCodes,
-                'selected_block_nodes' => $componentCodes,
+                'selected_blocks' => $componentCodes,
                 'selected_tasks' => $componentCodes,
                 'targets' => $targets,
             ],
@@ -4725,7 +4405,7 @@ class AiSiteAgent extends BaseController
         $scope = $this->planJsonTaskService->markTaskRunning($scope, $taskKey);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
-        if ($workspaceTrack !== AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES) {
+        if ($workspaceTrack !== AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks) {
             $scope = $this->ensureVirtualThemeWorkspaceForScopedBuildOperation($session, $adminId, $scope);
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         }
@@ -4743,7 +4423,7 @@ class AiSiteAgent extends BaseController
                 $sectionRefinements[$sectionCode] = $instruction;
                 $virtualPage['section_refinements'] = $sectionRefinements;
                 $virtualPages[$pageType] = $virtualPage;
-                $scope['virtual_pages_by_type'] = $virtualPages;
+                $scope = $this->withPlanJsonPages($scope, $virtualPages);
             }
         }
 
@@ -4767,7 +4447,6 @@ class AiSiteAgent extends BaseController
                 $affectedPageTypes = [$pageType];
             }
             $scope['preview_page_type'] = $pageType;
-            $scope['virtual_pages_by_type'] = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
             $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
                 'page_type' => $pageType,
                 'section_code' => $sectionCode,
@@ -4798,7 +4477,7 @@ class AiSiteAgent extends BaseController
             if (\in_array($activeOperationName, ['block_refine', 'block_regenerate'], true)) {
                 $scope = $this->writeActiveOperationStateToScope($scope, \array_replace($activeOperation, [
                     'operation' => 'block_regenerate',
-                    'status' => 'done',
+                    'queue_status' => 'done',
                     'page_type' => $pageType,
                     'component_code' => $componentCode,
                     'instruction' => $instruction,
@@ -4866,14 +4545,21 @@ class AiSiteAgent extends BaseController
                 'shared_region' => $sharedRegion,
                 'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
             ]);
-            $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
-            $scope['shared_components'][$sharedRegion] = $sharedComponent;
+            $scope['plan_json'] = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+            $scope['plan_json']['shared_components'] = \is_array($scope['plan_json']['shared_components'] ?? null)
+                ? $scope['plan_json']['shared_components']
+                : [];
+            $scope['plan_json']['shared_components'][$sharedRegion] = $sharedComponent;
+            unset($scope['shared_components']);
             if (\is_array($scope['shared_component_refinements'] ?? null)) {
                 unset($scope['shared_component_refinements'][$sharedRegion]);
             }
             $dummySection = ['block_id' => ''];
+            $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null)
+                ? $scope['plan_json']['shared_components']
+                : [];
 
-            if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES) {
+            if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks) {
                 $pageTypesAll = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
                 $affectedPageTypes = $pageTypesAll;
                 $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypesAll, $scope);
@@ -4887,10 +4573,10 @@ class AiSiteAgent extends BaseController
                     $row['meta_description'] = (string)($blueprint['meta_description'] ?? ($row['meta_description'] ?? ''));
                     $row['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($row['meta_keywords'] ?? ''));
                     $row['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
-                    $row['block_nodes'] = $this->composeHtmlBlockNodesForPage(
+                    $row['blocks'] = $this->composeHtmlBlocksForPage(
                         $pt,
-                        \is_array($row['block_nodes'] ?? null) ? $row['block_nodes'] : [],
-                        $scope['shared_components'],
+                        \is_array($row['blocks'] ?? null) ? $row['blocks'] : [],
+                        $sharedComponents,
                         $dummySection,
                         $scope['website_profile'],
                         $scope
@@ -4898,14 +4584,14 @@ class AiSiteAgent extends BaseController
                     $row['last_generated_at'] = $now;
                     $virtualPages[$pt] = $row;
                 }
-                $scope['virtual_pages_by_type'] = $virtualPages;
+                $scope = $this->withPlanJsonPages($scope, $virtualPages);
                 $scope['preview_page_type'] = $pageType;
                 $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
                     'page_type' => $pageType,
                     'section_code' => $sectionCode,
                     'shared_region' => $sharedRegion,
                 ]);
-                $this->logHotPathStage('block_regenerate.preview_ready_html_block_nodes', $opStartedAt, [
+                $this->logHotPathStage('block_regenerate.preview_ready_html_blocks', $opStartedAt, [
                     'page_type' => $pageType,
                     'component_code' => $componentCode,
                     'shared_region' => $sharedRegion,
@@ -4924,14 +4610,14 @@ class AiSiteAgent extends BaseController
                 );
                 $materializeStartedAt = \microtime(true);
                 $materialized = $this->materializeGeneratedPages(
-                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                     \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
                     $scope['website_profile'],
                     $pageTypesAll,
                     [],
                     $virtualPages
                 );
-                $this->logHotPathStage('block_regenerate.materialize_html_block_nodes', $materializeStartedAt, [
+                $this->logHotPathStage('block_regenerate.materialize_html_blocks', $materializeStartedAt, [
                     'page_type' => $pageType,
                     'component_code' => $componentCode,
                     'shared_region' => $sharedRegion,
@@ -4942,32 +4628,30 @@ class AiSiteAgent extends BaseController
                 $pageTypesAll = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
                 $affectedPageTypes = $pageTypesAll;
                 $layoutStartedAt = \microtime(true);
-                $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypesAll);
+                $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts([], $pageTypesAll);
                 $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
                 $this->virtualThemeService->saveGeneratedSharedComponent($virtualThemeId, $sharedComponent);
                 $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypesAll, $pageTypeLayouts, $sharedComponent);
                 $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypesAll, $pageTypeLayouts);
-                $scope['page_type_layouts'] = $pageTypeLayouts;
                 $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypesAll, \array_replace($scope, [
-                    'page_type_layouts' => $pageTypeLayouts,
-                    'virtual_pages_by_type' => $scope['virtual_pages_by_type'] ?? [],
+                    'plan_json' => \array_replace(\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [], ['pages' => $this->planJsonPages($scope)]),
                 ]), false);
                 $now = \date('Y-m-d H:i:s');
                 foreach ($pageTypesAll as $pt) {
                     if (!isset($virtualPages[$pt]) || !\is_array($virtualPages[$pt])) {
                         continue;
                     }
-                    $virtualPages[$pt]['block_nodes'] = $this->composeHtmlBlockNodesForPage(
+                    $virtualPages[$pt]['blocks'] = $this->composeHtmlBlocksForPage(
                         $pt,
-                        $this->resolveExistingAiHtmlBlockNodesForPage($pt, $scope, $virtualPages),
-                        $scope['shared_components'],
+                        $this->resolveExistingAiHtmlBlocksForPage($pt, $scope, $virtualPages),
+                        $sharedComponents,
                         $dummySection,
                         $scope['website_profile'],
-                        \array_replace($scope, ['page_type_layouts' => $pageTypeLayouts])
+                        $scope
                     );
                     $virtualPages[$pt]['last_generated_at'] = $now;
                 }
-                $scope['virtual_pages_by_type'] = $virtualPages;
+                $scope = $this->withPlanJsonPages($scope, $virtualPages);
                 $scope['preview_page_type'] = $pageType;
                 $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
                     'page_type' => $pageType,
@@ -5017,7 +4701,7 @@ class AiSiteAgent extends BaseController
                 'operation' => $instruction !== '' ? 'block_refine' : 'block_regenerate',
             ]);
 
-            if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES) {
+            if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks) {
                 $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
                 $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
                 $blueprint = $this->pageBlueprintService->buildPageBlueprint($pageType, $scope, $scope['website_profile']);
@@ -5028,17 +4712,17 @@ class AiSiteAgent extends BaseController
                 $row['meta_description'] = (string)($blueprint['meta_description'] ?? ($row['meta_description'] ?? ''));
                 $row['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($row['meta_keywords'] ?? ''));
                 $row['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
-                $row['block_nodes'] = $this->composeHtmlBlockNodesForPage(
+                $row['blocks'] = $this->composeHtmlBlocksForPage(
                     $pageType,
-                    $this->resolveExistingAiHtmlBlockNodesForPage($pageType, $scope, $virtualPages),
-                    \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [],
-                    $this->htmlBlockNodesBuildService->buildGeneratedSectionBlock($sectionComponent),
+                    $this->resolveExistingAiHtmlBlocksForPage($pageType, $scope, $virtualPages),
+                    \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [],
+                    $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent),
                     $scope['website_profile'],
                     $scope
                 );
                 $row['last_generated_at'] = \date('Y-m-d H:i:s');
                 $virtualPages[$pageType] = $row;
-                $scope['virtual_pages_by_type'] = $virtualPages;
+                $scope = $this->withPlanJsonPages($scope, $virtualPages);
                 $scope['preview_page_type'] = $pageType;
                 $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
                 $this->logHotPathStage('block_regenerate.preview_ready_html_section', $generateStartedAt, [
@@ -5059,7 +4743,7 @@ class AiSiteAgent extends BaseController
                 );
                 $materializeStartedAt = \microtime(true);
                 $materialized = $this->materializeGeneratedPages(
-                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                     \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
                     $scope['website_profile'],
                     [$pageType],
@@ -5075,7 +4759,7 @@ class AiSiteAgent extends BaseController
             } else {
                 $layoutStartedAt = \microtime(true);
                 $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
-                $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+                $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts([], $pageTypes);
                 $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
                 $layout = $this->virtualThemeService->mergePersistedContentIntoGeneratedLayout((int)$scope['virtual_theme_id'], $pageType, $layout);
                 $this->virtualThemeService->saveGeneratedContentComponent((int)($scope['virtual_theme_id'] ?? 0), $pageType, $sectionComponent);
@@ -5085,21 +4769,19 @@ class AiSiteAgent extends BaseController
                 $pageTypeLayouts[$pageType] = $layout;
 
                 $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, \array_replace($scope, [
-                    'page_type_layouts' => $pageTypeLayouts,
-                    'virtual_pages_by_type' => $scope['virtual_pages_by_type'] ?? [],
+                    'plan_json' => \array_replace(\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [], ['pages' => $this->planJsonPages($scope)]),
                 ]));
                 if (isset($virtualPages[$pageType]) && \is_array($virtualPages[$pageType])) {
-                    $virtualPages[$pageType]['block_nodes'] = $this->composeHtmlBlockNodesForPage(
+                    $virtualPages[$pageType]['blocks'] = $this->composeHtmlBlocksForPage(
                         $pageType,
-                        $this->resolveExistingAiHtmlBlockNodesForPage($pageType, $scope, $virtualPages),
-                        \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [],
-                        $this->htmlBlockNodesBuildService->buildGeneratedSectionBlock($sectionComponent),
+                        $this->resolveExistingAiHtmlBlocksForPage($pageType, $scope, $virtualPages),
+                        \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [],
+                        $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent),
                         $scope['website_profile'],
-                        \array_replace($scope, ['page_type_layouts' => $pageTypeLayouts])
+                        $scope
                     );
                 }
-                $scope['page_type_layouts'] = $pageTypeLayouts;
-                $scope['virtual_pages_by_type'] = $virtualPages;
+                $scope = $this->withPlanJsonPages($scope, $virtualPages);
                 $scope['preview_page_type'] = $pageType;
                 $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
                 $this->logHotPathStage('block_regenerate.preview_ready_virtual_theme_section', $layoutStartedAt, [
@@ -5136,7 +4818,7 @@ class AiSiteAgent extends BaseController
         if (\in_array($activeOperationName, ['block_refine', 'block_regenerate'], true)) {
             $scope = $this->writeActiveOperationStateToScope($scope, \array_replace($activeOperation, [
                 'operation' => 'block_regenerate',
-                'status' => 'done',
+                'queue_status' => 'done',
                 'page_type' => $pageType,
                 'component_code' => $componentCode,
                 'instruction' => $instruction,
@@ -5213,8 +4895,7 @@ class AiSiteAgent extends BaseController
         array $scope
     ): void {
         $minimalState = [
-            'virtual_pages_by_type' => \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [],
-            'page_type_layouts' => \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [],
+            'plan_json_pages' => $this->planJsonPages($scope),
             'preview_page_type' => (string)($scope['preview_page_type'] ?? $pageType),
             'plan_json_task_summary' => $this->planJsonTaskService->summarize($scope),
             'build_summary' => \array_diff_key(
@@ -5367,15 +5048,54 @@ class AiSiteAgent extends BaseController
                 ],
             ]);
         }
-        return $this->fetchJson($this->startOperation(
-            $session,
-            $adminId,
-            'publish',
-            AiSiteAgentSession::STAGE_PUBLISH,
-            [],
-            '',
-            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHING
-        ));
+        $executionToken = \bin2hex(\random_bytes(16));
+        $scope = $this->writeActiveOperationStateToScope($scope, [
+            'operation' => 'publish',
+            'execution_token' => $executionToken,
+            'status' => 'running',
+            'queue_status' => 'running',
+            'page_type' => '',
+            'started_at' => \date('Y-m-d H:i:s'),
+            'updated_at' => \date('Y-m-d H:i:s'),
+            'progress_percent' => 0,
+            'message' => (string)__('Operation progress updated.'),
+        ]);
+        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHING;
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_PUBLISH);
+        $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_PUBLISHING);
+
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        try {
+            $this->runPublishOperation($this->silentSseWriter(), $fresh, $adminId);
+        } catch (\Throwable $throwable) {
+            $this->updateActiveOperation(
+                $fresh,
+                $adminId,
+                [
+                    'operation' => 'publish',
+                    'status' => 'error',
+                    'queue_status' => 'error',
+                    'message' => \trim($throwable->getMessage()) !== '' ? $throwable->getMessage() : (string)__('Operation failed.'),
+                ],
+                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED,
+                AiSiteAgentSession::PUBLISH_STATUS_FAILED
+            );
+            return $this->fetchJson([
+                'success' => false,
+                'code' => 'PUBLISH_FAILED',
+                'message' => \trim($throwable->getMessage()) !== '' ? $throwable->getMessage() : (string)__('Operation failed.'),
+            ]);
+        }
+
+        $published = $this->buildWorkspaceFastViewState($this->sessionService->loadById($session->getId(), $adminId) ?? $fresh, $adminId);
+        return $this->fetchJson([
+            'success' => true,
+            'message' => (string)__('Operation completed.'),
+            'operation' => 'publish',
+            'execution_token' => $executionToken,
+            'data' => $published,
+        ]);
     }
 
     private function handleUpdateBlockConfig(): string
@@ -5422,7 +5142,7 @@ class AiSiteAgent extends BaseController
 
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
+        $blocks = $this->planJsonPageBlockList($scope, $pageType);
         $updatedBlock = null;
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
 
@@ -5431,7 +5151,7 @@ class AiSiteAgent extends BaseController
                 continue;
             }
 
-            $updatedBlock = $this->htmlBlockNodesBuildService->rebuildBlock(
+            $updatedBlock = $this->htmlBlocksBuildService->rebuildBlock(
                 $block,
                 $websiteProfile,
                 $scope,
@@ -5468,7 +5188,7 @@ class AiSiteAgent extends BaseController
             $updatedBlock,
             $lastGeneratedAt
         );
-        $scope['virtual_pages_by_type'] = $virtualPages;
+        $scope = $this->withPlanJsonPages($scope, $virtualPages);
         $scope = $this->syncUpdatedVirtualBlockToThemeLayout($scope, $pageTypes, $pageType, $updatedBlock);
         $scope['plan_json_task_summary'] = $this->planJsonTaskService->summarize($scope);
         if (\is_array($scope['build_summary'] ?? null)) {
@@ -5493,7 +5213,7 @@ class AiSiteAgent extends BaseController
 
         $clientVirtualPagesByType = [];
         if (\is_array($virtualPages[$pageType] ?? null)) {
-            $clientVirtualPagesByType = $this->htmlBlockNodesBuildService->stripServerOnlyVirtualPages([
+            $clientVirtualPagesByType = $this->htmlBlocksBuildService->stripServerOnlyVirtualPages([
                 $pageType => $virtualPages[$pageType],
             ]);
         }
@@ -5507,11 +5227,11 @@ class AiSiteAgent extends BaseController
                 'stage' => $this->scopeCompatibilityService->normalizeStage($session->getStage()),
                 'virtual_theme_id' => $virtualThemeId,
                 'preview_page_type' => (string)($scope['preview_page_type'] ?? $pageType),
-                'virtual_pages_by_type' => $clientVirtualPagesByType,
+                'plan_json_pages' => $clientVirtualPagesByType,
                 'plan_json_task_summary' => \is_array($scope['plan_json_task_summary'] ?? null) ? $scope['plan_json_task_summary'] : [],
             ],
         ];
-        $response['block'] = $this->htmlBlockNodesBuildService->stripServerOnlyBlock($updatedBlock);
+        $response['block'] = $this->htmlBlocksBuildService->stripServerOnlyBlock($updatedBlock);
 
         return $this->fetchJson($response);
     }
@@ -5602,28 +5322,19 @@ class AiSiteAgent extends BaseController
         if ($region === '') {
             $region = 'content';
         }
+        $pages = $this->planJsonPages($scope);
         $targetPageType = \in_array($region, ['header', 'footer'], true) ? Page::TYPE_HOME : $pageType;
-        $pageTypeLayouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
-        $layout = \is_array($pageTypeLayouts[$targetPageType] ?? null) ? $pageTypeLayouts[$targetPageType] : [];
-
-        if (\in_array($region, ['header', 'footer'], true)) {
-            $slot = \is_array($layout[$region] ?? null) ? $layout[$region] : [];
-            return \is_array($slot['config'] ?? null) ? $slot['config'] : [];
-        }
-
-        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-        if ($componentIndex >= 0 && isset($content[$componentIndex]) && \is_array($content[$componentIndex])) {
-            $item = $content[$componentIndex];
-            if ($this->layoutItemMatchesEditableBlock($pageType, $item, $blockId, $componentCode)) {
-                return \is_array($item['config'] ?? null) ? $item['config'] : [];
-            }
-        }
-
-        foreach ($content as $item) {
-            if (!\is_array($item) || !$this->layoutItemMatchesEditableBlock($pageType, $item, $blockId, $componentCode)) {
+        $page = \is_array($pages[$targetPageType] ?? null) ? $pages[$targetPageType] : [];
+        foreach (\array_values($this->planJsonDynamicBlocks($page)) as $index => $block) {
+            if (!\is_array($block)) {
                 continue;
             }
-            return \is_array($item['config'] ?? null) ? $item['config'] : [];
+            if ($componentIndex >= 0 && $index !== $componentIndex) {
+                continue;
+            }
+            if ($this->blockMatchesComponentIdentity($pageType, $block, $blockId, $componentCode)) {
+                return \is_array($block['config'] ?? null) ? $block['config'] : [];
+            }
         }
 
         return $this->loadVirtualThemeComponentDefaultConfig($scope, $region, $blockId, $componentCode);
@@ -5816,7 +5527,7 @@ class AiSiteAgent extends BaseController
         string $lastGeneratedAt
     ): array {
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
+        $blocks = $this->planJsonDynamicBlocks($virtualPage);
         $componentCode = \trim((string)($updatedBlock['_pb_server_component_code'] ?? $updatedBlock['component_code'] ?? ''));
 
         foreach ($blocks as $index => $block) {
@@ -5828,7 +5539,11 @@ class AiSiteAgent extends BaseController
             break;
         }
 
-        $virtualPage['block_nodes'] = \array_values($blocks);
+        foreach ($blocks as $key => $block) {
+            if (\is_string($key) && \is_array($block)) {
+                $virtualPage[$key] = $block;
+            }
+        }
         $virtualPage['last_generated_at'] = $lastGeneratedAt;
         $virtualPages[$pageType] = $virtualPage;
 
@@ -5862,7 +5577,7 @@ class AiSiteAgent extends BaseController
 
         $region = \strtolower(\trim((string)($updatedBlock['_pb_server_region'] ?? $updatedBlock['region'] ?? $blockConfig['region'] ?? '')));
         if ($region === '') {
-            $region = $this->htmlBlockNodesBuildService->resolveSharedBlockRegion($updatedBlock);
+            $region = $this->htmlBlocksBuildService->resolveSharedBlockRegion($updatedBlock);
         }
         if ($region === '') {
             $region = 'content';
@@ -5883,6 +5598,12 @@ class AiSiteAgent extends BaseController
             $pageTypeLayouts[$targetPageType] = $this->scopeCompatibilityService->normalizeLayoutConfig([], $targetPageType);
         }
         $layout = $pageTypeLayouts[$targetPageType];
+        if ($this->layoutHasNoConfiguredComponents($layout)) {
+            $persistedLayout = $this->virtualThemeService->loadGeneratedPageLayout($virtualThemeId, $targetPageType);
+            if (!$this->layoutHasNoConfiguredComponents($persistedLayout)) {
+                $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($persistedLayout, $targetPageType);
+            }
+        }
         $changed = false;
 
         if (\in_array($region, ['header', 'footer'], true)) {
@@ -5976,6 +5697,34 @@ class AiSiteAgent extends BaseController
         $scope['page_type_layouts'] = $pageTypeLayouts;
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     */
+    private function layoutHasNoConfiguredComponents(array $layout): bool
+    {
+        $header = \is_array($layout['header'] ?? null) ? $layout['header'] : [];
+        if (\trim((string)($header['component'] ?? '')) !== '') {
+            return false;
+        }
+
+        $footer = \is_array($layout['footer'] ?? null) ? $layout['footer'] : [];
+        if (\trim((string)($footer['component'] ?? '')) !== '') {
+            return false;
+        }
+
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        foreach ($content as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            if (\trim((string)($item['code'] ?? $item['component'] ?? '')) !== '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function runBlockPartialPatchOperation(
@@ -6086,7 +5835,7 @@ class AiSiteAgent extends BaseController
                 $adminId,
                 [
                     'operation' => 'block_partial_patch',
-                    'status' => 'error',
+                    'queue_status' => 'error',
                     'message' => $throwable->getMessage(),
                     'progress_percent' => 100,
                     'page_type' => $pageType,
@@ -6203,7 +5952,11 @@ class AiSiteAgent extends BaseController
     ): array {
         $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeFragment($session, self::WORKSPACE_FAST_VIEW_SCOPE_KEYS)
+            $this->sessionService->loadScopeFragment(
+                $session,
+                self::WORKSPACE_FAST_VIEW_SCOPE_KEYS,
+                $this->workspaceFastViewArtifactKeys($stage)
+            )
         );
         $scope = $this->discardForeignAiSiteQueueRuntimeState($scope, (int)$session->getId());
 
@@ -6287,9 +6040,13 @@ class AiSiteAgent extends BaseController
         }
         $websiteId = \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId());
         $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
-        $planJsonTaskSummary = \is_array($scope['plan_json_task_summary'] ?? null) ? $scope['plan_json_task_summary'] : [];
+        $planJsonTaskSummary = $this->planJsonPages($scope) !== []
+            ? $this->planJsonTaskService->summarize($scope)
+            : (\is_array($scope['plan_json_task_summary'] ?? null) ? $scope['plan_json_task_summary'] : []);
         $taskReady = $this->taskSummaryIndicatesCompleted($planJsonTaskSummary);
-        $completionGatePassed = !empty($scope['build_summary']['completion_gate']['passed']);
+        $completionGate = $this->planJsonTaskService->inspectBuildCompletionGate($scope);
+        $completionGatePassed = !empty($completionGate['passed'])
+            || !empty($scope['build_summary']['completion_gate']['passed']);
         $titleOk = \trim((string)($scope['website_profile']['site_title'] ?? $scope['site_title'] ?? '')) !== '';
         $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
             || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
@@ -6312,7 +6069,7 @@ class AiSiteAgent extends BaseController
             'stage_label' => $this->getStageLabel($stage),
             'workspace_status' => $workspaceStatus,
             'publish_status' => $session->getPublishStatus(),
-            'can_publish' => !$publishBlockingAiRunning && empty($publishBlockingBuildFailure['blocked']) && ($published || (!empty($scope['can_publish']) && $completionGatePassed && $taskReady && $titleOk)),
+            'can_publish' => !$publishBlockingAiRunning && empty($publishBlockingBuildFailure['blocked']) && ($published || ($completionGatePassed && $taskReady && $titleOk)),
             'latest_build_failed' => !empty($publishBlockingBuildFailure['blocked']),
             'latest_build_failure' => !empty($publishBlockingBuildFailure['blocked']) ? $publishBlockingBuildFailure : [],
             'publish_blocked_by_latest_ai_failure' => !empty($publishBlockingBuildFailure['blocked']),
@@ -6485,14 +6242,11 @@ class AiSiteAgent extends BaseController
         $scope['page_types'] = $pageTypes;
 
         $pagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType(
-            $scope['pagebuilder_pages_by_type'] ?? []
+            $scope['materialized_pages_by_type'] ?? []
         );
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts(
-            $scope['page_type_layouts'] ?? [],
-            $pageTypes
-        );
+        $planJsonPages = $this->planJsonPages($scope);
         $virtualPagesByType = $this->scopeCompatibilityService->normalizeVirtualPagesByType(
-            $scope['virtual_pages_by_type'] ?? [],
+            $planJsonPages,
             $pageTypes
         );
         if ($virtualPagesByType !== []) {
@@ -6513,7 +6267,7 @@ class AiSiteAgent extends BaseController
             : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
         $prePublishVisualUrls = $this->normalizeAiSiteVisualUrlsToLocalBase($prePublishVisualUrls, [
             'scope' => $scope,
-            'virtual_pages_by_type' => $virtualPagesByType,
+            'plan_json_pages' => $virtualPagesByType,
             'preview_page_type' => $previewPageType,
         ]);
         $scope = \array_replace($scope, $prePublishVisualUrls);
@@ -6523,9 +6277,11 @@ class AiSiteAgent extends BaseController
             $adminId,
             (string)($scope['active_operation']['operation'] ?? '')
         );
-        $planJsonTaskSummary = \is_array($scope['plan_json_task_summary'] ?? null)
-            ? $scope['plan_json_task_summary']
-            : (\is_array($queuePatch['plan_json_task_summary'] ?? null) ? $queuePatch['plan_json_task_summary'] : []);
+        $scopePlanJsonTaskSummary = $planJsonPages !== []
+            ? $this->planJsonTaskService->summarize($scope)
+            : (\is_array($scope['plan_json_task_summary'] ?? null) ? $scope['plan_json_task_summary'] : []);
+        $queuePlanJsonTaskSummary = \is_array($queuePatch['plan_json_task_summary'] ?? null) ? $queuePatch['plan_json_task_summary'] : [];
+        $planJsonTaskSummary = $scopePlanJsonTaskSummary !== [] ? $scopePlanJsonTaskSummary : $queuePlanJsonTaskSummary;
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         if ($websiteProfile === []) {
             $websiteProfile = [
@@ -6546,14 +6302,22 @@ class AiSiteAgent extends BaseController
         $canPublish = $published
             || (
                 !empty($scope['can_publish'])
+                && $taskReady
                 && $titleOk
-                && $completionGatePassed
+            )
+            || (
+                $completionGatePassed
+                && $taskReady
+                && $titleOk
             );
         $workspaceStatus = (string)($scope['workspace_status'] ?? '');
         if ($workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH && !$canPublish) {
             $workspaceStatus = $taskReady
                 ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_EDITING
                 : (string)$stage;
+        }
+        if ($canPublish) {
+            $workspaceStatus = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         }
         if ($workspaceStatus === '') {
             $workspaceStatus = $canPublish
@@ -6586,7 +6350,14 @@ class AiSiteAgent extends BaseController
         }
 
         $clientScope = $scope;
-        unset($clientScope['plan_markdown']);
+        unset(
+            $clientScope['plan_markdown'],
+            $clientScope['plan_projection'],
+            $clientScope['pagebuilder_pages_by_type'],
+            $clientScope['page_type_layouts'],
+            $clientScope['virtual_pages_by_type'],
+            $clientScope['materialized_pages_by_type']
+        );
 
         $state = \array_replace($queuePatch, [
             'public_id' => $session->getPublicId(),
@@ -6601,9 +6372,6 @@ class AiSiteAgent extends BaseController
             'draft_website_id' => $draftWebsiteId,
             'website_profile' => $websiteProfile,
             'draft_website_id' => $draftWebsiteId,
-            'pagebuilder_pages_by_type' => $pagesByType,
-            'page_type_layouts' => $pageTypeLayouts,
-            'virtual_pages_by_type' => $virtualPagesByType,
             'preview_page_options' => $this->scopeCompatibilityService->buildPreviewPageOptions($pagesByType),
             'preview_page_id' => (int)$scope['preview_page_id'],
             'preview_page_type' => $previewPageType,
@@ -6616,13 +6384,12 @@ class AiSiteAgent extends BaseController
             'build_summary' => \is_array($scope['build_summary'] ?? null)
                 ? \array_diff_key($scope['build_summary'], ['task_summary' => true])
                 : [],
+            'plan_json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
             'plan' => [
                 'json' => \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
-                'projection' => \is_array($scope['plan_projection'] ?? null) ? $scope['plan_projection'] : [],
             ],
             'confirmed_plan_signature' => $this->resolveConfirmedPlanSignature($scope),
             'has_stage_one_plan' => $hasStageOnePlan,
-            'plan_projection' => \is_array($scope['plan_projection'] ?? null) ? $scope['plan_projection'] : [],
             'asset_manifest' => \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($scope['verified_assets'] ?? null) ? $scope['verified_assets'] : [],
             'reference_images' => \is_array($scope['reference_images'] ?? null) ? $scope['reference_images'] : [],
@@ -6663,7 +6430,7 @@ class AiSiteAgent extends BaseController
 
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
         $pagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType(
-            $state['scope']['pagebuilder_pages_by_type'] ?? []
+            $state['scope']['materialized_pages_by_type'] ?? []
         );
         if ($requestedPageType === '' && $requestedPageId > 0) {
             foreach ($pagesByType as $pageType => $pageData) {
@@ -6675,7 +6442,7 @@ class AiSiteAgent extends BaseController
         }
 
         $virtualPages = $this->scopeCompatibilityService->normalizeVirtualPagesByType(
-            $state['scope']['virtual_pages_by_type'] ?? [],
+            $this->planJsonPages(\is_array($state['scope'] ?? null) ? $state['scope'] : []),
             $this->scopeCompatibilityService->resolveScopedPageTypes(\is_array($state['scope'] ?? null) ? $state['scope'] : [])
         );
         $previewPageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
@@ -6721,7 +6488,7 @@ class AiSiteAgent extends BaseController
         }
 
         $pagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType(
-            $previewState['pagebuilder_pages_by_type'] ?? []
+            $previewState['materialized_pages_by_type'] ?? []
         );
         if ($requestedPageType === '' && $requestedPageId > 0) {
             foreach ($pagesByType as $pageType => $pageData) {
@@ -6736,7 +6503,7 @@ class AiSiteAgent extends BaseController
             \is_array($previewState['page_types'] ?? null) ? $previewState['page_types'] : []
         );
         $virtualPages = $this->scopeCompatibilityService->normalizeVirtualPagesByType(
-            $previewState['virtual_pages_by_type'] ?? [],
+            \is_array($previewState['plan_json_pages'] ?? null) ? $previewState['plan_json_pages'] : [],
             $pageTypes
         );
         $previewPageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
@@ -6790,7 +6557,7 @@ class AiSiteAgent extends BaseController
         if ($previewPageType !== '' && \is_array($virtualPagesByType[$previewPageType] ?? null)) {
             $selectedVirtualPages[$previewPageType] = $virtualPagesByType[$previewPageType];
         }
-        $selectedVirtualPages = $this->htmlBlockNodesBuildService->stripServerOnlyVirtualPages($selectedVirtualPages);
+        $selectedVirtualPages = $this->htmlBlocksBuildService->stripServerOnlyVirtualPages($selectedVirtualPages);
         $minimalPagesByType = [];
         foreach ($pagesByType as $pageType => $pageData) {
             if (!\is_string($pageType) || !\is_array($pageData)) {
@@ -6807,8 +6574,7 @@ class AiSiteAgent extends BaseController
             ? $this->visualUrlService->resolveVirtualUrls($session->getPublicId(), $previewPageType, $virtualThemeId)
             : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
         $prePublishVisualUrls = $this->normalizeAiSiteVisualUrlsToLocalBase($prePublishVisualUrls, [
-            'scope' => $scope,
-            'virtual_pages_by_type' => $virtualPagesByType,
+            'plan_json_pages' => $virtualPagesByType,
             'preview_page_type' => $previewPageType,
         ]);
         $resolvedUrls = $this->shouldUseWorkspacePreviewUrls($session, $workspaceTrack, $previewPageType, $previewPageId)
@@ -6818,8 +6584,7 @@ class AiSiteAgent extends BaseController
                     ? $this->normalizeAiSiteVisualUrlsToLocalBase(
                         $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId),
                         [
-                            'scope' => $scope,
-                            'virtual_pages_by_type' => $virtualPagesByType,
+                            'plan_json_pages' => $virtualPagesByType,
                             'preview_page_type' => $previewPageType,
                         ]
                     )
@@ -6832,8 +6597,8 @@ class AiSiteAgent extends BaseController
             'preview_full_url' => (string)($resolvedUrls['preview_full_url'] ?? ''),
             'visual_preview_url' => (string)($resolvedUrls['visual_preview_url'] ?? ''),
             'visual_edit_url' => (string)($resolvedUrls['visual_edit_url'] ?? ''),
-            'pagebuilder_pages_by_type' => $minimalPagesByType,
-            'virtual_pages_by_type' => $selectedVirtualPages,
+            'materialized_pages_by_type' => $minimalPagesByType,
+            'plan_json_pages' => $selectedVirtualPages,
         ];
     }
 
@@ -7046,7 +6811,7 @@ class AiSiteAgent extends BaseController
             $state['can_publish'] = false;
         }
         $buildAlreadyComplete = $completionGatePassed;
-        $virtualPages = \is_array($state['virtual_pages_by_type']) ? $state['virtual_pages_by_type'] : [];
+        $virtualPages = \is_array($state['plan_json_pages'] ?? null) ? $state['plan_json_pages'] : [];
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $checkItems = [
             [
@@ -7109,7 +6874,12 @@ class AiSiteAgent extends BaseController
             ],
             'detail' => $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness),
         ];
-        $scope = $this->refreshScopeQualityContractsForPublishGate($scope);
+        $refreshedScope = $this->refreshScopeQualityContractsForPublishGate($scope);
+        if ($refreshedScope !== $scope) {
+            $this->sessionService->replaceScope($session->getId(), $adminId, $refreshedScope);
+            $state['scope'] = $refreshedScope;
+            $scope = $refreshedScope;
+        }
         $qualityGate = ObjectManager::getInstance(AiSiteQualityGateService::class);
         $qualityReport = $this->normalizePublishQualityReport(
             $qualityGate->inspectScope($scope),
@@ -7468,7 +7238,7 @@ class AiSiteAgent extends BaseController
     ): ?array {
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN, ['plan_json'])
+            $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN, [])
         );
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         $planJson = $this->planJsonStateService()->normalizePlanJson($planJson);
@@ -7504,7 +7274,7 @@ class AiSiteAgent extends BaseController
     private function isWorkspaceStreamOperationActive(array $state): bool
     {
         $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
-        $status = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+        $status = \strtolower(\trim((string)($activeOperation['queue_status'] ?? '')));
 
         return \in_array($status, ['queued', 'running'], true);
     }
@@ -7515,7 +7285,7 @@ class AiSiteAgent extends BaseController
     private function isWorkspaceStreamOperationTerminal(array $state): bool
     {
         $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
-        $status = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+        $status = \strtolower(\trim((string)($activeOperation['queue_status'] ?? '')));
 
         if (\in_array($status, ['stop', 'stopped'], true)) {
             return true;
@@ -7532,7 +7302,7 @@ class AiSiteAgent extends BaseController
     {
         $payload = $this->buildWorkspaceStreamStatePayload($state);
         $activeOperation = \is_array($payload['active_operation'] ?? null) ? $payload['active_operation'] : [];
-        $status = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+        $status = \strtolower(\trim((string)($activeOperation['queue_status'] ?? '')));
         $message = \trim((string)($activeOperation['message'] ?? ''));
         if ($message === '') {
             $message = match ($status) {
@@ -7566,7 +7336,7 @@ class AiSiteAgent extends BaseController
         if (\trim((string)($activeOperation['operation'] ?? '')) !== 'plan') {
             return;
         }
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         $progressPercent = (int)($activeOperation['progress_percent'] ?? 0);
         $allowResumeStuckRunning = ($activeStatus === 'running' && $progressPercent <= 0);
         // Comment removed.
@@ -7583,7 +7353,7 @@ class AiSiteAgent extends BaseController
                     $fresh,
                     $adminId,
                     [
-                        'status' => 'queued',
+                        'queue_status' => 'queued',
                         'message' => $schedulerWaitMessage,
                         'progress_percent' => 0,
                     ],
@@ -7967,7 +7737,7 @@ class AiSiteAgent extends BaseController
                     ? $artifacts['plan_json']
                     : (\is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [])
             );
-            $planJson['confirmed'] = 0;
+            $planJson = (new AiSitePlanJsonStateService((int)$fresh->getId()))->setConfirmed($planJson, false);
             $retryablePlanFailures = \is_array($artifacts['retryable_ai_failures'] ?? null)
                 ? \array_values(\array_filter($artifacts['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
                 : [];
@@ -8012,9 +7782,9 @@ class AiSiteAgent extends BaseController
             } else {
                 $scopePatchPersist['plan_missing_page_types'] = [];
             }
-            $planJsonDraftPatch = $this->PlanJsonDraftScopePatch(\array_replace($scope, $scopePatchPersist));
-            if ($planJsonDraftPatch !== []) {
-                $scopePatchPersist = \array_replace($scopePatchPersist, $planJsonDraftPatch);
+            $planJsonValidationPatch = $this->PlanJsonPageValidationScopePatch(\array_replace($scope, $scopePatchPersist));
+            if ($planJsonValidationPatch !== []) {
+                $scopePatchPersist = \array_replace($scopePatchPersist, $planJsonValidationPatch);
             }
             $scopeWithFailures = $this->planJsonTaskService->replaceRetryableAiFailures(
                 \array_replace($scope, $scopePatchPersist),
@@ -8060,7 +7830,7 @@ class AiSiteAgent extends BaseController
                     $fresh,
                     $adminId,
                     [
-                        'status' => 'error',
+                        'queue_status' => 'error',
                         'message' => (string)__('Operation completed.'),
                         'retry_allowed' => 1,
                         'failure_mode' => 'plan_failed',
@@ -8073,7 +7843,7 @@ class AiSiteAgent extends BaseController
             $this->updateActiveOperation(
                 $fresh,
                 $adminId,
-                ['status' => 'done', 'message' => (string)__('Plan generated.')],
+                ['queue_status' => 'done', 'message' => (string)__('Plan generated.')],
                 AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
             );
             $this->appendWorkspaceEvent(
@@ -8131,7 +7901,7 @@ class AiSiteAgent extends BaseController
             $this->updateActiveOperation(
                 $fresh,
                 $adminId,
-                ['status' => 'error', 'message' => $throwable->getMessage()],
+                ['queue_status' => 'error', 'message' => $throwable->getMessage()],
                 AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
             );
             $this->appendWorkspaceEvent(
@@ -8176,14 +7946,14 @@ class AiSiteAgent extends BaseController
             return;
         }
 
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
-        $schedulerWaitMessage = (string)__('Waiting for plan_json block node work to finish.');
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
+        $schedulerWaitMessage = (string)__('Waiting for plan_json block work to finish.');
         if ($activeStatus !== 'queued' || \trim((string)($activeOperation['message'] ?? '')) !== $schedulerWaitMessage) {
             $this->updateActiveOperation(
                 $fresh,
                 $adminId,
                 [
-                    'status' => 'queued',
+                    'queue_status' => 'queued',
                     'message' => $schedulerWaitMessage,
                     'progress_percent' => 0,
                 ],
@@ -8435,6 +8205,9 @@ class AiSiteAgent extends BaseController
             $op = \trim((string)($active['operation'] ?? ''));
             $tok = \trim((string)($active['execution_token'] ?? ''));
             $status = \trim((string)($active['status'] ?? ''));
+            if ($status === '') {
+                $status = \trim((string)($active['queue_status'] ?? ''));
+            }
 
             if ($op !== $operation || !$this->executionTokenMatches($tok, $executionToken)) {
                 if ($operation !== 'plan') {
@@ -8476,6 +8249,7 @@ class AiSiteAgent extends BaseController
 
             $scope = $this->writeActiveOperationStateToScope($scope, \array_replace($active, [
                 'status' => 'running',
+                'queue_status' => 'running',
                 'claimed_by' => $claimSource,
                 'claimed_at' => \date('Y-m-d H:i:s'),
                 'message' => (string)__('Operation completed.'),
@@ -8728,7 +8502,7 @@ class AiSiteAgent extends BaseController
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
-        $status = \trim((string)($activeOperation['status'] ?? ''));
+        $status = \trim((string)($activeOperation['queue_status'] ?? ''));
         if ($operation === '') {
             $this->sendSseContractError($sse, 'OPERATION_FAILED', (string)__('Operation failed.'));
             $sse->complete(['success' => false]);
@@ -9098,7 +8872,7 @@ class AiSiteAgent extends BaseController
             ]);
         } catch (\Throwable $throwable) {
             $failedStatus = $operation === 'publish' ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
-            $this->updateActiveOperation($session, $adminId, ['status' => 'error', 'message' => $throwable->getMessage()], $failedStatus, $operation === 'publish' ? AiSiteAgentSession::PUBLISH_STATUS_FAILED : null);
+            $this->updateActiveOperation($session, $adminId, ['queue_status' => 'error', 'message' => $throwable->getMessage()], $failedStatus, $operation === 'publish' ? AiSiteAgentSession::PUBLISH_STATUS_FAILED : null);
             $httpCode = $this->inferThrowableHttpCode($throwable);
             $sse->sendError($throwable->getMessage(), $httpCode);
             if ($httpCode === 402) {
@@ -9162,7 +8936,7 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
         );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        $status = \trim((string)($activeOperation['status'] ?? ''));
+        $status = \trim((string)($activeOperation['queue_status'] ?? ''));
         $message = \trim((string)($activeOperation['message'] ?? ''));
 
         if ($status === 'error') {
@@ -9410,7 +9184,7 @@ class AiSiteAgent extends BaseController
             $activeOperation = \array_replace($activeOperation, [
                 'operation' => $operation,
                 'execution_token' => $operationToken,
-                'status' => 'done',
+                'queue_status' => 'done',
                 'queue_id' => (int)($queueRow['queue_id'] ?? $queueId),
                 'message' => $completeMessage,
                 'updated_at' => \date('Y-m-d H:i:s'),
@@ -9428,7 +9202,7 @@ class AiSiteAgent extends BaseController
                 $activeOperation = $stateActiveOperation;
             }
         }
-        $status = \trim((string)($activeOperation['status'] ?? ''));
+        $status = \trim((string)($activeOperation['queue_status'] ?? ''));
 
         $activeInProgress = \in_array($status, ['pending', 'queued', 'running', 'processing'], true);
         $queueInProgress = $this->isObservedQueueInProgress($queueRow);
@@ -9618,7 +9392,7 @@ class AiSiteAgent extends BaseController
             return [$fresh, $scope, $activeOperation, $queueRow, $queueStatus];
         }
 
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         if (
             \in_array($activeStatus, ['pending', 'queued', 'running', 'processing'], true)
             || !\in_array($queueStatus, ['pending', 'queued', 'running', 'processing'], true)
@@ -9670,7 +9444,7 @@ class AiSiteAgent extends BaseController
             return false;
         }
 
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         if ($this->isObservedQueueTerminal($queueRow)) {
             return false;
         }
@@ -9939,9 +9713,7 @@ class AiSiteAgent extends BaseController
         if ($message === '') {
             $message = 'Linked queue process ended without a terminal queue status; retry is allowed.';
         }
-        $queueInfo['status'] = 'cancelled';
         $queueInfo['queue_status'] = 'cancelled';
-        $queueInfo['job_status'] = 'cancelled';
         $queueInfo['semantic_status'] = 'cancelled';
         $queueInfo['queue_terminal_recovered'] = 1;
         $queueInfo['retry_allowed'] = 1;
@@ -10006,9 +9778,9 @@ class AiSiteAgent extends BaseController
         if (
             (
                 \trim((string)($activeOperation['operation'] ?? '')) === 'build'
-                && \trim((string)($activeOperation['status'] ?? '')) === 'cancelled'
+                && \trim((string)($activeOperation['queue_status'] ?? '')) === 'cancelled'
             )
-            || \trim((string)($activeBuildOperation['status'] ?? '')) === 'cancelled'
+            || \trim((string)($activeBuildOperation['queue_status'] ?? '')) === 'cancelled'
         ) {
             return $result;
         }
@@ -10027,7 +9799,7 @@ class AiSiteAgent extends BaseController
             if ((int)($freshTaskSummary['total'] ?? 0) > 0) {
                 $taskSummary = $freshTaskSummary;
                 $result['task_summary'] = $freshTaskSummary;
-                foreach (['plan_projection', 'content_manifest'] as $scopeKey) {
+                foreach (['content_manifest'] as $scopeKey) {
                     if (\array_key_exists($scopeKey, $freshScope)) {
                         $normalized[$scopeKey] = $freshScope[$scopeKey];
                     }
@@ -10042,16 +9814,16 @@ class AiSiteAgent extends BaseController
                     'reason' => 'failed_plan_json_tasks',
                     'queue_id' => $queueId,
                     'queue_status' => $queueStatus,
-                    'message' => 'Build queue reached terminal state while plan_json block node work are still incomplete.',
+                    'message' => 'Build queue reached terminal state while plan_json block work is still incomplete.',
                     'task_summary' => $taskSummary,
                 ];
                 $failedOperation = \array_replace(
                     \is_array($freshScope['active_operation'] ?? null) ? $freshScope['active_operation'] : $activeOperation,
                     [
                         'operation' => 'build',
-                        'status' => 'error',
+                        'queue_status' => 'error',
                         'message' => (string)__(
-                            'Build queue cannot continue: terminal queue state %{1} with %{2} incomplete plan_json block node work.',
+                            'Build queue cannot continue: terminal queue state %{1} with %{2} incomplete plan_json block work.',
                             [$queueStatus !== '' ? $queueStatus : 'unknown', $incompletePlanJsonTasks]
                         ),
                         'progress_percent' => 100,
@@ -10093,7 +9865,7 @@ class AiSiteAgent extends BaseController
                         \is_array($freshScope['active_operation'] ?? null) ? $freshScope['active_operation'] : $activeOperation,
                         [
                             'operation' => 'build',
-                            'status' => 'done',
+                            'queue_status' => 'done',
                             'message' => (string)__('Virtual theme generated'),
                             'progress_percent' => 100,
                             'queue_waiting_for_scheduler' => false,
@@ -10166,7 +9938,7 @@ class AiSiteAgent extends BaseController
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'operation_progress',
-            (string)__('Detected unfinished plan_json block node work; build queue has been resumed.'),
+            (string)__('Detected unfinished plan_json block work; build queue has been resumed.'),
             [
                 'operation' => 'build',
                 'queue_id' => $queueId,
@@ -10294,7 +10066,7 @@ class AiSiteAgent extends BaseController
             'execution_token' => $executionToken,
             'queue_id' => $queueId,
             'status' => $status,
-            'message' => (string)__('Detected unfinished plan_json block node work; resuming the build queue from remaining tasks.'),
+            'message' => (string)__('Detected unfinished plan_json block work; resuming the build queue from remaining tasks.'),
             'updated_at' => \date('Y-m-d H:i:s'),
             'details' => \array_replace($details, [
                 'auto_resume_reason' => $reason,
@@ -10313,7 +10085,7 @@ class AiSiteAgent extends BaseController
         // Comment removed.
         // Comment removed.
         $activeName = \trim((string)($activeOperation['operation'] ?? ''));
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         return $activeName === $operation && \in_array($activeStatus, ['queued', 'running', 'done', 'error', 'stop', 'cancelled', 'canceled'], true);
     }
 
@@ -10452,7 +10224,7 @@ class AiSiteAgent extends BaseController
 
         $summary = $this->planJsonTaskService->summarize($scope);
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
         $aiGenerating = \in_array($queueStatus, ['pending', 'queued', 'running'], true)
             || \in_array($activeStatus, ['queued', 'running'], true);
@@ -11091,7 +10863,7 @@ class AiSiteAgent extends BaseController
             $this->buildWorkspaceState($fresh, $adminId, 80, true),
             $pageType !== '' ? [$pageType] : []
         );
-        $pagesByType = \is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : [];
+        $pagesByType = \is_array($state['materialized_pages_by_type'] ?? null) ? $state['materialized_pages_by_type'] : [];
         $pageRow = \is_array($pagesByType[$pageType] ?? null) ? $pagesByType[$pageType] : [];
 
         return [
@@ -11158,7 +10930,7 @@ class AiSiteAgent extends BaseController
             'build' => [
                 'draft_website_id' => (int)($state['draft_website_id'] ?? 0),
                 'virtual_theme_id' => (int)($state['virtual_theme_id'] ?? 0),
-                'page_types' => \array_values(\array_map('strval', \array_keys(\is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : []))),
+                'page_types' => \array_values(\array_map('strval', \array_keys(\is_array($state['plan_json_pages'] ?? null) ? $state['plan_json_pages'] : []))),
             ],
             'publish' => [
                 'publish_status' => (string)($state['publish_status'] ?? ''),
@@ -11245,8 +11017,8 @@ class AiSiteAgent extends BaseController
      *   virtual_theme_id:int,
      *   website_profile:array<string, mixed>,
      *   draft_website_id:int,
-     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
-     *   virtual_pages_by_type:array<string, array<string, mixed>>,
+     *   materialized_pages_by_type:array<string, array<string, mixed>>,
+     *   plan_json_pages:array<string, array<string, mixed>>,
      *   preview_page_options:list<array<string, mixed>>,
      *   preview_page_id:int,
      *   preview_page_type:string,
@@ -11271,7 +11043,11 @@ class AiSiteAgent extends BaseController
     ): array {
         $startedAt = \microtime(true);
         $normalized = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, $this->scopeCompatibilityService->normalizeStage($session->getStage()))
+            $this->sessionService->loadScopeForStage(
+                $session,
+                $this->scopeCompatibilityService->normalizeStage($session->getStage()),
+                $this->workspaceFastViewArtifactKeys($this->scopeCompatibilityService->normalizeStage($session->getStage()))
+            )
         );
         $referenceImages = $this->resolveReferenceImagesFromScope($normalized);
         $normalized['reference_images'] = $referenceImages;
@@ -11299,11 +11075,6 @@ class AiSiteAgent extends BaseController
             $normalized['asset_manifest'] = $assetManifest;
             $normalized['verified_assets'] = $assetManifestService->extractVerifiedAssets($assetManifest);
         }
-        $normalized['page_type_layouts'] = $this->scopeCompatibilityService->normalizePageTypeLayouts(
-            $normalized['page_type_layouts'] ?? [],
-            $normalized['page_types']
-        );
-
         $draftWebsiteId = \max(
             (int)($normalized['draft_website_id'] ?? 0),
             (int)($normalized['website_id'] ?? 0),
@@ -11324,28 +11095,21 @@ class AiSiteAgent extends BaseController
         }
 
         $pagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType(
-            $normalized['pagebuilder_pages_by_type'] ?? []
+            $normalized['materialized_pages_by_type'] ?? []
         );
-        $normalized['pagebuilder_pages_by_type'] = $pagesByType;
+        $normalized['materialized_pages_by_type'] = $pagesByType;
         $normalized['preview_page_options'] = $this->scopeCompatibilityService->buildPreviewPageOptions($pagesByType);
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts(
-            $normalized['page_type_layouts'] ?? [],
-            $normalized['page_types']
-        );
-        $normalized['page_type_layouts'] = $pageTypeLayouts;
 
         $virtualPagesStartedAt = \microtime(true);
-        $virtualPagesByType = $this->scopeCompatibilityService->buildVirtualPagesByType(
-            $normalized['page_types'],
-            $normalized,
-            false
-        );
+        $planJson = \is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : [];
+        $virtualPagesByType = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
         $virtualPagesByType = $this->decorateVirtualPagesWithUrls($session->getPublicId(), $virtualThemeId, $virtualPagesByType);
         $this->logHotPathStage('build_workspace_state.virtual_pages', $virtualPagesStartedAt, [
             'public_id' => $session->getPublicId(),
             'page_type_count' => \count($normalized['page_types']),
         ]);
-        $normalized['virtual_pages_by_type'] = $virtualPagesByType;
+        $planJson['pages'] = $virtualPagesByType;
+        $normalized['plan_json'] = $planJson;
         $normalized = $this->planJsonTaskService->reconcileGeneratedArtifactsWithTaskState($normalized);
         $taskSummaryStartedAt = \microtime(true);
         $taskSummary = $this->planJsonTaskService->summarize($normalized);
@@ -11358,9 +11122,7 @@ class AiSiteAgent extends BaseController
         if ($pendingGenerationPageTypes === []) {
             $pendingGenerationPageTypes = $this->resolvePendingGenerationPageTypes(
                 $normalized['page_types'],
-                $workspaceTrack,
                 $pagesByType,
-                $pageTypeLayouts,
                 $virtualPagesByType
             );
         }
@@ -11377,7 +11139,7 @@ class AiSiteAgent extends BaseController
             : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
         $prePublishVisualUrls = $this->normalizeAiSiteVisualUrlsToLocalBase($prePublishVisualUrls, [
             'scope' => $normalized,
-            'virtual_pages_by_type' => $virtualPagesByType,
+            'plan_json_pages' => $virtualPagesByType,
             'preview_page_type' => $previewPageType,
         ]);
         $normalized['pre_publish_visual_urls'] = $prePublishVisualUrls;
@@ -11391,7 +11153,7 @@ class AiSiteAgent extends BaseController
                 $this->visualUrlService->resolveUrls((int)$normalized['preview_page_id'], $virtualThemeId),
                 [
                     'scope' => $normalized,
-                    'virtual_pages_by_type' => $virtualPagesByType,
+                    'plan_json_pages' => $virtualPagesByType,
                     'preview_page_type' => $previewPageType,
                 ]
             );
@@ -11542,10 +11304,11 @@ class AiSiteAgent extends BaseController
             $taskSummary = \is_array($completionGateForWorkspace['summary'] ?? null)
                 ? $completionGateForWorkspace['summary']
                 : $taskSummary;
+            $pendingGenerationPageTypes = [];
         $doneMessage = (string)__('Operation completed.');
             $buildDoneState = [
                 'operation' => 'build',
-                'status' => 'done',
+                'queue_status' => 'done',
                 'message' => $doneMessage,
                 'updated_at' => $now,
                 'finished_at' => $now,
@@ -11568,10 +11331,7 @@ class AiSiteAgent extends BaseController
             $normalized['active_operation'] = $activeOperation;
             $normalized['active_operations'] = $activeOperations;
             $buildQueueInfo = \array_replace(\is_array($buildQueueInfo) ? $buildQueueInfo : [], [
-                'status' => 'done',
                 'queue_status' => 'done',
-                'state' => 'done',
-                'job_status' => 'done',
                 'message' => $doneMessage,
                 'process' => $doneMessage,
             ]);
@@ -11597,11 +11357,11 @@ class AiSiteAgent extends BaseController
         $taskReady = $this->taskSummaryIndicatesCompleted($taskSummary);
         $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
             || (string)($normalized['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
-        $canPublish = $published || ($completionGateForWorkspacePassed && $taskReady && $pendingGenerationPageTypes === [] && $titleOk);
+        $canPublish = $published || ($completionGateForWorkspacePassed && $taskReady && $titleOk);
         if ($hasPublishBlockingRetryableAiFailures) {
             $canPublish = false;
         }
-        $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeOperationStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
         if (
             \in_array($activeOperationStatus, ['queued', 'running'], true)
@@ -11609,7 +11369,7 @@ class AiSiteAgent extends BaseController
             && $this->isActiveOperationStale($activeOperation)
         ) {
             $activeOperation = \array_replace($activeOperation, [
-                'status' => 'cancelled',
+                'queue_status' => 'cancelled',
                     'message' => (string)__('Operation completed.'),
                 'updated_at' => \date('Y-m-d H:i:s'),
                 'details' => \array_replace(
@@ -11631,10 +11391,10 @@ class AiSiteAgent extends BaseController
                 )
             )
         ) {
-            $activeOperation['status'] = 'done';
+            $activeOperation['queue_status'] = 'done';
             $normalized['active_operation'] = $activeOperation;
         }
-        $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeOperationStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
         $publishBlockingBuildFailure = $this->resolveLatestPublishBlockingAiBuildFailure($normalized, $activeOperation, $buildQueueInfo);
         $publishBlockingAiRunning = $this->hasPublishBlockingAiBuildRunningState($normalized, $activeOperation, $buildQueueInfo);
@@ -11677,22 +11437,20 @@ class AiSiteAgent extends BaseController
             ]);
         }
 
-        $clientVirtualPagesByType = $this->htmlBlockNodesBuildService->stripServerOnlyVirtualPages($virtualPagesByType);
         $clientScope = $normalized;
-        $clientScope['virtual_pages_by_type'] = $clientVirtualPagesByType;
         $clientScope['reference_images'] = $referenceImages;
-        unset($clientScope['plan_markdown']);
+        unset(
+            $clientScope['plan_markdown'],
+            $clientScope['plan_projection'],
+            $clientScope['pagebuilder_pages_by_type'],
+            $clientScope['page_type_layouts'],
+            $clientScope['virtual_pages_by_type'],
+            $clientScope['materialized_pages_by_type']
+        );
         $designDirectionState = $this->designDirectionService()->buildWorkspaceDirectionState($normalized);
+        $designDirectionStateForView = $this->pruneWorkspaceDesignDirectionStateForView($designDirectionState);
         unset($clientScope['_ai_generated_shared_components']);
-        if (\is_array($clientScope['shared_components'] ?? null)) {
-            foreach ($clientScope['shared_components'] as $region => $component) {
-                if (!\is_array($component)) {
-                    continue;
-                }
-                unset($component['phtml']);
-                $clientScope['shared_components'][$region] = $component;
-            }
-        }
+        unset($clientScope['shared_components']);
 
         $result = [
             'public_id' => $session->getPublicId(),
@@ -11713,20 +11471,16 @@ class AiSiteAgent extends BaseController
             'website_id' => $draftWebsiteId,
             'virtual_theme_id' => $virtualThemeId,
             'website_profile' => \is_array($normalized['website_profile']) ? $normalized['website_profile'] : [],
-            'design_direction' => $designDirectionState,
-            'design_direction_snapshot' => \is_array($designDirectionState['snapshot'] ?? null) ? $designDirectionState['snapshot'] : [],
+            'design_direction' => $designDirectionStateForView,
+            'design_direction_snapshot' => \is_array($designDirectionStateForView['snapshot'] ?? null) ? $designDirectionStateForView['snapshot'] : [],
             'design_direction_match_reason' => (string)($designDirectionState['match_reason'] ?? ''),
             'design_direction_locked' => !empty($designDirectionState['locked']) ? 1 : 0,
             'design_direction_code' => (string)($designDirectionState['code'] ?? ''),
             'draft_website_id' => $draftWebsiteId,
-            'pagebuilder_pages_by_type' => $pagesByType,
-            'page_type_layouts' => \is_array($normalized['page_type_layouts'] ?? null) ? $normalized['page_type_layouts'] : [],
-            'virtual_pages_by_type' => $clientVirtualPagesByType,
             'pending_generation_page_types' => $pendingGenerationPageTypes,
             'plan_json_task_summary' => $taskSummary,
             'plan' => [
                 'json' => \is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : [],
-                'projection' => \is_array($normalized['plan_projection'] ?? null) ? $normalized['plan_projection'] : [],
             ],
             'plan_json' => \is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : [],
             'stage1_validation_report' => \is_array($normalized['stage1_validation_report'] ?? null) ? $normalized['stage1_validation_report'] : [],
@@ -11734,7 +11488,6 @@ class AiSiteAgent extends BaseController
             'stage1_generation_attempts' => \is_array($normalized['stage1_generation_attempts'] ?? null) ? $normalized['stage1_generation_attempts'] : [],
             'stage1_visual_qa_report' => \is_array($normalized['stage1_visual_qa_report'] ?? null) ? $normalized['stage1_visual_qa_report'] : [],
             'has_stage_one_plan' => $hasStageOnePlan,
-            'plan_projection' => \is_array($normalized['plan_projection'] ?? null) ? $normalized['plan_projection'] : [],
             'content_manifest' => \is_array($normalized['content_manifest'] ?? null) ? $normalized['content_manifest'] : [],
             'plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/plan-sse'),
             'refine_plan_page_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-refine-plan-page'),
@@ -11920,7 +11673,6 @@ class AiSiteAgent extends BaseController
             'plan_json_task_summary' => \is_array($state['plan_json_task_summary'] ?? null) ? $state['plan_json_task_summary'] : [],
             'build_summary' => $this->buildSummaryWithoutTaskSummary($state),
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
-            'plan_projection' => \is_array($state['plan_projection'] ?? null) ? $state['plan_projection'] : [],
             'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
             'build_queue_info' => \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null,
         ], $this->buildWorkspaceStatusEnvelope($state, 'confirm'));
@@ -11968,8 +11720,6 @@ class AiSiteAgent extends BaseController
             'visual_preview_url' => (string)($state['visual_preview_url'] ?? ''),
             'visual_edit_url' => (string)($state['visual_edit_url'] ?? ''),
             'pre_publish_visual_urls' => \is_array($state['pre_publish_visual_urls'] ?? null) ? $state['pre_publish_visual_urls'] : [],
-            'page_type_layouts' => $this->pruneWorkspacePageTypeLayoutsForPayload($state),
-            'pagebuilder_pages_by_type' => \is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : [],
             'preview_page_options' => \is_array($state['preview_page_options'] ?? null) ? $state['preview_page_options'] : [],
             'active_operation' => \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [],
             'confirmed_plan_signature' => (string)($state['confirmed_plan_signature'] ?? ''),
@@ -11982,7 +11732,6 @@ class AiSiteAgent extends BaseController
             'plan_json_task_summary' => \is_array($state['plan_json_task_summary'] ?? null) ? $state['plan_json_task_summary'] : [],
             'build_summary' => $this->buildSummaryWithoutTaskSummary($state),
             'pending_generation_page_types' => \is_array($state['pending_generation_page_types'] ?? null) ? $state['pending_generation_page_types'] : [],
-            'plan_projection' => \is_array($state['plan_projection'] ?? null) ? $state['plan_projection'] : [],
             'website_profile' => \is_array($state['website_profile'] ?? null) ? $state['website_profile'] : [],
             'asset_manifest' => \is_array($state['asset_manifest'] ?? null) ? $state['asset_manifest'] : ['version' => 1, 'slots' => []],
             'verified_assets' => \is_array($state['verified_assets'] ?? null) ? $state['verified_assets'] : [],
@@ -11994,23 +11743,6 @@ class AiSiteAgent extends BaseController
         $payload['response_operation'] = $operation;
 
         return $payload;
-    }
-
-    /**
-     * @param array<string, mixed> $state
-     * @return array<string, mixed>
-     */
-    private function pruneWorkspacePageTypeLayoutsForPayload(array $state): array
-    {
-        if (!\is_array($state['page_type_layouts'] ?? null)) {
-            return [];
-        }
-
-        $pruned = $this->workspaceStateHelperService()->pruneStateForView([
-            'page_type_layouts' => $state['page_type_layouts'],
-        ]);
-
-        return \is_array($pruned['page_type_layouts'] ?? null) ? $pruned['page_type_layouts'] : [];
     }
 
     /**
@@ -12038,7 +11770,6 @@ class AiSiteAgent extends BaseController
      */
     private function buildWorkspaceSseStatePayload(array $state, array $pageTypes, bool $workspaceStream): array
     {
-        $resolvedPageTypes = $this->normalizeWorkspaceSsePageTypes($pageTypes, (string)($state['preview_page_type'] ?? ''));
         $payload = \array_replace([
             'public_id' => (string)($state['public_id'] ?? ''),
             'stage' => (string)($state['stage'] ?? ''),
@@ -12055,9 +11786,7 @@ class AiSiteAgent extends BaseController
             'virtual_theme_id' => (int)($state['virtual_theme_id'] ?? 0),
             'draft_website_id' => (int)($state['draft_website_id'] ?? 0),
             'has_stage_one_plan' => !empty($state['has_stage_one_plan']),
-            'plan_projection' => \is_array($state['plan_projection'] ?? null) ? $state['plan_projection'] : [],
             'content_manifest' => \is_array($state['content_manifest'] ?? null) ? $state['content_manifest'] : [],
-            'pagebuilder_pages_by_type' => \is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : [],
             'preview_page_options' => \is_array($state['preview_page_options'] ?? null) ? $state['preview_page_options'] : [],
             'preview_page_id' => (int)($state['preview_page_id'] ?? 0),
             'preview_page_type' => (string)($state['preview_page_type'] ?? ''),
@@ -12065,7 +11794,6 @@ class AiSiteAgent extends BaseController
             'visual_preview_url' => (string)($state['visual_preview_url'] ?? ''),
             'visual_edit_url' => (string)($state['visual_edit_url'] ?? ''),
             'pre_publish_visual_urls' => \is_array($state['pre_publish_visual_urls'] ?? null) ? $state['pre_publish_visual_urls'] : [],
-            'page_type_layouts' => $this->pruneWorkspacePageTypeLayoutsForPayload($state),
             'active_operation' => \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [],
             'plan_queue_info' => \is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null,
             'build_queue_info' => \is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null,
@@ -12091,10 +11819,6 @@ class AiSiteAgent extends BaseController
             $payload['events'] = $this->pruneWorkspaceEventsForSse(\is_array($state['events'] ?? null) ? $state['events'] : [], 6);
             $payload['top_logs'] = $this->pruneWorkspaceEventsForSse(\is_array($state['top_logs'] ?? null) ? $state['top_logs'] : [], 6);
             return $payload;
-        }
-
-        if ($resolvedPageTypes !== []) {
-            $payload['virtual_pages_by_type'] = $this->selectWorkspaceVirtualPagesForSse($state, $resolvedPageTypes);
         }
 
         return $payload;
@@ -12339,7 +12063,7 @@ class AiSiteAgent extends BaseController
             foreach (['target_scope', 'block_id', 'block_key', 'component_code', 'task_key', 'section_code'] as $key) {
                 $append($source[$key] ?? null);
             }
-            foreach (['target_scopes', 'block_keys', 'component_codes', 'task_keys', 'section_codes', 'selected_block_nodes', 'selected_tasks', 'targets'] as $key) {
+            foreach (['target_scopes', 'block_keys', 'component_codes', 'task_keys', 'section_codes', 'selected_blocks', 'selected_tasks', 'targets'] as $key) {
                 $append($source[$key] ?? null);
             }
         }
@@ -12530,10 +12254,7 @@ class AiSiteAgent extends BaseController
     {
         unset($queueInfo['snapshot']);
         return \strtolower(\trim((string)(
-            $queueInfo['status']
-            ?? $queueInfo['queue_status']
-            ?? $queueInfo['state']
-            ?? $queueInfo['job_status']
+            $queueInfo['queue_status']
             ?? ''
         )));
     }
@@ -12724,6 +12445,73 @@ class AiSiteAgent extends BaseController
     }
 
     /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function pruneWorkspaceDesignDirectionStateForView(array $state): array
+    {
+        $result = [];
+        foreach (['mode', 'code', 'match_reason'] as $key) {
+            if (\array_key_exists($key, $state) && !\is_array($state[$key]) && !\is_object($state[$key])) {
+                $result[$key] = \is_string($state[$key]) ? $this->limitWorkspaceViewText((string)$state[$key], 600) : $state[$key];
+            }
+        }
+        if (\array_key_exists('locked', $state)) {
+            $result['locked'] = !empty($state['locked']) ? 1 : 0;
+        }
+        if (\is_array($state['snapshot'] ?? null)) {
+            $result['snapshot'] = $this->pruneWorkspaceDesignDirectionSnapshotForView($state['snapshot']);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     * @return array<string, mixed>
+     */
+    private function pruneWorkspaceDesignDirectionSnapshotForView(array $snapshot): array
+    {
+        $result = [];
+        foreach (['code', 'name', 'description', 'source_type', 'version'] as $key) {
+            if (\array_key_exists($key, $snapshot) && !\is_array($snapshot[$key]) && !\is_object($snapshot[$key])) {
+                $limit = $key === 'description' ? 1000 : 240;
+                $result[$key] = \is_string($snapshot[$key]) ? $this->limitWorkspaceViewText((string)$snapshot[$key], $limit) : $snapshot[$key];
+            }
+        }
+        foreach (['industry_tags', 'match_keywords', 'visual_keywords'] as $key) {
+            if (!\is_array($snapshot[$key] ?? null)) {
+                continue;
+            }
+            $items = [];
+            foreach ($snapshot[$key] as $item) {
+                if (\count($items) >= 12) {
+                    break;
+                }
+                if (!\is_array($item) && !\is_object($item)) {
+                    $items[] = $this->limitWorkspaceViewText((string)$item, 120);
+                }
+            }
+            $result[$key] = $items;
+            if (\count($snapshot[$key]) > \count($items)) {
+                $result[$key . '_truncated'] = \count($snapshot[$key]) - \count($items);
+            }
+        }
+        $result['slimmed_for_view'] = true;
+
+        return $result;
+    }
+
+    private function limitWorkspaceViewText(string $text, int $limit): string
+    {
+        if ($limit <= 0 || \strlen($text) <= $limit) {
+            return $text;
+        }
+
+        return \rtrim(\substr($text, 0, $limit - 3)) . '...';
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
@@ -12735,13 +12523,12 @@ class AiSiteAgent extends BaseController
     /**
      * @param list<string> $pageTypes
      * @param array<string, array<string, mixed>> $pagesByType
+     * @param array<string, array<string, mixed>> $virtualPagesByType
      * @return list<string>
      */
     private function resolvePendingGenerationPageTypes(
         array $pageTypes,
-        string $workspaceTrack,
         array $pagesByType,
-        array $pageTypeLayouts,
         array $virtualPagesByType
     ): array
     {
@@ -12750,7 +12537,7 @@ class AiSiteAgent extends BaseController
             if (!\is_string($pageType) || $pageType === '') {
                 continue;
             }
-            if (!$this->isPageTypeGenerationComplete($workspaceTrack, $pageType, $pagesByType, $pageTypeLayouts, $virtualPagesByType)) {
+            if (!$this->isPageTypeGenerationComplete($pageType, $pagesByType, $virtualPagesByType)) {
                 $pending[] = $pageType;
             }
         }
@@ -12837,23 +12624,23 @@ class AiSiteAgent extends BaseController
         }
 
         $allPageTypes = \array_values(\array_unique(\array_merge(
-            \array_keys($expected['page_block_nodes']),
-            \array_keys($actual['page_block_nodes']),
+            \array_keys($expected['page_blocks']),
+            \array_keys($actual['page_blocks']),
             $pageTypes
         )));
         foreach ($allPageTypes as $pageType) {
             $pageType = (string)$pageType;
-            $expectedCount = (int)($expected['page_block_nodes'][$pageType] ?? 0);
-            $actualCount = (int)($actual['page_block_nodes'][$pageType] ?? 0);
+            $expectedCount = (int)($expected['page_blocks'][$pageType] ?? 0);
+            $actualCount = (int)($actual['page_blocks'][$pageType] ?? 0);
             if ($expectedCount !== $actualCount) {
                 $failures[] = \sprintf('page %s expected %d generated content blocks, got %d', $pageType, $expectedCount, $actualCount);
             }
         }
 
-        foreach (\array_unique(\array_merge(\array_keys($expected['shared_block_nodes']), \array_keys($actual['shared_block_nodes']))) as $region) {
+        foreach (\array_unique(\array_merge(\array_keys($expected['shared_blocks']), \array_keys($actual['shared_blocks']))) as $region) {
             $region = (string)$region;
-            $expectedCount = (int)($expected['shared_block_nodes'][$region] ?? 0);
-            $actualCount = (int)($actual['shared_block_nodes'][$region] ?? 0);
+            $expectedCount = (int)($expected['shared_blocks'][$region] ?? 0);
+            $actualCount = (int)($actual['shared_blocks'][$region] ?? 0);
             if ($expectedCount !== $actualCount) {
                 $failures[] = \sprintf('shared %s expected %d materialized blocks, got %d', $region, $expectedCount, $actualCount);
             }
@@ -12870,22 +12657,22 @@ class AiSiteAgent extends BaseController
             'task_summary' => $taskSummary,
             'expected_total' => $expectedTotal,
             'actual_total' => $actualTotal,
-            'expected_page_block_nodes' => $expected['page_block_nodes'],
-            'actual_page_block_nodes' => $actual['page_block_nodes'],
-            'expected_shared_block_nodes' => $expected['shared_block_nodes'],
-            'actual_shared_block_nodes' => $actual['shared_block_nodes'],
+            'expected_page_blocks' => $expected['page_blocks'],
+            'actual_page_blocks' => $actual['page_blocks'],
+            'expected_shared_blocks' => $expected['shared_blocks'],
+            'actual_shared_blocks' => $actual['shared_blocks'],
             'failures' => $failures,
         ];
     }
 
     /**
      * @param array<string, mixed> $taskSummary
-     * @return array{total:int,page_block_nodes:array<string,int>,shared_block_nodes:array<string,int>}
+     * @return array{total:int,page_blocks:array<string,int>,shared_blocks:array<string,int>}
      */
     private function countExpectedStageTwoBlocksFromTaskSummary(array $taskSummary): array
     {
-        $pageBlockNodes = [];
-        $sharedBlockNodes = [];
+        $pageBlocks = [];
+        $sharedBlocks = [];
         foreach (\is_array($taskSummary['groups'] ?? null) ? $taskSummary['groups'] : [] as $group) {
             if (!\is_array($group)) {
                 continue;
@@ -12898,23 +12685,23 @@ class AiSiteAgent extends BaseController
                 if ($taskType === 'page_section') {
                     $pageType = \trim((string)($task['page_type'] ?? $group['page_type'] ?? ''));
                     if ($pageType !== '') {
-                        $pageBlockNodes[$pageType] = (int)($pageBlockNodes[$pageType] ?? 0) + 1;
+                        $pageBlocks[$pageType] = (int)($pageBlocks[$pageType] ?? 0) + 1;
                     }
                     continue;
                 }
                 if ($taskType === 'shared_component') {
                     $region = $this->resolveStageTwoSharedTaskRegion($task);
-                    $sharedBlockNodes[$region] = (int)($sharedBlockNodes[$region] ?? 0) + 1;
+                    $sharedBlocks[$region] = (int)($sharedBlocks[$region] ?? 0) + 1;
                 }
             }
         }
-        \ksort($pageBlockNodes);
-        \ksort($sharedBlockNodes);
+        \ksort($pageBlocks);
+        \ksort($sharedBlocks);
 
         return [
-            'total' => \array_sum($pageBlockNodes) + \array_sum($sharedBlockNodes),
-            'page_block_nodes' => $pageBlockNodes,
-            'shared_block_nodes' => $sharedBlockNodes,
+            'total' => \array_sum($pageBlocks) + \array_sum($sharedBlocks),
+            'page_blocks' => $pageBlocks,
+            'shared_blocks' => $sharedBlocks,
         ];
     }
 
@@ -12944,59 +12731,41 @@ class AiSiteAgent extends BaseController
     /**
      * @param array<string, mixed> $scope
      * @param list<string> $pageTypes
-     * @return array{total:int,page_block_nodes:array<string,int>,shared_block_nodes:array<string,int>}
+     * @return array{total:int,page_blocks:array<string,int>,shared_blocks:array<string,int>}
      */
     private function countActualStageTwoMaterializedBlocks(array $scope, array $pageTypes): array
     {
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
-        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-        $pageBlockNodes = [];
+        $virtualPages = $this->planJsonPages($scope);
+        $pageBlocks = [];
         foreach ($pageTypes as $pageType) {
             $pageType = (string)$pageType;
-            $pageBlockNodes[$pageType] = $this->countGeneratedContentBlocksForPage(
-                \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [],
-                \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : []
-            );
+            $pageBlocks[$pageType] = $this->countGeneratedContentBlocksForPage(\is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : []);
         }
-        $sharedBlockNodes = $this->countGeneratedSharedBlockNodes($scope, $pageTypeLayouts);
-        \ksort($pageBlockNodes);
-        \ksort($sharedBlockNodes);
+        $sharedBlocks = $this->countGeneratedSharedBlocks($scope);
+        \ksort($pageBlocks);
+        \ksort($sharedBlocks);
 
         return [
-            'total' => \array_sum($pageBlockNodes) + \array_sum($sharedBlockNodes),
-            'page_block_nodes' => $pageBlockNodes,
-            'shared_block_nodes' => $sharedBlockNodes,
+            'total' => \array_sum($pageBlocks) + \array_sum($sharedBlocks),
+            'page_blocks' => $pageBlocks,
+            'shared_blocks' => $sharedBlocks,
         ];
     }
 
     /**
-     * @param array<string, mixed> $layout
      * @param array<string, mixed> $virtualPage
      */
-    private function countGeneratedContentBlocksForPage(array $layout, array $virtualPage): int
+    private function countGeneratedContentBlocksForPage(array $virtualPage): int
     {
         $count = 0;
-        foreach (\is_array($layout['content'] ?? null) ? $layout['content'] : [] as $item) {
-            if (!\is_array($item) || !$this->stageTwoGeneratedBlockIsEnabled($item)) {
-                continue;
-            }
-            $component = \trim((string)($item['component'] ?? $item['code'] ?? $item['block_id'] ?? ''));
-            if ($component !== '') {
-                $count++;
-            }
-        }
-        if ($count > 0) {
-            return $count;
-        }
-
-        foreach (\is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [] as $block) {
+        foreach ($this->planJsonDynamicBlocks($virtualPage) as $block) {
             if (!\is_array($block) || !$this->stageTwoGeneratedBlockIsEnabled($block)) {
                 continue;
             }
-            if (AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($block)) {
-                continue;
-            }
-            if (\trim((string)($block['block_id'] ?? $block['component'] ?? $block['code'] ?? '')) !== '') {
+            if (
+                (int)($block['status'] ?? 0) === 1
+                && \trim((string)($block['html'] ?? $block['html_content'] ?? $block['phtml'] ?? '')) !== ''
+            ) {
                 $count++;
             }
         }
@@ -13006,31 +12775,21 @@ class AiSiteAgent extends BaseController
 
     /**
      * @param array<string, mixed> $scope
-     * @param array<string, array<string, mixed>> $pageTypeLayouts
      * @return array<string,int>
      */
-    private function countGeneratedSharedBlockNodes(array $scope, array $pageTypeLayouts): array
+    private function countGeneratedSharedBlocks(array $scope): array
     {
         $shared = [];
-        foreach (\is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [] as $region => $component) {
+        $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null)
+            ? $scope['plan_json']['shared_components']
+            : [];
+        foreach ($sharedComponents as $region => $component) {
             if (!\is_array($component)) {
                 continue;
             }
             if (\trim((string)($component['code'] ?? $component['html'] ?? $component['phtml'] ?? '')) !== '') {
                 $region = \trim((string)$region);
                 $shared[$region !== '' ? $region : 'shared'] = 1;
-            }
-        }
-
-        foreach ($pageTypeLayouts as $layout) {
-            if (!\is_array($layout)) {
-                continue;
-            }
-            foreach (['header', 'footer'] as $region) {
-                $component = \is_array($layout[$region] ?? null) ? $layout[$region] : [];
-                if (\trim((string)($component['component'] ?? $component['code'] ?? '')) !== '') {
-                    $shared[$region] = 1;
-                }
             }
         }
 
@@ -13072,7 +12831,7 @@ class AiSiteAgent extends BaseController
                 $item['blocking'] = true;
                 $item['level'] = 'pass';
                 $item['detail'] = $this->formatStageTwoPublishReadinessDetail($stageTwoReadiness);
-            } elseif ($key === 'plan_json_block_nodes_done' && $stageTwoPassed) {
+            } elseif ($key === 'plan_json_blocks_done' && $stageTwoPassed) {
                 $item['ok'] = true;
                 $item['blocking'] = true;
                 $item['level'] = 'pass';
@@ -13179,14 +12938,11 @@ class AiSiteAgent extends BaseController
 
     /**
      * @param array<string, array<string, mixed>> $pagesByType
-     * @param array<string, array<string, mixed>> $pageTypeLayouts
      * @param array<string, array<string, mixed>> $virtualPagesByType
      */
     private function isPageTypeGenerationComplete(
-        string $workspaceTrack,
         string $pageType,
         array $pagesByType,
-        array $pageTypeLayouts,
         array $virtualPagesByType
     ): bool {
         $pageId = (int)($pagesByType[$pageType]['page_id'] ?? 0);
@@ -13194,20 +12950,12 @@ class AiSiteAgent extends BaseController
             return false;
         }
 
-        if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES) {
-            $blocks = \is_array($virtualPagesByType[$pageType]['block_nodes'] ?? null) ? $virtualPagesByType[$pageType]['block_nodes'] : [];
-
-            return $blocks !== [];
+        $page = \is_array($virtualPagesByType[$pageType] ?? null) ? $virtualPagesByType[$pageType] : [];
+        if ($page === []) {
+            return false;
         }
 
-        $layout = \is_array($pageTypeLayouts[$pageType] ?? null)
-            ? $pageTypeLayouts[$pageType]
-            : $this->scopeCompatibilityService->normalizeLayoutConfig([], $pageType);
-        $headerCode = \trim((string)($layout['header']['component'] ?? ''));
-        $footerCode = \trim((string)($layout['footer']['component'] ?? ''));
-        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-
-        return $headerCode !== '' && $footerCode !== '' && $content !== [];
+        return $this->planJsonDynamicBlocks($page) !== [];
     }
 
     /**
@@ -13246,7 +12994,7 @@ class AiSiteAgent extends BaseController
     ): string
     {
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
         $workspaceStatus = $this->scopeCompatibilityService->normalizeWorkspaceStatus((string)($scope['workspace_status'] ?? ''));
 
@@ -13261,11 +13009,11 @@ class AiSiteAgent extends BaseController
         if (\in_array($activeStatus, ['queued', 'running'], true) && $this->isPublishBlockingAiBuildOperation($operation)) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
         }
-        if ($activeStatus === 'error' || $workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED) {
-            return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
-        }
         if ($canPublish) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+        }
+        if ($activeStatus === 'error' || $workspaceStatus === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED) {
+            return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
         }
         if ($pendingGenerationPageTypes !== []) {
             if ((int)($scope['virtual_theme_id'] ?? 0) > 0) {
@@ -13344,7 +13092,7 @@ class AiSiteAgent extends BaseController
      * @param array<string, array<string, mixed>> $pageTypeLayouts
      * @param array<string, array<string, mixed>> $virtualPagesByType
      * @return array{
-     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
+     *   materialized_pages_by_type:array<string, array<string, mixed>>,
      *   preview_page_id:int,
      *   preview_page_type:string
      * }
@@ -13359,7 +13107,7 @@ class AiSiteAgent extends BaseController
     ): array {
         if ($websiteId <= 0 || $pageTypes === [] || $virtualPagesByType === []) {
             return [
-                'pagebuilder_pages_by_type' => [],
+                'materialized_pages_by_type' => [],
                 'preview_page_id' => 0,
                 'preview_page_type' => '',
             ];
@@ -13377,7 +13125,7 @@ class AiSiteAgent extends BaseController
     /**
      * @param array<string, mixed> $scope
      * @param array{
-     *   pagebuilder_pages_by_type?:array<string, array<string, mixed>>,
+     *   materialized_pages_by_type?:array<string, array<string, mixed>>,
      *   preview_page_id?:int,
      *   preview_page_type?:string
      * } $materialized
@@ -13385,20 +13133,11 @@ class AiSiteAgent extends BaseController
      */
     private function mergeMaterializedPagesIntoScope(array $scope, array $materialized): array
     {
-        if (\is_array($materialized['pagebuilder_pages_by_type']['pagebuilder_pages_by_type'] ?? null)) {
-            $nested = $materialized['pagebuilder_pages_by_type'];
-            $materialized['pagebuilder_pages_by_type'] = $nested['pagebuilder_pages_by_type'];
-            $materialized['preview_page_id'] = (int)($materialized['preview_page_id'] ?? $nested['preview_page_id'] ?? 0);
-            $materialized['preview_page_type'] = (string)($materialized['preview_page_type'] ?? $nested['preview_page_type'] ?? '');
-            if (empty($materialized['home_page_id']) && !empty($nested['home_page_id'])) {
-                $materialized['home_page_id'] = (int)$nested['home_page_id'];
-            }
-        }
-        $currentPages = $this->scopeCompatibilityService->normalizePagebuilderPagesByType($scope['pagebuilder_pages_by_type'] ?? []);
-        $newPages = \is_array($materialized['pagebuilder_pages_by_type'] ?? null)
-            ? $this->scopeCompatibilityService->normalizePagebuilderPagesByType($materialized['pagebuilder_pages_by_type'])
+        $currentPages = $this->scopeCompatibilityService->normalizePagebuilderPagesByType($scope['materialized_pages_by_type'] ?? []);
+        $newPages = \is_array($materialized['materialized_pages_by_type'] ?? null)
+            ? $this->scopeCompatibilityService->normalizePagebuilderPagesByType($materialized['materialized_pages_by_type'])
             : [];
-        $scope['pagebuilder_pages_by_type'] = \array_replace($currentPages, $newPages);
+        $scope['materialized_pages_by_type'] = \array_replace($currentPages, $newPages);
 
         $previewPageType = \trim((string)($materialized['preview_page_type'] ?? ''));
         if ($previewPageType !== '') {
@@ -13410,16 +13149,194 @@ class AiSiteAgent extends BaseController
             $scope['preview_page_id'] = $previewPageId;
         }
 
-        if ($newPages !== [] && \is_array($scope['virtual_pages_by_type'] ?? null)) {
+        if ($newPages !== [] && \is_array($scope['plan_json']['pages'] ?? null)) {
             foreach ($newPages as $pageType => $pageData) {
-                if (!\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
+                if (!\is_array($scope['plan_json']['pages'][$pageType] ?? null)) {
                     continue;
                 }
-                $scope['virtual_pages_by_type'][$pageType]['materialized_page_id'] = (int)($pageData['page_id'] ?? 0);
+                $scope['plan_json']['pages'][$pageType]['materialized_page_id'] = (int)($pageData['page_id'] ?? 0);
             }
         }
 
         return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,array<string,mixed>> $pagesByType
+     * @return array<string,mixed>
+     */
+    private function withPlanJsonPages(array $scope, array $pagesByType): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $currentPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        foreach ($pagesByType as $pageType => $pageData) {
+            if (!\is_string($pageType) || !\is_array($pageData)) {
+                continue;
+            }
+            $currentPage = \is_array($currentPages[$pageType] ?? null) ? $currentPages[$pageType] : [];
+            $currentPages[$pageType] = \array_replace($currentPage, $pageData);
+        }
+        $planJson['pages'] = $currentPages;
+        $scope['plan_json'] = (new AiSitePlanJsonStateService())->normalizePlanJson($planJson);
+
+        return $scope;
+    }
+
+    private function silentSseWriter(): SseWriter
+    {
+        return new class extends SseWriter {
+            public function start(): self
+            {
+                return $this;
+            }
+
+            public function sendEvent(string $event, mixed $data = null, ?int $id = null): self
+            {
+                unset($event, $data, $id);
+                return $this;
+            }
+
+            public function sendData(mixed $data): self
+            {
+                unset($data);
+                return $this;
+            }
+
+            public function complete(mixed $data = null): void
+            {
+                unset($data);
+            }
+
+            public function close(): void
+            {
+            }
+        };
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,array<string,mixed>>
+     */
+    private function planJsonPages(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+
+        return \array_filter($pages, static fn(mixed $page): bool => \is_array($page));
+    }
+
+    /**
+     * @param array<string,mixed> $page
+     * @return array<string,array<string,mixed>>
+     */
+    private function planJsonDynamicBlocks(array $page): array
+    {
+        $blocks = [];
+        foreach ($page as $blockKey => $block) {
+            if (!\is_string($blockKey) || !\is_array($block)) {
+                continue;
+            }
+            if (\in_array($blockKey, [
+                'name',
+                'title',
+                'label',
+                'page_key',
+                'page_type',
+                'type',
+                'status',
+                'layout',
+                'style',
+                'page_meta',
+                'meta',
+                'seo',
+                'route',
+                'slug',
+                'assets',
+                'handle',
+                'updated_at',
+                'started_at',
+                'finished_at',
+                'last_generated_at',
+                'attempt_no',
+                'message',
+                'error',
+                'error_message',
+                'page_goal',
+                'page_label',
+                'page_title',
+                'page_status',
+                'content_locale',
+                'shared_context_hash',
+                'theme_context_hash',
+                'assembly_version',
+                'generation_method',
+                'page_design_plan',
+                'theme_alignment_summary',
+                'page_context_hash',
+                'ordered_block_keys',
+                'primary_keywords',
+                'secondary_keywords',
+                'meta_title',
+                'meta_description',
+                'meta_keywords',
+                'route_path',
+                'style_code',
+                'style_settings',
+                'design_tokens',
+                'theme_css_ref',
+                'navigation',
+                'menus',
+                'links',
+                'settings',
+                'preview_url',
+                'preview_full_url',
+                'visual_preview_url',
+                'visual_edit_url',
+                'virtual_preview_url',
+                'virtual_edit_url',
+                'ai_description',
+                'materialized_page_id',
+                'blocks',
+                'block_previews',
+                'sections',
+                'section_refinements',
+                'components',
+            ], true)) {
+                continue;
+            }
+            $blocks[$blockKey] = $block;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return list<array<string,mixed>>
+     */
+    private function planJsonPageBlockList(array $scope, string $pageType): array
+    {
+        $page = \is_array($scope['plan_json']['pages'][$pageType] ?? null) ? $scope['plan_json']['pages'][$pageType] : [];
+        $blocks = [];
+        foreach ($this->planJsonDynamicBlocks($page) as $blockKey => $block) {
+            $blockId = \trim((string)($block['block_id'] ?? $block['component_code'] ?? $block['section_code'] ?? $blockKey));
+            $fields = \is_array($block['fields'] ?? null) ? $block['fields'] : [];
+            $config = \is_array($block['config'] ?? null) ? $block['config'] : $fields;
+            $html = (string)($block['html'] ?? $block['html_content'] ?? $block['phtml'] ?? '');
+            $block = \array_replace($block, [
+                'block_key' => \trim((string)($block['block_key'] ?? $blockKey)),
+                'page_type' => $pageType,
+                'block_id' => $blockId !== '' ? $blockId : (string)$blockKey,
+                'html' => $html,
+                'config' => $config,
+                'fields' => $fields !== [] ? $fields : $config,
+                'field_schema' => \is_array($block['field_schema'] ?? null) ? $block['field_schema'] : [],
+            ]);
+            $blocks[] = $block;
+        }
+
+        return $blocks;
     }
 
     private function emitBuildEnvironmentReady(
@@ -13467,7 +13384,7 @@ class AiSiteAgent extends BaseController
         );
         $scope = $this->discardForeignAiSiteQueueRuntimeState($scope, (int)$session->getId());
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         $preserveRunningQueueRow = false;
         $forceQueueTakeover = $this->shouldForceQueueTakeoverForOperation($operation, $scopePatch, $operationDetails);
         $skipActiveQueueGuardAfterTakeover = false;
@@ -13477,7 +13394,7 @@ class AiSiteAgent extends BaseController
             && $this->isActiveOperationStale($activeOperation)
         ) {
             $scope['active_operation'] = \array_replace($activeOperation, [
-                'status' => 'cancelled',
+                'queue_status' => 'cancelled',
                     'message' => (string)__('Operation completed.'),
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]);
@@ -13492,7 +13409,7 @@ class AiSiteAgent extends BaseController
                 ['details' => ['reason' => 'stale_active_operation']]
             );
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-            $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+            $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         }
         if (\in_array($activeStatus, ['queued', 'running'], true)) {
             $linkedQueueIssue = $this->resolveActiveOperationLinkedQueueIssue($activeOperation);
@@ -13514,7 +13431,7 @@ class AiSiteAgent extends BaseController
                     AiSiteAgentSessionEvent::LEVEL_WARNING
                 );
                 $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-                $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+                $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
             }
         }
         // Comment removed.
@@ -13525,7 +13442,7 @@ class AiSiteAgent extends BaseController
             && \trim((string)($activeOperation['execution_token'] ?? '')) === ''
         ) {
             $scope['active_operation'] = \array_replace($activeOperation, [
-                'status' => 'cancelled',
+                'queue_status' => 'cancelled',
                     'message' => (string)__('Operation completed.'),
                 'updated_at' => \date('Y-m-d H:i:s'),
             ]);
@@ -13544,7 +13461,7 @@ class AiSiteAgent extends BaseController
                 AiSiteAgentSessionEvent::LEVEL_WARNING
             );
             $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-            $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+            $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         }
         if ($forceQueueTakeover && $this->isAiSiteQueueBackedOperation($operation)) {
             $takeoverResult = $this->forceTakeoverActiveAiSiteQueueForFreshStart($session, $adminId, $operation, $stage, $scope);
@@ -13561,7 +13478,7 @@ class AiSiteAgent extends BaseController
                 $scope = \is_array($takeoverResult['scope'] ?? null) ? $takeoverResult['scope'] : $scope;
                 $skipActiveQueueGuardAfterTakeover = true;
                 $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-                $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+                $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
             }
         }
         $runningOperationState = $this->resolveRunningQueuedOperationState($scope, $operation);
@@ -13735,7 +13652,7 @@ class AiSiteAgent extends BaseController
         $scope['active_operation'] = \array_replace([
             'operation' => $operation,
             'execution_token' => $executionToken,
-            'status' => 'queued',
+            'queue_status' => 'queued',
             'page_type' => $pageType,
             'started_at' => \date('Y-m-d H:i:s'),
             'updated_at' => \date('Y-m-d H:i:s'),
@@ -13776,7 +13693,7 @@ class AiSiteAgent extends BaseController
                 $this->updateActiveOperation(
                     $freshForQueue,
                     $adminId,
-                    ['status' => 'error', 'message' => $throwable->getMessage()],
+                    ['queue_status' => 'error', 'message' => $throwable->getMessage()],
                     $failedWorkspaceStatus,
                     $operation === 'publish' ? AiSiteAgentSession::PUBLISH_STATUS_FAILED : null
                 );
@@ -13805,7 +13722,7 @@ class AiSiteAgent extends BaseController
         if ($queueId > 0) {
             $queueWait = $this->buildAiSiteQueueSchedulerWaitPayload($operation, $queueId);
         }
-        $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_started', (string)__('Operation started.'));
+        $this->appendWorkspaceEvent($session->getId(), $adminId, $stage, 'operation_started', (string)__('Operation started.'));
 
         // Comment removed.
         // Comment removed.
@@ -13893,7 +13810,7 @@ class AiSiteAgent extends BaseController
     ): array {
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
-        $activeStatus = \strtolower(\trim((string)($activeOperation['status'] ?? '')));
+        $activeStatus = \strtolower(\trim((string)($activeOperation['queue_status'] ?? '')));
         if (!\in_array($activeStatus, ['pending', 'queued', 'running', 'processing'], true)) {
             return [];
         }
@@ -14003,7 +13920,7 @@ class AiSiteAgent extends BaseController
 
         return $this->writeActiveOperationStateToScope($scope, \array_replace($activeOperation, [
             'operation' => $operation,
-            'status' => 'cancelled',
+            'queue_status' => 'cancelled',
             'message' => 'Force takeover completed; waiting for a fresh system-scheduled operation.',
             'retry_allowed' => 1,
             'queue_terminal_recovered' => 1,
@@ -14026,12 +13943,12 @@ class AiSiteAgent extends BaseController
 
     private function shouldEnqueueOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset', 'publish'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
     }
 
     private function isAiSiteQueueBackedOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset', 'publish'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
     }
 
     private function buildRunningOperationReuseMessage(string $operation): string
@@ -14396,7 +14313,7 @@ class AiSiteAgent extends BaseController
             'queue_status' => (string)($queueIssue['queue_status'] ?? ''),
         ]);
         $operationState = \array_replace($activeOperation, [
-            'status' => 'cancelled',
+            'queue_status' => 'cancelled',
             'message' => (string)($queueIssue['message'] ?? 'Linked queue is no longer active; retry is allowed.'),
             'retry_allowed' => 1,
             'queue_terminal_recovered' => 1,
@@ -14672,7 +14589,7 @@ class AiSiteAgent extends BaseController
             'task_configs',
             'operation_scope',
             'selection',
-            'selected_block_nodes',
+            'selected_blocks',
             'selected_tasks',
             'targets',
             'change_summary',
@@ -14800,7 +14717,6 @@ class AiSiteAgent extends BaseController
             'block_partial_patch' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             'regenerate_page' => \GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue::class,
             'image_asset' => \GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue::class,
-            'publish' => \GuoLaiRen\PageBuilder\Queue\AiSitePublishQueue::class,
             default => '',
         };
     }
@@ -14821,7 +14737,7 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * @return array{job_key?: string, job_type?: string, status?: string, token?: string}
+     * @return array{job_key?: string, job_type?: string, queue_status?: string, token?: string}
      */
     private function buildOperationQueueEnvelope(
         AiSiteAgentSession $session,
@@ -14837,7 +14753,7 @@ class AiSiteAgent extends BaseController
         return [
             'job_key' => $this->buildAiSiteQueueJobKey((int)$session->getId(), $jobType),
             'job_type' => $jobType,
-            'status' => $status,
+            'queue_status' => $status,
             'token' => $executionToken,
         ];
     }
@@ -14874,14 +14790,14 @@ class AiSiteAgent extends BaseController
             ? $this->buildQueueObserverPanelPayload($queueRow)
             : null;
         $queueStatus = \is_array($queueInfo)
-            ? \trim((string)($queueInfo['status'] ?? $queueInfo['queue_status'] ?? ''))
+            ? \trim((string)($queueInfo['queue_status'] ?? ''))
             : (\is_array($queueRow) ? \trim((string)($queueRow['status'] ?? '')) : '');
         $queueRecoveredForRetry = \is_array($queueInfo) && (
             !empty($queueInfo['queue_terminal_recovered'])
             || !empty($queueInfo['retry_allowed'])
             || \in_array(\trim((string)($queueInfo['semantic_status'] ?? '')), ['cancelled', 'canceled', 'stale'], true)
         );
-        $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+        $activeOperationStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
         if ($activeOperationStatus === 'pending') {
             $activeOperationStatus = 'queued';
         } elseif ($activeOperationStatus === 'processing') {
@@ -15203,7 +15119,7 @@ class AiSiteAgent extends BaseController
      *
      * @return array<string, mixed>
      */
-    private function runHtmlBlockNodesBuildOperationV3(
+    private function runHtmlBlocksBuildOperationV3(
         SseWriter $sse,
         AiSiteAgentSession $session,
         int $adminId,
@@ -15214,7 +15130,7 @@ class AiSiteAgent extends BaseController
         $scope = $this->planJsonTaskService->ensureTaskScope(
             $scope,
             \is_array($scope['website_profile']) ? $scope['website_profile'] : [],
-            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks
         );
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
         if ($queueForcedAiRebuild) {
@@ -15282,7 +15198,7 @@ class AiSiteAgent extends BaseController
         /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
-        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
+        $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [];
         $environmentReadyEmitted = false;
         $parallelPageModeLogged = false;
         $buildLoopStallPasses = 0;
@@ -15342,6 +15258,23 @@ class AiSiteAgent extends BaseController
                 if ($sharedTaskByRegion !== []) {
                     $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
                     $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('Generating shared header/footer'), (int)(($currentStep / $totalSteps) * 100));
+                    if ((int)($scope['fake_mode'] ?? 0) === 1) {
+                        foreach ($sharedTaskByRegion as $region => $taskMeta) {
+                            $taskKey = (string)($taskMeta['task_key'] ?? '');
+                            if ($taskKey === '') {
+                                continue;
+                            }
+                            $component = $this->buildFakePlanJsonSharedComponent((string)$region, Page::TYPE_HOME, $scope['website_profile'], $scope);
+                            $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
+                                'region' => (string)$region,
+                                'component' => $component,
+                                'fake_mode' => 1,
+                            ]);
+                            $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [];
+                            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                        }
+                        continue;
+                    }
                     foreach ($pageComponentGenerationService->generateSharedComponentEventsConcurrently($scope['website_profile'], $scope, \array_keys($sharedTaskByRegion)) as $region => $event) {
                         $taskMeta = \is_array($sharedTaskByRegion[(string)$region] ?? null) ? $sharedTaskByRegion[(string)$region] : [];
                         $taskKey = (string)($taskMeta['task_key'] ?? '');
@@ -15353,7 +15286,7 @@ class AiSiteAgent extends BaseController
                             $throwable = ($event['error'] ?? null) instanceof \Throwable
                                 ? $event['error']
                                 : new \RuntimeException('Shared component generation returned an empty result.');
-                            $failure = $this->handlePlanJsonTaskGenerationFailure($sse, $session, $adminId, $scope, $taskKey, 'shared_component', AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES, $throwable, [
+                            $failure = $this->handlePlanJsonTaskGenerationFailure($sse, $session, $adminId, $scope, $taskKey, 'shared_component', AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks, $throwable, [
                                 'region' => (string)$region,
                                 'progress_percent' => $progressPercent,
                             ]);
@@ -15365,9 +15298,11 @@ class AiSiteAgent extends BaseController
                         }
                         $component = $event['result'];
                         $sharedComponents[(string)$region] = $component;
-                        $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
-                        $scope['shared_components'][(string)$region] = $component;
-                        $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, ['region' => (string)$region]);
+                        $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
+                            'region' => (string)$region,
+                            'component' => $component,
+                        ]);
+                        $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [];
                         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
                         $message = (string)$region === 'header' ? 'Shared header generated' : 'Shared footer generated';
@@ -15393,7 +15328,7 @@ class AiSiteAgent extends BaseController
                 $this->emitBuildInfoEvent($sse, 'Shared theme ready; remaining pages will be generated in concurrent batches.', [
                     'event_type' => 'build_parallel_mode_enabled',
                     'parallel' => true,
-                    'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                    'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                 ]);
             }
 
@@ -15422,7 +15357,7 @@ class AiSiteAgent extends BaseController
                     $scope,
                     $taskKey,
                     'page_section',
-                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                     new \RuntimeException((string)(\is_array($error) ? ($error['message'] ?? 'Build task spec error') : 'Build task spec error')),
                     [
                         'page_type' => \is_array($error) ? (string)($error['page_type'] ?? '') : '',
@@ -15468,7 +15403,7 @@ class AiSiteAgent extends BaseController
                     'event_type' => 'build_parallel_batch',
                     'batch_state' => 'started',
                     'parallel' => true,
-                    'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                    'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                     'batch_size' => \count($runningTaskKeys),
                     'page_types' => $batchPageTypes,
                     'task_keys' => $runningTaskKeys,
@@ -15494,7 +15429,7 @@ class AiSiteAgent extends BaseController
                         $scope,
                         (string)$taskKey,
                         'page_section',
-                        AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                        AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                         $throwable,
                         [
                             'page_type' => $pageType,
@@ -15530,7 +15465,7 @@ class AiSiteAgent extends BaseController
 
                 $blueprint = \is_array($meta['blueprint'] ?? null) ? $meta['blueprint'] : [];
                 $sectionComponent = \is_array($event['result'] ?? null) ? $event['result'] : [];
-                $sectionBlock = $this->htmlBlockNodesBuildService->buildGeneratedSectionBlock($sectionComponent);
+                $sectionBlock = $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent);
                 $row = $virtualPages[$pageType] ?? [];
                 $row['title'] = (string)($blueprint['page_title'] ?? ($row['title'] ?? ''));
                 $row['ai_description'] = (string)($blueprint['ai_description'] ?? ($row['ai_description'] ?? ''));
@@ -15538,9 +15473,9 @@ class AiSiteAgent extends BaseController
                 $row['meta_description'] = (string)($blueprint['meta_description'] ?? ($row['meta_description'] ?? ''));
                 $row['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($row['meta_keywords'] ?? ''));
                 $row['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
-                $row['block_nodes'] = $this->composeHtmlBlockNodesForPage(
+                $row['blocks'] = $this->composeHtmlBlocksForPage(
                     $pageType,
-                    \is_array($row['block_nodes'] ?? null) ? $row['block_nodes'] : [],
+                    \is_array($row['blocks'] ?? null) ? $row['blocks'] : [],
                     $sharedComponents,
                     $sectionBlock,
                     $scope['website_profile'],
@@ -15548,12 +15483,12 @@ class AiSiteAgent extends BaseController
                 );
                 $row['last_generated_at'] = \date('Y-m-d H:i:s');
                 $virtualPages[$pageType] = $row;
-                $scope['virtual_pages_by_type'] = $virtualPages;
+                $scope = $this->withPlanJsonPages($scope, $virtualPages);
                 $scope['virtual_theme_id'] = 0;
                 $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? $pageType));
                 $scope = $this->planJsonTaskService->markTaskDone($scope, (string)$taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
                 $materialized = $this->materializeGeneratedPages(
-                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                    AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                     (int)$draftWebsite['website_id'],
                     $scope['website_profile'],
                     [$pageType],
@@ -15563,7 +15498,7 @@ class AiSiteAgent extends BaseController
                 $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
                 $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
-                $pageId = (int)($scope['pagebuilder_pages_by_type'][$pageType]['page_id'] ?? 0);
+                $pageId = (int)($scope['materialized_pages_by_type'][$pageType]['page_id'] ?? 0);
                 if (!$environmentReadyEmitted && $pageId > 0) {
                     $environmentReadyEmitted = true;
                     $this->emitBuildEnvironmentReady($sse, $session, $adminId, $pageType, $pageLabel, $pageId, 0);
@@ -15622,7 +15557,7 @@ class AiSiteAgent extends BaseController
                         'event_type' => 'build_parallel_batch',
                         'batch_state' => 'failed',
                         'parallel' => true,
-                        'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                        'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                         'batch_size' => \count($runningTaskKeys),
                         'page_types' => $batchPageTypes,
                         'task_keys' => $runningTaskKeys,
@@ -15642,7 +15577,7 @@ class AiSiteAgent extends BaseController
                     'event_type' => 'build_parallel_batch',
                     'batch_state' => 'completed',
                     'parallel' => true,
-                    'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCK_NODES,
+                    'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                     'batch_size' => \count($runningTaskKeys),
                     'page_types' => $batchPageTypes,
                     'task_keys' => $runningTaskKeys,
@@ -15663,25 +15598,10 @@ class AiSiteAgent extends BaseController
         $now = \date('Y-m-d H:i:s');
         $htmlTrackReady = $this->scopeCompatibilityService->htmlTrackHasCompleteBlocks($virtualPages, $pageTypes)
             || $this->htmlTrackHasMaterializedAiBlocks($scope, $virtualPages, $pageTypes);
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts([], $pageTypes);
         $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
         if ($virtualThemeId > 0) {
             $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
-            $scope['page_type_layouts'] = $pageTypeLayouts;
-        }
-
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
-        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
-        if ($virtualThemeId > 0) {
-            $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
-            $scope['page_type_layouts'] = $pageTypeLayouts;
-        }
-
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
-        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
-        if ($virtualThemeId > 0) {
-            $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
-            $scope['page_type_layouts'] = $pageTypeLayouts;
         }
 
         $scope = $this->planJsonTaskService->finalizePlanJsonTaskStatesAfterRunLoop($scope);
@@ -15708,7 +15628,7 @@ class AiSiteAgent extends BaseController
         $scope['active_operation'] = \array_replace(
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
             ($hasBuildFailures || $hasOutstandingTasks) ? [
-                'status' => 'error',
+                'queue_status' => 'error',
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
                     ? (string)__('HTML block build failed; unfinished AI items will retry on the same queue.')
@@ -15718,7 +15638,7 @@ class AiSiteAgent extends BaseController
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
                 'queue_waiting_for_scheduler' => false,
             ] : [
-                'status' => 'done',
+                'queue_status' => 'done',
                 'updated_at' => $now,
                 'message' => (string)__('HTML blocks generated'),
                 'queue_waiting_for_scheduler' => false,
@@ -15766,7 +15686,7 @@ class AiSiteAgent extends BaseController
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
      */
-    private function composeHtmlBlockNodesForPage(
+    private function composeHtmlBlocksForPage(
         string $pageType,
         array $existingBlocks,
         array $sharedComponents,
@@ -15778,18 +15698,18 @@ class AiSiteAgent extends BaseController
 
         $existingHeaderBlock = $this->findExistingHtmlSharedBlock($existingBlocks, 'header');
         if (\is_array($sharedComponents['header'] ?? null)) {
-            $headerBlock = $this->htmlBlockNodesBuildService->buildGeneratedSharedBlock('header', $pageType, $sharedComponents['header']);
+            $headerBlock = $this->htmlBlocksBuildService->buildGeneratedSharedBlock('header', $pageType, $sharedComponents['header']);
             if (\is_array($existingHeaderBlock)) {
-                $headerBlock = $this->htmlBlockNodesBuildService->mergeUserCustomizedSharedBlockConfig($headerBlock, $existingHeaderBlock);
+                $headerBlock = $this->htmlBlocksBuildService->mergeUserCustomizedSharedBlockConfig($headerBlock, $existingHeaderBlock);
             }
             $blocks[] = $headerBlock;
         } else {
-            $blocks[] = $this->htmlBlockNodesBuildService->buildSharedHeaderBlock($pageType, $websiteProfile, $scope);
+            $blocks[] = $this->htmlBlocksBuildService->buildSharedHeaderBlock($pageType, $websiteProfile, $scope);
         }
 
         $sectionBlockId = \trim((string)($sectionBlock['block_id'] ?? ''));
         $sectionInserted = false;
-        $dropNonPlanJsonPageBlockNodes = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? '')) === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
+        $dropNonPlanJsonPageBlocks = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? '')) === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
             || (string)($sectionBlock['type'] ?? '') === 'ai_generated_section';
         $allowedGeneratedBlockIds = $this->buildAllowedGeneratedContentBlockIdMap($pageType, $scope, $sectionBlockId);
         foreach ($existingBlocks as $block) {
@@ -15800,10 +15720,10 @@ class AiSiteAgent extends BaseController
             if ($this->isHtmlSharedBlock($blockId, $block)) {
                 continue;
             }
-            if ($dropNonPlanJsonPageBlockNodes && !$this->isGeneratedHtmlContentBlock($blockId, $block)) {
+            if ($dropNonPlanJsonPageBlocks && !$this->isGeneratedHtmlContentBlock($blockId, $block)) {
                 continue;
             }
-            if ($dropNonPlanJsonPageBlockNodes
+            if ($dropNonPlanJsonPageBlocks
                 && $this->isGeneratedHtmlContentBlock($blockId, $block)
                 && $allowedGeneratedBlockIds !== []
                 && !isset($allowedGeneratedBlockIds[$blockId])
@@ -15823,13 +15743,13 @@ class AiSiteAgent extends BaseController
 
         $existingFooterBlock = $this->findExistingHtmlSharedBlock($existingBlocks, 'footer');
         if (\is_array($sharedComponents['footer'] ?? null)) {
-            $footerBlock = $this->htmlBlockNodesBuildService->buildGeneratedSharedBlock('footer', $pageType, $sharedComponents['footer']);
+            $footerBlock = $this->htmlBlocksBuildService->buildGeneratedSharedBlock('footer', $pageType, $sharedComponents['footer']);
             if (\is_array($existingFooterBlock)) {
-                $footerBlock = $this->htmlBlockNodesBuildService->mergeUserCustomizedSharedBlockConfig($footerBlock, $existingFooterBlock);
+                $footerBlock = $this->htmlBlocksBuildService->mergeUserCustomizedSharedBlockConfig($footerBlock, $existingFooterBlock);
             }
             $blocks[] = $footerBlock;
         } else {
-            $blocks[] = $this->htmlBlockNodesBuildService->buildSharedFooterBlock($pageType, $websiteProfile, $scope);
+            $blocks[] = $this->htmlBlocksBuildService->buildSharedFooterBlock($pageType, $websiteProfile, $scope);
         }
 
         return $blocks;
@@ -15846,9 +15766,8 @@ class AiSiteAgent extends BaseController
             $allowed[$currentBlockId] = true;
         }
 
-        $pageTypeLayouts = \is_array($scope['page_type_layouts'] ?? null) ? $scope['page_type_layouts'] : [];
-        $layout = \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [];
-        foreach (\is_array($layout['content'] ?? null) ? $layout['content'] : [] as $item) {
+        $page = \is_array($scope['plan_json']['pages'][$pageType] ?? null) ? $scope['plan_json']['pages'][$pageType] : [];
+        foreach ($this->planJsonDynamicBlocks($page) as $item) {
             if (!\is_array($item)) {
                 continue;
             }
@@ -15933,14 +15852,20 @@ class AiSiteAgent extends BaseController
      * @param array<string, array<string, mixed>> $virtualPages
      * @return list<array<string, mixed>>
      */
-    private function resolveExistingAiHtmlBlockNodesForPage(string $pageType, array $scope, array $virtualPages = []): array
+    private function resolveExistingAiHtmlBlocksForPage(string $pageType, array $scope, array $virtualPages = []): array
     {
         foreach ([
-            $virtualPages[$pageType]['block_nodes'] ?? null,
-            $scope['virtual_pages_by_type'][$pageType]['block_nodes'] ?? null,
+            $this->planJsonPageBlockList($scope, $pageType),
+            $virtualPages[$pageType]['blocks'] ?? null,
         ] as $candidate) {
             if (\is_array($candidate) && $candidate !== []) {
-                return \array_values(\array_filter($candidate, static fn(mixed $block): bool => \is_array($block)));
+                $blocks = \array_values(\array_filter($candidate, static function (mixed $block): bool {
+                    return \is_array($block)
+                        && \trim((string)($block['html'] ?? $block['html_content'] ?? $block['phtml'] ?? '')) !== '';
+                }));
+                if ($blocks !== []) {
+                    return $blocks;
+                }
             }
         }
         return [];
@@ -15958,7 +15883,7 @@ class AiSiteAgent extends BaseController
         }
 
         foreach ($pageTypes as $pageType) {
-            if ($this->resolveExistingAiHtmlBlockNodesForPage($pageType, $scope, $virtualPages) === []) {
+            if ($this->resolveExistingAiHtmlBlocksForPage($pageType, $scope, $virtualPages) === []) {
                 return false;
             }
         }
@@ -16009,7 +15934,7 @@ class AiSiteAgent extends BaseController
             if (!\is_array($block)) {
                 continue;
             }
-            if ($this->htmlBlockNodesBuildService->resolveSharedBlockRegion($block) !== $region) {
+            if ($this->htmlBlocksBuildService->resolveSharedBlockRegion($block) !== $region) {
                 continue;
             }
 
@@ -16028,8 +15953,7 @@ class AiSiteAgent extends BaseController
         array $pageTypeLayouts,
         array $virtualPages
     ): array {
-        $scope['page_type_layouts'] = $pageTypeLayouts;
-        $scope['virtual_pages_by_type'] = $virtualPages;
+        $scope = $this->withPlanJsonPages($scope, $virtualPages);
         $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? ''));
         $scope = $this->dropPrePublishMaterializedPagesFromVirtualThemeScope($scope, $session);
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
@@ -16040,7 +15964,7 @@ class AiSiteAgent extends BaseController
     }
 
     /**
-     * PlanJson v2 writes generated content into the virtual theme first. Entity
+     * plan_json.pages writes generated content into the virtual theme first. Entity
      * Page ids are publish artifacts only, so stale pre-publish materialization
      * must not leak back into the editing workspace.
      *
@@ -16057,16 +15981,15 @@ class AiSiteAgent extends BaseController
             return $scope;
         }
 
-        $scope['pagebuilder_pages_by_type'] = [];
         $scope['materialized_pages_by_type'] = [];
         $scope['preview_page_id'] = 0;
-        if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
-            foreach ($scope['virtual_pages_by_type'] as $pageType => $pageData) {
+        if (\is_array($scope['plan_json']['pages'] ?? null)) {
+            foreach ($scope['plan_json']['pages'] as $pageType => $pageData) {
                 if (!\is_array($pageData)) {
                     continue;
                 }
                 unset($pageData['page_id'], $pageData['materialized_page_id']);
-                $scope['virtual_pages_by_type'][$pageType] = $pageData;
+                $scope['plan_json']['pages'][$pageType] = $pageData;
             }
         }
 
@@ -16858,7 +16781,7 @@ class AiSiteAgent extends BaseController
             1
         );
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForBuildOperation($session)
+            $this->sessionService->loadScope($session, [])
         );
         return $this->runVirtualThemeBuildOperationV3($sse, $session, $adminId, $scope);
     }
@@ -16968,15 +16891,15 @@ class AiSiteAgent extends BaseController
         if ($pageTypes === []) {
             $pageTypes = [$pageType];
         }
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
-        $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts([], $pageTypes);
+        $layout = $this->scopeCompatibilityService->normalizeLayoutConfig([], $pageType);
         $layout['content'] = [];
         $pageTypeLayouts[$pageType] = $layout;
-        $scope['page_type_layouts'] = $pageTypeLayouts;
-
-        if (\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
-            $scope['virtual_pages_by_type'][$pageType]['block_nodes'] = [];
-            $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = '';
+        if (\is_array($scope['plan_json']['pages'][$pageType] ?? null)) {
+            foreach (\array_keys($this->planJsonDynamicBlocks($scope['plan_json']['pages'][$pageType])) as $blockKey) {
+                unset($scope['plan_json']['pages'][$pageType][$blockKey]);
+            }
+            $scope['plan_json']['pages'][$pageType]['last_generated_at'] = '';
         }
 
         $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
@@ -17093,8 +17016,8 @@ class AiSiteAgent extends BaseController
 
         /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
-        $sharedComponents = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [];
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts([], $pageTypes);
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope, false);
         $environmentReadyEmitted = false;
         $parallelPageModeLogged = false;
@@ -17155,6 +17078,27 @@ class AiSiteAgent extends BaseController
                 if ($sharedTaskByRegion !== []) {
                     $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
                     $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('Generating shared header/footer'), (int)(($currentStep / $totalSteps) * 100));
+                    if ((int)($scope['fake_mode'] ?? 0) === 1) {
+                        foreach ($sharedTaskByRegion as $region => $taskMeta) {
+                            $taskKey = (string)($taskMeta['task_key'] ?? '');
+                            if ($taskKey === '') {
+                                continue;
+                            }
+                            $component = $this->buildFakePlanJsonSharedComponent((string)$region, Page::TYPE_HOME, $scope['website_profile'], $scope);
+                            $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
+                                'region' => (string)$region,
+                                'component' => $component,
+                                'fake_mode' => 1,
+                            ]);
+                            $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [];
+                            $virtualThemeId = (int)$scope['virtual_theme_id'];
+                            $this->virtualThemeService->saveGeneratedSharedComponent($virtualThemeId, $component);
+                            $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $component);
+                            $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
+                            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                        }
+                        continue;
+                    }
                     foreach ($pageComponentGenerationService->generateSharedComponentEventsConcurrently($scope['website_profile'], $scope, \array_keys($sharedTaskByRegion)) as $region => $event) {
                         $taskMeta = \is_array($sharedTaskByRegion[(string)$region] ?? null) ? $sharedTaskByRegion[(string)$region] : [];
                         $taskKey = (string)($taskMeta['task_key'] ?? '');
@@ -17178,14 +17122,16 @@ class AiSiteAgent extends BaseController
                         }
                         $component = $event['result'];
                         $sharedComponents[(string)$region] = $component;
-                        $scope['shared_components'] = \is_array($scope['shared_components'] ?? null) ? $scope['shared_components'] : [];
-                        $scope['shared_components'][(string)$region] = $component;
-                        $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, ['region' => (string)$region]);
+                        $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
+                            'region' => (string)$region,
+                            'component' => $component,
+                        ]);
+                        $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [];
                         $virtualThemeId = (int)$scope['virtual_theme_id'];
                         $this->virtualThemeService->saveGeneratedSharedComponent($virtualThemeId, $component);
                         $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $component);
                         $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
-                        $scope['page_type_layouts'] = $pageTypeLayouts;
+                        $scope = $this->withPlanJsonPages($scope, $this->planJsonPages($scope));
                         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
                         $message = (string)$region === 'header' ? 'Shared header generated' : 'Shared footer generated';
@@ -17213,6 +17159,22 @@ class AiSiteAgent extends BaseController
                     'parallel' => true,
                     'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
                 ]);
+            }
+
+            if ((int)($scope['fake_mode'] ?? 0) === 1) {
+                $fakeBatchResult = $this->runFakeVirtualThemePlanJsonPageTaskBatch(
+                    $sse,
+                    $session,
+                    $adminId,
+                    $scope,
+                    $pageTasks,
+                    $pageTypeLabels,
+                    $currentStep,
+                    $totalSteps
+                );
+                $scope = \is_array($fakeBatchResult['scope'] ?? null) ? $fakeBatchResult['scope'] : $scope;
+                $currentStep = (int)($fakeBatchResult['current_step'] ?? $currentStep);
+                continue;
             }
 
             $batchSpecs = $this->buildConcurrentPageTaskBatchSpecs(
@@ -17351,7 +17313,7 @@ class AiSiteAgent extends BaseController
                 try {
                     $blueprint = \is_array($meta['blueprint'] ?? null) ? $meta['blueprint'] : [];
                     $sectionComponent = \is_array($event['result'] ?? null) ? $event['result'] : [];
-                    $sectionBlock = $this->htmlBlockNodesBuildService->buildGeneratedSectionBlock($sectionComponent);
+                    $sectionBlock = $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent);
                     if (!$this->isGeneratedSectionBlockUsable($sectionComponent, $sectionBlock)) {
                         $failure = $this->handlePlanJsonTaskGenerationFailure(
                             $sse,
@@ -17401,8 +17363,7 @@ class AiSiteAgent extends BaseController
                     $pageTypeLayouts[$pageType] = $layout;
 
                     $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], \array_replace($scope, [
-                        'page_type_layouts' => $pageTypeLayouts,
-                        'virtual_pages_by_type' => $virtualPages,
+                        'plan_json' => \array_replace(\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [], ['pages' => $virtualPages]),
                     ]), false, false);
                     if (isset($currentVirtualPages[$pageType])) {
                         $currentVirtualPages[$pageType]['last_generated_at'] = \date('Y-m-d H:i:s');
@@ -17412,9 +17373,9 @@ class AiSiteAgent extends BaseController
                         $currentVirtualPages[$pageType]['meta_description'] = (string)($blueprint['meta_description'] ?? ($currentVirtualPages[$pageType]['meta_description'] ?? ''));
                         $currentVirtualPages[$pageType]['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($currentVirtualPages[$pageType]['meta_keywords'] ?? ''));
                         $currentVirtualPages[$pageType]['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
-                        $currentVirtualPages[$pageType]['block_nodes'] = $this->composeHtmlBlockNodesForPage(
+                        $currentVirtualPages[$pageType]['blocks'] = $this->composeHtmlBlocksForPage(
                             $pageType,
-                            \is_array($virtualPages[$pageType]['block_nodes'] ?? null) ? $virtualPages[$pageType]['block_nodes'] : [],
+                            \is_array($virtualPages[$pageType]['blocks'] ?? null) ? $virtualPages[$pageType]['blocks'] : [],
                             $sharedComponents,
                             $sectionBlock,
                             $scope['website_profile'],
@@ -17423,10 +17384,14 @@ class AiSiteAgent extends BaseController
                         $virtualPages[$pageType] = $currentVirtualPages[$pageType];
                     }
 
-                    $scope['page_type_layouts'] = $pageTypeLayouts;
-                    $scope['virtual_pages_by_type'] = $virtualPages;
+                    $scope = $this->withPlanJsonPages($scope, $virtualPages);
                     $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? $pageType));
-                    $scope = $this->planJsonTaskService->markTaskDone($scope, (string)$taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
+                    $scope = $this->planJsonTaskService->markTaskDone($scope, (string)$taskKey, [
+                        'page_type' => $pageType,
+                        'section_code' => $sectionCode,
+                        'section_block' => $sectionBlock,
+                        'component' => $sectionComponent,
+                    ]);
                     $scope = $this->dropPrePublishMaterializedPagesFromVirtualThemeScope($scope, $session);
                     $scope = $this->refreshInlineImageStateFromPersistedScope($session, $adminId, $scope);
                     $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
@@ -17567,11 +17532,10 @@ class AiSiteAgent extends BaseController
             );
         }
 
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts([], $pageTypes);
         $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
         if ($virtualThemeId > 0) {
             $this->saveGeneratedPageLayoutsForTypes($virtualThemeId, $pageTypes, $pageTypeLayouts);
-            $scope['page_type_layouts'] = $pageTypeLayouts;
         }
 
         $scope = $this->planJsonTaskService->finalizePlanJsonTaskStatesAfterRunLoop($scope);
@@ -17605,7 +17569,7 @@ class AiSiteAgent extends BaseController
         $scope['active_operation'] = \array_replace(
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
             ($hasBuildFailures || $hasOutstandingTasks) ? [
-                'status' => 'error',
+                'queue_status' => 'error',
                 'updated_at' => $now,
                 'message' => $hasBuildFailures
                     ? (string)__('Virtual theme build failed; unfinished AI items will retry on the same queue.')
@@ -17615,7 +17579,7 @@ class AiSiteAgent extends BaseController
                 'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
                 'queue_waiting_for_scheduler' => false,
             ] : [
-                'status' => 'done',
+                'queue_status' => 'done',
                 'updated_at' => $now,
                 'message' => (string)__('Virtual theme generated'),
                 'queue_waiting_for_scheduler' => false,
@@ -17630,7 +17594,7 @@ class AiSiteAgent extends BaseController
 
         $freshForCompletionGate = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $freshScopeForCompletionGate = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($freshForCompletionGate, AiSiteAgentSession::STAGE_VISUAL_EDIT)
+            $this->sessionService->loadScopeForStage($freshForCompletionGate, AiSiteAgentSession::STAGE_VISUAL_EDIT, [])
         );
         $freshCompletionGate = $this->planJsonTaskService->inspectBuildCompletionGate($freshScopeForCompletionGate);
         if (!empty($freshCompletionGate['passed'])) {
@@ -17648,7 +17612,7 @@ class AiSiteAgent extends BaseController
                 $scope['active_operation'] = \array_replace(
                     \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
                     [
-                        'status' => 'done',
+                        'queue_status' => 'done',
                         'message' => (string)__('Virtual theme generated'),
                         'updated_at' => \date('Y-m-d H:i:s'),
                         'queue_waiting_for_scheduler' => false,
@@ -17686,6 +17650,394 @@ class AiSiteAgent extends BaseController
         ];
     }
 
+    /**
+     * @param list<array<string,mixed>> $pageTasks
+     * @param array<string,string> $pageTypeLabels
+     * @return array{scope:array<string,mixed>,current_step:int}
+     */
+    private function runFakeVirtualThemePlanJsonPageTaskBatch(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $scope,
+        array $pageTasks,
+        array $pageTypeLabels,
+        int $currentStep,
+        int $totalSteps
+    ): array {
+        $runningTaskKeys = [];
+        foreach ($pageTasks as $task) {
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $runningTaskKeys[] = $taskKey;
+            $scope = $this->planJsonTaskService->markTaskRunning($scope, $taskKey);
+        }
+        if ($runningTaskKeys === []) {
+            return ['scope' => $scope, 'current_step' => $currentStep];
+        }
+
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        $this->emitPlanJsonTaskProgressStateFromScope(
+            $sse,
+            $scope,
+            'build',
+            'Fake build batch started.',
+            $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
+        );
+        $this->emitBuildInfoEvent($sse, 'Fake mode generated page blocks without AI calls.', [
+            'event_type' => 'build_fake_mode_batch',
+            'batch_state' => 'started',
+            'task_keys' => $runningTaskKeys,
+        ]);
+
+        $completedTaskKeys = [];
+        foreach ($pageTasks as $task) {
+            $this->assertActiveStreamLeaseAlive($session, $adminId);
+            $taskKey = \trim((string)($task['task_key'] ?? ''));
+            if ($taskKey === '') {
+                continue;
+            }
+            $pageType = \trim((string)($task['page_type'] ?? ''));
+            $sectionCode = \trim((string)($task['section_code'] ?? ''));
+            $pageLabel = (string)($pageTypeLabels[$pageType] ?? $pageType);
+            $block = $this->resolveFakePlanJsonBlockForTask($scope, $task);
+            $sectionBlock = $this->buildFakePlanJsonSectionBlock($scope, $task, $block);
+            $config = \is_array($sectionBlock['config'] ?? null) ? $sectionBlock['config'] : [];
+            $sectionComponent = $this->buildFakePlanJsonSectionComponent($task, $sectionBlock);
+
+            $currentStep++;
+            $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+            $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
+                'page_type' => $pageType,
+                'section_code' => $sectionCode,
+                'section_block' => $sectionBlock,
+                'component' => $sectionComponent,
+                'fake_mode' => 1,
+            ]);
+            $scope = $this->syncFakePlanJsonSectionBlockToPreviewPage($scope, $task, $sectionBlock);
+            if ($pageType !== '' && (int)($scope['virtual_theme_id'] ?? 0) > 0) {
+                $virtualThemeId = (int)$scope['virtual_theme_id'];
+                $sharedComponents = \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [];
+                $layout = $this->virtualThemeService->loadGeneratedPageLayout($virtualThemeId, $pageType);
+                $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($layout, $pageType);
+                if (\trim((string)($layout['header']['component'] ?? '')) === '' && \is_array($sharedComponents['header'] ?? null)) {
+                    $layout['header'] = [
+                        'component' => (string)($sharedComponents['header']['code'] ?? ''),
+                        'config' => \is_array($sharedComponents['header']['default_config'] ?? null) ? $sharedComponents['header']['default_config'] : [],
+                    ];
+                }
+                if (\trim((string)($layout['footer']['component'] ?? '')) === '' && \is_array($sharedComponents['footer'] ?? null)) {
+                    $layout['footer'] = [
+                        'component' => (string)($sharedComponents['footer']['code'] ?? ''),
+                        'config' => \is_array($sharedComponents['footer']['default_config'] ?? null) ? $sharedComponents['footer']['default_config'] : [],
+                    ];
+                }
+                $this->virtualThemeService->saveGeneratedContentComponent($virtualThemeId, $pageType, $sectionComponent);
+                $layout = $this->virtualThemeService->mergeGeneratedContentIntoLayout($layout, $sectionComponent);
+                $layout = $this->sortVirtualThemeLayoutContentByPlanJsonTasks($layout, $scope, $pageType);
+                $this->virtualThemeService->saveGeneratedPageLayout($virtualThemeId, $pageType, $layout);
+            }
+            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+
+            $message = 'Fake page block generated: ' . ($pageLabel !== '' ? $pageLabel : $pageType);
+            $this->sendOperationProgress(
+                $sse,
+                $session,
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'build',
+                $message,
+                $progressPercent,
+                $pageType
+            );
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'page_generated',
+                $message,
+                [
+                    'operation' => 'build',
+                    'page_type' => $pageType,
+                    'details' => [
+                        'section_code' => $sectionCode,
+                        'fake_mode' => 1,
+                    ],
+                ]
+            );
+            $state = [];
+            $sse->sendEvent('page_generated', $this->enrichTaskEventPayload($scope, [
+                'task_key' => $taskKey,
+                'page_type' => $pageType,
+                'page_label' => $pageLabel,
+                'page_id' => 0,
+                'virtual_theme_id' => (int)($scope['virtual_theme_id'] ?? 0),
+                'progress_percent' => $progressPercent,
+                'section_code' => $sectionCode,
+                'page_completed' => $pageType !== '' && $this->planJsonTaskService->arePageTasksComplete($scope, $pageType),
+                'message' => $message,
+                'state' => $state,
+                'fake_mode' => 1,
+            ]));
+            $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
+                'task_key' => $taskKey,
+                'task_type' => 'page_section',
+                'message' => 'Fake theme section task complete: ' . $pageLabel,
+                'state' => $state,
+                'fake_mode' => 1,
+            ]));
+            $completedTaskKeys[] = $taskKey;
+        }
+
+        $this->emitBuildInfoEvent($sse, 'Fake mode page block batch completed.', [
+            'event_type' => 'build_fake_mode_batch',
+            'batch_state' => 'completed',
+            'task_keys' => $runningTaskKeys,
+            'completed_task_keys' => $completedTaskKeys,
+        ]);
+        $this->emitPlanJsonTaskProgressStateFromScope(
+            $sse,
+            $scope,
+            'build',
+            (string)__('Page block batch completed: %{done}/%{total}', [
+                'done' => (string)(int)($this->planJsonTaskService->summarize($scope)['done'] ?? 0),
+                'total' => (string)(int)($this->planJsonTaskService->summarize($scope)['total'] ?? 0),
+            ]),
+            $this->resolveTaskSummaryProgressPercent($this->planJsonTaskService->summarize($scope))
+        );
+
+        return ['scope' => $scope, 'current_step' => $currentStep];
+    }
+
+    /**
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function buildFakePlanJsonSharedComponent(string $region, string $pageType, array $websiteProfile, array $scope): array
+    {
+        $region = \trim($region);
+        $block = $region === 'footer'
+            ? $this->htmlBlocksBuildService->buildSharedFooterBlock($pageType, $websiteProfile, $scope)
+            : $this->htmlBlocksBuildService->buildSharedHeaderBlock($pageType, $websiteProfile, $scope);
+        $html = (string)($block['html'] ?? '');
+
+        return [
+            'code' => $region === 'footer' ? 'footer/ai-site-footer' : 'header/ai-site-header',
+            'name' => $region === 'footer' ? 'AI Site Footer' : 'AI Site Header',
+            'region' => $region === 'footer' ? 'footer' : 'header',
+            'html' => $html,
+            'phtml' => $html,
+            'default_config' => \is_array($block['config'] ?? null) ? $block['config'] : [],
+            'ai_data' => [
+                'fake_mode' => 1,
+                'source' => 'plan_json.shared_components',
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $task
+     * @param array<string,mixed> $sectionBlock
+     * @return array<string,mixed>
+     */
+    private function buildFakePlanJsonSectionComponent(array $task, array $sectionBlock): array
+    {
+        $pageType = \trim((string)($task['page_type'] ?? ''));
+        $sectionCode = \trim((string)($task['section_code'] ?? $sectionBlock['section_code'] ?? 'section'));
+        $blockId = \trim((string)($sectionBlock['block_id'] ?? ''));
+        $componentCode = 'content/' . \str_replace(['/', '_'], '-', $blockId !== '' ? $blockId : ($pageType . '-' . $sectionCode));
+        $html = (string)($sectionBlock['html'] ?? '');
+        $config = \is_array($sectionBlock['config'] ?? null) ? $sectionBlock['config'] : [];
+
+        return [
+            'code' => $componentCode,
+            'name' => (string)($config['headline'] ?? $sectionCode ?: $componentCode),
+            'key' => \trim((string)($task['block_key'] ?? $task['section_key'] ?? $sectionCode)),
+            'html' => $html,
+            'phtml' => $html,
+            'default_config' => $config,
+            'config' => $config,
+            'sort_order' => (int)($task['sort_order'] ?? $sectionBlock['sort_order'] ?? 0),
+            'ai_data' => [
+                'fake_mode' => 1,
+                'source' => 'plan_json.pages.' . $pageType . '.' . \trim((string)($task['block_key'] ?? $task['section_key'] ?? $sectionCode)),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $task
+     * @param array<string,mixed> $sectionBlock
+     * @return array<string,mixed>
+     */
+    private function syncFakePlanJsonSectionBlockToPreviewPage(array $scope, array $task, array $sectionBlock): array
+    {
+        $pageType = \trim((string)($task['page_type'] ?? ''));
+        if ($pageType === '' || \trim((string)($sectionBlock['html'] ?? '')) === '') {
+            return $scope;
+        }
+
+        $pages = $this->planJsonPages($scope);
+        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
+        if ($page === []) {
+            $pageLabels = Page::getPageTypes();
+            $page = [
+                'page_type' => $pageType,
+                'title' => (string)($pageLabels[$pageType] ?? $pageType),
+                'handle' => $pageType === Page::TYPE_HOME ? '' : Page::getDefaultHandleForType($pageType),
+                'status' => 1,
+                'fake_mode' => 1,
+            ];
+        }
+
+        $blockKey = \trim((string)($task['block_key'] ?? $task['section_key'] ?? ''));
+        if ($blockKey !== '' && \is_array($page[$blockKey] ?? null)) {
+            $page[$blockKey] = \array_replace($page[$blockKey], [
+                'status' => 1,
+                'html' => (string)$sectionBlock['html'],
+                'fields' => \is_array($sectionBlock['config'] ?? null) ? $sectionBlock['config'] : [],
+                'field_schema' => \is_array($sectionBlock['field_schema'] ?? null) ? $sectionBlock['field_schema'] : [],
+                'fake_mode' => 1,
+            ]);
+        }
+
+        $page['status'] = 1;
+        $page['last_generated_at'] = \date('Y-m-d H:i:s');
+        $pages[$pageType] = $page;
+
+        return $this->withPlanJsonPages($scope, $pages);
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $task
+     * @return array<string,mixed>
+     */
+    private function resolveFakePlanJsonBlockForTask(array $scope, array $task): array
+    {
+        $pageType = \trim((string)($task['page_type'] ?? ''));
+        $blockKey = \trim((string)($task['block_key'] ?? $task['section_key'] ?? ''));
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
+        if ($blockKey !== '' && \is_array($page[$blockKey] ?? null)) {
+            return $page[$blockKey];
+        }
+
+        $sectionCode = \trim((string)($task['section_code'] ?? ''));
+        foreach ($this->planJsonDynamicBlocks($page) as $candidateKey => $candidateBlock) {
+            $candidateSectionCode = \trim((string)($candidateBlock['section_code'] ?? $candidateBlock['component_code'] ?? ''));
+            if ($candidateKey === $blockKey || ($sectionCode !== '' && $candidateSectionCode === $sectionCode)) {
+                return $candidateBlock;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $task
+     * @param array<string,mixed> $block
+     * @return array<string,mixed>
+     */
+    private function buildFakePlanJsonSectionBlock(array $scope, array $task, array $block): array
+    {
+        $pageType = \trim((string)($task['page_type'] ?? ''));
+        $blockKey = \trim((string)($task['block_key'] ?? $task['section_key'] ?? 'section'));
+        $sectionCode = \trim((string)($task['section_code'] ?? $block['section_code'] ?? $blockKey));
+        $siteName = $this->firstNonEmptyFakePlanJsonText([
+            $scope['site_title'] ?? null,
+            $scope['website_profile']['site_title'] ?? null,
+            $scope['plan_json']['site_name'] ?? null,
+            'Fake Site',
+        ]);
+        $headline = $this->firstNonEmptyFakePlanJsonText([
+            $block['headline'] ?? null,
+            $block['title'] ?? null,
+            $block['section_title'] ?? null,
+            $block['name'] ?? null,
+            $block['content'] ?? null,
+            $this->humanizeFakePlanJsonIdentifier($blockKey),
+        ]);
+        $body = $this->firstNonEmptyFakePlanJsonText([
+            $block['body'] ?? null,
+            $block['description'] ?? null,
+            $block['summary'] ?? null,
+            $block['content'] ?? null,
+            'Fake mode rendered this block from plan_json without an AI call.',
+        ]);
+        $cta = $this->firstNonEmptyFakePlanJsonText([
+            $block['cta_text'] ?? null,
+            $block['primary_cta'] ?? null,
+            'Review block',
+        ]);
+        $escape = static fn(string $value): string => \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
+        $html = '<section class="pb-ai-fake-section" data-page-type="' . $escape($pageType) . '" data-block-key="' . $escape($blockKey) . '">'
+            . '<div class="pb-ai-fake-section__inner">'
+            . '<p class="pb-ai-fake-section__eyebrow">' . $escape($siteName) . ' / fake mode</p>'
+            . '<h2>' . $escape($headline) . '</h2>'
+            . '<p>' . $escape($body) . '</p>'
+            . '<button type="button">' . $escape($cta) . '</button>'
+            . '</div>'
+            . '</section>';
+        $config = [
+            'headline' => $headline,
+            'body' => $body,
+            'cta_text' => $cta,
+            'fake_mode' => 1,
+            'page_type' => $pageType,
+            'block_key' => $blockKey,
+        ];
+
+        return [
+            'block_id' => 'fake-' . $pageType . '-' . ($sectionCode !== '' ? $sectionCode : $blockKey),
+            'block_key' => $blockKey,
+            'section_key' => $blockKey,
+            'type' => 'ai_generated_section',
+            'section_code' => $sectionCode !== '' ? $sectionCode : $blockKey,
+            'html' => $html,
+            'config' => $config,
+            'field_schema' => [
+                'headline' => ['type' => 'text'],
+                'body' => ['type' => 'textarea'],
+                'cta_text' => ['type' => 'text'],
+            ],
+        ];
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmptyFakePlanJsonText(array $values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $text = \trim((string)$value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '';
+    }
+
+    private function humanizeFakePlanJsonIdentifier(string $value): string
+    {
+        $value = \trim(\preg_replace('/[_-]+/', ' ', $value) ?? $value);
+        if ($value === '') {
+            return 'Section';
+        }
+
+        return \ucwords(\strtolower($value));
+    }
+
     private function runRegeneratePageOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId, string $pageType): array
     {
         $ports = new AiSiteAgentRegeneratePageOperationPorts(
@@ -17704,7 +18056,7 @@ class AiSiteAgent extends BaseController
             },
             buildVirtualPagesByType: fn (array $pageTypes, array $scope): array => $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope),
             buildPageBlueprint: fn (string $pageType, array $scope, array $websiteProfile): array => $this->pageBlueprintService->buildPageBlueprint($pageType, $scope, $websiteProfile),
-            buildPlaceholderBlocksForPageType: fn (string $pageType, array $websiteProfile, array $scope): array => $this->htmlBlockNodesBuildService->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope),
+            buildPlaceholderBlocksForPageType: fn (string $pageType, array $websiteProfile, array $scope): array => $this->htmlBlocksBuildService->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope),
             markTaskDone: fn (array $scope, string $taskKey, array $payload): array => $this->planJsonTaskService->markTaskDone($scope, $taskKey, $payload),
             materializeGeneratedPages: fn (string $track, int $websiteId, array $websiteProfile, array $pageTypes, array $layouts, array $virtualPages): array => $this->materializeGeneratedPages($track, $websiteId, $websiteProfile, $pageTypes, $layouts, $virtualPages),
             mergeMaterializedPagesIntoScope: fn (array $scope, array $materialized): array => $this->mergeMaterializedPagesIntoScope($scope, $materialized),
@@ -17733,7 +18085,7 @@ class AiSiteAgent extends BaseController
     {
         $this->assertActiveStreamLeaseAlive($session, $adminId);
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForBuildOperation($session)
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT, ['plan_json'])
         );
         $publishBlock = $this->resolveLatestPublishBlockingAiBuildFailure(
             $scope,
@@ -17744,8 +18096,12 @@ class AiSiteAgent extends BaseController
             throw new \RuntimeException($this->formatPublishBlockedByAiFailureMessage($publishBlock));
         }
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        $scope = $this->planJsonTaskService->syncPageTypeLayoutsWithSharedComponents($scope);
         $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
         $websiteProfile = $this->profileGenerationService->generate($scope);
+        if (\is_array($scope['plan_json'] ?? null)) {
+            $websiteProfile['plan_json'] = $scope['plan_json'];
+        }
 
         $websiteId = \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId());
         $virtualThemeId = \max((int)($scope['virtual_theme_id'] ?? 0), (int)$session->getVirtualThemeId());
@@ -17753,7 +18109,7 @@ class AiSiteAgent extends BaseController
         if ($websiteId <= 0 || $virtualThemeId <= 0) {
             throw new \RuntimeException((string)__('Operation failed.'));
         }
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'progress', (string)__('Operation progress updated.'));
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', (string)__('Operation progress updated.'), 10);
         $stageTwoReadiness = $this->buildStageTwoPublishReadinessReport($scope);
         $scope['stage2_publish_readiness'] = $stageTwoReadiness;
         if (empty($stageTwoReadiness['passed'])) {
@@ -17769,18 +18125,18 @@ class AiSiteAgent extends BaseController
             throw new \RuntimeException((string)__('Operation failed.'));
         }
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'progress', (string)__('Operation progress updated.'));
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', (string)__('Operation progress updated.'), 70);
         $published = $this->publishService->publish(
             $websiteId,
             $virtualThemeId,
             $websiteProfile,
             $pageTypes,
             $pageTypeLayouts,
-            \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [],
-            $workspaceTrack
+            $this->planJsonPages($scope),
+            $workspaceTrack,
+            \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : []
         );
 
-        $scope['pagebuilder_pages_by_type'] = $published['pagebuilder_pages_by_type'] ?? [];
         $scope['materialized_pages_by_type'] = $published['materialized_pages_by_type'] ?? [];
         $scope['stage1_visual_qa_report'] = $this->buildStageOneVisualQaReport($scope, $qualityReport, $stageTwoReadiness);
         $scope['publish_verification'] = \is_array($published['publish_verification'] ?? null)
@@ -17797,7 +18153,7 @@ class AiSiteAgent extends BaseController
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
             [
                 'operation' => 'publish',
-                'status' => 'done',
+                'queue_status' => 'done',
                 'updated_at' => \date('Y-m-d H:i:s'),
                 'message' => (string)__('Operation completed.'),
             ]
@@ -17807,7 +18163,17 @@ class AiSiteAgent extends BaseController
         $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED);
         $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_PUBLISH);
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'progress', (string)__('Operation progress updated.'));
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_PUBLISH, 'publish', (string)__('Operation progress updated.'), 100, '', 'done', AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED, AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED);
+
+        return [
+            'message' => (string)__('Operation completed.'),
+            'website_id' => $websiteId,
+            'virtual_theme_id' => $virtualThemeId,
+            'materialized_pages_by_type' => $scope['materialized_pages_by_type'],
+            'preview_page_id' => (int)$scope['preview_page_id'],
+            'preview_page_type' => (string)$scope['preview_page_type'],
+            'publish_verification' => $scope['publish_verification'],
+        ];
     }
 
     private function sendOperationProgress(
@@ -17953,7 +18319,7 @@ class AiSiteAgent extends BaseController
     ): void {
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($fresh, $this->scopeCompatibilityService->normalizeStage($fresh->getStage()))
+            $this->sessionService->loadScope($fresh, [])
         );
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
@@ -18254,7 +18620,7 @@ class AiSiteAgent extends BaseController
         }
 
         $nextPlanJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
-        $nextPlanJson['confirmed'] = 0;
+        $nextPlanJson = (new AiSitePlanJsonStateService((int)$session->getId()))->setConfirmed($nextPlanJson, false);
         $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
             'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
             'plan_json' => $nextPlanJson,
@@ -18291,7 +18657,7 @@ class AiSiteAgent extends BaseController
         ]);
     }
 
-    private function handleSortPlanBlockNodes(): string
+    private function handleSortPlanBlocks(): string
     {
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
@@ -18318,13 +18684,13 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
         );
         try {
-            $artifacts = $this->planJsonGenerationService->reorderDraftPlanBlockNodes($scope, $pageType, $orderedBlockKeys);
+            $artifacts = $this->planJsonGenerationService->reorderDraftPlanBlocks($scope, $pageType, $orderedBlockKeys);
         } catch (\Throwable $throwable) {
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }
 
         $nextPlanJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
-        $nextPlanJson['confirmed'] = 0;
+        $nextPlanJson = (new AiSitePlanJsonStateService((int)$session->getId()))->setConfirmed($nextPlanJson, false);
         $saved = $this->sessionService->mergeScope($session->getId(), $adminId, [
             'plan_json' => $nextPlanJson,
             'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
@@ -18337,7 +18703,7 @@ class AiSiteAgent extends BaseController
             $session->getId(),
             $adminId,
             $this->scopeCompatibilityService->normalizeStage($session->getStage()),
-            'plan_block_nodes_reordered',
+            'plan_blocks_reordered',
             'Stage-1 plan blocks reordered.',
             ['details' => \is_array($artifacts['reorder_summary'] ?? null) ? $artifacts['reorder_summary'] : []]
         );
@@ -18457,7 +18823,7 @@ class AiSiteAgent extends BaseController
         }
 
         $planJson = \is_array($resultArtifacts['plan_json'] ?? null) ? $resultArtifacts['plan_json'] : [];
-        $planJson['confirmed'] = 0;
+        $planJson = (new AiSitePlanJsonStateService((int)$session->getId()))->setConfirmed($planJson, false);
         $planMarkdown = (string)($resultArtifacts['markdown'] ?? '');
         $combinedSummary = $mutationSummaries === []
             ? (\is_array($resultArtifacts['mutation_summary'] ?? null) ? $resultArtifacts['mutation_summary'] : [])
@@ -18535,7 +18901,7 @@ class AiSiteAgent extends BaseController
 
     private function supportsBackgroundOperation(string $operation): bool
     {
-        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset', 'publish'], true);
+        return \in_array($operation, ['plan', 'build', 'block_regenerate', 'block_partial_patch', 'regenerate_page', 'image_asset'], true);
     }
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
@@ -19023,7 +19389,7 @@ class AiSiteAgent extends BaseController
             $session,
             $adminId,
             [
-                'status' => 'cancelled',
+                'queue_status' => 'cancelled',
                 'message' => (string)__('Operation completed.'),
             ],
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
@@ -19044,9 +19410,18 @@ class AiSiteAgent extends BaseController
     private function getStageOptions(): array
     {
         return [
-            'label' => __('Ready'),
-            'label' => __('Ready'),
-            'label' => __('Ready'),
+            [
+                'value' => AiSiteAgentSession::STAGE_PLAN,
+                'label' => __('Plan'),
+            ],
+            [
+                'value' => AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'label' => __('Visual Edit'),
+            ],
+            [
+                'value' => AiSiteAgentSession::STAGE_PUBLISH,
+                'label' => __('Publish'),
+            ],
         ];
     }
 
@@ -19074,7 +19449,44 @@ class AiSiteAgent extends BaseController
         if (\is_array($bodyParams) && \array_key_exists($key, $bodyParams)) {
             return $bodyParams[$key];
         }
+        $rawBodyParams = $this->getRawRequestBodyParams();
+        if (\array_key_exists($key, $rawBodyParams)) {
+            return $rawBodyParams[$key];
+        }
         return $default;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getRawRequestBodyParams(): array
+    {
+        $cached = $this->request->getData('pb_ai_raw_request_body_params');
+        if (\is_array($cached)) {
+            return $cached;
+        }
+
+        $params = [];
+        $rawBody = $this->request->getBodyParams(false);
+        if (\is_string($rawBody)) {
+            $rawBody = \trim($rawBody);
+            if ($rawBody !== '') {
+                if (\str_starts_with($rawBody, '{') || \str_starts_with($rawBody, '[')) {
+                    $decoded = \json_decode($rawBody, true);
+                    if (\is_array($decoded)) {
+                        $params = $decoded;
+                    }
+                } elseif (\str_contains($rawBody, '=')) {
+                    \parse_str($rawBody, $parsed);
+                    if (\is_array($parsed)) {
+                        $params = $parsed;
+                    }
+                }
+            }
+        }
+
+        $this->request->setData('pb_ai_raw_request_body_params', $params);
+        return $params;
     }
 
     private function isTruthyRequestFlag(string $key): bool

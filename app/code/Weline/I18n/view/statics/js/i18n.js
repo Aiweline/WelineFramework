@@ -185,6 +185,19 @@
     /**
      * 基于当前 URL 安全构建语言切换链接，避免重复注入 backend/currency/lang 段
      */
+    function isBackendLocalizedPath(pathParts, backendKey) {
+        if (backendKey) {
+            return true;
+        }
+        const config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+        if (config.area === 'backend' || (config.theme && config.theme.area === 'backend')) {
+            return true;
+        }
+        return document.documentElement
+            && document.documentElement.getAttribute('data-theme') === 'backend'
+            && pathParts.length > 0;
+    }
+
     function buildLanguageUrl(targetLang, pathname, search, fallbackCurrency) {
         if (!targetLang) {
             return '';
@@ -240,6 +253,13 @@
 
         if (prefixSegment) {
             return '/' + prefixSegment + '/' + currency + '/' + targetLang +
+                (filteredParts.length ? '/' + filteredParts.join('/') : '') +
+                (safeSearch || '');
+        }
+
+        if (isBackendLocalizedPath(pathParts, backendKey) && filteredParts.length > 0) {
+            const inferredPrefix = filteredParts.shift();
+            return '/' + inferredPrefix + '/' + currency + '/' + targetLang +
                 (filteredParts.length ? '/' + filteredParts.join('/') : '') +
                 (safeSearch || '');
         }

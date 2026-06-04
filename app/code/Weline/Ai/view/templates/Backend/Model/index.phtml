@@ -782,7 +782,7 @@ $currentSearch = $currentSearch ?? '';
             '<div class="modal-content">' +
             '<div class="modal-body text-center py-4">' +
             '<div class="spinner-border text-primary mb-3" role="status">' +
-            '<span class="visually-hidden">Loading...</span>' +
+            '<span class="visually-hidden"><?= __('加载中...') ?></span>' +
             '</div>' +
             '<h5 id="progressText">正在测试...</h5>' +
             '<p class="text-muted mb-0" id="progressDetail">请稍候，正在测试模型连接</p>' +
@@ -1044,7 +1044,7 @@ $currentSearch = $currentSearch ?? '';
             btn.disabled = false;
             document.body.removeChild(testModal);
             
-            console.error('Error:', error);
+            console.error('<?= __('错误：') ?>', error);
             var fnName = '__retry_test_' + Date.now();
             window[fnName] = function() { testModelConnection(modelCode); };
             showResultModal('error', '连通测试失败', '<?= __('测试失败: 网络错误') ?>', false, fnName);
@@ -1103,7 +1103,7 @@ $currentSearch = $currentSearch ?? '';
             btn.disabled = false;
             document.body.removeChild(testModal);
             
-            console.error('Error:', error);
+            console.error('<?= __('错误：') ?>', error);
             var fnName = '__retry_self_' + Date.now();
             window[fnName] = function() { testSelfConfigConnection(modelCode); };
             showResultModal('error', '自配置连通测试失败', '<?= __('测试失败: 网络错误') ?>', false, fnName);
@@ -1120,7 +1120,7 @@ $currentSearch = $currentSearch ?? '';
             '<div class="modal-content">' +
             '<div class="modal-body text-center">' +
             '<div class="spinner-border text-primary mb-3" role="status">' +
-            '<span class="visually-hidden">Loading...</span>' +
+            '<span class="visually-hidden"><?= __('加载中...') ?></span>' +
             '</div>' +
             '<h5>正在测试连通性...</h5>' +
             '<p class="text-muted">请稍候，正在连接AI服务</p>' +
@@ -1150,7 +1150,7 @@ $currentSearch = $currentSearch ?? '';
             var revised = image && image.revised_prompt ? '<div class="small text-muted mt-1">' + escapeHtmlForResult(image.revised_prompt) + '</div>' : '';
             return '<div class="col-12 col-md-6 mb-2">'
                 + '<a href="' + safeSrc + '" target="_blank" rel="noopener">'
-                + '<img src="' + safeSrc + '" class="img-fluid rounded border" style="max-height: 280px; width: 100%; object-fit: contain; background: #fff;" alt="test image">'
+                + '<img src="' + safeSrc + '" class="img-fluid rounded border" style="max-height: 280px; width: 100%; object-fit: contain; background: #fff;" alt="<?= __('测试图片') ?>">'
                 + '</a>' + revised + '</div>';
         }).join('');
         if (!items) return '';

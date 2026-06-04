@@ -3126,12 +3126,9 @@ function injectWlsProcessTimeHeader(string $response, float $durationMs): string
         return $response;
     }
     $ms = \round($durationMs, 2);
-    // 注意：不要在最后一行末尾额外附加 \r\n。
-    // $pos 位置对应原响应的 \r\n\r\n 分隔符起点，分隔符自身会提供最后一行结束符与空行。
-    $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"";
-    // 在 header/body 分隔符（\r\n\r\n）之前插入新增 header，
-    // 避免插入点落在分隔符内部造成多余 CRLF 从而污染 body。
-    return \substr_replace($response, $headers, $pos, 0);
+    // Insert inside the original header/body separator so the previous header keeps its CRLF.
+    $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"\r\n";
+    return \substr_replace($response, $headers, $pos + 2, 0);
 }
 
 function wlsCompressFormattedHttpResponse(string $response, string $acceptEncoding): string
@@ -3347,8 +3344,8 @@ function sendResponseAndCleanup(
         if ($headerEndErr !== false) {
             $headersPartErr = \substr($response, 0, $headerEndErr);
             $bodyPartErr = \substr($response, $headerEndErr + 4);
-            if (\preg_match('/^Connection:\s*.+$/mi', $headersPartErr)) {
-                $headersPartErr = (string)\preg_replace('/^Connection:\s*.+$/mi', 'Connection: close', $headersPartErr);
+            if (\preg_match('/^Connection:\s*[^\r\n]*/mi', $headersPartErr)) {
+                $headersPartErr = (string)\preg_replace('/^Connection:\s*[^\r\n]*/mi', 'Connection: close', $headersPartErr);
             } else {
                 $headersPartErr .= "\r\nConnection: close";
             }

@@ -14,7 +14,7 @@ final class PlanJsonFrozenFieldValidatorTest extends TestCase
         $validator = new PlanJsonFrozenFieldValidator();
 
         $result = $validator->validateRepairCandidatePath('tasks.0.executor', [
-            'frozen_fields' => ['tasks', 'pages', 'block_nodes'],
+            'frozen_fields' => ['tasks', 'pages', 'blocks'],
         ]);
 
         self::assertFalse($result['valid']);
@@ -26,7 +26,7 @@ final class PlanJsonFrozenFieldValidatorTest extends TestCase
         $validator = new PlanJsonFrozenFieldValidator();
 
         $result = $validator->validateRepairCandidatePath('content_manifest.items.hero.title', [
-            'frozen_fields' => ['tasks', 'pages', 'block_nodes'],
+            'frozen_fields' => ['tasks', 'pages', 'blocks'],
         ]);
 
         self::assertTrue($result['valid']);

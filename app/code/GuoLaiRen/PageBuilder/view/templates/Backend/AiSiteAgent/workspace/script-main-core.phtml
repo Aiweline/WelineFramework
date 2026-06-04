@@ -9,9 +9,16 @@
 
     var isGuidedUi = <?= $guidedUi ? 'true' : 'false' ?>;
     var publicId = <?= $pbAiScriptJson($publicId) ?>;
+    if (!String(publicId || '').trim()) {
+        try {
+            publicId = String(new URLSearchParams(window.location.search).get('public_id') || '').trim();
+        } catch (error) {
+            publicId = '';
+        }
+    }
     var pageTypeLabelMap = <?= $pbAiScriptJson($pageTypeLabels) ?>;
     var currentStageCode = <?= $pbAiScriptJson($currentStage) ?>;
-    var initialWorkspaceState = normalizeWorkspaceStateShape(<?php $this->writeJsonForScript($state); ?>);
+    var initialWorkspaceState = normalizeWorkspaceStateShape(<?= $pbAiScriptJson($state, $pbAiScriptJsonHexFlags) ?>);
     var latestWorkspaceState = initialWorkspaceState;
     var initialWorkspaceStateHydrated = false;
     window.__pbInitialWorkspaceState = initialWorkspaceState;
@@ -34,6 +41,7 @@
     var skillDisableUrl = <?= $pbAiScriptJson((string)($skillDisableUrl ?? $this->getData('skillDisableUrl') ?? $this->getData('skill_disable_url') ?? '')) ?>;
     var designDirectionListUrl = <?= $pbAiScriptJson((string)($designDirectionListUrl ?? $this->getData('designDirectionListUrl') ?? $this->getData('design_direction_list_url') ?? '')) ?>;
     var designDirectionMatchUrl = <?= $pbAiScriptJson((string)($designDirectionMatchUrl ?? $this->getData('designDirectionMatchUrl') ?? $this->getData('design_direction_match_url') ?? '')) ?>;
+    var designDirectionMatchTimer = null;
     var initialSelectedSkillCodes = <?= $pbAiScriptJson(\array_values(\array_filter(\array_map('strval', \is_array($scope['selected_skill_codes'] ?? null) ? $scope['selected_skill_codes'] : (\is_array($state['selected_skill_codes'] ?? null) ? $state['selected_skill_codes'] : (\is_array($state['scope']['selected_skill_codes'] ?? null) ? $state['scope']['selected_skill_codes'] : [])))))) ?>;
     var defaultSelectedSkillCodes = [];
     var queueUiStateByStage = {};
@@ -66,6 +74,9 @@
     setStageUrl = normalizeLocalPreviewUrlForCurrentHost(setStageUrl);
     startPlanUrl = normalizeLocalPreviewUrlForCurrentHost(startPlanUrl);
     confirmPlanUrl = normalizeLocalPreviewUrlForCurrentHost(confirmPlanUrl);
+    if (!confirmPlanUrl) {
+        confirmPlanUrl = resolveCurrentWorkspaceActionUrl('post-confirm-plan');
+    }
     planSseUrl = normalizeLocalPreviewUrlForCurrentHost(planSseUrl);
     skillListUrl = normalizeLocalPreviewUrlForCurrentHost(skillListUrl);
     skillSaveUrl = normalizeLocalPreviewUrlForCurrentHost(skillSaveUrl);
@@ -95,14 +106,13 @@
     var publishedSiteUrl = resolvePublishedSiteUrl(initialWorkspaceState || {});
     var currentWorkspaceStage = <?= $pbAiScriptJson($currentStage) ?>;
     var planConfirmedState = <?= $pbAiScriptJson((int)($state['plan_json']['confirmed'] ?? 0) === 1) ?>;
-    var hasPendingPlanJsonBlockNodesState = <?= $pbAiScriptJson((bool)($state['has_pending_plan_json_block_nodes'] ?? false)) ?>;
     /** 与 PHP 注入的 $pbAiPhaseOnePlanPresent 同步：是否存在可用的建站方案（用于按钮禁用等）。 */
     var lastPhaseOnePlanPresent = <?= $pbAiScriptJson((bool)($pbAiPhaseOnePlanPresent)) ?>;
     var globalRunVirtualThemeDisabled = false;
     var planGenerationActionLockActive = false;
     var planGenerationLockedControls = [];
     var planGenerationActionLockClickGuardBound = false;
-    window.__pbTaskSummary = <?php $this->writeJsonForScript($planJsonTaskSummary); ?>;
+    window.__pbTaskSummary = <?= $pbAiScriptJson($planJsonTaskSummary, $pbAiScriptJsonHexFlags) ?>;
     var buildNavigationGuardActive = false;
     var buildStartupPending = false;
     if (typeof window.__pbWorkspaceStreamPaused === 'undefined') {
@@ -144,7 +154,13 @@
         return window.__pbBlockRefreshState;
     }
     var blockRefreshState = getSharedBlockRefreshState();
-    var virtualPagesByTypeState = <?php $this->writeJsonForScript($initialVirtualPagesByTypeState); ?>;
+    var planJsonPagesByTypeState = (
+        initialWorkspaceState
+        && initialWorkspaceState.plan_json
+        && initialWorkspaceState.plan_json.pages
+        && typeof initialWorkspaceState.plan_json.pages === 'object'
+        && !Array.isArray(initialWorkspaceState.plan_json.pages)
+    ) ? initialWorkspaceState.plan_json.pages : {};
 
     function resolvePreviewBridge() {
         return window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview === 'object'
@@ -268,12 +284,8 @@
 
     function resolvePlanJsonFromWorkspaceState(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         if (state.plan_json && typeof state.plan_json === 'object' && !Array.isArray(state.plan_json)) {
             return state.plan_json;
-        }
-        if (scope.plan_json && typeof scope.plan_json === 'object' && !Array.isArray(scope.plan_json)) {
-            return scope.plan_json;
         }
         return {};
     }
@@ -296,28 +308,49 @@
     function resolvePlanJsonArtifactsFromWorkspaceState(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var planJson = resolvePlanJsonFromWorkspaceState(state);
-        var projection = state.plan_projection && typeof state.plan_projection === 'object'
-            ? state.plan_projection
-            : {};
         var displayPlan = {};
         var displayKind = '';
         if (hasNonEmptyPlanArtifact(planJson)) {
             displayPlan = planJson;
             displayKind = 'plan_json';
-        } else if (hasNonEmptyPlanArtifact(projection)) {
-            displayPlan = projection;
-            displayKind = 'projection';
         }
         var hasEvidence = !!(planJson.pages && typeof planJson.pages === 'object' && Object.keys(planJson.pages).length > 0);
         var confirmed = hasEvidence && parseInt(String(planJson.confirmed || 0), 10) === 1;
         return {
             planJson: planJson,
-            projection: projection,
             displayPlan: displayPlan,
             displayKind: displayKind,
             hasEvidence: hasEvidence,
             confirmed: confirmed
         };
+    }
+
+    function hasPendingPlanJsonBlocksFromWorkspaceState(workspaceState) {
+        var planJson = resolvePlanJsonFromWorkspaceState(workspaceState);
+        var pages = planJson.pages && typeof planJson.pages === 'object' && !Array.isArray(planJson.pages)
+            ? planJson.pages
+            : {};
+        var pageMeta = {
+            page_key: true, page_type: true, type: true, status: true, message: true, error: true, error_message: true,
+            updated_at: true, started_at: true, finished_at: true, attempt_no: true, result_ref: true,
+            title: true, label: true, page_label: true, page_title: true, page_goal: true, page_status: true,
+            content_locale: true, ordered_block_keys: true,
+            seo: true, route: true, slug: true, path: true, layout: true, sections: true, content: true,
+            description: true, summary: true, html: true, html_content: true, fields: true
+        };
+        return Object.keys(pages).some(function (pageType) {
+            var page = pages[pageType];
+            if (!page || typeof page !== 'object' || Array.isArray(page)) {
+                return false;
+            }
+            return Object.keys(page).some(function (blockKey) {
+                var block = page[blockKey];
+                if (pageMeta[blockKey] || !block || typeof block !== 'object' || Array.isArray(block)) {
+                    return false;
+                }
+                return parseInt(String(block.status == null ? 0 : block.status), 10) !== 1;
+            });
+        });
     }
 
     function hasPlanJsonFlowEvidence(workspaceState) {
@@ -341,17 +374,30 @@
             return;
         }
         var artifacts = resolvePlanJsonArtifactsFromWorkspaceState(workspaceState || getLatestWorkspaceStateForQueuePrompt());
-        var projection = artifacts.projection && typeof artifacts.projection === 'object' ? artifacts.projection : {};
-        if (!artifacts.hasEvidence || !hasNonEmptyPlanArtifact(projection)) {
+        var planJson = artifacts.planJson && typeof artifacts.planJson === 'object' ? artifacts.planJson : {};
+        if (!artifacts.hasEvidence || !hasNonEmptyPlanArtifact(planJson)) {
             panel.classList.add('d-none');
             panel.innerHTML = '';
             return;
         }
-        var pages = Array.isArray(projection.pages) ? projection.pages : [];
+        var pagesByType = planJson.pages && typeof planJson.pages === 'object' ? planJson.pages : {};
+        var pages = Object.keys(pagesByType).map(function (pageType) {
+            var page = pagesByType[pageType] && typeof pagesByType[pageType] === 'object' ? pagesByType[pageType] : {};
+            return Object.assign({ page_type: pageType }, page);
+        });
         var counts = [];
-        var pageCount = Number(projection.page_count || pages.length || 0);
-        var blockCount = Number(projection.block_count || 0);
-        var taskCount = Number(projection.task_count || 0);
+        var pageCount = Number(pages.length || 0);
+        var blockCount = pages.reduce(function (count, page) {
+            if (!page || typeof page !== 'object') {
+                return count;
+            }
+            return count + Object.keys(page).filter(function (key) {
+                var node = page[key];
+                return !!(node && typeof node === 'object' && !Array.isArray(node)
+                    && Object.prototype.hasOwnProperty.call(node, 'status'));
+            }).length;
+        }, 0);
+        var taskCount = blockCount;
         if (pageCount > 0) {
             counts.push(<?= $pbAiScriptJson((string)__('页面')) ?> + ' ' + pageCount);
         }
@@ -361,14 +407,18 @@
         if (taskCount > 0) {
             counts.push(<?= $pbAiScriptJson((string)__('构建任务')) ?> + ' ' + taskCount);
         }
-        var siteName = String(projection.site_name || '').trim();
-        var goal = String(projection.primary_goal || projection.summary || '').trim();
+        var siteName = String(planJson.site_name || '').trim();
+        var goal = String(planJson.primary_goal || planJson.summary || '').trim();
         var pageItems = pages.slice(0, 5).map(function (page) {
             if (!page || typeof page !== 'object') {
                 return '';
             }
             var title = String(page.title || page.page_type || page.page_id || '').trim();
-            var blockTotal = Array.isArray(page.block_nodes) ? page.block_nodes.length : 0;
+            var blockTotal = Object.keys(page).filter(function (key) {
+                var node = page[key];
+                return !!(node && typeof node === 'object' && !Array.isArray(node)
+                    && Object.prototype.hasOwnProperty.call(node, 'status'));
+            }).length;
             return '<li class="mb-1"><span class="fw-semibold">' + escapeHtml(title || '-') + '</span>'
                 + (blockTotal > 0
                     ? ' <span class="text-muted">(' + escapeHtml(String(blockTotal)) + ' ' + <?= $pbAiScriptJson((string)__('个区块')) ?> + ')</span>'
@@ -376,7 +426,7 @@
                 + '</li>';
         }).filter(Boolean).join('');
         panel.classList.remove('d-none');
-        panel.innerHTML = '<div class="border rounded bg-light p-3 pb-ai-plan-json-projection-card">'
+        panel.innerHTML = '<div class="border rounded bg-light p-3 pb-ai-plan-json-summary-card">'
             + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
             + '<div class="fw-semibold">' + <?= $pbAiScriptJson((string)__('构建任务计划')) ?> + '</div>'
             + '<span class="badge text-bg-success">' + (artifacts.confirmed
@@ -404,6 +454,24 @@
         return Object.assign({}, base, patch);
     }
 
+    function mergePlanJsonWorkspaceObject(base, patch) {
+        if (!isPlainWorkspaceObject(patch)) {
+            return patch;
+        }
+        if (!isPlainWorkspaceObject(base)) {
+            return Object.assign({}, patch);
+        }
+        var merged = Object.assign({}, base);
+        Object.keys(patch).forEach(function (key) {
+            var patchValue = patch[key];
+            var baseValue = base[key];
+            merged[key] = isPlainWorkspaceObject(baseValue) && isPlainWorkspaceObject(patchValue)
+                ? mergePlanJsonWorkspaceObject(baseValue, patchValue)
+                : patchValue;
+        });
+        return merged;
+    }
+
     function sanitizeQueueInfoForMemory(info) {
         var safe = isPlainWorkspaceObject(info) ? Object.assign({}, info) : {};
         dropWorkspaceVolatileKeys(safe);
@@ -423,19 +491,9 @@
     function sanitizeWorkspaceStateForMemory(state) {
         var safe = isPlainWorkspaceObject(state) ? Object.assign({}, state) : {};
         dropWorkspaceVolatileKeys(safe);
-        ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
-            if (isPlainWorkspaceObject(safe[key])) {
-                safe[key] = sanitizeQueueInfoForMemory(safe[key]);
-            }
-        });
         if (isPlainWorkspaceObject(safe.scope)) {
             safe.scope = Object.assign({}, safe.scope);
             dropWorkspaceVolatileKeys(safe.scope);
-            ['plan_queue_info', 'build_queue_info'].forEach(function (key) {
-                if (isPlainWorkspaceObject(safe.scope[key])) {
-                    safe.scope[key] = sanitizeQueueInfoForMemory(safe.scope[key]);
-                }
-            });
         }
         ['plan_json'].forEach(function (key) {
             if (isPlainWorkspaceObject(safe[key])) {
@@ -447,14 +505,6 @@
                 safe.scope[key] = Object.assign({}, safe.scope[key]);
                 dropWorkspaceVolatileKeys(safe.scope[key]);
                 delete safe.scope[key].task_results;
-            }
-        });
-        ['page_type_layouts', 'pagebuilder_pages_by_type', 'virtual_pages_by_type'].forEach(function (key) {
-            if (isPlainWorkspaceObject(safe[key])) {
-                safe[key] = sanitizeWorkspaceStateCollectionForMemory(safe[key]);
-            }
-            if (isPlainWorkspaceObject(safe.scope) && isPlainWorkspaceObject(safe.scope[key])) {
-                safe.scope[key] = sanitizeWorkspaceStateCollectionForMemory(safe.scope[key]);
             }
         });
         delete safe.task_results;
@@ -570,19 +620,19 @@
             ? latestWorkspaceState
             : (isPlainWorkspaceObject(window.__pbLastWorkspaceState) ? window.__pbLastWorkspaceState : {});
         var merged = Object.assign({}, base, patch);
+        if (Object.prototype.hasOwnProperty.call(patch, 'plan_json')) {
+            merged.plan_json = mergePlanJsonWorkspaceObject(base.plan_json, patch.plan_json);
+        }
         [
             'scope',
             'active_operation',
             'active_operations',
             'plan',
-            'plan_queue_info',
-            'build_queue_info',
             'plan_json_execution_summary',
             'build_summary',
             'workspace_entry_queue_notice',
             'asset_manifest',
-            'pre_publish_visual_urls',
-            'virtual_pages_by_type'
+            'pre_publish_visual_urls'
         ].forEach(function (key) {
             if (Object.prototype.hasOwnProperty.call(patch, key)) {
                 merged[key] = mergePlainWorkspaceObject(base[key], patch[key]);
@@ -603,23 +653,11 @@
 
     function buildStageOnePlanPayloadFromWorkspaceState(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
-        var plan = state.plan && typeof state.plan === 'object' ? state.plan : {};
+        var planJson = pickFirstNonEmptyPlanObject(state.plan_json);
         var payload = {
-            json: pickFirstNonEmptyPlanObject.apply(null, [
-                plan.json,
-                state.plan_json,
-                scope.plan_json
-            ]),
-            structured: pickFirstNonEmptyPlanObject.apply(null, [
-                plan.structured,
-                plan.json,
-                state.structured_plan,
-                state.plan_json,
-                scope.structured_plan,
-                scope.plan_json
-            ].concat(stateWorkbenchCandidates, scopeWorkbenchCandidates)),
-            plan_json: pickFirstNonEmptyPlanObject(plan.plan_json, state.plan_json, scope.plan_json)
+            json: planJson,
+            structured: planJson,
+            plan_json: planJson
         };
         if (
             hasNonEmptyPlanArtifact(payload.json)
@@ -669,25 +707,15 @@
 
     function collectPlanOperationCandidatesFromWorkspaceState(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         var candidates = [];
         if (state.active_operation && typeof state.active_operation === 'object') {
             candidates.push({ source: 'active_operation', value: state.active_operation, requirePlanOperation: true });
         }
-        if (scope.active_operation && typeof scope.active_operation === 'object') {
-            candidates.push({ source: 'scope.active_operation', value: scope.active_operation, requirePlanOperation: true });
-        }
-        [state.active_operations, scope.active_operations].forEach(function (operations) {
+        [state.active_operations].forEach(function (operations) {
             if (operations && typeof operations === 'object' && operations.plan && typeof operations.plan === 'object') {
                 candidates.push({ source: 'active_operations.plan', value: operations.plan, requirePlanOperation: false });
             }
         });
-        if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
-            candidates.push({ source: 'plan_queue_info', value: state.plan_queue_info, requirePlanOperation: false });
-        }
-        if (scope.plan_queue_info && typeof scope.plan_queue_info === 'object') {
-            candidates.push({ source: 'scope.plan_queue_info', value: scope.plan_queue_info, requirePlanOperation: false });
-        }
         return candidates;
     }
 
@@ -1005,18 +1033,12 @@
         }
         planConfirmedState = parseInt(String(resolvePlanJsonFromWorkspaceState(workspaceState).confirmed || 0), 10) === 1;
         setNeedsFormSelectedSkillCodes(resolveSelectedSkillCodesFromWorkspaceState(workspaceState, getNeedsFormSelectedSkillCodes()));
-        if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_pending_plan_json_block_nodes')) {
-            hasPendingPlanJsonBlockNodesState = !!workspaceState.has_pending_plan_json_block_nodes;
-        }
         if (workspaceState.active_operation && typeof workspaceState.active_operation === 'object') {
             currentActiveOperationState = workspaceState.active_operation;
             isOperationRunning = isQueueUiBusyStatus(currentActiveOperationState.status || currentActiveOperationState.state);
         }
         if (!syncPlanTerminalFailureUiFromWorkspaceState(workspaceState)) {
             syncPlanTerminalSuccessUiFromWorkspaceState(workspaceState);
-        }
-        if (workspaceState.virtual_pages_by_type && typeof workspaceState.virtual_pages_by_type === 'object') {
-            mergeVirtualPagesByTypeState(workspaceState.virtual_pages_by_type);
         }
         renderPlanJsonProjectionSummary(workspaceState);
         setPlanRetryButtonVisible(shouldShowPlanRetryButtonFromWorkspaceState(workspaceState));
@@ -1063,7 +1085,7 @@
         return !!hasPlanJsonFlowEvidence();
     };
     workspaceApi.getHasPendingPlanJsonTasksState = function () {
-        return !!hasPendingPlanJsonBlockNodesState;
+        return hasPendingPlanJsonBlocksFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
     };
     workspaceApi.retryPhaseOnePlanGeneration = function (options) {
         var opts = options && typeof options === 'object' ? options : {};
@@ -1309,7 +1331,7 @@
 
     function promptManualPlanReviewAfterReload(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        var operation = findPlanSuccessOperationFromWorkspaceState(state) || state.plan_queue_info || {};
+        var operation = findPlanSuccessOperationFromWorkspaceState(state) || resolveCanonicalQueueInfoFromWorkspaceStateForUi(state, 'plan') || {};
         var fingerprint = shortHashText([
             String(publicId || ''),
             String(operation.queue_id || ''),
@@ -1384,12 +1406,9 @@
         if (activeOperations.plan && typeof activeOperations.plan === 'object') {
             candidates.push(activeOperations.plan);
         }
-        if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
-            candidates.push(state.plan_queue_info);
-        }
         return candidates.some(function (item) {
             var operation = String(item.operation || '').trim();
-            return (operation === '' || operation === 'plan')
+            return operation === 'plan'
                 && isQueueStatusRunningForUi(readQueueStatusForPrompt(item));
         });
     }
@@ -1444,7 +1463,6 @@
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         var actual = [];
         var pushPageTypes = function (pageSource) {
             if (!pageSource || typeof pageSource !== 'object') {
@@ -1461,24 +1479,7 @@
                 }
             });
         };
-        var plan = state.plan && typeof state.plan === 'object' ? state.plan : {};
-        var payload = currentPlanPayload && typeof currentPlanPayload === 'object' ? currentPlanPayload : {};
-        [
-            state.plan_json && state.plan_json.pages,
-            state.plan_json && state.plan_json.pages,
-            scope.plan_json && scope.plan_json.pages,
-            scope.plan_json && scope.plan_json.pages,
-            plan.json && plan.json.pages,
-            plan.json && plan.json.pages,
-            plan.structured && plan.structured.pages,
-            plan.structured && plan.structured.pages,
-            payload.json && payload.json.pages,
-            payload.json && payload.json.pages,
-            payload.structured && payload.structured.pages,
-            payload.structured && payload.structured.pages,
-            payload.plan_json && payload.plan_json.pages,
-            payload.plan_json && payload.plan_json.pages
-        ].forEach(pushPageTypes);
+        pushPageTypes(state.plan_json && state.plan_json.pages);
         return actual;
     }
 
@@ -1614,6 +1615,24 @@
         return '';
     }
 
+    function getPlanJsonConfirmationBlockingMessage(workspaceState) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan')) {
+            return '';
+        }
+        var actual = resolveGeneratedPlanPageTypesFromState(state);
+        var expected = resolveSelectedPlanPageTypesFromState(state);
+        if (actual.length === 0) {
+            return String(messages.planJsonConfirmRequired || messages.planStartUnavailable || messages.networkError || '');
+        }
+        var missing = expected.length > 0 ? expected.filter(function (pageType) {
+            return actual.indexOf(pageType) === -1;
+        }) : [];
+        return missing.length > 0 ? formatPlanMissingPagesMessage(missing) : '';
+    }
+
     function hasPhaseOnePlanBlockingErrors(workspaceState) {
         return getPhaseOnePlanBlockingErrorMessage(workspaceState) !== '';
     }
@@ -1627,7 +1646,7 @@
         var c1 = planGenerationActionLockActive;
         var c2 = !(hasCurrentPhaseOnePlan() || lastPhaseOnePlanPresent);
         var c3 = isPhaseOneQueueUnfinished();
-        var c4 = hasPhaseOnePlanBlockingErrors(state);
+        var c4 = getPlanJsonConfirmationBlockingMessage(state) !== '';
         var c5 = planSseRunning || hasBuildOperationRunningForUi(state);
         confirmBtn.disabled = c1 || c2 || c3 || c4 || c5;
     }
@@ -1728,30 +1747,12 @@
         }
     };
     window.__pbWorkspaceApi = workspaceApi;
-    // 兼容旧入口：全局 hydrateWorkspaceFromState 委托到 __pbWorkspaceApi。
     window.hydrateWorkspaceFromState = function (workspaceState) {
         return window.__pbWorkspaceApi.hydrateWorkspaceFromState(workspaceState);
     };
-    // 兼容旧入口：全局 updatePlanModalContent 与弹层更新函数绑定。
     window.updatePlanModalContent = function (markdown) {
         return updatePlanModalContent(markdown);
     };
-
-    function mergeVirtualPagesByTypeState(pages) {
-        if (!pages || typeof pages !== 'object') {
-            return;
-        }
-        var merged = {};
-        if (virtualPagesByTypeState && typeof virtualPagesByTypeState === 'object') {
-            Object.keys(virtualPagesByTypeState).forEach(function (pageType) {
-                merged[pageType] = virtualPagesByTypeState[pageType];
-            });
-        }
-        Object.keys(pages).forEach(function (pageType) {
-            merged[pageType] = pages[pageType];
-        });
-        virtualPagesByTypeState = merged;
-    }
     var messages = {
         networkError: <?= $pbAiScriptJson((string)__('网络错误，请稍后重试')) ?>,
         planErrorNoDetail: <?= $pbAiScriptJson((string)__('建站方案生成失败，但后端未返回具体错误详情。请查看队列日志，或刷新工作区后重试失败项。')) ?>,
@@ -2084,13 +2085,11 @@
 
     function updatePlanQueueLatestMessage(message) {
         var currentState = getLatestWorkspaceStateForQueuePrompt();
-        var queueInfo = currentState && currentState.plan_queue_info && typeof currentState.plan_queue_info === 'object'
-            ? currentState.plan_queue_info
-            : null;
+        var queueInfo = resolveCanonicalQueueInfoFromWorkspaceStateForUi(currentState, 'plan');
         if (
             !planQueueLatestProgressPublishing
             &&
-            queueInfo
+            Object.keys(queueInfo).length > 0
             && window.__pbPhase1TaskProgress
             && typeof window.__pbPhase1TaskProgress.publishPlanQueueLatestProgressFromInfo === 'function'
         ) {
@@ -2218,7 +2217,7 @@
             return normalizeQueueStatusForPrompt(info);
         }
         var currentInfo = sanitizeQueueInfoForMemory(info);
-        var directStatus = normalizeQueueStatusForPrompt(currentInfo.status || currentInfo.queue_status || currentInfo.state || currentInfo.job_status || '');
+        var directStatus = normalizeQueueStatusForPrompt(currentInfo.queue_status || '');
         if (isQueueTerminalRecoveryForUi(currentInfo)) {
             var semanticStatus = normalizeQueueStatusForPrompt(currentInfo.semantic_status || '');
             if (isPlanSuccessStatusForWorkspaceUi(directStatus)) {
@@ -2235,6 +2234,77 @@
             return directStatus;
         }
         return directStatus;
+    }
+
+    function normalizeCanonicalQueueStatusForWorkspaceUi(candidate, operation) {
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        if (typeof candidate === 'string' || typeof candidate === 'number') {
+            var scalarStatus = normalizeQueueStatusForPrompt(candidate);
+            return scalarStatus !== '' ? { operation: normalizedOperation, queue_status: scalarStatus, status: scalarStatus } : {};
+        }
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+            return {};
+        }
+        if (normalizedOperation !== '' && Object.prototype.hasOwnProperty.call(candidate, normalizedOperation)) {
+            return normalizeCanonicalQueueStatusForWorkspaceUi(candidate[normalizedOperation], normalizedOperation);
+        }
+        var directStatus = normalizeQueueStatusForPrompt(candidate.queue_status || '');
+        if (directStatus === '' && !candidate.operation && !candidate.job_type && !candidate.job_key && !candidate.biz_key) {
+            return {};
+        }
+        return sanitizeQueueInfoForMemory(candidate);
+    }
+
+    function canonicalQueueInfoBelongsToWorkspaceUiOperation(queueInfo, operation) {
+        if (!queueInfo || typeof queueInfo !== 'object') {
+            return false;
+        }
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        if (normalizedOperation === '') {
+            return true;
+        }
+        var markers = [
+            queueInfo.operation,
+            queueInfo.job_type,
+            queueInfo.job_key,
+            queueInfo.biz_key,
+            queueInfo.name
+        ].map(function (value) {
+            return String(value || '').trim().toLowerCase();
+        }).filter(Boolean);
+        if (markers.length === 0) {
+            return true;
+        }
+        return markers.some(function (marker) {
+            return marker === normalizedOperation
+                || marker.indexOf('operation:' + normalizedOperation) >= 0
+                || marker.indexOf('queue_slot:' + normalizedOperation) >= 0
+                || marker.indexOf(normalizedOperation) >= 0;
+        });
+    }
+
+    function resolveCanonicalQueueInfoFromWorkspaceStateForUi(workspaceState, operation) {
+        var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
+        var normalizedOperation = String(operation || '').trim().toLowerCase();
+        var active = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
+        var activeOperations = state.active_operations && typeof state.active_operations === 'object' ? state.active_operations : {};
+        var scopedActive = normalizedOperation && activeOperations[normalizedOperation] && typeof activeOperations[normalizedOperation] === 'object'
+            ? activeOperations[normalizedOperation]
+            : {};
+        var candidates = [
+            scopedActive.queue_status,
+            active.queue_status,
+            scopedActive,
+            active,
+            state.queue_status
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var queueInfo = normalizeCanonicalQueueStatusForWorkspaceUi(candidates[i], normalizedOperation);
+            if (Object.keys(queueInfo).length > 0 && canonicalQueueInfoBelongsToWorkspaceUiOperation(queueInfo, normalizedOperation)) {
+                return queueInfo;
+            }
+        }
+        return {};
     }
 
     function hasRunningQueueForUi(workspaceState, operationFilter) {
@@ -2287,8 +2357,9 @@
         if (state.active_operations && typeof state.active_operations === 'object' && state.active_operations.build) {
             candidates.push(state.active_operations.build);
         }
-        if (state.build_queue_info && typeof state.build_queue_info === 'object') {
-            candidates.push(state.build_queue_info);
+        var canonicalBuildQueueInfo = resolveCanonicalQueueInfoFromWorkspaceStateForUi(state, 'build');
+        if (Object.keys(canonicalBuildQueueInfo).length > 0) {
+            candidates.push(canonicalBuildQueueInfo);
         }
         return candidates.some(function (item) {
             var operation = String(item.operation || 'build').trim().toLowerCase();
@@ -2357,7 +2428,7 @@
         var candidates = [];
         if (normalizedOperation !== '') {
             candidates.push(parseInt(String(summaryOperations[normalizedOperation] || 0), 10) || 0);
-            [state.retryable_ai_failures, scope.retryable_ai_failures].forEach(function (ledger) {
+            [state.retryable_ai_failures].forEach(function (ledger) {
                 if (!ledger || typeof ledger !== 'object') {
                     return;
                 }
@@ -2376,9 +2447,7 @@
             if (normalizedOperation === 'build' && !hasPublishBlockingAiOperationRunningFromWorkspaceState(state)) {
                 [
                     state.latest_build_failed,
-                    state.publish_blocked_by_latest_ai_failure,
-                    scope.latest_build_failed,
-                    scope.publish_blocked_by_latest_ai_failure
+                    state.publish_blocked_by_latest_ai_failure
                 ].forEach(function (flag) {
                     if (flag) {
                         candidates.push(1);
@@ -2387,7 +2456,6 @@
             }
         } else {
             candidates.push(parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0);
-            candidates.push(parseInt(String(scope.retryable_ai_failure_count || 0), 10) || 0);
             candidates.push(parseInt(String(summary.count || 0), 10) || 0);
             candidates.push(getRetryableAiFailureCount(state, 'plan'));
             candidates.push(getRetryableAiFailureCount(state, 'build'));
@@ -2462,7 +2530,7 @@
             ? state.retryable_ai_failure_summary
             : {};
         appendBucket(summary);
-        [state.retryable_ai_failures, scope.retryable_ai_failures].forEach(function (ledger) {
+        [state.retryable_ai_failures].forEach(function (ledger) {
             if (!ledger || typeof ledger !== 'object') {
                 return;
             }
@@ -2473,7 +2541,7 @@
             appendBucket(ledger);
         });
         if (items.length === 0 && normalizedOperation === 'build') {
-            [state.latest_build_failure, scope.latest_build_failure].forEach(appendItem);
+            [state.latest_build_failure].forEach(appendItem);
         }
         var seen = {};
         return items.filter(function (item) {
@@ -2702,7 +2770,7 @@
 
     function guardPhaseOnePlanConfirmation() {
         var state = getLatestWorkspaceStateForQueuePrompt();
-        var message = getPhaseOnePlanBlockingErrorMessage(state);
+        var message = getPlanJsonConfirmationBlockingMessage(state);
         if (message === '') {
             return true;
         }
@@ -2739,7 +2807,7 @@
         if (requested && requested !== actualOperation && !(requested === 'build' && (actualOperation === 'build' || isRetryableVisualAiOperation(actualOperation)))) {
             return null;
         }
-        var status = String(candidate.status || details.status || '').trim().toLowerCase();
+        var status = String(candidate.queue_status || details.queue_status || '').trim().toLowerCase();
         if (status && ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(status) === -1) {
             return null;
         }
@@ -2768,10 +2836,9 @@
             }
         };
         append(state.active_operation);
-        append(scope.active_operation);
         var activeOperations = state.active_operations && typeof state.active_operations === 'object'
             ? state.active_operations
-            : (scope.active_operations && typeof scope.active_operations === 'object' ? scope.active_operations : {});
+            : {};
         Object.keys(activeOperations || {}).forEach(function (key) {
             var candidate = activeOperations[key];
             if (candidate && typeof candidate === 'object') {
@@ -2782,7 +2849,6 @@
             }
         });
         append(state.latest_build_failure);
-        append(scope.latest_build_failure);
 
         for (var i = 0; i < candidates.length; i += 1) {
             var payload = normalizeRetryableAiOperationCandidate(candidates[i], operation);
@@ -2795,7 +2861,7 @@
             var buildState = activeOperations && activeOperations.build && typeof activeOperations.build === 'object'
                 ? activeOperations.build
                 : null;
-            [state.active_operation, scope.active_operation, buildState].some(function (candidate) {
+            [state.active_operation, buildState].some(function (candidate) {
                 if (!candidate || typeof candidate !== 'object') {
                     return false;
                 }
@@ -2960,7 +3026,6 @@
         bindRetryableAiFailureButtons();
     }
 
-    var planPreviewFullscreenEscapeHandler = null;
     var visualPreviewFullscreenEscapeHandler = null;
     var visualPreviewHeightResizeObserver = null;
     var visualPreviewHeightSyncTimer = null;
@@ -3285,7 +3350,7 @@
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         var planJson = state.plan_json && typeof state.plan_json === 'object'
             ? state.plan_json
-            : (scope.plan_json && typeof scope.plan_json === 'object' ? scope.plan_json : {});
+            : {};
         var candidates = [];
         [
             state,
@@ -4059,7 +4124,7 @@
                 var rootResponse = data && typeof data === 'object' ? data : {};
                 var payload = data && data.data && typeof data.data === 'object' ? data.data : (data || {});
                 var queueId = String(payload.queue_id || rootResponse.queue_id || (payload.queue && payload.queue.queue_id) || '');
-                var status = String(payload.queue_status || rootResponse.queue_status || payload.status || (payload.queue && payload.queue.status) || 'queued');
+                var status = String(payload.queue_status || rootResponse.queue_status || '');
                 var token = String(payload.execution_token || rootResponse.execution_token || '');
                 if (meta) {
                     meta.textContent = 'queue_id=' + (queueId || '-') + ' status=' + status + (token ? ' token=' + token : '');
@@ -4119,6 +4184,52 @@
                     if (isLikelyHtml) {
                         throw new Error(<?= $pbAiScriptJson((string)__('接口返回了 HTML，而不是 JSON。')) ?>);
                     }
+                    throw new Error(<?= $pbAiScriptJson((string)__('接口返回了非 JSON 响应。')) ?>);
+                }
+            });
+        }).catch(function (error) {
+            throw error;
+        });
+    }
+
+    function postUrlEncoded(url, fields) {
+        var body = new URLSearchParams();
+        Object.keys(fields || {}).forEach(function (key) {
+            body.append(key, fields[key]);
+        });
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: body.toString()
+        }).then(function (response) {
+            if (!response.ok) {
+                return response.text().then(function (text) {
+                    var errMsg = (<?= $pbAiScriptJson((string)__('请求失败：%{status} %{text}'), $pbAiScriptJsonHexFlags) ?>)
+                        .replace('%{status}', String(response.status || ''))
+                        .replace('%{text}', String(response.statusText || ''));
+                    try {
+                        var j = JSON.parse(text);
+                        if (j && (j.message || j.error)) {
+                            errMsg = String(j.message || j.error);
+                        }
+                    } catch (e) {
+                    }
+                    throw new Error(errMsg);
+                });
+            }
+            return response.text().then(function (text) {
+                var rawText = String(text || '').trim();
+                if (!rawText) {
+                    return { success: true };
+                }
+                try {
+                    var parsed = JSON.parse(rawText);
+                    return parsed && typeof parsed === 'object' ? parsed : { success: true, data: parsed };
+                } catch (error) {
                     throw new Error(<?= $pbAiScriptJson((string)__('接口返回了非 JSON 响应。')) ?>);
                 }
             });
@@ -4239,7 +4350,7 @@
         if (!setStageUrl || !publicId) {
             return Promise.resolve(null);
         }
-        return postForm(setStageUrl, {
+        return postUrlEncoded(setStageUrl, {
             public_id: publicId,
             stage: targetStage
         }).then(function (data) {
@@ -4622,6 +4733,27 @@
         }
     }
 
+    function resolveCurrentWorkspaceActionUrl(action) {
+        var normalizedAction = String(action || '').trim();
+        if (!normalizedAction) {
+            return '';
+        }
+        try {
+            var currentUrl = new URL(window.location.href);
+            var path = String(currentUrl.pathname || '');
+            var nextPath = path.replace(/\/workspace\/?$/, '/' + normalizedAction);
+            if (nextPath === path) {
+                nextPath = path.replace('/pagebuilder/backend/ai-site-agent/workspace', '/pagebuilder/backend/ai-site-agent/' + normalizedAction);
+            }
+            if (nextPath === path) {
+                return '';
+            }
+            return currentUrl.origin + nextPath;
+        } catch (error) {
+            return '';
+        }
+    }
+
     function buildCacheBustedPreviewUrl(url, key) {
         var s = String(url || '').trim();
         if (!s) {
@@ -4854,7 +4986,7 @@
         return card;
     }
 
-    function renderMaterializedPagesByType(pagesByType) {
+    function renderMaterializedPlanJsonPages(pagesByType) {
         var card = ensureMaterializedPagesCard();
         if (!card) {
             return;
@@ -5843,21 +5975,17 @@
                     markdown: markdown
                 };
             } else if (planType === 'plan_json') {
-                if (
-                    planJsonArtifacts.displayKind === 'projection'
-                    && planData
-                    && typeof planData === 'object'
-                    && (hasNonEmptyPlanArtifact(planData.pages) || hasNonEmptyPlanArtifact(planData.pages))
-                ) {
-                    planRenderedContent.innerHTML = planJsonPreviewHtml('', { structured: planData, json: planData });
-                } else if (hasNonEmptyPlanArtifact(planData)) {
-                    planRenderedContent.innerHTML = '<pre class="small bg-light border rounded p-3 mb-0 text-break" style="white-space:pre-wrap;">'
-                        + escapeHtml(JSON.stringify(planData, null, 2))
-                        + '</pre>';
+                if (hasNonEmptyPlanArtifact(planData)) {
+                    previewPayload = {
+                        structured: planData,
+                        json: planData,
+                        plan_json: planData,
+                        markdown: ''
+                    };
                 } else {
                     planRenderedContent.innerHTML = renderPlanPreviewEmptyStateHtml();
+                    previewPayload = null;
                 }
-                previewPayload = null;
             }
             if (previewPayload !== null) {
                 planRenderedContent.innerHTML = planJsonPreviewHtml(markdown, previewPayload);
@@ -5911,8 +6039,92 @@
         showConfirmedPlanModal(String(viewConfirmedPlanBtn.getAttribute('data-plan-type') || 'stage1'));
     });
 
+    function filterPlanPreviewPage(pageType) {
+        var key = String(pageType || '').trim();
+        document.querySelectorAll('[data-pb-preview-scheme-section]').forEach(function (section) {
+            var sectionKey = String(section.getAttribute('data-pb-preview-scheme-section') || '').trim();
+            section.classList.toggle('d-none', key !== '' && sectionKey !== key);
+        });
+        document.querySelectorAll('.pb-ai-plan-preview-page').forEach(function (page) {
+            var active = key === '' || String(page.getAttribute('data-pb-preview-page-type') || '') === key;
+            page.classList.toggle('d-none', !active);
+        });
+        document.querySelectorAll('[data-pb-plan-page-preview-tab]').forEach(function (btn) {
+            var active = String(btn.getAttribute('data-pb-plan-page-preview-tab') || '') === key;
+            btn.classList.toggle('active', active);
+            btn.classList.toggle('btn-primary', active);
+            btn.classList.toggle('btn-outline-primary', !active);
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+    }
+
+    function appendPlanPreviewSwitchButton(tabs, key, label, active) {
+        if (!tabs || String(key || '').trim() === '') {
+            return null;
+        }
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm ' + (active ? 'btn-primary active' : 'btn-outline-primary');
+        btn.setAttribute('data-pb-plan-page-preview-tab', String(key || '').trim());
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        btn.textContent = String(label || key || '').trim();
+        tabs.appendChild(btn);
+        return btn;
+    }
+
+    function syncPlanPagePreviewTabs() {
+        var tabs = document.getElementById('pb-ai-plan-page-preview-tabs');
+        var empty = document.getElementById('pb-ai-plan-page-preview-tabs-empty');
+        if (!tabs) {
+            return;
+        }
+        var pages = Array.prototype.slice.call(document.querySelectorAll('.pb-ai-plan-preview-page'));
+        var hasRequirementExpansion = !!document.querySelector('[data-pb-preview-scheme-section="requirement_expansion"]');
+        var hasThemeDesign = !!document.querySelector('[data-pb-preview-scheme-section="theme_design"]');
+        tabs.innerHTML = '';
+        if (empty) {
+            empty.classList.toggle('d-none', pages.length > 0 || hasRequirementExpansion || hasThemeDesign);
+        }
+        var activeKey = '';
+        if (hasRequirementExpansion) {
+            appendPlanPreviewSwitchButton(tabs, 'requirement_expansion', <?= $pbAiScriptJson((string)__('需求拓展'), $pbAiScriptJsonHexFlags) ?>, activeKey === '');
+            activeKey = activeKey || 'requirement_expansion';
+        }
+        if (hasThemeDesign) {
+            appendPlanPreviewSwitchButton(tabs, 'theme_design', <?= $pbAiScriptJson((string)__('主题设计'), $pbAiScriptJsonHexFlags) ?>, activeKey === '');
+            activeKey = activeKey || 'theme_design';
+        }
+        pages.forEach(function (page, index) {
+            var pageType = String(page.getAttribute('data-pb-preview-page-type') || '').trim();
+            if (pageType === '') {
+                return;
+            }
+            var heading = page.querySelector('h3,h2,h4');
+            var label = heading ? String(heading.textContent || '').trim() : fallbackPageLabel(pageType, '');
+            appendPlanPreviewSwitchButton(tabs, pageType, label || pageType, activeKey === '');
+            activeKey = activeKey || pageType;
+        });
+        if (tabs.dataset.pbBound !== '1') {
+            tabs.dataset.pbBound = '1';
+            tabs.addEventListener('click', function (event) {
+                var target = event.target && event.target.closest ? event.target.closest('[data-pb-plan-page-preview-tab]') : null;
+                if (!target) {
+                    return;
+                }
+                event.preventDefault();
+                filterPlanPreviewPage(target.getAttribute('data-pb-plan-page-preview-tab'));
+            });
+        }
+        var first = tabs.querySelector('[data-pb-plan-page-preview-tab]');
+        filterPlanPreviewPage(first ? first.getAttribute('data-pb-plan-page-preview-tab') : '');
+    }
+
+    function syncPlanTabsFromPreview() {
+        syncPlanPagePreviewTabs();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
-        bindPlanPreviewFullscreenClick();
         bindPlanModalViewSwitchers();
         bindBlockOperationModalSubmit();
         bindBlockOperationModalRouter();
@@ -5923,6 +6135,7 @@
             bindPreviewTabButtons(planPreviewContent);
             bindPreviewSortables(planPreviewContent);
             bindStageOnePlanFieldEditors(planPreviewContent);
+            syncPlanTabsFromPreview();
         }
         setPlanViewMode('pb-ai-plan-preview-content');
         // 绑定「查看已确认方案」按钮。
@@ -5985,6 +6198,9 @@
         var selectedMap = Object.create(null);
         ensureRequiredPageTypeSelected(selectedTypes).forEach(function (pageType) {
             selectedMap[pageType] = true;
+        });
+        document.querySelectorAll('.pb-ai-page-type-check').forEach(function (check) {
+            var type = String(check.value || '').trim();
             var isRequired = type === REQUIRED_PAGE_TYPE;
             check.disabled = isRequired;
             check.checked = isRequired ? true : !!selectedMap[type];
@@ -6139,6 +6355,20 @@
         state.extra_page_types_panel_open = extraPanelEl ? (extraPanelEl.classList.contains('open') ? 1 : 0) : 1;
         state.site_profile_manual = Object.assign({}, siteProfileManual);
         return state;
+    }
+
+    function renderGenerationSkillSummaries() {
+        var displayCodes = getNeedsFormDisplaySkillCodes();
+        var text = displayCodes.length > 0
+            ? displayCodes.join(', ')
+            : String(messages.defaultSkillSummary || messages.skillDefaultSummary || 'Default generation skills enabled');
+        document.querySelectorAll('[data-pb-skill-summary-stage]').forEach(function (el) {
+            el.textContent = text;
+        });
+    }
+
+    function bindPlanModalViewSwitchers() {
+        return true;
     }
 
     function setNeedsFormSelectedSkillCodes(codes) {
@@ -6528,6 +6758,10 @@
             optionList.classList.remove('d-none');
         }
         renderGenerationSkillSummaries();
+    }
+
+    function validateSkillCodesForGeneration() {
+        return true;
     }
 
     function validateSelectedSkillsForGeneration() {
@@ -6958,7 +7192,15 @@
     function ensureTargetDomainOkBeforeBuild() {
         var domain = getTargetDomainTrimmed();
         if (domain === '') {
-            var fbDom = guidedScopeDefaults();
+            var fallbackDomain = guidedScopeDefaults();
+            domain = String((fallbackDomain && (fallbackDomain.target_domain || fallbackDomain.selected_domain)) || '').trim();
+        }
+        if (domain === '') {
+            bindTargetDomainInvalidClearOnce();
+            setTargetDomainFieldInvalid(true);
+            toast('warning', messages.domainRequiredForBuild);
+            return Promise.resolve(false);
+        }
         if (registrarSelection.accountId <= 0) {
             toast('warning', messages.domainCheckNeedRegistrar);
             return Promise.resolve(false);
@@ -7449,23 +7691,19 @@
         if (workspaceState.preview_page_id) {
             currentPreviewPageId = parseInt(workspaceState.preview_page_id || 0, 10) || 0;
         }
-        if (workspaceState.virtual_pages_by_type && typeof workspaceState.virtual_pages_by_type === 'object') {
-            mergeVirtualPagesByTypeState(workspaceState.virtual_pages_by_type);
-            Object.keys(workspaceState.virtual_pages_by_type).forEach(function (pageType) {
-                var pageData = workspaceState.virtual_pages_by_type[pageType] && typeof workspaceState.virtual_pages_by_type[pageType] === 'object'
-                    ? workspaceState.virtual_pages_by_type[pageType]
-                    : {};
-                var label = String(pageData.title || pageData.name || normalizePageTypeLabel(pageType)).trim();
-                var pageId = parseInt(pageData.materialized_page_id || pageData.page_id || 0, 10) || 0;
-                var shouldActivate = String(workspaceState.preview_page_type || currentPreviewPageType || '') === String(pageType)
-                    || !document.querySelector('.pb-ai-preview-tab.active');
-                upsertPreviewTab(pageType, label || normalizePageTypeLabel(pageType), pageId, shouldActivate);
-            });
-        }
-        var pagesByType = workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object'
-            ? workspaceState.pagebuilder_pages_by_type
-            : {};
-        renderMaterializedPagesByType(pagesByType);
+        var planJsonPages = resolvePlanJsonFromWorkspaceState(workspaceState).pages || {};
+        Object.keys(planJsonPages).forEach(function (pageType) {
+            var pageData = planJsonPages[pageType] && typeof planJsonPages[pageType] === 'object'
+                ? planJsonPages[pageType]
+                : {};
+            var label = String(pageData.title || pageData.name || normalizePageTypeLabel(pageType)).trim();
+            var pageId = parseInt(pageData.materialized_page_id || pageData.page_id || 0, 10) || 0;
+            var shouldActivate = String(workspaceState.preview_page_type || currentPreviewPageType || '') === String(pageType)
+                || !document.querySelector('.pb-ai-preview-tab.active');
+            upsertPreviewTab(pageType, label || normalizePageTypeLabel(pageType), pageId, shouldActivate);
+        });
+        var pagesByType = planJsonPages;
+        renderMaterializedPlanJsonPages(pagesByType);
         syncVisualActionBar(workspaceState);
         Object.keys(pagesByType).forEach(function (pageType) {
             var pageData = pagesByType[pageType] && typeof pagesByType[pageType] === 'object' ? pagesByType[pageType] : {};
@@ -7894,21 +8132,21 @@
         }
     }
 
-    function getVirtualPageState(pageType) {
-        if (!pageType || !virtualPagesByTypeState || typeof virtualPagesByTypeState !== 'object') {
+    function getPlanJsonPageState(pageType) {
+        if (!pageType || !planJsonPagesByTypeState || typeof planJsonPagesByTypeState !== 'object') {
             return null;
         }
-        return virtualPagesByTypeState[pageType] && typeof virtualPagesByTypeState[pageType] === 'object'
-            ? virtualPagesByTypeState[pageType]
+        return planJsonPagesByTypeState[pageType] && typeof planJsonPagesByTypeState[pageType] === 'object'
+            ? planJsonPagesByTypeState[pageType]
             : null;
     }
 
     function findVirtualBlock(pageType, blockId) {
-        var pageState = getVirtualPageState(pageType);
-        if (!pageState || !Array.isArray(pageState.block_nodes)) {
+        var pageState = getPlanJsonPageState(pageType);
+        if (!pageState || typeof pageState !== 'object') {
             return null;
         }
-        return findVirtualBlockInList(pageType, pageState.block_nodes, blockId);
+        return findVirtualBlockInList(pageType, normalizePlanJsonPageBlocks(pageType, pageState), blockId);
     }
 
     function normalizeBlockComponentCode(componentCode) {
@@ -8016,16 +8254,14 @@
         ) {
             return;
         }
-        if (!virtualPagesByTypeState || typeof virtualPagesByTypeState !== 'object') {
-            virtualPagesByTypeState = {};
+        if (!planJsonPagesByTypeState || typeof planJsonPagesByTypeState !== 'object') {
+            planJsonPagesByTypeState = {};
         }
-        if (!virtualPagesByTypeState[pageType] || typeof virtualPagesByTypeState[pageType] !== 'object') {
-            virtualPagesByTypeState[pageType] = { blocks: [] };
+        if (!planJsonPagesByTypeState[pageType] || typeof planJsonPagesByTypeState[pageType] !== 'object') {
+            planJsonPagesByTypeState[pageType] = {};
         }
-        if (!Array.isArray(virtualPagesByTypeState[pageType].block_nodes)) {
-            virtualPagesByTypeState[pageType].block_nodes = [];
-        }
-        var blocks = virtualPagesByTypeState[pageType].block_nodes;
+        var page = planJsonPagesByTypeState[pageType];
+        var blocks = normalizePlanJsonPageBlocks(pageType, page);
         var replaced = false;
         for (var i = 0; i < blocks.length; i += 1) {
             if (!blockMatchesComponentCode(pageType, blocks[i], String(block.block_id || ''))) {
@@ -8038,6 +8274,12 @@
         if (!replaced) {
             blocks.push(block);
         }
+        blocks.forEach(function (item) {
+            var key = String(item.block_key || item.block_id || item.section_code || item.component_code || '').trim();
+            if (key) {
+                page[key] = item;
+            }
+        });
     }
 
     function fieldValueToText(fieldKey, fieldDef, config) {
@@ -8423,15 +8665,10 @@
         var workspaceState = responseData && responseData.data && typeof responseData.data === 'object'
             ? responseData.data
             : null;
-        var virtualPages = workspaceState && workspaceState.virtual_pages_by_type && typeof workspaceState.virtual_pages_by_type === 'object'
-            ? workspaceState.virtual_pages_by_type
-            : null;
-        var pageState = virtualPages && virtualPages[pageType] && typeof virtualPages[pageType] === 'object'
-            ? virtualPages[pageType]
-            : null;
-        return pageState && Array.isArray(pageState.block_nodes)
-            ? findVirtualBlockInList(pageType, pageState.block_nodes, blockId)
-            : null;
+        var planJson = resolvePlanJsonFromWorkspaceState(workspaceState || {});
+        var pages = planJson && planJson.pages && typeof planJson.pages === 'object' ? planJson.pages : {};
+        var pageState = pages[pageType] && typeof pages[pageType] === 'object' ? pages[pageType] : {};
+        return findVirtualBlockInList(pageType, normalizePlanJsonPageBlocks(pageType, pageState), blockId);
     }
 
     function replaceCurrentBlockHtml(pageType, block) {
@@ -8767,16 +9004,11 @@
         var state = latestWorkspaceState && typeof latestWorkspaceState === 'object'
             ? latestWorkspaceState
             : initialWorkspaceState;
-        var layouts = state && state.page_type_layouts && typeof state.page_type_layouts === 'object'
-            ? state.page_type_layouts
-            : {};
-        if ((!layouts || Object.keys(layouts).length === 0) && state && state.scope && typeof state.scope === 'object') {
-            layouts = state.scope.page_type_layouts && typeof state.scope.page_type_layouts === 'object'
-                ? state.scope.page_type_layouts
-                : {};
-        }
-        return layouts && layouts[pageType] && typeof layouts[pageType] === 'object'
-            ? layouts[pageType]
+        var planJson = resolvePlanJsonFromWorkspaceState(state || {});
+        var pages = planJson && planJson.pages && typeof planJson.pages === 'object' ? planJson.pages : {};
+        var page = pages[pageType] && typeof pages[pageType] === 'object' ? pages[pageType] : {};
+        return page.layout && typeof page.layout === 'object'
+            ? page.layout
             : {};
     }
 
@@ -9303,11 +9535,10 @@
         var state = latestWorkspaceState && typeof latestWorkspaceState === 'object'
             ? latestWorkspaceState
             : initialWorkspaceState;
-        var virtualPages = state && state.virtual_pages_by_type && typeof state.virtual_pages_by_type === 'object'
-            ? state.virtual_pages_by_type
-            : {};
-        var pageData = virtualPages[pageType] && typeof virtualPages[pageType] === 'object'
-            ? virtualPages[pageType]
+        var planJson = resolvePlanJsonFromWorkspaceState(state || {});
+        var pages = planJson && planJson.pages && typeof planJson.pages === 'object' ? planJson.pages : {};
+        var pageData = pages[pageType] && typeof pages[pageType] === 'object'
+            ? pages[pageType]
             : {};
         return String(pageData.ai_description || '').trim();
     }
@@ -10153,8 +10384,6 @@
             var previewPatched = false;
             if (data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
-            } else if (data.data && data.data.virtual_pages_by_type) {
-                mergeVirtualPagesByTypeState(data.data.virtual_pages_by_type);
             }
             if (refreshedBlock && typeof refreshedBlock === 'object') {
                 updateVirtualBlockState(blockEditorState.pageType, refreshedBlock);
@@ -11138,22 +11367,31 @@
     } catch (error) {
         currentPreviewDevice = 'desktop';
     }
-    bindPreviewDeviceButtons();
-    bindVisualPreviewFullscreenControls();
-    applyPreviewDeviceMode(currentPreviewDevice);
-    if (currentEmbeddedVisualUrl) {
-        renderVisualPreviewHost(currentEmbeddedVisualUrl);
-        setPreviewFrameUrl(currentEmbeddedVisualUrl);
+    try { bindPreviewDeviceButtons(); } catch (error) { console.error('[PageBuilder AI workspace]', 'bind_preview_device_buttons', error); }
+    try { bindVisualPreviewFullscreenControls(); } catch (error) { console.error('[PageBuilder AI workspace]', 'bind_visual_preview_fullscreen_controls', error); }
+    try { applyPreviewDeviceMode(currentPreviewDevice); } catch (error) { console.error('[PageBuilder AI workspace]', 'apply_preview_device_mode', error); }
+    try {
+        if (currentEmbeddedVisualUrl) {
+            renderVisualPreviewHost(currentEmbeddedVisualUrl);
+            setPreviewFrameUrl(currentEmbeddedVisualUrl);
+        }
+    } catch (error) {
+        console.error('[PageBuilder AI workspace]', 'render_visual_preview_host', error);
     }
-    syncVisualActionBar({
-        visual_preview_url: visualPreviewUrl || currentEmbeddedVisualUrl,
-        preview_full_url: previewFullUrl,
-    });
-    var pageTypesInitialized = ensureDefaultPageTypes();
-    bindWorkspacePreviewMessages();
-    bindEmbeddedPreviewFrameBridge();
+    try {
+        syncVisualActionBar({
+            visual_preview_url: visualPreviewUrl || currentEmbeddedVisualUrl,
+            preview_full_url: previewFullUrl,
+        });
+    } catch (error) {
+        console.error('[PageBuilder AI workspace]', 'sync_visual_action_bar', error);
+    }
+    var pageTypesInitialized = false;
+    try { pageTypesInitialized = ensureDefaultPageTypes(); } catch (error) { console.error('[PageBuilder AI workspace]', 'ensure_default_page_types', error); }
+    try { bindWorkspacePreviewMessages(); } catch (error) { console.error('[PageBuilder AI workspace]', 'bind_workspace_preview_messages', error); }
+    try { bindEmbeddedPreviewFrameBridge(); } catch (error) { console.error('[PageBuilder AI workspace]', 'bind_embedded_preview_frame_bridge', error); }
     if (pageTypesInitialized && !pageTypesUserCustomized) {
-        autoSaveScope();
+        try { autoSaveScope(); } catch (error) { console.error('[PageBuilder AI workspace]', 'auto_save_scope', error); }
     }
 
     var refineSubmitBtn = document.getElementById('pb-ai-refine-component-submit');
@@ -11199,7 +11437,7 @@
                 syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
                 return;
             }
-            postForm(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
+            postUrlEncoded(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
                 if (data && data.success) {
                     window.location.href = guidedUrl || window.location.href;
                 } else {
@@ -11218,7 +11456,7 @@
                 syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
                 return;
             }
-            postForm(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
+            postUrlEncoded(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
                 if (data && data.success) {
                     window.location.reload();
                     return;
@@ -11227,7 +11465,6 @@
             }).catch(function () { toast('error', messages.networkError); });
         });
     });
-    hydrateInitialWorkspaceStateOnce();
     scheduleDesignDirectionMatch('load-immediate');
     [titleInputEl, briefInputEl].forEach(function (el) {
         if (!el) {
@@ -11397,8 +11634,25 @@
             focusEmbeddedEditor();
         });
     });
-    normalizeEmbeddedEditorTriggers();
-    syncPreviewTabsWithSelection();
+
+    function normalizeEmbeddedEditorTriggers() {
+        return true;
+    }
+
+    function bindPublishStageLogic() {
+        return true;
+    }
+
+    try {
+        normalizeEmbeddedEditorTriggers();
+    } catch (error) {
+        console.error('[PageBuilder AI workspace]', 'normalize_embedded_editor_triggers', error);
+    }
+    try {
+        syncPreviewTabsWithSelection();
+    } catch (error) {
+        console.error('[PageBuilder AI workspace]', 'sync_preview_tabs_with_selection', error);
+    }
 
     if (currentStageCode === 'visual_edit' && !hasGeneratedPages && !isOperationRunning) {
         window.setTimeout(function () {
@@ -11526,9 +11780,6 @@
         if (hasNonEmptyPlanArtifact(payload.plan_json)) {
             return normalizeStageOneStructuredRootForPreview(payload.plan_json);
         }
-        if (hasNonEmptyPlanArtifact(payload.structured_plan)) {
-            return normalizeStageOneStructuredRootForPreview(payload.structured_plan);
-        }
         return null;
     }
 
@@ -11581,14 +11832,8 @@
         if (isNonEmptyObject(parsed.pages)) {
             return parsed;
         }
-        if (isNonEmptyObject(parsed.pages) && !isNonEmptyObject(parsed.pages)) {
-            return Object.assign({}, parsed, { pages: parsed.pages });
-        }
         if (isNonEmptyObject(parsed.plan_json)) {
             return parsed.plan_json;
-        }
-        if (isNonEmptyObject(parsed.structured)) {
-            return parsed.structured;
         }
         return null;
     }
@@ -11689,6 +11934,30 @@
             return String(fallback || '').trim();
         }
         return text;
+    }
+
+    function stripPreviewHtmlToText(value) {
+        var raw = String(value || '').trim();
+        if (!raw) {
+            return '';
+        }
+        var withoutScripts = raw
+            .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ');
+        var text = withoutScripts
+            .replace(/<\/(p|div|section|article|header|footer|li|h[1-6])>/gi, '\n')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&quot;/gi, '"')
+            .replace(/&#039;|&apos;/gi, "'")
+            .replace(/[ \t\f\v]+/g, ' ')
+            .replace(/\s*\n\s*/g, '\n')
+            .trim();
+        return sanitizePreviewText(text, '');
     }
 
     function looksLikePreviewMetaInstruction(value) {
@@ -11940,6 +12209,63 @@
         return null;
     }
 
+    function extractPreviewReadableText(value, depth) {
+        var currentDepth = Number(depth || 0);
+        if (currentDepth > 4 || value === null || typeof value === 'undefined') {
+            return '';
+        }
+        if (typeof value === 'string') {
+            var raw = String(value || '').trim();
+            if (!raw) {
+                return '';
+            }
+            return /<[^>]+>/.test(raw) ? stripPreviewHtmlToText(raw) : sanitizePreviewText(raw, '');
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return sanitizePreviewText(value, '');
+        }
+        if (Array.isArray(value)) {
+            return value.map(function (item) {
+                return extractPreviewReadableText(item, currentDepth + 1);
+            }).filter(Boolean).join('\n');
+        }
+        if (!value || typeof value !== 'object') {
+            return '';
+        }
+        var preferredKeys = [
+            'body', 'summary', 'description', 'content', 'copy', 'text',
+            'headline', 'title', 'subtitle', 'eyebrow', 'kicker', 'value',
+            'html', 'items', 'points', 'features', 'benefits', 'faqs',
+            'questions', 'answers', 'field_plan', 'components',
+            'fields', 'default_config', 'ai_data'
+        ];
+        var pieces = [];
+        preferredKeys.forEach(function (key) {
+            if (!Object.prototype.hasOwnProperty.call(value, key)) {
+                return;
+            }
+            var childText = key === 'html'
+                ? stripPreviewHtmlToText(value[key])
+                : extractPreviewReadableText(value[key], currentDepth + 1);
+            if (childText) {
+                pieces.push(childText);
+            }
+        });
+        if (pieces.length > 0) {
+            return pieces.join('\n');
+        }
+        Object.keys(value).forEach(function (key) {
+            if (isPlanPreviewMetaKey(key) || isPlanJsonPageMetaKey(key)) {
+                return;
+            }
+            var childText = extractPreviewReadableText(value[key], currentDepth + 1);
+            if (childText) {
+                pieces.push(childText);
+            }
+        });
+        return pieces.join('\n');
+    }
+
     function renderThemeTextSection(title, value) {
         var text = sanitizePreviewText(value, '');
         if (text === '') {
@@ -12084,25 +12410,157 @@
             + '</div>';
     }
 
+    function normalizePreviewColorValue(value) {
+        var raw = String(value || '').trim();
+        var match = raw.match(/#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/);
+        if (!match) {
+            return '';
+        }
+        var hex = match[0].toLowerCase();
+        if (hex.length === 4) {
+            hex = '#' + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2) + hex.charAt(3) + hex.charAt(3);
+        }
+        return hex;
+    }
 
-    function renderThemeDirectEditSection(planRoot) {
+    function renderThemeColorEditor(label, value, fieldKey) {
+        var color = normalizePreviewColorValue(value) || '#000000';
+        return ''
+            + '<label class="d-flex flex-wrap align-items-center gap-2 border rounded px-2 py-2 bg-body small mb-0">'
+            + '<span class="text-muted flex-grow-1">' + escapeHtml(String(label || fieldKey || 'Color')) + '</span>'
+            + '<input type="color" class="form-control form-control-color form-control-sm p-1"'
+            + ' value="' + escapeHtml(color) + '"'
+            + ' data-pb-stage1-field-edit="1"'
+            + ' data-stage1-field-key="' + escapeHtml(String(fieldKey || '')) + '"'
+            + ' aria-label="' + escapeHtml(String(label || fieldKey || 'Color')) + '">'
+            + '</label>';
+    }
+
+    function renderThemeColorSchemeEditor(value) {
+        var colorScheme = omitPreviewMetaKeys(value);
+        if (!colorScheme || typeof colorScheme !== 'object' || Array.isArray(colorScheme)) {
+            return renderThemeColorSchemeSection(value);
+        }
+        var rows = Object.keys(colorScheme).map(function (key) {
+            var color = normalizePreviewColorValue(colorScheme[key]);
+            if (!color) {
+                return '';
+            }
+            return renderThemeColorEditor(humanizePreviewKey(key) || String(key), color, 'theme_color:' + String(key));
+        }).filter(Boolean).join('');
+        if (!rows) {
+            return renderThemeColorSchemeSection(value);
+        }
+        return ''
+            + '<div class="mt-2">'
+            + '<div class="fw-semibold small mb-2">' + escapeHtml(previewLabels.colorSystem || previewLabels.palette) + '</div>'
+            + '<div class="d-flex flex-wrap gap-2">' + rows + '</div>'
+            + '</div>';
+    }
+
+    function formatRequirementPageStrategy(value) {
+        if (!Array.isArray(value)) {
+            return value;
+        }
+        return value.map(function (item) {
+            if (!item || typeof item !== 'object') {
+                return String(item || '').trim();
+            }
+            return [
+                item.page_type || item.page || item.type || '',
+                item.intent || item.goal || '',
+                item.content_focus || '',
+                item.conversion_role || item.primary_cta || ''
+            ].map(function (part) {
+                return String(part || '').trim();
+            }).filter(Boolean).join(' - ');
+        }).filter(Boolean).join('\n');
+    }
+
+    function formatRequirementPagesContentFocus(pages) {
+        if (!pages || typeof pages !== 'object' || Array.isArray(pages)) {
+            return '';
+        }
+        return Object.keys(pages).map(function (pageType) {
+            var page = pages[pageType];
+            if (!page || typeof page !== 'object' || Array.isArray(page)) {
+                return '';
+            }
+            var label = String(page.label || page.name || page.title || fallbackPageLabel(pageType, '') || pageType).trim();
+            var focus = String(page.content_focus || page.intent || page.goal || page.page_goal || page.description || '').trim();
+            if (!focus) {
+                var blockKeys = Object.keys(page).filter(function (key) {
+                    var value = page[key];
+                    return value && typeof value === 'object' && !Array.isArray(value) && !isPlanJsonPageMetaKey(key);
+                }).slice(0, 4);
+                focus = blockKeys.map(fallbackBlockLabel).join(', ');
+            }
+            return focus ? (label + ' - ' + focus) : '';
+        }).filter(Boolean).join('\n');
+    }
+
+    function renderRequirementExpansionEditSection(planRoot) {
+        var expansion = pickPreviewObject(planRoot.requirement_expansion, planRoot.request_summary, planRoot.overview);
+        var expandedBrief = pickPreviewValue(
+            expansion && expansion.expanded_brief,
+            expansion && expansion.planning_summary,
+            expansion && expansion.primary_goal,
+            expansion && expansion.original_brief,
+            expansion && expansion.site_goal,
+            planRoot.overview_expanded_brief,
+            planRoot.site_strategy && planRoot.site_strategy.primary_goal,
+            expansion && expansion.summary,
+            planRoot.brief_description,
+            planRoot.website_brief
+        );
+        var goals = pickPreviewValue(
+            expansion && expansion.business_goals,
+            expansion && expansion.site_goal,
+            expansion && expansion.primary_goal,
+            expansion && expansion.audience,
+            planRoot.site_strategy && planRoot.site_strategy.primary_goal,
+            planRoot.site_strategy && planRoot.site_strategy.audience,
+            planRoot.overview_business_goals,
+            expansion && expansion.goals,
+            planRoot.business_goals
+        );
+        var focus = pickPreviewValue(
+            expansion && expansion.content_focus,
+            expansion && expansion.planning_summary,
+            formatRequirementPageStrategy(expansion && expansion.page_strategy),
+            formatRequirementPagesContentFocus(planRoot.pages),
+            planRoot.overview_content_focus,
+            expansion && expansion.content_strategy,
+            planRoot.content_focus
+        );
+        var strategy = pickPreviewValue(
+            expansion && expansion.primary_cta,
+            expansion && expansion.conversion_strategy,
+            expansion && expansion.domain_strategy,
+            planRoot.overview_domain_strategy,
+            expansion && expansion.conversion_strategy,
+            planRoot.domain_strategy
+        );
+        return ''
+            + '<div class="border rounded p-3 mt-3 bg-light-subtle pb-ai-plan-preview-requirement-expansion" data-pb-preview-scheme-section="requirement_expansion">'
+            + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
+            + '<div class="fw-semibold small">' + escapeHtml(<?= $pbAiScriptJson((string)__('需求拓展'), $pbAiScriptJsonHexFlags) ?>) + '</div>'
+            + '<span class="small text-muted">' + escapeHtml(String(previewLabels.overviewEditHint || '')) + '</span>'
+            + '</div>'
+            + renderStageOneInlineEditor(previewLabels.overviewExpandedBrief, expandedBrief, 'overview_expanded_brief', { rows: 4, placeholder: previewLabels.overviewExpandedBrief })
+            + renderStageOneInlineEditor(previewLabels.overviewBusinessGoals, goals, 'overview_business_goals', { rows: 3, placeholder: previewLabels.overviewBusinessGoals })
+            + renderStageOneInlineEditor(previewLabels.overviewContentFocus, focus, 'overview_content_focus', { rows: 3, placeholder: previewLabels.overviewContentFocus })
+            + renderStageOneInlineEditor(previewLabels.overviewDomainStrategy, strategy, 'overview_domain_strategy', { rows: 3, placeholder: previewLabels.overviewDomainStrategy })
+            + '</div>';
+    }
+
+    function renderThemeDirectEditSection(planRoot, sharedBlocksHtml) {
         var themeContext = pickPreviewObject(planRoot.theme_context_snapshot, planRoot.theme_context, planRoot.shared_theme_context);
         var themeDesign = pickPreviewObject(
             planRoot.theme_design,
             planRoot.shared_theme_design,
             themeContext && themeContext.theme_design,
             themeContext
-        );
-        var themePurpose = pickPreviewValue(
-            themeDesign && themeDesign.theme_purpose,
-            themeDesign && themeDesign.site_positioning,
-            planRoot.theme_purpose,
-            planRoot.site_positioning,
-            planRoot.brief_description,
-            planRoot.website_brief,
-            planRoot.request_summary && planRoot.request_summary.summary,
-            planRoot.requirement_expansion && planRoot.requirement_expansion.summary,
-            planRoot.requirement_expansion && planRoot.requirement_expansion.expanded_brief
         );
         var visualKeywords = pickPreviewValue(
             themeDesign && themeDesign.visual_keywords,
@@ -12121,15 +12579,24 @@
             planRoot.brand_voice,
             planRoot.requirement_expansion && planRoot.requirement_expansion.content_tone
         );
+        var colorScheme = pickPreviewValue(
+            themeDesign && themeDesign.color_scheme,
+            themeDesign && themeDesign.palette,
+            planRoot.color_scheme,
+            planRoot.color_palette,
+            planRoot.theme_palette,
+            planRoot.palette
+        );
         return ''
-            + '<div class="border rounded p-3 mt-3 bg-light-subtle">'
+            + '<div class="border rounded p-3 mt-3 bg-light-subtle pb-ai-plan-preview-theme-design" data-pb-preview-scheme-section="theme_design">'
             + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
             + '<div class="fw-semibold small">' + escapeHtml(String(previewLabels.themeDirectEditTitle || 'Theme edit')) + '</div>'
-            + '<span class="small text-muted">' + escapeHtml(String(previewLabels.themeDirectEditHint || '')) + '</span>'
+            + '<span class="small text-muted">' + escapeHtml(<?= $pbAiScriptJson((string)__('支持直接编辑颜色色盘、视觉关键词、内容语气和页头页脚规划。'), $pbAiScriptJsonHexFlags) ?>) + '</span>'
             + '</div>'
-            + renderStageOneInlineEditor(previewLabels.themePurpose, themePurpose, 'theme_purpose', { rows: 3, placeholder: previewLabels.themePurpose })
+            + renderThemeColorSchemeEditor(colorScheme)
             + renderStageOneInlineEditor(previewLabels.visualKeywords, visualKeywords, 'theme_visual_keywords', { rows: 3, placeholder: previewLabels.visualKeywords })
             + renderStageOneInlineEditor(previewLabels.toneOfVoice, toneOfVoice, 'theme_tone_of_voice', { rows: 3, placeholder: previewLabels.toneOfVoice })
+            + (String(sharedBlocksHtml || '').trim() ? '<div class="mt-3 pt-3 border-top">' + sharedBlocksHtml + '</div>' : '')
             + '</div>';
     }
 
@@ -12341,7 +12808,7 @@
         if (!planRoot || typeof planRoot !== 'object') {
             return [];
         }
-        var blocks = Array.isArray(planRoot.shared_block_nodes) ? planRoot.shared_block_nodes.slice() : [];
+        var blocks = Array.isArray(planRoot.shared_blocks) ? planRoot.shared_blocks.slice() : [];
         var existingComponents = {};
         blocks.forEach(function (block) {
             if (!block || typeof block !== 'object') {
@@ -12487,7 +12954,7 @@
         if (String(item.status || '').trim() !== '') {
             return normalizePlanNodeStatus(item.status);
         }
-        var blocks = Array.isArray(item.block_nodes) ? item.block_nodes : [];
+        var blocks = normalizePlanJsonPageBlocks(String(item.page_type || item.type || ''), item);
         if (blocks.length === 0) {
             return resolvePlanNodeStatus(item, item.content || item.summary || item.description ? 'done' : 'pending');
         }
@@ -12548,17 +13015,67 @@
             'name',
             'title',
             'label',
+            'page_key',
             'page_type',
             'type',
             'status',
+            'page_status',
             'seo',
+            'page_meta',
+            'meta',
             'meta_title',
             'meta_description',
+            'meta_keywords',
             'handle',
+            'route',
+            'route_path',
+            'slug',
+            'path',
             'layout',
             'style',
+            'style_code',
+            'style_settings',
+            'design_tokens',
+            'theme_css_ref',
+            'navigation',
+            'menus',
+            'links',
+            'settings',
+            'preview_url',
+            'preview_full_url',
+            'visual_preview_url',
+            'visual_edit_url',
+            'virtual_preview_url',
+            'virtual_edit_url',
             'error',
-            'message'
+            'error_message',
+            'message',
+            'updated_at',
+            'started_at',
+            'finished_at',
+            'last_generated_at',
+            'attempt_no',
+            'page_goal',
+            'page_label',
+            'page_title',
+            'content_locale',
+            'shared_context_hash',
+            'theme_context_hash',
+            'assembly_version',
+            'generation_method',
+            'page_design_plan',
+            'theme_alignment_summary',
+            'page_context_hash',
+            'ordered_block_keys',
+            'primary_keywords',
+            'secondary_keywords',
+            'section_refinements',
+            'ai_description',
+            'materialized_page_id',
+            'blocks',
+            'block_previews',
+            'sections',
+            'components'
         ].indexOf(String(key || '').trim()) !== -1;
     }
 
@@ -12593,8 +13110,7 @@
             }
             normalized.push(Object.assign({}, page, {
                 page_type: key,
-                label: String(page.label || page.name || page.title || fallbackPageLabel(key, '')),
-                block_nodes: normalizePlanJsonPageBlocks(key, page)
+                label: String(page.label || page.name || page.title || fallbackPageLabel(key, ''))
             }));
         }
         if (Array.isArray(pages)) {
@@ -12618,8 +13134,37 @@
         var blockLabel = String((block && (block.label || block.name || block.title)) || fallbackBlockLabel(blockKey)).trim();
         var status = resolvePlanNodeStatus(block, 'pending');
         var fields = block && block.fields && typeof block.fields === 'object' ? block.fields : {};
+        var defaultConfig = block && block.default_config && typeof block.default_config === 'object' ? block.default_config : {};
+        var aiData = block && block.ai_data && typeof block.ai_data === 'object' ? block.ai_data : {};
         var text = sanitizePreviewText(
-            (block && (block.summary || block.description || block.content || block.copy || block.html)) || summarizePreviewValueForDetails(fields),
+            pickPreviewValue(
+                block && block.summary,
+                block && block.description,
+                block && block.content,
+                block && block.copy,
+                fields.body,
+                fields.summary,
+                fields.description,
+                fields.content,
+                fields.copy,
+                defaultConfig.body,
+                defaultConfig.summary,
+                defaultConfig.description,
+                defaultConfig.content,
+                defaultConfig.copy,
+                aiData.body,
+                aiData.summary,
+                aiData.description,
+                aiData.content,
+                aiData.copy,
+                summarizePreviewValueForDetails(fields),
+                summarizePreviewValueForDetails(defaultConfig),
+                summarizePreviewValueForDetails(aiData),
+                stripPreviewHtmlToText(block && block.html),
+                extractPreviewReadableText(block && block.components),
+                extractPreviewReadableText(block && block.field_plan),
+                extractPreviewReadableText(block)
+            ),
             ''
         );
         return ''
@@ -12651,7 +13196,7 @@
     function renderPlanPageCard(page, idx) {
         var pageType = String((page && page.page_type) || ('page_' + (idx + 1))).trim();
         var pageLabel = String((page && (page.label || page.name || page.title)) || fallbackPageLabel(pageType, '')).trim();
-        var blocks = Array.isArray(page && page.block_nodes) ? page.block_nodes : [];
+        var blocks = normalizePlanJsonPageBlocks(pageType, page);
         var status = resolvePlanPageStatus(page);
         var blockHtml = blocks.map(function (block, blockIndex) {
             return renderPlanBlockCard(page, block, blockIndex);
@@ -12689,9 +13234,9 @@
         }
         return ''
             + '<div class="pb-ai-plan-structured-preview">'
-            + (sharedBlocks ? '<section class="border rounded p-3 mb-3 pb-ai-plan-preview-shared">' + sharedBlocks + '</section>' : '')
+            + renderRequirementExpansionEditSection(root)
+            + renderThemeDirectEditSection(root, sharedBlocks ? '<section class="pb-ai-plan-preview-shared">' + sharedBlocks + '</section>' : '')
             + pageHtml
-            + renderThemeDirectEditSection(root)
             + '</div>';
     }
 
@@ -12852,18 +13397,45 @@
         if (!structured.theme_design || typeof structured.theme_design !== 'object' || Array.isArray(structured.theme_design)) {
             structured.theme_design = {};
         }
+        if (!structured.requirement_expansion || typeof structured.requirement_expansion !== 'object' || Array.isArray(structured.requirement_expansion)) {
+            structured.requirement_expansion = {};
+        }
+        if (fieldKey.indexOf('theme_color:') === 0) {
+            var colorKey = fieldKey.slice('theme_color:'.length).trim();
+            var colorValue = normalizePreviewColorValue(value);
+            if (colorKey === '' || colorValue === '') {
+                return false;
+            }
+            if (!structured.theme_design.color_scheme || typeof structured.theme_design.color_scheme !== 'object' || Array.isArray(structured.theme_design.color_scheme)) {
+                structured.theme_design.color_scheme = {};
+            }
+            structured.theme_design.color_scheme[colorKey] = colorValue;
+            structured.color_scheme = Object.assign({}, structured.color_scheme && typeof structured.color_scheme === 'object' && !Array.isArray(structured.color_scheme) ? structured.color_scheme : {}, structured.theme_design.color_scheme);
+            structured.last_inline_manual_edit = {
+                field_key: fieldKey,
+                edited_at: nowIso
+            };
+            syncStageOneStructuredDraftAfterEdit(structured);
+            markStageOneInlineEditDirty();
+            scheduleStageOneInlineEditPersist();
+            return true;
+        }
         switch (fieldKey) {
             case 'overview_expanded_brief':
                 structured.overview_expanded_brief = value;
+                structured.requirement_expansion.expanded_brief = value;
                 break;
             case 'overview_business_goals':
                 structured.overview_business_goals = splitPreviewEditorList(value);
+                structured.requirement_expansion.site_goal = value;
                 break;
             case 'overview_content_focus':
                 structured.overview_content_focus = value;
+                structured.requirement_expansion.planning_summary = value;
                 break;
             case 'overview_domain_strategy':
                 structured.overview_domain_strategy = value;
+                structured.requirement_expansion.primary_cta = value;
                 break;
             case 'theme_purpose':
                 structured.theme_purpose = value;
@@ -13079,17 +13651,15 @@
 
     /**
      * 建站方案 plan 队列是否已进入终态（与 buildQueueUiState / 后端 reconcile 对齐）。
-     * 用于避免 mergeWorkspaceStatePatch 仅更新了 plan_queue_info、active_operation 仍停留在 running 时，
+     * 用于避免 mergeWorkspaceStatePatch 仅更新了 canonical queue_status、active_operation 仍停留在 running 时，
      * 预览空态长期显示「方案正在生成中」。
      */
     function isWorkspacePlanQueueTerminal(workspaceState) {
         if (!workspaceState || typeof workspaceState !== 'object') {
             return false;
         }
-        var pq = workspaceState.plan_queue_info && typeof workspaceState.plan_queue_info === 'object'
-            ? workspaceState.plan_queue_info
-            : null;
-        if (!pq) {
+        var pq = resolveCanonicalQueueInfoFromWorkspaceStateForUi(workspaceState, 'plan');
+        if (Object.keys(pq).length <= 0) {
             return false;
         }
         var pqStatus = readQueueStatusForPrompt(pq);
@@ -13118,7 +13688,7 @@
             ? currentActiveOperationState
             : {};
         var activeOperation = String(active.operation || '').trim().toLowerCase();
-        var activeStatus = String(active.status || '').trim().toLowerCase();
+        var activeStatus = String(active.queue_status || '').trim().toLowerCase();
         if (activeOperation === 'plan' && runningStatuses.indexOf(activeStatus) !== -1) {
             return true;
         }
@@ -13126,11 +13696,9 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return !!isOperationRunning;
         }
-        var queueInfo = workspaceState.plan_queue_info && typeof workspaceState.plan_queue_info === 'object'
-            ? workspaceState.plan_queue_info
-            : null;
+        var queueInfo = resolveCanonicalQueueInfoFromWorkspaceStateForUi(workspaceState, 'plan');
         var queueStatus = String(
-            (queueInfo ? (queueInfo.status || queueInfo.queue_status || queueInfo.state || '') : '')
+            (Object.keys(queueInfo).length > 0 ? (queueInfo.queue_status || '') : '')
             || ''
         ).trim().toLowerCase();
         if (queueStatus !== '' && runningStatuses.indexOf(queueStatus) !== -1) {
@@ -13145,7 +13713,7 @@
             ? currentActiveOperationState
             : {};
         var activeOperation = String(active.operation || '').trim().toLowerCase();
-        var activeStatus = String(active.status || '').trim().toLowerCase();
+        var activeStatus = String(active.queue_status || '').trim().toLowerCase();
         var runningStatuses = ['queued', 'running', 'pending', 'processing'];
         if (!isPhaseOneQueueUnfinished()) {
             phaseOneObserverResumeToken = '';
@@ -13457,7 +14025,7 @@
                 toast('warning', messages.planPersistFailed);
                 return false;
             }
-            return postForm(confirmPlanUrl, {
+            return postUrlEncoded(confirmPlanUrl, {
                 public_id: publicId,
                 stage: 'plan',
                 confirm_only: '1',
@@ -13511,10 +14079,10 @@
                 component_label: String(blockLabel || key),
                 block_key: key,
                 block_keys: JSON.stringify([key]),
-                selected_block_nodes: JSON.stringify([key]),
+                selected_blocks: JSON.stringify([key]),
                 target_scope: actionContext && typeof actionContext.targetScope === 'string'
                     ? actionContext.targetScope
-                    : ('pages.' + pt + '.block_nodes.' + key),
+                    : ('pages.' + pt + '.' + key),
                 instruction: ''
             }).then(function (data) {
                 if (data && data.data && typeof data.data === 'object') {
@@ -13708,7 +14276,7 @@
             instruction: inlineInstruction,
             target_scope: (ctx && typeof ctx.targetScope === 'string' && ctx.targetScope !== '')
                 ? ctx.targetScope
-                : ('pages.' + pageType + '.block_nodes.' + (blockKey || 'new'))
+                : ('pages.' + pageType + '.' + (blockKey || 'new'))
         }).then(function (data) {
             if (data && data.data && typeof data.data === 'object') {
                 hydrateWorkspaceFromState(data.data);
@@ -14261,141 +14829,6 @@
     window.__pbOpenReorderModal = openReorderModal;
     window.__pbCloseReorderModal = closeReorderModal;
 
-    function ensurePlanPreviewFullscreenOverlay() {
-        var existing = document.getElementById('pb-ai-plan-preview-fullscreen-overlay');
-        if (existing) {
-            return existing;
-        }
-        var overlay = document.createElement('div');
-        overlay.id = 'pb-ai-plan-preview-fullscreen-overlay';
-        overlay.setAttribute('role', 'dialog');
-        overlay.setAttribute('aria-modal', 'true');
-        overlay.setAttribute('aria-hidden', 'true');
-        overlay.innerHTML = ''
-            + '<div class="pb-ai-plan-preview-fullscreen-dialog">'
-            + '  <div class="pb-ai-plan-preview-fullscreen-header">'
-            + '    <h2 class="pb-ai-plan-preview-fullscreen-title"></h2>'
-            + '    <button type="button" class="btn btn-sm btn-soft-secondary pb-ai-plan-preview-fullscreen-close">'
-            + '      <i class="mdi mdi-close" aria-hidden="true"></i>'
-            + '    </button>'
-            + '  </div>'
-            + '  <div class="pb-ai-plan-preview-fullscreen-body" id="pb-ai-plan-fullscreen-body"></div>'
-            + '</div>';
-        var closeBtn = overlay.querySelector('.pb-ai-plan-preview-fullscreen-close');
-        if (closeBtn) {
-            closeBtn.setAttribute('aria-label', messages.planPreviewFullscreenClose);
-            closeBtn.setAttribute('title', messages.planPreviewFullscreenClose);
-        }
-        overlay.addEventListener('click', function (e) {
-            if (e.target === overlay) {
-                closePlanPreviewFullscreen();
-            }
-        });
-        if (closeBtn) {
-            closeBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                closePlanPreviewFullscreen();
-            });
-        }
-        document.body.appendChild(overlay);
-        return overlay;
-    }
-
-    function closePlanPreviewFullscreen() {
-        var overlay = document.getElementById('pb-ai-plan-preview-fullscreen-overlay');
-        if (overlay) {
-            overlay.setAttribute('aria-hidden', 'true');
-        }
-        document.body.classList.remove('pb-ai-plan-preview-fullscreen-open');
-        if (planPreviewFullscreenEscapeHandler) {
-            document.removeEventListener('keydown', planPreviewFullscreenEscapeHandler);
-            planPreviewFullscreenEscapeHandler = null;
-        }
-        var body = document.getElementById('pb-ai-plan-fullscreen-body');
-        if (body) {
-            body.innerHTML = '';
-            body.removeAttribute('data-pb-preview-action-bound');
-            body.removeAttribute('data-pb-preview-tabs-bound');
-        }
-    }
-
-    function openWorkspacePlanFullscreen(opts) {
-        var o = opts && typeof opts === 'object' ? opts : {};
-        var sourceId = String(o.sourceId || 'pb-ai-plan-rendered-content');
-        var hostId = String(o.hostId || 'pb-ai-plan-preview-content');
-        var titleText = typeof o.title === 'string' && o.title !== '' ? o.title : messages.planPreviewFullscreenTitle;
-        var source = document.getElementById(sourceId);
-        if (!source) {
-            return;
-        }
-        var previewHost = document.getElementById(hostId);
-        if (previewHost && (previewHost.classList.contains('d-none') || previewHost.style.display === 'none')) {
-            return;
-        }
-        var overlay = ensurePlanPreviewFullscreenOverlay();
-        var titleEl = overlay.querySelector('.pb-ai-plan-preview-fullscreen-title');
-        if (titleEl) {
-            titleEl.textContent = titleText;
-        }
-        var body = document.getElementById('pb-ai-plan-fullscreen-body');
-        if (!body) {
-            return;
-        }
-        body.innerHTML = '';
-        body.removeAttribute('data-pb-preview-action-bound');
-        body.removeAttribute('data-pb-preview-tabs-bound');
-        body.appendChild(source.cloneNode(true));
-        bindPreviewActionButtons(body);
-        bindPreviewTabButtons(body);
-        overlay.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('pb-ai-plan-preview-fullscreen-open');
-        planPreviewFullscreenEscapeHandler = function (e) {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                closePlanPreviewFullscreen();
-            }
-        };
-        document.addEventListener('keydown', planPreviewFullscreenEscapeHandler);
-    }
-
-    function openPlanPreviewFullscreen() {
-        openWorkspacePlanFullscreen({
-            sourceId: 'pb-ai-plan-rendered-content',
-            hostId: 'pb-ai-plan-preview-content',
-            title: messages.planPreviewFullscreenTitle
-        });
-    }
-
-    function bindPlanPreviewFullscreenClick() {
-        var el = document.getElementById('pb-ai-plan-preview-content');
-        if (!el || el.dataset.pbFullscreenBound === '1') {
-            return;
-        }
-        el.dataset.pbFullscreenBound = '1';
-        el.addEventListener('click', function (e) {
-            if (e.button !== 0) {
-                return;
-            }
-            if (e.target.closest && e.target.closest('[data-pb-sort-handle="1"]')) {
-                return;
-            }
-            if (e.target.closest && e.target.closest('.pb-ai-preview-action-btn')) {
-                return;
-            }
-            if (e.target.closest && e.target.closest('a[href]')) {
-                return;
-            }
-            if (e.target.closest && e.target.closest('button, input, textarea, select')) {
-                return;
-            }
-            var pv = document.getElementById('pb-ai-plan-preview-content');
-            if (!pv || pv.classList.contains('d-none') || pv.style.display === 'none') {
-                return;
-            }
-            openPlanPreviewFullscreen();
-        });
-    }
-
     function updatePlanModalContent(markdown, options) {
         var opts = options && typeof options === 'object' ? options : {};
         var persistField = opts.persistField !== false;
@@ -14414,6 +14847,7 @@
             bindPreviewTabButtons(previewContent);
             bindPreviewSortables(previewContent);
             bindStageOnePlanFieldEditors(previewContent);
+            syncPlanTabsFromPreview();
         }
         void persistField;
         syncConfirmPlanButtonEnabled();
@@ -14650,19 +15084,14 @@
         if (state.active_operation && typeof state.active_operation === 'object') {
             candidates.push(state.active_operation);
         }
-        if (scope.active_operation && typeof scope.active_operation === 'object') {
-            candidates.push(scope.active_operation);
-        }
-        [state.active_operations, scope.active_operations].forEach(function (operations) {
+        [state.active_operations].forEach(function (operations) {
             if (operations && typeof operations === 'object' && operations.plan && typeof operations.plan === 'object') {
                 candidates.push(operations.plan);
             }
         });
-        if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
-            candidates.push(state.plan_queue_info);
-        }
-        if (scope.plan_queue_info && typeof scope.plan_queue_info === 'object') {
-            candidates.push(scope.plan_queue_info);
+        var planQueueInfo = resolveCanonicalQueueInfoFromWorkspaceStateForUi(state, 'plan');
+        if (Object.keys(planQueueInfo).length > 0) {
+            candidates.push(planQueueInfo);
         }
         return candidates.some(function (operation) {
             var op = String(operation.operation || '').trim();
@@ -14830,23 +15259,21 @@
         if (blockingMessage !== '' && !isGenericPlanTerminalErrorMessage(blockingMessage)) {
             return blockingMessage;
         }
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
         var candidates = [];
-        [state.active_operation, scope.active_operation].forEach(function (operation) {
+        [state.active_operation].forEach(function (operation) {
             if (operation && typeof operation === 'object') {
                 candidates.push(operation);
             }
         });
-        [state.active_operations, scope.active_operations].forEach(function (operations) {
+        [state.active_operations].forEach(function (operations) {
             if (operations && typeof operations === 'object' && operations.plan && typeof operations.plan === 'object') {
                 candidates.push(operations.plan);
             }
         });
-        [state.plan_queue_info, scope.plan_queue_info].forEach(function (queueInfo) {
-            if (queueInfo && typeof queueInfo === 'object') {
-                candidates.push(queueInfo);
-            }
-        });
+        var planQueueInfo = resolveCanonicalQueueInfoFromWorkspaceStateForUi(state, 'plan');
+        if (Object.keys(planQueueInfo).length > 0) {
+            candidates.push(planQueueInfo);
+        }
         for (var i = 0; i < candidates.length; i += 1) {
             var message = readPlanTerminalObjectFailureMessage(candidates[i]);
             if (message !== '') {
@@ -14961,13 +15388,7 @@
         if (message !== '') {
             return message;
         }
-        var queueStatus = String(
-            data.queue_status
-            || queueState.job_status
-            || queueState.status
-            || queueState.queue_status
-            || ''
-        ).trim();
+        var queueStatus = String(data.queue_status || queueState.queue_status || '').trim();
         if (queueStatus === '') {
             return '';
         }
@@ -14994,13 +15415,7 @@
             (data.queue_state && typeof data.queue_state === 'object') ? data.queue_state : {},
             sanitizeQueueInfoForMemory(queueInfo)
         );
-        var queueStatus = String(
-            data.queue_status
-            || queueState.job_status
-            || queueState.status
-            || queueState.queue_status
-            || ''
-        ).trim().toLowerCase();
+        var queueStatus = String(data.queue_status || queueState.queue_status || '').trim().toLowerCase();
         if (queueStatus === 'done' || queueStatus === 'success' || queueStatus === 'error' || queueStatus === 'failed' || queueStatus === 'cancelled' || queueStatus === 'stop') {
             return 100;
         }
@@ -15393,17 +15808,26 @@
         var active = currentActiveOperationState && typeof currentActiveOperationState === 'object'
             ? currentActiveOperationState
             : {};
-        var operation = String(active.operation || '').toLowerCase();
-        return workspaceState && typeof workspaceState === 'object'
-            ? workspaceState
+        var activeOperation = String(active.operation || '').trim().toLowerCase();
+        var activeStatus = String(active.queue_status || '').trim().toLowerCase();
+        if ((activeOperation === 'build' || activeOperation === 'visual_edit') && isPublishRunningStatus(activeStatus)) {
+            return true;
+        }
+        var state = latestWorkspaceState && typeof latestWorkspaceState === 'object'
+            ? latestWorkspaceState
             : (
-                latestWorkspaceState && typeof latestWorkspaceState === 'object'
-                    ? latestWorkspaceState
+                window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
+                    ? window.__pbWorkspaceState
                     : (
-                        window.__pbWorkspaceState && typeof window.__pbWorkspaceState === 'object'
-                            ? window.__pbWorkspaceState
-                            : (
-                                window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+                        window.__pbLastWorkspaceState && typeof window.__pbLastWorkspaceState === 'object'
+                            ? window.__pbLastWorkspaceState
+                            : {}
+                    )
+            );
+        var buildQueueInfo = resolveCanonicalQueueInfoFromWorkspaceStateForUi(state, 'build');
+        return Object.keys(buildQueueInfo).length > 0 && isPublishRunningStatus(readPublishQueueStatus(buildQueueInfo));
+    }
+
     function isPublishFailureStatus(status) {
         return ['error', 'failed', 'fail', 'stop', 'stopped', 'cancelled', 'canceled'].indexOf(String(status || '').trim().toLowerCase()) !== -1;
     }
@@ -15414,13 +15838,7 @@
 
     function readPublishQueueStatus(queueInfo) {
         var info = sanitizeQueueInfoForMemory(queueInfo && typeof queueInfo === 'object' ? queueInfo : {});
-        return String(
-            info.status
-            || info.queue_status
-            || info.state
-            || info.job_status
-            || ''
-        ).trim().toLowerCase();
+        return String(info.queue_status || '').trim().toLowerCase();
     }
 
     function getPublishBlockingOperationLabel(operation) {
@@ -15462,7 +15880,7 @@
         var candidates = collectPublishBlockingOperationCandidates(state);
         for (var i = 0; i < candidates.length; i++) {
             var candidate = candidates[i] && typeof candidates[i] === 'object' ? candidates[i] : {};
-            var status = String(candidate.status || '').toLowerCase();
+            var status = String(candidate.queue_status || '').toLowerCase();
             var operation = String(candidate.operation || '').toLowerCase();
             if (!isPublishBlockingOperationName(operation) || !isPublishRunningStatus(status)) {
                 continue;
@@ -15496,11 +15914,12 @@
                 }
             });
         }
-        if (state && typeof state === 'object' && state.build_queue_info && typeof state.build_queue_info === 'object') {
+        var buildQueueInfo = resolveCanonicalQueueInfoFromWorkspaceStateForUi(state, 'build');
+        if (Object.keys(buildQueueInfo).length > 0) {
             candidates.push({
                 operation: 'build',
-                status: readPublishQueueStatus(state.build_queue_info),
-                message: String(state.build_queue_info.message || state.build_queue_info.error || '')
+                queue_status: readPublishQueueStatus(buildQueueInfo),
+                message: String(buildQueueInfo.message || buildQueueInfo.error || '')
             });
         }
         return candidates;
@@ -15521,14 +15940,14 @@
             return true;
         }
         return collectPublishBlockingOperationCandidates(state).some(function (candidate) {
-            return isPublishBlockingOperationName(candidate.operation) && isPublishFailureStatus(candidate.status);
+            return isPublishBlockingOperationName(candidate.operation) && isPublishFailureStatus(candidate.queue_status);
         });
     }
 
     function hasPublishBlockingAiOperationRunningFromWorkspaceState(workspaceState) {
         var state = getWorkspaceStateForPublishGate(workspaceState);
         return collectPublishBlockingOperationCandidates(state).some(function (candidate) {
-            return isPublishBlockingOperationName(candidate.operation) && isPublishRunningStatus(candidate.status);
+            return isPublishBlockingOperationName(candidate.operation) && isPublishRunningStatus(candidate.queue_status);
         });
     }
 
@@ -15540,19 +15959,7 @@
         ) {
             return false;
         }
-        var workspaceStatus = String(state.workspace_status || '').toLowerCase();
-        var publishStatus = String(state.publish_status || '').toLowerCase();
-        var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
-        var scopeWorkspaceStatus = String(scope.workspace_status || '').toLowerCase();
-        var scopePublishStatus = String(scope.publish_status || '').toLowerCase();
-        return !!state.can_publish
-            || !!scope.can_publish
-            || workspaceStatus === 'can_publish'
-            || scopeWorkspaceStatus === 'can_publish'
-            || workspaceStatus === 'published'
-            || scopeWorkspaceStatus === 'published'
-            || scopePublishStatus === 'published'
-            || publishStatus === 'published';
+        return !!state.can_publish;
     }
 
     function syncPublishStartButtonFromWorkspaceState(workspaceState) {
@@ -15587,6 +15994,25 @@
         });
     }
 
+    function getWorkspaceStateForPublishGate(workspaceState) {
+        return workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+    }
+
+    function isPublishBlockingOperationName(operation) {
+        return [
+            'build',
+            'visual_edit',
+            'regenerate_page',
+            'block_partial_patch',
+            'block_regenerate',
+            'publish',
+            'publish_repair',
+            'quality_repair'
+        ].indexOf(String(operation || '').trim().toLowerCase()) !== -1;
+    }
+
     function syncPublishStageEntryFromWorkspaceState(workspaceState) {
         var state = getWorkspaceStateForPublishGate(workspaceState);
         syncPublishStartButtonFromWorkspaceState(state);
@@ -15604,7 +16030,7 @@
             ? state.active_operation
             : {};
         var activeOperation = String(active.operation || '').toLowerCase();
-        var activeStatus = String(active.status || '').toLowerCase();
+        var activeStatus = String(active.queue_status || '').toLowerCase();
         var blockedByFailure = hasPublishBlockingLatestBuildFailureFromWorkspaceState(state);
         var blockedByRunning = hasPublishBlockingAiOperationRunningFromWorkspaceState(state);
         var blockedByRetryable = hasPublishBlockingRetryableAiFailures(state);
@@ -15689,7 +16115,7 @@
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
-        var canStartBuildFlow = shouldUsePlanJsonFlow(state);
+        var canStartBuildFlow = hasPlanJsonFlowEvidence(state);
         var disabled = isBuildActionLocked(state)
             || hasRetryableAiFailures(state, 'plan')
             || !canStartBuildFlow;
@@ -15734,7 +16160,7 @@
             toast('warning', messages.planStartUnavailable);
             return Promise.resolve(false);
         }
-        return confirmSchemeRebuild(messages.planSchemeRebuildConfirmMessage, messages.planSchemeRebuildConfirmTitle).then(function (confirmed) {
+        return confirmWorkspaceRebuildAction(messages.planSchemeRebuildConfirmMessage, messages.planSchemeRebuildConfirmTitle).then(function (confirmed) {
             if (!confirmed) {
                 toast('info', messages.resumeDeferred);
                 return false;
@@ -15742,34 +16168,9 @@
             var selectedTypes = Array.isArray(currentPlanSelection) && currentPlanSelection.length > 0
                 ? currentPlanSelection.slice()
                 : selectedPageTypes();
-        var opts = options && typeof options === 'object' ? options : {};
-        var normalizedTypes = ensureRequiredPageTypeSelected(selectedTypes);
-        if (!startPlanUrl) {
-            toast('error', messages.planStartUnavailable);
-            return;
-        }
-        if (planStartRequestPending) {
-            return;
-        }
-        var forceRebuild = !!opts.forceRebuild;
-        var previousPlanMarkdown = forceRebuild ? '' : String((currentPlanPayload && currentPlanPayload.markdown) || '');
-        if (forceRebuild) {
-            setPlanMode('rebuild');
-            planConfirmedState = false;
-        }
-        releasePlanStreamBuffer({ clearPreviewPayload: forceRebuild });
-        currentPlanSelection = normalizedTypes.slice();
-        currentPlanTriggerButton = triggerBtn || null;
-        pageTypesUserCustomized = true;
-        pageTypesSelectionLocallyCustomized = true;
-        serverPageTypesFallback = normalizedTypes.slice();
-        syncDomPageTypeChecks(normalizedTypes);
-        if (typeof window.applyTaskSummarySelectionFilter === 'function') {
-            window.applyTaskSummarySelectionFilter();
-        }
-
-        setPlanGenerationActionLock(true);
-        proceedToShowPlanModalAndRequestStart(previousPlanMarkdown, opts);
+            startPlanGenerationForSelection(triggerBtn, selectedTypes, { forceRebuild: true, promptMode: 'rebuild' });
+            return true;
+        });
     }
 
     function startPlanGenerationForSelection(triggerBtn, selectedTypes, options) {
@@ -16045,11 +16446,21 @@
         if (!confirmed) {
             confirmCurrentPlanAndMaybeBuild(Object.assign({}, opts, {
                 triggerBtn: triggerBtn || currentPlanTriggerButton,
-                selectedTypes: normalizedTypes
+                selectedTypes: normalizedTypes,
+                startBuildAfterConfirm: true
             }));
             return;
         }
         startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, Object.assign({}, opts, {}));
+    }
+
+    function confirmWorkspaceRebuildAction(message, title) {
+        var confirmTitle = String(title || '').trim();
+        var confirmMessage = String(message || '').trim();
+        if (confirmTitle !== '') {
+            confirmMessage = confirmTitle + "\n\n" + confirmMessage;
+        }
+        return Promise.resolve(window.confirm(confirmMessage));
     }
 
     function startFullBuildRebuild(triggerBtn, selectedTypes, options) {
@@ -16062,6 +16473,22 @@
         pbAiConfirmGenerateThemeContinue(triggerBtn || currentPlanTriggerButton, normalizedTypes, Object.assign({}, opts, {
             forceBuildRebuild: true
         }));
+    }
+
+    function startBuildButtonAction(triggerBtn, selectedTypes, options) {
+        var opts = Object.assign({}, options && typeof options === 'object' ? options : {});
+        var state = latestWorkspaceState || initialWorkspaceState || {};
+        var stage = String((state && state.stage) || currentWorkspaceStage || '').trim();
+        var normalizedTypes = ensureRequiredPageTypeSelected(selectedTypes && selectedTypes.length ? selectedTypes : selectedPageTypes());
+        if (!normalizedTypes || normalizedTypes.length === 0) {
+            toast('warning', messages.noPageType);
+            return;
+        }
+        if (stage === 'publish' || opts.forceBuildRebuild === true) {
+            startFullBuildRebuild(triggerBtn, normalizedTypes, opts);
+            return;
+        }
+        ensurePlanJsonConfirmedBeforeBuild(triggerBtn, normalizedTypes, opts);
     }
 
     function handleEmbeddedPreviewGenerateRequest(pageType) {
@@ -16133,7 +16560,7 @@
             if (opts.forceConfirmStalePlan === true) {
                 fields.force_confirm_stale_plan = '1';
             }
-            postForm(confirmPlanUrl, {
+            postUrlEncoded(confirmPlanUrl, {
                 public_id: fields.public_id,
                 stage: fields.stage,
                 force_confirm_stale_plan: fields.force_confirm_stale_plan || '0'
@@ -16142,7 +16569,7 @@
                     if (opts.forceConfirmStalePlan !== true && isPlanInputStaleConfirmationResponse(data)) {
                         promptPlanInputStaleConfirmation(data).then(function (confirmed) {
                             if (confirmed) {
-                                confirmCurrentPlanAndMaybeBuild({ forceConfirmStalePlan: true });
+                                confirmCurrentPlanAndMaybeBuild(Object.assign({}, opts, { forceConfirmStalePlan: true }));
                                 return;
                             }
                             syncConfirmPlanButtonEnabled();
@@ -16158,6 +16585,13 @@
                 }
                 hidePlanGenerationModal();
                 toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
+                if (opts.startBuildAfterConfirm === true) {
+                    var buildTypes = ensureRequiredPageTypeSelected(opts.selectedTypes && opts.selectedTypes.length ? opts.selectedTypes : selectedPageTypes());
+                    startConfirmedBuild(opts.triggerBtn || currentPlanTriggerButton, buildTypes, Object.assign({}, opts, {
+                        startBuildAfterConfirm: false
+                    }));
+                    return;
+                }
                 continueToBuildAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
             }).catch(function (error) {
                 toast('error', (error && error.message) ? String(error.message) : messages.networkError);
@@ -16214,6 +16648,35 @@
                 }
                 return;
             }
+            var runPlanBtn = target.closest('.pb-ai-run-virtual-theme');
+            if (runPlanBtn) {
+                event.preventDefault();
+                if (typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
+                if (!guardDelegatedStageButtonClick(runPlanBtn)) {
+                    return;
+                }
+                if (runPlanBtn.disabled || globalRunVirtualThemeDisabled) {
+                    return;
+                }
+                if (!startPlanUrl) {
+                    toast('error', messages.planStartUnavailable);
+                    return;
+                }
+                var planPageTypes = selectedPageTypes();
+                if (planPageTypes.length === 0) {
+                    toast('warning', messages.noPageType);
+                    return;
+                }
+                bindTargetDomainInvalidClearOnce();
+                setTargetDomainFieldInvalid(false);
+                if (!validateVirtualThemeInputs()) {
+                    return;
+                }
+                startPlanGenerationForSelection(runPlanBtn, planPageTypes);
+                return;
+            }
             var startBuildBtn = target.closest('#pb-ai-start-build-site');
             if (startBuildBtn) {
                 event.preventDefault();
@@ -16237,7 +16700,7 @@
                     syncPlanJsonStartButtonState();
                     return;
                 }
-                ensurePlanJsonConfirmedBeforeBuild(startBuildBtn, selectedTypesForBuild, {});
+                startBuildButtonAction(startBuildBtn, selectedTypesForBuild, {});
                 return;
             }
             var publishStageBtn = target.closest('#pb-ai-go-publish-stage');
@@ -16271,7 +16734,7 @@
                     syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
                     return;
                 }
-                postForm(setStageUrl, { public_id: publicId, stage: 'publish' }).then(function (data) {
+                postUrlEncoded(setStageUrl, { public_id: publicId, stage: 'publish' }).then(function (data) {
                     if (data && data.success) {
                         window.location.reload();
                         return;

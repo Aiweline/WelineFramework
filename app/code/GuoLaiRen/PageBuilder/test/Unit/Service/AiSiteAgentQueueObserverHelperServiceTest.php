@@ -162,7 +162,7 @@ line-3
     {
         $service = new AiSiteAgentQueueObserverHelperService();
 
-        $queueState = ['queue_id' => 4321, 'status' => 'running'];
+        $queueState = ['queue_id' => 4321, 'queue_status' => 'running'];
         $payload = $service->buildPanelPayload(
             [
                 'process' => '  正在执行  ',
@@ -179,7 +179,6 @@ line-3
                 'biz_key',
                 'status',
                 'queue_status',
-                'job_status',
                 'semantic_status',
                 'pid',
                 'type_id',

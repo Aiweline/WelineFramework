@@ -76,6 +76,62 @@ final class RouterHostFallbackTest extends TestCase
         self::assertArrayNotHasKey('module', $rule);
     }
 
+    public function testRootPathDoesNotResolveWhenCurrentWebsiteIsNotPageBuilder(): void
+    {
+        $this->initRequestContext([
+            'HTTP_HOST' => 'p11005ce4.weline.test',
+            'SERVER_NAME' => 'p11005ce4.weline.test',
+            'REQUEST_URI' => '/',
+            'WELINE_WEBSITE_ID' => '268',
+        ]);
+
+        $this->setObjectManagerInstances($this->objectManagerInstancesBackup + [
+            Website::class => new RouterHostFallbackWebsiteStub([
+                Website::schema_fields_ID => 268,
+                Website::schema_fields_SCOPE => 'catalog',
+                Website::schema_fields_URL => 'https://p11005ce4.weline.test',
+            ]),
+            Page::class => new RouterHostFallbackPageStub([268 => 'catalog-home']),
+        ]);
+
+        $path = '/';
+        $rule = [];
+
+        Router::process($path, $rule);
+
+        self::assertSame('/', $path);
+        self::assertArrayNotHasKey('module', $rule);
+    }
+
+    public function testRootPathResolvesOnlyWhenCurrentWebsiteIsPageBuilder(): void
+    {
+        $this->initRequestContext([
+            'HTTP_HOST' => 'build-a-ae9ab8.weline.test',
+            'SERVER_NAME' => 'build-a-ae9ab8.weline.test',
+            'REQUEST_URI' => '/',
+            'WELINE_WEBSITE_ID' => '409',
+            'WELINE_WEBSITE_URL' => 'http://build-a-ae9ab8.weline.test',
+        ]);
+
+        $this->setObjectManagerInstances($this->objectManagerInstancesBackup + [
+            Website::class => new RouterHostFallbackWebsiteStub([
+                Website::schema_fields_ID => 409,
+                Website::schema_fields_SCOPE => 'page_builder',
+                Website::schema_fields_URL => 'http://build-a-ae9ab8.weline.test',
+            ]),
+            Page::class => new RouterHostFallbackPageStub([409 => 'site-home']),
+        ]);
+
+        $path = '/';
+        $rule = [];
+
+        Router::process($path, $rule);
+
+        self::assertSame('/pagebuilder/frontend/page/view', $path);
+        self::assertSame('GuoLaiRen_PageBuilder', $rule['module'] ?? null);
+        self::assertSame('site-home', $rule['handle'] ?? null);
+    }
+
     public function testHostCandidatesIgnoreDerivedWebsiteUrl(): void
     {
         $this->initRequestContext([
@@ -254,6 +310,26 @@ final class RouterHostFallbackWebsiteStub extends Website
         return $this;
     }
 
+    public function clearData(bool $with_query = true): static
+    {
+        return $this;
+    }
+
+    public function clearQuery(string $type = ''): static
+    {
+        return $this;
+    }
+
+    public function load(string|int $field_or_pk_value, $value = null): \Weline\Framework\Database\AbstractModel
+    {
+        unset($value);
+        if ((int)$field_or_pk_value !== (int)($this->data[Website::schema_fields_ID] ?? 0)) {
+            $this->data = [];
+        }
+
+        return $this;
+    }
+
     public function where(array|string $field, mixed $value = null, string $condition = '=', string $where_logic = 'AND', string $array_where_logic_type = 'AND'): static
     {
         return $this;
@@ -278,13 +354,21 @@ final class RouterHostFallbackWebsiteStub extends Website
 
         return $this->data[$key] ?? null;
     }
+
+    public function getId(mixed $default = 0): mixed
+    {
+        return $this->data[Website::schema_fields_ID] ?? $default;
+    }
 }
 
 final class RouterHostFallbackPageStub extends Page
 {
     public object $state;
 
-    public function __construct()
+    /**
+     * @param array<int, string> $homeHandlesByWebsiteId
+     */
+    public function __construct(private array $homeHandlesByWebsiteId = [])
     {
         $this->state = (object)[
             'where' => [],
@@ -324,10 +408,10 @@ final class RouterHostFallbackPageStub extends Page
             $this->state->queriedWebsiteIds[] = $websiteId;
         }
 
-        $this->state->data = $websiteId === 0
+        $this->state->data = isset($this->homeHandlesByWebsiteId[(int)$websiteId])
             ? [
                 Page::schema_fields_ID => 900,
-                Page::schema_fields_HANDLE => 'global-card-game-home',
+                Page::schema_fields_HANDLE => $this->homeHandlesByWebsiteId[(int)$websiteId],
             ]
             : [];
 

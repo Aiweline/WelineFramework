@@ -81,15 +81,61 @@ final class AiSiteMaterializationServiceTest extends TestCase
         ], Page::TYPE_HOME)));
     }
 
-    public function testVirtualThemeMaterializationUsesLayoutConfigInsteadOfStaleAiHtmlBlockNodes(): void
+    public function testMaterializationExtractsCanonicalPlanJsonBlocksForAiHtmlPublish(): void
+    {
+        $page = $this->createMock(Page::class);
+        $layout = $this->createMock(PageLayout::class);
+        $scopeSvc = new AiSiteScopeCompatibilityService(LayoutConfigNormalizer::getInstance());
+        $service = new AiSiteMaterializationService($page, $layout, $scopeSvc);
+        $method = new \ReflectionMethod($service, 'resolveCanonicalPlanJsonAiHtmlBlocks');
+        $method->setAccessible(true);
+
+        $blocks = $method->invoke($service, [
+            'name' => 'Home',
+            'status' => 1,
+            'seo' => ['title' => 'Home'],
+            'hero' => [
+                'status' => 1,
+                'html' => '<section data-block="hero">Hero</section>',
+            ],
+            'faq' => [
+                'status' => 0,
+                'html' => '<section data-block="faq">FAQ</section>',
+            ],
+            'gallery' => [
+                'status' => 1,
+                'html_content' => '<section data-block="gallery">Gallery</section>',
+            ],
+        ]);
+
+        self::assertCount(2, $blocks);
+        self::assertSame('hero', $blocks[0]['block_key'] ?? '');
+        self::assertSame('<section data-block="hero">Hero</section>', $blocks[0]['html'] ?? '');
+        self::assertSame('gallery', $blocks[1]['block_key'] ?? '');
+        self::assertSame('<section data-block="gallery">Gallery</section>', $blocks[1]['html'] ?? '');
+    }
+
+    public function testVirtualThemeMaterializationUsesLayoutConfigInsteadOfStaleAiHtmlBlocks(): void
     {
         $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteMaterializationService.php');
         self::assertIsString($source);
 
-        self::assertStringContainsString('$hasGeneratedLayout = $this->layoutHasGeneratedContentComponents($materializedLayoutConfig);', $source);
-        self::assertStringContainsString('if (!$hasGeneratedLayout) {', $source);
+        self::assertStringContainsString('$blocks = $this->resolveCanonicalPlanJsonAiHtmlBlocks($virtualPage);', $source);
+        self::assertStringContainsString('$hasGeneratedLayout = $blocks === [] && $this->layoutHasGeneratedContentComponents($materializedLayoutConfig);', $source);
+        self::assertStringContainsString('if ($blocks === []) {', $source);
         self::assertStringContainsString('$renderMode = $hasGeneratedLayout ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;', $source);
         self::assertStringContainsString('$aiLayoutJson = $hasGeneratedLayout ? null : \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);', $source);
+        self::assertStringContainsString("'block_nodes' => \$blocks", $source);
+    }
+
+    public function testMaterializationDoesNotUseExistingAiLayoutAsBlockTruthSource(): void
+    {
+        $source = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/Service/AiSiteMaterializationService.php');
+        self::assertIsString($source);
+
+        self::assertStringNotContainsString('resolveExistingAiHtmlBlocks', $source);
+        self::assertStringNotContainsString('getAiLayoutArray()', $source);
+        self::assertStringContainsString("AI HTML page has no generated plan_json blocks", $source);
     }
 
     public function testSinglePageMaterializationDoesNotInjectHomePage(): void

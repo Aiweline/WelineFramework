@@ -718,12 +718,15 @@ ID,ID
 确定要删除选中的模型吗？此操作不可恢复！注意：仅复制模型和自定义模型可删除。,"Are you sure you want to delete the selected models? This action cannot be undone! Note: Only copied models and custom models can be deleted."
 请先选择要测试的模型,"Please select the model to test first."
 测试失败：,"Test failed:"
+加载中...,Loading...
 受保护模型不能删除，只能删除复制模型或自定义模型,"Protected models cannot be deleted; only copied or custom models can be deleted"
 确定要删除模型,"Are you sure you want to delete the model?"
 吗？,?
 删除失败:,"Deletion failed:"
 删除失败，请重试,"Deletion failed, please try again."
+错误：,Error:
 "测试失败: 网络错误","Test failed: Network error"
+测试图片,测试图片
 重试,Retry
 条件不足,"Insufficient conditions"
 无法激活,"Unable to activate"
@@ -780,6 +783,20 @@ Temperature,Temperature
 使用当前模型,"Using current model"
 "可从当前供应商账户支持的 models 接口中选择测试模型。","You can select a test model from the models interface supported by the current provider account."
 开始测试,"Start testing"
+正在加载模型...,正在加载模型...
+请先选择供应商,"Please select a vendor first"
+"models 接口不可用，请手动输入模型。","models 接口不可用，请手动输入模型。"
+手动输入模型,手动输入模型
+选择供应商模型,选择供应商模型
+"已从供应商 models 接口加载。","已从供应商 models 接口加载。"
+只能选择当前供应商账户返回的模型。,只能选择当前供应商账户返回的模型。
+"models 接口请求失败，请手动输入模型。","models 接口请求失败，请手动输入模型。"
+"models 接口请求失败，测试将使用当前模型。","models 接口请求失败，测试将使用当前模型。"
+正在加载供应商模型...,正在加载供应商模型...
+无法加载供应商模型,无法加载供应商模型
+"models 接口返回了非 JSON 响应","models 接口返回了非 JSON 响应"
+"models 接口 HTTP","models 接口 HTTP"
+"models 接口返回了空列表","models 接口返回了空列表"
 选择账户或使用自配置,"Select Account or Use Self-Configuration"
 模型已成功保存,"Model saved successfully"
 账户名称,"Account Name"
@@ -816,7 +833,6 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 响应,Response
 请求地址,"Request address"
 "基础 URL","Base URL"
-请先选择供应商,"Please select a vendor first"
 请先填写API密钥,"Please fill in the API key first"
 保存失败，请重试,"Save failed. Please try again"
 测试失败，请重试,"Test failed, please retry"
@@ -841,7 +857,6 @@ API密钥将被加密存储,"API keys will be stored encrypted"
 总令牌,"Total Tokens"
 花费,Spent
 使用详情,"Usage details"
-加载中...,Loading...
 加载失败，请重试,"Failed to load, please retry"
 暂无数据,"No data available"
 请求ID,"Request ID"
@@ -985,4 +1000,3 @@ AI聊天助手,"AI Chat Assistant"
 请输入您的问题，我会尽力为您解答。,"Please enter your question, and I will do my best to answer it for you."
 请输入您的消息...,"Please enter your message..."
 确定要清空聊天记录吗？,"Are you sure you want to clear the chat history?"
-错误：,Error:

@@ -319,7 +319,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
 
         self::assertNull($detect->call(
             $service,
-            "<section class='pb-c-root'><div class='pb-c-inner'><div class='pb-c-action'><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? 'Baixar APK', ENT_QUOTES, 'UTF-8') ?></button></div></div></section>",
+            "<section class='pb-c-root'><div class='pb-c-inner'><div class='pb-c-action'><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Baixar APK', ENT_QUOTES, 'UTF-8') ?></button></div></div></section>",
             'content/home-page-final-cta'
         ));
     }
@@ -413,17 +413,17 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
 
         $phtml = $builder->buildComponent('content', ['name' => 'CTA test'], [
             'extra_fields' => 'cta.text => CTA text:text:Baixar APK',
-            'php_variables' => "\$ctaText = \$getConfig('cta.text', 'Baixar APK');",
+            'php_variables' => "$ctaText = $getConfig('cta.text', 'Baixar APK');",
             'css_extra' => '#componentId .pb-c-root{padding:40px;}',
             'css_responsive' => '@media (max-width: 768px){#componentId .pb-c-inner{display:block;}}@media (max-width: 420px){#componentId .pb-c-root{padding:20px;}}',
-            'html_content' => "<section class='pb-c-root'><div class='pb-c-inner'><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? 'Baixar APK', ENT_QUOTES, 'UTF-8') ?></button></div></section>",
+            'html_content' => "<section class='pb-c-root'><div class='pb-c-inner'><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Baixar APK', ENT_QUOTES, 'UTF-8') ?></button></div></section>",
             'js_content' => '',
         ]);
 
         self::assertStringContainsString("CustomEvent('pb:cta'", $phtml);
         self::assertStringContainsString('data-pb-ai-bound', $phtml);
-        self::assertStringNotContainsString("    @media (max-width: 768px){#<?= \$componentId ?> .pb-c-inner", $phtml);
-        self::assertStringContainsString("\n@media (max-width: 768px){#<?= \$componentId ?> .pb-c-inner", $phtml);
+        self::assertStringNotContainsString("    @media (max-width: 768px){#<?= $componentId ?> .pb-c-inner", $phtml);
+        self::assertStringContainsString("\n@media (max-width: 768px){#<?= $componentId ?> .pb-c-inner", $phtml);
     }
 
     /**

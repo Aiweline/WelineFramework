@@ -531,7 +531,6 @@ PID：%{1},PID：%{1}
 维护模式已关闭。,"Maintenance mode is off."
 "检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED","Detected that Windows system proxy %{1} is enabled. Browser access to %{2} may be intercepted by the proxy and report ERR_CONNECTION_CLOSED."
 "建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名","Suggestion: Add %{1} to the system proxy bypass list (ProxyOverride) before accessing the local WLS domain"
-"当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","The current WLS does not have a whitelist default host configured, so the frontend may not be accessible from the public network. Please configure app/etc/env.php -> wls.servers.%{1}.host (recommended) or wls.host (not 0.0.0.0)."
 "启动已阻止：当前监听地址为 %{1}，且无法确定默认项目域名白名单。","Startup blocked: The current listening address is %{1}, and the default project domain whitelist cannot be determined."
 "请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","Please configure app/etc/env.php -> wls.servers.%{1}.host (recommended) or wls.host (not 0.0.0.0)."
 后台域名池域名不需要写入此处。,"Backend domain pool domains do not need to be written here."

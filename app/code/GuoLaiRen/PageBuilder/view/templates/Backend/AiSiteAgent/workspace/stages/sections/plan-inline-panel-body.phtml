@@ -7,9 +7,7 @@
  *  - 保留 `pb-ai-plan-rendered-content` / `pb-ai-plan-progress-bar` / `pb-ai-plan-status`
  *    等既有 ID，使 JS 状态驱动代码无需同步迁移。
  */
-$phaseOneInitialJson = \is_array($state['plan']['json'] ?? null)
-    ? $state['plan']['json']
-    : (\is_array($state['plan_json'] ?? null) ? $state['plan_json'] : []);
+$phaseOneInitialJson = \is_array($state['plan_json'] ?? null) ? $state['plan_json'] : [];
 $phaseOneHasPlanArtifact = $phaseOneInitialJson !== [];
 ?>
 <div class="mt-3 border rounded shadow-sm d-flex flex-column min-h-0" id="pb-ai-plan-inline-panel">
@@ -19,10 +17,14 @@ $phaseOneHasPlanArtifact = $phaseOneInitialJson !== [];
                 <div id="pb-ai-plan-primary-pane-preview" class="d-flex flex-column flex-grow-1 min-h-0 overflow-hidden">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 border-bottom px-2 py-2 bg-light">
                         <span class="small text-muted fw-semibold"><?= htmlspecialchars((string)__('方案预览'), ENT_QUOTES, 'UTF-8') ?></span>
-                        <button type="button" class="btn btn-outline-secondary btn-sm active" id="pb-ai-plan-preview-view"><?= htmlspecialchars((string)__('结构化预览'), ENT_QUOTES, 'UTF-8') ?></button>
+                        <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                            <div class="d-flex flex-wrap gap-2" id="pb-ai-plan-page-preview-tabs" role="tablist" aria-label="<?= htmlspecialchars((string)__('页面方案'), ENT_QUOTES, 'UTF-8') ?>"></div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm active" id="pb-ai-plan-preview-view"><?= htmlspecialchars((string)__('结构化预览'), ENT_QUOTES, 'UTF-8') ?></button>
+                        </div>
                     </div>
+                    <div class="small text-muted border-bottom px-3 py-2 d-none" id="pb-ai-plan-page-preview-tabs-empty"><?= htmlspecialchars((string)__('生成方案后，这里会按页面类型切换显示对应页面方案。'), ENT_QUOTES, 'UTF-8') ?></div>
                     <div class="d-flex flex-column flex-grow-1 min-h-0 overflow-hidden pb-ai-plan-preview-outer">
-                        <div id="pb-ai-plan-preview-content" class="p-3 flex-grow-1 overflow-auto min-h-0" title="<?= htmlspecialchars((string)__('单击预览区域可全屏查看建站方案'), ENT_QUOTES, 'UTF-8') ?>">
+                        <div id="pb-ai-plan-preview-content" class="p-3 flex-grow-1 overflow-auto min-h-0">
                             <?php /*
                                 方案预览始终由前端 PlanJsonPreviewHtml 基于结构化数据渲染，
                                 这里只输出占位文案，避免在服务端直接展示 markdown 列表（即“确认态泄漏”）。

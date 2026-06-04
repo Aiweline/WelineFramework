@@ -17,8 +17,8 @@ final class AiSiteBuildPromptContextAssembler
         $inputScope = \is_array($task['input_scope'] ?? null) ? $task['input_scope'] : [];
         $blockId = \trim((string)($inputScope['block_id'] ?? $task['block_id'] ?? ''));
         $pageId = \trim((string)($inputScope['page_id'] ?? $task['page_id'] ?? ''));
-        $blocks = $this->normalizeRecordSet($contract['block_nodes'] ?? [], ['block_id', 'id']);
         $pages = $this->normalizeRecordSet($contract['pages'] ?? [], ['page_id', 'id']);
+        $blocks = $this->extractPlanJsonBlocks($pages);
         $contentManifest = \is_array($contract['content_manifest'] ?? null) ? $contract['content_manifest'] : [];
         $items = \is_array($contentManifest['items'] ?? null) ? $contentManifest['items'] : [];
         $block = \is_array($blocks[$blockId] ?? null) ? $blocks[$blockId] : [];
@@ -269,6 +269,67 @@ final class AiSiteBuildPromptContextAssembler
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $pages
+     * @return array<string, array<string, mixed>>
+     */
+    private function extractPlanJsonBlocks(array $pages): array
+    {
+        $blocks = [];
+        foreach ($pages as $pageId => $page) {
+            foreach ($this->extractPageBlocks($page) as $blockKey => $block) {
+                $blockId = \trim((string)($block['block_id'] ?? $block['id'] ?? $blockKey));
+                if ($blockId === '') {
+                    continue;
+                }
+                $blocks[$blockId] = $block + [
+                    'block_key' => (string)$blockKey,
+                    'page_id' => (string)$pageId,
+                    'page_type' => (string)($page['page_type'] ?? $pageId),
+                ];
+            }
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return array<string, array<string, mixed>>
+     */
+    private function extractPageBlocks(array $page): array
+    {
+        $reserved = [
+            'page_id' => true,
+            'id' => true,
+            'page_type' => true,
+            'type' => true,
+            'title' => true,
+            'description' => true,
+            'page_goal' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'status' => true,
+            'seo' => true,
+            'route' => true,
+            'meta' => true,
+            'layout' => true,
+            'blocks' => true,
+            'block_previews' => true,
+            'sections' => true,
+            'components' => true,
+        ];
+        $blocks = [];
+        foreach ($page as $key => $value) {
+            if (!\is_string($key) || isset($reserved[$key]) || !\is_array($value)) {
+                continue;
+            }
+            $blocks[$key] = $value;
+        }
+
+        return $blocks;
     }
 
     /**

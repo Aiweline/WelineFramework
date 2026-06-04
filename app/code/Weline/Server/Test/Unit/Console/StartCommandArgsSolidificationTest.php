@@ -117,7 +117,10 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $result = $start->validatePublicHost($sslService, 'pre.example.com');
 
         self::assertFalse((bool)($result['success'] ?? true));
-        self::assertStringContainsString('未解析到当前服务器 IP', (string)($result['message'] ?? ''));
+        $message = (string)($result['message'] ?? '');
+        self::assertStringContainsString('pre.example.com', $message);
+        self::assertStringContainsString('203.0.113.10', $message);
+        self::assertStringContainsString('198.51.100.20', $message);
     }
 
     public function testPublicHostResolutionGuardSkipsLocalDomains(): void
@@ -244,6 +247,37 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame('demo.internal.example', (string)($config['host'] ?? ''));
     }
 
+    public function testWildcardListenHostUsesServerHostAsPublicHostWithoutWarning(): void
+    {
+        $start = $this->createProbe(
+            null,
+            [
+                'wls' => ['host' => '0.0.0.0'],
+                'server' => ['host' => 'p11005ce4.weline.test'],
+            ]
+        );
+
+        $result = $start->validateExternalAllowlist('default', ['host' => '0.0.0.0']);
+
+        self::assertTrue($result['valid']);
+        self::assertSame('p11005ce4.weline.test', $result['config']['public_host'] ?? null);
+        self::assertNull($result['warning']);
+    }
+
+    public function testWildcardListenHostFallsBackToGeneratedProjectHostWithoutWarning(): void
+    {
+        $start = $this->createProbe(
+            null,
+            ['wls' => ['host' => '0.0.0.0']]
+        );
+
+        $result = $start->validateExternalAllowlist('default', ['host' => '0.0.0.0']);
+
+        self::assertTrue($result['valid']);
+        self::assertSame('unit-test.weline.test', $result['config']['public_host'] ?? null);
+        self::assertNull($result['warning']);
+    }
+
     public function testBaseGetEnvConfigReturnsArray(): void
     {
         $start = new StartBaseEnvConfigProbe();
@@ -340,6 +374,24 @@ final class StartConfigProbe extends Start
     public function validatePublicHost(SslCertificateService $sslService, string $host): array
     {
         return $this->validatePublicHostResolvesToCurrentServer($host, $sslService);
+    }
+
+    /**
+     * @return array{valid: bool, config: array<string, mixed>, warning: string|null}
+     */
+    public function validateExternalAllowlist(string $instanceName, array $config): array
+    {
+        $host = (string)($config['host'] ?? '');
+        $valid = $this->validateExternalHostAllowlist($instanceName, $host, $config);
+
+        $warning = new \ReflectionProperty(Start::class, 'deferredStartupWarning');
+        $warning->setAccessible(true);
+
+        return [
+            'valid' => $valid,
+            'config' => $config,
+            'warning' => $warning->getValue($this),
+        ];
     }
 
     protected function resolvePublicHostIps(string $host): array

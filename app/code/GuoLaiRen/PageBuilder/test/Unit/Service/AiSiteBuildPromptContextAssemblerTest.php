@@ -22,10 +22,11 @@ final class AiSiteBuildPromptContextAssemblerTest extends TestCase
                 ],
             ],
             'pages' => [
-                ['page_id' => 'home_page', 'page_type' => 'home_page', 'page_goal' => 'Explain the service clearly.'],
-            ],
-            'block_nodes' => [
-                [
+                'home_page' => [
+                    'page_id' => 'home_page',
+                    'page_type' => 'home_page',
+                    'page_goal' => 'Explain the service clearly.',
+                    'hero' => [
                     'block_id' => 'home_page.hero',
                     'page_id' => 'home_page',
                     'content_keys' => [
@@ -33,6 +34,7 @@ final class AiSiteBuildPromptContextAssemblerTest extends TestCase
                         'block.home_page.hero.description',
                         'block.home_page.hero.cta',
                     ],
+                ],
                 ],
             ],
         ];
@@ -72,10 +74,11 @@ final class AiSiteBuildPromptContextAssemblerTest extends TestCase
                 'items' => [],
             ],
             'pages' => [
-                ['page_id' => 'home_page', 'page_type' => 'home_page'],
-            ],
-            'block_nodes' => [
-                ['block_id' => 'home_page.hero', 'page_id' => 'home_page'],
+                'home_page' => [
+                    'page_id' => 'home_page',
+                    'page_type' => 'home_page',
+                    'hero' => ['block_id' => 'home_page.hero', 'page_id' => 'home_page'],
+                ],
             ],
         ];
         $task = [

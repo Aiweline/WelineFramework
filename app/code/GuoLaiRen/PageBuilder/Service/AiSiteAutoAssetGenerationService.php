@@ -1060,8 +1060,8 @@ class AiSiteAutoAssetGenerationService
 
         $scope = $this->clearInvalidIdentityAssetReferences($scope);
 
-        $defaultConfig = \is_array($scope['shared_components']['header']['default_config'] ?? null)
-            ? $scope['shared_components']['header']['default_config']
+        $defaultConfig = \is_array($scope['plan_json']['shared_components']['header']['default_config'] ?? null)
+            ? $scope['plan_json']['shared_components']['header']['default_config']
             : [];
         foreach (['logo.image', 'logo.url', 'brand.logo'] as $key) {
             if ($this->identityAssetUrlIsInvalidForRole((string)($defaultConfig[$key] ?? ''), 'logo')) {
@@ -1076,8 +1076,9 @@ class AiSiteAutoAssetGenerationService
             }
         }
         if ($defaultConfig !== []) {
-            $scope['shared_components']['header']['default_config'] = $defaultConfig;
+            $scope['plan_json']['shared_components']['header']['default_config'] = $defaultConfig;
         }
+        unset($scope['shared_components']);
 
         return $scope;
     }
@@ -1296,40 +1297,49 @@ class AiSiteAutoAssetGenerationService
      */
     private function applyIdentityAssetToRenderPayload(array $payload, string $role, string $finalUrl): array
     {
+        if (!\is_array($payload['plan_json'] ?? null)) {
+            $payload['plan_json'] = [];
+        }
+        if (!\is_array($payload['plan_json']['shared_components'] ?? null)) {
+            $payload['plan_json']['shared_components'] = \is_array($payload['shared_components'] ?? null)
+                ? $payload['shared_components']
+                : [];
+        }
+
         if ($role === 'logo') {
-            if (\is_array($payload['shared_components']['header']['default_config'] ?? null)) {
-                $payload['shared_components']['header']['default_config']['logo']['url'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['logo']['image'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['logo.url'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['logo.image'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['identity.shared_logo_asset'] = $finalUrl;
+            if (\is_array($payload['plan_json']['shared_components']['header']['default_config'] ?? null)) {
+                $payload['plan_json']['shared_components']['header']['default_config']['logo']['url'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['logo']['image'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['logo.url'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['logo.image'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['identity.shared_logo_asset'] = $finalUrl;
             }
-            if (\is_array($payload['shared_components']['footer']['default_config'] ?? null)) {
-                $payload['shared_components']['footer']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
-                $payload['shared_components']['footer']['default_config']['identity.shared_logo_asset'] = $finalUrl;
-                $payload['shared_components']['footer']['default_config']['brand']['logo'] = $finalUrl;
-                $payload['shared_components']['footer']['default_config']['brand.logo'] = $finalUrl;
+            if (\is_array($payload['plan_json']['shared_components']['footer']['default_config'] ?? null)) {
+                $payload['plan_json']['shared_components']['footer']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
+                $payload['plan_json']['shared_components']['footer']['default_config']['identity.shared_logo_asset'] = $finalUrl;
+                $payload['plan_json']['shared_components']['footer']['default_config']['brand']['logo'] = $finalUrl;
+                $payload['plan_json']['shared_components']['footer']['default_config']['brand.logo'] = $finalUrl;
             }
-            foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $pageType => $layout) {
-                if (!\is_string($pageType) || !\is_array($layout)) {
+            foreach (\is_array($payload['plan_json']['pages'] ?? null) ? $payload['plan_json']['pages'] : [] as $pageType => $page) {
+                if (!\is_string($pageType) || !\is_array($page)) {
                     continue;
                 }
-                if (\is_array($layout['header']['config'] ?? null)) {
-                    $layout['header']['config']['logo']['url'] = $finalUrl;
-                    $layout['header']['config']['logo']['image'] = $finalUrl;
-                    $layout['header']['config']['logo.url'] = $finalUrl;
-                    $layout['header']['config']['logo.image'] = $finalUrl;
-                    $layout['header']['config']['identity']['shared_logo_asset'] = $finalUrl;
-                    $layout['header']['config']['identity.shared_logo_asset'] = $finalUrl;
+                if (\is_array($page['header']['config'] ?? null)) {
+                    $page['header']['config']['logo']['url'] = $finalUrl;
+                    $page['header']['config']['logo']['image'] = $finalUrl;
+                    $page['header']['config']['logo.url'] = $finalUrl;
+                    $page['header']['config']['logo.image'] = $finalUrl;
+                    $page['header']['config']['identity']['shared_logo_asset'] = $finalUrl;
+                    $page['header']['config']['identity.shared_logo_asset'] = $finalUrl;
                 }
-                if (\is_array($layout['footer']['config'] ?? null)) {
-                    $layout['footer']['config']['identity']['shared_logo_asset'] = $finalUrl;
-                    $layout['footer']['config']['identity.shared_logo_asset'] = $finalUrl;
-                    $layout['footer']['config']['brand']['logo'] = $finalUrl;
-                    $layout['footer']['config']['brand.logo'] = $finalUrl;
+                if (\is_array($page['footer']['config'] ?? null)) {
+                    $page['footer']['config']['identity']['shared_logo_asset'] = $finalUrl;
+                    $page['footer']['config']['identity.shared_logo_asset'] = $finalUrl;
+                    $page['footer']['config']['brand']['logo'] = $finalUrl;
+                    $page['footer']['config']['brand.logo'] = $finalUrl;
                 }
-                $payload['page_type_layouts'][$pageType] = $layout;
+                $payload['plan_json']['pages'][$pageType] = $page;
             }
             if (\is_array($payload['asset_manifest']['slots']['identity:website-logo'] ?? null)) {
                 $payload['asset_manifest']['slots']['identity:website-logo']['final_url'] = $finalUrl;
@@ -1348,21 +1358,23 @@ class AiSiteAutoAssetGenerationService
                     $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['path'] = \ltrim($finalUrl, '/');
                 }
             }
-            if (\is_array($payload['shared_components']['header']['default_config'] ?? null)) {
-                $payload['shared_components']['header']['default_config']['identity']['shared_icon_asset'] = $finalUrl;
-                $payload['shared_components']['header']['default_config']['identity.shared_icon_asset'] = $finalUrl;
+            if (\is_array($payload['plan_json']['shared_components']['header']['default_config'] ?? null)) {
+                $payload['plan_json']['shared_components']['header']['default_config']['identity']['shared_icon_asset'] = $finalUrl;
+                $payload['plan_json']['shared_components']['header']['default_config']['identity.shared_icon_asset'] = $finalUrl;
             }
-            foreach (\is_array($payload['page_type_layouts'] ?? null) ? $payload['page_type_layouts'] : [] as $pageType => $layout) {
-                if (!\is_string($pageType) || !\is_array($layout)) {
+            foreach (\is_array($payload['plan_json']['pages'] ?? null) ? $payload['plan_json']['pages'] : [] as $pageType => $page) {
+                if (!\is_string($pageType) || !\is_array($page)) {
                     continue;
                 }
-                if (\is_array($layout['header']['config'] ?? null)) {
-                    $layout['header']['config']['identity']['shared_icon_asset'] = $finalUrl;
-                    $layout['header']['config']['identity.shared_icon_asset'] = $finalUrl;
+                if (\is_array($page['header']['config'] ?? null)) {
+                    $page['header']['config']['identity']['shared_icon_asset'] = $finalUrl;
+                    $page['header']['config']['identity.shared_icon_asset'] = $finalUrl;
                 }
-                $payload['page_type_layouts'][$pageType] = $layout;
+                $payload['plan_json']['pages'][$pageType] = $page;
             }
         }
+
+        unset($payload['shared_components']);
 
         return $payload;
     }

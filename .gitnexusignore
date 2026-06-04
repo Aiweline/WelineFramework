@@ -16,7 +16,6 @@ extend/*.phar
 app/code/Weline/AutoLeadAgent/
 app/code/Aiweline/
 app/code/WeShop/
-app/code/GuoLaiRen/PageBuilder/
 app/code/WelineTools/
 app/code/Agent/
 app/code/Weline/BackendThemeUpzet/
@@ -25,15 +24,18 @@ app/code/Weline/Theme/
 tests/
 **/test/
 **/Test/
-**/view/
 app/design/
-*.md
-*.html
-*.phtml
-*.js
-*.css
-*.scss
-*.less
+
+# Frontend source/templates are part of the code graph.
+# Keep module view files, but skip framework tpl directories across modules.
+!app/code/**/view/
+!app/code/**/view/**
+
+**/view/tpl/
+**/view/tpl/**
+**/tpl/
+**/tpl/**
+
 pub/static/
 pub/media/
 pub/theme_previews/

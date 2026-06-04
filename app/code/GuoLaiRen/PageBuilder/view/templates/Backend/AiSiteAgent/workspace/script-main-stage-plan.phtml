@@ -18,7 +18,7 @@
 
         var confirmPlanBtn = document.getElementById('pb-ai-confirm-plan');
         if (confirmPlanBtn) {
-            confirmPlanBtn.dataset.pbBound = '1';
+            confirmPlanBtn.dataset.pbConfirmPlanBound = '1';
             confirmPlanBtn.onclick = function (event) {
                 if (event && typeof event.preventDefault === 'function') {
                     event.preventDefault();
@@ -34,18 +34,18 @@
         ensurePhaseOneQueueObserverRunning();
 
         var regeneratePlanBtn = document.getElementById('pb-ai-plan-rebuild-full');
-        if (regeneratePlanBtn && regeneratePlanBtn.dataset.pbBound !== '1') {
-            regeneratePlanBtn.dataset.pbBound = '1';
+        if (regeneratePlanBtn) {
+            regeneratePlanBtn.dataset.pbPlanRebuildBound = '1';
             regeneratePlanBtn.dataset.pbPlanGenerationLockBypass = '1';
-            regeneratePlanBtn.addEventListener('click', function () {
+            regeneratePlanBtn.onclick = function () {
                 startWholeSchemePlanRebuildFromPanel(this);
-            });
+            };
         }
 
         var retryPlanBtn = document.getElementById('pb-ai-plan-retry-generate');
-        if (retryPlanBtn && retryPlanBtn.dataset.pbBound !== '1') {
-            retryPlanBtn.dataset.pbBound = '1';
-            retryPlanBtn.addEventListener('click', function () {
+        if (retryPlanBtn) {
+            retryPlanBtn.dataset.pbPlanRetryBound = '1';
+            retryPlanBtn.onclick = function () {
                 if (planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan')) {
                     toast('warning', getRetryableAiFailureMessage(null, 'plan'));
                     return;
@@ -57,11 +57,11 @@
                 startPlanGenerationForSelection(currentPlanTriggerButton || this, selectedTypes, {
                     promptMode: PLAN_PROMPT_MODE_RESUME
                 });
-            });
+            };
         }
         var startBuildSiteBtn = document.getElementById('pb-ai-start-build-site');
         if (startBuildSiteBtn) {
-            startBuildSiteBtn.dataset.pbBound = '1';
+            startBuildSiteBtn.dataset.pbStartBuildBound = '1';
             startBuildSiteBtn.onclick = function (event) {
                 if (event && typeof event.preventDefault === 'function') {
                     event.preventDefault();
@@ -83,14 +83,14 @@
                     syncPlanJsonStartButtonState();
                     return;
                 }
-                ensurePlanJsonConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});
+                startBuildButtonAction(startBuildSiteBtn, selectedTypes, {});
             };
         }
         var rebuildBuildStageBtn = document.getElementById('pb-ai-rebuild-build-stage');
-        if (rebuildBuildStageBtn && rebuildBuildStageBtn.dataset.pbBound !== '1') {
-            rebuildBuildStageBtn.dataset.pbBound = '1';
+        if (rebuildBuildStageBtn) {
+            rebuildBuildStageBtn.dataset.pbRebuildBuildStageBound = '1';
             rebuildBuildStageBtn.dataset.pbPlanGenerationLockBypass = '1';
-            rebuildBuildStageBtn.addEventListener('click', function () {
+            rebuildBuildStageBtn.onclick = function () {
                 if (isBuildActionLocked(latestWorkspaceState || initialWorkspaceState || {})) {
                     toast('warning', messages.buildQueueBusyActionBlocked || messages.networkError);
                     syncPlanJsonStartButtonState();
@@ -102,14 +102,14 @@
                     return;
                 }
                 var triggerBtn = this;
-                confirmSchemeRebuild(messages.buildFullRebuildConfirmMessage, messages.buildFullRebuildConfirmTitle).then(function (confirmed) {
+                confirmWorkspaceRebuildAction(messages.buildFullRebuildConfirmMessage, messages.buildFullRebuildConfirmTitle).then(function (confirmed) {
                     if (!confirmed) {
                         toast('info', messages.resumeDeferred);
                         return;
                     }
                     startFullBuildRebuild(triggerBtn, selectedTypes, {});
                 });
-            });
+            };
         }
         bindRetryableAiFailureButtons();
         syncPlanJsonStartButtonState();
@@ -121,7 +121,7 @@
         syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
         var publishStageBtn = document.getElementById('pb-ai-go-publish-stage');
         if (publishStageBtn) {
-            publishStageBtn.dataset.pbBound = '1';
+            publishStageBtn.dataset.pbGoPublishStageBound = '1';
             publishStageBtn.onclick = function (event) {
                 if (event && typeof event.preventDefault === 'function') {
                     event.preventDefault();
@@ -151,7 +151,7 @@
                     syncPublishStageEntryFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
                     return;
                 }
-                postForm(setStageUrl, { public_id: publicId, stage: 'publish' }).then(function (data) {
+                postUrlEncoded(setStageUrl, { public_id: publicId, stage: 'publish' }).then(function (data) {
                     if (data && data.success) {
                         window.location.reload();
                         return;
@@ -215,15 +215,7 @@
         return normalized;
     }
 
-    function hasMaterializedPageForType(workspaceState, pageType) {
-        var pages = workspaceState && workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object'
-            ? workspaceState.pagebuilder_pages_by_type
-            : {};
-        var page = pages[pageType] && typeof pages[pageType] === 'object' ? pages[pageType] : {};
-        return (parseInt(String(page.page_id || page.id || 0), 10) || 0) > 0;
-    }
-
-    function hasPlanJsonBlockNodesForType(workspaceState, pageType) {
+    function hasPlanJsonBlocksForType(workspaceState, pageType) {
         var pages = workspaceState && workspaceState.plan_json && typeof workspaceState.plan_json === 'object'
             && workspaceState.plan_json.pages && typeof workspaceState.plan_json.pages === 'object'
             ? workspaceState.plan_json.pages
@@ -232,17 +224,6 @@
         return Object.keys(page).some(function (blockKey) {
             return page[blockKey] && typeof page[blockKey] === 'object';
         });
-    }
-
-    function hasLayoutContentForType(workspaceState, pageType) {
-        var layouts = workspaceState && workspaceState.page_type_layouts && typeof workspaceState.page_type_layouts === 'object'
-            ? workspaceState.page_type_layouts
-            : {};
-        var layout = layouts[pageType] && typeof layouts[pageType] === 'object' ? layouts[pageType] : {};
-        var content = Array.isArray(layout.content) ? layout.content : [];
-        return String(layout.header && layout.header.component || '').trim() !== ''
-            && String(layout.footer && layout.footer.component || '').trim() !== ''
-            && content.length > 0;
     }
 
     function allExpectedPageTypesHaveGeneratedSurface(workspaceState) {
@@ -255,9 +236,7 @@
             return false;
         }
         return expectedPageTypes.every(function (pageType) {
-            return hasMaterializedPageForType(state, pageType)
-                || hasPlanJsonBlockNodesForType(state, pageType)
-                || hasLayoutContentForType(state, pageType);
+            return hasPlanJsonBlocksForType(state, pageType);
         });
     }
 
@@ -270,17 +249,16 @@
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
         var active = state.active_operation && typeof state.active_operation === 'object' ? state.active_operation : {};
         var activeOp = String(active.operation || '').trim().toLowerCase();
-        var activeStatus = String(active.status || '').trim().toLowerCase();
+        var activeStatus = String(active.queue_status || '').trim().toLowerCase();
         if ((activeOp === 'build' || activeOp === 'visual_edit') && isQueueStatusErrorForResumePrompt(activeStatus)) {
             return true;
         }
-        var queueInfo = sanitizeQueueInfoForMemory(state.build_queue_info && typeof state.build_queue_info === 'object' ? state.build_queue_info : {});
+        var queueStatusState = state.queue_status && typeof state.queue_status === 'object' && !Array.isArray(state.queue_status)
+            ? state.queue_status
+            : {};
+        var queueInfo = sanitizeQueueInfoForMemory(queueStatusState.build && typeof queueStatusState.build === 'object' ? queueStatusState.build : {});
         return isQueueStatusErrorForResumePrompt(
-            queueInfo.status
-            || queueInfo.queue_status
-            || queueInfo.state
-            || queueInfo.job_status
-            || ''
+            queueInfo.queue_status || ''
         );
     }
 
@@ -298,14 +276,14 @@
     function buildVisualEditResumePromptMessage(summary, runningOperation) {
         var progressPercent = summary.total > 0 ? Math.round((summary.done / summary.total) * 100) : 0;
         var header = runningOperation ? messages.resumeRunningPrompt : messages.resumePendingPrompt;
-        var progressLine = <?= \json_encode((string)__('当前进度'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+        var progressLine = <?= \json_encode((string)__('Progress'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
             + ': ' + progressPercent + '% [' + renderTaskProgressBarText(progressPercent) + ']';
-        var countLine = <?= \json_encode((string)__('任务统计'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
+        var countLine = <?= \json_encode((string)__('Tasks'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>
             + ': '
-            + <?= \json_encode((string)__('总计'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.total + ' / '
-            + <?= \json_encode((string)__('已完成'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.done + ' / '
-            + <?= \json_encode((string)__('进行中'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.running + ' / '
-            + <?= \json_encode((string)__('待处理'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.pending;
+            + <?= \json_encode((string)__('Total'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.total + ' / '
+            + <?= \json_encode((string)__('Done'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.done + ' / '
+            + <?= \json_encode((string)__('Running'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.running + ' / '
+            + <?= \json_encode((string)__('Pending'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?> + ' ' + summary.pending;
         return header + '\n\n' + progressLine + '\n' + countLine;
     }
 
@@ -313,7 +291,7 @@
         var active = currentActiveOperationState && typeof currentActiveOperationState === 'object'
             ? currentActiveOperationState
             : {};
-        var activeStatus = String(active.status || '').trim().toLowerCase();
+        var activeStatus = String(active.queue_status || '').trim().toLowerCase();
         var isActiveRunning = ['pending', 'queued', 'running', 'processing'].indexOf(activeStatus) !== -1;
         if (isActiveRunning && String(active.execution_token || '').trim() !== '') {
             if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
@@ -384,13 +362,13 @@
             var stateForPrompt = latestWorkspaceState && typeof latestWorkspaceState === 'object'
                 ? latestWorkspaceState
                 : (initialWorkspaceState && typeof initialWorkspaceState === 'object' ? initialWorkspaceState : {});
-            // 仅在构建队列异常时提示“继续观察 / 继续操作”，正常运行中不打断用户。
+            // Only show the resume prompt when the build or visual-edit queue is in an error state.
             if (!hasBuildQueueErrorForResumePrompt(stateForPrompt)) {
                 return;
             }
             var summary = getTaskSummaryState(null);
             var runningOperation = !!isOperationRunning || summary.running > 0;
-            var activeStatus = String(currentActiveOperationState && currentActiveOperationState.status || '').toLowerCase();
+            var activeStatus = String(currentActiveOperationState && currentActiveOperationState.queue_status || '').toLowerCase();
             if (!runningOperation && isTerminalActiveOperationStatus(activeStatus)) {
                 return;
             }
@@ -398,7 +376,7 @@
                 return;
             }
             var hasUnfinishedTasks = summary.total > 0 && summary.done < summary.total;
-            if (!runningOperation && !hasPendingPlanJsonBlockNodesState && !hasUnfinishedTasks && summary.pending <= 0) {
+            if (!runningOperation && !hasPendingPlanJsonBlocksState && !hasUnfinishedTasks && summary.pending <= 0) {
                 return;
             }
             var confirmMessage = buildVisualEditResumePromptMessage(summary, runningOperation);
@@ -440,15 +418,15 @@
                 buildStartupPending = true;
                 showBuildGuard(messages.buildPreparing);
                 setBuildNavigationGuard(true);
-                // 根据用户勾选同步 DOM 中的页面类型复选框状态。
                 syncDomPageTypeChecks(selectedTypes);
+                // 閺嶈宓侀悽銊﹀煕閸曢箖鈧鎮撳?DOM 娑擃厾娈戞い鐢告桨缁鐎锋径宥夆偓澶嬵攱閻樿埖鈧降鈧?                syncDomPageTypeChecks(selectedTypes);
 
                 setRunVirtualThemeButtonsDisabled(true);
                 if (confirmBtn) {
                     confirmBtn.disabled = true;
                 }
 
-                // 提交构建请求；后续进度由 PbAiOperationRunner / SSE 接管。
+                // Start the build through the queue runner so SSE can observe progress.
                 var requestPayload = {
                     public_id: publicId,
                     scope_patch: JSON.stringify(buildVirtualThemePatch())
@@ -469,7 +447,7 @@
                         if (window.PbAiOperationRunner.startFromResponse(resumePayload, String(data.operation || 'build'))) {
                             toast('warning', (data && data.message)
                                 ? String(data.message)
-                                : (messages.operationResumed || <?= \json_encode((string)__('检测到已有操作，已自动接管任务流。'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
+                                : (messages.operationResumed || <?= \json_encode((string)__('Operation resumed.'), \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR) ?>));
                             return;
                         }
                     }
@@ -497,7 +475,7 @@
                     return;
                 }
 
-                // 尝试从响应启动操作流（SSE）；失败则提示缺少可观察的进度流。
+                // 鐏忔繆鐦禒搴℃惙鎼存柨鎯庨崝銊︽惙娴ｆ粍绁﹂敍鍦玈E閿涘绱辨径杈Е閸掓瑦褰佺粈铏瑰繁鐏忔垵褰茬憴鍌氱檪閻ㄥ嫯绻樻惔锔界ウ閵?                if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
                 if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
                     if (window.PbAiOperationRunner.startFromResponse(data)) {
                         return;
@@ -509,14 +487,14 @@
                 setBuildNavigationGuard(false);
                 resetBuildStartUi();
                 toast('error', messages.operationStreamMissing);
-                }).catch(function (error) {
+            }).catch(function (error) {
                     buildStartupPending = false;
                     hideBuildGuard();
                     setBuildNavigationGuard(false);
                     resetBuildStartUi();
                     toast('error', (error && error.message) ? String(error.message) : messages.networkError);
                     scheduleWorkspaceTransportRecoveryReload('build_start_transport_error', 900);
-                });
+            });
             } catch (syncError) {
                 buildStartupPending = false;
                 hideBuildGuard();
@@ -603,11 +581,6 @@
                 : '';
             if (streamUrl && typeof workspaceTerminalInst.start === 'function') {
                 workspaceTerminalInst.start(streamUrl);
-            }
-        },
-        setVirtualPagesByType: function (pages) {
-            if (pages && typeof pages === 'object') {
-                mergeVirtualPagesByTypeState(pages);
             }
         },
         handleEmbeddedPreviewGenerateRequest: handleEmbeddedPreviewGenerateRequest,
@@ -783,3 +756,33 @@
 
     window.__pbOpenPublishChecklistModal = function () { return runPublishChecklistFetchAndRender(true); };
     window.__pbClosePublishChecklistModal = closePublishChecklistModal;
+    window.__pbStageLogic = Object.assign(window.__pbStageLogic || {}, {
+        bindPlanStageLogic: bindPlanStageLogic,
+        bindVisualEditStageLogic: bindVisualEditStageLogic
+    });
+    function bindStageLogicForCurrentDom(reason) {
+        if (String(currentStageCode || currentWorkspaceStage || '').trim().toLowerCase() === 'visual_edit'
+            || document.getElementById('pb-ai-go-publish-stage')) {
+            bindVisualEditStageLogic();
+            return;
+        }
+        bindPlanStageLogic();
+    }
+    bindStageLogicForCurrentDom('initial');
+    document.addEventListener('DOMContentLoaded', function () {
+        window.setTimeout(function () {
+            bindStageLogicForCurrentDom('dom-ready');
+        }, 0);
+    });
+    var stageLogicAsyncBindAttempts = 0;
+    function bindStageLogicWhenPublishEntryAppears() {
+        stageLogicAsyncBindAttempts += 1;
+        if (document.getElementById('pb-ai-go-publish-stage')) {
+            bindStageLogicForCurrentDom('async');
+            return;
+        }
+        if (stageLogicAsyncBindAttempts < 20) {
+            window.setTimeout(bindStageLogicWhenPublishEntryAppears, 250);
+        }
+    }
+    window.setTimeout(bindStageLogicWhenPublishEntryAppears, 250);

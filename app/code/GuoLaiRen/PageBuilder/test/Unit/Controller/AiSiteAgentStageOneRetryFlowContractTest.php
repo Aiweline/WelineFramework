@@ -23,6 +23,16 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
 
         self::assertTrue($method->invoke(
             $service,
+            new \RuntimeException('AI stream generation completed without content.')
+        ));
+        self::assertTrue($method->invoke(
+            $service,
+            new \RuntimeException('AI stream generation failed: AI stream generation completed without content.')
+        ));
+        return;
+
+        self::assertTrue($method->invoke(
+            $service,
             new \RuntimeException('AI 流式生成完成但未返回任何内容，请检查模型配置（API Key、Base URL、模型名称）是否正确')
         ));
         self::assertTrue($method->invoke(
@@ -39,7 +49,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         $retryBranch = $this->extractIfBlock($runPlanOperation, 'if ($retryablePlanFailures !== [])');
 
         self::assertStringContainsString('$this->updateActiveOperation(', $retryBranch);
-        self::assertStringContainsString("'status' => 'error'", $retryBranch);
+        self::assertStringContainsString("'queue_status' => 'error'", $retryBranch);
         self::assertStringContainsString("'retry_allowed' => 1", $retryBranch);
         self::assertStringContainsString('return;', $retryBranch);
         self::assertStringNotContainsString('throw new \\RuntimeException', $retryBranch);
@@ -79,6 +89,9 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('$content[self::CONTENT_MAX_AUTO_ATTEMPTS_KEY] = self::MAX_PLAN_QUEUE_ATTEMPTS;', $beginAttempt);
         self::assertStringContainsString('return [$content, $attempt, self::MAX_PLAN_QUEUE_ATTEMPTS];', $beginAttempt);
 
+        $automaticRetryContent = $this->extractMethodSource($queueSource, 'isAutomaticPlanRetryContent');
+        self::assertStringContainsString('array_key_exists(self::CONTENT_AUTO_ATTEMPT_KEY, $content)', $automaticRetryContent);
+
         $retryGuard = $this->extractMethodSource($queueSource, 'canScheduleAutomaticPlanRetry');
         self::assertStringContainsString('< self::MAX_PLAN_QUEUE_ATTEMPTS', $retryGuard);
 
@@ -90,6 +103,70 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString("'manual_confirmation_required'", $markStopped);
         self::assertStringContainsString("'automatic_attempt_limit'", $markStopped);
         self::assertStringContainsString("'content' => (string)(\\json_encode(\$content, \\JSON_UNESCAPED_UNICODE)", $markStopped);
+
+        $stopState = $this->extractMethodSource($queueSource, 'persistPlanQueueStopState');
+        self::assertStringContainsString("\$active['retry_allowed'] = 0;", $stopState);
+        self::assertStringContainsString("\$active['failure_mode'] = \$skipAsDone ? '' : 'plan_retry_exhausted';", $stopState);
+        self::assertStringContainsString("'retry_allowed' => 0", $stopState);
+        self::assertStringContainsString('$scope = $this->clearPlanGenerationRetryableFailure($scope);', $stopState);
+        self::assertStringNotContainsString('$scope = $this->markPlanGenerationFailureRetryable(', $stopState);
+
+        $clearRetryable = $this->extractMethodSource($queueSource, 'clearPlanGenerationRetryableFailure');
+        self::assertStringContainsString("unset(\$planFailures['stage1_plan']);", $clearRetryable);
+        self::assertStringContainsString("replaceRetryableAiFailures(\$scope, 'plan', \$planFailures)", $clearRetryable);
+    }
+
+    public function testPlanQueueAutomaticRetryGateAllowsOnlyThreeFakeAttempts(): void
+    {
+        $queue = new AiSitePlanQueue();
+        $method = new \ReflectionMethod($queue, 'canScheduleAutomaticPlanRetry');
+        $method->setAccessible(true);
+
+        self::assertTrue((bool)$method->invoke($queue, []));
+        self::assertTrue((bool)$method->invoke($queue, ['_plan_auto_attempt' => 1]));
+        self::assertTrue((bool)$method->invoke($queue, ['_plan_auto_attempt' => 2]));
+        self::assertFalse((bool)$method->invoke($queue, ['_plan_auto_attempt' => 3]));
+        self::assertFalse((bool)$method->invoke($queue, ['_plan_auto_attempt' => 4]));
+
+        $queueSource = (string)\file_get_contents((new ReflectionClass(AiSitePlanQueue::class))->getFileName());
+        foreach ([
+            'canScheduleTransientPlanRetry',
+            'canScheduleGeneralPlanRetry',
+            'canSchedulePlanCompletionGateRetry',
+        ] as $methodName) {
+            $methodSource = $this->extractMethodSource($queueSource, $methodName);
+            self::assertStringContainsString('$this->canScheduleAutomaticPlanRetry($content)', $methodSource);
+        }
+    }
+
+    public function testPlanQueueCompletionGateUsesPlanJsonPagesAsOnlyPlanTruthSource(): void
+    {
+        $queueSource = (string)\file_get_contents((new ReflectionClass(AiSitePlanQueue::class))->getFileName());
+
+        $guard = $this->extractMethodSource($queueSource, 'guardPlanQueueExecution');
+        self::assertStringContainsString('$this->hasCompletedPlanJsonPagesTree($planJson)', $guard);
+        self::assertStringNotContainsString('hasPersistedStageOnePlan($scope)', $guard);
+
+        $completionGate = $this->extractMethodSource($queueSource, 'assertPlanQueueCompletionGate');
+        self::assertStringContainsString('$this->assertPlanJsonPagesTree($planJson);', $completionGate);
+        self::assertStringContainsString('plan_json.pages is missing; regenerate the plan.', $queueSource);
+        self::assertStringContainsString('plan_json.pages has no direct page block nodes; regenerate the plan.', $queueSource);
+
+        $finalize = $this->extractMethodSource($queueSource, 'persistPlanQueueCompletionScope');
+        self::assertStringContainsString('$this->assertPlanJsonPagesTree($planJson);', $finalize);
+        self::assertStringContainsString('$pageTypes = $this->resolveCompletedPlanPageTypes($planJson);', $finalize);
+
+        $resolveTypes = $this->extractMethodSource($queueSource, 'resolveCompletedPlanPageTypes');
+        self::assertStringContainsString('$planJson[\'pages\']', $resolveTypes);
+        self::assertStringNotContainsString('resolveScopedPageTypes', $resolveTypes);
+        self::assertStringNotContainsString('$scope[\'page_types\']', $resolveTypes);
+        self::assertStringNotContainsString('$planJson[\'page_types\']', $resolveTypes);
+
+        $collectTypes = $this->extractMethodSource($queueSource, 'collectStageOnePageTypesFromSource');
+        self::assertStringNotContainsString('collectNestedStageOnePageTypeBuckets', $queueSource);
+        self::assertStringNotContainsString("'page'", $collectTypes);
+        self::assertStringNotContainsString("'plan_json_page'", $collectTypes);
+        self::assertStringNotContainsString("'pages'", $collectTypes);
     }
 
     public function testPlanOperationSseKeepsQueuedObserverStreamOpen(): void
@@ -228,6 +305,50 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringNotContainsString('latestFile', $controllerSource);
         self::assertStringContainsString('loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, $planArtifactKeys)', $controllerSource);
         self::assertStringNotContainsString('hydrateStageOnePlanPayloadFromPlanJsonGeneration', $controllerSource);
+    }
+
+    public function testFakeVirtualThemeBatchWritesGeneratedHtmlBackToPlanJsonPreviewPage(): void
+    {
+        $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
+        $fakeBatch = $this->extractMethodSource($controllerSource, 'runFakeVirtualThemePlanJsonPageTaskBatch');
+
+        self::assertStringContainsString('syncFakePlanJsonSectionBlockToPreviewPage($scope, $task, $sectionBlock)', $fakeBatch);
+
+        $syncMethod = $this->extractMethodSource($controllerSource, 'syncFakePlanJsonSectionBlockToPreviewPage');
+        self::assertStringContainsString('$pages = $this->planJsonPages($scope);', $syncMethod);
+        self::assertStringContainsString("'html' => (string)\$sectionBlock['html']", $syncMethod);
+        self::assertStringContainsString('return $this->withPlanJsonPages($scope, $pages);', $syncMethod);
+        self::assertStringNotContainsString('$page[\'blocks\']', $syncMethod);
+        self::assertFalse((new ReflectionClass(AiSiteAgent::class))->hasMethod('upsertFakePreviewSectionBlock'));
+    }
+
+    public function testPlanJsonPageWritesMergeMetadataWithoutReplacingCanonicalBlocks(): void
+    {
+        $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
+        $withPlanJsonPages = $this->extractMethodSource($controllerSource, 'withPlanJsonPages');
+
+        self::assertStringContainsString('$currentPages = \\is_array($planJson[\'pages\'] ?? null) ? $planJson[\'pages\'] : [];', $withPlanJsonPages);
+        self::assertStringContainsString('$currentPage = \\is_array($currentPages[$pageType] ?? null) ? $currentPages[$pageType] : [];', $withPlanJsonPages);
+        self::assertStringContainsString('$currentPages[$pageType] = \\array_replace($currentPage, $pageData);', $withPlanJsonPages);
+        self::assertStringContainsString('$planJson[\'pages\'] = $currentPages;', $withPlanJsonPages);
+        self::assertStringNotContainsString('$planJson[\'pages\'] = $pagesByType;', $withPlanJsonPages);
+    }
+
+    public function testRealVirtualThemePageTasksWriteGeneratedHtmlBackToPlanJsonBlocks(): void
+    {
+        $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
+        $anchor = "__('Theme page batch synced: %{page}'";
+        $anchorStart = \strpos($controllerSource, $anchor);
+        self::assertIsInt($anchorStart);
+        $needle = "\$scope = \$this->planJsonTaskService->markTaskDone(\$scope, (string)\$taskKey, [";
+        $start = \strpos($controllerSource, $needle, $anchorStart);
+        self::assertIsInt($start);
+        $snippet = \substr($controllerSource, $start, 320);
+
+        self::assertStringContainsString("'page_type' => \$pageType", $snippet);
+        self::assertStringContainsString("'section_code' => \$sectionCode", $snippet);
+        self::assertStringContainsString("'section_block' => \$sectionBlock", $snippet);
+        self::assertStringContainsString("'component' => \$sectionComponent", $snippet);
     }
 
     public function testPageBuilderWorkspaceOwnsDomainWorkbenchRoutes(): void

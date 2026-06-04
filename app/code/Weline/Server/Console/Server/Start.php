@@ -1278,6 +1278,7 @@ class Start extends CommandAbstract
 
         $envConfig = $this->getEnvConfig();
         $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $serverConfig = \is_array($envConfig['server'] ?? null) ? $envConfig['server'] : [];
         $servers = \is_array($wlsConfig['servers'] ?? null) ? $wlsConfig['servers'] : [];
         $instanceConfig = \is_array($servers[$instanceName] ?? null) ? $servers[$instanceName] : [];
 
@@ -1288,6 +1289,8 @@ class Start extends CommandAbstract
             (string)($wlsConfig['public_host'] ?? ''),
             (string)($wlsConfig['ssl_domain'] ?? ''),
             (string)($wlsConfig['host'] ?? ''),
+            (string)($serverConfig['public_host'] ?? ''),
+            (string)($serverConfig['host'] ?? ''),
         ];
         // 兼容误配：wls.servers.default 写成纯索引数组时，提取首个可用值作为候选
         if (isset($instanceConfig[0]) && \is_scalar($instanceConfig[0])) {
@@ -1296,10 +1299,8 @@ class Start extends CommandAbstract
         if (isset($instanceConfig[1]) && \is_scalar($instanceConfig[1])) {
             $publicCandidates[] = (string)$instanceConfig[1];
         }
-        $hasConfiguredPublicHost = false;
         foreach ($publicCandidates as $candidate) {
             if ($this->isUsablePublicHost($candidate)) {
-                $hasConfiguredPublicHost = true;
                 $config['public_host'] = $candidate;
                 return true;
             }
@@ -1307,10 +1308,7 @@ class Start extends CommandAbstract
 
         $defaultProjectHost = $this->getDefaultHost();
         if ($this->isUsablePublicHost($defaultProjectHost)) {
-            if (!$hasConfiguredPublicHost) {
-                $config['public_host'] = $defaultProjectHost;
-                $this->deferredStartupWarning = __('当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。', [$instanceName]);
-            }
+            $config['public_host'] = $defaultProjectHost;
             return true;
         }
 

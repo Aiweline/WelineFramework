@@ -12,8 +12,10 @@ final class PlanJsonNoReasonLinterTest extends TestCase
     public function testAllowsExecutableFieldsWithoutExplanationKeys(): void
     {
         $result = (new PlanJsonNoReasonLinter())->validate([
-            'tasks' => [
-                ['task_id' => 'task.hero', 'acceptance_rule_ids' => ['layout.4_8_spacing']],
+            'pages' => [
+                'home_page' => [
+                    'hero' => ['acceptance_rule_ids' => ['layout.4_8_spacing']],
+                ],
             ],
         ]);
 
@@ -24,10 +26,12 @@ final class PlanJsonNoReasonLinterTest extends TestCase
     public function testRejectsNestedReasonFields(): void
     {
         $result = (new PlanJsonNoReasonLinter())->validate([
-            'block_nodes' => [
-                [
+            'pages' => [
+                'home_page' => [
+                    'hero' => [
                     'block_id' => 'home.hero',
                     'design_reason' => 'Because it looks premium.',
+                ],
                 ],
             ],
         ]);

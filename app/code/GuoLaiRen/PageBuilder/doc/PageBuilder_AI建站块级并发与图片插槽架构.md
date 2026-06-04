@@ -27,5 +27,5 @@ flowchart TD
 ## 关键约束
 
 - 队列状态只认数字 block status：`0`、`2`、`1`、`-1`。
-- 图片生成是当前 block 的内部步骤，不能通过 历史plan_json block node 工作表 或 移除派生计划 形成长期状态源。
+- 图片生成是当前 block 的内部步骤，不能通过 历史plan_json block 工作表 或 移除派生计划 形成长期状态源。
 - 已成功的 block 保留 `html`、`fields` 和资产引用；失败 block 保留 `error` 并允许单 block 重试。

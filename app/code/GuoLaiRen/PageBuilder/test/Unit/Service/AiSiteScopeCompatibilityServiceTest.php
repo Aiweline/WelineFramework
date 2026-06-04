@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
-use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlockNodesBuildService;
+use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use PHPUnit\Framework\TestCase;
@@ -31,6 +31,39 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame('plan', $service->normalizeStage('content'));
         $this->assertSame('visual_edit', $service->normalizeStage('visual_edit'));
         $this->assertSame('publish', $service->normalizeStage('publish'));
+    }
+
+    public function testNormalizeVirtualPagesKeepsCanonicalPlanJsonBlockNodes(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $pages = $service->normalizeVirtualPagesByType([
+            Page::TYPE_HOME => [
+                'title' => 'Home',
+                'seo' => ['title' => 'Home'],
+                'blocks' => [],
+                'hero_download' => [
+                    'status' => 1,
+                    'html' => '<section data-block="hero">Hero</section>',
+                ],
+                'faq_or_rules' => [
+                    'status' => 0,
+                    'html' => '<section data-block="faq">FAQ</section>',
+                ],
+                'final_download_cta' => [
+                    'status' => 1,
+                    'html_content' => '<section data-block="cta">CTA</section>',
+                ],
+            ],
+        ], [Page::TYPE_HOME]);
+
+        $blocks = $pages[Page::TYPE_HOME]['blocks'] ?? [];
+        $this->assertCount(2, $blocks);
+        $this->assertSame('hero_download', $blocks[0]['block_id'] ?? '');
+        $this->assertSame('hero_download', $blocks[0]['block_key'] ?? '');
+        $this->assertSame('<section data-block="hero">Hero</section>', $blocks[0]['html'] ?? '');
+        $this->assertSame('final_download_cta', $blocks[1]['block_id'] ?? '');
+        $this->assertSame('<section data-block="cta">CTA</section>', $blocks[1]['html'] ?? '');
     }
 
     public function testNormalizePageTypeLayoutsRejectsRegionsComponentsShape(): void
@@ -208,7 +241,10 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertFalse($service->hasPersistedStageOnePlan([
             'plan_json' => [
                 'pages' => [
-                    Page::TYPE_HOME => ['title' => 'Home'],
+                    Page::TYPE_HOME => [
+                        'title' => 'Home',
+                        'hero' => ['type' => 'hero'],
+                    ],
                 ],
                 'theme_design' => [
                     'tone' => 'Practical',
@@ -217,6 +253,18 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
             ],
             'plan_markdown' => '# Removed seeded test plan',
             'plan_generated_at' => '2026-05-04 18:00:00',
+        ]));
+
+        self::assertTrue($service->hasPersistedStageOnePlan([
+            'fake_mode' => 1,
+            'plan_json' => [
+                'pages' => [
+                    Page::TYPE_HOME => [
+                        'title' => 'Home',
+                        'hero' => ['type' => 'hero'],
+                    ],
+                ],
+            ],
         ]));
 
         self::assertTrue($service->hasPersistedStageOnePlan([
@@ -268,12 +316,12 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                 Page::TYPE_HOME => [
                     'page_type' => Page::TYPE_HOME,
                     'title' => 'Home',
-                    'block_nodes' => [],
+                    'blocks' => [],
                 ],
                 Page::TYPE_ABOUT => [
                     'page_type' => Page::TYPE_ABOUT,
                     'title' => 'About',
-                    'block_nodes' => [],
+                    'blocks' => [],
                 ],
             ],
         ]);
@@ -310,7 +358,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
             'virtual_pages_by_type' => [
                 Page::TYPE_HOME => [
                     'page_type' => Page::TYPE_HOME,
-                    'block_nodes' => [
+                    'blocks' => [
                         [
                             'block_id' => 'home-page-hero',
                             'type' => 'ai_generated_section',
@@ -327,7 +375,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
             ],
         ]);
 
-        $block = $scope['virtual_pages_by_type'][Page::TYPE_HOME]['block_nodes'][0] ?? [];
+        $block = $scope['virtual_pages_by_type'][Page::TYPE_HOME]['blocks'][0] ?? [];
         $this->assertSame('content/home-page-hero', $block['component_code'] ?? null);
         $this->assertSame('home:content/home-page-hero', $block['section_code'] ?? null);
         $this->assertSame('content/home-page-hero', $block['component'] ?? null);
@@ -384,7 +432,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
     public function testBuildVirtualPagesByTypeHydratesSingleContentPageIntoBlocks(): void
     {
-        $blocksBuilder = $this->createMock(AiSiteHtmlBlockNodesBuildService::class);
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->method('hydrateGeneratedBlockMetadata')
             ->willReturnCallback(static fn(array $block): array => $block);
         $blocksBuilder->expects($this->once())
@@ -424,13 +472,13 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                     'locale' => 'en_US',
                     'style_code' => 'default',
                     'ai_description' => 'stored session',
-                    'block_nodes' => [],
+                    'blocks' => [],
                 ],
             ],
         ]);
 
-        self::assertCount(2, $virtualPages[Page::TYPE_HOME]['block_nodes']);
-        self::assertSame('home-page-hero', $virtualPages[Page::TYPE_HOME]['block_nodes'][0]['block_id']);
+        self::assertCount(2, $virtualPages[Page::TYPE_HOME]['blocks']);
+        self::assertSame('home-page-hero', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
     }
 
     public function testBuildVirtualPagesByTypeLocalizesFallbackTitlesForEnglishLocale(): void
@@ -531,7 +579,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
      */
     public function testBuildVirtualPagesByTypeRethrowsWhenAiHydrationHitsRecoverable402Failure(): void
     {
-        $blocksBuilder = $this->createMock(AiSiteHtmlBlockNodesBuildService::class);
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->method('hydrateGeneratedBlockMetadata')
             ->willReturnCallback(static fn(array $block): array => $block);
         $blocksBuilder->expects($this->once())
@@ -571,7 +619,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                     'locale' => 'en_US',
                     'style_code' => 'default',
                     'ai_description' => 'stored session',
-                    'block_nodes' => [],
+                    'blocks' => [],
                 ],
             ],
         ]);
@@ -582,7 +630,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
      */
     public function testBuildVirtualPagesByTypeRethrowsWhenAiComponentPayloadValidationFails(): void
     {
-        $blocksBuilder = $this->createMock(AiSiteHtmlBlockNodesBuildService::class);
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->method('hydrateGeneratedBlockMetadata')
             ->willReturnCallback(static fn(array $block): array => $block);
         $blocksBuilder->expects($this->once())
@@ -622,7 +670,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                     'locale' => 'en_US',
                     'style_code' => 'default',
                     'ai_description' => 'stored session',
-                    'block_nodes' => [],
+                    'blocks' => [],
                 ],
             ],
         ]);
@@ -635,7 +683,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
      */
     public function testBuildVirtualPagesByTypeHydratesExistingBlocksWithPlaceholderMetadata(): void
     {
-        $blocksBuilder = $this->createMock(AiSiteHtmlBlockNodesBuildService::class);
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->method('hydrateGeneratedBlockMetadata')
             ->willReturnCallback(static fn(array $block): array => $block);
         $blocksBuilder->method('buildPlaceholderBlocksForPageType')
@@ -670,7 +718,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                     'title' => 'Home',
                     'locale' => 'en_US',
                     'style_code' => 'default',
-                    'block_nodes' => [
+                    'blocks' => [
                         [
                             'block_id' => 'home-page-hero',
                             'type' => 'hero',
@@ -684,7 +732,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         ]);
 
         self::assertArrayHasKey(Page::TYPE_HOME, $virtualPages);
-        $blocks = $virtualPages[Page::TYPE_HOME]['block_nodes'];
+        $blocks = $virtualPages[Page::TYPE_HOME]['blocks'];
         self::assertIsArray($blocks);
         self::assertNotEmpty($blocks);
         $first = $blocks[0];
@@ -697,7 +745,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
      */
     public function testBuildVirtualPagesByTypeLeavesBlocksEmptyWhenAiGenerationDisabled(): void
     {
-        $blocksBuilder = $this->createMock(AiSiteHtmlBlockNodesBuildService::class);
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->expects($this->never())
             ->method('buildPlaceholderBlocksForPageType');
 
@@ -729,13 +777,13 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
                     'title' => 'Home',
                     'locale' => 'en_US',
                     'style_code' => 'default',
-                    'block_nodes' => [],
+                    'blocks' => [],
                 ],
             ],
         ], false);
 
         self::assertArrayHasKey(Page::TYPE_HOME, $virtualPages);
-        self::assertSame([], $virtualPages[Page::TYPE_HOME]['block_nodes']);
+        self::assertSame([], $virtualPages[Page::TYPE_HOME]['blocks']);
         $homeTitle = (string)$virtualPages[Page::TYPE_HOME]['title'];
         self::assertNotSame('', $homeTitle);
         self::assertSame(0, \preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]/u', $homeTitle));
@@ -744,7 +792,7 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
     public function testPortugueseVirtualPagesAndFooterLabelsDoNotFallBackToEnglish(): void
     {
-        $blocksBuilder = $this->createMock(AiSiteHtmlBlockNodesBuildService::class);
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
         $blocksBuilder->expects($this->never())
             ->method('buildPlaceholderBlocksForPageType');
 
@@ -845,6 +893,64 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         self::assertSame('Policy Info', $layout['footer']['config']['links.column2_title']);
         self::assertSame('Privacy Policy', $layout['footer']['config']['links.column2_items'][0]['label']);
     }
+
+    public function testSharedLayoutConfigPrefersCanonicalPlanJsonSharedComponents(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $layout = $service->localizeSharedLayoutConfigForScope([
+            'header' => [
+                'component' => 'header/stale-header',
+                'config' => [
+                    'navigation.items' => "Stale=>/stale",
+                    'cta.text' => 'Old CTA',
+                ],
+            ],
+            'footer' => [
+                'component' => 'footer/stale-footer',
+                'config' => [
+                    'links.column1_title' => 'Old links',
+                    'brand.description' => 'Old profile description',
+                ],
+            ],
+        ], [
+            'content_locale' => 'en_US',
+            'plan_json' => [
+                'shared_components' => [
+                    'header' => [
+                        'code' => 'header/ai-site-header',
+                        'default_config' => [
+                            'logo.text' => 'Old profile title',
+                            'navigation.items' => "Plan Home=>/\nPlan Games=>/games",
+                            'cta.text' => 'Play now',
+                        ],
+                    ],
+                    'footer' => [
+                        'code' => 'footer/ai-site-footer',
+                        'default_config' => [
+                            'brand.name' => 'Old profile title',
+                            'links.column1_title' => 'Plan Links',
+                            'brand.description' => 'Plan JSON brand promise',
+                        ],
+                    ],
+                ],
+                'site_brief' => [
+                    'site_title' => 'India Card Game APK Guide',
+                    'site_tagline' => 'Trusted APK comparisons for Indian card players',
+                ],
+            ],
+        ]);
+
+        self::assertSame('header/ai-site-header', $layout['header']['component']);
+        self::assertSame('India Card Game APK Guide', $layout['header']['config']['logo.text']);
+        self::assertSame("Plan Home=>/\nPlan Games=>/games", $layout['header']['config']['navigation.items']);
+        self::assertSame('Play now', $layout['header']['config']['cta.text']);
+        self::assertSame('footer/ai-site-footer', $layout['footer']['component']);
+        self::assertSame('India Card Game APK Guide', $layout['footer']['config']['brand.name']);
+        self::assertSame('Plan Links', $layout['footer']['config']['links.column1_title']);
+        self::assertSame('Trusted APK comparisons for Indian card players', $layout['footer']['config']['brand.description']);
+    }
+
     public function testPreviewContentLocalePrefersGeneratedLocaleOverDefault(): void
     {
         $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
@@ -911,20 +1017,20 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertTrue($service->htmlTrackHasCompleteBlocks(
             [
-                Page::TYPE_HOME => ['block_nodes' => [['block_id' => 'a']]],
-                Page::TYPE_ABOUT => ['block_nodes' => [['block_id' => 'b']]],
+                Page::TYPE_HOME => ['blocks' => [['block_id' => 'a']]],
+                Page::TYPE_ABOUT => ['blocks' => [['block_id' => 'b']]],
             ],
             [Page::TYPE_HOME, Page::TYPE_ABOUT]
         ));
         self::assertFalse($service->htmlTrackHasCompleteBlocks(
             [
-                Page::TYPE_HOME => ['block_nodes' => [['block_id' => 'a']]],
-                Page::TYPE_ABOUT => ['block_nodes' => []],
+                Page::TYPE_HOME => ['blocks' => [['block_id' => 'a']]],
+                Page::TYPE_ABOUT => ['blocks' => []],
             ],
             [Page::TYPE_HOME, Page::TYPE_ABOUT]
         ));
         self::assertFalse($service->htmlTrackHasCompleteBlocks(
-            [Page::TYPE_HOME => ['block_nodes' => [['block_id' => 'a']]]],
+            [Page::TYPE_HOME => ['blocks' => [['block_id' => 'a']]]],
             [Page::TYPE_HOME, Page::TYPE_ABOUT]
         ));
         self::assertFalse($service->htmlTrackHasCompleteBlocks([], [Page::TYPE_HOME]));

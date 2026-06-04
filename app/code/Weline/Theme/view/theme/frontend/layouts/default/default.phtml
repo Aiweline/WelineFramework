@@ -1,277 +1,220 @@
-<!--
-布局：默认布局
+<?php
+/**
+ * Layout: default.
+ *
+ * A safe Theme-owned shell for generic frontend pages. Real modules can inject
+ * content through hooks, slots, meta.content, content, or contentTemplate.
+ *
+ * @meta.name {default="Default Layout",name="Default Layout",description="Header, content, optional sidebars, footer"}
+ * @param.title {default="Weline",name="Page Title",description="Page title"}
+ * @param.content {default="",name="Content HTML",description="Main page content"}
+ * @param.showHeader {default=true,name="Show Header",description="Whether to render header"}
+ * @param.showFooter {default=true,name="Show Footer",description="Whether to render footer"}
+ * @param.class {default="",name="Extra CSS class",description="Extra CSS class"}
+ */
 
-默认布局模板，适用于所有页面类型
-字段
-@meta.name {default="默认布局",name="默认布局",description="默认布局，用于描述布局的名称"}
-@meta.description {default="默认布局，包含header、main、footer",name="默认布局，包含header、main、footer",description="默认布局，包含header、main、footer，用于描述布局的用途"}
-@preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
-@param.title {default="",name="页面标题",description="页面标题，用于设置页面标题"}
-@param.content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
-@param.showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
-@param.showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
-@param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
-@param.layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
-@param.layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
-
-参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
-模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
-页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
--->
+$meta = $this->getData('meta') ?? [];
+$class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
+?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <style data-theme-inline="layout-default">
+        .theme-layout-default .default-layout__main {
+            padding: clamp(26px, 4vw, 56px) 0;
+        }
+
+        .theme-layout-default .default-layout__grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 24px;
+            align-items: start;
+        }
+
+        .theme-layout-default.has-left-sidebar .default-layout__grid {
+            grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+        }
+
+        .theme-layout-default.has-right-sidebar .default-layout__grid {
+            grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+        }
+
+        .theme-layout-default.has-left-sidebar.has-right-sidebar .default-layout__grid {
+            grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(180px, 240px);
+        }
+
+        .default-layout__content {
+            min-width: 0;
+        }
+
+        .default-layout__fallback {
+            display: grid;
+            gap: 18px;
+            padding: clamp(28px, 5vw, 56px);
+        }
+
+        .default-layout__fallback h1 {
+            margin: 0;
+            font-size: clamp(32px, 5vw, 54px);
+            line-height: 1.05;
+            letter-spacing: 0;
+        }
+
+        .default-layout__fallback p {
+            max-width: 660px;
+            margin: 0;
+            color: var(--weline-theme-muted, #657083);
+            font-size: 18px;
+        }
+
+        .default-layout__fallback-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+
+        .default-layout__sidebar {
+            min-height: 160px;
+        }
+
+        @media (max-width: 920px) {
+            .theme-layout-default.has-left-sidebar .default-layout__grid,
+            .theme-layout-default.has-right-sidebar .default-layout__grid,
+            .theme-layout-default.has-left-sidebar.has-right-sidebar .default-layout__grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
 </head>
-<body>
+<body class="theme-layout-default <?= $class ?>">
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::body-start</w:hook>
-    
-    <if condition="meta.showHeader">
-        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
-        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
-        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
-    </if>
 
-    <!-- 全站统一的面包屑导航区域：位于 Header 和主内容之间 -->
-    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
-    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
-    <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
-    
-    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>
-    <main class="main-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="main-content" data-layout="main_content">
-        <w:slot id="content"
-                name="内容区"
-                accept="layout-default-content,content,container,banner,carousel,product,category,faq,video"
-                reject="header,footer"
+    <div class="weline-page-wrapper">
+        <w:slot id="page-top"
+                name="Page top"
+                accept="layout-page-top,announcement,banner,content"
                 multiple="true"
+                append="true"
                 position="content"
-                class="default-layout__content-root-slot">
-            <w:slot id="default-content"
-                name="默认内容区"
-                accept="layout-default-content,content,banner,carousel,product,category,faq,video"
-                reject="header,footer"
-                multiple="true"
-                position="content"
-                class="default-layout__content-slot">
-            <if condition="meta.content">
-                {{meta.content}}
-                <elseif condition="content"/>
-                {{content}}
-                <elseif condition="meta.contentTemplate"/>
-                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
-            </if>
-            </w:slot>
+                class="default-layout__page-top">
+            <w:hook>Weline_Theme::frontend::layouts::default::page-top</w:hook>
         </w:slot>
-    </main>
-    <w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
-    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
-    
-    <if condition="meta.showFooter">
-        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop"/>
-        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
-    </if>
-    
+
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+
+        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+        <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+
+        <main class="weline-main-content default-layout__main" id="main-content" data-layout="default">
+            <div class="weline-container">
+                <w:slot id="content-before"
+                        name="Content before"
+                        accept="layout-content-before,layout-default-before,banner,content,container"
+                        multiple="true"
+                        append="true"
+                        position="content"
+                        class="default-layout__content-before">
+                    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>
+                </w:slot>
+
+                <div class="default-layout__grid">
+                    <w:slot id="sidebar-left"
+                            name="Left sidebar"
+                            accept="layout-sidebar,sidebar,filter,navigation,content"
+                            multiple="true"
+                            position="sidebar"
+                            class="default-layout__sidebar default-layout__sidebar--left">
+                        <w:hook>Weline_Theme::frontend::layouts::default::sidebar-left</w:hook>
+                    </w:slot>
+
+                    <w:slot id="content"
+                            name="Content"
+                            accept="layout-default-content,content,container,banner,carousel,product,category,faq,video"
+                            reject="header,footer"
+                            multiple="true"
+                            position="content"
+                            class="default-layout__content">
+                        <w:slot id="default-content"
+                                name="Default content"
+                                accept="layout-default-content,content,banner,carousel,product,category,faq,video"
+                                reject="header,footer"
+                                multiple="true"
+                                position="content"
+                                class="default-layout__content-slot">
+                            <w:hook>Weline_Theme::frontend::layouts::default::content<else/>
+                            <if condition="meta.content">
+                                {{meta.content}}
+                                <elseif condition="content"/>
+                                {{content}}
+                                <elseif condition="meta.contentTemplate"/>
+                                <?php echo $this->fetch($this->getData('meta.contentTemplate')); ?>
+                                <else/>
+                                <section class="weline-layout-surface default-layout__fallback">
+                                    <h1><?= htmlspecialchars((string)($meta['title'] ?? __('Weline default page')), ENT_QUOTES, 'UTF-8') ?></h1>
+                                    <p><?= __('This default Theme page is ready for module hooks, visual slots, and direct controller content.') ?></p>
+                                    <div class="default-layout__fallback-actions">
+                                        <a class="weline-button" href="/"><?= __('Go home') ?></a>
+                                        <a class="weline-button weline-button--ghost" href="/contact"><?= __('Contact') ?></a>
+                                    </div>
+                                </section>
+                            </if>
+                            </w:hook>
+                        </w:slot>
+                    </w:slot>
+
+                    <w:slot id="sidebar-right"
+                            name="Right sidebar"
+                            accept="layout-sidebar,sidebar,filter,navigation,content"
+                            multiple="true"
+                            position="sidebar"
+                            class="default-layout__sidebar default-layout__sidebar--right">
+                        <w:hook>Weline_Theme::frontend::layouts::default::sidebar-right</w:hook>
+                    </w:slot>
+                </div>
+
+                <w:slot id="content-after"
+                        name="Content after"
+                        accept="layout-content-after,layout-default-after,banner,content,container"
+                        multiple="true"
+                        append="true"
+                        position="content"
+                        class="default-layout__content-after">
+                    <w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+                </w:slot>
+            </div>
+        </main>
+
+        <w:slot id="page-bottom"
+                name="Page bottom"
+                accept="layout-page-bottom,announcement,banner,content"
+                multiple="true"
+                append="true"
+                position="content"
+                class="default-layout__page-bottom">
+            <w:hook>Weline_Theme::frontend::layouts::default::page-bottom</w:hook>
+        </w:slot>
+
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+
     <w:hook>Weline_Theme::frontend::layouts::default::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>
-
-<style>
-/* ========================================
-   Amazon风格 - 默认布局样式
-   ======================================== */
-
-/* 基础重置和全局样式 */
-* {
-    box-sizing: border-box;
-}
-
-html {
-    height: 100%;
-}
-
-body {
-    margin: 0;
-    padding: 0;
-    font-family: var(--weline-layout-font-family, var(--font-family-base, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif));
-    font-size: var(--weline-layout-font-size-base, var(--font-size-base, 1rem));
-    line-height: var(--weline-layout-line-height-normal, var(--line-height-normal, 1.5));
-    color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
-    background-color: var(--weline-layout-surface-primary, var(--color-bg-primary, #fff));
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    min-height: 100vh; /* 确保body至少占据整个视口高度 */
-    display: flex;
-    flex-direction: column;
-}
-
-/* 亚马逊风格容器 */
-.main-content {
-    width: 100%;
-    max-width: var(--weline-layout-content-max-width, 1440px);
-    margin: 0 auto;
-    padding: 0 var(--weline-layout-content-padding-inline, 1rem);
-    box-sizing: border-box;
-    background-color: transparent;
-    flex: 1 0 auto; /* flex-grow: 1, flex-shrink: 0, flex-basis: auto - 占据剩余空间，但不会收缩 */
-    min-height: 0; /* 允许flex子项收缩，但通过flex: 1确保占据剩余空间 */
-}
-
-/* 页面包装器 */
-body > main {
-    width: 100%;
-}
-
-/* 响应式容器 */
-@media (max-width: 1400px) {
-    .main-content {
-        padding: 0 var(--weline-layout-content-padding-inline, 1rem);
-    }
-}
-
-@media (max-width: 1024px) {
-    .main-content {
-        padding: 0 clamp(0.75rem, 2vw, var(--weline-layout-content-padding-inline, 1rem));
-    }
-}
-
-@media (max-width: 768px) {
-    .main-content {
-        padding: 0 clamp(0.5rem, 3vw, var(--weline-layout-content-padding-inline, 1rem));
-    }
-}
-
-/* 内容区域样式 */
-.main-content > * {
-    width: 100%;
-}
-
-/* 平滑滚动 */
-html {
-    scroll-behavior: smooth;
-}
-
-/* 链接样式（亚马逊风格） */
-a {
-    color: var(--weline-layout-link-color, var(--color-link, #007185));
-    text-decoration: none;
-    transition: color 0.2s ease, text-decoration 0.2s ease;
-}
-
-a:hover {
-    color: var(--weline-layout-link-hover-color, var(--color-link-hover, #c45500));
-    text-decoration: underline;
-}
-
-/* 按钮基础样式 */
-button {
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-/* 输入框基础样式 */
-input, textarea, select {
-    font-family: inherit;
-    font-size: inherit;
-}
-
-/* 清除默认样式 */
-ul, ol {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-/* 图片响应式 */
-img {
-    max-width: 100%;
-    height: auto;
-}
-
-/* 工具类 */
-.clearfix::after {
-    content: "";
-    display: table;
-    clear: both;
-}
-
-.hidden {
-    display: none !important;
-}
-
-.sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border-width: 0;
-}
-</style>
-
-<script>
-// Amazon风格 - 默认布局基础交互脚本
-(function() {
-    'use strict';
-    
-    // 等待DOM加载完成
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-    
-    function init() {
-        // 初始化基础交互功能
-        initSmoothScroll();
-        initExternalLinks();
-    }
-    
-    // 平滑滚动增强
-    function initSmoothScroll() {
-        // 为所有锚点链接添加平滑滚动
-        document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
-            anchor.addEventListener('click', function(e) {
-                const href = this.getAttribute('href');
-                if (href === '#' || href === '#!') {
-                    e.preventDefault();
-                    return;
-                }
-                
-                const target = document.querySelector(href);
-                if (target) {
-                    e.preventDefault();
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
-                }
-            });
-        });
-    }
-    
-    // 外部链接处理
-    function initExternalLinks() {
-        document.querySelectorAll('a[href^="http"]').forEach(function(link) {
-            // 如果是外部链接，添加target="_blank"和rel="noopener"
-            const hostname = window.location.hostname;
-            const linkHostname = new URL(link.href).hostname;
-            
-            if (linkHostname !== hostname) {
-                link.setAttribute('target', '_blank');
-                link.setAttribute('rel', 'noopener noreferrer');
-            }
-        });
-    }
-})();
-</script>
-

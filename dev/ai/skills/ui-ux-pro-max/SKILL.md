@@ -250,6 +250,15 @@ These are frequently overlooked issues that make UI look unprofessional:
 | **Content padding** | Account for fixed navbar height | Let content hide behind fixed elements |
 | **Consistent max-width** | Use same `max-w-6xl` or `max-w-7xl` | Mix different container widths |
 
+### Attention Management
+
+| Rule | Do | Don't |
+|------|----|----- |
+| **Primary focal point** | Make the main function or next action visually dominant within the first scan | Give every card, badge, CTA, and decoration equal weight |
+| **Clear hierarchy** | Use size, contrast, placement, spacing, and motion to guide attention from key value to action | Scatter competing highlights across the screen |
+| **Quiet secondary actions** | Keep secondary controls available but visually calmer than the primary action | Style secondary actions like primary CTAs |
+| **State guidance** | In empty, loading, and error states, point users to the next useful action | Show decorative states that do not help users continue |
+
 ---
 
 ## Pre-Delivery Checklist
@@ -262,6 +271,8 @@ Before delivering UI code, verify these items:
 - [ ] Brand logos are correct (verified from Simple Icons)
 - [ ] Hover states don't cause layout shift
 - [ ] Use theme colors directly (bg-primary) not var() wrapper
+- [ ] Primary function/action is the strongest focal point on first scan
+- [ ] Secondary actions and decorative elements do not compete with the primary path
 
 ### Interaction
 - [ ] All clickable elements have `cursor-pointer`

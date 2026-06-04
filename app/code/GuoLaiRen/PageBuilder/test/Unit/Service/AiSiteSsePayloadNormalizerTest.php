@@ -22,7 +22,7 @@ final class AiSiteSsePayloadNormalizerTest extends TestCase
 
         self::assertSame('running', $payload['queue_status']);
         self::assertSame('Pending', $payload['status']);
-        self::assertSame('Done', $payload['job_status']);
+        self::assertArrayNotHasKey('job_status', $payload);
         self::assertSame(['total' => 2, 'done' => 1], $payload['plan_json_execution_summary']);
     }
 

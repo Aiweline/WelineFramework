@@ -74,21 +74,21 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         $isTerminal->setAccessible(true);
         $buildPayload->setAccessible(true);
 
-        self::assertTrue((bool)$isActive->invoke($controller, ['active_operation' => ['status' => 'queued']]));
-        self::assertTrue((bool)$isActive->invoke($controller, ['active_operation' => ['status' => 'running']]));
-        self::assertFalse((bool)$isActive->invoke($controller, ['active_operation' => ['status' => 'done']]));
+        self::assertTrue((bool)$isActive->invoke($controller, ['active_operation' => ['queue_status' => 'queued']]));
+        self::assertTrue((bool)$isActive->invoke($controller, ['active_operation' => ['queue_status' => 'running']]));
+        self::assertFalse((bool)$isActive->invoke($controller, ['active_operation' => ['queue_status' => 'done']]));
 
         foreach (['done', 'error', 'cancelled', 'stop', 'stopped'] as $status) {
             self::assertTrue(
-                (bool)$isTerminal->invoke($controller, ['active_operation' => ['status' => $status]]),
+                (bool)$isTerminal->invoke($controller, ['active_operation' => ['queue_status' => $status]]),
                 $status . ' must close the workspace SSE stream once an active operation reaches a terminal state.'
             );
         }
-        self::assertFalse((bool)$isTerminal->invoke($controller, ['active_operation' => ['status' => 'running']]));
+        self::assertFalse((bool)$isTerminal->invoke($controller, ['active_operation' => ['queue_status' => 'running']]));
 
         $donePayload = $buildPayload->invoke($controller, [
             'public_id' => 'pb-terminal-test',
-            'active_operation' => ['status' => 'done', 'message' => 'plan done'],
+            'active_operation' => ['queue_status' => 'done', 'message' => 'plan done'],
         ], 42);
         self::assertSame('done', $donePayload['terminal_status']);
         self::assertTrue((bool)$donePayload['success']);
@@ -97,7 +97,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         $errorPayload = $buildPayload->invoke($controller, [
             'public_id' => 'pb-terminal-test',
-            'active_operation' => ['status' => 'error'],
+            'active_operation' => ['queue_status' => 'error'],
         ], 43);
         self::assertSame('error', $errorPayload['terminal_status']);
         self::assertFalse((bool)$errorPayload['success']);
@@ -105,7 +105,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         $stopPayload = $buildPayload->invoke($controller, [
             'public_id' => 'pb-terminal-test',
-            'active_operation' => ['status' => 'stop', 'message' => 'queue skipped'],
+            'active_operation' => ['queue_status' => 'stop', 'message' => 'queue skipped'],
         ], 44);
         self::assertSame('stop', $stopPayload['terminal_status']);
         self::assertFalse((bool)$stopPayload['success']);
@@ -311,29 +311,28 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         $virtualPages = [
             'home' => [
-                'block_nodes' => [
-                    [
-                        'block_id' => 'home-site-header',
-                        'type' => 'site_header',
-                        'html' => '<header>Home before</header>',
-                        'config' => ['site_title' => 'Home before'],
-                    ],
-                    [
-                        'block_id' => 'home-hero',
-                        'type' => 'hero',
-                        'html' => '<section>Hero before</section>',
-                        'config' => ['headline' => 'Hero before'],
-                    ],
+                'site_header' => [
+                    'block_id' => 'home-site-header',
+                    'type' => 'site_header',
+                    'html' => '<header>Home before</header>',
+                    'config' => ['site_title' => 'Home before'],
+                ],
+                'hero' => [
+                    'block_id' => 'home-hero',
+                    'type' => 'hero',
+                    'html' => '<section>Hero before</section>',
+                    'config' => ['headline' => 'Hero before'],
+                ],
+                'blocks' => [
+                    ['block_id' => 'legacy-home-site-header', 'config' => ['site_title' => 'Legacy before']],
                 ],
             ],
             'about' => [
-                'block_nodes' => [
-                    [
-                        'block_id' => 'about-site-header',
-                        'type' => 'site_header',
-                        'html' => '<header>About before</header>',
-                        'config' => ['site_title' => 'About before'],
-                    ],
+                'site_header' => [
+                    'block_id' => 'about-site-header',
+                    'type' => 'site_header',
+                    'html' => '<header>About before</header>',
+                    'config' => ['site_title' => 'About before'],
                 ],
             ],
         ];
@@ -352,13 +351,48 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             '2026-04-21 15:20:00'
         );
 
-        self::assertSame('Home tuned', $result['home']['block_nodes'][0]['config']['site_title']);
-        self::assertSame('<header>Home tuned</header>', $result['home']['block_nodes'][0]['html']);
-        self::assertSame('Hero before', $result['home']['block_nodes'][1]['config']['headline']);
-        self::assertSame('About before', $result['about']['block_nodes'][0]['config']['site_title']);
-        self::assertSame('<header>About before</header>', $result['about']['block_nodes'][0]['html']);
+        self::assertSame('Home tuned', $result['home']['site_header']['config']['site_title']);
+        self::assertSame('<header>Home tuned</header>', $result['home']['site_header']['html']);
+        self::assertSame('Hero before', $result['home']['hero']['config']['headline']);
+        self::assertSame('Legacy before', $result['home']['blocks'][0]['config']['site_title']);
+        self::assertSame('About before', $result['about']['site_header']['config']['site_title']);
+        self::assertSame('<header>About before</header>', $result['about']['site_header']['html']);
         self::assertSame('2026-04-21 15:20:00', $result['home']['last_generated_at']);
         self::assertArrayNotHasKey('last_generated_at', $result['about']);
+    }
+
+    public function testExistingAiHtmlBlocksPreferCanonicalPlanJsonBlockNodes(): void
+    {
+        $controller = (new ReflectionClass(AiSiteAgent::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(AiSiteAgent::class, 'resolveExistingAiHtmlBlocksForPage');
+        $method->setAccessible(true);
+
+        $scope = [
+            'plan_json' => [
+                'pages' => [
+                    'home' => [
+                        'page_type' => 'home',
+                        'hero' => [
+                            'block_id' => 'home-hero',
+                            'status' => 1,
+                            'html' => '<section>Canonical hero</section>',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $virtualPages = [
+            'home' => [
+                'blocks' => [
+                    ['block_id' => 'home-hero', 'html' => ''],
+                ],
+            ],
+        ];
+
+        $blocks = $method->invoke($controller, 'home', $scope, $virtualPages);
+
+        self::assertSame('<section>Canonical hero</section>', $blocks[0]['html'] ?? '');
+        self::assertSame('hero', $blocks[0]['block_key'] ?? '');
     }
 
     public function testQueueObserverPanelPayloadContainsCurrentQueueDetails(): void
@@ -427,7 +461,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         self::assertSame('running', $payload['status']);
         self::assertSame('running', $payload['queue_status']);
-        self::assertSame('running', $payload['job_status']);
+        self::assertArrayNotHasKey('job_status', $payload);
         self::assertArrayNotHasKey('retry_allowed', $payload);
         self::assertArrayNotHasKey('queue_terminal_recovered', $payload);
         self::assertSame('prior running message', $payload['process']);
@@ -446,7 +480,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         self::assertSame('glr_aisite:session:321:job:stage1.requirement_expand', $envelope['job_key']);
         self::assertSame('stage1.requirement_expand', $envelope['job_type']);
-        self::assertSame('queued', $envelope['status']);
+        self::assertSame('queued', $envelope['queue_status']);
         self::assertSame('token-abc', $envelope['token']);
     }
 
@@ -507,7 +541,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertSame('queue_info', $infoEvents[0]['data']['progress_kind']);
         self::assertArrayHasKey('queue_info', $infoEvents[0]['data']);
         self::assertArrayNotHasKey('snapshot', $infoEvents[0]['data']['queue_info']);
-        self::assertSame('running', $infoEvents[0]['data']['queue_info']['status']);
+        self::assertSame('running', $infoEvents[0]['data']['queue_info']['queue_status']);
         self::assertSame(600, $infoEvents[0]['data']['token_usage']['input_tokens']);
         self::assertSame(180, $infoEvents[0]['data']['queue_info']['token_usage']['output_tokens']);
         $processEvents = \array_values(\array_filter(
@@ -580,7 +614,15 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('data-queue-info-list="stage1"', $phaseScript);
         self::assertStringContainsString("data-queue-info-field=\"' + escapeHtml(key) + '\"", $phaseScript);
         self::assertStringContainsString('data-token-usage-field', $phaseScript);
-        self::assertStringContainsString("'job_status'", $phaseScript);
+        self::assertStringContainsString("'queue_status'", $phaseScript);
+        self::assertStringContainsString("var status = (info && info.queue_status) || '';", $phaseScript);
+        self::assertStringContainsString("var status = String(queueInfo.queue_status || '').toLowerCase();", $phaseScript);
+        self::assertStringContainsString("statusEl.textContent = String(info.queue_status || '').trim();", $phaseScript);
+        self::assertStringNotContainsString("info.job_status || info.status || info.queue_status", $phaseScript);
+        self::assertStringNotContainsString("queueInfo.semantic_status || queueInfo.job_status || queueInfo.queue_status || queueInfo.status", $phaseScript);
+        self::assertStringNotContainsString("payload.job_status || payload.status", $phaseScript);
+        self::assertStringNotContainsString("Object.prototype.hasOwnProperty.call(payload, 'job_status')", $phaseScript);
+        self::assertStringNotContainsString("Object.prototype.hasOwnProperty.call(payload, 'status')", $phaseScript);
         self::assertStringContainsString('payload.progress_kind', $phaseScript);
         self::assertStringContainsString('input_tokens', $phaseScript);
         self::assertStringContainsString('output_tokens', $phaseScript);
@@ -590,7 +632,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('function appendLiveQueueLog(delta)', $phaseScript);
         self::assertStringContainsString('resEl.appendChild(node)', $phaseScript);
         self::assertStringContainsString('while (resEl.childNodes.length > LIVE_LOG_MAX_LINES)', $phaseScript);
-        self::assertStringContainsString('state.plan_queue_info = mergeIncomingPlanQueueInfoWithRememberedProgress(info);', $phaseScript);
+        self::assertStringContainsString('safeState.queue_status.plan = mergeIncomingPlanQueueInfoWithRememberedProgress(planQueueInfo);', $phaseScript);
+        self::assertStringNotContainsString('state.plan_queue_info = mergeIncomingPlanQueueInfoWithRememberedProgress(info);', $phaseScript);
         self::assertStringContainsString('function hasNonEmptyStageOneProgress(progress)', $phaseScript);
         self::assertStringContainsString('stage1_page_progress', $phaseScript);
         self::assertStringContainsString('function resolvePlanQueueLatestPageProgress(info)', $phaseScript);
@@ -601,6 +644,16 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('window.__pbWorkspaceApi.updateStageStatusSummary(state)', $phaseScript);
         self::assertStringContainsString('window.__pbWorkspaceApi.updateStageStatusSummary(safeState)', $phaseScript);
         self::assertStringContainsString("activeOp === 'plan' && isStageQueueInProgress(readStageQueueStatus(resolveRuntimeQueueInfoFromState(state, 'plan')))", $runtimeScript);
+        self::assertStringContainsString("var directStatus = String(candidate.queue_status || '').trim();", $runtimeScript);
+        self::assertStringContainsString('queueInfo.queue_status', $runtimeScript);
+        self::assertStringContainsString("task.status = normalizeTaskProgressStatus(payload.status);", $runtimeScript);
+        self::assertStringNotContainsString('queueInfo.status', $runtimeScript);
+        self::assertStringNotContainsString('queueInfo.state', $runtimeScript);
+        self::assertStringNotContainsString('queueInfo.job_status', $runtimeScript);
+        self::assertStringNotContainsString('queueState.status', $runtimeScript);
+        self::assertStringNotContainsString('queueState.job_status', $runtimeScript);
+        self::assertStringNotContainsString('candidate.queue_status || candidate.status', $runtimeScript);
+        self::assertStringNotContainsString('payload.job_status || payload.status', $runtimeScript);
         self::assertStringContainsString("'result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'", $phaseScript);
         self::assertStringContainsString("'events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'", $phaseScript);
         self::assertStringNotContainsString('state.queue_result_delta =', $phaseScript);
@@ -639,8 +692,10 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('function abortBlockEditorAiStream()', $mainScript);
         self::assertStringContainsString('abortCurrentStream();', $mainScript);
         self::assertStringContainsString('clearStreamRefs();', $mainScript);
-        self::assertStringContainsString("safe.scope[key] = sanitizeQueueInfoForMemory(safe.scope[key]);", $mainScript);
-        self::assertStringContainsString("['page_type_layouts', 'pagebuilder_pages_by_type', 'virtual_pages_by_type']", $mainScript);
+        self::assertStringContainsString("state.queue_status[key] = sanitizeQueueInfoForMemory(state.queue_status[key]);", $phaseScript);
+        self::assertStringContainsString("state.queue_status[key] = sanitizeQueueInfoForMemory(state.queue_status[key]);", $buildScript);
+        self::assertStringNotContainsString("safe.scope[key] = sanitizeQueueInfoForMemory(safe.scope[key]);", $mainScript);
+        self::assertStringNotContainsString("['page_type_layouts', 'pagebuilder_pages_by_type', 'virtual_pages_by_type']", $mainScript);
         self::assertStringContainsString('function sanitizeWorkspaceStateCollectionForMemory(collection)', $mainScript);
 
         self::assertStringContainsString('writeChunk: function(text)', $terminalSource);
@@ -671,9 +726,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
                 'details close should clear the bounded live log DOM'
             );
             self::assertStringContainsString('if (panelEl && !panelEl.open)', $script);
-            self::assertStringContainsString('state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);', $script);
-            self::assertStringContainsString('state.plan_queue_info = sanitizeQueueInfoForMemory(state.plan_queue_info);', $script);
-            self::assertStringContainsString('state.build_queue_info = sanitizeQueueInfoForMemory(state.build_queue_info);', $script);
+            self::assertStringContainsString('state.queue_status[key] = sanitizeQueueInfoForMemory(state.queue_status[key]);', $script);
+            self::assertStringNotContainsString('state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);', $script);
             self::assertStringContainsString("'result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'", $script);
             self::assertStringContainsString("'events', 'top_logs', 'result_log', 'queue_result_delta', 'chunk', 'content'", $script);
         }
@@ -752,6 +806,29 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('pb-ai-plan-queue-token-summary', $phaseOneScript);
         self::assertStringContainsString('pb-ai-build-queue-token-summary', $phaseTwoScript);
         self::assertStringContainsString('pickTokenCount(usage, [\'input_tokens\', \'prompt_tokens\'])', $phaseTwoScript);
+    }
+
+    public function testBuildQueuePanelReadsOnlyCanonicalQueueStatus(): void
+    {
+        $moduleRoot = \dirname(__DIR__, 3);
+        $buildScript = (string)\file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-build-queue-progress.phtml');
+
+        self::assertStringContainsString("var status = (info && info.queue_status) || '';", $buildScript);
+        self::assertStringContainsString("statusEl.textContent = String(info.queue_status || '').trim();", $buildScript);
+        self::assertStringContainsString("parsedPayload.queue_status\n            || (info && info.queue_status)", $buildScript);
+        self::assertStringContainsString("var directStatus = String(candidate.queue_status || '').trim();", $buildScript);
+        self::assertStringContainsString("'queue_status', 'job_key', 'job_type', 'token', 'execution_token', 'input_tokens', 'output_tokens', 'total_tokens'", $buildScript);
+        self::assertStringNotContainsString('delete queueState.status;', $buildScript);
+        self::assertStringNotContainsString('delete queueState.job_status;', $buildScript);
+        self::assertStringNotContainsString('info.status || info.queue_status || info.job_status', $buildScript);
+        self::assertStringNotContainsString('info.job_status || info.status || info.queue_status', $buildScript);
+        self::assertStringNotContainsString('parsedPayload.job_status', $buildScript);
+        self::assertStringNotContainsString('parsedPayload.status', $buildScript);
+        self::assertStringNotContainsString('candidate.queue_status || candidate.status', $buildScript);
+        self::assertStringNotContainsString("Object.prototype.hasOwnProperty.call(payload, 'job_status')", $buildScript);
+        self::assertStringNotContainsString("Object.prototype.hasOwnProperty.call(payload, 'status')", $buildScript);
+        self::assertStringNotContainsString('queueState.queue_status || queueState.status', $buildScript);
+        self::assertStringNotContainsString('queueState.job_status || queueState.status', $buildScript);
     }
 
     public function testPlanQueueDuplicateStreamRequiresPersistedStageOnePlan(): void
@@ -845,7 +922,7 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'workspace_status' => 'building',
             'publish_status' => 'draft',
             'can_publish' => false,
-            'workspace_track' => 'html_block_nodes',
+            'workspace_track' => 'html_blocks',
             'site_ready' => 1,
             'website_id' => 9,
             'virtual_theme_id' => 11,
@@ -863,14 +940,13 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             'has_stage_one_plan' => true,
             'active_operation' => [
                 'operation' => 'plan',
-                'status' => 'running',
+                'queue_status' => 'running',
                 'progress_percent' => 45,
                 'updated_at' => '2026-04-21 12:20:00',
             ],
             'plan_queue_info' => [
                 'queue_id' => 143,
-                'status' => 'running',
-                'job_status' => 'running',
+                'queue_status' => 'running',
                 'job_key' => 'glr_aisite:session:987:job:stage1.requirement_expand',
                 'job_type' => 'stage1.requirement_expand',
                 'token' => 'token-abc',
@@ -975,12 +1051,12 @@ final class AiSiteAgentSseMarkerTest extends TestCase
 
         $notice = $method->invoke($controller, [
             'operation' => 'build',
-            'status' => 'done',
+            'queue_status' => 'done',
             'message' => 'Build queue completed.',
         ], [
             'build' => [
                 'queue_id' => 82,
-                'status' => 'done',
+                'queue_status' => 'done',
                 'name' => 'PageBuilder build #82',
                 'biz_key' => 'glr_aisite:session:48:queue_slot:build',
                 'process' => 'Build queue completed.',

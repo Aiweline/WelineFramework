@@ -24,7 +24,7 @@ class AiSiteMaterializationService
      * @param array<string, array<string, mixed>> $pageTypeLayouts
      * @param array<string, array<string, mixed>> $virtualPagesByType
      * @return array{
-     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
+     *   materialized_pages_by_type:array<string, array<string, mixed>>,
      *   home_page_id:int,
      *   preview_page_id:int,
      *   preview_page_type:string
@@ -47,6 +47,7 @@ class AiSiteMaterializationService
         foreach ($layouts as $layoutPageType => $layout) {
             $layouts[$layoutPageType] = $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, [
                 'website_profile' => $websiteProfile,
+                'plan_json' => \is_array($websiteProfile['plan_json'] ?? null) ? $websiteProfile['plan_json'] : [],
                 'content_locale' => $websiteProfile['content_locale'] ?? $websiteProfile['default_locale'] ?? '',
                 'default_locale' => $websiteProfile['default_locale'] ?? '',
                 'brief_description' => $websiteProfile['brief_description'] ?? '',
@@ -69,18 +70,12 @@ class AiSiteMaterializationService
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
             $layoutConfig = $layouts[$pageType] ?? $this->scopeCompatibilityService->normalizeLayoutConfig([]);
             $materializedLayoutConfig = $this->resolveMaterializedLayoutConfig($layoutConfig);
-            $hasGeneratedLayout = $this->layoutHasGeneratedContentComponents($materializedLayoutConfig);
-            $blocks = [];
-            if (!$hasGeneratedLayout) {
-                $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $this->filterPageContentAiHtmlBlockNodes($virtualPage['block_nodes']) : [];
-                if ($blocks === []) {
-                    $blocks = $this->resolveExistingAiHtmlBlockNodes($page);
-                }
-            }
+            $blocks = $this->resolveCanonicalPlanJsonAiHtmlBlocks($virtualPage);
+            $hasGeneratedLayout = $blocks === [] && $this->layoutHasGeneratedContentComponents($materializedLayoutConfig);
             if ($blocks === [] && !$hasGeneratedLayout) {
                 throw new \RuntimeException((string)__('AI virtual theme page has no generated layout or blocks: %{1}', [$pageType]));
             }
-            $aiLayout = ['block_nodes' => $blocks];
+            $aiLayout = ['blocks' => $blocks];
             $renderMode = $hasGeneratedLayout ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
             $aiLayoutJson = $hasGeneratedLayout ? null : \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);
 
@@ -137,13 +132,14 @@ class AiSiteMaterializationService
                 'name' => (string)$page->getData(Page::schema_fields_NAME),
                 'title' => (string)$page->getData(Page::schema_fields_TITLE),
                 'handle' => (string)$page->getData(Page::schema_fields_HANDLE),
+                'block_nodes' => $blocks,
             ];
         }
 
         $selection = $this->scopeCompatibilityService->resolvePreviewSelection($pagesByType);
 
         return [
-            'pagebuilder_pages_by_type' => $pagesByType,
+            'materialized_pages_by_type' => $pagesByType,
             'home_page_id' => $homePageId,
             'preview_page_id' => $selection['preview_page_id'],
             'preview_page_type' => $selection['preview_page_type'],
@@ -151,11 +147,11 @@ class AiSiteMaterializationService
     }
 
     /**
-     * ai_html 杞ㄧ墿鍖栵細鍐欏叆 render_mode + ai_layout锛屼笉璧拌櫄鎷熶富棰樼粍浠跺竷灞€
+     * ai_html 鏉炪劎澧块崠鏍电窗閸愭瑥鍙?render_mode + ai_layout閿涘奔绗夌挧鎷屾珓閹风喍瀵屾０妯肩矋娴犺泛绔风仦鈧?
      *
      * @param array<string, array<string, mixed>> $virtualPagesByType
      * @return array{
-     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
+     *   materialized_pages_by_type:array<string, array<string, mixed>>,
      *   home_page_id:int,
      *   preview_page_id:int,
      *   preview_page_type:string
@@ -185,11 +181,11 @@ class AiSiteMaterializationService
             $pageLocale = $this->resolveMaterializedLocale($virtualPage, $websiteProfile);
             $pageLocales = $this->resolveMaterializedLocales($pageLocale, $websiteProfile);
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
-            $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $this->filterPageContentAiHtmlBlockNodes($virtualPage['block_nodes']) : [];
+            $blocks = \is_array($virtualPage['blocks'] ?? null) ? $this->filterPageContentAiHtmlBlocks($virtualPage['blocks']) : [];
             if ($blocks === []) {
-                $blocks = $this->resolveExistingAiHtmlBlockNodes($page);
+                throw new \RuntimeException((string)__('AI HTML page has no generated plan_json blocks: %{1}', [$pageType]));
             }
-            $aiLayout = ['block_nodes' => $blocks];
+            $aiLayout = ['blocks' => $blocks];
             $aiLayoutJson = \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);
 
             $page->setData(Page::schema_fields_TYPE, $pageType)
@@ -252,13 +248,14 @@ class AiSiteMaterializationService
                 'name' => (string)$page->getData(Page::schema_fields_NAME),
                 'title' => (string)$page->getData(Page::schema_fields_TITLE),
                 'handle' => (string)$page->getData(Page::schema_fields_HANDLE),
+                'block_nodes' => $blocks,
             ];
         }
 
         $selection = $this->scopeCompatibilityService->resolvePreviewSelection($pagesByType);
 
         return [
-            'pagebuilder_pages_by_type' => $pagesByType,
+            'materialized_pages_by_type' => $pagesByType,
             'home_page_id' => $homePageId,
             'preview_page_id' => $selection['preview_page_id'],
             'preview_page_type' => $selection['preview_page_type'],
@@ -447,25 +444,25 @@ class AiSiteMaterializationService
                 Page::TYPE_CUSTOM => 'Page',
             ],
             'th' => [
-                Page::TYPE_HOME => '喔笝喙夃覆喙佮福喔?,
-                Page::TYPE_ABOUT => '喙€喔佮傅喙堗涪喔о竵喔编笟喙€喔｀覆',
-                Page::TYPE_CONTACT => '喔曕复喔斷笗喙堗腑喙€喔｀覆',
-                Page::TYPE_PRIVACY_POLICY => '喔權箓喔⑧笟喔侧涪喔勦抚喔侧浮喙€喔涏箛喔權釜喙堗抚喔權笗喔编抚',
-                Page::TYPE_TERMS_OF_SERVICE => '喔傕箟喔竵喔赤斧喔權笖喔佮覆喔｀箖喔娻箟喔氞福喔脆竵喔侧福',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
             ],
             'hi' => [
-                Page::TYPE_HOME => '啶灌啶?,
-                Page::TYPE_ABOUT => '啶灌ぎ啶距ぐ啷?啶ぞ啶班 啶啶?,
-                Page::TYPE_CONTACT => '啶膏啶ぐ啷嵿 啶曕ぐ啷囙',
-                Page::TYPE_PRIVACY_POLICY => '啶椸啶え啷€啶い啶?啶ㄠ啶むた',
-                Page::TYPE_TERMS_OF_SERVICE => '啶膏啶掂ぞ 啶曕 啶多ぐ啷嵿い啷囙',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
             ],
             'zh' => [
-                Page::TYPE_HOME => '棣栭〉',
-                Page::TYPE_ABOUT => '鍏充簬鎴戜滑',
-                Page::TYPE_CONTACT => '鑱旂郴鎴戜滑',
-                Page::TYPE_PRIVACY_POLICY => '闅愮鏀跨瓥',
-                Page::TYPE_TERMS_OF_SERVICE => '鏈嶅姟鏉℃',
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
             ],
         ];
 
@@ -628,29 +625,76 @@ class AiSiteMaterializationService
     }
 
     /**
-     * @return list<array<string, mixed>>
-     */
-    private function resolveExistingAiHtmlBlockNodes(Page $page): array
-    {
-        if ((int)$page->getId() <= 0) {
-            return [];
-        }
-
-        $layout = $page->getAiLayoutArray();
-        $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
-
-        return $this->filterPageContentAiHtmlBlockNodes($blocks);
-    }
-
-    /**
      * @param list<mixed> $blocks
      * @return list<array<string, mixed>>
      */
-    private function filterPageContentAiHtmlBlockNodes(array $blocks): array
+    private function filterPageContentAiHtmlBlocks(array $blocks): array
     {
         return \array_values(\array_filter($blocks, static function (mixed $block): bool {
-            return \is_array($block) && !AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($block);
+            return \is_array($block) && !AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block);
         }));
+    }
+
+    /**
+     * @param array<string, mixed> $virtualPage
+     * @return list<array<string, mixed>>
+     */
+    private function resolveCanonicalPlanJsonAiHtmlBlocks(array $virtualPage): array
+    {
+        $blocks = [];
+        foreach ($virtualPage as $key => $node) {
+            if (!\is_string($key) || !$this->isCanonicalPlanJsonBlockNode($key, $node)) {
+                continue;
+            }
+            /** @var array<string, mixed> $node */
+            $html = \trim((string)($node['html'] ?? $node['html_content'] ?? $node['phtml'] ?? ''));
+            if ($html === '') {
+                continue;
+            }
+            $block = $node;
+            $block['block_key'] = \trim((string)($block['block_key'] ?? $key));
+            $block['html'] = $html;
+            $blocks[] = $block;
+        }
+
+        if ($blocks !== []) {
+            return $this->filterPageContentAiHtmlBlocks($blocks);
+        }
+
+        return \is_array($virtualPage['blocks'] ?? null) ? $this->filterPageContentAiHtmlBlocks($virtualPage['blocks']) : [];
+    }
+
+    private function isCanonicalPlanJsonBlockNode(string $key, mixed $node): bool
+    {
+        if (!\is_array($node) || $this->isPlanJsonPageMetadataKey($key)) {
+            return false;
+        }
+
+        if (\array_key_exists('status', $node) && (int)$node['status'] !== 1) {
+            return false;
+        }
+
+        $html = \trim((string)($node['html'] ?? $node['html_content'] ?? $node['phtml'] ?? ''));
+        return $html !== '';
+    }
+
+    private function isPlanJsonPageMetadataKey(string $key): bool
+    {
+        return \in_array($key, [
+            'layout',
+            'page_meta',
+            'meta',
+            'seo',
+            'route',
+            'assets',
+            'blocks',
+            'block_previews',
+            'sections',
+            'components',
+            'page_design_plan',
+            'primary_keywords',
+            'secondary_keywords',
+        ], true);
     }
 
     /**

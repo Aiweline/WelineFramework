@@ -32,11 +32,9 @@ class AiSiteAgentSession extends Model
     private const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
     private const ARTIFACT_BACKED_SCOPE_PATHS = [
         self::STAGE_PLAN => [
-            'plan_json' => [['plan_json'], []],
             'content_manifest' => [['content_manifest'], []],
         ],
         self::STAGE_VISUAL_EDIT => [
-            'plan_json' => [['plan_json'], []],
             'content_manifest' => [['content_manifest'], []],
             'build_contracts' => [['build_contracts'], []],
             'render_data_contract' => [['render_data_contract'], []],
@@ -264,8 +262,8 @@ class AiSiteAgentSession extends Model
     }
 
     /**
-     * Artifact references make the artifact table the canonical storage for
-     * these large payloads. Do not write hydrated copies back into scope_json.
+     * Artifact references compact non-plan diagnostic payloads only.
+     * plan_json remains inline in scope_json as the pre-publish truth tree.
      *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
@@ -340,18 +338,6 @@ class AiSiteAgentSession extends Model
                     continue;
                 }
                 $scope[$field][$key] = $this->compactGeneratedComponentForStorage($component);
-            }
-        }
-
-        if (\is_array($scope['virtual_pages_by_type'] ?? null)) {
-            foreach ($scope['virtual_pages_by_type'] as $pageType => $virtualPage) {
-                if (!\is_array($virtualPage)) {
-                    continue;
-                }
-                if (\is_array($virtualPage['block_nodes'] ?? null) && $virtualPage['block_nodes'] !== []) {
-                    $virtualPage['block_nodes'] = [];
-                    $scope['virtual_pages_by_type'][$pageType] = $virtualPage;
-                }
             }
         }
 

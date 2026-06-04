@@ -531,7 +531,6 @@ PID：%{1},PID：%{1}
 维护模式已关闭。,维护模式已关闭。
 "检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED","检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED"
 "建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名","建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名"
-"当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。"
 "启动已阻止：当前监听地址为 %{1}，且无法确定默认项目域名白名单。","启动已阻止：当前监听地址为 %{1}，且无法确定默认项目域名白名单。"
 "请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。"
 后台域名池域名不需要写入此处。,后台域名池域名不需要写入此处。

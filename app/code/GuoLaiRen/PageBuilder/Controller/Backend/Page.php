@@ -424,7 +424,8 @@ class Page extends BackendController
             $publicId,
             $pageType,
             \trim((string)$this->request->getGet('style_code', '')),
-            \trim((string)$this->request->getGet('locale', ''))
+            \trim((string)$this->request->getGet('locale', '')),
+            (int)$this->request->getGet('virtual_theme_id', 0)
         );
         if ($context === null) {
             return '<!DOCTYPE html><html><body><div style="padding:20px;color:red;">AI建站工作台虚拟编辑上下文不存在或无权限访问</div></body></html>';
