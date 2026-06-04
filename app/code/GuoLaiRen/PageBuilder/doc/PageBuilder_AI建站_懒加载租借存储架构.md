@@ -1,25 +1,40 @@
-# PageBuilder AI 建站 — 懒加载租借存储架构
+# PageBuilder AI 建站懒加载与存储架构
 
-## 目标
+当前 PageBuilder AI 生成状态只有一棵持久化树：
 
-持久层保存完整 blueprint / 块 HTML；进程内只保留 **ScopeManifest**（小对象）。大对象通过 `AiSiteSessionRuntime` 租借 API 加载，闭包结束 **脱水归还**。
+```js
+plan_json.pages.{page_type}.{block_key}
+```
 
-## 三层存储
+ArtifactStore、队列日志、SSE 事件和临时 session artifact 可以继续用于传输大文本、图片、日志和调试材料，但不能成为生成状态的第二份真相源。
 
-| 层 | 键 | 说明 |
-|---|---|---|
-| L1 ScopeManifest | `scope_json` | `build_tasks`、`design_tokens`、`language_contract`、`virtual_page_index`、`theme_css_ref`、`_artifact_refs` |
-| L2 ArtifactStore | DB + 文件 | `execution_blueprint`、`build_blueprint` 等 |
-| L3 ComponentStore | `VirtualThemeComponent` | 块 `phtml` / `default_config` |
+## 存储层级
 
-## 核心 API
+| 层级 | 用途 | 是否状态真相源 |
+| --- | --- | --- |
+| `plan_json` root | 站点、主题、语言、共享上下文 | 部分是 |
+| `plan_json.pages` | 页面总表，key 为动态 `page_type` | 是 |
+| `plan_json.pages.{page_type}.{block_key}` | block 状态、HTML、fields、error | 是 |
+| session artifact | 大文本、AI 原始响应、图片结果、日志 | 否 |
+| queue runtime | 排队、运行、终止事件 | 否 |
 
-- `AiSiteAgentSessionService::loadScopeManifest()` — 不 hydrate 大 artifact
-- `AiSiteSessionRuntime::withArtifact()` — 用时解码，dirty 写回，闭包外脱水
-- `AiSiteSessionRuntime::withBlock()` — DB 读写组件，manifest 只更新 index
-- `AiSiteSessionRuntime::withRenderedPage()` — 渲染后 unset HTML
-- `AiSiteSessionRuntime::patchManifest()` — 小字段 merge
+## 写入规则
 
-## 原子任务索引
+- 生成开始时写 `status=2` 到当前 block。
+- 生成成功时写 `status=1`、`html`、`fields` 和相关结果到同一 block。
+- 生成失败时写 `status=-1`、`error` 到同一 block。
+- 重试只选择 `status=-1` 或 `status=0` 的 block。
+- 每次 block 状态变化后更新所在 page 的 rollup status。
 
-M-00 `AiSiteScopeManifestPolicy` · M-01~M-04 `AiSiteSessionRuntime` · M-05~M-08 构建链迁移 · M-09~M-12 工作台/CLI/回归
+## 懒加载规则
+
+构建阶段不提前 hydrate 完整执行计划。队列读取当前 page/block 后，只在内存中组装当前 block 所需 prompt/context：
+
+```js
+current_page = plan_json.pages[page_type]
+current_block = current_page[block_key]
+root_context = plan_json without pages
+```
+
+图片、组件片段和调试数据可以作为 artifact 暂存，但最终可见状态仍必须回写到 `plan_json.pages.{page_type}.{block_key}`。
+

@@ -52,15 +52,9 @@ class AiSitePageBlueprintServiceTest extends TestCase
             'site_title' => 'Teenipiya',
             'user_description' => '# ROLE You are a senior web designer building a gaming entertainment site.',
             'brief_description' => '# ROLE You are a senior web designer building a gaming entertainment site.',
-            'build_plan_v2' => [
-                'site_brief' => [
-                    'site_name' => '# ROLE You are a senior web designer',
-                ],
-                'source_of_truth' => [
-                    'user_requirements' => [
-                        'site_name' => '# ROLE You are a senior web designer',
-                    ],
-                ],
+            'plan_json' => [
+                'site_name' => '# ROLE You are a senior web designer',
+                'theme' => ['summary' => 'Gaming entertainment'],
             ],
         ];
         $websiteProfile = [

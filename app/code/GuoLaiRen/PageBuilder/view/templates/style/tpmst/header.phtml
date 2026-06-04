@@ -303,7 +303,7 @@ unset($item);
 // Banner配置（优先使用颜色配置）
 // 注意：Banner已独立为组件（hero-slider等），header中的banner默认关闭
 $bannerDisplayRaw = tpmst_getConfig($styleSettings, 'banner.display', 'no');
-// 处理显示配置：支持 yes/no 或兼容旧的 0/1 值
+// 处理显示配置：支持 yes/no 或兼容既有的 0/1 值
 // 统一转换为 yes/no 格式（Banner已独立为组件，默认关闭）
 if ($bannerDisplayRaw === 'yes' || $bannerDisplayRaw === true || $bannerDisplayRaw === 'true' || $bannerDisplayRaw === 1 || $bannerDisplayRaw === '1') {
     $bannerDisplay = 'yes'; // yes 或 1 = 显示

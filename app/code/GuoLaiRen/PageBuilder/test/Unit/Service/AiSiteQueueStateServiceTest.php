@@ -150,7 +150,7 @@ final class AiSiteQueueStateServiceTest extends TestCase
                     [
                         'page_type' => 'home_page',
                         'status' => 'running',
-                        'blocks' => [
+                        'block_rows' => [
                             [
                                 'block_key' => 'hero',
                                 'status' => 'running',
@@ -174,7 +174,7 @@ final class AiSiteQueueStateServiceTest extends TestCase
         self::assertSame(['home_page', 'blog_list'], $state['stage1_page_progress']['running'] ?? []);
         self::assertSame(
             'hero',
-            (string)($state['stage1_page_progress']['details'][0]['blocks'][0]['block_key'] ?? '')
+            (string)($state['stage1_page_progress']['details'][0]['block_rows'][0]['block_key'] ?? '')
         );
     }
 }

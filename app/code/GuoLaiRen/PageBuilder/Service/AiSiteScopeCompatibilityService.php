@@ -20,7 +20,6 @@ class AiSiteScopeCompatibilityService
     public const WORKSPACE_STATUS_PUBLISHED = 'published';
     public const WORKSPACE_STATUS_FAILED = 'failed';
     public const DUPLICATED_STAGE_ONE_STORAGE_KEYS = [
-        'confirmed_stage1_plan_book',
         'theme_context_snapshot',
         'shared_prompt_context',
     ];
@@ -50,7 +49,8 @@ class AiSiteScopeCompatibilityService
 
     public function __construct(
         private readonly LayoutConfigNormalizer $layoutConfigNormalizer,
-        private readonly ?AiSiteHtmlBlocksBuildService $aiSiteHtmlBlocksBuildService = null,
+        private readonly ?AiSiteHtmlBlockNodesBuildService $aiSiteHtmlBlockNodesBuildService = null,
+        private readonly ?AiSitePlanJsonStateService $planJsonStateService = null,
     ) {
     }
 
@@ -62,15 +62,14 @@ class AiSiteScopeCompatibilityService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    public function stripDeprecatedScopeArtifactKeys(array $scope): array
+    public function stripUnsupportedScopeArtifactKeys(array $scope): array
     {
         foreach ([
-            'execution_blueprint',
-            'execution_blueprint_draft',
-            'execution_blueprint_confirmed_signature',
-            'execution_blueprint_confirmed_at',
-            'build_blueprint',
-            'build_tasks',
+            'plan_confirmed',
+            'plan_confirmed_at',
+            'plan_confirmed_stale_input',
+            'plan_confirmed_stale_input_at',
+            'plan_projection',
             'task_plan',
             'build_order',
         ] as $key) {
@@ -82,7 +81,7 @@ class AiSiteScopeCompatibilityService
                 if (!\is_array($stageRefs)) {
                     continue;
                 }
-                foreach (['execution_blueprint', 'build_blueprint'] as $artifactKey) {
+                foreach (['plan_projection'] as $artifactKey) {
                     unset($scope['_artifact_refs'][$stageCode][$artifactKey]);
                 }
                 if ($scope['_artifact_refs'][$stageCode] === []) {
@@ -94,12 +93,9 @@ class AiSiteScopeCompatibilityService
             }
         }
 
-        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
-        $confirmed = \is_array($planWorkbench['confirmed'] ?? null) ? $planWorkbench['confirmed'] : [];
-        if ($confirmed !== []) {
-            unset($confirmed['execution_blueprint']);
-            $planWorkbench['confirmed'] = $confirmed;
-            $scope['plan_workbench'] = $planWorkbench;
+        if (\is_array($scope['plan_json'] ?? null)) {
+            $editor = $this->planJsonStateService ?? new AiSitePlanJsonStateService();
+            $scope['plan_json'] = $editor->normalizePlanJson($scope['plan_json']);
         }
 
         return $scope;
@@ -107,7 +103,7 @@ class AiSiteScopeCompatibilityService
 
     public function normalizeScope(array $scope): array
     {
-        $normalized = $this->stripDeprecatedScopeArtifactKeys($scope);
+        $normalized = $this->stripUnsupportedScopeArtifactKeys($scope);
         $normalized[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] = $this->normalizePageTypesUserCustomized(
             $scope[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] ?? null
         ) ? 1 : 0;
@@ -171,40 +167,11 @@ class AiSiteScopeCompatibilityService
         if ($explicitContentLocale !== '') {
             $normalized['content_locale'] = $explicitContentLocale;
             $normalized['website_profile']['content_locale'] = $explicitContentLocale;
+            $normalized = $this->normalizePlanJsonStageOneContractLocale($normalized, $explicitContentLocale);
             $normalized['website_profile'] = $this->sanitizeWebsiteProfileVisitorMetadataForLocale(
                 $normalized['website_profile'],
                 $explicitContentLocale
             );
-            if (\is_array($normalized['plan_json'] ?? null)) {
-                $normalized['plan_json']['content_locale'] = $explicitContentLocale;
-                if (\is_array($normalized['plan_json']['i18n'] ?? null)) {
-                    $normalized['plan_json']['i18n']['content_locale'] = $explicitContentLocale;
-                }
-            }
-            if (\is_array($normalized['build_plan_v2'] ?? null)) {
-                if (!\is_array($normalized['build_plan_v2']['i18n'] ?? null)) {
-                    $normalized['build_plan_v2']['i18n'] = [];
-                }
-                $normalized['build_plan_v2']['i18n']['primary_locale'] = $explicitContentLocale;
-            }
-            if (\is_array($normalized['stage1_contract'] ?? null)) {
-                $normalized['stage1_contract']['content_locale'] = $explicitContentLocale;
-                $normalized['stage1_contract']['plan_locale'] = $explicitContentLocale;
-                if (\is_array($normalized['stage1_contract']['i18n'] ?? null)) {
-                    $normalized['stage1_contract']['i18n']['content_locale'] = $explicitContentLocale;
-                    $normalized['stage1_contract']['i18n']['primary_locale'] = $explicitContentLocale;
-                }
-                if (\is_array($normalized['stage1_contract']['shared_prompt_context'] ?? null)) {
-                    $normalized['stage1_contract']['shared_prompt_context']['content_locale'] = $explicitContentLocale;
-                }
-                if (\is_array($normalized['stage1_contract']['shared_components'] ?? null)) {
-                    foreach ($normalized['stage1_contract']['shared_components'] as $componentKey => $componentPlan) {
-                        if (\is_array($componentPlan)) {
-                            $normalized['stage1_contract']['shared_components'][$componentKey]['content_locale'] = $explicitContentLocale;
-                        }
-                    }
-                }
-            }
             $normalized['virtual_pages_by_type'] = $this->localizeVirtualPagesForVisitorLocale(
                 $normalized['virtual_pages_by_type'],
                 $explicitContentLocale,
@@ -221,9 +188,7 @@ class AiSiteScopeCompatibilityService
                 $normalized['page_type_layouts'][$pageType] = $this->localizeSharedLayoutConfigForScope($layout, $normalized, (string)$pageType);
             }
         }
-        $routeContractRaw = \is_array($scope['page_route_contract'] ?? null)
-            ? $scope['page_route_contract']
-            : (\is_array($scope['stage1_contract']['page_route_contract'] ?? null) ? $scope['stage1_contract']['page_route_contract'] : []);
+        $routeContractRaw = \is_array($scope['page_route_contract'] ?? null) ? $scope['page_route_contract'] : [];
         $normalized['page_route_contract'] = $this->getPageRouteContractService()->normalize(
             $routeContractRaw,
             $normalized['page_types'],
@@ -244,7 +209,7 @@ class AiSiteScopeCompatibilityService
      */
     public function ensureManifestFields(array $scope): array
     {
-        $manifestSource = $this->buildPlanManifestSource($scope);
+        $manifestSource = $this->PlanJsonManifestSource($scope);
         if (!\is_array($scope['design_tokens'] ?? null) || $scope['design_tokens'] === []) {
             $scope['design_tokens'] = (new AiSiteDesignTokenResolver())->resolveFromBlueprint($manifestSource);
         }
@@ -273,21 +238,12 @@ class AiSiteScopeCompatibilityService
     /**
      * @param array<string, mixed> $scope
      */
-    public function hasConfirmedStageOnePlanForBuildPlan(array $scope): bool
+    public function hasConfirmedPlanJsonForBuild(array $scope): bool
     {
-        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $buildPlanMeta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
-        if ((int)($scope['build_plan_confirmed'] ?? 0) === 1
-            || \strtolower(\trim((string)($buildPlanMeta['status'] ?? ''))) === 'confirmed'
-        ) {
-            return true;
-        }
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $editor = $this->planJsonStateService ?? new AiSitePlanJsonStateService();
 
-        if ((int)($scope['plan_confirmed'] ?? 0) === 1 && $this->hasPersistedStageOnePlan($scope)) {
-            return true;
-        }
-
-        return false;
+        return $editor->isConfirmed($planJson) && $this->hasPersistedStageOnePlan($scope);
     }
 
     /**
@@ -303,9 +259,9 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
-     * A markdown note or legacy/test artifact is not enough to skip stage-one
+     * A markdown note or test artifact is not enough to skip stage-one
      * generation. The queue may only treat a persisted plan as reusable when
-     * the strong-contract sections needed by downstream page planning exist.
+     * the strong-contract sections needed by downstream plan JSON pagening exist.
      *
      * @param array<string, mixed> $planJson
      */
@@ -364,8 +320,8 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
-     * Newer stage-one artifacts are validated by the contract validator and may
-     * intentionally omit legacy requirement_expansion/theme_detail fields. Treat
+     * Stage-one artifacts are validated by the contract validator and may
+     * intentionally omit requirement_expansion/theme_detail fields. Treat
      * a passed contract report plus concrete page/block plans as reusable while
      * still rejecting light manifests such as {"content_locale":"en_US"}.
      *
@@ -380,14 +336,9 @@ class AiSiteScopeCompatibilityService
             return false;
         }
 
-        foreach (['pages', 'page_plans'] as $key) {
-            $pages = \is_array($planJson[$key] ?? null) ? $planJson[$key] : [];
-            if ($this->stageOnePlanPagesContainBlocks($pages)) {
-                return true;
-            }
-        }
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
 
-        return false;
+        return $this->stageOnePlanPagesContainBlocks($pages);
     }
 
     /**
@@ -412,8 +363,11 @@ class AiSiteScopeCompatibilityService
             if (!\is_array($page)) {
                 continue;
             }
-            foreach (['blocks', 'block_blueprints', 'ordered_block_keys'] as $key) {
-                if (\is_array($page[$key] ?? null) && $page[$key] !== []) {
+            foreach ($page as $key => $value) {
+                if (!\is_string($key) || !$this->isStageOneDynamicBlockKey($key) || !\is_array($value)) {
+                    continue;
+                }
+                if ($value !== []) {
                     return true;
                 }
             }
@@ -425,25 +379,76 @@ class AiSiteScopeCompatibilityService
         return false;
     }
 
+    private function isStageOneDynamicBlockKey(string $key): bool
+    {
+        static $metaKeys = [
+            'page_key' => true,
+            'page_type' => true,
+            'type' => true,
+            'status' => true,
+            'message' => true,
+            'error' => true,
+            'error_message' => true,
+            'updated_at' => true,
+            'started_at' => true,
+            'finished_at' => true,
+            'attempt_no' => true,
+            'result_ref' => true,
+            'title' => true,
+            'label' => true,
+            'page_label' => true,
+            'page_title' => true,
+            'page_goal' => true,
+            'page_status' => true,
+            'content_locale' => true,
+            'shared_context_hash' => true,
+            'theme_context_hash' => true,
+            'assembly_version' => true,
+            'generation_method' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'page_context_hash' => true,
+            'block_nodes' => true,
+            'block_nodes' => true,
+            'ordered_block_keys' => true,
+            'seo' => true,
+            'meta_title' => true,
+            'meta_description' => true,
+            'meta_keywords' => true,
+            'route' => true,
+            'slug' => true,
+            'path' => true,
+            'layout' => true,
+            'sections' => true,
+            'section_refinements' => true,
+            'content' => true,
+            'description' => true,
+            'summary' => true,
+            'html' => true,
+            'html_content' => true,
+            'fields' => true,
+        ];
+        $key = \trim($key);
+
+        return $key !== '' && !isset($metaKeys[$key]);
+    }
+
     /**
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
     public function normalizeConfirmedPlanFlag(array $scope): array
     {
-        if ($this->hasConfirmedStageOnePlanForBuildPlan($scope)) {
-            $scope['plan_confirmed'] = 1;
-            $confirmedAt = \trim((string)($scope['build_plan_confirmed_at'] ?? ''));
-            if ($confirmedAt !== '' && \trim((string)($scope['plan_confirmed_at'] ?? '')) === '') {
-                $scope['plan_confirmed_at'] = $confirmedAt;
-            }
+        if (\is_array($scope['plan_json'] ?? null)) {
+            $editor = $this->planJsonStateService ?? new AiSitePlanJsonStateService();
+            $scope['plan_json'] = $editor->normalizePlanJson($scope['plan_json']);
         }
 
         return $scope;
     }
 
     public const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
-    public const WORKSPACE_TRACK_HTML_BLOCKS = 'html_blocks';
+    public const WORKSPACE_TRACK_HTML_BLOCK_NODES = 'html_block_nodes';
 
     public function normalizeWorkspaceTrack(string $raw): string
     {
@@ -486,26 +491,17 @@ class AiSiteScopeCompatibilityService
             return $pageTypesUserCustomized ? [Page::TYPE_HOME] : $this->defaultPageTypes();
         }
 
-        if (!$pageTypesUserCustomized && $this->matchesLegacyDefaultPageTypes($providedPageTypes)) {
-            return $this->defaultPageTypes();
-        }
-
         return $this->normalizePageTypes($providedPageTypes);
     }
 
     /**
-     * Old website-hub drafts may mark the legacy home/about/contact set as
-     * customized before the brief-driven pages are inferred. Keep true manual
-     * selections intact, but expand that legacy set when the brief asks for
-     * product/academy style pages that PageBuilder maps to generic page codes.
-     *
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    public function augmentLegacyDefaultPageTypesFromBrief(array $scope): array
+    public function augmentDefaultPageTypesFromBrief(array $scope): array
     {
         $pageTypes = $this->resolveScopedPageTypes($scope);
-        if (!$this->matchesLegacyDefaultPageTypes($pageTypes)) {
+        if ($this->normalizePageTypesUserCustomized($scope[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] ?? null)) {
             return $scope;
         }
 
@@ -625,18 +621,6 @@ class AiSiteScopeCompatibilityService
     /**
      * @return list<string>
      */
-    private function legacyDefaultPageTypes(): array
-    {
-        return [
-            Page::TYPE_HOME,
-            Page::TYPE_ABOUT,
-            Page::TYPE_CONTACT,
-        ];
-    }
-
-    /**
-     * @return list<string>
-     */
     private function extractAllowedPageTypes(mixed $raw): array
     {
         if (\is_array($raw)) {
@@ -694,14 +678,6 @@ class AiSiteScopeCompatibilityService
         }
 
         return $codes;
-    }
-
-    /**
-     * @param list<string> $pageTypes
-     */
-    private function matchesLegacyDefaultPageTypes(array $pageTypes): bool
-    {
-        return $this->samePageTypeSet($pageTypes, $this->legacyDefaultPageTypes());
     }
 
     /**
@@ -845,15 +821,13 @@ class AiSiteScopeCompatibilityService
         $siteTitle = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''));
         $contentLocale = $this->resolveContentLocale($scope, $websiteProfile);
         $pageRouteContract = $this->getPageRouteContractService()->normalize(
-            \is_array($scope['page_route_contract'] ?? null)
-                ? $scope['page_route_contract']
-                : (\is_array($scope['stage1_contract']['page_route_contract'] ?? null) ? $scope['stage1_contract']['page_route_contract'] : []),
+            \is_array($scope['page_route_contract'] ?? null) ? $scope['page_route_contract'] : [],
             $pageTypes,
             \array_replace($scope, ['website_profile' => $websiteProfile]),
             $contentLocale
         );
         $routesByType = $this->getPageRouteContractService()->routesByType($pageRouteContract);
-        $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder = $this->aiSiteHtmlBlockNodesBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlockNodesBuildService::class);
 
         foreach ($pageTypes as $pageType) {
             $record = $existing[$pageType] ?? $this->normalizeVirtualPageRecord([], $pageType);
@@ -894,19 +868,13 @@ class AiSiteScopeCompatibilityService
                 $websiteProfile,
                 $scope
             );
-            $shouldHydrateLegacyBlocks = $this->shouldHydrateLegacyBlocks($record, $layouts[$pageType] ?? [], $pageType);
-            $placeholderBlocks = [];
-            if ($shouldHydrateLegacyBlocks && $allowAiPlaceholderGeneration) {
-                $placeholderBlocks = $this->buildWorkspacePlaceholderBlocks($blocksBuilder, $pageType, $websiteProfile, $scope);
-            }
-            if ($shouldHydrateLegacyBlocks) {
-                $record['blocks'] = $placeholderBlocks;
-            } else {
-                $record['blocks'] = $this->hydrateEditableBlockMetadata(
-                    \is_array($record['blocks'] ?? null) ? $record['blocks'] : [],
-                    $placeholderBlocks
-                );
-            }
+            $placeholderBlocks = $allowAiPlaceholderGeneration
+                ? $this->buildWorkspacePlaceholderBlocks($blocksBuilder, $pageType, $websiteProfile, $scope)
+                : [];
+            $record['block_nodes'] = $this->hydrateEditableBlockMetadata(
+                \is_array($record['block_nodes'] ?? null) ? $record['block_nodes'] : [],
+                $placeholderBlocks
+            );
             $existing[$pageType] = $record;
         }
 
@@ -923,7 +891,7 @@ class AiSiteScopeCompatibilityService
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
      */    private function buildWorkspacePlaceholderBlocks(
-        AiSiteHtmlBlocksBuildService $blocksBuilder,
+        AiSiteHtmlBlockNodesBuildService $blocksBuilder,
         string $pageType,
         array $websiteProfile,
         array $scope
@@ -932,8 +900,7 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
-     * 判断 HTML 区块 workspace_track 是否满足"每个 page type 都已具备 blocks"的完整性条件。
-     * 控制器 publish checklist / task plan auto-dispatch 会用该判断决定是否允许跨阶段推进。
+     * 闁硅矇鍐ㄧ厬闁?publish checklist / task plan auto-dispatch 濞村吋姘ㄩ弫銈囨嫚閵夈儱鐏查柡鍌ゅ幖閸犲懐鈧纰嶅Σ鎼佸触閿曗偓閸樻垹鎷嬪灞剧《闂傚啳鍩栭宀勫箳閵娿劎绠婚柕?
      *
      * @param array<string, array<string, mixed>> $virtualPagesByType
      * @param list<string> $pageTypes
@@ -948,7 +915,7 @@ class AiSiteScopeCompatibilityService
             if (!\is_array($record)) {
                 return false;
             }
-            $blocks = $record['blocks'] ?? null;
+            $blocks = $record['block_nodes'] ?? null;
             if (!\is_array($blocks) || $blocks === []) {
                 return false;
             }
@@ -1082,10 +1049,6 @@ class AiSiteScopeCompatibilityService
             return $this->emptyLayoutConfig();
         }
 
-        if (isset($raw['regions']) || isset($raw['components'])) {
-            return $this->normalizeLegacyRegionsLayout($raw, $pageType);
-        }
-
         $layout = $raw['layout_config'] ?? $raw;
         if (!\is_array($layout)) {
             return $this->emptyLayoutConfig();
@@ -1186,89 +1149,6 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
-     * @param array<string, mixed> $layout
-     * @return array{version:string,page_id:int,use_original_template:bool,header:array{component:string,config:array<string,mixed>},content:list<array<string,mixed>>,footer:array{component:string,config:array<string,mixed>}}
-     */
-    private function normalizeLegacyRegionsLayout(array $layout, string $pageType = ''): array
-    {
-        $regions = \is_array($layout['regions'] ?? null) ? $layout['regions'] : [];
-        $components = \is_array($layout['components'] ?? null) ? $layout['components'] : [];
-
-        $header = $this->normalizeRegionComponent($regions['header'] ?? []);
-        $footer = $this->normalizeRegionComponent($regions['footer'] ?? []);
-        $content = [];
-
-        foreach ($components as $index => $component) {
-            if (!\is_array($component)) {
-                continue;
-            }
-
-            $code = $this->layoutConfigNormalizer->normalizeComponentCode(
-                (string)($component['code'] ?? $component['component'] ?? '')
-            );
-            if ($code === '') {
-                continue;
-            }
-
-            $region = \strtolower(\trim((string)($component['region'] ?? 'content')));
-            $config = \is_array($component['config'] ?? null) ? $component['config'] : [];
-            if ($config === []) {
-                $title = \trim((string)($component['title'] ?? ''));
-                $description = \trim((string)($component['description'] ?? ''));
-                $config = \array_filter([
-                    'title' => $title,
-                    'description' => $description,
-                    'page_type' => $pageType,
-                ], static fn(mixed $value): bool => $value !== '');
-            }
-
-            if ($region === 'header' && $header['component'] === '') {
-                $header = ['component' => $code, 'config' => $config];
-                continue;
-            }
-
-            if ($region === 'footer' && $footer['component'] === '') {
-                $footer = ['component' => $code, 'config' => $config];
-                continue;
-            }
-
-            $content[] = [
-                'code' => $code,
-                'enabled' => !\array_key_exists('enabled', $component) || (bool)$component['enabled'],
-                'config' => $config,
-                'instance_id' => (string)($component['instance_id'] ?? $component['id'] ?? ''),
-                'sort_order' => (int)($component['sort_order'] ?? (($index + 1) * 10)),
-            ];
-        }
-
-        return [
-            'version' => '1.0',
-            'page_id' => 0,
-            'use_original_template' => false,
-            'header' => $header,
-            'content' => $content,
-            'footer' => $footer,
-        ];
-    }
-
-    /**
-     * @param array<string, mixed> $region
-     * @return array{component:string,config:array<string,mixed>}
-     */
-    private function normalizeRegionComponent(array $region): array
-    {
-        $component = $this->layoutConfigNormalizer->normalizeComponentCode(
-            (string)($region['component'] ?? $region['code'] ?? '')
-        );
-        $config = \is_array($region['config'] ?? null) ? $region['config'] : [];
-
-        return [
-            'component' => $component,
-            'config' => $config,
-        ];
-    }
-
-    /**
      * @param mixed $row
      * @return array<string, mixed>
      */
@@ -1278,9 +1158,9 @@ class AiSiteScopeCompatibilityService
         $resolvedType = \trim((string)($data['page_type'] ?? $data['type'] ?? $pageType));
         $label = (string)(Page::getPageTypes()[$resolvedType] ?? $resolvedType);
 
-        $blocks = $data['blocks'] ?? null;
-        if (!\is_array($blocks) && isset($data['ai_layout']['blocks']) && \is_array($data['ai_layout']['blocks'])) {
-            $blocks = $data['ai_layout']['blocks'];
+        $blocks = $data['block_nodes'] ?? null;
+        if (!\is_array($blocks) && isset($data['ai_layout']['block_nodes']) && \is_array($data['ai_layout']['block_nodes'])) {
+            $blocks = $data['ai_layout']['block_nodes'];
         }
         $blocks = \is_array($blocks) ? $this->normalizeBlocksList($blocks) : [];
 
@@ -1301,7 +1181,7 @@ class AiSiteScopeCompatibilityService
             'last_generated_at' => \trim((string)($data['last_generated_at'] ?? '')),
             'materialized_page_id' => (int)($data['materialized_page_id'] ?? 0),
             'section_refinements' => $this->normalizeStringMap($data['section_refinements'] ?? []),
-            'blocks' => $blocks,
+            'block_nodes' => $blocks,
         ];
     }
 
@@ -1424,56 +1304,6 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
-     * @param array<string, mixed> $record
-     * @param array<string, mixed> $layout
-     */
-    private function shouldHydrateLegacyBlocks(array $record, array $layout, string $pageType): bool
-    {
-        $blocks = \is_array($record['blocks'] ?? null) ? $record['blocks'] : [];
-        if ($blocks !== []) {
-            return false;
-        }
-
-        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
-        if ($content === []) {
-            return true;
-        }
-
-        if (\count($content) !== 1) {
-            return false;
-        }
-
-        $code = \trim((string)($content[0]['code'] ?? $content[0]['component'] ?? ''));
-        if ($code === '') {
-            return true;
-        }
-
-        $slugPageType = \str_replace('_', '-', $pageType);
-        $genericCodes = [
-            'content/' . $slugPageType,
-            'content/' . $pageType,
-            'content/ai-generated-section',
-            'ai-generated-section',
-            'content-ai-generated-section',
-        ];
-        if (\in_array($code, $genericCodes, true)) {
-            return true;
-        }
-
-        if (\preg_match('#^content/[^/]+$#', $code) === 1) {
-            foreach (['-hero', '-highlights', '-details', '-cta', '-story', '-values', '-channels', '-process', '-coverage', '-rights', '-topics', '-structure', '-modules', '-steps'] as $marker) {
-                if (\str_contains($code, $marker)) {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
      * @param list<array<string,mixed>> $existingBlocks
      * @param list<array<string,mixed>> $defaultBlocks
      * @return list<array<string,mixed>>
@@ -1481,7 +1311,7 @@ class AiSiteScopeCompatibilityService
     private function hydrateEditableBlockMetadata(array $existingBlocks, array $defaultBlocks): array
     {
         if ($defaultBlocks === []) {
-            $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
+            $blocksBuilder = $this->aiSiteHtmlBlockNodesBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlockNodesBuildService::class);
 
             return \array_values(\array_map(
                 static fn(array $block): array => $blocksBuilder->hydrateGeneratedBlockMetadata($block),
@@ -1502,7 +1332,7 @@ class AiSiteScopeCompatibilityService
         }
 
         $hydrated = [];
-        $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder = $this->aiSiteHtmlBlockNodesBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlockNodesBuildService::class);
         foreach ($existingBlocks as $block) {
             if (!\is_array($block)) {
                 continue;
@@ -1550,7 +1380,7 @@ class AiSiteScopeCompatibilityService
             if (!\is_array($b)) {
                 continue;
             }
-            if (AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($b)) {
+            if (AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($b)) {
                 continue;
             }
             $bid = \trim((string)($b['block_id'] ?? ''));
@@ -1726,6 +1556,7 @@ class AiSiteScopeCompatibilityService
             $scope['website_profile'] = [];
         }
         $scope['website_profile']['content_locale'] = $locale;
+        $scope = $this->normalizePlanJsonStageOneContractLocale($scope, $locale);
 
         return $scope;
     }
@@ -1734,24 +1565,34 @@ class AiSiteScopeCompatibilityService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    private function buildPlanManifestSource(array $scope): array
+    private function normalizePlanJsonStageOneContractLocale(array $scope, string $locale): array
     {
-        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        if ($buildPlan !== []) {
-            $designManifest = \is_array($buildPlan['design_manifest'] ?? null) ? $buildPlan['design_manifest'] : [];
-            $sourceTruth = \is_array($buildPlan['source_of_truth'] ?? null) ? $buildPlan['source_of_truth'] : [];
-            $requirements = \is_array($sourceTruth['user_requirements'] ?? null) ? $sourceTruth['user_requirements'] : [];
-
-            return [
-                'theme_design' => \is_array($designManifest['visual_contract'] ?? null)
-                    ? $designManifest['visual_contract']
-                    : (\is_array($designManifest['theme_design'] ?? null) ? $designManifest['theme_design'] : []),
-                'theme_style' => \is_array($designManifest['theme_style'] ?? null) ? $designManifest['theme_style'] : [],
-                'palette' => \is_array($designManifest['palette'] ?? null) ? $designManifest['palette'] : [],
-                'site_strategy' => $requirements,
-            ];
+        if (!\is_array($scope['plan_json']['stage1_validation_contract'] ?? null)) {
+            return $scope;
         }
 
+        $scope['plan_json']['stage1_validation_contract']['content_locale'] = $locale;
+        $scope['plan_json']['stage1_validation_contract']['plan_locale'] = $locale;
+        if (\is_array($scope['plan_json']['stage1_validation_contract']['shared_prompt_context'] ?? null)) {
+            $scope['plan_json']['stage1_validation_contract']['shared_prompt_context']['content_locale'] = $locale;
+        }
+        if (\is_array($scope['plan_json']['stage1_validation_contract']['shared_components'] ?? null)) {
+            foreach ($scope['plan_json']['stage1_validation_contract']['shared_components'] as $componentKey => $component) {
+                if (\is_array($component)) {
+                    $scope['plan_json']['stage1_validation_contract']['shared_components'][$componentKey]['content_locale'] = $locale;
+                }
+            }
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function PlanJsonManifestSource(array $scope): array
+    {
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
         return [
             'theme_design' => \is_array($planJson['theme_design'] ?? null) ? $planJson['theme_design'] : [],
@@ -1807,7 +1648,6 @@ class AiSiteScopeCompatibilityService
     {
         foreach ([
             $scope['plan_generated_locale'] ?? null,
-            $scope['plan_workbench']['confirmed']['plan_generated_locale'] ?? null,
             $scope['plan_json']['plan_generated_locale'] ?? null,
         ] as $candidate) {
             if (!\is_scalar($candidate)) {
@@ -1893,10 +1733,6 @@ class AiSiteScopeCompatibilityService
             $scope['site_description'] ?? null,
             $scope['source_brief'] ?? null,
             $scope['requirements']['expanded_brief'] ?? null,
-            $scope['build_plan_v2']['site_brief']['summary'] ?? null,
-            $scope['build_plan_v2']['i18n']['primary_locale'] ?? null,
-            $scope['plan_json']['content_locale'] ?? null,
-            $scope['plan_json']['i18n']['content_locale'] ?? null,
             $websiteProfile['brief_description'] ?? null,
             $websiteProfile['_ai_profile']['source_brief'] ?? null,
         ] as $candidate) {
@@ -1913,16 +1749,16 @@ class AiSiteScopeCompatibilityService
             return '';
         }
 
-        if (\preg_match('/\bhi(?:[_-]IN)?\b|Hindi|Hindustani|Devanagari|印地语|印地文|印度语|हिन्दी|हिंदी/iu', $text) === 1) {
+        if (\preg_match('/\bhi(?:[_-]IN)?\b|Hindi|Hindustani|Devanagari|闁告婢樺﹢瀵告嫚閻″懘宕￠弶鎸庡嬀闁哄倸娅夐柛妤佹緲鐎瑰磭鎷犻悺鍛殽閻忓被浠ч崯韬插妴椤ㄦ帒鏆ラ敂娈挎當|閸熷墎浜撮妵鐔锋殽閸屾洏浜為崯灏佸亾/iu', $text) === 1) {
             return 'hi_IN';
         }
-        if (\preg_match('/\bth(?:[_-]TH)?\b|Thai|泰语|泰文|ภาษาไทย/iu', $text) === 1) {
+        if (\preg_match('/\bth(?:[_-]TH)?\b|Thai|婵炲濯介顣㈡繛澶屽閺嬪剟閸犳梻濮憰鍡楁灃閳硅壈顩崰娆忓缁楁艾鏋?iu', $text) === 1) {
             return 'th_TH';
         }
-        if (\preg_match('/\bzh(?:[_-](?:Hans|CN|SG))?\b|简体中文|中文|Chinese/iu', $text) === 1) {
+        if (\preg_match('/\bzh(?:[_-](?:Hans|CN|SG))?\b|缂佺姭鍋撳ù锝嗘尫閼垫垿寮崳鐔哥▔椤撶喐鐎畖Chinese/iu', $text) === 1) {
             return 'zh_Hans_CN';
         }
-        if (\preg_match('/\bru(?:[_-]RU)?\b|Russian|俄语|русский/iu', $text) === 1) {
+        if (\preg_match('/\bru(?:[_-]RU)?\b|Russian|濞ｅ洤瀚顣㈢憸澶庮槻鐟滃顦板▔缁樺櫜濞?iu', $text) === 1) {
             return 'ru_RU';
         }
 
@@ -1973,331 +1809,94 @@ class AiSiteScopeCompatibilityService
 
     private function localizeBuildText(string $key, string $locale): string
     {
-        if ($this->isHindiLocale($locale)) {
-            return match ($key) {
-                'home' => "\u{0939}\u{094B}\u{092E}",
-                'about' => "\u{0939}\u{092E}\u{093E}\u{0930}\u{0947} \u{092C}\u{093E}\u{0930}\u{0947} \u{092E}\u{0947}\u{0902}",
-                'contact' => "\u{0938}\u{0902}\u{092A}\u{0930}\u{094D}\u{0915} \u{0915}\u{0930}\u{0947}\u{0902}",
-                'blog' => "\u{092C}\u{094D}\u{0932}\u{0949}\u{0917}",
-                'privacy_policy' => "\u{0917}\u{094B}\u{092A}\u{0928}\u{0940}\u{092F}\u{0924}\u{093E} \u{0928}\u{0940}\u{0924}\u{093F}",
-                'terms_of_service' => "\u{0938}\u{0947}\u{0935}\u{093E} \u{0915}\u{0940} \u{0936}\u{0930}\u{094D}\u{0924}\u{0947}\u{0902}",
-                'refund_policy' => "\u{0930}\u{093F}\u{092B}\u{0902}\u{0921} \u{0928}\u{0940}\u{0924}\u{093F}",
-                'shipping_policy' => "\u{0936}\u{093F}\u{092A}\u{093F}\u{0902}\u{0917} \u{0928}\u{0940}\u{0924}\u{093F}",
-                'cookie_policy' => "\u{0915}\u{0941}\u{0915}\u{0940} \u{0928}\u{0940}\u{0924}\u{093F}",
-                'policy_info' => "\u{0928}\u{0940}\u{0924}\u{093F} \u{091C}\u{093E}\u{0928}\u{0915}\u{093E}\u{0930}\u{0940}",
-                'featured_pages' => "\u{092E}\u{0941}\u{0916}\u{094D}\u{092F} \u{092A}\u{0947}\u{091C}",
-                'all_pages' => "\u{0938}\u{092D}\u{0940} \u{092A}\u{0947}\u{091C}",
-                'all_rights_reserved' => "\u{0938}\u{0930}\u{094D}\u{0935}\u{093E}\u{0927}\u{093F}\u{0915}\u{093E}\u{0930} \u{0938}\u{0941}\u{0930}\u{0915}\u{094D}\u{0937}\u{093F}\u{0924}\u{0964}",
-                'brand_summary' => "\u{0915}\u{093E}\u{0930}\u{094D}\u{0921} \u{0917}\u{0947}\u{092E} APK \u{0921}\u{093E}\u{0909}\u{0928}\u{0932}\u{094B}\u{0921}, \u{0928}\u{093F}\u{092F}\u{092E} \u{0914}\u{0930} \u{0938}\u{0939}\u{093E}\u{092F}\u{0924}\u{093E} \u{0915}\u{0947} \u{0932}\u{093F}\u{090F} \u{092D}\u{0930}\u{094B}\u{0938}\u{0947}\u{092E}\u{0902}\u{0926} \u{0915}\u{0947}\u{0902}\u{0926}\u{094D}\u{0930}\u{0964}",
-                'download_now' => "\u{0905}\u{092D}\u{0940} \u{0921}\u{093E}\u{0909}\u{0928}\u{0932}\u{094B}\u{0921} \u{0915}\u{0930}\u{0947}\u{0902}",
-                default => $key,
-            };
-        }
         $labels = [
-            'en' => [
-                'home' => 'Home',
-                'about' => 'About',
-                'contact' => 'Contact',
-                'blog' => 'Blog',
-                'blog_category' => 'Blog Categories',
-                'custom_page' => 'Page',
-                'privacy_policy' => 'Privacy Policy',
-                'terms_of_service' => 'Terms of Service',
-                'refund_policy' => 'Refund Policy',
-                'shipping_policy' => 'Shipping Policy',
-                'cookie_policy' => 'Cookie Policy',
-                'policy_info' => 'Policy Info',
-                'featured_pages' => 'Featured Pages',
-                'all_pages' => 'All Pages',
-                'all_rights_reserved' => 'All rights reserved.',
-                'brand_summary' => 'A curated destination with clear information, trusted support, and simple next steps.',
-                'download_now' => 'Download Now',
-            ],
-            'pt' => [
-                'home' => 'Início',
-                'about' => 'Sobre',
-                'contact' => 'Contato',
-                'blog' => 'Blog',
-                'blog_category' => 'Categorias',
-                'custom_page' => 'Pagina',
-                'privacy_policy' => 'Política de Privacidade',
-                'terms_of_service' => 'Termos de Serviço',
-                'refund_policy' => 'Política de Reembolso',
-                'shipping_policy' => 'Política de Envio',
-                'cookie_policy' => 'Política de Cookies',
-                'policy_info' => 'Informações legais',
-                'featured_pages' => 'Páginas principais',
-                'all_pages' => 'Todas as páginas',
-                'all_rights_reserved' => 'Todos os direitos reservados.',
-                'brand_summary' => 'Destino confiável para baixar APK de jogos de cartas, consultar regras e obter suporte.',
-                'download_now' => 'Baixar Agora',
-            ],
-            'th' => [
-                'home' => 'หน้าแรก',
-                'about' => 'เกี่ยวกับเรา',
-                'contact' => 'ติดต่อเรา',
-                'blog' => 'บทความ',
-                'privacy_policy' => 'นโยบายความเป็นส่วนตัว',
-                'terms_of_service' => 'ข้อกำหนดการใช้บริการ',
-                'refund_policy' => 'นโยบายการคืนเงิน',
-                'shipping_policy' => 'นโยบายการจัดส่ง',
-                'cookie_policy' => 'นโยบายคุกกี้',
-                'policy_info' => 'ข้อมูลนโยบาย',
-                'featured_pages' => 'หน้าสำคัญ',
-                'all_pages' => 'ทุกหน้า',
-                'all_rights_reserved' => 'สงวนลิขสิทธิ์',
-                'brand_summary' => 'เว็บไซต์เกมไพ่ APK ที่รวมข้อมูลดาวน์โหลด กติกา และช่องทางช่วยเหลือสำหรับผู้เล่น',
-                'download_now' => 'ดาวน์โหลดตอนนี้',
-            ],
-            'hi' => [
-                'home' => 'होम',
-                'about' => 'हमारे बारे में',
-                'contact' => 'संपर्क करें',
-                'blog' => 'ब्लॉग',
-                'privacy_policy' => 'गोपनीयता नीति',
-                'terms_of_service' => 'सेवा की शर्तें',
-                'refund_policy' => 'रिफंड नीति',
-                'shipping_policy' => 'शिपिंग नीति',
-                'cookie_policy' => 'कुकी नीति',
-                'policy_info' => 'नीति जानकारी',
-                'featured_pages' => 'मुख्य पेज',
-                'all_pages' => 'सभी पेज',
-                'all_rights_reserved' => 'सर्वाधिकार सुरक्षित।',
-                'brand_summary' => 'डाउनलोड, नियम और सहायता जानकारी के साथ एक कार्ड गेम APK गाइड',
-                'download_now' => 'अभी डाउनलोड करें',
-            ],
-            'zh' => [
-                'home' => '首页',
-                'about' => '关于我们',
-                'contact' => '联系我们',
-                'blog' => '博客',
-                'privacy_policy' => '隐私政策',
-                'terms_of_service' => '服务条款',
-                'refund_policy' => '退款政策',
-                'shipping_policy' => '配送政策',
-                'cookie_policy' => 'Cookie 政策',
-                'policy_info' => '政策信息',
-                'featured_pages' => '重点页面',
-                'all_pages' => '全部页面',
-                'all_rights_reserved' => '保留所有权利。',
-                'brand_summary' => '棋牌 APK 下载、规则与支持信息站点。',
-                'download_now' => '立即下载',
-            ],
-            'ru' => [
-                'home' => 'Главная',
-                'about' => 'О нас',
-                'contact' => 'Контакты',
-                'blog' => 'Блог',
-                'privacy_policy' => 'Политика конфиденциальности',
-                'terms_of_service' => 'Условия использования',
-                'refund_policy' => 'Политика возврата',
-                'shipping_policy' => 'Доставка',
-                'cookie_policy' => 'Политика Cookie',
-                'policy_info' => 'Правовая информация',
-                'featured_pages' => 'Основные разделы',
-                'all_pages' => 'Все разделы',
-                'all_rights_reserved' => 'Все права защищены.',
-                'brand_summary' => 'Сайт APK для карточных игр с информацией о загрузке, правилах и поддержке.',
-                'download_now' => 'Скачать сейчас',
-            ],
+            'home' => 'Home',
+            'about' => 'About',
+            'contact' => 'Contact',
+            'blog' => 'Blog',
+            'blog_category' => 'Blog Categories',
+            'custom_page' => 'Page',
+            'privacy_policy' => 'Privacy Policy',
+            'terms_of_service' => 'Terms of Service',
+            'refund_policy' => 'Refund Policy',
+            'shipping_policy' => 'Shipping Policy',
+            'cookie_policy' => 'Cookie Policy',
+            'policy_info' => 'Policy Info',
+            'featured_pages' => 'Featured Pages',
+            'all_pages' => 'All Pages',
+            'all_rights_reserved' => 'All rights reserved.',
+            'brand_summary' => 'A clear destination for downloads, policy information, and support.',
+            'download_now' => 'Download Now',
         ];
 
-        $family = $this->localeFamily($locale);
-        return (string)($labels[$family][$key] ?? $key);
-    }
-
-    private function localizeLinkItemsValue(mixed $value, string $locale): mixed
-    {
-        if (\is_array($value)) {
-            $items = [];
-            $seen = [];
-            foreach ($value as $item) {
-                if (!\is_array($item)) {
-                    continue;
-                }
-                $label = (string)($item['label'] ?? $item['text'] ?? $item['name'] ?? '');
-                $href = (string)($item['href'] ?? $item['url'] ?? '#');
-                $canonical = $this->canonicalNavLabelKey($label, $href, (string)($item['type'] ?? ''));
-                if ($canonical !== '') {
-                    $localized = $this->localizeBuildText($canonical, $locale);
-                    $item['label'] = $localized;
-                    $item['text'] = $localized;
-                    $item['name'] = $localized;
-                }
-                $dedupe = \strtolower($href . '|' . (string)($item['label'] ?? $item['text'] ?? $item['name'] ?? ''));
-                if (isset($seen[$dedupe])) {
-                    continue;
-                }
-                $seen[$dedupe] = true;
-                $items[] = $item;
-            }
-
-            return $items;
-        }
-
-        $raw = \trim((string)$value);
-        if ($raw === '') {
-            return $value;
-        }
-
-        $lines = [];
-        $seen = [];
-        foreach (\preg_split('/\r?\n/', $raw) ?: [] as $line) {
-            $line = \trim((string)$line);
-            if ($line === '') {
-                continue;
-            }
-            [$label, $href] = \array_pad(\explode('=>', $line, 2), 2, '#');
-            $label = \trim((string)$label);
-            $href = \trim((string)$href);
-            $canonical = $this->canonicalNavLabelKey($label, $href);
-            if ($canonical !== '') {
-                $label = $this->localizeBuildText($canonical, $locale);
-            }
-            $dedupe = \strtolower($href . '|' . $label);
-            if (isset($seen[$dedupe])) {
-                continue;
-            }
-            $seen[$dedupe] = true;
-            $lines[] = $label . '=>' . ($href !== '' ? $href : '#');
-        }
-
-        return \implode("\n", $lines);
-    }
-
-    private function canonicalNavLabelKey(string $label, string $href = '', string $type = ''): string
-    {
-        $typeMap = [
-            Page::TYPE_HOME => 'home',
-            Page::TYPE_ABOUT => 'about',
-            Page::TYPE_CONTACT => 'contact',
-            Page::TYPE_BLOG_LIST => 'blog',
-            Page::TYPE_BLOG => 'blog',
-            Page::TYPE_PRIVACY_POLICY => 'privacy_policy',
-            Page::TYPE_TERMS_OF_SERVICE => 'terms_of_service',
-            Page::TYPE_REFUND_POLICY => 'refund_policy',
-            Page::TYPE_SHIPPING_POLICY => 'shipping_policy',
-            Page::TYPE_COOKIE_POLICY => 'cookie_policy',
-            'policy_info' => 'policy_info',
-        ];
-        if (isset($typeMap[$type])) {
-            return $typeMap[$type];
-        }
-
-        $normalized = \strtolower(\trim(\preg_replace('/[\s\-_]+/u', ' ', $label) ?? $label));
-        $labelMap = [
-            'home' => 'home',
-            'homepage' => 'home',
-            '首页' => 'home',
-            '主页' => 'home',
-            'início' => 'home',
-            'inicio' => 'home',
-            'about' => 'about',
-            'about us' => 'about',
-            '关于我们' => 'about',
-            'sobre' => 'about',
-            'contact' => 'contact',
-            'contact us' => 'contact',
-            '联系我们' => 'contact',
-            'contato' => 'contact',
-            'blog' => 'blog',
-            'news' => 'blog',
-            'blog category' => 'blog_category',
-            'blog categories' => 'blog_category',
-            "\u{535A}\u{5BA2}\u{5206}\u{7C7B}" => 'blog_category',
-            'categorias' => 'blog_category',
-            'categorias do blog' => 'blog_category',
-            'custom page' => 'custom_page',
-            'page' => 'custom_page',
-            "\u{81EA}\u{5B9A}\u{4E49}\u{9875}\u{9762}" => 'custom_page',
-            'pagina' => 'custom_page',
-            'página' => 'custom_page',
-            'privacy policy' => 'privacy_policy',
-            'privacy' => 'privacy_policy',
-            '隐私政策' => 'privacy_policy',
-            'política de privacidade' => 'privacy_policy',
-            'politica de privacidade' => 'privacy_policy',
-            'terms of service' => 'terms_of_service',
-            'terms' => 'terms_of_service',
-            '服务条款' => 'terms_of_service',
-            'termos de serviço' => 'terms_of_service',
-            'termos de servico' => 'terms_of_service',
-            'refund policy' => 'refund_policy',
-            '退款政策' => 'refund_policy',
-            'política de reembolso' => 'refund_policy',
-            'politica de reembolso' => 'refund_policy',
-            'shipping policy' => 'shipping_policy',
-            '配送政策' => 'shipping_policy',
-            'política de envio' => 'shipping_policy',
-            'politica de envio' => 'shipping_policy',
-            'cookie policy' => 'cookie_policy',
-            'cookie' => 'cookie_policy',
-            'cookies' => 'cookie_policy',
-            'cookie政策' => 'cookie_policy',
-            'política de cookies' => 'cookie_policy',
-            'politica de cookies' => 'cookie_policy',
-            'policy info' => 'policy_info',
-            'policies' => 'policy_info',
-        ];
-        if (isset($labelMap[$normalized])) {
-            return $labelMap[$normalized];
-        }
-
-        if (\trim($href) === '') {
-            return '';
-        }
-
-        $path = \strtolower(\trim((string)(\parse_url($href, PHP_URL_PATH) ?: $href)));
-        $path = '/' . \trim($path, '/');
-        return match ($path) {
-            '/', '/home', '/index' => 'home',
-            '/about', '/about-us' => 'about',
-            '/contact', '/contact-us' => 'contact',
-            '/blog', '/news' => 'blog',
-            '/privacy', '/privacy-policy' => 'privacy_policy',
-            '/terms', '/terms-of-service' => 'terms_of_service',
-            '/refund', '/refund-policy' => 'refund_policy',
-            '/shipping', '/shipping-policy' => 'shipping_policy',
-            '/cookie', '/cookie-policy' => 'cookie_policy',
-            default => '',
-        };
+        return (string)($labels[$key] ?? $key);
     }
 
     private function localizeGenericPageTitle(string $title, string $locale): string
     {
-        if ($this->localeFamily($locale) === 'en' && $this->hasAnyCjkContent($title)) {
-            return '';
-        }
-        $canonical = $this->canonicalNavLabelKey($title);
-        if ($canonical === '') {
+        $normalized = $this->normalizePageTypeFromLabel($title);
+        if ($normalized === '') {
             return '';
         }
 
-        return $this->localizeBuildText($canonical, $locale);
+        return $this->localizePageTypeLabel($normalized, $locale) ?: $title;
+    }
+
+    private function localizeLinkItemsValue(mixed $value, string $locale): mixed
+    {
+        if (!\is_array($value)) {
+            return $value;
+        }
+
+        foreach ($value as $index => $item) {
+            if (\is_array($item)) {
+                foreach (['label', 'title', 'text'] as $key) {
+                    if (\array_key_exists($key, $item) && \is_scalar($item[$key])) {
+                        $item[$key] = $this->localizeGenericPageTitle((string)$item[$key], $locale);
+                    }
+                }
+                $value[$index] = $item;
+            } elseif (\is_scalar($item)) {
+                $value[$index] = $this->localizeGenericPageTitle((string)$item, $locale);
+            }
+        }
+
+        return $value;
+    }
+
+    private function normalizePageTypeFromLabel(string $label): string
+    {
+        $normalized = \strtolower(\trim(\preg_replace('/\s+/u', ' ', $label) ?? $label));
+        $map = [
+            'home' => Page::TYPE_HOME,
+            'about' => Page::TYPE_ABOUT,
+            'about us' => Page::TYPE_ABOUT,
+            'contact' => Page::TYPE_CONTACT,
+            'contact us' => Page::TYPE_CONTACT,
+            'blog' => Page::TYPE_BLOG,
+            'privacy' => Page::TYPE_PRIVACY_POLICY,
+            'privacy policy' => Page::TYPE_PRIVACY_POLICY,
+            'terms' => Page::TYPE_TERMS_OF_SERVICE,
+            'terms of service' => Page::TYPE_TERMS_OF_SERVICE,
+            'refund policy' => Page::TYPE_REFUND_POLICY,
+            'shipping policy' => Page::TYPE_SHIPPING_POLICY,
+            'cookie policy' => Page::TYPE_COOKIE_POLICY,
+        ];
+
+        return (string)($map[$normalized] ?? '');
+    }
+
+    private function looksLikeEnglishNavOrFooterLabel(string $value): bool
+    {
+        return $this->normalizePageTypeFromLabel($value) !== ''
+            || \in_array(\strtolower(\trim($value)), ['featured pages', 'all pages', 'policy info', 'download now'], true);
     }
 
     private function isGenericFooterBoilerplate(string $value): bool
     {
         $normalized = \strtolower(\trim(\preg_replace('/\s+/u', ' ', $value) ?? $value));
-        return \in_array($normalized, [
-            'a curated destination with clear information, trusted support, and simple next steps.',
-            'featured',
-            'featured pages',
-            'quick links',
-            'policy info',
-            'policies',
-            'all pages',
-            'all rights reserved.',
-            'website',
-            'site profile',
-            'website profile',
-            'websiteprofile',
-        ], true);
-    }
 
-    private function looksLikeEnglishNavOrFooterLabel(string $value): bool
-    {
-        return \preg_match('/^(?:featured|featured pages|quick links|policy info|policies|all pages|home|about|contact|blog|privacy policy|terms of service|all rights reserved\.?|download now|download apk)$/iu', \trim($value)) === 1;
+        return \in_array($normalized, ['all rights reserved.', 'all rights reserved', 'copyright'], true);
     }
 
     private function localeFamily(string $locale): string
@@ -2324,42 +1923,23 @@ class AiSiteScopeCompatibilityService
 
     private function localizePageTypeLabel(string $pageType, string $locale): string
     {
-        $label = match ($pageType) {
-            Page::TYPE_HOME => $this->localizeBuildText('home', $locale),
-            Page::TYPE_ABOUT => $this->localizeBuildText('about', $locale),
-            Page::TYPE_CONTACT => $this->localizeBuildText('contact', $locale),
-            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $this->localizeBuildText('blog', $locale),
-            Page::TYPE_BLOG_CATEGORY => $this->localizeBuildText('blog_category', $locale),
-            Page::TYPE_CUSTOM => $this->localizeBuildText('custom_page', $locale),
-            Page::TYPE_PRIVACY_POLICY => $this->localizeBuildText('privacy_policy', $locale),
-            Page::TYPE_TERMS_OF_SERVICE => $this->localizeBuildText('terms_of_service', $locale),
-            Page::TYPE_REFUND_POLICY => $this->localizeBuildText('refund_policy', $locale),
-            Page::TYPE_SHIPPING_POLICY => $this->localizeBuildText('shipping_policy', $locale),
-            Page::TYPE_COOKIE_POLICY => $this->localizeBuildText('cookie_policy', $locale),
+        $key = match ($pageType) {
+            Page::TYPE_HOME => 'home',
+            Page::TYPE_ABOUT => 'about',
+            Page::TYPE_CONTACT => 'contact',
+            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => 'blog',
+            Page::TYPE_BLOG_CATEGORY => 'blog_category',
+            Page::TYPE_CUSTOM => 'custom_page',
+            Page::TYPE_PRIVACY_POLICY => 'privacy_policy',
+            Page::TYPE_TERMS_OF_SERVICE => 'terms_of_service',
+            Page::TYPE_REFUND_POLICY => 'refund_policy',
+            Page::TYPE_SHIPPING_POLICY => 'shipping_policy',
+            Page::TYPE_COOKIE_POLICY => 'cookie_policy',
             default => '',
         };
-        if ($label !== '') {
-            return $label;
-        }
 
-        $isZh = $this->isChineseLocale($locale);
-        $isJa = $this->isJapaneseLocale($locale);
-        $isKo = $this->isKoreanLocale($locale);
-
-        return match ($pageType) {
-            Page::TYPE_HOME => $isZh ? '首页' : ($isJa ? 'ホーム' : ($isKo ? '홈' : 'Home')),
-            Page::TYPE_ABOUT => $isZh ? '关于我们' : ($isJa ? '私たちについて' : ($isKo ? '회사 소개' : 'About')),
-            Page::TYPE_CONTACT => $isZh ? '联系我们' : ($isJa ? 'お問い合わせ' : ($isKo ? '문의하기' : 'Contact')),
-            Page::TYPE_BLOG_LIST, Page::TYPE_BLOG => $isZh ? '博客' : ($isJa ? 'ブログ' : ($isKo ? '블로그' : 'Blog')),
-            Page::TYPE_PRIVACY_POLICY => $isZh ? '隐私政策' : ($isJa ? 'プライバシーポリシー' : ($isKo ? '개인정보처리방침' : 'Privacy Policy')),
-            Page::TYPE_TERMS_OF_SERVICE => $isZh ? '服务条款' : ($isJa ? '利用規約' : ($isKo ? '이용약관' : 'Terms of Service')),
-            Page::TYPE_REFUND_POLICY => $isZh ? '退款政策' : ($isJa ? '返金ポリシー' : ($isKo ? '환불 정책' : 'Refund Policy')),
-            Page::TYPE_SHIPPING_POLICY => $isZh ? '配送政策' : ($isJa ? '配送ポリシー' : ($isKo ? '배송 정책' : 'Shipping Policy')),
-            Page::TYPE_COOKIE_POLICY => $isZh ? 'Cookie 政策' : ($isJa ? 'Cookie ポリシー' : ($isKo ? '쿠키 정책' : 'Cookie Policy')),
-            default => '',
-        };
+        return $key !== '' ? $this->localizeBuildText($key, $locale) : '';
     }
-
     private function isChineseLocale(string $locale): bool
     {
         return \preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1;
@@ -2433,3 +2013,4 @@ class AiSiteScopeCompatibilityService
         return \implode(', ', \array_values(\array_unique($safe)));
     }
 }
+

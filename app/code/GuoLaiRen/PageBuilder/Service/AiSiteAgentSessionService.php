@@ -34,7 +34,6 @@ class AiSiteAgentSessionService
         'build_contracts',
         'build_queue_info',
         'build_summary',
-        'build_workbench',
         'can_publish',
         'default_language',
         'default_locale',
@@ -114,8 +113,6 @@ class AiSiteAgentSessionService
 
     /** @var list<string> */
     private const PLAN_STAGE_SCOPE_KEYS = [
-        'plan_confirmed',
-        'plan_confirmed_at',
         'plan_ai_generated',
         'plan_generation_progress',
         'plan_generated_at',
@@ -123,10 +120,7 @@ class AiSiteAgentSessionService
         'plan_generated_page_types',
         'plan_generated_source_signature',
         'plan_json',
-        'plan_markdown',
-        'plan_workbench',
         'page_route_contract',
-        'stage1_contract',
         'stage1_validation_report',
         'stage1_first_pass',
         'stage1_generation_attempts',
@@ -139,17 +133,8 @@ class AiSiteAgentSessionService
     /** @var list<string> */
     private const VISUAL_EDIT_STAGE_SCOPE_KEYS = [
         'build_contracts',
-        'build_plan_confirmed',
-        'build_plan_confirmed_at',
-        'build_plan_v2',
-        'build_plan_v2_validation',
-        'build_workbench',
         'component_refinements',
-        'plan_confirmed',
-        'plan_confirmed_at',
-        'plan_markdown',
-        'plan_projection',
-        'plan_workbench',
+        'plan_json',
         'section_refinements',
         'shared_component_refinements',
         'shared_components',
@@ -157,7 +142,6 @@ class AiSiteAgentSessionService
         'asset_block_cache',
         'asset_manifest',
         'asset_image_generation_failures',
-        'has_build_plan_v2',
         'qa_report_contract',
         'render_data_contract',
         'verified_assets',
@@ -359,10 +343,7 @@ class AiSiteAgentSessionService
     /** @var list<string> */
     public const BUILD_OPERATION_ARTIFACT_KEYS = [
         'plan_json',
-        'build_plan_v2',
-        'plan_projection',
         'content_manifest',
-        'build_workbench',
         'build_contracts',
         'render_data_contract',
         'task_results',
@@ -371,9 +352,6 @@ class AiSiteAgentSessionService
     ];
 
     /**
-     * Build/publish queue paths must hydrate confirmed build_plan_v2; manifest-only
-     * loads leave execution shells without blocks and collapse the task tree to shared chrome.
-     *
      * @return array<string, mixed>
      */
     public function loadScopeForBuildOperation(AiSiteAgentSession $session): array
@@ -396,7 +374,6 @@ class AiSiteAgentSessionService
 
         $scope = $this->loadScopeFragmentFromPgsql($session, $stageCode);
         if ($scope !== null) {
-            $scope = $this->hydrateLegacyArtifactsForStage($session, $scope, $stageCode);
             return $artifactKeys === null
                 ? $this->artifactStorage()->hydrateScopeForStage(
                     (int)$session->getId(),
@@ -901,142 +878,6 @@ SQL;
     }
 
     /**
-     * Legacy rows may still keep stage payloads inside scope_json. Migrate only
-     * the exact artifact paths needed by this stage, then future reads use the
-     * artifact table without transferring full scope_json to PHP.
-     *
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function hydrateLegacyArtifactsForStage(AiSiteAgentSession $session, array $scope, string $stageCode): array
-    {
-        $sessionId = (int)$session->getId();
-        if ($sessionId <= 0) {
-            return $scope;
-        }
-        $artifactService = $this->artifactStorage();
-        $refs = \is_array($scope['_artifact_refs'] ?? null) ? $scope['_artifact_refs'] : [];
-        $migrated = false;
-        foreach ($artifactService->artifactKeysForStage($stageCode) as $artifactKey) {
-            $artifactStage = $artifactService->artifactStage($artifactKey);
-            if ($artifactStage === '' || \is_array($refs[$artifactStage][$artifactKey] ?? null)) {
-                continue;
-            }
-            $path = $artifactService->artifactPath($artifactKey);
-            if ($path === []) {
-                continue;
-            }
-            if ($artifactService->payloadHasContent($this->getNestedScopeValue($scope, $path))) {
-                continue;
-            }
-
-            $payload = $this->loadLegacyScopePathValueFromPgsql($session, $path);
-            if (!$artifactService->payloadHasContent($payload)) {
-                continue;
-            }
-
-            $scope = $this->setNestedScopeValue($scope, $path, $payload);
-            $migrated = true;
-            unset($payload);
-        }
-
-        if (!$migrated) {
-            return $scope;
-        }
-
-        $storage = $artifactService->prepareScopeForStorage($sessionId, $scope);
-        $scopeForStorage = $storage['scope'];
-        $artifacts = $storage['artifacts'];
-        unset($storage, $refs);
-        $artifactService->persistArtifacts($sessionId, $artifacts);
-        unset($artifacts);
-        $this->writeScopeArrayToExistingSession($session, $scopeForStorage);
-        unset($scopeForStorage);
-
-        return $scope;
-    }
-
-    /**
-     * @param list<string> $path
-     */
-    private function loadLegacyScopePathValueFromPgsql(AiSiteAgentSession $session, array $path): mixed
-    {
-        $pdo = $this->getPgsqlPdo();
-        if ($pdo === null || $path === []) {
-            return null;
-        }
-        $pathSql = "'{" . \implode(',', \array_map(static fn(string $part): string => \str_replace(['\\', '"', ',', '{', '}'], '', $part), $path)) . "}'";
-        $table = $this->sessionModel->getTable();
-        $pk = AiSiteAgentSession::schema_fields_ID;
-        $adminField = AiSiteAgentSession::schema_fields_ADMIN_USER_ID;
-        $scopeField = AiSiteAgentSession::schema_fields_SCOPE_JSON;
-        $sql = <<<SQL
-SELECT (COALESCE(NULLIF("{$scopeField}", ''), '{}')::jsonb #> {$pathSql})::text AS payload_json
-FROM {$table}
-WHERE "{$pk}" = :session_id
-  AND "{$adminField}" = :admin_user_id
-LIMIT 1
-SQL;
-        $stmt = $pdo->prepare($sql);
-        if (!$stmt || !$stmt->execute([
-            'session_id' => (int)$session->getId(),
-            'admin_user_id' => (int)$session->getAdminUserId(),
-        ])) {
-            return null;
-        }
-        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        $raw = \trim((string)(\is_array($row) ? ($row['payload_json'] ?? '') : ''));
-        if ($raw === '' || $raw === 'null') {
-            return null;
-        }
-
-        try {
-            return \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return null;
-        }
-    }
-
-    /**
-     * @param list<string> $path
-     */
-    private function getNestedScopeValue(array $scope, array $path): mixed
-    {
-        $cursor = $scope;
-        foreach ($path as $part) {
-            if (!\is_array($cursor) || !\array_key_exists($part, $cursor)) {
-                return null;
-            }
-            $cursor = $cursor[$part];
-        }
-
-        return $cursor;
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @param list<string> $path
-     * @return array<string, mixed>
-     */
-    private function setNestedScopeValue(array $scope, array $path, mixed $value): array
-    {
-        $cursor =& $scope;
-        foreach ($path as $index => $part) {
-            if ($index === \count($path) - 1) {
-                $cursor[$part] = $value;
-                break;
-            }
-            if (!\is_array($cursor[$part] ?? null)) {
-                $cursor[$part] = [];
-            }
-            $cursor =& $cursor[$part];
-        }
-        unset($cursor);
-
-        return $scope;
-    }
-
-    /**
      * @param array<string, mixed> $scope
      */
     private function writeScopeArrayToExistingSession(AiSiteAgentSession $session, array $scope): void
@@ -1167,7 +1008,7 @@ SQL;
             'task_session_id',
             'stream_session_key',
             'content_locale',
-            'build_plan_contract_id',
+            'plan_json_contract_id',
         ] as $key) {
             if (!\array_key_exists($key, $runtime) || \is_array($runtime[$key]) || \is_object($runtime[$key])) {
                 continue;

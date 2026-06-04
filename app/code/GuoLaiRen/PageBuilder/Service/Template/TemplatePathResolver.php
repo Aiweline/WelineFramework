@@ -225,29 +225,8 @@ class TemplatePathResolver
         return "GuoLaiRen_PageBuilder::style/{$styleCode}/assets/{$file}";
     }
     
-    /**
-     * 获取传统模板文件路径（header.phtml, footer.phtml, content.phtml, layout.phtml）
-     * 
-     * @param string $styleCode 模板代码
-     * @param string $file 文件名
-     * @return string 绝对路径
-     */
-    public function getLegacyTemplateFilePath(string $styleCode, string $file): string
-    {
-        return $this->getTemplatePath($styleCode) . '/' . $file;
-    }
-    
-    /**
-     * 获取传统模板文件的模板引用路径
-     * 
-     * @param string $styleCode 模板代码
-     * @return string 模板引用路径
-     */
-    public function getLegacyTemplateReference(string $styleCode): string
-    {
-        return self::TEMPLATE_REFERENCE_PREFIX . "/{$styleCode}";
-    }
-    
+
+
     /**
      * 验证路径是否存在
      * 

@@ -51,18 +51,18 @@ $componentConfig = $this->getData('component_config') ?: [];
 $config = array_merge($styleSettings, $componentConfig);
 
 // 辅助函数：读取配置，支持 group.field 格式
-// 同时兼容旧格式 group.group.field（历史数据兼容）
+// 同时兼容既有格式 group.group.field（历史数据兼容）
 $getConfig = function($key, $default = '') use ($config) {
     // 优先查找标准格式 (如 button.text)
     if (isset($config[$key]) && $config[$key] !== '') {
         return $config[$key];
     }
-    // 兼容旧格式：尝试 group.group.field 格式 (如 button.button.text)
+    // 兼容既有格式：尝试 group.group.field 格式 (如 button.button.text)
     $parts = explode('.', $key);
     if (count($parts) === 2) {
-        $legacyKey = $parts[0] . '.' . $key; // button.text -> button.button.text
-        if (isset($config[$legacyKey]) && $config[$legacyKey] !== '') {
-            return $config[$legacyKey];
+        $currentKey = $parts[0] . '.' . $key; // button.text -> button.button.text
+        if (isset($config[$currentKey]) && $config[$currentKey] !== '') {
+            return $config[$currentKey];
         }
     }
     return $default;

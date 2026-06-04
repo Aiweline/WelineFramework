@@ -14,7 +14,7 @@ namespace GuoLaiRen\PageBuilder\Service;
  * 抽出动机：
  *  - 纯数据结构转换，无 Session / DB / Request 依赖，和 Controller 耦合度最低，迁移风险最小；
  *  - 作为 R4 SOLID 拆分的第一块"安全样本"，后续抽取 QueueObserver、DomainPurchase 等领域可以复用同样范式；
- *  - 让 AiSiteBuildPlanService / QueueDbWriter / 前端 state 之间对 token 字段的去重规则有同一个 Source-Of-Truth。
+ *  - 让 AiSitePlanJsonService / QueueDbWriter / 前端 state 之间对 token 字段的去重规则有同一个 Source-Of-Truth。
  *
  * 重要：方法签名、输入输出 shape 必须与 AiSiteAgent.php 原有私有方法严格一致，
  * 以便保持 SSE 载荷和前端 debug 数据向后兼容。调整时请同步更新

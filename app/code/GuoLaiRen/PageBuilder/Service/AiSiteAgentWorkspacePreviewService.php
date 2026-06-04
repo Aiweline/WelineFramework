@@ -18,6 +18,7 @@ final class AiSiteAgentWorkspacePreviewService
         private readonly PageRenderService $pageRenderService,
         private readonly ?AiSitePreviewLinkRewriteService $previewLinkRewriteService = null,
         private readonly ?AiSiteVisualUrlService $visualUrlService = null,
+        private readonly ?AiSitePlanJsonStateService $planJsonStateService = null,
     ) {
     }
 
@@ -70,16 +71,16 @@ final class AiSiteAgentWorkspacePreviewService
         $layout = $this->virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
         $layout = $this->mergePreviewLayoutFromScope($layout, $scope, $pageType);
         $layout = $this->scopeCompatibilityService->localizeSharedLayoutConfigForScope($layout, $scope, $pageType);
-        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $virtualBlocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
         $materializedPreview = $this->resolveMaterializedAiHtmlPreviewData($scope, $pageType);
-        $materializedBlocks = \is_array($materializedPreview['blocks'] ?? null) ? $materializedPreview['blocks'] : [];
+        $materializedBlocks = \is_array($materializedPreview['block_nodes'] ?? null) ? $materializedPreview['block_nodes'] : [];
         if ($materializedBlocks !== []) {
             $virtualBlocks = $materializedBlocks;
             $virtualPage = \array_replace(
                 $virtualPage,
                 \is_array($materializedPreview['page'] ?? null) ? $materializedPreview['page'] : []
             );
-            $virtualPage['blocks'] = $virtualBlocks;
+            $virtualPage['block_nodes'] = $virtualBlocks;
             $virtualPages[$pageType] = $virtualPage;
         }
         $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
@@ -114,7 +115,7 @@ final class AiSiteAgentWorkspacePreviewService
             ], \JSON_UNESCAPED_UNICODE),
             Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, \JSON_UNESCAPED_UNICODE),
             Page::schema_fields_RENDER_MODE => $renderMode,
-            Page::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_AI_LAYOUT => \json_encode(['block_nodes' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
         ]);
         $page->setData('virtual_public_id', $publicId);
         $page->setData('virtual_page_type', $pageType);
@@ -166,7 +167,7 @@ final class AiSiteAgentWorkspacePreviewService
     }
 
     /**
-     * @return array{blocks?:list<array<string,mixed>>,page?:array<string,mixed>}
+     * @return array{block_nodes?:list<array<string,mixed>>,page?:array<string,mixed>}
      */
     private function resolveMaterializedAiHtmlPreviewData(array $scope, string $pageType): array
     {
@@ -191,10 +192,10 @@ final class AiSiteAgentWorkspacePreviewService
         }
 
         $layout = \json_decode((string)($row[Page::schema_fields_AI_LAYOUT] ?? ''), true);
-        $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+        $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
         $blocks = \array_values(\array_filter($blocks, static function (mixed $block): bool {
             return \is_array($block)
-                && !AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block)
+                && !AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($block)
                 && \trim((string)($block['html'] ?? $block['config']['html_content'] ?? '')) !== '';
         }));
         if ($blocks === []) {
@@ -202,7 +203,7 @@ final class AiSiteAgentWorkspacePreviewService
         }
 
         return [
-            'blocks' => $blocks,
+            'block_nodes' => $blocks,
             'page' => [
                 'page_type' => (string)($row[Page::schema_fields_TYPE] ?? $pageType),
                 'title' => (string)($row[Page::schema_fields_TITLE] ?? $row[Page::schema_fields_NAME] ?? ''),
@@ -307,51 +308,27 @@ final class AiSiteAgentWorkspacePreviewService
                 ?? ''
         ));
 
-        if (\preg_match('/^th(?:[_-]|$)/i', $locale) === 1) {
-            return match ($key) {
-                'home' => 'หน้าแรก',
-                'about' => 'เกี่ยวกับเรา',
-                'contact' => 'ติดต่อเรา',
-                'privacy_policy' => 'นโยบายความเป็นส่วนตัว',
-                'terms_of_service' => 'ข้อกำหนดการใช้บริการ',
-                default => '',
-            };
-        }
-        if (\preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', $locale) === 1) {
-            return match ($key) {
-                'home' => 'होम',
-                'about' => 'हमारे बारे में',
-                'contact' => 'संपर्क करें',
-                'privacy_policy' => 'गोपनीयता नीति',
-                'terms_of_service' => 'सेवा की शर्तें',
-                default => '',
-            };
-        }
-        if (\preg_match('/^(zh|zh[_-]hans|zh[_-]cn|zh[_-]sg)/i', $locale) === 1) {
-            return match ($key) {
-                'home' => '首页',
-                'about' => '关于我们',
-                'contact' => '联系我们',
-                'privacy_policy' => '隐私政策',
-                'terms_of_service' => '服务条款',
-                default => '',
-            };
-        }
-
-        return '';
+        return match ($key) {
+            'home' => 'Home',
+            'about' => 'About',
+            'contact' => 'Contact',
+            'privacy_policy' => 'Privacy Policy',
+            'terms_of_service' => 'Terms of Service',
+            default => '',
+        };
     }
 
     /**
      * @return array{
      *   session_accessible:bool,
-     *   build_plan_confirmed:bool,
+     *   plan_json:array{confirmed:int},
      *   page_type:string
      * }
      */
     public function buildUnavailablePayload(int $adminId, string $publicId, string $requestedPageType): array
     {
         $sessionAccessible = false;
-        $buildPlanConfirmed = false;
+        $planJsonConfirmed = false;
         $publicId = \trim($publicId);
         $requestedPageType = \trim($requestedPageType);
         if ($adminId > 0 && $publicId !== '' && $requestedPageType !== '') {
@@ -361,13 +338,14 @@ final class AiSiteAgentWorkspacePreviewService
                 $scope = $this->scopeCompatibilityService->normalizeScope(
                     $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT)
                 );
-                $buildPlanConfirmed = (int)($scope['build_plan_confirmed'] ?? 0) === 1;
+                $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+                $planJsonConfirmed = $this->planJsonStateService()->isConfirmed($planJson);
             }
         }
 
         return [
             'session_accessible' => $sessionAccessible,
-            'build_plan_confirmed' => $buildPlanConfirmed,
+            'plan_json' => ['confirmed' => $planJsonConfirmed ? 1 : 0],
             'page_type' => $requestedPageType,
         ];
     }
@@ -524,5 +502,11 @@ SCRIPT;
     {
         return $this->visualUrlService
             ?? ObjectManager::getInstance(AiSiteVisualUrlService::class);
+    }
+
+    private function planJsonStateService(): AiSitePlanJsonStateService
+    {
+        return $this->planJsonStateService
+            ?? ObjectManager::getInstance(AiSitePlanJsonStateService::class);
     }
 }

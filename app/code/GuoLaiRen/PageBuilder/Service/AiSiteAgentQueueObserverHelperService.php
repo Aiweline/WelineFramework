@@ -7,20 +7,20 @@ namespace GuoLaiRen\PageBuilder\Service;
 /**
  * AiSiteAgentQueueObserverHelperService
  *
- * 从 AiSiteAgent.php 抽出的 **队列观察子域纯辅助方法**。本轮只迁移三个无
- * Session / SSE / DB 依赖的判定/归一化函数：
- *  - 判断某 operation 是否应抑制 queue process 镜像下发；
- *  - 判断是否跳过一行 queue.result 日志（含时间戳 + 事件类型前缀的回放行）；
- *  - 将 queueRow + 成功标志解析成"结束文案"(process / result 尾行 / i18n 兜底)。
+ * 浠?AiSiteAgent.php 鎶藉嚭鐨?**闃熷垪瑙傚療瀛愬煙绾緟鍔╂柟娉?*銆傛湰杞彧杩佺Щ涓変釜鏃?
+ * Session / SSE / DB 渚濊禆鐨勫垽瀹?褰掍竴鍖栧嚱鏁帮細
+ *  - 鍒ゆ柇鏌?operation 鏄惁搴旀姂鍒?queue process 闀滃儚涓嬪彂锛?
+ *  - 鍒ゆ柇鏄惁璺宠繃涓€琛?queue.result 鏃ュ織锛堝惈鏃堕棿鎴?+ 浜嬩欢绫诲瀷鍓嶇紑鐨勫洖鏀捐锛夛紱
+ *  - 灏?queueRow + 鎴愬姛鏍囧織瑙ｆ瀽鎴?缁撴潫鏂囨"(process / result 灏捐 / i18n 鍏滃簳)銆?
  *
- * 抽出动机：
- *  - 纯函数、无副作用，与控制器/会话解耦成本最低，可单元测试锁定；
- *  - 作为 R4.2 SOLID 拆分的第二块"安全样本"，范式沿用 AiSiteQueueStateService；
- *  - 让下一轮抽 `buildQueueObserverPanelPayload / emitQueueObserverQueueDetailEvents`
- *    等依赖 SSE 状态的方法时，可以直接复用这里的判定逻辑，避免跨层复制。
+ * 鎶藉嚭鍔ㄦ満锛?
+ *  - 绾嚱鏁般€佹棤鍓綔鐢紝涓庢帶鍒跺櫒/浼氳瘽瑙ｈ€︽垚鏈渶浣庯紝鍙崟鍏冩祴璇曢攣瀹氾紱
+ *  - 浣滀负 R4.2 SOLID 鎷嗗垎鐨勭浜屽潡"瀹夊叏鏍锋湰"锛岃寖寮忔部鐢?AiSiteQueueStateService锛?
+ *  - 璁╀笅涓€杞娊 `buildQueueObserverPanelPayload / emitQueueObserverQueueDetailEvents`
+ *    绛変緷璧?SSE 鐘舵€佺殑鏂规硶鏃讹紝鍙互鐩存帴澶嶇敤杩欓噷鐨勫垽瀹氶€昏緫锛岄伩鍏嶈法灞傚鍒躲€?
  *
- * 重要：方法签名、输入输出 shape 必须与 AiSiteAgent.php 原私有方法一致，
- * 以便前端/SSE 链路向后兼容；调整时同步更新 `AiSiteAgentQueueObserverHelperServiceTest`。
+ * 閲嶈锛氭柟娉曠鍚嶃€佽緭鍏ヨ緭鍑?shape 蹇呴』涓?AiSiteAgent.php 鍘熺鏈夋柟娉曚竴鑷达紝
+ * 浠ヤ究鍓嶇/SSE 閾捐矾鍚戝悗鍏煎锛涜皟鏁存椂鍚屾鏇存柊 `AiSiteAgentQueueObserverHelperServiceTest`銆?
  */
 class AiSiteAgentQueueObserverHelperService
 {
@@ -28,8 +28,8 @@ class AiSiteAgentQueueObserverHelperService
     private const QUEUE_RESULT_TAIL_LINES = 50;
 
     /**
-     * 对 plan 这类"自带 SSE 事件流"的 operation，抑制 queue process 镜像转发；
-     * 其它 operation 走默认 process 镜像。保持与原 AiSiteAgent 私有方法语义一致。
+     * 瀵?plan 杩欑被"鑷甫 SSE 浜嬩欢娴?鐨?operation锛屾姂鍒?queue process 闀滃儚杞彂锛?
+     * 鍏跺畠 operation 璧伴粯璁?process 闀滃儚銆備繚鎸佷笌鍘?AiSiteAgent 绉佹湁鏂规硶璇箟涓€鑷淬€?
      */
     public function shouldSuppressProcessMirror(string $operation): bool
     {
@@ -37,15 +37,15 @@ class AiSiteAgentQueueObserverHelperService
     }
 
     /**
-     * 判断一行 queue.result 是否需要跳过：仅对 plan 两类 operation 生效，
-     * 用于剔除"已由 SSE 事件流覆盖"的时间戳日志行，避免回放重复上屏。
-     * 匹配示例：`[HH:MM:SS] LOG|START|INFO|WARNING|PROGRESS|ERROR|DATA|AI_STREAM|PLAN_xxx ...`
+     * 鍒ゆ柇涓€琛?queue.result 鏄惁闇€瑕佽烦杩囷細浠呭 plan 涓ょ被 operation 鐢熸晥锛?
+     * 鐢ㄤ簬鍓旈櫎"宸茬敱 SSE 浜嬩欢娴佽鐩?鐨勬椂闂存埑鏃ュ織琛岋紝閬垮厤鍥炴斁閲嶅涓婂睆銆?
+     * 鍖归厤绀轰緥锛歚[HH:MM:SS] LOG|START|INFO|WARNING|PROGRESS|ERROR|DATA|AI_STREAM|PLAN_xxx ...`
      */
     public function shouldSkipResultLine(string $operation, string $line): bool
     {
         if (
-            \str_contains($line, '正文流不写入队列日志')
-            || \str_contains($line, '正文流已从队列 SSE 中省略')
+            \str_contains($line, 'stream body omitted from queue log')
+            || \str_contains($line, 'stream body omitted from queue SSE')
         ) {
             return true;
         }
@@ -60,17 +60,14 @@ class AiSiteAgentQueueObserverHelperService
             return true;
         }
 
-        // 旧版本可能把 chunk 裸写成 markdown/json 行；规划类队列不再回放正文。
         return $line !== '';
     }
 
     /**
-     * 根据 queueRow 解析"结束文案"：
-     *  1) 优先使用结构化 `process` / `message` / `terminal_summary` 字段；
-     *  2) 历史 `result` 仅作为先按字节裁剪后的兼容尾部摘要；
-     *  3) 最终兜底 i18n 文案（成功 / 失败）。
-     *
-     * @param array<string, mixed>|null $queueRow `weline_queue` 一行原始数据；null 直接走 i18n 兜底
+     * 鏍规嵁 queueRow 瑙ｆ瀽"缁撴潫鏂囨"锛?
+     *  1) 浼樺厛浣跨敤缁撴瀯鍖?`process` / `message` / `terminal_summary` 瀛楁锛?     *  2) 鍘嗗彶 `result` 浠呬綔涓哄厛鎸夊瓧鑺傝鍓悗鐨勫吋瀹瑰熬閮ㄦ憳瑕侊紱
+     *  3) 鏈€缁堝厹搴?i18n 鏂囨锛堟垚鍔?/ 澶辫触锛夈€?     *
+     * @param array<string, mixed>|null $queueRow `weline_queue` 涓€琛屽師濮嬫暟鎹紱null 鐩存帴璧?i18n 鍏滃簳
      */
     public function resolveMessage(?array $queueRow, bool $success): string
     {
@@ -79,14 +76,9 @@ class AiSiteAgentQueueObserverHelperService
             if ($message !== '' && ($success || !$this->isQueueStreamOmittedMessage($message))) {
                 return $message;
             }
-
-            $legacyResultMessage = $this->resolveLegacyResultMessage($queueRow);
-            if ($legacyResultMessage !== '') {
-                return $legacyResultMessage;
-            }
         }
 
-        return $success ? (string)__('操作执行完成') : (string)__('操作执行失败');
+        return $success ? (string)__('鎿嶄綔鎵ц瀹屾垚') : (string)__('鎿嶄綔鎵ц澶辫触');
     }
 
     /**
@@ -129,8 +121,8 @@ class AiSiteAgentQueueObserverHelperService
     }
 
     /**
-     * 将底层队列事件类型归一化成前端 SSE 监听的事件名。未知类型返回空串，
-     * 调用方据此决定是否跳过（与原 `AiSiteAgent::mapObservedOperationEventName` 对齐）。
+     * 灏嗗簳灞傞槦鍒椾簨浠剁被鍨嬪綊涓€鍖栨垚鍓嶇 SSE 鐩戝惉鐨勪簨浠跺悕銆傛湭鐭ョ被鍨嬭繑鍥炵┖涓诧紝
+     * 璋冪敤鏂规嵁姝ゅ喅瀹氭槸鍚﹁烦杩囷紙涓庡師 `AiSiteAgent::mapObservedOperationEventName` 瀵归綈锛夈€?
      */
     public function mapOperationEventName(string $eventType): string
     {
@@ -149,17 +141,17 @@ class AiSiteAgentQueueObserverHelperService
             'ai_chunk' => 'progress',
             'shared_component_generated' => 'shared_component_generated',
             'page_generated' => 'page_generated',
-            'build_plan_block_completed' => 'build_plan_block_completed',
+            'plan_json_block_completed' => 'plan_json_block_completed',
             'task_completed' => 'task_completed',
-            // Build-plan block lifecycle events are forwarded with the same public SSE names.
-            'build_plan_block_failed' => 'build_plan_block_failed',
+            // Plan-json block lifecycle events are forwarded with the same public SSE names.
+            'plan_json_block_failed' => 'plan_json_block_failed',
             'operation_failed' => 'error',
             default => '',
         };
     }
 
     /**
-     * 判断某条 queue event 是否与当前 operation / 起始时间匹配，供 SSE 转发链路过滤。
+     * 鍒ゆ柇鏌愭潯 queue event 鏄惁涓庡綋鍓?operation / 璧峰鏃堕棿鍖归厤锛屼緵 SSE 杞彂閾捐矾杩囨护銆?
      *
      * @param array<string, mixed> $event
      */
@@ -184,11 +176,11 @@ class AiSiteAgentQueueObserverHelperService
             'ai_chunk',
             'shared_component_generated',
             'page_generated',
-            'build_plan_block_completed',
+            'plan_json_block_completed',
             'task_completed',
-            // build_plan_block_failed must be forwardable by forwardObservedOperationEvents.
-            // 否则 mapOperationEventName 即便有映射也会被 isOperationEventRelevant 的白名单挡掉。
-            'build_plan_block_failed',
+            // plan_json_block_failed must be forwardable by forwardObservedOperationEvents.
+            // 鍚﹀垯 mapOperationEventName 鍗充究鏈夋槧灏勪篃浼氳 isOperationEventRelevant 鐨勭櫧鍚嶅崟鎸℃帀銆?
+            'plan_json_block_failed',
             'operation_failed',
         ], true)) {
             return false;
@@ -210,8 +202,8 @@ class AiSiteAgentQueueObserverHelperService
     }
 
     /**
-     * 过滤 queue event 列表：丢弃 event_id 小于等于 afterEventId、与当前 operation
-     * 无关、或早于 startedAtRaw 的条目。保持与原控制器私有方法语义一致。
+     * 杩囨护 queue event 鍒楄〃锛氫涪寮?event_id 灏忎簬绛変簬 afterEventId銆佷笌褰撳墠 operation
+     * 鏃犲叧銆佹垨鏃╀簬 startedAtRaw 鐨勬潯鐩€備繚鎸佷笌鍘熸帶鍒跺櫒绉佹湁鏂规硶璇箟涓€鑷淬€?
      *
      * @param list<array<string, mixed>> $events
      *
@@ -376,24 +368,6 @@ class AiSiteAgentQueueObserverHelperService
 
     /**
      * @param array<string, mixed> $queueRow
-     */
-    private function resolveLegacyResultMessage(array $queueRow): string
-    {
-        $result = $this->trimQueueResultCompatibilityTail((string)($queueRow['result'] ?? ''));
-        if ($result === '') {
-            return '';
-        }
-
-        $lines = $this->extractNonEmptyTailLines($result, 0, self::QUEUE_RESULT_TAIL_LINES);
-        if ($lines === []) {
-            return '';
-        }
-
-        return (string)\end($lines);
-    }
-
-    /**
-     * @param array<string, mixed> $queueRow
      * @param list<string> $keys
      */
     private function firstNonEmptyQueueText(array $queueRow, array $keys): string
@@ -419,7 +393,7 @@ class AiSiteAgentQueueObserverHelperService
             return $result;
         }
 
-        return (string)__('...(仅显示末尾约 %{n} 字节)', ['n' => (string)self::QUEUE_RESULT_TAIL_BYTES])
+        return (string)__('...(浠呮樉绀烘湯灏剧害 %{n} 瀛楄妭)', ['n' => (string)self::QUEUE_RESULT_TAIL_BYTES])
             . "\n"
             . $this->strcutTail($result, self::QUEUE_RESULT_TAIL_BYTES);
     }
@@ -467,8 +441,8 @@ class AiSiteAgentQueueObserverHelperService
         }
 
         return \str_contains($message, 'AI body stream is intentionally omitted from queue logs')
-            || \str_contains($message, '正文流不写入队列日志')
-            || \str_contains($message, '正文流已从队列 SSE 中省略');
+            || \str_contains($message, 'stream body omitted from queue log')
+            || \str_contains($message, 'stream body omitted from queue SSE');
     }
 
     private function strcutTail(string $text, int $maxBytes): string

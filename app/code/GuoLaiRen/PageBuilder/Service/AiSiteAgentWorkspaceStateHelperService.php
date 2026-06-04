@@ -7,7 +7,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * Workspace state, SSE filtering, and status-envelope helpers for BuildPlan v2.2.
+ * Workspace state, SSE filtering, and status-envelope helpers for plan_json-backed PageBuilder state.
  */
 class AiSiteAgentWorkspaceStateHelperService
 {
@@ -60,10 +60,13 @@ class AiSiteAgentWorkspaceStateHelperService
             'workspace_status' => (string)($state['workspace_status'] ?? ''),
             'publish_status' => (string)($state['publish_status'] ?? ''),
             'active_operation' => \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [],
-            'plan_confirmed' => (int)($state['plan_confirmed'] ?? ($scope['plan_confirmed'] ?? 0)),
-            'build_plan_confirmed' => (int)($state['build_plan_confirmed'] ?? ($scope['build_plan_confirmed'] ?? 0)),
+            'plan_json' => [
+                'confirmed' => (int)(\is_array($state['plan_json'] ?? null)
+                    ? ($state['plan_json']['confirmed'] ?? 0)
+                    : ($scope['plan_json']['confirmed'] ?? 0)),
+            ],
             'virtual_theme_id' => (int)($state['virtual_theme_id'] ?? 0),
-            'build_plan_execution_summary' => $this->resolveBuildPlanExecutionSummary($state),
+            'plan_json_execution_summary' => $this->resolvePlanJsonExecutionSummary($state),
             'queue_state' => [
                 'plan' => $this->resolveQueueCurrentState(\is_array($state['plan_queue_info'] ?? null) ? $state['plan_queue_info'] : null),
                 'build' => $this->resolveQueueCurrentState(\is_array($state['build_queue_info'] ?? null) ? $state['build_queue_info'] : null),
@@ -269,20 +272,13 @@ class AiSiteAgentWorkspaceStateHelperService
      */
     public function pruneStateForView(array $state): array
     {
-        $rawScope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
-        $buildPlanForView = \is_array($state['build_plan_v2'] ?? null)
-            ? $state['build_plan_v2']
-            : (\is_array($rawScope['build_plan_v2'] ?? null) ? $rawScope['build_plan_v2'] : []);
         if (\is_array($state['scope'] ?? null)) {
             $state['scope'] = $this->pruneScopeForView($state['scope']);
         }
 
         $plan = \is_array($state['plan'] ?? null) ? $state['plan'] : [];
         foreach ([
-            'markdown' => 'plan_markdown',
             'json' => 'plan_json',
-            'build_plan_v2' => 'build_plan_v2',
-            'projection' => 'plan_projection',
         ] as $planKey => $stateKey) {
             if (!\array_key_exists($planKey, $plan) && \array_key_exists($stateKey, $state)) {
                 $plan[$planKey] = $state[$stateKey];
@@ -291,23 +287,16 @@ class AiSiteAgentWorkspaceStateHelperService
         if ($plan !== []) {
             $state['plan'] = $this->prunePlanForView($plan);
         }
-        if (\is_array($state['stage1_contract'] ?? null)) {
-            $state['stage1_contract'] = $this->summarizeStageOneContractForView($state['stage1_contract']);
-        }
         if (\is_array($state['virtual_pages_by_type'] ?? null)) {
             $state['virtual_pages_by_type'] = $this->pruneVirtualPagesByTypeForView($state['virtual_pages_by_type']);
         }
         if (\is_array($state['page_type_layouts'] ?? null)) {
             $state['page_type_layouts'] = $this->prunePageTypeLayoutsForView($state['page_type_layouts']);
         }
-        if (\is_array($state['build_task_summary'] ?? null)) {
-            $state['build_task_summary'] = $this->pruneBuildTaskSummaryForView($state['build_task_summary']);
+        if (\is_array($state['plan_json_task_summary'] ?? null)) {
+            $state['plan_json_task_summary'] = $this->prunePlanJsonTaskSummaryForView($state['plan_json_task_summary']);
         }
-        if ($buildPlanForView !== []) {
-            $state['build_plan_v2'] = $this->pruneBuildPlanForView($buildPlanForView);
-            $state['build_plan_execution_summary'] = $this->resolveBuildPlanExecutionSummary($state);
-            $state['build_plan_block_progress'] = $this->buildPlanBlockProgressForView($buildPlanForView);
-        }
+        $state['plan_json_execution_summary'] = $this->resolvePlanJsonExecutionSummary($state);
         if (\is_array($state['asset_manifest'] ?? null)) {
             $state['asset_manifest'] = $this->pruneAssetManifestForView($state['asset_manifest']);
         }
@@ -326,21 +315,18 @@ class AiSiteAgentWorkspaceStateHelperService
 
         unset(
             $state['events'],
+            $state['plan_confirmed'],
+            $state['plan_confirmed_at'],
             $state['plan_markdown'],
             $state['plan_json'],
-            $state['plan_workbench'],
             $state['virtual_theme_plan'],
             $state['task_plan'],
             $state['task_plan_markdown'],
             $state['task_plan_confirmed'],
             $state['task_plan_confirmed_at'],
-            $state['build_blueprint'],
-            $state['build_tasks'],
             $state['build_html'],
             $state['build_css'],
             $state['build_js'],
-            $state['execution_blueprint'],
-            $state['plan_projection'],
             $state['raw'],
             $state['raw_response']
         );
@@ -363,7 +349,6 @@ class AiSiteAgentWorkspaceStateHelperService
             $state['reference_images'],
             $state['retryable_ai_failures'],
             $state['retryable_ai_failure_summary'],
-            $state['stage1_contract'],
             $state['plan'],
             $state['page_type_layouts'],
             $state['scope'],
@@ -380,9 +365,6 @@ class AiSiteAgentWorkspaceStateHelperService
     public function pruneScopeForView(array $scope): array
     {
         $scope = $this->preserveViewMetadataFromHeavyScope($scope);
-        if (\is_array($scope['stage1_contract'] ?? null)) {
-            $scope['stage1_contract'] = $this->summarizeStageOneContractForView($scope['stage1_contract']);
-        }
 
         unset(
             $scope['pagebuilder_pages_by_type'],
@@ -392,23 +374,19 @@ class AiSiteAgentWorkspaceStateHelperService
             $scope['events'],
             $scope['top_logs'],
             $scope['build_summary'],
+            $scope['plan_confirmed'],
+            $scope['plan_confirmed_at'],
             $scope['active_operation'],
             $scope['pre_publish_visual_urls'],
             $scope['plan_markdown'],
             $scope['plan_json'],
-            $scope['plan_workbench'],
-            $scope['build_plan_v2'],
-            $scope['plan_projection'],
             $scope['task_plan'],
             $scope['task_plan_markdown'],
             $scope['task_plan_confirmed'],
             $scope['task_plan_confirmed_at'],
-            $scope['build_blueprint'],
-            $scope['build_tasks'],
             $scope['build_html'],
             $scope['build_css'],
             $scope['build_js'],
-            $scope['execution_blueprint'],
             $scope['content_manifest'],
             $scope['virtual_theme_plan'],
             $scope['virtual_theme_build_tree'],
@@ -440,64 +418,29 @@ class AiSiteAgentWorkspaceStateHelperService
      * @param array<string, mixed> $state
      * @return array<string, mixed>
      */
-    private function resolveBuildPlanExecutionSummary(array $state): array
+    private function resolvePlanJsonExecutionSummary(array $state): array
     {
-        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
-        $currentSummary = $this->resolveCurrentBuildTaskSummary($state);
-        $buildPlan = \is_array($state['build_plan_v2'] ?? null)
-            ? $state['build_plan_v2']
-            : (\is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : []);
-        if ($buildPlan === []) {
-            return $currentSummary !== [] ? $this->summarizeExecutionSummaryCountsForView($currentSummary) : [];
-        }
-        if (\is_array($buildPlan['execution_summary'] ?? null) && $buildPlan['execution_summary'] !== []) {
-            return $this->summarizeExecutionSummaryCountsForView($buildPlan['execution_summary']);
-        }
-
-        $summary = [
-            'total' => 0,
-            'done' => 0,
-            'pending' => 0,
-            'running' => 0,
-            'failed' => 0,
-            'cancelled' => 0,
-        ];
-        foreach (['header', 'footer'] as $region) {
-            $row = \is_array($buildPlan['shared_execution'][$region] ?? null) ? $buildPlan['shared_execution'][$region] : [];
-            if ($row !== []) {
-                $this->accumulateBuildPlanExecutionSummaryRow($summary, (string)($row['status'] ?? 'pending'));
-            }
-        }
-        foreach (\is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [] as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $row = \is_array($block['execution'] ?? null) ? $block['execution'] : [];
-            $this->accumulateBuildPlanExecutionSummaryRow($summary, (string)($row['status'] ?? 'pending'));
-        }
-
-        return (int)$summary['total'] > 0
-            ? $summary
-            : ($currentSummary !== [] ? $this->summarizeExecutionSummaryCountsForView($currentSummary) : $summary);
+        $currentSummary = $this->resolveCurrentPlanJsonTaskSummary($state);
+        return $currentSummary !== [] ? $this->summarizeExecutionSummaryCountsForView($currentSummary) : [];
     }
 
     /**
      * @param array<string, mixed> $state
      * @return array<string, mixed>
      */
-    private function resolveCurrentBuildTaskSummary(array $state): array
+    private function resolveCurrentPlanJsonTaskSummary(array $state): array
     {
-        if (\is_array($state['build_task_summary'] ?? null)) {
-            return $state['build_task_summary'];
+        if (\is_array($state['plan_json_task_summary'] ?? null)) {
+            return $state['plan_json_task_summary'];
         }
         $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
-        return \is_array($scope['build_task_summary'] ?? null) ? $scope['build_task_summary'] : [];
+        return \is_array($scope['plan_json_task_summary'] ?? null) ? $scope['plan_json_task_summary'] : [];
     }
 
     /**
      * @param array<string, int> $summary
      */
-    private function accumulateBuildPlanExecutionSummaryRow(array &$summary, string $status): void
+    private function accumulatePlanJsonExecutionSummaryRow(array &$summary, string $status): void
     {
         $status = \strtolower(\trim($status));
         $status = match ($status) {
@@ -512,16 +455,13 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
-     * @param array<string, mixed> $buildPlan
+     * @param array<string, mixed> $PlanJson
      * @return list<array<string, mixed>>
      */
-    private function buildPlanBlockProgressForView(array $buildPlan): array
+    private function PlanJsonBlockProgressForView(array $PlanJson): array
     {
         $rows = [];
-        foreach (\is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [] as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
+        foreach ($this->extractPlanJsonBlockNodesForView($PlanJson) as $block) {
             $execution = \is_array($block['execution'] ?? null) ? $block['execution'] : [];
             $rows[] = [
                 'block_id' => (string)($block['block_id'] ?? $block['id'] ?? ''),
@@ -542,28 +482,28 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
-     * @param array<string, mixed> $buildPlan
+     * @param array<string, mixed> $PlanJson
      * @return array<string, mixed>
      */
-    private function pruneBuildPlanForView(array $buildPlan): array
+    private function prunePlanJsonForView(array $PlanJson): array
     {
         $result = [];
         foreach (['id', 'contract_id', 'contract_version', 'version', 'status', 'source_truth_contract_hash'] as $key) {
-            if (\array_key_exists($key, $buildPlan) && !\is_array($buildPlan[$key]) && !\is_object($buildPlan[$key])) {
-                $result[$key] = $buildPlan[$key];
+            if (\array_key_exists($key, $PlanJson) && !\is_array($PlanJson[$key]) && !\is_object($PlanJson[$key])) {
+                $result[$key] = $PlanJson[$key];
             }
         }
         foreach (['contract_meta', 'execution_summary'] as $key) {
-            if ($key === 'execution_summary' && \is_array($buildPlan['execution_summary'] ?? null)) {
-                $result['execution_summary'] = $this->summarizeExecutionSummaryCountsForView($buildPlan['execution_summary']);
+            if ($key === 'execution_summary' && \is_array($PlanJson['execution_summary'] ?? null)) {
+                $result['execution_summary'] = $this->summarizeExecutionSummaryCountsForView($PlanJson['execution_summary']);
                 continue;
             }
-            if (\is_array($buildPlan[$key] ?? null)) {
-                $result[$key] = $this->pruneRecursiveViewPayload($buildPlan[$key]);
+            if (\is_array($PlanJson[$key] ?? null)) {
+                $result[$key] = $this->pruneRecursiveViewPayload($PlanJson[$key]);
             }
         }
 
-        $pages = \is_array($buildPlan['pages'] ?? null) ? $buildPlan['pages'] : [];
+        $pages = \is_array($PlanJson['pages'] ?? null) ? $PlanJson['pages'] : [];
         $result['pages'] = [];
         foreach ($pages as $page) {
             if (!\is_array($page)) {
@@ -575,35 +515,26 @@ class AiSiteAgentWorkspaceStateHelperService
                     $pageOut[$key] = \is_string($page[$key]) ? $this->limitViewText((string)$page[$key], 800) : $page[$key];
                 }
             }
-            if (\is_array($page['blocks'] ?? null)) {
-                $pageOut['blocks'] = [];
-                foreach ($page['blocks'] as $block) {
-                    if (!\is_array($block) || \count($pageOut['blocks']) >= self::VIEW_PLAN_BLOCK_LIMIT) {
-                        continue;
-                    }
-                    $pageOut['blocks'][] = $this->pruneBuildPlanBlockForView($block);
-                }
-            }
             $result['pages'][] = $pageOut;
         }
 
-        $blocks = \is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [];
-        $result['blocks'] = [];
+        $blocks = $this->extractPlanJsonBlockNodesForView($PlanJson);
+        $result['block_nodes'] = [];
         foreach ($blocks as $block) {
-            if (!\is_array($block) || \count($result['blocks']) >= self::VIEW_PLAN_BLOCK_LIMIT) {
+            if (\count($result['block_nodes']) >= self::VIEW_PLAN_BLOCK_LIMIT) {
                 continue;
             }
-            $result['blocks'][] = $this->pruneBuildPlanBlockForView($block);
+            $result['block_nodes'][] = $this->prunePlanJsonBlockForView($block);
         }
         if (\count($blocks) > self::VIEW_PLAN_BLOCK_LIMIT) {
-            $result['blocks_truncated'] = \count($blocks) - self::VIEW_PLAN_BLOCK_LIMIT;
+            $result['block_nodes_truncated'] = \count($blocks) - self::VIEW_PLAN_BLOCK_LIMIT;
         }
 
-        if (\is_array($buildPlan['shared_execution'] ?? null)) {
+        if (\is_array($PlanJson['shared_execution'] ?? null)) {
             $result['shared_execution'] = [];
             foreach (['header', 'footer'] as $region) {
-                if (\is_array($buildPlan['shared_execution'][$region] ?? null)) {
-                    $result['shared_execution'][$region] = $this->pruneBuildPlanExecutionForView($buildPlan['shared_execution'][$region]);
+                if (\is_array($PlanJson['shared_execution'][$region] ?? null)) {
+                    $result['shared_execution'][$region] = $this->prunePlanJsonExecutionForView($PlanJson['shared_execution'][$region]);
                 }
             }
         }
@@ -613,10 +544,54 @@ class AiSiteAgentWorkspaceStateHelperService
     }
 
     /**
+     * @param array<string, mixed> $PlanJson
+     * @return list<array<string, mixed>>
+     */
+    private function extractPlanJsonBlockNodesForView(array $PlanJson): array
+    {
+        $reservedPageKeys = [
+            'name' => true,
+            'title' => true,
+            'label' => true,
+            'status' => true,
+            'seo' => true,
+            'path' => true,
+            'route' => true,
+            'url' => true,
+            'page_goal' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'updated_at' => true,
+            'error' => true,
+            'ordered_block_keys' => true,
+            'primary_keywords' => true,
+            'secondary_keywords' => true,
+            'asset_distribution_policy' => true,
+        ];
+        $rows = [];
+        foreach (\is_array($PlanJson['pages'] ?? null) ? $PlanJson['pages'] : [] as $pageType => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach ($page as $key => $block) {
+                $blockKey = \trim((string)$key);
+                if ($blockKey === '' || isset($reservedPageKeys[$blockKey]) || !\is_array($block)) {
+                    continue;
+                }
+                $block['page_type'] = (string)$pageType;
+                $block['block_key'] = \trim((string)($block['block_key'] ?? $blockKey));
+                $rows[] = $block;
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
      * @param array<string, mixed> $block
      * @return array<string, mixed>
      */
-    private function pruneBuildPlanBlockForView(array $block): array
+    private function prunePlanJsonBlockForView(array $block): array
     {
         $result = [];
         foreach ([
@@ -638,7 +613,7 @@ class AiSiteAgentWorkspaceStateHelperService
             }
         }
         if (\is_array($block['execution'] ?? null)) {
-            $result['execution'] = $this->pruneBuildPlanExecutionForView($block['execution']);
+            $result['execution'] = $this->prunePlanJsonExecutionForView($block['execution']);
         }
 
         return $result;
@@ -648,7 +623,7 @@ class AiSiteAgentWorkspaceStateHelperService
      * @param array<string, mixed> $execution
      * @return array<string, mixed>
      */
-    private function pruneBuildPlanExecutionForView(array $execution): array
+    private function prunePlanJsonExecutionForView(array $execution): array
     {
         $result = [];
         foreach (['status', 'progress_percent', 'attempt_no', 'message', 'started_at', 'updated_at', 'finished_at', 'reason'] as $key) {
@@ -671,17 +646,6 @@ class AiSiteAgentWorkspaceStateHelperService
      */
     private function preserveViewMetadataFromHeavyScope(array $scope): array
     {
-        if (!\is_array($scope['selected_skill_codes'] ?? null)) {
-            $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
-            $contractContext = \is_array($planWorkbench['contract_context'] ?? null) ? $planWorkbench['contract_context'] : [];
-            if (\is_array($contractContext['selected_skill_codes'] ?? null)) {
-                $scope['selected_skill_codes'] = \array_values(\array_filter(
-                    \array_map('strval', $contractContext['selected_skill_codes']),
-                    static fn(string $code): bool => \trim($code) !== ''
-                ));
-            }
-        }
-
         return $scope;
     }
 
@@ -696,19 +660,13 @@ class AiSiteAgentWorkspaceStateHelperService
         if ($structured === [] && $json !== []) {
             $structured = $json;
         }
-        $buildPlan = \is_array($plan['build_plan_v2'] ?? null) ? $plan['build_plan_v2'] : [];
-
         $prunedStructured = $this->pruneStageOneStructuredPlanForView($structured);
 
         return [
-            'markdown' => $this->limitViewText((string)($plan['markdown'] ?? ''), 80000),
             'json' => [],
             'structured' => $prunedStructured,
-            'build_plan_v2' => $buildPlan !== [] ? $this->pruneBuildPlanForView($buildPlan) : [],
-            'projection' => \is_array($plan['projection'] ?? null) ? $this->pruneRecursiveViewPayload($plan['projection']) : [],
             'json_available' => $json !== [],
             'structured_available' => $structured !== [],
-            'build_plan_v2_available' => \is_array($plan['build_plan_v2'] ?? null) && $plan['build_plan_v2'] !== [],
             'slimmed' => true,
         ];
     }
@@ -725,10 +683,9 @@ class AiSiteAgentWorkspaceStateHelperService
 
         foreach ([
             'stage1_queue',
-            'stage1_contract',
             'queue_jobs',
             'block_index',
-            'plan_blocks',
+            'plan_block_nodes',
         ] as $heavyRootKey) {
             unset($plan[$heavyRootKey]);
         }
@@ -970,7 +927,7 @@ class AiSiteAgentWorkspaceStateHelperService
      * @param array<string, mixed> $summary
      * @return array<string, mixed>
      */
-    private function pruneBuildTaskSummaryForView(array $summary): array
+    private function prunePlanJsonTaskSummaryForView(array $summary): array
     {
         return $this->pruneRecursiveFailureForView($summary);
     }
@@ -1235,7 +1192,7 @@ class AiSiteAgentWorkspaceStateHelperService
             return \max(0, \min(100, (int)$activeOperation['progress_percent']));
         }
 
-        $taskSummary = $this->resolveBuildPlanExecutionSummary($state);
+        $taskSummary = $this->resolvePlanJsonExecutionSummary($state);
         $total = (int)($taskSummary['total'] ?? 0);
         if ($total > 0) {
             $completed = (int)($taskSummary['completed'] ?? $taskSummary['done'] ?? $taskSummary['success'] ?? 0);
@@ -1282,19 +1239,10 @@ class AiSiteAgentWorkspaceStateHelperService
             return 'queue_info';
         }
 
-        $scope = \is_array($state['scope'] ?? null) ? $state['scope'] : [];
-        $buildPlan = \is_array($state['build_plan_v2'] ?? null)
-            ? $state['build_plan_v2']
-            : (\is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : []);
-        $buildPlanMeta = \is_array($buildPlan['contract_meta'] ?? null) ? $buildPlan['contract_meta'] : [];
-        $taskSummary = $this->resolveBuildPlanExecutionSummary($state);
+        $taskSummary = $this->resolvePlanJsonExecutionSummary($state);
 
-        if ((int)($state['build_plan_confirmed'] ?? $scope['build_plan_confirmed'] ?? 0) === 1
-            || !empty($state['has_build_plan_v2'])
-            || \strtolower(\trim((string)($buildPlanMeta['status'] ?? ''))) === 'confirmed'
-            || (int)($taskSummary['total'] ?? 0) > 0
-        ) {
-            return 'build_plan_progress';
+        if ((int)($taskSummary['total'] ?? 0) > 0) {
+            return 'plan_json_progress';
         }
 
         return 'queue_info';
@@ -1384,13 +1332,11 @@ class AiSiteAgentWorkspaceStateHelperService
         );
         $progressPercent = $this->resolveEnvelopeProgressPercent($state, $activeOperation, $status);
         $stateFingerprint = $this->buildStateFingerprint($state);
-        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
         $contextHash = \trim((string)(
             $state['context_hash']
             ?? $scope['context_hash']
-            ?? $scope['plan_workbench']['confirmed']['context_hash']
-            ?? $buildPlan['contract_id']
-            ?? $buildPlan['id']
+            ?? $scope['plan_json']['signature']
+            ?? $scope['plan_json']['plan_signature']
             ?? $stateFingerprint
         ));
 
@@ -1447,10 +1393,10 @@ class AiSiteAgentWorkspaceStateHelperService
                 }
             }
             $summary['materialized_page_id'] = (int)($pageData['materialized_page_id'] ?? 0);
-            $blocks = \is_array($pageData['blocks'] ?? null) ? $pageData['blocks'] : [];
+            $blocks = \is_array($pageData['block_nodes'] ?? null) ? $pageData['block_nodes'] : [];
             $summary['block_count'] = \count($blocks);
-            $summary['blocks'] = $this->pruneVirtualPageBlocksForView($blocks);
-            $summary['blocks_slimmed'] = true;
+            $summary['block_nodes'] = $this->pruneVirtualPageBlockNodesForView($blocks);
+            $summary['block_nodes_slimmed'] = true;
             $result[(string)$pageType] = $summary;
         }
 
@@ -1461,7 +1407,7 @@ class AiSiteAgentWorkspaceStateHelperService
      * @param array<int|string, mixed> $blocks
      * @return list<array<string, mixed>>
      */
-    private function pruneVirtualPageBlocksForView(array $blocks): array
+    private function pruneVirtualPageBlockNodesForView(array $blocks): array
     {
         $result = [];
         foreach ($blocks as $index => $block) {
@@ -1494,7 +1440,7 @@ class AiSiteAgentWorkspaceStateHelperService
             if (!\is_array($layout)) {
                 continue;
             }
-            $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+            $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
             $sections = \is_array($layout['sections'] ?? null) ? $layout['sections'] : [];
             $summary = [
                 'page_type' => (string)($layout['page_type'] ?? $pageType),

@@ -19,7 +19,7 @@ use Weline\Framework\Http\Url;
  * 本轮锁定 `buildScopeFromSource` 的字段映射 —— 它是 3 个抽出方法中唯一的纯函数，
  * 也是 PageBuilder ↔ Websites handoff 契约里最脆弱的一环：
  * 前端工作台 + Websites 采购队列都按这份 shape 读取，字段错位会立刻造成
- * "域名推荐列表丢失 / 注册商选项无法预选 / handoff_source 丢失回归到旧 provider" 等线上回归。
+ * "域名推荐列表丢失 / 注册商选项无法预选 / handoff_source 丢失回归到既有 provider" 等线上回归。
  *
  * `ensureMirrorSession` / `syncScopeBack` 依赖 `AiSiteAgentSessionService` 与
  * `WebsitesSessionService` 的真实 DB 读写，需要集成测试覆盖；单测不在本轮作用域内

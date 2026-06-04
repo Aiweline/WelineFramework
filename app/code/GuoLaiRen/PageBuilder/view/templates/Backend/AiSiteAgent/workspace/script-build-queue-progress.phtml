@@ -1,6 +1,6 @@
 <?php
 /**
- * 构建侧栏队列信息：重构后只显示 build 队列。
+ * 鏋勫缓渚ф爮闃熷垪淇℃伅锛氶噸鏋勫悗鍙樉绀?build 闃熷垪銆?
  */
 ?>
 <script>
@@ -12,18 +12,18 @@
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceStateUrl = <?= \json_encode((string)($workspaceStateUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var queueMessages = {
-        emptyBuild: <?= \json_encode((string)__('当前没有可展示的生成主题队列记录。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refreshed: <?= \json_encode((string)__('队列信息已刷新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        refreshFailed: <?= \json_encode((string)__('刷新队列信息失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        queueIdLabel: <?= \json_encode((string)__('队列编号'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        unknown: <?= \json_encode((string)__('—'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        emptyBuild: <?= \json_encode((string)__('褰撳墠娌℃湁鍙睍绀虹殑鐢熸垚涓婚闃熷垪璁板綍銆?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refreshed: <?= \json_encode((string)__('闃熷垪淇℃伅宸插埛鏂?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        refreshFailed: <?= \json_encode((string)__('鍒锋柊闃熷垪淇℃伅澶辫触'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        queueIdLabel: <?= \json_encode((string)__('闃熷垪缂栧彿'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        unknown: <?= \json_encode((string)__('鈥?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         jobKeyLabel: <?= \json_encode((string)__('Job'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        jobTypeLabel: <?= \json_encode((string)__('类型'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        statusLabel: <?= \json_encode((string)__('状态'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        jobTypeLabel: <?= \json_encode((string)__('绫诲瀷'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        statusLabel: <?= \json_encode((string)__('鐘舵€?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         tokenLabel: <?= \json_encode((string)__('Token'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        inputTokensLabel: <?= \json_encode((string)__('输入 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        outputTokensLabel: <?= \json_encode((string)__('输出 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        totalTokensLabel: <?= \json_encode((string)__('总 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        inputTokensLabel: <?= \json_encode((string)__('杈撳叆 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        outputTokensLabel: <?= \json_encode((string)__('杈撳嚭 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        totalTokensLabel: <?= \json_encode((string)__('鎬?tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
     };
     var panelMap = {
         build: {
@@ -38,8 +38,8 @@
     };
     var LIVE_LOG_MAX_LINES = 200;
     var PAGE_BLOCK_PROGRESS_MAX_ROWS = 120;
-    var BUILD_PLAN_BLOCK_PROGRESS_MAX_ROWS = 240;
-    var BUILD_PLAN_BLOCK_MESSAGE_MAX_CHARS = 240;
+    var PLAN_JSON_BLOCK_PROGRESS_MAX_ROWS = 240;
+    var PLAN_JSON_BLOCK_MESSAGE_MAX_CHARS = 240;
     function escapeHtml(text) {
         if (typeof bridge.escapeHtml === 'function') {
             return bridge.escapeHtml(text);
@@ -76,7 +76,7 @@
             : 'pending';
     }
 
-    function compactBuildTaskSummaryForMemory(summary) {
+    function compactPlanJsonTaskSummaryForMemory(summary) {
         if (!summary || typeof summary !== 'object') {
             return {};
         }
@@ -126,8 +126,8 @@
             row = row && typeof row === 'object' ? row : {};
             return {
                 page_type: String(row.page_type || ''),
-                done: normalizeCount(row.done || row.completed_blocks || row.block_done_count),
-                total: normalizeCount(row.total || row.expected_blocks || row.executable_blocks || row.block_total),
+                done: normalizeCount(row.done || row.completed_block_nodes || row.block_done_count),
+                total: normalizeCount(row.total || row.expected_block_nodes || row.executable_block_nodes || row.block_total),
                 running: normalizeCount(row.running),
                 queued: normalizeCount(row.queued),
                 pending: normalizeCount(row.pending || row.todo || row.block_pending_count),
@@ -135,18 +135,18 @@
                 cancelled: normalizeCount(row.cancelled || row.canceled),
                 stale: normalizeCount(row.stale),
                 complete: !!row.complete,
-                block_rows: compactBuildPlanBlockProgressForMemory(row.block_rows || row.blocks || [])
+                block_rows: compactPlanJsonBlockProgressForMemory(row.block_rows || [])
             };
         }).filter(function (row) {
             return row.page_type !== '';
         });
     }
 
-    function compactBuildPlanBlockProgressForMemory(progress) {
+    function compactPlanJsonBlockProgressForMemory(progress) {
         if (!Array.isArray(progress)) {
             return [];
         }
-        return progress.slice(0, BUILD_PLAN_BLOCK_PROGRESS_MAX_ROWS).map(function (row) {
+        return progress.slice(0, PLAN_JSON_BLOCK_PROGRESS_MAX_ROWS).map(function (row) {
             row = row && typeof row === 'object' ? row : {};
             var pageType = String(row.page_type || row.pageType || '').trim();
             var sectionKey = String(row.section_key || row.block_key || row.section_code || '').trim();
@@ -158,7 +158,7 @@
                 section_key: sectionKey.slice(0, 96),
                 label: label.slice(0, 120),
                 status: normalizeTaskStatus(row.status || row.state || row.execution_status),
-                message: String(row.message || row.error_message || row.failure_reason || '').slice(0, BUILD_PLAN_BLOCK_MESSAGE_MAX_CHARS),
+                message: String(row.message || row.error_message || row.failure_reason || '').slice(0, PLAN_JSON_BLOCK_MESSAGE_MAX_CHARS),
                 updated_at: String(row.updated_at || row.finished_at || '').slice(0, 96)
             };
         }).filter(function (row) {
@@ -166,7 +166,7 @@
         });
     }
 
-    function countBuildPlanBlockStatuses(blockRows) {
+    function countPlanJsonBlockStatuses(blockRows) {
         var counts = {
             total: 0,
             done: 0,
@@ -190,7 +190,7 @@
         return counts;
     }
 
-    function groupBuildPlanBlockProgressByPage(blockRows) {
+    function groupPlanJsonBlockProgressByPage(blockRows) {
         var buckets = {};
         var order = [];
         (Array.isArray(blockRows) ? blockRows : []).forEach(function (row) {
@@ -204,15 +204,15 @@
         });
         return order.map(function (pageType) {
             var rows = buckets[pageType] || [];
-            var counts = countBuildPlanBlockStatuses(rows);
+            var counts = countPlanJsonBlockStatuses(rows);
             counts.page_type = pageType;
             counts.block_rows = rows;
             return counts;
         });
     }
 
-    function attachBuildPlanBlockRowsToPages(pageRows, blockRows) {
-        var grouped = groupBuildPlanBlockProgressByPage(blockRows);
+    function attachPlanJsonBlockRowsToPages(pageRows, blockRows) {
+        var grouped = groupPlanJsonBlockProgressByPage(blockRows);
         if (grouped.length === 0) {
             return pageRows;
         }
@@ -237,12 +237,12 @@
         });
     }
 
-    function resolveBuildTaskSummary(info) {
+    function resolvePlanJsonTaskSummary(info) {
         if (!info || typeof info !== 'object') {
             return {};
         }
-        if (info.build_task_summary && typeof info.build_task_summary === 'object') {
-            return info.build_task_summary;
+        if (info.plan_json_task_summary && typeof info.plan_json_task_summary === 'object') {
+            return info.plan_json_task_summary;
         }
         if (info.task_summary && typeof info.task_summary === 'object') {
             return info.task_summary;
@@ -257,15 +257,15 @@
         if (!info || typeof info !== 'object') {
             return [];
         }
-        var blockRows = compactBuildPlanBlockProgressForMemory(info.build_plan_block_progress);
+        var blockRows = compactPlanJsonBlockProgressForMemory(info.plan_json_block_progress);
         var direct = compactPageBlockProgressForMemory(info.page_block_progress);
         if (direct.length > 0) {
-            return attachBuildPlanBlockRowsToPages(direct, blockRows);
+            return attachPlanJsonBlockRowsToPages(direct, blockRows);
         }
         if (blockRows.length > 0) {
-            return groupBuildPlanBlockProgressByPage(blockRows);
+            return groupPlanJsonBlockProgressByPage(blockRows);
         }
-        var summary = resolveBuildTaskSummary(info);
+        var summary = resolvePlanJsonTaskSummary(info);
         var groups = summary.groups && typeof summary.groups === 'object' ? summary.groups : {};
         var rows = Object.keys(groups).map(function (groupKey) {
             var group = groups[groupKey];
@@ -291,16 +291,16 @@
                 complete: total > 0 && done >= total
             };
         }).filter(Boolean);
-        return attachBuildPlanBlockRowsToPages(rows, blockRows);
+        return attachPlanJsonBlockRowsToPages(rows, blockRows);
     }
 
-    function renderBuildPlanBlockProgressRows(blockRows) {
+    function renderPlanJsonBlockProgressRows(blockRows) {
         blockRows = Array.isArray(blockRows) ? blockRows : [];
         if (blockRows.length === 0) {
             return '';
         }
         var visibleRows = blockRows.slice(0, 32);
-        var html = '<div class="mt-1 small border-start ps-2" data-build-plan-block-progress>';
+        var html = '<div class="mt-1 small border-start ps-2" data-plan-json-block-progress>';
         visibleRows.forEach(function (row) {
             var status = normalizeTaskStatus(row.status);
             var statusClass = status === 'failed' ? 'text-danger' : (status === 'done' ? 'text-success' : (status === 'running' ? 'text-primary' : 'text-muted'));
@@ -335,7 +335,7 @@
         var html = '<div class="border rounded p-2 bg-body mb-2" data-build-page-block-progress>'
             + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
             + '<strong class="small">Page/block progress</strong>'
-            + '<span class="text-muted small">pages ' + donePages + '/' + totalPages + ' · blocks ' + doneBlocks + '/' + totalBlocks + '</span>'
+            + '<span class="text-muted small">pages ' + donePages + '/' + totalPages + ' 路 blocks ' + doneBlocks + '/' + totalBlocks + '</span>'
             + '</div>';
         rows.forEach(function (row) {
             var total = normalizeCount(row.total);
@@ -351,12 +351,12 @@
             html += '<div class="mb-2" data-page-type="' + escapeHtml(row.page_type) + '">'
                 + '<div class="d-flex align-items-center justify-content-between gap-2 small">'
                 + '<code>' + escapeHtml(row.page_type) + '</code>'
-                + '<span class="text-muted">' + done + '/' + total + (detail.length ? ' · ' + escapeHtml(detail.join(' · ')) : '') + '</span>'
+                + '<span class="text-muted">' + done + '/' + total + (detail.length ? ' 路 ' + escapeHtml(detail.join(' 路 ')) : '') + '</span>'
                 + '</div>'
                 + '<div class="progress" style="height:4px;" aria-hidden="true">'
                 + '<div class="progress-bar' + (row.failed > 0 ? ' bg-danger' : '') + '" style="width:' + pct + '%"></div>'
                 + '</div>'
-                + renderBuildPlanBlockProgressRows(row.block_rows)
+                + renderPlanJsonBlockProgressRows(row.block_rows)
                 + '</div>';
         });
         return html + '</div>';
@@ -509,7 +509,7 @@
         try {
             var debugInfo = info && typeof info === 'object' ? Object.assign({}, info) : info;
             if (debugInfo && typeof debugInfo === 'object') {
-                delete debugInfo.build_plan_block_progress;
+                delete debugInfo.plan_json_block_progress;
                 if (Array.isArray(debugInfo.page_block_progress)) {
                     debugInfo.page_block_progress = compactPageBlockProgressForMemory(debugInfo.page_block_progress).map(function (row) {
                         var copy = Object.assign({}, row);
@@ -559,7 +559,7 @@
         if (kind === 'done' || kind === 'complete' || kind === 'completed') {
             return 'done';
         }
-        if (kind === 'progress' || kind === 'build_plan_progress' || kind === 'total') {
+        if (kind === 'progress' || kind === 'plan_json_progress' || kind === 'total') {
             return 'running';
         }
         return '';
@@ -597,22 +597,22 @@
         ['result_log', 'queue_result_delta', 'chunk', 'content', 'events', 'top_logs'].forEach(function (key) {
             delete safe[key];
         });
-        if (safe.build_task_summary && typeof safe.build_task_summary === 'object') {
-            safe.build_task_summary = compactBuildTaskSummaryForMemory(safe.build_task_summary);
+        if (safe.plan_json_task_summary && typeof safe.plan_json_task_summary === 'object') {
+            safe.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(safe.plan_json_task_summary);
         }
         if (safe.task_summary && typeof safe.task_summary === 'object') {
-            safe.build_task_summary = compactBuildTaskSummaryForMemory(safe.task_summary);
+            safe.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(safe.task_summary);
             delete safe.task_summary;
         }
         if (safe.task_progress && typeof safe.task_progress === 'object') {
-            safe.build_task_summary = compactBuildTaskSummaryForMemory(safe.task_progress);
+            safe.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(safe.task_progress);
             delete safe.task_progress;
         }
         if (Array.isArray(safe.page_block_progress)) {
             safe.page_block_progress = compactPageBlockProgressForMemory(safe.page_block_progress);
         }
-        if (Array.isArray(safe.build_plan_block_progress)) {
-            safe.build_plan_block_progress = compactBuildPlanBlockProgressForMemory(safe.build_plan_block_progress);
+        if (Array.isArray(safe.plan_json_block_progress)) {
+            safe.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(safe.plan_json_block_progress);
         }
         return safe;
     }
@@ -632,8 +632,8 @@
                     state.scope[key] = sanitizeQueueInfoForMemory(state.scope[key]);
                 }
             });
-            if (Array.isArray(state.scope.build_plan_block_progress)) {
-                state.scope.build_plan_block_progress = compactBuildPlanBlockProgressForMemory(state.scope.build_plan_block_progress);
+            if (Array.isArray(state.scope.plan_json_block_progress)) {
+                state.scope.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(state.scope.plan_json_block_progress);
             }
         }
         if (state.plan_queue_info && typeof state.plan_queue_info === 'object') {
@@ -642,8 +642,8 @@
         if (state.build_queue_info && typeof state.build_queue_info === 'object') {
             state.build_queue_info = sanitizeQueueInfoForMemory(state.build_queue_info);
         }
-        if (Array.isArray(state.build_plan_block_progress)) {
-            state.build_plan_block_progress = compactBuildPlanBlockProgressForMemory(state.build_plan_block_progress);
+        if (Array.isArray(state.plan_json_block_progress)) {
+            state.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(state.plan_json_block_progress);
         }
         return state;
     }
@@ -726,27 +726,27 @@
         }
         if (payload.state && payload.state[panel.stateKey] && typeof payload.state[panel.stateKey] === 'object') {
             var stateQueueInfo = sanitizeQueueInfoForMemory(payload.state[panel.stateKey]);
-            if (payload.state.build_task_summary && typeof payload.state.build_task_summary === 'object') {
-                stateQueueInfo.build_task_summary = compactBuildTaskSummaryForMemory(payload.state.build_task_summary);
+            if (payload.state.plan_json_task_summary && typeof payload.state.plan_json_task_summary === 'object') {
+                stateQueueInfo.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.state.plan_json_task_summary);
             }
             if (Array.isArray(payload.state.page_block_progress)) {
                 stateQueueInfo.page_block_progress = compactPageBlockProgressForMemory(payload.state.page_block_progress);
             }
-            if (Array.isArray(payload.state.build_plan_block_progress)) {
-                stateQueueInfo.build_plan_block_progress = compactBuildPlanBlockProgressForMemory(payload.state.build_plan_block_progress);
+            if (Array.isArray(payload.state.plan_json_block_progress)) {
+                stateQueueInfo.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(payload.state.plan_json_block_progress);
             }
             if (payload.task_summary && typeof payload.task_summary === 'object') {
-                stateQueueInfo.build_task_summary = compactBuildTaskSummaryForMemory(payload.task_summary);
+                stateQueueInfo.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.task_summary);
             } else if (payload.task_progress && typeof payload.task_progress === 'object') {
-                stateQueueInfo.build_task_summary = compactBuildTaskSummaryForMemory(payload.task_progress);
-            } else if (payload.build_task_summary && typeof payload.build_task_summary === 'object') {
-                stateQueueInfo.build_task_summary = compactBuildTaskSummaryForMemory(payload.build_task_summary);
+                stateQueueInfo.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.task_progress);
+            } else if (payload.plan_json_task_summary && typeof payload.plan_json_task_summary === 'object') {
+                stateQueueInfo.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.plan_json_task_summary);
             }
             if (Array.isArray(payload.page_block_progress)) {
                 stateQueueInfo.page_block_progress = compactPageBlockProgressForMemory(payload.page_block_progress);
             }
-            if (Array.isArray(payload.build_plan_block_progress)) {
-                stateQueueInfo.build_plan_block_progress = compactBuildPlanBlockProgressForMemory(payload.build_plan_block_progress);
+            if (Array.isArray(payload.plan_json_block_progress)) {
+                stateQueueInfo.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(payload.plan_json_block_progress);
             }
             return stateQueueInfo;
         }
@@ -769,9 +769,9 @@
             || Object.prototype.hasOwnProperty.call(payload, 'token_usage')
             || Object.prototype.hasOwnProperty.call(payload, 'task_summary')
             || Object.prototype.hasOwnProperty.call(payload, 'task_progress')
-            || Object.prototype.hasOwnProperty.call(payload, 'build_task_summary')
+            || Object.prototype.hasOwnProperty.call(payload, 'plan_json_task_summary')
             || Object.prototype.hasOwnProperty.call(payload, 'page_block_progress')
-            || Object.prototype.hasOwnProperty.call(payload, 'build_plan_block_progress')
+            || Object.prototype.hasOwnProperty.call(payload, 'plan_json_block_progress')
             || Object.prototype.hasOwnProperty.call(payload, 'progress_kind')
             || Object.prototype.hasOwnProperty.call(payload, 'active_operation_status')
         );
@@ -801,23 +801,23 @@
             queueState.token_usage = Object.assign({}, queueState.token_usage && typeof queueState.token_usage === 'object' ? queueState.token_usage : {}, payload.token_usage);
         }
         if (payload.task_summary && typeof payload.task_summary === 'object') {
-            queueState.build_task_summary = compactBuildTaskSummaryForMemory(payload.task_summary);
+            queueState.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.task_summary);
         } else if (payload.task_progress && typeof payload.task_progress === 'object') {
-            queueState.build_task_summary = compactBuildTaskSummaryForMemory(payload.task_progress);
-        } else if (payload.build_task_summary && typeof payload.build_task_summary === 'object') {
-            queueState.build_task_summary = compactBuildTaskSummaryForMemory(payload.build_task_summary);
-        } else if (payload.state && payload.state.build_task_summary && typeof payload.state.build_task_summary === 'object') {
-            queueState.build_task_summary = compactBuildTaskSummaryForMemory(payload.state.build_task_summary);
+            queueState.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.task_progress);
+        } else if (payload.plan_json_task_summary && typeof payload.plan_json_task_summary === 'object') {
+            queueState.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.plan_json_task_summary);
+        } else if (payload.state && payload.state.plan_json_task_summary && typeof payload.state.plan_json_task_summary === 'object') {
+            queueState.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(payload.state.plan_json_task_summary);
         }
         if (Array.isArray(payload.page_block_progress)) {
             queueState.page_block_progress = compactPageBlockProgressForMemory(payload.page_block_progress);
         } else if (payload.state && Array.isArray(payload.state.page_block_progress)) {
             queueState.page_block_progress = compactPageBlockProgressForMemory(payload.state.page_block_progress);
         }
-        if (Array.isArray(payload.build_plan_block_progress)) {
-            queueState.build_plan_block_progress = compactBuildPlanBlockProgressForMemory(payload.build_plan_block_progress);
-        } else if (payload.state && Array.isArray(payload.state.build_plan_block_progress)) {
-            queueState.build_plan_block_progress = compactBuildPlanBlockProgressForMemory(payload.state.build_plan_block_progress);
+        if (Array.isArray(payload.plan_json_block_progress)) {
+            queueState.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(payload.plan_json_block_progress);
+        } else if (payload.state && Array.isArray(payload.state.plan_json_block_progress)) {
+            queueState.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(payload.state.plan_json_block_progress);
         }
         var process = String(existing.process || '');
         if (Object.prototype.hasOwnProperty.call(payload, 'queue_process')) {
@@ -859,9 +859,9 @@
             input_tokens: queueState.input_tokens,
             output_tokens: queueState.output_tokens,
             total_tokens: queueState.total_tokens,
-            build_task_summary: queueState.build_task_summary && typeof queueState.build_task_summary === 'object' ? compactBuildTaskSummaryForMemory(queueState.build_task_summary) : {},
+            plan_json_task_summary: queueState.plan_json_task_summary && typeof queueState.plan_json_task_summary === 'object' ? compactPlanJsonTaskSummaryForMemory(queueState.plan_json_task_summary) : {},
             page_block_progress: Array.isArray(queueState.page_block_progress) ? compactPageBlockProgressForMemory(queueState.page_block_progress) : [],
-            build_plan_block_progress: Array.isArray(queueState.build_plan_block_progress) ? compactBuildPlanBlockProgressForMemory(queueState.build_plan_block_progress) : [],
+            plan_json_block_progress: Array.isArray(queueState.plan_json_block_progress) ? compactPlanJsonBlockProgressForMemory(queueState.plan_json_block_progress) : [],
             process: process,
             terminal_summary: terminalSummary
         };
@@ -941,14 +941,14 @@
             ? Object.assign({}, safeState.build_queue_info)
             : null;
         if (buildInfo) {
-            if (safeState.build_task_summary && typeof safeState.build_task_summary === 'object') {
-                buildInfo.build_task_summary = compactBuildTaskSummaryForMemory(safeState.build_task_summary);
+            if (safeState.plan_json_task_summary && typeof safeState.plan_json_task_summary === 'object') {
+                buildInfo.plan_json_task_summary = compactPlanJsonTaskSummaryForMemory(safeState.plan_json_task_summary);
             }
             if (Array.isArray(safeState.page_block_progress)) {
                 buildInfo.page_block_progress = compactPageBlockProgressForMemory(safeState.page_block_progress);
             }
-            if (Array.isArray(safeState.build_plan_block_progress)) {
-                buildInfo.build_plan_block_progress = compactBuildPlanBlockProgressForMemory(safeState.build_plan_block_progress);
+            if (Array.isArray(safeState.plan_json_block_progress)) {
+                buildInfo.plan_json_block_progress = compactPlanJsonBlockProgressForMemory(safeState.plan_json_block_progress);
             }
         }
         renderQueueInfoPanel('build', buildInfo);

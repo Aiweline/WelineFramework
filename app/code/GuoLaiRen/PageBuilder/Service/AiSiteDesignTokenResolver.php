@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 /**
- * Resolve site-level design tokens from build_plan_v2 or plan_json.
+ * Resolve site-level design tokens from plan_json.
  */
 final class AiSiteDesignTokenResolver
 {

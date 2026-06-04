@@ -457,7 +457,7 @@ final class AiSiteAgentQueueDispatchGuardServiceTest extends TestCase
                 'queue_id' => 42,
                 'status' => 'stop',
                 'pid' => 0,
-                'content' => \json_encode(['execution_token' => 'tok-OLD']),
+                'content' => \json_encode(['execution_token' => 'tok-PRIOR']),
             ],
             false,
             [

@@ -25,7 +25,7 @@ class AiSiteBlockPartialPatchService
     public function __construct(
         private readonly ?AiSiteAgentSessionService $sessionService = null,
         private readonly ?AiSiteScopeCompatibilityService $scopeCompatibilityService = null,
-        private readonly ?AiSiteBuildTaskService $buildTaskService = null,
+        private readonly ?AiSitePlanJsonTaskService $planJsonTaskService = null,
         private readonly ?AiSiteVirtualThemeService $virtualThemeService = null,
         private readonly ?AiResponseJsonParser $jsonParser = null,
         private readonly ?AiService $aiService = null,
@@ -97,7 +97,7 @@ class AiSiteBlockPartialPatchService
 
         $virtualPages = $this->buildTargetVirtualPagesByType($scope, $pageType);
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
         $match = $this->findBlockInBlocks($blocks, $blockId);
         $source = 'virtual_pages_by_type';
 
@@ -296,7 +296,7 @@ class AiSiteBlockPartialPatchService
             $beforeBlock = $currentBlock;
             $scope = $this->syncSharedComponentReplacement($scope, $sharedRegion, $candidate);
             $scope['preview_page_type'] = $pageType;
-            $scope['build_plan_execution_summary'] = $this->safeSummarize($scope);
+            $scope['plan_json_execution_summary'] = $this->safeSummarize($scope);
             $scope['block_patch_history'] = $this->appendPatchHistory(
                 \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
                 $pageType,
@@ -338,7 +338,7 @@ class AiSiteBlockPartialPatchService
             ]);
         }
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $virtualPage['block_nodes'] : [];
 
         $match = $this->findBlockInBlocks($blocks, $blockId);
         if ($match === null) {
@@ -371,7 +371,7 @@ class AiSiteBlockPartialPatchService
         }
 
         $createdAt = \date('Y-m-d H:i:s');
-        $virtualPage['blocks'] = \array_values($blocks);
+        $virtualPage['block_nodes'] = \array_values($blocks);
         $virtualPage['last_generated_at'] = $createdAt;
         $virtualPages[$pageType] = $virtualPage;
         $scope['virtual_pages_by_type'] = $virtualPages;
@@ -379,7 +379,7 @@ class AiSiteBlockPartialPatchService
         // 发布时 publish flow 会将虚拟主题中的 block 拷贝到具体页面。
         // 编辑数据已安全保存在 session scope 中。
         $scope['preview_page_type'] = $pageType;
-        $scope['build_plan_execution_summary'] = $this->safeSummarize($scope);
+        $scope['plan_json_execution_summary'] = $this->safeSummarize($scope);
         $scope['block_patch_history'] = $this->appendPatchHistory(
             \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
             $pageType,
@@ -1223,7 +1223,7 @@ class AiSiteBlockPartialPatchService
 
         $scope = $this->syncVirtualPageBlockIfPresent($scope, $pageType, $requestedBlockId, $candidate, $createdAt);
         $scope['preview_page_type'] = $pageType;
-        $scope['build_plan_execution_summary'] = $this->safeSummarize($scope);
+        $scope['plan_json_execution_summary'] = $this->safeSummarize($scope);
         $scope['block_patch_history'] = $this->appendPatchHistory(
             \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
             $pageType,
@@ -1264,8 +1264,8 @@ class AiSiteBlockPartialPatchService
         if (!\is_array($scope['virtual_pages_by_type'][$pageType] ?? null)) {
             return $scope;
         }
-        $blocks = \is_array($scope['virtual_pages_by_type'][$pageType]['blocks'] ?? null)
-            ? $scope['virtual_pages_by_type'][$pageType]['blocks']
+        $blocks = \is_array($scope['virtual_pages_by_type'][$pageType]['block_nodes'] ?? null)
+            ? $scope['virtual_pages_by_type'][$pageType]['block_nodes']
             : [];
         $match = $this->findBlockInBlocks($blocks, $requestedBlockId);
         if ($match === null) {
@@ -1277,7 +1277,7 @@ class AiSiteBlockPartialPatchService
         $index = (int)($match['index'] ?? -1);
         if ($index >= 0 && \array_key_exists($index, $blocks)) {
             $blocks[$index] = $candidate;
-            $scope['virtual_pages_by_type'][$pageType]['blocks'] = \array_values($blocks);
+            $scope['virtual_pages_by_type'][$pageType]['block_nodes'] = \array_values($blocks);
         }
         $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = $createdAt;
 
@@ -1360,7 +1360,7 @@ class AiSiteBlockPartialPatchService
             $scope['virtual_pages_by_type'][$pageType]['last_generated_at'] = $createdAt;
         }
         $scope['preview_page_type'] = $pageType;
-        $scope['build_plan_execution_summary'] = $this->safeSummarize($scope);
+        $scope['plan_json_execution_summary'] = $this->safeSummarize($scope);
         $scope['block_patch_history'] = $this->appendPatchHistory(
             \is_array($scope['block_patch_history'] ?? null) ? $scope['block_patch_history'] : [],
             $pageType,
@@ -1914,7 +1914,7 @@ class AiSiteBlockPartialPatchService
     private function safeSummarize(array $scope): array
     {
         try {
-            return $this->buildTaskService()->summarize($scope);
+            return $this->planJsonTaskService()->summarize($scope);
         } catch (\Throwable) {
             return [];
         }
@@ -1982,7 +1982,7 @@ class AiSiteBlockPartialPatchService
             . ($visualContract !== '' ? $visualContract . "\n" : '')
             . "Visible copy governance:\n"
             . "- Visitor-facing copy and attributes must use source_of_truth_locale/content_locale exactly.\n"
-            . "- Task labels, component labels, section labels, image-slot labels, queue/build-plan labels, and schema role labels are internal metadata. Never render them verbatim as headings, card titles, badges, CTA text, alt/title/aria text, or body copy.\n"
+            . "- Task labels, component labels, section labels, image-slot labels, queue/plan-json labels, and schema role labels are internal metadata. Never render them verbatim as headings, card titles, badges, CTA text, alt/title/aria text, or body copy.\n"
             . "- Before returning, compare all headings, card titles, badges, CTA labels, alt/title/aria attributes, and paragraphs against current_block labels/config labels/layout labels. Exact copies, title-cased copies, or instruction-shaped sentences starting with Introduce, Showcase, Answer, Reassure, Remove, Educate, Encourage, or Close are invalid; rewrite them into final customer-facing copy.\n"
             . "- Preserve the required generated image src and data-pb-ai-asset-slot attributes, but rewrite alt/title/aria text into concise visitor-facing descriptions instead of copying slot labels or prompt briefs.\n\n"
             . "- Never leave a browser-default `<a>` in block.html or template fields. If a link is necessary, it must have a component-prefixed class and explicit CSS in the same block/template; otherwise remove the link and use plain text.\n\n"
@@ -2000,7 +2000,7 @@ class AiSiteBlockPartialPatchService
         $blockId = \trim((string)($read['block_id'] ?? ''));
         $componentCode = \trim((string)($read['component_code'] ?? ''));
         $layoutContext = \is_array($read['layout_context'] ?? null) ? $read['layout_context'] : [];
-        $task = $this->resolvePatchBuildTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $task = $this->resolvePatchPlanJsonTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
         $contentLocale = $this->resolvePatchContentLocale($read, $scope, $task);
         $languageContract = $this->buildPatchLanguageContract($task, $contentLocale);
         $blockContract = $this->resolvePatchBlockContract($task, $scope, $pageType, $blockId, $componentCode, $layoutContext);
@@ -2009,7 +2009,7 @@ class AiSiteBlockPartialPatchService
         $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
 
         return [
-            'block_context_source' => $task !== [] ? 'confirmed_build_task' : 'current_rendered_block',
+            'block_context_source' => $task !== [] ? 'confirmed_plan_json_task' : 'current_rendered_block',
             'content_locale' => $contentLocale,
             'language_contract' => $languageContract,
             'task_identity' => [
@@ -2083,18 +2083,18 @@ class AiSiteBlockPartialPatchService
         $componentCode = \trim((string)($read['component_code'] ?? ''));
         $pageContext = \is_array($read['page_context'] ?? null) ? $read['page_context'] : [];
         $layoutContext = \is_array($read['layout_context'] ?? null) ? $read['layout_context'] : [];
-        $task = $this->resolvePatchBuildTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $task = $this->resolvePatchPlanJsonTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
         $planContext = \is_array($task['plan_context'] ?? null) ? $task['plan_context'] : [];
         $blockTask = \is_array($task['block_task'] ?? null) ? $task['block_task'] : [];
         $taskScript = \is_array($task['task_script'] ?? null) ? $task['task_script'] : [];
-        $pagePlanBlock = $this->resolvePatchPagePlanBlock($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $planJsonPageBlock = $this->resolvePatchPlanJsonPageBlock($scope, $pageType, $blockId, $componentCode, $layoutContext);
         $blockGoal = $this->firstNonEmptyScalar([
             $planContext['block_goal'] ?? null,
             $planContext['stage1_block_goal'] ?? null,
             $blockTask['task_goal'] ?? null,
-            $pagePlanBlock['block_goal'] ?? null,
-            $pagePlanBlock['execution_script']['core_copy'] ?? null,
-            $pagePlanBlock['execution_script'] ?? null,
+            $planJsonPageBlock['block_goal'] ?? null,
+            $planJsonPageBlock['execution_script']['core_copy'] ?? null,
+            $planJsonPageBlock['execution_script'] ?? null,
         ]);
         $pageGoal = $this->firstNonEmptyScalar([
             $planContext['page_goal'] ?? null,
@@ -2103,13 +2103,13 @@ class AiSiteBlockPartialPatchService
         ]);
         $pageFlowRole = $this->firstNonEmptyScalar([
             $planContext['page_flow_role'] ?? null,
-            $pagePlanBlock['page_flow_role'] ?? null,
+            $planJsonPageBlock['page_flow_role'] ?? null,
         ]);
         $blockKey = $this->firstNonEmptyScalar([
             $layoutContext['block_key'] ?? null,
             $task['block_key'] ?? null,
             $task['section_key'] ?? null,
-            $pagePlanBlock['block_key'] ?? null,
+            $planJsonPageBlock['block_key'] ?? null,
             $blockId,
         ]);
 
@@ -2124,10 +2124,10 @@ class AiSiteBlockPartialPatchService
             'block_goal' => $blockGoal,
             'stage1_block_content' => $this->firstNonEmptyScalar([
                 $planContext['stage1_block_content'] ?? null,
-                $pagePlanBlock['content_brief'] ?? null,
+                $planJsonPageBlock['content_brief'] ?? null,
                 $taskScript['story_goal'] ?? null,
             ]),
-            'must_include_facts' => $this->collectPatchFacts($taskScript, $pagePlanBlock),
+            'must_include_facts' => $this->collectPatchFacts($taskScript, $planJsonPageBlock),
             'role_fidelity_hint' => $this->buildPatchRoleFidelityHint($blockKey, $pageFlowRole, $blockGoal),
         ];
     }
@@ -2174,17 +2174,17 @@ class AiSiteBlockPartialPatchService
      * @param array<string, mixed> $layoutContext
      * @return array<string, mixed>
      */
-    private function resolvePatchBuildTask(
+    private function resolvePatchPlanJsonTask(
         array $scope,
         string $pageType,
         string $blockId,
         string $componentCode,
         array $layoutContext
     ): array {
-        $buildTasks = $this->collectPatchBuildTaskDefinitions($scope, $pageType);
+        $planJsonTasks = $this->collectPatchPlanJsonTaskDefinitions($scope, $pageType);
         $blockKey = \trim((string)($layoutContext['block_key'] ?? ''));
         $sharedRegion = $this->resolveSharedComponentRegionForBlockId($pageType, $componentCode !== '' ? $componentCode : $blockId);
-        foreach ($buildTasks as $task) {
+        foreach ($planJsonTasks as $task) {
             if (!\is_array($task)) {
                 continue;
             }
@@ -2215,7 +2215,7 @@ class AiSiteBlockPartialPatchService
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
      */
-    private function collectPatchBuildTaskDefinitions(array $scope, string $pageType): array
+    private function collectPatchPlanJsonTaskDefinitions(array $scope, string $pageType): array
     {
         $tasks = [];
         $seen = [];
@@ -2231,14 +2231,14 @@ class AiSiteBlockPartialPatchService
             $tasks[] = $task;
         };
 
-        foreach ($this->buildTaskService()->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
-            $definition = $this->buildTaskService()->getTaskDefinition($scope, $taskKey);
+        foreach ($this->planJsonTaskService()->listTaskKeysByPageType($scope, $pageType) as $taskKey) {
+            $definition = $this->planJsonTaskService()->getTaskDefinition($scope, $taskKey);
             if (\is_array($definition)) {
                 $append($definition);
             }
         }
         foreach (['shared:header', 'shared:footer'] as $taskKey) {
-            $definition = $this->buildTaskService()->getTaskDefinition($scope, $taskKey);
+            $definition = $this->planJsonTaskService()->getTaskDefinition($scope, $taskKey);
             if (\is_array($definition)) {
                 $append($definition);
             }
@@ -2252,19 +2252,22 @@ class AiSiteBlockPartialPatchService
      * @param array<string, mixed> $layoutContext
      * @return array<string, mixed>
      */
-    private function resolvePatchPagePlanBlock(
+    private function resolvePatchPlanJsonPageBlock(
         array $scope,
         string $pageType,
         string $blockId,
         string $componentCode,
         array $layoutContext
     ): array {
-        $planBlocks = \is_array($scope['plan_json']['pages'][$pageType]['blocks'] ?? null)
-            ? $scope['plan_json']['pages'][$pageType]['blocks']
-            : [];
         $blockKey = \trim((string)($layoutContext['block_key'] ?? ''));
-        foreach ($planBlocks as $block) {
-            if (!\is_array($block)) {
+        $planJsonPage = \is_array($scope['plan_json']['pages'][$pageType] ?? null)
+            ? $scope['plan_json']['pages'][$pageType]
+            : [];
+        if ($blockKey !== '' && \is_array($planJsonPage[$blockKey] ?? null)) {
+            return $planJsonPage[$blockKey];
+        }
+        foreach ($planJsonPage as $candidateKey => $block) {
+            if (!\is_string($candidateKey) || !$this->isDynamicPlanBlockKey($candidateKey) || !\is_array($block)) {
                 continue;
             }
             if ($blockKey !== '' && \trim((string)($block['block_key'] ?? '')) === $blockKey) {
@@ -2283,10 +2286,10 @@ class AiSiteBlockPartialPatchService
 
     /**
      * @param array<string, mixed> $taskScript
-     * @param array<string, mixed> $pagePlanBlock
+     * @param array<string, mixed> $planJsonPageBlock
      * @return list<string>
      */
-    private function collectPatchFacts(array $taskScript, array $pagePlanBlock): array
+    private function collectPatchFacts(array $taskScript, array $planJsonPageBlock): array
     {
         $facts = [];
         foreach (\is_array($taskScript['field_content_requirements'] ?? null) ? $taskScript['field_content_requirements'] : [] as $row) {
@@ -2303,7 +2306,7 @@ class AiSiteBlockPartialPatchService
                 }
             }
         }
-        foreach (\is_array($pagePlanBlock['required_facts'] ?? null) ? $pagePlanBlock['required_facts'] : [] as $fact) {
+        foreach (\is_array($planJsonPageBlock['required_facts'] ?? null) ? $planJsonPageBlock['required_facts'] : [] as $fact) {
             if (\is_scalar($fact) && \trim((string)$fact) !== '') {
                 $facts[] = \trim((string)$fact);
             }
@@ -2383,7 +2386,7 @@ class AiSiteBlockPartialPatchService
         $blockId = \trim((string)($read['block_id'] ?? ''));
         $componentCode = \trim((string)($read['component_code'] ?? ''));
         $layoutContext = \is_array($read['layout_context'] ?? null) ? $read['layout_context'] : [];
-        $task = $this->resolvePatchBuildTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        $task = $this->resolvePatchPlanJsonTask($scope, $pageType, $blockId, $componentCode, $layoutContext);
         $locale = $this->resolvePatchContentLocale($read, $scope, $task);
 
         return $locale !== '' ? $locale : null;
@@ -2402,13 +2405,13 @@ class AiSiteBlockPartialPatchService
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
 
         foreach ([
+            $scope['content_locale'] ?? null,
+            $websiteProfile['content_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
             $runtimeContext['content_locale'] ?? null,
             $languageContract['source_of_truth_locale'] ?? null,
             $task['content_locale'] ?? null,
             $pageContext['content_locale'] ?? null,
-            $scope['content_locale'] ?? null,
-            $websiteProfile['content_locale'] ?? null,
-            $websiteProfile['default_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $pageContext['locale'] ?? null,
             $scope['plan_locale'] ?? null,
@@ -2477,12 +2480,66 @@ class AiSiteBlockPartialPatchService
             }
         }
 
-        $pagePlanBlock = $this->resolvePatchPagePlanBlock($scope, $pageType, $blockId, $componentCode, $layoutContext);
-        if (\is_array($pagePlanBlock['block_contract'] ?? null) && $pagePlanBlock['block_contract'] !== []) {
-            return $pagePlanBlock['block_contract'];
+        $planJsonPageBlock = $this->resolvePatchPlanJsonPageBlock($scope, $pageType, $blockId, $componentCode, $layoutContext);
+        if (\is_array($planJsonPageBlock['block_contract'] ?? null) && $planJsonPageBlock['block_contract'] !== []) {
+            return $planJsonPageBlock['block_contract'];
         }
 
         return [];
+    }
+
+    private function isDynamicPlanBlockKey(string $key): bool
+    {
+        static $metaKeys = [
+            'page_key' => true,
+            'page_type' => true,
+            'type' => true,
+            'status' => true,
+            'message' => true,
+            'error' => true,
+            'error_message' => true,
+            'updated_at' => true,
+            'started_at' => true,
+            'finished_at' => true,
+            'attempt_no' => true,
+            'result_ref' => true,
+            'title' => true,
+            'label' => true,
+            'page_label' => true,
+            'page_title' => true,
+            'page_goal' => true,
+            'page_status' => true,
+            'content_locale' => true,
+            'shared_context_hash' => true,
+            'theme_context_hash' => true,
+            'assembly_version' => true,
+            'generation_method' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'page_context_hash' => true,
+            'block_nodes' => true,
+            'block_nodes' => true,
+            'ordered_block_keys' => true,
+            'seo' => true,
+            'meta_title' => true,
+            'meta_description' => true,
+            'meta_keywords' => true,
+            'route' => true,
+            'slug' => true,
+            'path' => true,
+            'layout' => true,
+            'sections' => true,
+            'section_refinements' => true,
+            'content' => true,
+            'description' => true,
+            'summary' => true,
+            'html' => true,
+            'html_content' => true,
+            'fields' => true,
+        ];
+        $key = \trim($key);
+
+        return $key !== '' && !isset($metaKeys[$key]);
     }
 
     /**
@@ -2551,9 +2608,9 @@ class AiSiteBlockPartialPatchService
         return $this->sessionService ?? ObjectManager::getInstance(AiSiteAgentSessionService::class);
     }
 
-    private function buildTaskService(): AiSiteBuildTaskService
+    private function planJsonTaskService(): AiSitePlanJsonTaskService
     {
-        return $this->buildTaskService ?? ObjectManager::getInstance(AiSiteBuildTaskService::class);
+        return $this->planJsonTaskService ?? ObjectManager::getInstance(AiSitePlanJsonTaskService::class);
     }
 
     private function clipText(string $value, int $limit): string

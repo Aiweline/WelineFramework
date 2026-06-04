@@ -106,43 +106,7 @@ class Component extends BackendController
         }
     }
     
-    /**
-     * API: 获取组件列表（旧版兼容）
-     * GET /backend/visual/api/component/listLegacy
-     */
-    public function listLegacy()
-    {
-        try {
-            $styleCode = $this->request->getParam('style_code', '');
-            $includeCompatible = $this->request->getParam('include_compatible', '1') === '1';
-            
-            // 扫描组件
-            $this->componentService->scanAndRegister($styleCode);
-            
-            // 获取组件
-            $components = $this->componentService->getComponentsByStyle($styleCode, $includeCompatible);
-            
-            $result = [
-                'success' => true,
-                'own' => $this->componentService->toArrayBatch($components['own']),
-                'shared' => $this->componentService->toArrayBatch($components['shared'] ?? []),
-                'compatible' => [],
-            ];
-            
-            // 转换兼容组件
-            foreach ($components['compatible'] as $templateCode => $templateComponents) {
-                $result['compatible'][$templateCode] = $this->componentService->toArrayBatch($templateComponents);
-            }
-            
-            return $this->fetchJson($result);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ]);
-        }
-    }
-    
+
     /**
      * API: 预览组件
      * POST /backend/visual/api/component/preview

@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
-use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use PHPUnit\Framework\TestCase;
 
-final class AiSiteExecutionBlueprintServiceWeakPageGoalDetectionTest extends TestCase
+final class AiSitePlanJsonGenerationServiceWeakPageGoalDetectionTest extends TestCase
 {
     public function testDetailedBriefUsesLocalRequirementExpansion(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSitePlanJsonGenerationService(new AiSitePageBlueprintService());
         $shouldUse = new \ReflectionMethod($service, 'shouldUseLocalStageOneRequirementExpansion');
         $shouldUse->setAccessible(true);
         $builder = new \ReflectionMethod($service, 'buildLocalStageOneRequirementExpansion');
@@ -39,9 +39,9 @@ final class AiSiteExecutionBlueprintServiceWeakPageGoalDetectionTest extends Tes
         self::assertCount(\count($pageTypes), $expansion['page_strategy'] ?? []);
     }
 
-    public function testCollectStageOneIssuesMarksLegacyRefundPolicyPageGoalAsInvalid(): void
+    public function testCollectStageOneIssuesMarksRemovedRefundPolicyPageGoalAsInvalid(): void
     {
-        $service = new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService());
+        $service = new AiSitePlanJsonGenerationService(new AiSitePageBlueprintService());
         $method = new \ReflectionMethod($service, 'collectAiStageOneProblemIssues');
         $method->setAccessible(true);
 
@@ -50,8 +50,7 @@ final class AiSiteExecutionBlueprintServiceWeakPageGoalDetectionTest extends Tes
                 Page::TYPE_REFUND_POLICY => [
                     'page_goal' => 'Deliver clear and actionable page content for visitors.',
                     'theme_alignment_summary' => 'Refund Policy follows shared_prompt_context and keeps policy copy scannable.',
-                    'blocks' => [
-                        [
+                    'refund_overview' => [
                             'block_key' => 'refund-overview',
                             'content' => 'The refund overview block shows concrete customer-facing details, trust signals, and the next action on the page.',
                             'field_plan' => [
@@ -66,7 +65,6 @@ final class AiSiteExecutionBlueprintServiceWeakPageGoalDetectionTest extends Tes
                                     'List the documents or proof customers need.',
                                 ],
                             ],
-                        ],
                     ],
                 ],
             ],

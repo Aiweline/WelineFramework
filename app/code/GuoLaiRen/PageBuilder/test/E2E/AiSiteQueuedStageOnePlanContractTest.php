@@ -6,7 +6,7 @@ namespace GuoLaiRen\PageBuilder\Test\E2E;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
-use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Test\Integration\AbstractAiSiteWorkbenchIntegrationHarness;
 use Weline\Ai\Service\AiService;
@@ -15,15 +15,15 @@ use Weline\Queue\Console\Queue\Run as QueueRunCommand;
 
 class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegrationHarness
 {
-    private bool $hadPreviousExecutionBlueprintService = false;
-    private ?object $previousExecutionBlueprintService = null;
+    private bool $hadPreviousPlanJsonGenerationService = false;
+    private ?object $previousPlanJsonGenerationService = null;
 
     protected function tearDown(): void
     {
         $this->restoreObjectManagerInstance(
-            AiSiteExecutionBlueprintService::class,
-            $this->hadPreviousExecutionBlueprintService,
-            $this->previousExecutionBlueprintService
+            AiSitePlanJsonGenerationService::class,
+            $this->hadPreviousPlanJsonGenerationService,
+            $this->previousPlanJsonGenerationService
         );
         parent::tearDown();
     }
@@ -52,11 +52,11 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
                     return;
                 }
                 if (\str_contains($prompt, 'Page type: ' . Page::TYPE_HOME)) {
-                    $callback($this->buildPagePlanResponse(Page::TYPE_HOME));
+                    $callback($this->makePlanJsonPageResponse(Page::TYPE_HOME));
                     return;
                 }
                 if (\str_contains($prompt, 'Page type: ' . Page::TYPE_ABOUT)) {
-                    $callback($this->buildPagePlanResponse(Page::TYPE_ABOUT));
+                    $callback($this->makePlanJsonPageResponse(Page::TYPE_ABOUT));
                     return;
                 }
 
@@ -83,8 +83,8 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
             });
 
         $this->replaceObjectManagerInstance(
-            AiSiteExecutionBlueprintService::class,
-            new AiSiteExecutionBlueprintService(new AiSitePageBlueprintService(), $aiService)
+            AiSitePlanJsonGenerationService::class,
+            new AiSitePlanJsonGenerationService(new AiSitePageBlueprintService(), $aiService)
         );
 
         $createPayload = $this->invokeJsonAction(
@@ -164,12 +164,10 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
         $scope = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, [
             'plan_json',
             'plan_markdown',
-            'plan_workbench',
         ]);
         $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
-        $planWorkbench = \is_array($scope['plan_workbench'] ?? null) ? $scope['plan_workbench'] : [];
 
-        $this->assertStageOnePlanContract($planJson, $planWorkbench);
+        $this->assertStageOnePlanContract($planJson);
     }
 
     /**
@@ -259,9 +257,8 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
 
     /**
      * @param array<string, mixed> $planJson
-     * @param array<string, mixed> $planWorkbench
      */
-    private function assertStageOnePlanContract(array $planJson, array $planWorkbench): void
+    private function assertStageOnePlanContract(array $planJson): void
     {
         self::assertNotSame([], $planJson);
         self::assertNotSame('', (string)($planJson['requirement_expansion']['expanded_brief'] ?? ''));
@@ -286,12 +283,8 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
             self::assertNotSame('', \trim((string)($overview['differentiation_note'] ?? '')), $pageType . ' differentiation_note must exist.');
         }
 
-        $planBook = \is_array($planWorkbench['confirmed']['plan_book']['structured'] ?? null)
-            ? $planWorkbench['confirmed']['plan_book']['structured']
-            : [];
-        self::assertNotSame([], $planBook);
-        self::assertNotSame('', (string)($planBook['requirement_expansion']['expanded_brief'] ?? ''));
-        self::assertIsArray($planBook['page_type_overviews'][Page::TYPE_HOME] ?? null);
+        self::assertIsArray($planJson['pages'][Page::TYPE_HOME] ?? null);
+        self::assertIsArray($planJson['pages'][Page::TYPE_ABOUT] ?? null);
     }
 
     private function looksLikeInstructionalPlaceholder(string $text): bool
@@ -460,7 +453,7 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
         ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
-    private function buildPagePlanResponse(string $pageType): string
+    private function makePlanJsonPageResponse(string $pageType): string
     {
         $page = $pageType === Page::TYPE_ABOUT
             ? [
@@ -468,27 +461,23 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
                 'theme_alignment_summary' => 'About uses the Emerald Saffron trust palette, direct safety voice, rounded proof cards, and Download APK handoff from Header/Footer.',
                 'primary_keywords' => ['safe rummy app', 'responsible teen patti'],
                 'secondary_keywords' => ['APK safety', 'Indian player support'],
-                'blocks' => [
-                    $this->buildPageBlock('origin_story', 'Royal India Play explains why its APK guide focuses on clear checks, readable rules, and practical mobile-first trust for Indian players.'),
-                    $this->buildPageBlock('mission_values', 'The mission values section shows safer recommendations, responsible play reminders, and concise editorial standards before any install decision.'),
-                    $this->buildPageBlock('trust_proof', 'Trust proof highlights review steps, support visibility, privacy-aware guidance, and transparent download expectations.'),
-                    $this->buildPageBlock('about_cta', 'The about CTA invites visitors to return to the main download guide after they understand the brand standards and support promise.'),
-                ],
+                'origin_story' => $this->buildPageBlock('origin_story', 'Royal India Play explains why its APK guide focuses on clear checks, readable rules, and practical mobile-first trust for Indian players.'),
+                'mission_values' => $this->buildPageBlock('mission_values', 'The mission values section shows safer recommendations, responsible play reminders, and concise editorial standards before any install decision.'),
+                'trust_proof' => $this->buildPageBlock('trust_proof', 'Trust proof highlights review steps, support visibility, privacy-aware guidance, and transparent download expectations.'),
+                'about_cta' => $this->buildPageBlock('about_cta', 'The about CTA invites visitors to return to the main download guide after they understand the brand standards and support promise.'),
             ]
             : [
                 'page_goal' => 'Turn Indian rummy and teen patti visitors into confident APK installers.',
                 'theme_alignment_summary' => 'Home uses the Emerald Saffron palette, direct Download APK CTA tone, trust cards, and shared Header/Footer install path.',
                 'primary_keywords' => ['rummy APK download', 'teen patti APK'],
                 'secondary_keywords' => ['Indian gaming app', 'safe APK install'],
-                'blocks' => [
-                    $this->buildPageBlock('hero_download', 'The download hero states the APK action, install confidence, supported game categories, and visible reassurance before visitors tap the primary button.'),
-                    $this->buildPageBlock('game_showcase_or_features', 'The game showcase compares rummy, teen patti, ludo, carrom, and chess options with concise benefits for Android players.'),
-                    $this->buildPageBlock('trust_security', 'Trust and security content explains review checks, responsible-play cues, support visibility, and privacy-aware install guidance.'),
-                    $this->buildPageBlock('player_reviews', 'Player review cards summarize practical visitor concerns such as speed, clarity, responsible play, and support response quality.'),
-                    $this->buildPageBlock('faq_or_rules', 'FAQ and rules content answers install safety, account basics, game selection, troubleshooting, and responsible-use questions.'),
-                    $this->buildPageBlock('final_download_cta', 'The final download action band gives visitors one confident APK path after they have scanned games, trust proof, reviews, and FAQ details.'),
-                    $this->buildPageBlock('bonus_steps', 'Bonus steps explain the short install checklist, verification cues, and what visitors should confirm before opening the downloaded APK.'),
-                ],
+                'hero_download' => $this->buildPageBlock('hero_download', 'The download hero states the APK action, install confidence, supported game categories, and visible reassurance before visitors tap the primary button.'),
+                'game_showcase_or_features' => $this->buildPageBlock('game_showcase_or_features', 'The game showcase compares rummy, teen patti, ludo, carrom, and chess options with concise benefits for Android players.'),
+                'trust_security' => $this->buildPageBlock('trust_security', 'Trust and security content explains review checks, responsible-play cues, support visibility, and privacy-aware install guidance.'),
+                'player_reviews' => $this->buildPageBlock('player_reviews', 'Player review cards summarize practical visitor concerns such as speed, clarity, responsible play, and support response quality.'),
+                'faq_or_rules' => $this->buildPageBlock('faq_or_rules', 'FAQ and rules content answers install safety, account basics, game selection, troubleshooting, and responsible-use questions.'),
+                'final_download_cta' => $this->buildPageBlock('final_download_cta', 'The final download action band gives visitors one confident APK path after they have scanned games, trust proof, reviews, and FAQ details.'),
+                'bonus_steps' => $this->buildPageBlock('bonus_steps', 'Bonus steps explain the short install checklist, verification cues, and what visitors should confirm before opening the downloaded APK.'),
             ];
 
         return \json_encode(['page' => $page], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}';
@@ -556,8 +545,8 @@ class AiSiteQueuedStageOnePlanContractTest extends AbstractAiSiteWorkbenchIntegr
     private function replaceObjectManagerInstance(string $class, object $instance): void
     {
         $instances = $this->getObjectManagerScopedInstances();
-        $this->hadPreviousExecutionBlueprintService = \array_key_exists($class, $instances);
-        $this->previousExecutionBlueprintService = $this->hadPreviousExecutionBlueprintService ? $instances[$class] : null;
+        $this->hadPreviousPlanJsonGenerationService = \array_key_exists($class, $instances);
+        $this->previousPlanJsonGenerationService = $this->hadPreviousPlanJsonGenerationService ? $instances[$class] : null;
         $instances[$class] = $instance;
         $this->setObjectManagerScopedInstances($instances);
     }
