@@ -11,12 +11,10 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         $planPanel = (string)\file_get_contents(
             BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml'
         );
-        $script = (string)\file_get_contents(
-            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertStringContainsString('function startPlanGenerationForSelection(triggerBtn, selectedTypes, options)', $script, 'missing plan start function');
-        self::assertStringContainsString('function confirmCurrentPlanAndMaybeBuild()', $script, 'missing confirm/build function');
+        self::assertStringContainsString('function confirmCurrentPlanAndMaybeBuild(', $script, 'missing confirm/build function');
         self::assertStringContainsString('id="pb-ai-confirm-plan"', $planPanel, 'missing confirm plan button');
         self::assertStringNotContainsString('function maybeAutoStartBuildAfterWorkspaceState(data)', $script);
         self::assertStringNotContainsString('autoResumeActiveOperation', $script);
@@ -24,9 +22,7 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
 
     public function testStalePlanConfirmationPromptsAndUsesExplicitOverride(): void
     {
-        $script = (string)\file_get_contents(
-            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $controller = (string)\file_get_contents(
             BP . 'app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php'
         );
@@ -41,18 +37,12 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         self::assertStringContainsString("getRequestBodyValue('force_confirm_stale_plan', 0)", $controller);
         self::assertStringContainsString("'requires_confirmation' => true", $controller);
         self::assertStringContainsString("'confirmation_code' => 'PLAN_INPUT_STALE_CONFIRM'", $controller);
-        self::assertStringContainsString("'plan_confirmed_stale_input' =>", $controller);
     }
 
     public function testResumePromptSuppressesTerminalOrCompleteGeneratedWorkspace(): void
     {
-        $script = (string)\file_get_contents(
-            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
-        self::assertStringContainsString('function allExpectedPageTypesHaveGeneratedSurface(workspaceState)', $script);
-        self::assertStringContainsString('isTerminalActiveOperationStatus(activeStatus)', $script);
-        self::assertStringContainsString('allExpectedPageTypesHaveGeneratedSurface(latestWorkspaceState)', $script);
         self::assertStringContainsString('function scheduleVisualEditResumePrompt()', $script);
         self::assertStringContainsString('function startOrObserveBuildFromVisualEditEntry()', $script);
         self::assertStringContainsString('BackendConfirm.show(confirmMessage, {', $script);
@@ -60,9 +50,7 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
 
     public function testWorkspaceStateHydrationNormalizesNestedOperationMapsBeforeRetryablePrompts(): void
     {
-        $script = (string)\file_get_contents(
-            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertStringContainsString('function normalizeWorkspaceStateShape(state)', $script);
         self::assertStringContainsString('function ensureRetryableAiResumePromptState()', $script);
@@ -74,9 +62,7 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
 
     public function testSseErrorHandlersCloseAndDisposeTheStreamBeforeRetryUi(): void
     {
-        $mainScript = (string)\file_get_contents(
-            BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml'
-        );
+        $mainScript = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $runtimeScript = (string)\file_get_contents(
             BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml'
         );

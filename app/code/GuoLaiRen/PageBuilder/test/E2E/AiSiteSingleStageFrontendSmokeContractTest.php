@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\E2E;
 
+use GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader;
 use PHPUnit\Framework\TestCase;
 
 final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
 {
-    public function testWorkspaceFrontendDoesNotExposeLegacyPlanStageLabels(): void
+    public function testWorkspaceFrontendDoesNotExposeRemovedPlanStageLabels(): void
     {
         $moduleRoot = \dirname(__DIR__, 2);
         $files = [
@@ -20,6 +21,8 @@ final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
             $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/layout.phtml',
             $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/modals.phtml',
             $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml',
+            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main-core.phtml',
+            $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main-boot.phtml',
             $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml',
             $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-body.phtml',
             $moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-head.phtml',
@@ -37,37 +40,28 @@ final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
     public function testConfirmedBlueprintPreviewUsesNonEmptySingleStageFallbacks(): void
     {
         $moduleRoot = \dirname(__DIR__, 2);
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
-
-        self::assertIsString($script);
-        self::assertStringContainsString('displayPlan: displayPlan', $script);
-        self::assertStringContainsString('displayKind: displayKind', $script);
-        self::assertStringContainsString('resolveBuildPlanV2ArtifactsFromWorkspaceState', $script);
-        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'projection'", $script);
-        self::assertStringNotContainsString('execution_blueprint', $script);
-        self::assertStringContainsString("buildPlanArtifacts.displayKind === 'projection'", $script);
-        self::assertStringContainsString("displayKind = 'build_plan'", $script);
+        $script = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
+        self::assertStringContainsString('resolvePlanJsonArtifactsFromWorkspaceState', $script);
+        self::assertStringContainsString('hasPlanJsonFlowEvidence', $script);
+        self::assertStringContainsString('shouldUsePlanJsonFlow', $script);
+        self::assertStringContainsString('planJson:', $script);
     }
 
     public function testStageOnePreviewReadsPrunedStructuredPlanFields(): void
     {
         $moduleRoot = \dirname(__DIR__, 2);
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
-
-        self::assertIsString($script);
-        self::assertStringContainsString('collectStageOnePlanWorkbenchPreviewCandidates', $script);
+        $script = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
+        self::assertStringContainsString('pickStructuredPlanRoot', $script);
         self::assertStringContainsString('plan.structured', $script);
-        self::assertStringContainsString('confirmed.structured_plan', $script);
-        self::assertStringContainsString('confirmed.plan_json', $script);
-        self::assertStringContainsString('planBook.structured', $script);
+        self::assertStringContainsString('payload.structured_plan', $script);
+        self::assertStringContainsString('payload.plan_json', $script);
+        self::assertStringContainsString('parsed.plan_json', $script);
     }
 
     public function testConfirmedPlanModalBindsPreviewInteractionsAfterRendering(): void
     {
         $moduleRoot = \dirname(__DIR__, 2);
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
-
-        self::assertIsString($script);
+        $script = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         self::assertStringContainsString('bindPreviewActionButtons(planRenderedContent);', $script);
         self::assertStringContainsString('bindPreviewTabButtons(planRenderedContent);', $script);
         self::assertStringContainsString('bindPreviewSortables(planRenderedContent);', $script);
@@ -77,9 +71,7 @@ final class AiSiteSingleStageFrontendSmokeContractTest extends TestCase
     public function testPlanPreviewBlockActionsUseDirectHandlersWithoutInlineClickFallbacks(): void
     {
         $moduleRoot = \dirname(__DIR__, 2);
-        $script = \file_get_contents($moduleRoot . '/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
-
-        self::assertIsString($script);
+        $script = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         self::assertStringContainsString('function bindPreviewActionButtonDirectHandlers(root)', $script);
         self::assertStringContainsString("root.querySelectorAll('.pb-ai-preview-action-btn')", $script);
         self::assertStringContainsString("button.dataset.pbPreviewActionButtonBound = '1';", $script);

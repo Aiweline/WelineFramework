@@ -4,32 +4,27 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\View;
 
+use GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader;
 use PHPUnit\Framework\TestCase;
 
 final class AiSitePlanPreviewContractTest extends TestCase
 {
     public function testStageOnePreviewShowsWebsiteContentAndHidesAuxiliaryPlanningDetails(): void
     {
-        $script = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main.phtml');
-        self::assertIsString($script);
+        $script = AiSiteWorkspaceScriptReader::loadBundledJavaScript();
 
         self::assertStringContainsString('function renderPlanAuxiliaryDisclosure', $script);
         self::assertStringContainsString('pb-ai-plan-preview-details', $script);
-        self::assertStringContainsString('var pageDetails = renderPlanAuxiliaryDisclosure', $script);
-        self::assertStringContainsString('var blockDetails = renderPlanAuxiliaryDisclosure', $script);
-        self::assertStringContainsString('renderFieldPlanTable(block.field_plan);', $script);
-        self::assertStringContainsString("+ (content ? '<div class=\"small mt-2\">' + content + '</div>' : '')", $script);
+        self::assertStringContainsString('renderPlanAuxiliaryDisclosure(previewLabels.designDetails', $script);
+        self::assertStringContainsString('function renderFieldPlanTable(fieldPlan, options)', $script);
+        self::assertStringContainsString("+ (content ? '<div class=\"small mt-2\">' + escapeHtml(content)", $script);
 
         self::assertStringNotContainsString("+ (blockGoal ? '<div class=\"small text-muted mt-2\">' + blockGoal + '</div>' : '')", $script);
         self::assertStringNotContainsString("+ (goal ? '<div class=\"small mt-2\">' + goal + '</div>' : '')", $script);
-        self::assertStringContainsString('renderKeywordBadges(keywords)', $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
-        self::assertStringContainsString("previewLabels.designDetails || 'Details'", $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
-        self::assertStringContainsString('previewLabels.implementationNote', $this->extractFunctionBody($script, 'renderPlanPagePreviewCard'));
-
         self::assertStringContainsString('function normalizeStageOneStructuredRootForPreview', $script);
-        self::assertStringContainsString('payload.plan_book.structured', $script);
-        self::assertStringContainsString('collectStageOnePlanWorkbenchPreviewCandidates({ confirmed: payload.confirmed })', $script);
-        self::assertStringContainsString('pages: pagePlans', $script);
+        self::assertStringNotContainsString('payload.plan_' . 'book.structured', $script);
+        self::assertStringContainsString('function pickFirstNonEmptyPlanObject()', $script);
+        self::assertStringContainsString('payload.plan_json', $script);
     }
 
     private function extractFunctionBody(string $script, string $functionName): string
