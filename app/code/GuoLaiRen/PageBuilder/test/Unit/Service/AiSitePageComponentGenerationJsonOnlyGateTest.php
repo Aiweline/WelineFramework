@@ -116,7 +116,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     'copyright.text' => "\u{4FDD}\u{7559}\u{6240}\u{6709}\u{6743}\u{5229}\u{3002}",
                     'runtime.shared_region' => 'footer',
                     'runtime.content_locale' => 'zh_Hans_CN',
-                    'runtime.build_plan_task_json' => (string)\json_encode([
+                    'runtime.plan_json_task_json' => (string)\json_encode([
                         'task_key' => 'shared:footer',
                         'region' => 'footer',
                     ], \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
@@ -131,7 +131,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                             'brief_description' => "\u{6697}\u{8272}\u{9713}\u{8679}\u{68CB}\u{724C}\u{5A31}\u{4E50}\u{7AD9}\u{70B9}",
                         ],
                     ],
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'shared:footer',
                         'region' => 'footer',
                     ],
@@ -153,7 +153,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
     {
         $service = new AiSitePageComponentGenerationService();
 
-        $buildPlanTask = [
+        $PlanJsonTask = [
             'task_key' => 'page:home_page:content/home-page-faq-or-rules',
             'page_type' => 'home_page',
             'section_code' => 'content/home-page-faq-or-rules',
@@ -165,7 +165,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
             ],
         ];
 
-        $artifact = (function (array $buildPlanTask): array {
+        $artifact = (function (array $PlanJsonTask): array {
             return $this->generateComponent(
                 'content/home-page-faq-or-rules',
                 'FAQ Rules',
@@ -176,7 +176,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     'content.description' => "\u{73A9}\u{5BB6}\u{53EF}\u{9010}\u{6761}\u{67E5}\u{770B}\u{623F}\u{95F4}\u{89C4}\u{5219}\u{3001}\u{516C}\u{5E73}\u{6280}\u{672F}\u{8BF4}\u{660E}\u{548C}\u{8D26}\u{6237}\u{5B89}\u{5168}\u{7B56}\u{7565}\u{3002}",
                     'runtime.content_locale' => 'zh_Hans_CN',
                     'runtime.section_name' => 'FAQ Rules',
-                    'runtime.build_plan_task_json' => (string)\json_encode($buildPlanTask, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
+                    'runtime.plan_json_task_json' => (string)\json_encode($PlanJsonTask, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES),
                 ],
                 [
                     AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
@@ -188,10 +188,10 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                             'brief_description' => "\u{6697}\u{8272}\u{9713}\u{8679}\u{68CB}\u{724C}\u{5A31}\u{4E50}\u{7AD9}\u{70B9}",
                         ],
                     ],
-                    'build_plan_task' => $buildPlanTask,
+                    'plan_json_task' => $PlanJsonTask,
                 ]
             );
-        })->call($service, $buildPlanTask);
+        })->call($service, $PlanJsonTask);
 
         $aiData = $artifact['ai_data'] ?? [];
         self::assertStringContainsString('faq.item_1_question', (string)($aiData['extra_fields'] ?? ''));
@@ -215,7 +215,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     'runtime.section_name' => 'Latest operations guides',
                 ],
                 [
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:blog_list:content/blog-list-resource-grid',
                         'page_type' => 'blog_list',
                         'section_code' => 'content/blog-list-resource-grid',
@@ -275,7 +275,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     'runtime.section_name' => 'Four pillars of automated ops',
                 ],
                 [
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-proof-grid',
                         'page_type' => 'home_page',
                         'section_code' => 'content/home-page-proof-grid',
@@ -315,7 +315,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     'runtime.section_name' => 'Trusted by ops teams scaling fast',
                 ],
                 [
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-proof-grid',
                         'page_type' => 'home_page',
                         'section_code' => 'content/home-page-proof-grid',
@@ -362,7 +362,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     'runtime.section_name' => 'Automate approvals, eliminate spreadsheet chaos',
                 ],
                 [
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-hero',
                         'page_type' => 'home_page',
                         'section_code' => 'content/home-page-hero',
@@ -382,7 +382,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     'runtime.section_name' => 'Ready to see it in action?',
                 ],
                 [
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-final-cta',
                         'page_type' => 'home_page',
                         'section_code' => 'content/home-page-final-cta',
@@ -419,7 +419,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
     {
         $service = new AiSitePageComponentGenerationService();
         $genericPlanCopy = 'Capture ops leaders\' attention with a product-led dashboard visual, prove spreadsheet replacement value, and convert to demo requests.';
-        $scope = $this->buildNeonCardBuildPlanV2Scope();
+        $scope = $this->buildNeonCardPlanJsonScope();
 
         $heroPayload = (function () use ($genericPlanCopy, $scope): array {
             return $this->buildDeterministicStrictHeroAiData(
@@ -430,7 +430,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                 ],
                 [
                     '_scope' => $scope,
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-hero',
                         'page_type' => 'home_page',
                         'section_code' => 'content/home-page-hero',
@@ -450,7 +450,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                 ],
                 [
                     '_scope' => $scope,
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-final-cta',
                         'page_type' => 'home_page',
                         'section_code' => 'content/home-page-final-cta',
@@ -505,7 +505,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
 
         $renderContext = \array_replace([
             'content_locale' => 'pt_BR',
-            '_build_plan_task' => [
+            '_plan_json_task' => [
                 'section_template' => 'hero',
                 'page_flow_role' => 'opening',
             ],
@@ -556,16 +556,16 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
     /**
      * @return array<string,mixed>
      */
-    private function buildNeonCardBuildPlanV2Scope(): array
+    private function buildNeonCardPlanJsonScope(): array
     {
         return [
             'site_title' => "\u{9713}\u{8679}\u{68CB}\u{724C}\u{9986}",
             'brief_description' => "\u{6253}\u{9020}\u{4E00}\u{4E2A}\u{9713}\u{8679}\u{68CB}\u{724C}\u{98CE}\u{683C}\u{7684}\u{7EBF}\u{4E0A}\u{5A31}\u{4E50}\u{7F51}\u{7AD9}\u{FF0C}\u{5305}\u{542B}\u{73A9}\u{5BB6}\u{8BC1}\u{660E}\u{3001}\u{73A9}\u{6CD5}\u{4EAE}\u{70B9}\u{3001}\u{653B}\u{7565}\u{5185}\u{5BB9}\u{548C}\u{5BA2}\u{670D}\u{652F}\u{6301}\u{3002}",
-            'build_plan_confirmed' => 1,
-            'build_plan_v2' => [
+            'plan_json' => [
+                'confirmed' => 1,
                 'contract_meta' => [
-                    'id' => 'test-neon-card-build-plan-v2',
-                    'type' => 'build_plan_v2',
+                    'id' => 'test-neon-card-plan-json-v2',
+                    'type' => 'plan_json',
                     'version' => '2.2',
                     'status' => 'confirmed',
                 ],
@@ -592,38 +592,38 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                     ],
                 ],
                 'pages' => [
-                    [
-                        'page_id' => 'home_page',
+                    'home_page' => [
                         'page_type' => 'home_page',
                         'title_key' => 'page.home_page.title',
-                        'blocks' => ['home_page.hero', 'home_page.final_cta'],
-                    ],
-                ],
-                'blocks' => [
-                    [
-                        'block_id' => 'home_page.hero',
-                        'page_id' => 'home_page',
-                        'page_type' => 'home_page',
-                        'section_key' => 'hero',
-                        'block_type' => 'hero',
-                        'page_flow_role' => 'opening',
-                        'content_keys' => ['block.home_page.hero.title', 'block.home_page.hero.copy'],
-                        'visual_signature' => [
-                            'composition_pattern' => 'dark neon casino chess guidance hero',
-                            'surface_treatment' => 'deep casino table surface with neon cyan edges',
+                        'hero' => [
+                            'block_key' => 'hero',
+                            'block_id' => 'home_page.hero',
+                            'page_type' => 'home_page',
+                            'section_key' => 'hero',
+                            'section_code' => 'content/home-page-hero',
+                            'block_type' => 'hero',
+                            'page_flow_role' => 'opening',
+                            'status' => 0,
+                            'content_keys' => ['block.home_page.hero.title', 'block.home_page.hero.copy'],
+                            'visual_signature' => [
+                                'composition_pattern' => 'dark neon casino chess guidance hero',
+                                'surface_treatment' => 'deep casino table surface with neon cyan edges',
+                            ],
                         ],
-                    ],
-                    [
-                        'block_id' => 'home_page.final_cta',
-                        'page_id' => 'home_page',
-                        'page_type' => 'home_page',
-                        'section_key' => 'final_cta',
-                        'block_type' => 'final_cta',
-                        'page_flow_role' => 'conversion',
-                        'content_keys' => ['block.home_page.final_cta.title', 'block.home_page.final_cta.copy'],
-                        'visual_signature' => [
-                            'composition_pattern' => 'dark neon casino chess guidance CTA band',
-                            'surface_treatment' => 'glowing card-room panel',
+                        'final_cta' => [
+                            'block_key' => 'final_cta',
+                            'block_id' => 'home_page.final_cta',
+                            'page_type' => 'home_page',
+                            'section_key' => 'final_cta',
+                            'section_code' => 'content/home-page-final-cta',
+                            'block_type' => 'final_cta',
+                            'page_flow_role' => 'conversion',
+                            'status' => 0,
+                            'content_keys' => ['block.home_page.final_cta.title', 'block.home_page.final_cta.copy'],
+                            'visual_signature' => [
+                                'composition_pattern' => 'dark neon casino chess guidance CTA band',
+                                'surface_treatment' => 'glowing card-room panel',
+                            ],
                         ],
                     ],
                 ],

@@ -72,15 +72,15 @@ class AiSiteMaterializationService
             $hasGeneratedLayout = $this->layoutHasGeneratedContentComponents($materializedLayoutConfig);
             $blocks = [];
             if (!$hasGeneratedLayout) {
-                $blocks = \is_array($virtualPage['blocks'] ?? null) ? $this->filterPageContentAiHtmlBlocks($virtualPage['blocks']) : [];
+                $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $this->filterPageContentAiHtmlBlockNodes($virtualPage['block_nodes']) : [];
                 if ($blocks === []) {
-                    $blocks = $this->resolveExistingAiHtmlBlocks($page);
+                    $blocks = $this->resolveExistingAiHtmlBlockNodes($page);
                 }
             }
             if ($blocks === [] && !$hasGeneratedLayout) {
                 throw new \RuntimeException((string)__('AI virtual theme page has no generated layout or blocks: %{1}', [$pageType]));
             }
-            $aiLayout = ['blocks' => $blocks];
+            $aiLayout = ['block_nodes' => $blocks];
             $renderMode = $hasGeneratedLayout ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
             $aiLayoutJson = $hasGeneratedLayout ? null : \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);
 
@@ -151,7 +151,7 @@ class AiSiteMaterializationService
     }
 
     /**
-     * ai_html 轨物化：写入 render_mode + ai_layout，不走虚拟主题组件布局
+     * ai_html 杞ㄧ墿鍖栵細鍐欏叆 render_mode + ai_layout锛屼笉璧拌櫄鎷熶富棰樼粍浠跺竷灞€
      *
      * @param array<string, array<string, mixed>> $virtualPagesByType
      * @return array{
@@ -185,11 +185,11 @@ class AiSiteMaterializationService
             $pageLocale = $this->resolveMaterializedLocale($virtualPage, $websiteProfile);
             $pageLocales = $this->resolveMaterializedLocales($pageLocale, $websiteProfile);
             $pageHandle = \trim((string)($virtualPage['handle'] ?? $defaults['handle']));
-            $blocks = \is_array($virtualPage['blocks'] ?? null) ? $this->filterPageContentAiHtmlBlocks($virtualPage['blocks']) : [];
+            $blocks = \is_array($virtualPage['block_nodes'] ?? null) ? $this->filterPageContentAiHtmlBlockNodes($virtualPage['block_nodes']) : [];
             if ($blocks === []) {
-                $blocks = $this->resolveExistingAiHtmlBlocks($page);
+                $blocks = $this->resolveExistingAiHtmlBlockNodes($page);
             }
-            $aiLayout = ['blocks' => $blocks];
+            $aiLayout = ['block_nodes' => $blocks];
             $aiLayoutJson = \json_encode($aiLayout, \JSON_UNESCAPED_UNICODE);
 
             $page->setData(Page::schema_fields_TYPE, $pageType)
@@ -447,25 +447,25 @@ class AiSiteMaterializationService
                 Page::TYPE_CUSTOM => 'Page',
             ],
             'th' => [
-                Page::TYPE_HOME => 'หน้าแรก',
-                Page::TYPE_ABOUT => 'เกี่ยวกับเรา',
-                Page::TYPE_CONTACT => 'ติดต่อเรา',
-                Page::TYPE_PRIVACY_POLICY => 'นโยบายความเป็นส่วนตัว',
-                Page::TYPE_TERMS_OF_SERVICE => 'ข้อกำหนดการใช้บริการ',
+                Page::TYPE_HOME => '喔笝喙夃覆喙佮福喔?,
+                Page::TYPE_ABOUT => '喙€喔佮傅喙堗涪喔о竵喔编笟喙€喔｀覆',
+                Page::TYPE_CONTACT => '喔曕复喔斷笗喙堗腑喙€喔｀覆',
+                Page::TYPE_PRIVACY_POLICY => '喔權箓喔⑧笟喔侧涪喔勦抚喔侧浮喙€喔涏箛喔權釜喙堗抚喔權笗喔编抚',
+                Page::TYPE_TERMS_OF_SERVICE => '喔傕箟喔竵喔赤斧喔權笖喔佮覆喔｀箖喔娻箟喔氞福喔脆竵喔侧福',
             ],
             'hi' => [
-                Page::TYPE_HOME => 'होम',
-                Page::TYPE_ABOUT => 'हमारे बारे में',
-                Page::TYPE_CONTACT => 'संपर्क करें',
-                Page::TYPE_PRIVACY_POLICY => 'गोपनीयता नीति',
-                Page::TYPE_TERMS_OF_SERVICE => 'सेवा की शर्तें',
+                Page::TYPE_HOME => '啶灌啶?,
+                Page::TYPE_ABOUT => '啶灌ぎ啶距ぐ啷?啶ぞ啶班 啶啶?,
+                Page::TYPE_CONTACT => '啶膏啶ぐ啷嵿 啶曕ぐ啷囙',
+                Page::TYPE_PRIVACY_POLICY => '啶椸啶え啷€啶い啶?啶ㄠ啶むた',
+                Page::TYPE_TERMS_OF_SERVICE => '啶膏啶掂ぞ 啶曕 啶多ぐ啷嵿い啷囙',
             ],
             'zh' => [
-                Page::TYPE_HOME => '首页',
-                Page::TYPE_ABOUT => '关于我们',
-                Page::TYPE_CONTACT => '联系我们',
-                Page::TYPE_PRIVACY_POLICY => '隐私政策',
-                Page::TYPE_TERMS_OF_SERVICE => '服务条款',
+                Page::TYPE_HOME => '棣栭〉',
+                Page::TYPE_ABOUT => '鍏充簬鎴戜滑',
+                Page::TYPE_CONTACT => '鑱旂郴鎴戜滑',
+                Page::TYPE_PRIVACY_POLICY => '闅愮鏀跨瓥',
+                Page::TYPE_TERMS_OF_SERVICE => '鏈嶅姟鏉℃',
             ],
         ];
 
@@ -630,26 +630,26 @@ class AiSiteMaterializationService
     /**
      * @return list<array<string, mixed>>
      */
-    private function resolveExistingAiHtmlBlocks(Page $page): array
+    private function resolveExistingAiHtmlBlockNodes(Page $page): array
     {
         if ((int)$page->getId() <= 0) {
             return [];
         }
 
         $layout = $page->getAiLayoutArray();
-        $blocks = \is_array($layout['blocks'] ?? null) ? $layout['blocks'] : [];
+        $blocks = \is_array($layout['block_nodes'] ?? null) ? $layout['block_nodes'] : [];
 
-        return $this->filterPageContentAiHtmlBlocks($blocks);
+        return $this->filterPageContentAiHtmlBlockNodes($blocks);
     }
 
     /**
      * @param list<mixed> $blocks
      * @return list<array<string, mixed>>
      */
-    private function filterPageContentAiHtmlBlocks(array $blocks): array
+    private function filterPageContentAiHtmlBlockNodes(array $blocks): array
     {
         return \array_values(\array_filter($blocks, static function (mixed $block): bool {
-            return \is_array($block) && !AiSiteHtmlBlocksBuildService::isSharedLayoutBlock($block);
+            return \is_array($block) && !AiSiteHtmlBlockNodesBuildService::isSharedLayoutBlock($block);
         }));
     }
 

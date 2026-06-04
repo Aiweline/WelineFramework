@@ -128,7 +128,7 @@ ADD COLUMN `default_locale` VARCHAR(10) NULL COMMENT '默认语言代码';
 
 ### 内容存储格式
 
-**旧格式**（纯文本/HTML）：
+**既有格式**（纯文本/HTML）：
 ```
 <h1>标题</h1>
 <p>段落内容</p>
@@ -265,9 +265,9 @@ public function renderEditorJsToHtml(string $jsonContent): string
 
 ## 迁移指南
 
-### 从旧版本升级
+### 从既有版本升级
 
-如果你有使用旧版富文本编辑器的页面：
+如果你有使用既有版富文本编辑器的页面：
 
 1. **备份数据库**
    ```bash

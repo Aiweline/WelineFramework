@@ -17,13 +17,13 @@ final class AiSiteSsePayloadNormalizerTest extends TestCase
             'queue_status' => 'Running',
             'status' => 'Pending',
             'job_status' => 'Done',
-            'build_plan_execution_summary' => ['total' => 2, 'done' => 1],
+            'plan_json_execution_summary' => ['total' => 2, 'done' => 1],
         ]);
 
         self::assertSame('running', $payload['queue_status']);
         self::assertSame('Pending', $payload['status']);
         self::assertSame('Done', $payload['job_status']);
-        self::assertSame(['total' => 2, 'done' => 1], $payload['build_plan_execution_summary']);
+        self::assertSame(['total' => 2, 'done' => 1], $payload['plan_json_execution_summary']);
     }
 
     public function testNormalizeDoesNotFillOldAliases(): void
@@ -33,13 +33,13 @@ final class AiSiteSsePayloadNormalizerTest extends TestCase
         $payload = $normalizer->normalize([
             'status' => 'Running',
             'task_progress' => ['total' => 1],
-            'build_task_summary' => ['total' => 2],
+            'plan_json_task_summary' => ['total' => 2],
         ]);
 
         self::assertArrayNotHasKey('queue_status', $payload);
         self::assertArrayNotHasKey('task_summary', $payload);
         self::assertSame(['total' => 1], $payload['task_progress']);
-        self::assertSame(['total' => 2], $payload['build_task_summary']);
+        self::assertSame(['total' => 2], $payload['plan_json_task_summary']);
     }
 
     public function testNormalizeIsIdempotent(): void
@@ -48,14 +48,14 @@ final class AiSiteSsePayloadNormalizerTest extends TestCase
 
         $first = $normalizer->normalize([
             'queue_status' => 'running',
-            'build_plan_execution_summary' => ['total' => 3],
+            'plan_json_execution_summary' => ['total' => 3],
             'operation' => 'build',
         ]);
 
         self::assertSame($first, $normalizer->normalize($first));
     }
 
-    public function testAuthoritativeEventNamesUseBuildPlanBlockEvents(): void
+    public function testAuthoritativeEventNamesUsePlanJsonBlockEvents(): void
     {
         $events = AiSiteSsePayloadNormalizer::authoritativeEventNames();
 
@@ -65,8 +65,8 @@ final class AiSiteSsePayloadNormalizerTest extends TestCase
             'chunk',
             'done',
             'error',
-            'build_plan_block_completed',
-            'build_plan_block_failed',
+            'plan_json_block_completed',
+            'plan_json_block_failed',
             'task_progress',
             'task_completed',
             'task_failed',
@@ -74,14 +74,14 @@ final class AiSiteSsePayloadNormalizerTest extends TestCase
             self::assertContains($eventName, $events);
         }
 
-        self::assertNotContains('build_plan_progress', $events);
+        self::assertNotContains('plan_json_progress', $events);
         foreach ($events as $name) {
             self::assertSame($name, \strtolower($name));
             self::assertSame(1, \preg_match('/^[a-z][a-z0-9_]*$/', $name));
         }
     }
 
-    public function testNoDeprecatedAliasMapsRemain(): void
+    public function testNoUnsupportedAliasMapsRemain(): void
     {
         self::assertSame([], AiSiteSsePayloadNormalizer::aliasToAuthoritativeMap());
         self::assertSame([], AiSiteSsePayloadNormalizer::authoritativeToAliasesMap());

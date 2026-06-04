@@ -47,7 +47,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 "Base section prompt\nStage-2 component output contract V3\nCTX_CURRENT_ASSET\nCTX_FROZEN_TASK",
                 'content/home-page-hero',
                 [
-                    '_build_plan_task' => ['task_key' => 'page:home_page:content/home-page-hero'],
+                    '_plan_json_task' => ['task_key' => 'page:home_page:content/home-page-hero'],
                     '_visual_contract' => ['strict_hero_cover' => 1],
                 ]
             );
@@ -69,12 +69,12 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 'header' => $this->resolveComponentGenerationMaxTokens('header', [], false),
                 'content_build_first' => $this->resolveComponentGenerationMaxTokens(
                     'content',
-                    ['_build_plan_task' => ['task_key' => 'page:home_page:content/home-page-hero']],
+                    ['_plan_json_task' => ['task_key' => 'page:home_page:content/home-page-hero']],
                     false
                 ),
                 'content_build_retry' => $this->resolveComponentGenerationMaxTokens(
                     'content',
-                    ['_build_plan_task' => ['task_key' => 'page:home_page:content/home-page-hero']],
+                    ['_plan_json_task' => ['task_key' => 'page:home_page:content/home-page-hero']],
                     true
                 ),
                 'content_non_build' => $this->resolveComponentGenerationMaxTokens('content', [], false),
@@ -93,7 +93,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
 
         $matches = (function (): array {
             $heroContext = [
-                'build_plan_task' => [
+                'plan_json_task' => [
                     'task_key' => 'page:home_page:content/home-page-hero',
                     'block_key' => 'hero',
                     'block_type' => 'hero',
@@ -106,7 +106,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 ],
             ];
             $proofContext = [
-                'build_plan_task' => [
+                'plan_json_task' => [
                     'task_key' => 'page:home_page:content/home-page-brand-promise',
                     'block_key' => 'brand_promise',
                     'block_type' => 'brand_promise',
@@ -148,7 +148,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
             'runtime.section_name' => 'Home hero',
         ];
         $renderContext = [
-            '_build_plan_task' => [
+            '_plan_json_task' => [
                 'task_key' => 'page:home_page:content/home-page-hero',
                 'page_type' => 'home_page',
                 'block_key' => 'home-page-hero',
@@ -196,7 +196,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 ],
                 [
                     AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                    '_build_plan_task' => [
+                    '_plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-hero',
                         'page_type' => 'home_page',
                         'block_key' => 'home-page-hero',
@@ -231,7 +231,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 ],
                 [
                     AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-hero',
                         'page_type' => 'home_page',
                         'section_code' => 'content/home-page-hero',
@@ -270,7 +270,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
             'runtime.section_name' => 'Home hero',
         ];
         $renderContext = [
-            'build_plan_task' => [
+            'plan_json_task' => [
                 'task_key' => 'page:home_page:content/home-page-hero',
                 'page_type' => 'home_page',
                 'section_code' => 'content/home-page-hero',
@@ -320,7 +320,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 ],
                 [
                     AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:about_page:content/about-page-origin-story',
                         'page_type' => 'about_page',
                         'section_code' => 'content/about-page-origin-story',
@@ -381,7 +381,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 ],
                 [
                     AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-support-form-guidance',
                         'page_type' => 'contact_page',
                         'section_code' => 'content/contact-page-support-form-guidance',
@@ -429,7 +429,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 ],
                 [
                     AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-support-faq',
                         'page_type' => 'contact_page',
                         'section_code' => 'content/contact-page-support-faq',
@@ -481,7 +481,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 ],
                 [
                     AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-support-faq',
                         'page_type' => 'contact_page',
                         'section_code' => 'content/contact-page-support-faq',
@@ -519,7 +519,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     [],
                     [
                         AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                        'build_plan_task' => $task,
+                        'plan_json_task' => $task,
                         'visual_contract' => $visualContract,
                     ]
                 );
@@ -571,7 +571,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                 ],
                 [
                     AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                    'build_plan_task' => [
+                    'plan_json_task' => [
                         'task_key' => 'page:home_page:content/home-page-final-cta',
                         'page_type' => 'home_page',
                         'section_code' => 'content/home-page-final-cta',
@@ -607,7 +607,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
         ];
         $renderContext = [
             AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-            'build_plan_task' => [
+            'plan_json_task' => [
                 'task_key' => 'page:home_page:content/home-page-brand-promise',
                 'page_type' => 'home_page',
                 'section_code' => 'content/home-page-brand-promise',
@@ -674,7 +674,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     [],
                     [
                         AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                        'build_plan_task' => $task,
+                        'plan_json_task' => $task,
                         'visual_contract' => $visualContract,
                     ]
                 );
@@ -713,7 +713,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
                     [],
                     [
                         AiSitePageComponentGenerationService::RENDER_CONTEXT_ALLOW_DETERMINISTIC_CONTENT_COMPILER => true,
-                        'build_plan_task' => $task,
+                        'plan_json_task' => $task,
                         'visual_contract' => $visualContract,
                     ]
                 );
@@ -872,7 +872,7 @@ HTML;
                 '',
                 '#componentId .pb-c-title{font-size:52px;}',
                 [
-                    '_build_plan_task' => [
+                    '_plan_json_task' => [
                         'section_template' => 'hero',
                         'page_flow_role' => 'opening',
                     ],
@@ -892,7 +892,7 @@ HTML;
                 '',
                 '#componentId .pb-c-title{font-size:52px;letter-spacing:0;}',
                 [
-                    '_build_plan_task' => [
+                    '_plan_json_task' => [
                         'section_template' => 'hero',
                         'page_flow_role' => 'opening',
                     ],
@@ -916,7 +916,7 @@ HTML;
                 'content/home-page-hero',
                 'content/home-page-hero',
                 [
-                    '_build_plan_task' => [
+                    '_plan_json_task' => [
                         'section_template' => 'hero',
                         'page_flow_role' => 'opening',
                     ],
@@ -931,7 +931,7 @@ HTML;
     public function testFirstPageSectionRequiresH1EvenWhenPlanRoleIsSupport(): void
     {
         $service = new AiSitePageComponentGenerationService();
-        $scope = $this->buildPlanV2ScopeForContactFirstSection(true);
+        $scope = $this->PlanJsonScopeForContactFirstSection(true);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('opening/page-intro section must render one h1 heading');
@@ -943,7 +943,7 @@ HTML;
                 '',
                 '#componentId .pb-c-title{font-size:52px;}',
                 [
-                    '_build_plan_task' => [
+                    '_plan_json_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-contact-methods',
                         'task_type' => 'page_section',
                         'page_type' => 'contact_page',
@@ -960,7 +960,7 @@ HTML;
     public function testFirstPageSectionPayloadH2TitleIsNormalizedToH1(): void
     {
         $service = new AiSitePageComponentGenerationService();
-        $scope = $this->buildPlanV2ScopeForContactFirstSection(true);
+        $scope = $this->PlanJsonScopeForContactFirstSection(true);
         $payload = [
             'html_content' => '<section class="pb-c-root"><h2 class="pb-c-title">Contact our operations team</h2><p>Reach us.</p></section>',
         ];
@@ -971,7 +971,7 @@ HTML;
                 'content/contact-page-contact-methods',
                 'content/contact-page-contact-methods',
                 [
-                    '_build_plan_task' => [
+                    '_plan_json_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-contact-methods',
                         'task_type' => 'page_section',
                         'page_type' => 'contact_page',
@@ -991,7 +991,7 @@ HTML;
     public function testFirstPageSectionPayloadPlainH2IsNormalizedToH1(): void
     {
         $service = new AiSitePageComponentGenerationService();
-        $scope = $this->buildPlanV2ScopeForContactFirstSection(false);
+        $scope = $this->PlanJsonScopeForContactFirstSection(false);
         $payload = [
             'html_content' => '<section class="pb-c-root"><div class="pb-c-text-panel"><h2>Contact our operations team</h2><p>Reach us.</p></div></section>',
         ];
@@ -1002,7 +1002,7 @@ HTML;
                 'content/contact-page-contact-methods',
                 'content/contact-page-contact-methods',
                 [
-                    '_build_plan_task' => [
+                    '_plan_json_task' => [
                         'task_key' => 'page:contact_page:content/contact-page-contact-methods',
                         'task_type' => 'page_section',
                         'page_type' => 'contact_page',
@@ -1164,40 +1164,44 @@ HTML;
     /**
      * @return array<string,mixed>
      */
-    private function buildPlanV2ScopeForContactFirstSection(bool $includeFaq): array
+    private function PlanJsonScopeForContactFirstSection(bool $includeFaq): array
     {
-        $blocks = [
-            [
+        $pageNode = [
+            'page_type' => 'contact_page',
+            'title_key' => 'page.contact_page.title',
+            'contact_methods' => [
+                'block_key' => 'contact_methods',
                 'block_id' => 'contact_page.contact_methods',
-                'page_id' => 'contact_page',
                 'page_type' => 'contact_page',
                 'section_key' => 'contact_methods',
+                'section_code' => 'content/contact-page-contact-methods',
                 'block_type' => 'contact_methods',
                 'page_flow_role' => 'support',
                 'sort_order' => 260,
+                'status' => 0,
             ],
         ];
-        $pageBlocks = ['contact_page.contact_methods'];
 
         if ($includeFaq) {
-            $blocks[] = [
+            $pageNode['support_faq'] = [
+                'block_key' => 'support_faq',
                 'block_id' => 'contact_page.support_faq',
-                'page_id' => 'contact_page',
                 'page_type' => 'contact_page',
                 'section_key' => 'support_faq',
+                'section_code' => 'content/contact-page-support-faq',
                 'block_type' => 'support_faq',
                 'page_flow_role' => 'support',
                 'sort_order' => 280,
+                'status' => 0,
             ];
-            $pageBlocks[] = 'contact_page.support_faq';
         }
 
         return [
-            'build_plan_confirmed' => 1,
-            'build_plan_v2' => [
+            'plan_json' => [
+                'confirmed' => 1,
                 'contract_meta' => [
-                    'id' => 'test-build-plan-v2',
-                    'type' => 'build_plan_v2',
+                    'id' => 'test-plan-json-v2',
+                    'type' => 'plan_json',
                     'version' => '2.2',
                     'status' => 'confirmed',
                 ],
@@ -1212,14 +1216,8 @@ HTML;
                     ],
                 ],
                 'pages' => [
-                    [
-                        'page_id' => 'contact_page',
-                        'page_type' => 'contact_page',
-                        'title_key' => 'page.contact_page.title',
-                        'blocks' => $pageBlocks,
-                    ],
+                    'contact_page' => $pageNode,
                 ],
-                'blocks' => $blocks,
                 'design_manifest' => [
                     'palette' => [
                         'surface' => '#111827',

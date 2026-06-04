@@ -82,7 +82,7 @@ final class AiSiteStageOnePromptAssembler
             '- 【系统提示词】= 当前步骤任务、输出 Schema、语言与安全边界。',
             '- 【阶段契约】= PageBuilder 阶段一强约束，保证后续构建可消费。',
             '- 冲突时：用户明确的新指令优先于通用建议；Schema、语言、安全、可执行边界始终有效。',
-            'BuildPlan no-reason field rule: do not add extra explanatory keys named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning anywhere unless the active schema explicitly lists that exact key.',
+            'PlanJson no-reason field rule: do not add extra explanatory keys named reason, why, rationale, thinking, analysis, explanation, chain_of_thought, design_reason, or reasoning anywhere unless the active schema explicitly lists that exact key.',
             'Template scaffold translation rule: style templates and examples are structural references only; do not copy stale brands, #anchors, or sample CTA targets into output.',
             'Negative-intent rule: words after avoid, do not, no, without, exclude, forbid, 禁止, 避免, 不要, 不得, 排除, or 请勿 are hard exclusions, not requirements.',
             'Output vocabulary gate: do not write internal filler tokens or HTML attribute names in returned JSON values.',

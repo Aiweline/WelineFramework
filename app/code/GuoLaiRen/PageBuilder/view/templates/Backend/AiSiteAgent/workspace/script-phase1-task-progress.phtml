@@ -389,8 +389,8 @@
 
     function normalizePlanQueueBlockRows(row) {
         row = row && typeof row === 'object' ? row : {};
-        var blocks = Array.isArray(row.blocks)
-            ? row.blocks
+        var blocks = Array.isArray(row.block_rows)
+            ? row.block_rows
             : (Array.isArray(row.block_statuses) ? row.block_statuses : []);
         return blocks.map(function (block) {
             block = block && typeof block === 'object' ? block : {};

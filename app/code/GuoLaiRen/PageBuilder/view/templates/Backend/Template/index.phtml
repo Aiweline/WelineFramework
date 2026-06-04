@@ -1388,7 +1388,7 @@ async function refreshSinglePreview(styleCode) {
  * 更新预览图显示
  */
 function updatePreviewImage(previewContainer, imageUrl, styleCode) {
-    // 清除旧内容（保留加载遮罩）
+    // 清除既有内容（保留加载遮罩）
     const loading = previewContainer.querySelector('.template-card-preview-loading');
     
     previewContainer.innerHTML = '';

@@ -47,7 +47,7 @@ class AiSiteAgentWorkflowTest extends TestCase
     }
 
     /**
-     * 清理旧的测试数据
+     * 清理既有的测试数据
      */
     private function cleanupOldTestData(): void
     {

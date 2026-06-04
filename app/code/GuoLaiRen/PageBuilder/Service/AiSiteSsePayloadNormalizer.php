@@ -7,13 +7,12 @@ namespace GuoLaiRen\PageBuilder\Service;
 /**
  * SSE payload contract for PageBuilder AI workspace streams.
  *
- * Build execution has one public progress truth source:
- * `build_plan_execution_summary` derived from `build_plan_v2`. This normalizer
- * only trims canonical fields; it does not translate old task-progress aliases.
+ * Build execution has one public progress truth source: plan_json block node status
+ * plus the derived build task summary emitted for display.
  */
 class AiSiteSsePayloadNormalizer
 {
-    public const EMITTED_DEPRECATED_ALIASES = false;
+    public const EMITTED_UNSUPPORTED_ALIASES = false;
 
     /** @var array<string, string> */
     private const ALIAS_TO_AUTHORITATIVE = [];
@@ -34,8 +33,8 @@ class AiSiteSsePayloadNormalizer
             'warning',
             'done',
             'error',
-            'build_plan_block_completed',
-            'build_plan_block_failed',
+            'plan_json_block_completed',
+            'plan_json_block_failed',
             'page_generated',
             'shared_component_generated',
             'asset_generation_started',
@@ -79,7 +78,7 @@ class AiSiteSsePayloadNormalizer
             'operation',
             'message',
             'queue_status',
-            'build_plan_execution_summary',
+            'plan_json_execution_summary',
             'progress_kind',
             'progress_percent',
         ];

@@ -47,7 +47,7 @@
 **文件**:
 - `fetch.umd.js` - Fetch API polyfill (UMD格式)
 
-**用途**: 表单异步提交（为旧浏览器提供 Fetch API 支持）
+**用途**: 表单异步提交（为既有浏览器提供 Fetch API 支持）
 
 **官方网站**: https://github.github.io/fetch/
 

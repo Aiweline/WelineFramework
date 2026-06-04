@@ -15,10 +15,8 @@ final class AiSiteAgentPublishContractTest extends TestCase
 
         foreach ([
             "'code' => 'LATEST_AI_BUILD_FAILED'",
-            "'code' => 'PLAN_NOT_CONFIRMED'",
-            "'code' => 'BUILD_PLAN_NOT_CONFIRMED'",
+            "'code' => 'PLAN_JSON_NOT_CONFIRMED'",
             "'code' => 'BUILD_COMPLETION_GATE_BLOCKED'",
-            "'code' => 'WORKSPACE_NOT_READY'",
             "'code' => 'PUBLISH_STAGE2_TASK_BLOCK_MISMATCH'",
             "'code' => 'PUBLISH_QUALITY_GATE_FAILED'",
             "'code' => 'VISUAL_THEME_CONFIRM_REQUIRED'",
@@ -33,13 +31,10 @@ final class AiSiteAgentPublishContractTest extends TestCase
         $methodSource = $this->extractMethodSource($source, 'handlePublishChecklist');
 
         foreach ([
-            "'code' => 'PLAN_NOT_CONFIRMED'",
-            "'code' => 'BUILD_PLAN_NOT_CONFIRMED'",
+            "'code' => 'PLAN_JSON_NOT_CONFIRMED'",
             "'code' => 'LATEST_AI_BUILD_FAILED'",
-            "'code' => 'DRAFT_WEBSITE_READY'",
             "'code' => 'VIRTUAL_THEME_READY'",
             "'code' => 'WEBSITE_PROFILE_READY'",
-            "'code' => 'VIRTUAL_PAGES_READY'",
             "'code' => 'VISUAL_EDITOR_READY'",
             "'code' => 'BUILD_COMPLETION_GATE'",
             "'code' => 'STAGE2_TASK_BLOCK_INTEGRITY'",
@@ -47,7 +42,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
         ] as $expectedCode) {
             self::assertStringContainsString($expectedCode, $methodSource);
         }
-        self::assertStringNotContainsString("'code' => 'HTML_BLOCKS_READY'", $methodSource);
+        self::assertStringNotContainsString("'code' => 'HTML_BLOCK_NODES_READY'", $methodSource);
         self::assertStringNotContainsString("'code' => 'SITE_READY'", $methodSource);
     }
 
@@ -60,7 +55,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
         foreach ([$startSource, $checklistSource] as $methodSource) {
             self::assertStringContainsString('inspectBuildCompletionGate($scope)', $methodSource);
             self::assertStringContainsString('$buildAlreadyComplete = $completionGatePassed;', $methodSource);
-            self::assertStringNotContainsString("\$this->taskSummaryIndicatesCompleted(\$buildTaskSummary)\n            || !empty(\$scope['can_publish'])", $methodSource);
+            self::assertStringNotContainsString("\$this->taskSummaryIndicatesCompleted(\$planJsonTaskSummary)\n            || !empty(\$scope['can_publish'])", $methodSource);
         }
     }
 
@@ -138,7 +133,7 @@ final class AiSiteAgentPublishContractTest extends TestCase
             'buildWorkspaceFastViewState(',
             'listRecentEvents(',
             'buildVirtualPagesByType(',
-            'syncFromBuildPlan(',
+            'syncFromPlanJson(',
             'profileGenerationService->generate(',
         ] as $forbiddenCall) {
             self::assertStringNotContainsString($forbiddenCall, $methodSource);

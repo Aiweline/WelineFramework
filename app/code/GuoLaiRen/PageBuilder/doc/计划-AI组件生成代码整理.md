@@ -45,7 +45,7 @@
 
 **方案 A（推荐）**：在 **AiGenerate** 内保留私有方法 `normalizeComponentPayload(array $data): array`，只做字段映射（fieldMappings）；`parseComponentResponse` 改为：
 1. `$raw = $this->aiResponseJsonParser->extractAndDecode($response);`
-2. 若为 null，尝试旧逻辑（PHTML 代码块）或抛异常；
+2. 若为 null，尝试既有逻辑（PHTML 代码块）或抛异常；
 3. `return $this->normalizeComponentPayload($raw);`
 
 **方案 B**：将 fieldMappings + 标准化逻辑迁到 `Service\AI\ComponentPayloadNormalizer`，AiGenerate 只调 `$this->normalizer->normalize($raw)`。若后续多处需要同一套标准化再采用。

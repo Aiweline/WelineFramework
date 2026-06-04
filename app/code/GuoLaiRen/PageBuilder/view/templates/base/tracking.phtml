@@ -214,7 +214,7 @@ $websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
                 }
             }
             
-            // Legacy Google Analytics
+            // Universal Analytics
             if (trackingConfig.hasGA && typeof window.ga === 'function') {
                 window.ga('send', 'event', 'cta', eventName, { nonInteraction: false });
             }

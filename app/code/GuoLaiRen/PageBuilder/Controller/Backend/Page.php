@@ -1096,7 +1096,7 @@ class Page extends BackendController
                 throw new \Exception(__('页面不存在！'));
             }
             
-            // 保存更新前的 handle / website_id / style，用于保存后判断是否需要清理旧重写和缓存
+            // 保存更新前的 handle / website_id / style，用于保存后判断是否需要清理既有重写和缓存
             $oldHandle = $page->getData(PageModel::schema_fields_HANDLE);
             $oldWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
             $oldStyleCode = $page->getData(PageModel::schema_fields_STYLE) ?? '';
@@ -1324,10 +1324,10 @@ class Page extends BackendController
             // 更新后重新加载数据到 Model（使用整数类型的 pageId）
             $page->clear()->load($pageIdInt);
             
-            // 自动创建或更新 URL 重写规则（统一用 page_id，handle 变更时自动覆盖旧条目）
+            // 自动创建或更新 URL 重写规则（统一用 page_id，handle 变更时自动覆盖既有条目）
             $this->createOrUpdateUrlRewrite($page);
             
-            // 清理旧格式的 url_identify 条目（pagebuilder_page_{websiteId}_{handle}）
+            // 清理既有格式的 url_identify 条目（pagebuilder_page_{websiteId}_{handle}）
             $newHandle = $page->getData(PageModel::schema_fields_HANDLE);
             $newWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
             if ($oldHandle !== '' && $oldHandle !== null) {
@@ -4548,7 +4548,7 @@ class Page extends BackendController
             }
         }
         
-        // 5. 检查是否是其他静态文件路径（兼容旧代码）
+        // 5. 检查是否是其他静态文件路径（兼容既有代码）
         // 格式：/static/... 或 /pub/static/...
         if (preg_match('#^(pub/)?static/(.+)$#', $path, $matches)) {
             $filePath = $matches[2];

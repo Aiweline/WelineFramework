@@ -74,7 +74,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(
             1,
-            (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0),
+            (int)($planFlow['confirm_plan']['data']['plan_json']['confirmed'] ?? 0),
             'Confirmed plan state should be visible before build starts.'
         );
         $startBuildPayload = $this->invokeJsonAction(
@@ -386,7 +386,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         );
     }
 
-    public function testVirtualThemePublishIgnoresLegacySiteReadyFlag(): void
+    public function testVirtualThemePublishIgnoresRemovedSiteReadyFlag(): void
     {
         $buildFlow = $this->createAndBuildWorkbenchSession();
         $publicId = (string)$buildFlow['public_id'];
@@ -474,7 +474,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertContains((string)($data['preview_page_type'] ?? ''), [Page::TYPE_HOME, Page::TYPE_ABOUT]);
     }
 
-    public function testStartBuildRequiresConfirmedBuildPlanBeforeBuild(): void
+    public function testStartBuildRequiresConfirmedPlanJsonBeforeBuild(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -518,10 +518,10 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         );
 
         self::assertFalse((bool)($startBuildPayload['success'] ?? true), \json_encode($startBuildPayload, \JSON_UNESCAPED_UNICODE));
-        self::assertSame('BUILD_PLAN_REQUIRED_BEFORE_BUILD', (string)($startBuildPayload['code'] ?? ''));
+        self::assertSame('PLAN_JSON_REQUIRED_BEFORE_BUILD', (string)($startBuildPayload['code'] ?? ''));
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
-        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
+        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_json']['confirmed'] ?? 0));
 
         $startBuildWithPlanPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
@@ -586,7 +586,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
-        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
+        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_json']['confirmed'] ?? 0));
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',

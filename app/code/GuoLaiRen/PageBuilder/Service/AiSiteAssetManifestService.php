@@ -359,13 +359,13 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * 强行契约：图像 prompt 必须以"业务主体"开头，brand 名称仅作次要装饰，否则 AI 会忽略
-     * 用户的真实业务诉求（如行业、产品、服务场景），照着 site_title 字面凭空发挥
-     * 出无关吉祥物/插画。重构原则：
-     *   1. PRIMARY SUBJECT 必须是 prompt 的第 1 行；
-     *   2. brand name 仅作 wordmark text reference / brand context，不作主体；
-     *   3. slot.brief 中如果以 "Generate the official website logo for X" 开头，
-     *      会先把它替换成 subject-first 写法，避免和 brand 主体语义冲突。
+     * 寮鸿濂戠害锛氬浘鍍?prompt 蹇呴』浠?涓氬姟涓讳綋"寮€澶达紝brand 鍚嶇О浠呬綔娆¤瑁呴グ锛屽惁鍒?AI 浼氬拷鐣?
+     * 鐢ㄦ埛鐨勭湡瀹炰笟鍔¤瘔姹傦紙濡傝涓氥€佷骇鍝併€佹湇鍔″満鏅級锛岀収鐫€ site_title 瀛楅潰鍑┖鍙戞尌
+     * 鍑烘棤鍏冲悏绁ョ墿/鎻掔敾銆傞噸鏋勫師鍒欙細
+     *   1. PRIMARY SUBJECT 蹇呴』鏄?prompt 鐨勭 1 琛岋紱
+     *   2. brand name 浠呬綔 wordmark text reference / brand context锛屼笉浣滀富浣擄紱
+     *   3. slot.brief 涓鏋滀互 "Generate the official website logo for X" 寮€澶达紝
+     *      浼氬厛鎶婂畠鏇挎崲鎴?subject-first 鍐欐硶锛岄伩鍏嶅拰 brand 涓讳綋璇箟鍐茬獊銆?
      *
      * @param array<string, mixed> $slot
      * @param array<string, mixed> $scope
@@ -398,35 +398,35 @@ final class AiSiteAssetManifestService
 
         $parts = [];
 
-        // 第 1 行：强行契约 PRIMARY SUBJECT（最高优先级）。
+        // 绗?1 琛岋細寮鸿濂戠害 PRIMARY SUBJECT锛堟渶楂樹紭鍏堢骇锛夈€?
         if ($primarySubject !== '') {
             if ($isFaviconLikeSlot) {
-                $parts[] = 'PRIMARY SUBJECT (CRITICAL — the favicon/title icon glyph MUST visually depict this business; do not invent unrelated mascots, animals, or fantasy creatures): ' . $primarySubject;
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL 鈥?the favicon/title icon glyph MUST visually depict this business; do not invent unrelated mascots, animals, or fantasy creatures): ' . $primarySubject;
             } elseif ($isLogoSlot) {
-                $parts[] = 'PRIMARY SUBJECT (CRITICAL — the logo mark/glyph MUST visually depict this business; reject any unrelated mascot, animal, or fantasy figure that does not match the industry): ' . $primarySubject;
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL 鈥?the logo mark/glyph MUST visually depict this business; reject any unrelated mascot, animal, or fantasy figure that does not match the industry): ' . $primarySubject;
             } else {
-                $parts[] = 'PRIMARY SUBJECT (CRITICAL — the entire scene MUST depict this exactly; every figure, prop, and setting comes from this domain): ' . $primarySubject;
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL 鈥?the entire scene MUST depict this exactly; every figure, prop, and setting comes from this domain): ' . $primarySubject;
             }
         } elseif ($businessContext !== '') {
-            // 兜底：没有提取到主体时，至少把 brief 当成主体而不是 context。
-            $parts[] = 'PRIMARY SUBJECT (CRITICAL — depict this domain only): ' . $businessContext;
+            // 鍏滃簳锛氭病鏈夋彁鍙栧埌涓讳綋鏃讹紝鑷冲皯鎶?brief 褰撴垚涓讳綋鑰屼笉鏄?context銆?
+            $parts[] = 'PRIMARY SUBJECT (CRITICAL 鈥?depict this domain only): ' . $businessContext;
         }
 
-        // 第 2 行：业务背景（如果与 PRIMARY SUBJECT 已重复就跳过）。
+        // 绗?2 琛岋細涓氬姟鑳屾櫙锛堝鏋滀笌 PRIMARY SUBJECT 宸查噸澶嶅氨璺宠繃锛夈€?
         if ($businessContext !== '' && $businessContext !== $primarySubject) {
-            $parts[] = 'Business / cultural context (every figure, environment, and detail MUST match this exactly — never substitute a generic stock-photo subject): ' . $businessContext;
+            $parts[] = 'Business / cultural context (every figure, environment, and detail MUST match this exactly 鈥?never substitute a generic stock-photo subject): ' . $businessContext;
         }
 
-        // 第 3 行：处理 slot.brief。先去掉 "Generate the official website logo for X" 这类
-        // 把 brand 当主体的句式，否则会与 PRIMARY SUBJECT 形成主体冲突。
+        // 绗?3 琛岋細澶勭悊 slot.brief銆傚厛鍘绘帀 "Generate the official website logo for X" 杩欑被
+        // 鎶?brand 褰撲富浣撶殑鍙ュ紡锛屽惁鍒欎細涓?PRIMARY SUBJECT 褰㈡垚涓讳綋鍐茬獊銆?
         $sanitizedBrief = $this->sanitizeSlotBriefForPrompt($rawBrief, $siteTitle);
         if ($sanitizedBrief !== '') {
             $parts[] = $isLogoSlot
-                ? 'Slot brief (reference only — does not override PRIMARY SUBJECT): ' . $sanitizedBrief
+                ? 'Slot brief (reference only 鈥?does not override PRIMARY SUBJECT): ' . $sanitizedBrief
                 : $sanitizedBrief;
         }
 
-        // 第 4 行：brand name —— 仅当 logo 时作为 wordmark text；其它仅作风格背景，不画文字。
+        // 绗?4 琛岋細brand name 鈥斺€?浠呭綋 logo 鏃朵綔涓?wordmark text锛涘叾瀹冧粎浣滈鏍艰儗鏅紝涓嶇敾鏂囧瓧銆?
         if ($siteTitle !== '') {
             if ($isLogoSlot) {
                 $parts[] = 'Optional brand wordmark text (only as small typographic accompaniment to the PRIMARY SUBJECT glyph; never as the primary subject itself, never invent characters out of this name): ' . $siteTitle;
@@ -435,7 +435,7 @@ final class AiSiteAssetManifestService
             }
         }
 
-        // 第 5 行：tagline 仅作为情绪/风格调子，不画文字。
+        // 绗?5 琛岋細tagline 浠呬綔涓烘儏缁?椋庢牸璋冨瓙锛屼笉鐢绘枃瀛椼€?
         if ($siteTagline !== '') {
             $parts[] = $isLogoSlot
                 ? 'Brand personality for styling (mood/color palette only; never spell out this tagline inside the logo): ' . $siteTagline
@@ -463,7 +463,7 @@ final class AiSiteAssetManifestService
         } elseif ($isLogoSlot) {
             $parts[] = 'Logo output requirements (HARD): generate a production-ready identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). Keep only the brand mark/wordmark pixels on transparency; do not place the logo on a white box, colored rectangle, rounded card, wall, photo scene, gradient backdrop, website mockup, screenshot frame, or any other background surface.';
         } elseif ($isHeroSlot) {
-            $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed — cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
+            $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed 鈥?cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
             $parts[] = 'Hero visual quality bar (CRITICAL): premium cinematic website banner background, very wide horizontal composition, edge-to-edge coverage, strong depth, realistic lighting, high-end commercial art direction. Do NOT generate flat vector art, SVG-like shapes, childish cartoon, icon collage, clip-art, rough geometric placeholder art, cardboard-looking cards, UI mockups, or simplistic low-detail illustration. Prefer realistic/editorial photography or photoreal premium 3D only when the subject cannot be photographed.';
             $parts[] = $this->buildBlockImageArtifactContract(true);
         } else {
@@ -476,10 +476,10 @@ final class AiSiteAssetManifestService
         if ($pageType !== '') {
             $parts[] = 'Page type: ' . $pageType;
         }
-        // 强行契约：reference_image_insights 中的 layout/component cues 经常描述
-        // "header + hero + columns + footer" 这类整页结构，喂给单 block 图像生成时
-        // 会让 AI 复制成网站 mockup。仅 logo 类资产保留风格 reference；其它视觉素材
-        // 仅吸收颜色/排版关键词，剥离布局/组件层面的页面结构暗示。
+        // 寮鸿濂戠害锛歳eference_image_insights 涓殑 layout/component cues 缁忓父鎻忚堪
+        // "header + hero + columns + footer" 杩欑被鏁撮〉缁撴瀯锛屽杺缁欏崟 block 鍥惧儚鐢熸垚鏃?
+        // 浼氳 AI 澶嶅埗鎴愮綉绔?mockup銆備粎 logo 绫昏祫浜т繚鐣欓鏍?reference锛涘叾瀹冭瑙夌礌鏉?
+        // 浠呭惛鏀堕鑹?鎺掔増鍏抽敭璇嶏紝鍓ョ甯冨眬/缁勪欢灞傞潰鐨勯〉闈㈢粨鏋勬殫绀恒€?
         $referenceInsightsPrompt = $isLogoSlot
             ? $this->buildReferenceInsightsPrompt($scope)
             : $this->buildBlockReferenceInsightsPrompt($scope);
@@ -487,7 +487,7 @@ final class AiSiteAssetManifestService
             $parts[] = $referenceInsightsPrompt;
         }
 
-        // 收尾：再次复述 PRIMARY SUBJECT，避免 AI 在长 prompt 中"漂移"忘掉首要契约。
+        // 鏀跺熬锛氬啀娆″杩?PRIMARY SUBJECT锛岄伩鍏?AI 鍦ㄩ暱 prompt 涓?婕傜Щ"蹇樻帀棣栬濂戠害銆?
         if ($primarySubject !== '') {
             $parts[] = 'Reinforced contract: the visual MUST stay within the PRIMARY SUBJECT domain stated above; reject any drift toward unrelated mascots, generic stock imagery, or off-topic scenery.';
         }
@@ -517,7 +517,7 @@ final class AiSiteAssetManifestService
             return false;
         }
 
-        return \preg_match('/(?:neon|casino|card\s*game|poker|mahjong|rummy|teen\s*patti|game\s*lobby|gaming|棋牌|棋牌游戏|霓虹|牌桌|牌局|扑克|麻将|电玩城|线上娱乐|游戏房间|赛事房间)/iu', $text) === 1;
+        return \preg_match('/(?:neon|casino|card\s*game|poker|mahjong|rummy|teen\s*patti|game\s*lobby|gaming|妫嬬墝|妫嬬墝娓告垙|闇撹櫣|鐗屾|鐗屽眬|鎵戝厠|楹诲皢|鐢电帺鍩巪绾夸笂濞变箰|娓告垙鎴块棿|璧涗簨鎴块棿)/iu', $text) === 1;
     }
 
     /**
@@ -557,14 +557,14 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * 强行契约抽取：基于 brief_description 推导一组"必须出现的图像主体关键词"。
-     * 这是修复 logo/banner 与用户业务诉求脱节的关键——AI 看到具体名词
-     * （具体产品、服务、材料、场景等）会优先把它们画进图，
-     * 而光看 "Business context: ..." 长句反而会被淹没。
+     * 寮鸿濂戠害鎶藉彇锛氬熀浜?brief_description 鎺ㄥ涓€缁?蹇呴』鍑虹幇鐨勫浘鍍忎富浣撳叧閿瘝"銆?
+     * 杩欐槸淇 logo/banner 涓庣敤鎴蜂笟鍔¤瘔姹傝劚鑺傜殑鍏抽敭鈥斺€擜I 鐪嬪埌鍏蜂綋鍚嶈瘝
+     * 锛堝叿浣撲骇鍝併€佹湇鍔°€佹潗鏂欍€佸満鏅瓑锛変細浼樺厛鎶婂畠浠敾杩涘浘锛?
+     * 鑰屽厜鐪?"Business context: ..." 闀垮彞鍙嶈€屼細琚饭娌°€?
      *
-     * 关键词生成规则：
-     *   1. 优先从 brief_description 抽取。短句直接复用；长句保留前 240 字符。
-     *   2. 同时叠加 slot.brief 已存在的领域名词（如果有），减少 prompt 漂移。
+     * 鍏抽敭璇嶇敓鎴愯鍒欙細
+     *   1. 浼樺厛浠?brief_description 鎶藉彇銆傜煭鍙ョ洿鎺ュ鐢紱闀垮彞淇濈暀鍓?240 瀛楃銆?
+     *   2. 鍚屾椂鍙犲姞 slot.brief 宸插瓨鍦ㄧ殑棰嗗煙鍚嶈瘝锛堝鏋滄湁锛夛紝鍑忓皯 prompt 婕傜Щ銆?
      *
      * @param array<string, mixed> $slot
      */
@@ -583,7 +583,7 @@ final class AiSiteAssetManifestService
             return $this->clipText($slotBrief, 240);
         }
 
-        // 优先 business context；缺省退到 tagline；再退到 slot.brief。
+        // 浼樺厛 business context锛涚己鐪侀€€鍒?tagline锛涘啀閫€鍒?slot.brief銆?
         if ($businessContext !== '') {
             return $this->clipText($businessContext, 240);
         }
@@ -595,8 +595,8 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * 把 slot.brief 中"Generate the official website logo for X"这类把 brand 当主体的写法
-     * 替换成中性 "Logo output for X"，避免 AI 出现主体冲突（PRIMARY SUBJECT vs slot.brief）。
+     * 鎶?slot.brief 涓?Generate the official website logo for X"杩欑被鎶?brand 褰撲富浣撶殑鍐欐硶
+     * 鏇挎崲鎴愪腑鎬?"Logo output for X"锛岄伩鍏?AI 鍑虹幇涓讳綋鍐茬獊锛圥RIMARY SUBJECT vs slot.brief锛夈€?
      */
     /**
      * True only when slot.brief already carries a concrete block-level generated-image subject.
@@ -688,13 +688,11 @@ final class AiSiteAssetManifestService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    public function syncFromBuildPlan(array $scope): array
+    public function syncFromPlanJson(array $scope): array
     {
-        $manifest = $this->dropLegacyUnscopedBlockSlots(
-            $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [])
-        );
-        $currentBuildPlanSlots = $this->buildRequiredContentBlockSlots($scope);
-        $manifest = $this->dropStaleBuildPlanScopedSlots($manifest, $currentBuildPlanSlots);
+        $manifest = $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : []);
+        $currentPlanJsonSlots = $this->buildRequiredContentBlockSlots($scope);
+        $manifest = $this->dropStalePlanJsonScopedSlots($manifest, $currentPlanJsonSlots);
         foreach ($this->extractSlotsFromScope($scope) as $slot) {
             $slot = $this->attachPlanningContextToSlot($slot, $scope);
             $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
@@ -707,7 +705,7 @@ final class AiSiteAssetManifestService
             $slot = $this->attachPlanningContextToSlot($slot, $scope);
             $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
         }
-        foreach ($currentBuildPlanSlots as $slot) {
+        foreach ($currentPlanJsonSlots as $slot) {
             $slot = $this->attachPlanningContextToSlot($slot, $scope);
             $manifest = $this->upsert($manifest, $this->hydrateSlotFromSessionBlockCache($slot, $scope));
         }
@@ -722,7 +720,7 @@ final class AiSiteAssetManifestService
      */
     private function attachPlanningContextToSlot(array $slot, array $scope): array
     {
-        $contractHash = \trim((string)($scope['stage1_contract']['contract_hash'] ?? ''));
+        $contractHash = \trim((string)($scope['plan_json']['signature'] ?? $scope['plan_json']['plan_signature'] ?? ''));
         if ($contractHash === '') {
             $contractHash = \trim((string)($scope['plan_generated_source_signature'] ?? ''));
         }
@@ -797,45 +795,11 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * Full refactor cleanup: page block image slots must be page-scoped.
-     * Old stage-one slots such as "hero_download" or "trust_badges" are not
-     * valid production slots and must not leak into prompt/quality contracts.
-     *
-     * @param array<string,mixed> $manifest
-     * @return array<string,mixed>
-     */
-    private function dropLegacyUnscopedBlockSlots(array $manifest): array
-    {
-        $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
-        foreach ($slots as $slotId => $slot) {
-            if (!\is_array($slot)) {
-                continue;
-            }
-            $normalizedSlotId = \trim((string)($slot['slot_id'] ?? $slotId));
-            $pageType = \trim((string)($slot['page_type'] ?? ''));
-            $slotType = \trim((string)($slot['slot_type'] ?? ''));
-            if (!\in_array($slotType, self::SLOT_TYPES, true)) {
-                continue;
-            }
-            if ($pageType === '' && !$this->isScopedSlotId($normalizedSlotId)) {
-                unset($slots[$slotId]);
-                continue;
-            }
-            if ($this->isLegacyPageBlockSlot($normalizedSlotId)) {
-                unset($slots[$slotId]);
-            }
-        }
-        $manifest['slots'] = $slots;
-
-        return $manifest;
-    }
-
-    /**
      * @param array<string,mixed> $manifest
      * @param list<array<string,mixed>> $currentSlots
      * @return array<string,mixed>
      */
-    private function dropStaleBuildPlanScopedSlots(array $manifest, array $currentSlots): array
+    private function dropStalePlanJsonScopedSlots(array $manifest, array $currentSlots): array
     {
         if ($currentSlots === []) {
             return $manifest;
@@ -904,14 +868,10 @@ final class AiSiteAssetManifestService
     private function extractSlotsFromScope(array $scope): array
     {
         $slots = [];
-        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $sources = $buildPlan !== []
-            ? [$buildPlan]
-            : [
-                $scope['plan_json'] ?? [],
-                $scope['plan_projection'] ?? [],
-                $scope['content_manifest'] ?? [],
-            ];
+        $sources = [
+            $scope['plan_json'] ?? [],
+            $scope['content_manifest'] ?? [],
+        ];
         foreach ($sources as $source) {
             if (\is_array($source)) {
                 $this->collectSlotsRecursive($source, $slots, []);
@@ -1003,15 +963,8 @@ final class AiSiteAssetManifestService
                 $context['block_key'] ?? null,
                 $row['key'] ?? null,
                 (string)$key,
-                $this->extractLegacyPageSlotTail($slotId),
             ]);
             if ($pageType !== '' && !$this->isScopedSlotId($slotId)) {
-                if ($sectionCode === '') {
-                    $sectionCode = $this->buildSectionCodeFromBlockKey($pageType, $blockKeyForSection);
-                }
-                $slotId = $this->normalizeSlotId('page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode));
-            }
-            if ($pageType !== '' && $this->isLegacyPageBlockSlot($slotId)) {
                 if ($sectionCode === '') {
                     $sectionCode = $this->buildSectionCodeFromBlockKey($pageType, $blockKeyForSection);
                 }
@@ -1068,8 +1021,8 @@ final class AiSiteAssetManifestService
         $existingLogo = $this->readExistingIdentityAssetUrl($scope, 'logo');
         $existingIcon = $this->readExistingIdentityAssetUrl($scope, 'icon');
 
-        // 强行契约：slot.brief 必须以"业务主体"开头，避免 buildPrompt 时 brand name 抢占
-        // PRIMARY SUBJECT 位置（导致出现与诉求脱节的吉祥物 logo）。
+        // 寮鸿濂戠害锛歴lot.brief 蹇呴』浠?涓氬姟涓讳綋"寮€澶达紝閬垮厤 buildPrompt 鏃?brand name 鎶㈠崰
+        // PRIMARY SUBJECT 浣嶇疆锛堝鑷村嚭鐜颁笌璇夋眰鑴辫妭鐨勫悏绁ョ墿 logo锛夈€?
         $subjectAnchor = $briefDescription !== ''
             ? $briefDescription
             : ($siteTagline !== '' ? $siteTagline : $brandReference);
@@ -1170,9 +1123,9 @@ final class AiSiteAssetManifestService
 
     /**
      * Stage-1 JSON often omits a dedicated image row in {@see collectRequirementRows}, which leaves the
-     * asset manifest without a planned hero slot — previews fall back to bare gradients with no banner image.
+     * asset manifest without a planned hero slot 鈥?previews fall back to bare gradients with no banner image.
      * We synthesize a stable hero_image slot per hero section derived from the same blueprint wiring as
-     * {@see AiSiteBuildTaskService::buildBlueprintFromStageOneExecutionBlueprint}.
+     * {@see AiSitePlanJsonTaskService::buildBlueprintFromStageOnePlanJsonGeneration}.
      *
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
@@ -1193,14 +1146,14 @@ final class AiSiteAssetManifestService
                 'page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode)
             );
 
-            // 强行契约：banner slot.brief 必须以业务主体开头，否则 AI 会画与诉求无关的
-            // 通用渐变/抽象图案，跟"棋牌/印度市场/APK 下载"等真实诉求脱节。
+            // 寮鸿濂戠害锛歜anner slot.brief 蹇呴』浠ヤ笟鍔′富浣撳紑澶达紝鍚﹀垯 AI 浼氱敾涓庤瘔姹傛棤鍏崇殑
+            // 閫氱敤娓愬彉/鎶借薄鍥炬锛岃窡"妫嬬墝/鍗板害甯傚満/APK 涓嬭浇"绛夌湡瀹炶瘔姹傝劚鑺傘€?
             $briefParts = [];
             if ($businessContext !== '') {
-                $briefParts[] = 'PRIMARY SUBJECT for the hero banner background (CRITICAL — the entire scene MUST depict this business and culture; do not substitute a generic abstract gradient, generic stock photo, or off-topic figures): '
+                $briefParts[] = 'PRIMARY SUBJECT for the hero banner background (CRITICAL 鈥?the entire scene MUST depict this business and culture; do not substitute a generic abstract gradient, generic stock photo, or off-topic figures): '
                     . $businessContext;
             }
-            $briefParts[] = 'Format default: 1920x750-style full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Unless the user explicitly requests a different hero visual composition, fill the entire canvas edge-to-edge with one immersive wide scene and keep important subjects within the center-safe crop area. Apply a subtle gradient overlay at top and bottom edges (dark-to-transparent) so text and page content can overlay the image naturally. The style and color temperature MUST match the brand identity — not a generic stock photo.';
+            $briefParts[] = 'Format default: 1920x750-style full-width hero banner background image (photography or cinematic illustration) for the above-the-fold section. Unless the user explicitly requests a different hero visual composition, fill the entire canvas edge-to-edge with one immersive wide scene and keep important subjects within the center-safe crop area. Apply a subtle gradient overlay at top and bottom edges (dark-to-transparent) so text and page content can overlay the image naturally. The style and color temperature MUST match the brand identity 鈥?not a generic stock photo.';
             $briefParts[] = $this->buildBlockImageArtifactContract(true);
             if ($title !== '') {
                 $briefParts[] = 'Section headline context (do not render as readable slogan text inside the image): ' . $title;
@@ -1233,9 +1186,7 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * Build page-scoped image slots from build_plan_v2 only. The confirmed
-     * build plan is the execution contract; older execution blueprints must
-     * not create or preserve image slots for blocks the plan did not request.
+     * Build page-scoped image slots from plan_json.pages dynamic block nodes.
      *
      * @param array<string, mixed> $scope
      * @return list<array<string, mixed>>
@@ -1243,8 +1194,9 @@ final class AiSiteAssetManifestService
     private function buildRequiredContentBlockSlots(array $scope): array
     {
         $slots = [];
-        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        if ($buildPlan === []) {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        if ($pages === []) {
             return [];
         }
 
@@ -1253,19 +1205,15 @@ final class AiSiteAssetManifestService
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
         ]);
-        $contentItems = \is_array($buildPlan['content_manifest']['items'] ?? null)
-            ? $buildPlan['content_manifest']['items']
+        $contentItems = \is_array($planJson['content_manifest']['items'] ?? null)
+            ? $planJson['content_manifest']['items']
             : [];
-        foreach (\is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [] as $block) {
-            if (!\is_array($block)) {
+        foreach ($pages as $pageType => $page) {
+            if (!\is_string($pageType) || !\is_array($page)) {
                 continue;
             }
-            $pageType = \trim((string)($block['page_type'] ?? $block['page_id'] ?? ''));
-            $blockKey = $this->normalizeSlotId($this->firstString([
-                $block['section_key'] ?? null,
-                $block['block_key'] ?? null,
-                $block['block_id'] ?? null,
-            ]));
+            foreach ($this->extractPlanJsonPageBlockNodes($page) as $blockKey => $block) {
+                $blockKey = $this->normalizeSlotId((string)$blockKey);
             if ($pageType === '' || $blockKey === '') {
                 continue;
             }
@@ -1297,7 +1245,7 @@ final class AiSiteAssetManifestService
                 $mediaStrategy['asset_slot_id'] ?? null,
                 'page:' . $pageType . ':' . \str_replace('/', '-', $sectionCode),
             ]));
-            $titleCopy = $this->extractBuildPlanBlockContentText($block, $contentItems);
+            $titleCopy = $this->extractPlanJsonBlockContentText($block, $contentItems);
             $brief = $this->buildContentBlockImageSubjectBrief($blockKey, $block, $imageIntent, $businessContext);
             $briefParts = [];
             if ($businessContext !== '') {
@@ -1348,7 +1296,7 @@ final class AiSiteAssetManifestService
                 'brief' => $brief,
                 'prompt_brief' => $brief,
                 'status' => 'pending',
-                'source' => 'build_plan_v2',
+                'source' => 'plan_json',
                 'final_url' => '',
                 'required' => 1,
                 'desired_image' => 1,
@@ -1358,6 +1306,7 @@ final class AiSiteAssetManifestService
                 'locked_by_user' => 0,
             ];
         }
+        }
 
         return $slots;
     }
@@ -1366,7 +1315,7 @@ final class AiSiteAssetManifestService
      * @param array<string, mixed> $block
      * @param array<string|int, mixed> $contentItems
      */
-    private function extractBuildPlanBlockContentText(array $block, array $contentItems): string
+    private function extractPlanJsonBlockContentText(array $block, array $contentItems): string
     {
         $parts = [];
         foreach (\is_array($block['content_keys'] ?? null) ? $block['content_keys'] : [] as $key) {
@@ -1381,6 +1330,55 @@ final class AiSiteAssetManifestService
         }
 
         return $this->clipText(\implode(' ', \array_unique($parts)), 260);
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return array<string, array<string, mixed>>
+     */
+    private function extractPlanJsonPageBlockNodes(array $page): array
+    {
+        $blocks = [];
+        foreach ($page as $blockKey => $block) {
+            if (!\is_string($blockKey) || !\is_array($block)) {
+                continue;
+            }
+            if (\in_array($blockKey, [
+                'page_key',
+                'page_type',
+                'type',
+                'status',
+                'title',
+                'label',
+                'page_title',
+                'page_goal',
+                'page_design_plan',
+                'theme_alignment_summary',
+                'content_locale',
+                'seo',
+                'meta_title',
+                'meta_description',
+                'meta_keywords',
+                'route',
+                'slug',
+                'path',
+                'layout',
+                'sections',
+                'section_refinements',
+                'block_nodes',
+                'block_node_previews',
+                'updated_at',
+                'started_at',
+                'finished_at',
+                'error',
+                'error_message',
+            ], true)) {
+                continue;
+            }
+            $blocks[$blockKey] = $block;
+        }
+
+        return $blocks;
     }
 
     private function extractContentManifestItemText(mixed $value): string
@@ -1612,33 +1610,13 @@ final class AiSiteAssetManifestService
             ];
         };
 
-        $buildPlan = \is_array($scope['build_plan_v2'] ?? null) ? $scope['build_plan_v2'] : [];
-        $pageTypesById = [];
-        foreach (\is_array($buildPlan['pages'] ?? null) ? $buildPlan['pages'] : [] as $page) {
-            if (!\is_array($page)) {
-                continue;
-            }
-            $pageId = \trim((string)($page['page_id'] ?? $page['id'] ?? ''));
-            $pageType = \trim((string)($page['page_type'] ?? ''));
-            if ($pageId !== '' && $pageType !== '') {
-                $pageTypesById[$pageId] = $pageType;
-            }
-        }
-        $contentItems = \is_array($buildPlan['content_manifest']['items'] ?? null)
-            ? $buildPlan['content_manifest']['items']
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $contentItems = \is_array($planJson['content_manifest']['items'] ?? null)
+            ? $planJson['content_manifest']['items']
             : [];
-        foreach (\is_array($buildPlan['blocks'] ?? null) ? $buildPlan['blocks'] : [] as $block) {
-            if (!\is_array($block)) {
-                continue;
-            }
-            $pageType = \trim((string)($block['page_type'] ?? ''));
-            if ($pageType === '') {
-                $pageId = \trim((string)($block['page_id'] ?? ''));
-                $pageType = $pageId !== '' ? (string)($pageTypesById[$pageId] ?? '') : '';
-            }
-            if ($pageType !== 'home_page') {
-                continue;
-            }
+        $homePage = \is_array($pages['home_page'] ?? null) ? $pages['home_page'] : [];
+        foreach ($this->extractPlanJsonPageBlockNodes($homePage) as $blockKey => $block) {
             $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
             $isHero = \in_array(\strtolower(\trim((string)($imageIntent['image_role'] ?? ''))), ['hero_image', 'hero_banner'], true)
                 || \strtolower(\trim((string)($block['page_flow_role'] ?? ''))) === 'opening'
@@ -1646,12 +1624,13 @@ final class AiSiteAssetManifestService
             if (!$isHero) {
                 continue;
             }
-            $blockKey = \trim((string)($block['section_key'] ?? $block['block_key'] ?? $block['block_id'] ?? $block['id'] ?? ''));
+            $blockKey = \trim((string)($block['section_key'] ?? $block['block_key'] ?? $blockKey));
             if ($blockKey === '') {
                 continue;
             }
+            $pageType = 'home_page';
             $sectionCode = $this->buildSectionCodeFromBlockKey($pageType, $blockKey);
-            $append($pageType, $sectionCode, $this->extractBuildPlanBlockContentText($block, $contentItems));
+            $append($pageType, $sectionCode, $this->extractPlanJsonBlockContentText($block, $contentItems));
         }
 
         return $out;
@@ -2063,32 +2042,6 @@ final class AiSiteAssetManifestService
             || \str_starts_with($slotId, 'shared:');
     }
 
-    private function isLegacyPageBlockSlot(string $slotId): bool
-    {
-        $slotId = \strtolower(\trim($slotId));
-        if (!\str_starts_with($slotId, 'page:')) {
-            return false;
-        }
-        $parts = \explode(':', $slotId, 3);
-        $slotTail = \trim((string)($parts[2] ?? ''));
-        if (\str_contains($slotTail, ':')) {
-            return false;
-        }
-
-        return $slotTail !== '' && !\str_starts_with($slotTail, 'content-');
-    }
-
-    private function extractLegacyPageSlotTail(string $slotId): string
-    {
-        $slotId = \strtolower(\trim($slotId));
-        if (!\str_starts_with($slotId, 'page:')) {
-            return $slotId;
-        }
-        $parts = \explode(':', $slotId, 3);
-
-        return \trim((string)($parts[2] ?? ''));
-    }
-
     /**
      * @param array<string,mixed> $slot
      */
@@ -2290,8 +2243,8 @@ final class AiSiteAssetManifestService
     }
 
     /**
-     * 块级图像专用 reference 摘要：仅保留色彩/质感/风格类提示，
-     * 剥离 layout_cues / component_cues 等会被 AI 解读为"画整页"的结构信号。
+     * 鍧楃骇鍥惧儚涓撶敤 reference 鎽樿锛氫粎淇濈暀鑹插僵/璐ㄦ劅/椋庢牸绫绘彁绀猴紝
+     * 鍓ョ layout_cues / component_cues 绛変細琚?AI 瑙ｈ涓?鐢绘暣椤?鐨勭粨鏋勪俊鍙枫€?
      *
      * @param array<string, mixed> $scope
      */
@@ -2374,7 +2327,6 @@ final class AiSiteAssetManifestService
 
         foreach ([
             $scope['plan_json'] ?? null,
-            $scope['stage1_contract'] ?? null,
         ] as $source) {
             if (\is_array($source)) {
                 $this->appendPaletteCandidates($candidates, $source);

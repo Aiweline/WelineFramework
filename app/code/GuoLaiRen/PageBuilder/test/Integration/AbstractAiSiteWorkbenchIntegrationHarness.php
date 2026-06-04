@@ -9,7 +9,7 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSessionArtifact;
 use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Backend\Model\BackendUser;
-use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
@@ -314,13 +314,13 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         $scopeCompatibilityService = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
         /** @var AiSiteProfileGenerationService $profileService */
         $profileService = ObjectManager::getInstance(AiSiteProfileGenerationService::class);
-        /** @var AiSiteExecutionBlueprintService $executionBlueprintService */
-        $executionBlueprintService = ObjectManager::getInstance(AiSiteExecutionBlueprintService::class);
+        /** @var AiSitePlanJsonGenerationService $planJsonGenerationService */
+        $planJsonGenerationService = ObjectManager::getInstance(AiSitePlanJsonGenerationService::class);
         $scope = $scopeCompatibilityService->normalizeScope(
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN)
         );
         $websiteProfile = $profileService->generate($scope, false);
-        $artifacts = $executionBlueprintService->buildPlanArtifacts($scope, \is_array($websiteProfile) ? $websiteProfile : []);
+        $artifacts = $planJsonGenerationService->PlanJsonArtifacts($scope, \is_array($websiteProfile) ? $websiteProfile : []);
         $planOperation = [
             'operation' => 'plan',
             'status' => 'done',
@@ -346,7 +346,10 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
             \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [],
             [
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
-                'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
+                'plan_json' => \array_replace(
+                    \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
+                    ['confirmed' => 0]
+                ),
                 'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
                 'plan_locale' => (string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? ''),
                 'plan_ai_generated' => 0,
@@ -354,8 +357,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
                 'plan_generated_at' => \date('Y-m-d H:i:s'),
                 'plan_generated_locale' => (string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? ''),
                 'plan_generated_page_types' => \is_array($scope['page_types'] ?? null) ? \array_values(\array_map('strval', $scope['page_types'])) : [],
-                'plan_generated_source_signature' => $executionBlueprintService->buildSourceSignature($scope),
-                'plan_confirmed' => 0,
+                'plan_generated_source_signature' => $planJsonGenerationService->buildSourceSignature($scope),
                 'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING,
                 'active_operation' => [
                     'operation' => 'plan',
@@ -382,7 +384,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         self::assertStringContainsString(
             'public_id=' . $publicId,
             (string)($confirmPlanPayload['data']['workspace_url'] ?? ''),
-            'post-confirm-plan should return the workspace URL for the confirmed BuildPlan workspace'
+            'post-confirm-plan should return the workspace URL for the confirmed PlanJson workspace'
         );
 
         return [

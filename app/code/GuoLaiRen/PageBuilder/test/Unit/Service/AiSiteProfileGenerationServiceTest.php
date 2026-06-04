@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 class AiSiteProfileGenerationServiceTest extends TestCase
 {
-    private const LEGACY_PLACEHOLDER_SVG = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCAxNjAgNDgiPgogIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIHJ4PSIxMCIgZmlsbD0iIzBmMTcyYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEyIiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjZmZmZmZmIj5BUzwvdGV4dD4KPC9zdmc+';
+    private const REMOVED_PLACEHOLDER_SVG = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCAxNjAgNDgiPgogIDxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIHJ4PSIxMCIgZmlsbD0iIzBmMTcyYSIvPgogIDx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEyIiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjZmZmZmZmIj5BUzwvdGV4dD4KPC9zdmc+';
 
     public function testGeneratePrefersTopLevelScopeValuesOverStaleWebsiteProfileSnapshot(): void
     {
@@ -169,7 +169,7 @@ class AiSiteProfileGenerationServiceTest extends TestCase
                 'site_title' => 'Weline Pixel Event Instrumentation 2606',
                 '_ai_profile' => [
                     'version' => 6,
-                    'signature' => 'legacy',
+                    'signature' => 'removed',
                 ],
             ],
         ]);
@@ -231,7 +231,7 @@ class AiSiteProfileGenerationServiceTest extends TestCase
         self::assertContains('霓虹棋牌暗色娱乐页', $generator->lastContext['forbidden_visible_terms'] ?? []);
     }
 
-    public function testGenerateReplacesLegacyPlaceholderAssetsWithFreshSvgBrandAssets(): void
+    public function testGenerateReplacesRemovedPlaceholderAssetsWithFreshSvgBrandAssets(): void
     {
         $service = new AiSiteProfileGenerationService();
 
@@ -239,16 +239,16 @@ class AiSiteProfileGenerationServiceTest extends TestCase
             'brief_description' => '高客单家居品牌官网，强调定制设计、案例展示和预约咨询转化。',
             'website_profile' => [
                 'site_title' => 'AI Site',
-                'logo' => self::LEGACY_PLACEHOLDER_SVG,
-                'icon' => self::LEGACY_PLACEHOLDER_SVG,
-                'favicon' => self::LEGACY_PLACEHOLDER_SVG,
+                'logo' => self::REMOVED_PLACEHOLDER_SVG,
+                'icon' => self::REMOVED_PLACEHOLDER_SVG,
+                'favicon' => self::REMOVED_PLACEHOLDER_SVG,
             ],
         ], false);
 
         self::assertSame('高客单家居品牌官网', $profile['site_title']);
-        self::assertNotSame(self::LEGACY_PLACEHOLDER_SVG, $profile['logo']);
-        self::assertNotSame(self::LEGACY_PLACEHOLDER_SVG, $profile['favicon']);
-        self::assertNotSame(self::LEGACY_PLACEHOLDER_SVG, $profile['icon']);
+        self::assertNotSame(self::REMOVED_PLACEHOLDER_SVG, $profile['logo']);
+        self::assertNotSame(self::REMOVED_PLACEHOLDER_SVG, $profile['favicon']);
+        self::assertNotSame(self::REMOVED_PLACEHOLDER_SVG, $profile['icon']);
         self::assertStringStartsWith('data:image/svg+xml;base64,', (string)$profile['logo']);
         self::assertStringStartsWith('data:image/svg+xml;base64,', (string)$profile['favicon']);
         self::assertStringStartsWith('data:image/svg+xml;base64,', (string)$profile['icon']);

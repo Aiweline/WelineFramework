@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSiteContractAdapterSelectorTest extends TestCase
 {
-    public function testStageOneAndBuildPlanUseStrictJsonDefaults(): void
+    public function testStageOneAndPlanJsonUseStrictJsonDefaults(): void
     {
         $selector = new AiSiteContractAdapterSelector();
 
@@ -18,10 +18,10 @@ final class AiSiteContractAdapterSelectorTest extends TestCase
         self::assertSame(AiSiteContractAdapterSelector::ADAPTER_JSON_STRICT, $stageOne['adapter_type']);
         self::assertSame(['type' => 'json_object'], $stageOne['request_params']['response_format']);
 
-        $buildPlan = $selector->select(ContractType::STAGE_BUILD_PLAN, 'build_plan');
-        self::assertSame(AiSiteContractAdapterSelector::ADAPTER_JSON_STRICT, $buildPlan['adapter_type']);
-        self::assertTrue($buildPlan['request_params']['disable_conversation_history']);
-        self::assertTrue($buildPlan['request_params']['disable_conversation_persist']);
+        $PlanJson = $selector->select(ContractType::STAGE_PLAN_JSON, 'plan_json');
+        self::assertSame(AiSiteContractAdapterSelector::ADAPTER_JSON_STRICT, $PlanJson['adapter_type']);
+        self::assertTrue($PlanJson['request_params']['disable_conversation_history']);
+        self::assertTrue($PlanJson['request_params']['disable_conversation_persist']);
     }
 
     public function testQaMapsToRulesEngineAndAllowsOverrides(): void

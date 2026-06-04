@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service\AI\Contract;
 
-use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanDesignPolicyLinter;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PlanJsonDesignPolicyLinter;
 use GuoLaiRen\PageBuilder\Service\AiSiteDesignPolicyRegistry;
 use PHPUnit\Framework\TestCase;
 
-final class BuildPlanDesignPolicyLinterTest extends TestCase
+final class PlanJsonDesignPolicyLinterTest extends TestCase
 {
     public function testValidDesignPolicyProjectionPasses(): void
     {
-        $result = (new BuildPlanDesignPolicyLinter())->validate($this->contract());
+        $result = (new PlanJsonDesignPolicyLinter())->validate($this->contract());
 
         self::assertTrue($result['valid'], \implode("\n", $result['errors']));
     }
@@ -23,7 +23,7 @@ final class BuildPlanDesignPolicyLinterTest extends TestCase
         $contract['policy_projection']['applied_rule_ids'][] = 'unknown.rule';
         unset($contract['design_manifest']['tokens']['motion']);
 
-        $result = (new BuildPlanDesignPolicyLinter())->validate($contract);
+        $result = (new PlanJsonDesignPolicyLinter())->validate($contract);
 
         self::assertFalse($result['valid']);
         self::assertTrue($this->hasErrorContaining($result['errors'], 'unknown.rule'));
@@ -65,7 +65,7 @@ final class BuildPlanDesignPolicyLinterTest extends TestCase
                     'motion' => ['duration' => '240ms'],
                 ],
             ],
-            'blocks' => [
+            'block_nodes' => [
                 [
                     'block_id' => 'home.gallery',
                     'block_type' => 'image_gallery',

@@ -8,8 +8,8 @@
 
 让 AI 建站工作台的提示词具备**显式技能加载能力**：
 
-- 第一阶段方案（`AiSiteExecutionBlueprintService::buildAiPlanPrompt`）默认加载本目录下的强制技能；
-- 第二阶段任务（`AiSiteBuildPlanService` -> `AiSiteSkillRegistry::buildPromptGuideLines`）默认加载本目录下的强制技能 + 兼容旧版 `frontend-design`；
+- 第一阶段方案（`AiSitePlanJsonGenerationService::buildAiPlanPrompt`）默认加载本目录下的强制技能；
+- 第二阶段任务（`AiSitePlanJsonService` -> `AiSiteSkillRegistry::buildPromptGuideLines`）默认加载本目录下的强制技能 + 兼容既有版 `frontend-design`；
 - AI 在产出 plan/task 时必须把这些技能视为已装载并执行其硬约束。
 
 ## 技能目录约定
@@ -47,7 +47,7 @@ buildAiPlanPrompt（Stage1）
    ↓
 （用户确认 stage1 plan）
    ↓
-buildTaskPlanPromptBase（Stage2）
+planJsonTaskPlanPromptBase（Stage2）
    ├─ 上下文摘要
    ├─ buildSkillRegistryPromptGuide
    │     ├─ AI BUILDER SKILL CAPABILITY

@@ -128,7 +128,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
                         'required' => 1,
                         'desired_image' => 1,
                         'status' => 'pending',
-                        'source' => 'build_plan_v2',
+                        'source' => 'plan_json',
                     ],
                 ],
             ],
@@ -588,18 +588,18 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         );
     }
 
-    public function testPrepareBuildAssetsRegeneratesLegacyPlaceholderAssets(): void
+    public function testPrepareBuildAssetsRegeneratesRemovedPlaceholderAssets(): void
     {
         $publicId = 'asset-placeholder-regenerate-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
         $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
-        $legacyPlaceholderUrl = '/pub/media/page-build/legacy/ai-generated/identity-website-logo-old.svg';
+        $removedPlaceholderUrl = '/pub/media/page-build/removed/ai-generated/identity-website-logo-prior.svg';
 
         $scope = [
-            'site_title' => 'Legacy Placeholder Test',
-            'logo' => $legacyPlaceholderUrl,
+            'site_title' => 'Removed Placeholder Test',
+            'logo' => $removedPlaceholderUrl,
             'website_profile' => [
-                'logo' => $legacyPlaceholderUrl,
+                'logo' => $removedPlaceholderUrl,
             ],
             'asset_manifest' => [
                 'slots' => [
@@ -611,9 +611,9 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
                         'brief' => 'Generate the website logo.',
                         'source' => 'generated',
                         'status' => 'done',
-                        'final_url' => $legacyPlaceholderUrl,
+                        'final_url' => $removedPlaceholderUrl,
                         'variants' => [[
-                            'url' => $legacyPlaceholderUrl,
+                            'url' => $removedPlaceholderUrl,
                             'mode' => 'placeholder',
                             'model' => 'placeholder',
                             'placeholder' => 1,
@@ -645,7 +645,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
 
         try {
             self::assertContains('identity:website-logo', $result['generated_slots']);
-            self::assertNotSame($legacyPlaceholderUrl, $finalUrl);
+            self::assertNotSame($removedPlaceholderUrl, $finalUrl);
             self::assertStringEndsWith('.svg', $finalUrl);
             self::assertSame($finalUrl, (string)($resultScope['verified_assets']['identity:website-logo'] ?? ''));
             self::assertSame($finalUrl, (string)($resultScope['logo'] ?? ''));
@@ -670,7 +670,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $publicId = 'asset-placeholder-section-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
         $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
-        $placeholderUrl = '/pub/media/page-build/demo/ai-generated/home-hero-old.svg';
+        $placeholderUrl = '/pub/media/page-build/demo/ai-generated/home-hero-prior.svg';
 
         $scope = [
             'site_title' => 'Placeholder Section Retry Test',
@@ -1012,7 +1012,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $failureTrail = [];
         for ($i = 0; $i < 100; $i++) {
             $failureTrail[] = [
-                'slotId' => 'old-slot-' . $i,
+                'slotId' => 'prior-slot-' . $i,
                 'message' => \str_repeat((string)($i % 10), 900),
                 'updated_at' => '2026-05-24 08:00:00',
             ];
@@ -1048,7 +1048,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             : [];
 
         self::assertCount(80, $failTrail);
-        self::assertSame('old-slot-21', (string)($failTrail[0]['slot_id'] ?? ''));
+        self::assertSame('prior-slot-21', (string)($failTrail[0]['slot_id'] ?? ''));
         self::assertArrayNotHasKey('slotId', $failTrail[0]);
         self::assertContains((string)($failTrail[79]['slot_id'] ?? ''), \array_column($result['failed_slots'], 'slot_id'));
         self::assertLessThanOrEqual(803, \mb_strlen((string)($failTrail[79]['message'] ?? '')));
@@ -1065,7 +1065,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             'asset_image_generation_failures' => [
                 [
                     'slot_id' => 'home:hero',
-                    'message' => 'Old provider failure',
+                    'message' => 'Prior provider failure',
                     'updated_at' => '2026-05-09 04:11:13',
                 ],
                 [

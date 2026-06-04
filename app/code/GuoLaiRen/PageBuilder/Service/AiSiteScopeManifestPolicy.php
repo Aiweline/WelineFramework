@@ -16,11 +16,7 @@ final class AiSiteScopeManifestPolicy
     /** @var list<string> */
     public const INLINE_ARTIFACT_KEYS = [
         'plan_json',
-        'plan_markdown',
-        'plan_projection',
         'content_manifest',
-        'plan_workbench',
-        'build_workbench',
         'build_contracts',
         'render_data_contract',
         'task_results',
@@ -82,7 +78,6 @@ final class AiSiteScopeManifestPolicy
         }
 
         unset(
-            $scope['confirmed_stage1_plan_book'],
             $scope['theme_context_snapshot'],
             $scope['shared_prompt_context'],
             $scope['theme_css']
@@ -114,7 +109,7 @@ final class AiSiteScopeManifestPolicy
             if (!\is_array($pageData)) {
                 continue;
             }
-            $blocks = \is_array($pageData['blocks'] ?? null) ? $pageData['blocks'] : [];
+            $blocks = \is_array($pageData['block_nodes'] ?? null) ? $pageData['block_nodes'] : [];
             $entries = [];
             foreach ($blocks as $block) {
                 if (!\is_array($block)) {
@@ -133,7 +128,7 @@ final class AiSiteScopeManifestPolicy
             }
             $index[(string)$pageType] = [
                 'page_type' => (string)$pageType,
-                'blocks' => $entries,
+                'block_nodes' => $entries,
             ];
         }
 
@@ -181,10 +176,6 @@ final class AiSiteScopeManifestPolicy
             if ($value === []) {
                 return false;
             }
-            if ($key === 'plan_markdown') {
-                return \trim((string)($value['markdown'] ?? $value['content'] ?? '')) !== '';
-            }
-
             return true;
         }
 
@@ -201,7 +192,7 @@ final class AiSiteScopeManifestPolicy
             if (!\is_array($pageData)) {
                 continue;
             }
-            foreach (\is_array($pageData['blocks'] ?? null) ? $pageData['blocks'] : [] as $block) {
+            foreach (\is_array($pageData['block_nodes'] ?? null) ? $pageData['block_nodes'] : [] as $block) {
                 if (!\is_array($block)) {
                     continue;
                 }
@@ -227,7 +218,7 @@ final class AiSiteScopeManifestPolicy
             if (!\is_array($pageData)) {
                 continue;
             }
-            $blocks = \is_array($pageData['blocks'] ?? null) ? $pageData['blocks'] : [];
+            $blocks = \is_array($pageData['block_nodes'] ?? null) ? $pageData['block_nodes'] : [];
             foreach ($blocks as $idx => $block) {
                 if (!\is_array($block)) {
                     continue;
@@ -237,7 +228,7 @@ final class AiSiteScopeManifestPolicy
                 }
                 $blocks[$idx] = $block;
             }
-            $pageData['blocks'] = $blocks;
+            $pageData['block_nodes'] = $blocks;
             $virtualPages[$pageType] = $pageData;
         }
 
@@ -246,9 +237,8 @@ final class AiSiteScopeManifestPolicy
 
     private function emptyValueForArtifactKey(string $key): mixed
     {
-        return match ($key) {
-            'plan_markdown' => '',
-            default => [],
-        };
+        unset($key);
+
+        return [];
     }
 }

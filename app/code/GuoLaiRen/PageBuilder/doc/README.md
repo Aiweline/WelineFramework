@@ -1,6 +1,6 @@
 # PageBuilder 文档中心
 
-本文是 `GuoLaiRen_PageBuilder` 模块的文档入口。当前目录中混有现行契约、架构计划、功能说明、修复记录和历史样例；第一轮整理先建立索引和归类规则，不批量移动旧文件，避免破坏已有文档链接和测试提示。
+本文是 `GuoLaiRen_PageBuilder` 模块的文档入口。当前目录中混有现行契约、架构计划、功能说明、修复记录和历史样例；第一轮整理先建立索引和归类规则，不批量移动既有文件，避免破坏已有文档链接和测试提示。
 
 ## 阅读顺序
 
@@ -27,7 +27,7 @@
 
 | 文档 | 主题 |
 | --- | --- |
-| [PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md](PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md) | AI 建站工作台主架构与 BuildPlan v2.2 |
+| [PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md](PageBuilder_AI建站工作台重构计划_v2.2_Codex开发版.md) | AI 建站工作台主架构与 PlanJson |
 | [PR需求-PageBuilder-AI智能建站强契约与整站视觉验收.md](PR需求-PageBuilder-AI智能建站强契约与整站视觉验收.md) | 强契约与整站视觉验收需求 |
 | [PageBuilder_AI建站_13项门禁与Prompt对照表.md](PageBuilder_AI建站_13项门禁与Prompt对照表.md) | 质量门禁与 Prompt 契约映射 |
 | [SSE-契约清单.md](SSE-契约清单.md) | AI 工作台 SSE 事件契约 |
@@ -157,7 +157,7 @@
 | 类型 | 命名格式 | 示例 |
 | --- | --- | --- |
 | 长期规范 | 放入 `../docs/`，使用英文大写规格名 | `../docs/TEMPLATE_SPEC.md` |
-| 当前架构 | `架构-领域-主题.md` | `架构-AI建站-BuildPlan.md` |
+| 当前架构 | `架构-领域-主题.md` | `架构-AI建站-PlanJson.md` |
 | 契约 | `契约-领域-主题.md` | `契约-AI建站-SSE事件.md` |
 | 功能说明 | `功能-领域-主题.md` | `功能-页面-自动保存.md` |
 | 排障 | `排障-领域-问题.md` | `排障-AI建站-预览失败.md` |
@@ -169,4 +169,4 @@
 1. 第二轮：把修复记录和测试记录移入 `doc/archive/`，并同步内部链接。
 2. 第三轮：把仍有效的功能说明合并到 `../docs/` 的长期规范。
 3. 第四轮：把 AI 建站文档拆成 `contract`、`workflow`、`quality`、`runtime` 四组。
-4. 第五轮：检查根 README 的旧结构描述，改为只保留模块入口和文档导航。
+4. 第五轮：检查根 README 的既有结构描述，改为只保留模块入口和文档导航。

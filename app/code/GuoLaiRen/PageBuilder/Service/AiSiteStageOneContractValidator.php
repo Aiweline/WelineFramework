@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
-use GuoLaiRen\PageBuilder\Service\AI\Contract\BuildPlanContentManifestLinter;
+use GuoLaiRen\PageBuilder\Service\AI\Contract\PlanJsonContentManifestLinter;
 
 final class AiSiteStageOneContractValidator
 {
@@ -41,7 +41,7 @@ final class AiSiteStageOneContractValidator
                 continue;
             }
             $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
-            $pageReport = $this->validatePagePlan($pageType, $page, $contract, $context);
+            $pageReport = $this->validatePlanJsonPage($pageType, $page, $contract, $context);
             foreach (\is_array($pageReport['issues'] ?? null) ? $pageReport['issues'] : [] as $issue) {
                 if (\is_array($issue)) {
                     $issues[] = $issue;
@@ -74,23 +74,23 @@ final class AiSiteStageOneContractValidator
     }
 
     /**
-     * @param array<string, mixed> $pagePlan
+     * @param array<string, mixed> $planJsonPage
      * @param array<string, mixed> $contract
      * @param array<string, mixed> $context
      * @return array<string, mixed>
      */
-    public function validatePagePlan(string $pageType, array $pagePlan, array $contract, array $context = []): array
+    public function validatePlanJsonPage(string $pageType, array $planJsonPage, array $contract, array $context = []): array
     {
         $issues = [];
         $pageContract = $this->contractService()->pageContract($contract, $pageType);
-        if ($pagePlan === []) {
+        if ($planJsonPage === []) {
             $issues[] = $this->issue('missing_page', 'pages.' . $pageType, 'high', ['page_type' => $pageType]);
 
-            return $this->report($pagePlan, $contract, $issues, $context);
+            return $this->report($planJsonPage, $contract, $issues, $context);
         }
 
         foreach (['page_goal', 'theme_alignment_summary'] as $field) {
-            $value = \trim((string)($pagePlan[$field] ?? ''));
+            $value = \trim((string)($planJsonPage[$field] ?? ''));
             if ($value === '') {
                 $issues[] = $this->issue('instruction_like_or_empty', 'pages.' . $pageType . '.' . $field, 'medium', [
                     'page_type' => $pageType,
@@ -104,25 +104,25 @@ final class AiSiteStageOneContractValidator
             }
         }
 
-        if (!\is_array($pagePlan['page_design_plan'] ?? null) || $pagePlan['page_design_plan'] === []) {
+        if (!\is_array($planJsonPage['page_design_plan'] ?? null) || $planJsonPage['page_design_plan'] === []) {
             $issues[] = $this->issue('missing_page_design_plan', 'pages.' . $pageType . '.page_design_plan', 'high', [
                 'page_type' => $pageType,
             ]);
         }
 
-        $blocks = \is_array($pagePlan['blocks'] ?? null) ? \array_values($pagePlan['blocks']) : [];
-        $minBlocks = \max(0, (int)($pageContract['min_blocks'] ?? 0));
-        $maxBlocks = \max($minBlocks, (int)($pageContract['max_blocks'] ?? $minBlocks));
+        $blocks = $this->extractPlanJsonPageBlockNodes($planJsonPage);
+        $minBlocks = \max(0, (int)($pageContract['min_block_nodes'] ?? 0));
+        $maxBlocks = \max($minBlocks, (int)($pageContract['max_block_nodes'] ?? $minBlocks));
         if (\count($blocks) < $minBlocks || \count($blocks) > $maxBlocks) {
-            $issues[] = $this->issue('invalid_block_count', 'pages.' . $pageType . '.blocks', 'high', [
+            $issues[] = $this->issue('invalid_block_count', 'pages.' . $pageType, 'high', [
                 'page_type' => $pageType,
                 'expected' => ['min' => $minBlocks, 'max' => $maxBlocks],
                 'actual' => \count($blocks),
             ]);
         }
-        $targetBlocks = \max(0, (int)($pageContract['target_blocks'] ?? 0));
+        $targetBlocks = \max(0, (int)($pageContract['target_block_nodes'] ?? 0));
         if ($targetBlocks > 0 && !empty($pageContract['block_count_handoff_required']) && \count($blocks) !== $targetBlocks) {
-            $issues[] = $this->issue('target_block_count_mismatch', 'pages.' . $pageType . '.blocks', 'high', [
+            $issues[] = $this->issue('target_block_count_mismatch', 'pages.' . $pageType, 'high', [
                 'page_type' => $pageType,
                 'expected' => $targetBlocks,
                 'actual' => \count($blocks),
@@ -143,12 +143,8 @@ final class AiSiteStageOneContractValidator
         $requiredImageBlockKeys = [];
 
         foreach ($blocks as $index => $block) {
-            if (!\is_array($block)) {
-                $issues[] = $this->issue('malformed_block', 'pages.' . $pageType . '.blocks.' . $index, 'high', ['page_type' => $pageType]);
-                continue;
-            }
             $blockKey = \trim((string)($block['block_key'] ?? ''));
-            $path = 'pages.' . $pageType . '.blocks.' . $index;
+            $path = $blockKey !== '' ? 'pages.' . $pageType . '.' . $blockKey : 'pages.' . $pageType . '.block_' . $index;
             if ($blockKey === '') {
                 $issues[] = $this->issue('missing_block_key', $path . '.block_key', 'high', ['page_type' => $pageType]);
                 continue;
@@ -176,7 +172,7 @@ final class AiSiteStageOneContractValidator
                 $issues[] = $this->issue('missing_page_flow_role', $path . '.page_flow_role', 'high', [
                     'page_type' => $pageType,
                     'block_key' => $blockKey,
-                    'expected' => 'Stage-1 must declare the exact block identity/page flow role. BuildPlan must not infer it from block_key, section type, page type, or legacy defaults.',
+                    'expected' => 'Stage-1 must declare the exact block identity/page flow role. PlanJson must not infer it from block_key, section type, page type, or fallback defaults.',
                 ]);
             }
 
@@ -198,7 +194,7 @@ final class AiSiteStageOneContractValidator
             $this->validateDesignTags($block, $pageContract, $path, $pageType, $blockKey, $issues);
             $this->validateFieldPlan($block, $pageContract, $path, $pageType, $blockKey, $issues);
             $this->validateExecutionScript($block, $path, $pageType, $blockKey, $issues);
-            $this->validateBuildPlanVisibleBodyCopy($block, $path, $pageType, $blockKey, $issues);
+            $this->validatePlanJsonVisibleBodyCopy($block, $path, $pageType, $blockKey, $issues);
             $this->validateBlockVisibleCopyLocale($block, $path, $pageType, $blockKey, $contract, $context, $issues);
             $this->validateBlockSourceTruthAndPolicyCopy($block, $path, $pageType, $blockKey, $context, $issues);
             $visualSignatures[] = [
@@ -215,7 +211,7 @@ final class AiSiteStageOneContractValidator
 
         foreach ($requiredBlockKeys as $requiredBlockKey => $seenRequired) {
             if (!$seenRequired) {
-                $issues[] = $this->issue('missing_required_block_key', 'pages.' . $pageType . '.blocks.block_key', 'high', [
+                $issues[] = $this->issue('missing_required_block_key', 'pages.' . $pageType . '.' . $requiredBlockKey, 'high', [
                     'page_type' => $pageType,
                     'block_key' => $requiredBlockKey,
                     'expected' => $requiredBlockKey,
@@ -225,7 +221,44 @@ final class AiSiteStageOneContractValidator
         $this->validateVisualSignatureDiversity($visualSignatures, $pageType, $pageContract, $issues);
         $this->validatePageImageCoverage($blocks, $requiredImageBlockKeys, $pageContract, $pageType, $issues);
 
-        return $this->report($pagePlan, $contract, $issues, $context);
+        return $this->report($planJsonPage, $contract, $issues, $context);
+    }
+
+    /**
+     * @param array<string, mixed> $planJsonPage
+     * @return list<array<string, mixed>>
+     */
+    private function extractPlanJsonPageBlockNodes(array $planJsonPage): array
+    {
+        $reservedPageKeys = [
+            'name' => true,
+            'title' => true,
+            'label' => true,
+            'status' => true,
+            'seo' => true,
+            'path' => true,
+            'route' => true,
+            'url' => true,
+            'page_goal' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'updated_at' => true,
+            'error' => true,
+            'block_nodes' => true,
+            'block_node_previews' => true,
+        ];
+        $blocks = [];
+        foreach ($planJsonPage as $key => $value) {
+            $blockKey = \trim((string)$key);
+            if ($blockKey === '' || isset($reservedPageKeys[$blockKey]) || !\is_array($value)) {
+                continue;
+            }
+            $block = $value;
+            $block['block_key'] = \trim((string)($block['block_key'] ?? $blockKey));
+            $blocks[] = $block;
+        }
+
+        return $blocks;
     }
 
     /**
@@ -467,16 +500,16 @@ final class AiSiteStageOneContractValidator
     }
 
     /**
-     * Keep Stage-1 validation aligned with BuildPlan extraction. The builder does not have a
+     * Keep Stage-1 validation aligned with PlanJson extraction. The builder does not have a
      * local copy fallback, so a block that only contains layout/planning text must be repaired
      * before confirmation.
      *
      * @param array<string, mixed> $block
      * @param list<array<string, mixed>> $issues
      */
-    private function validateBuildPlanVisibleBodyCopy(array $block, string $path, string $pageType, string $blockKey, array &$issues): void
+    private function validatePlanJsonVisibleBodyCopy(array $block, string $path, string $pageType, string $blockKey, array &$issues): void
     {
-        if ($this->blockHasBuildPlanVisibleBodyCopy($block)) {
+        if ($this->blockHasPlanJsonVisibleBodyCopy($block)) {
             return;
         }
 
@@ -638,7 +671,7 @@ final class AiSiteStageOneContractValidator
     /**
      * @param array<string, mixed> $block
      */
-    private function blockHasBuildPlanVisibleBodyCopy(array $block): bool
+    private function blockHasPlanJsonVisibleBodyCopy(array $block): bool
     {
         $execution = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
         $candidates = [
@@ -658,7 +691,7 @@ final class AiSiteStageOneContractValidator
         $candidates[] = $block['content'] ?? null;
 
         foreach ($candidates as $candidate) {
-            if (!$this->isSafeBuildPlanVisibleCopy($candidate)) {
+            if (!$this->isSafePlanJsonVisibleCopy($candidate)) {
                 continue;
             }
 
@@ -692,7 +725,7 @@ final class AiSiteStageOneContractValidator
         return '';
     }
 
-    private function isSafeBuildPlanVisibleCopy(mixed $value): bool
+    private function isSafePlanJsonVisibleCopy(mixed $value): bool
     {
         if (!\is_scalar($value) && !(\is_object($value) && \method_exists($value, '__toString'))) {
             return false;
@@ -702,7 +735,7 @@ final class AiSiteStageOneContractValidator
             return false;
         }
 
-        return !BuildPlanContentManifestLinter::isPlanningOrImplementationCopy($text);
+        return !PlanJsonContentManifestLinter::isPlanningOrImplementationCopy($text);
     }
 
     private function isPolicyPageType(string $pageType): bool
@@ -875,7 +908,7 @@ final class AiSiteStageOneContractValidator
             if ($actualBlockKey === $expectedBlockKey) {
                 continue;
             }
-            $issues[] = $this->issue('required_block_order_mismatch', 'pages.' . $pageType . '.blocks.' . $expectedIndex . '.block_key', 'high', [
+            $issues[] = $this->issue('required_block_order_mismatch', 'pages.' . $pageType . '.' . $expectedBlockKey . '.block_key', 'high', [
                 'page_type' => $pageType,
                 'expected' => $expectedBlockKey,
                 'actual' => $actualBlockKey,
@@ -1044,46 +1077,12 @@ final class AiSiteStageOneContractValidator
             return false;
         }
 
-        if (\preg_match('/\b(?:css-only|css only|no image|without image|no generated image|no[_-]?generated[_-]?image|decorative css|css illustration|css icon)\b/u', $text) === 1) {
-            return true;
-        }
-        if (\str_contains($text, 'css绘制') || \str_contains($text, 'css 绘制')) {
-            return true;
-        }
-
-        $hasChineseCssMarker = \str_contains($text, 'css')
-            || \str_contains($text, '渐变')
-            || \str_contains($text, '纹理')
-            || \str_contains($text, '图标')
-            || \str_contains($text, '线性')
-            || \str_contains($text, '光晕')
-            || \str_contains($text, '徽章')
-            || \str_contains($text, '卡片');
-        $hasChineseNoImageMarker = \str_contains($text, '无生成图片')
-            || \str_contains($text, '无需生成图片')
-            || \str_contains($text, '不需要生成图片')
-            || \str_contains($text, '无图片')
-            || \str_contains($text, '无需图片')
-            || \str_contains($text, '不用图片');
-
-        return $hasChineseCssMarker && $hasChineseNoImageMarker;
+        return \preg_match('/\b(?:css-only|css only|no image|without image|no generated image|no[_-]?generated[_-]?image|decorative css|css illustration|css icon)\b/u', $text) === 1;
     }
-
     private function mentionsGeneratedImageMedia(string $text): bool
     {
-        if (\preg_match('/\b(?:image|photo|photograph|illustration|screenshot|mockup|scene|hero\s+image|banner\s+image|background\s+image|avatar)\b/u', $text) === 1) {
-            return true;
-        }
-
-        foreach (['图片', '照片', '摄影', '插画', '截图', '模型图', '样机', '场景图', '头像', '背景图', '主视觉图'] as $marker) {
-            if (\str_contains($text, $marker)) {
-                return true;
-            }
-        }
-
-        return false;
+        return \preg_match('/\b(?:image|photo|photograph|illustration|screenshot|mockup|scene|hero\s+image|banner\s+image|background\s+image|avatar)\b/u', $text) === 1;
     }
-
     /**
      * @param array<string, mixed> $block
      * @return list<array{text:string,path:string}>
@@ -1172,7 +1171,7 @@ final class AiSiteStageOneContractValidator
      */
     private function validateVisualSignatureDiversity(array $visualSignatures, string $pageType, array $pageContract, array &$issues): void
     {
-        $uniquenessScope = \trim((string)($pageContract['visual_signature_uniqueness_scope'] ?? 'same_page_adjacent_blocks'));
+        $uniquenessScope = \trim((string)($pageContract['visual_signature_uniqueness_scope'] ?? 'same_page_adjacent_block_nodes'));
         $adjacentSeverity = \trim((string)($pageContract['visual_signature_duplicate_severity'] ?? 'medium'));
         if ($adjacentSeverity === '') {
             $adjacentSeverity = 'medium';
@@ -1180,7 +1179,7 @@ final class AiSiteStageOneContractValidator
         if (\in_array($adjacentSeverity, ['high', 'blocking'], true)) {
             $adjacentSeverity = 'medium';
         }
-        $checkAdjacent = \in_array($uniquenessScope, ['same_page_adjacent_blocks', 'same_page_adjacent_blocks_soft'], true);
+        $checkAdjacent = \in_array($uniquenessScope, ['same_page_adjacent_block_nodes', 'same_page_adjacent_block_nodes_soft'], true);
         $checkCompositionOveruse = !empty($pageContract['forbid_repeated_composition_patterns_within_page'])
             || \trim((string)($pageContract['composition_overuse_severity'] ?? '')) !== '';
         $compositionOveruseSeverity = \trim((string)($pageContract['composition_overuse_severity'] ?? 'medium'));
@@ -1197,7 +1196,7 @@ final class AiSiteStageOneContractValidator
             $signature = \is_array($row['signature'] ?? null) ? $row['signature'] : [];
             $fingerprint = $this->visualSignatureFingerprint($signature, ['composition_pattern', 'surface_treatment', 'media_strategy']);
             if ($checkAdjacent && $fingerprint !== '' && $fingerprint === $previousFingerprint) {
-                $issues[] = $this->issue('adjacent_visual_signature_duplicate', 'pages.' . $pageType . '.blocks.' . (int)($row['index'] ?? 0) . '.visual_signature', $adjacentSeverity, [
+                $issues[] = $this->issue('adjacent_visual_signature_duplicate', 'pages.' . $pageType . '.' . (string)($row['block_key'] ?? 'block') . '.visual_signature', $adjacentSeverity, [
                     'page_type' => $pageType,
                     'block_key' => (string)($row['block_key'] ?? ''),
                     'fingerprint' => $fingerprint,
@@ -1219,7 +1218,7 @@ final class AiSiteStageOneContractValidator
             if ($count <= 2) {
                 continue;
             }
-            $issues[] = $this->issue('overused_composition_pattern', 'pages.' . $pageType . '.blocks.visual_signature.composition_pattern', $compositionOveruseSeverity, [
+            $issues[] = $this->issue('overused_composition_pattern', 'pages.' . $pageType . '.visual_signature.composition_pattern', $compositionOveruseSeverity, [
                 'page_type' => $pageType,
                 'composition_pattern' => $composition,
                 'count' => $count,
@@ -1354,7 +1353,7 @@ final class AiSiteStageOneContractValidator
             'severity' => $severity,
             'path' => $path,
             'field_path' => $path,
-            'retry_scope' => 'stage1_contract',
+            'retry_scope' => 'stage1_validation_contract',
             'prompt_hint' => 'Regenerate the affected Stage-1 section from the contract instead of applying local fallback content.',
         ], $extra);
     }
@@ -1380,7 +1379,7 @@ final class AiSiteStageOneContractValidator
             return true;
         }
 
-        return \preg_match('/^(?:write|rewrite|describe\s+(?:the|this)\s+(?:block|section|field|content|layout|purpose)|use this field|do not output|围绕|突出|说明|完善|优化)\b/iu', $value) === 1;
+        return \preg_match('/^(?:write|rewrite|describe\s+(?:the|this)\s+(?:block|section|field|content|layout|purpose)|use this field|do not output|鍥寸粫|绐佸嚭|璇存槑|瀹屽杽|浼樺寲)\b/iu', $value) === 1;
     }
 
     private function hasNonEmptyValue(mixed $value): bool

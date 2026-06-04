@@ -50,8 +50,8 @@ class AiSiteVirtualLayoutService
         );
         $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
-        $hasHtmlBlocks = \is_array($virtualPage['blocks'] ?? null) && $virtualPage['blocks'] !== [];
-        if ($virtualThemeId <= 0 && !$hasHtmlBlocks) {
+        $hasHtmlBlockNodes = \is_array($virtualPage['block_nodes'] ?? null) && $virtualPage['block_nodes'] !== [];
+        if ($virtualThemeId <= 0 && !$hasHtmlBlockNodes) {
             return null;
         }
 
