@@ -1,0 +1,99 @@
+    function bindPublishStageLogic() {
+        syncPublishStartButtonFromWorkspaceState(latestWorkspaceState || initialWorkspaceState || {});
+        syncPublishedSiteAccess(latestWorkspaceState || initialWorkspaceState || {});
+        var openPublishPreviewBtn = document.getElementById('pb-ai-open-publish-preview');
+        if (openPublishPreviewBtn && openPublishPreviewBtn.dataset.pbBound !== '1') {
+            openPublishPreviewBtn.dataset.pbBound = '1';
+            openPublishPreviewBtn.addEventListener('click', function () {
+                var workspaceState = latestWorkspaceState || initialWorkspaceState || {};
+                var liveUrl = isWorkspacePublished(workspaceState) ? resolvePublishedSiteUrl(workspaceState) : '';
+                var previewUrl = String(liveUrl || publishedSiteUrl || previewFullUrl || visualPreviewUrl || currentEmbeddedVisualUrl || '').trim();
+                if (!previewUrl) {
+                    toast('warning', messages.publishPreviewUnavailable || messages.networkError);
+                    return;
+                }
+                window.open(previewUrl, '_blank', 'noopener');
+            });
+        }
+
+        var publishBtn = document.getElementById('pb-ai-run-publish-check');
+        if (publishBtn && publishBtn.dataset.pbBound !== '1') {
+            publishBtn.dataset.pbBound = '1';
+            publishBtn.addEventListener('click', function () {
+                if (!publishCheckUrl) { return; }
+                if (!guardRetryableAiFailuresBeforeProgress(null)) { return; }
+                runPublishChecklistFetchAndRender(true);
+            });
+        }
+
+        var publishStartBtn = document.getElementById('pb-ai-start-publish');
+        if (publishStartBtn && publishStartBtn.dataset.pbMainPublishBound !== '1') {
+            publishStartBtn.dataset.pbMainPublishBound = '1';
+            publishStartBtn.addEventListener('click', function () {
+                if (typeof window.__pbStartPublishFromButton === 'function') {
+                    window.__pbStartPublishFromButton(publishStartBtn);
+                    return;
+                }
+                toast('error', messages.publishStartUnavailable || messages.networkError);
+            });
+        }
+
+        bindPublishRepairButton();
+
+        var refreshBtn = document.getElementById('pb-ai-publish-checklist-refresh');
+        if (refreshBtn && refreshBtn.dataset.pbBound !== '1') {
+            refreshBtn.dataset.pbBound = '1';
+            refreshBtn.addEventListener('click', function () {
+                var modal = document.getElementById('pb-ai-publish-checklist-modal');
+                if (modal) {
+                    var loadingEl = modal.querySelector('#pb-ai-publish-checklist-loading');
+                    var listEl = modal.querySelector('#pb-ai-publish-checklist-items');
+                    var alertEl = modal.querySelector('#pb-ai-publish-checklist-alert');
+                    var confirmBtn = modal.querySelector('#pb-ai-publish-checklist-confirm');
+                    if (loadingEl) { loadingEl.classList.remove('d-none'); }
+                    if (listEl) { listEl.innerHTML = ''; }
+                    if (alertEl) { alertEl.classList.add('d-none'); }
+                    if (confirmBtn) { confirmBtn.disabled = true; }
+                }
+                runPublishChecklistFetchAndRender(false);
+            });
+        }
+
+        var confirmBtn = document.getElementById('pb-ai-publish-checklist-confirm');
+        if (confirmBtn && confirmBtn.dataset.pbBound !== '1') {
+            confirmBtn.dataset.pbBound = '1';
+            confirmBtn.addEventListener('click', function () {
+                if (confirmBtn.disabled) { return; }
+                if (!guardRetryableAiFailuresBeforeProgress(null)) { return; }
+                function proceed() {
+                    toast('info', messages.publishCheckConfirmStarting || '');
+                    closePublishChecklistModal();
+                    var startBtn = document.getElementById('pb-ai-start-publish');
+                    if (startBtn && typeof window.__pbStartPublishFromButton === 'function') {
+                        window.__pbStartPublishFromButton(startBtn);
+                    } else if (startBtn) {
+                        startBtn.click();
+                    } else {
+                        toast('error', messages.publishStartUnavailable || messages.networkError);
+                    }
+                }
+                if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+                    var confirmTitle = String(messages.publishCheckModalTitle || '发布前预检清单');
+                    var confirmMessage = String(messages.publishCheckConfirmPrompt || '确认将当前站点正式发布？发布后会覆盖原有线上站点内容。');
+                    var confirmAction = String(messages.publishCheckConfirmAction || '确认发布');
+                    window.BackendConfirm.show(confirmMessage, {
+                        title: confirmTitle,
+                        confirmText: confirmAction,
+                        type: 'warning'
+                    }).then(function (confirmed) {
+                        if (confirmed) {
+                            proceed();
+                        }
+                    }).catch(function () {});
+                } else {
+                    toast('error', messages.publishStartUnavailable || messages.networkError);
+                }
+            });
+        }
+    }
+
