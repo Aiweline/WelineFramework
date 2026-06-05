@@ -429,7 +429,7 @@ final class AiSiteAssetManifestService
         // 缁?4 鐞涘矉绱癰rand name 閳ユ柡鈧?娴犲懎缍?logo 閺冩湹缍旀稉?wordmark text閿涙稑鍙剧€瑰啩绮庢担婊堫棑閺嶈壈鍎楅弲顖ょ礉娑撳秶鏁鹃弬鍥х摟閵?
         if ($siteTitle !== '') {
             if ($isLogoSlot) {
-                $parts[] = 'Optional brand wordmark text (only as small typographic accompaniment to the PRIMARY SUBJECT glyph; never as the primary subject itself, never invent characters out of this name): ' . $siteTitle;
+                $parts[] = 'Brand name context (do NOT render as readable text inside the logo; use it only to understand the business identity): ' . $siteTitle;
             } else {
                 $parts[] = 'Brand context (do not render as text on the image): ' . $siteTitle;
             }
@@ -461,7 +461,7 @@ final class AiSiteAssetManifestService
         if ($isFaviconLikeSlot) {
             $parts[] = 'Favicon output requirements (HARD): generate a production-ready square 1:1 identity image with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). The symbol/monogram is isolated on transparency; there must be no white background, solid color background, rounded square tile, card, gradient backdrop, photo scene, website mockup, watermark, screenshot frame, or paragraph text. Keep it recognizable at 16-64px with one bold business-relevant symbol or monogram.';
         } elseif ($isLogoSlot) {
-            $parts[] = 'Logo output requirements (HARD): generate a production-ready identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). Keep only the brand mark/wordmark pixels on transparency; do not place the logo on a white box, colored rectangle, rounded card, wall, photo scene, gradient backdrop, website mockup, screenshot frame, or any other background surface.';
+            $parts[] = 'Logo output requirements (HARD): generate a production-ready symbol-only identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). Keep only the brand mark/glyph pixels on transparency. Do NOT include readable letters, words, brand names, slogans, paragraph text, pseudo text, watermarks, or long typographic strips. Do not place the logo on a white box, colored rectangle, rounded card, wall, photo scene, gradient backdrop, website mockup, screenshot frame, or any other background surface.';
         } elseif ($isHeroSlot) {
             $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed 閳?cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
             $parts[] = 'Hero visual quality bar (CRITICAL): premium cinematic website banner background, very wide horizontal composition, edge-to-edge coverage, strong depth, realistic lighting, high-end commercial art direction. Do NOT generate flat vector art, SVG-like shapes, childish cartoon, icon collage, clip-art, rough geometric placeholder art, cardboard-looking cards, UI mockups, or simplistic low-detail illustration. Prefer realistic/editorial photography or photoreal premium 3D only when the subject cannot be photographed.';
@@ -501,7 +501,7 @@ final class AiSiteAssetManifestService
             return 'Teaching examples: GOOD favicon prompt shape - one bold business-relevant glyph or monogram on transparent alpha, readable at 16px, no tile/background. BAD - a mascot, full website screenshot, rounded app tile, paragraph text, or generic sparkle icon.';
         }
         if ($isLogoSlot) {
-            return 'Teaching examples: GOOD logo prompt shape - business-relevant mark plus optional compact wordmark on transparent alpha, no canvas surface. BAD - brand name alone on a colored square, unrelated animal mascot, photo scene, website mockup, or logo placed on a card.';
+            return 'Teaching examples: GOOD logo prompt shape - business-relevant symbol-only mark on transparent alpha, no readable text, no canvas surface. BAD - brand name text strip, slogan, pseudo letters, colored square, unrelated mascot, photo scene, website mockup, or logo placed on a card.';
         }
         if ($isHeroSlot) {
             return 'Teaching examples: GOOD hero prompt shape - real scene/product/interface subject, environment, lighting, wide crop, safe focal area, and brand palette integration. BAD - isolated icon, badge, shield, logo, abstract gradient, placeholder mockup, generic stock photo, or off-topic character.';
@@ -1030,13 +1030,9 @@ final class AiSiteAssetManifestService
             $logoBriefParts[] = 'PRIMARY SUBJECT for the logo glyph (the mark MUST visually depict this exact business; derive concrete iconography only from the approved brief, products, services, materials, culture, and visual plan; never copy example industries or unrelated symbols): '
                 . $subjectAnchor;
         }
-        $logoBriefParts[] = 'Output requirements (HARD): identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background), production-ready horizontal logo or wordmark, simple brand mark. Keep only logo pixels on transparency; no white box, colored rectangle, rounded card, gradient backdrop, checkerboard transparency preview, extra scene, mockup, paragraph text, watermark, or screenshot frame.';
-        $logoTextLanguageInstruction = $this->buildLogoTextLanguageInstruction($scope);
-        if ($logoTextLanguageInstruction !== '') {
-            $logoBriefParts[] = $logoTextLanguageInstruction;
-        }
+        $logoBriefParts[] = 'Output requirements (HARD): symbol-only identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background), production-ready simple brand mark/glyph. Do NOT include readable letters, words, brand names, slogans, paragraph text, pseudo text, watermark, or long typographic strips. Keep only logo mark pixels on transparency; no white box, colored rectangle, rounded card, gradient backdrop, checkerboard transparency preview, extra scene, mockup, or screenshot frame.';
         if ($brandReference !== '' && $brandReference !== $subjectAnchor) {
-            $logoBriefParts[] = 'Optional brand wordmark text alongside the glyph (small, secondary; never the primary subject; localize or omit it when it conflicts with the required logo text language; never invent characters out of this name): "' . $brandReference . '"';
+            $logoBriefParts[] = 'Brand name context only (never render this as visible text inside the logo): "' . $brandReference . '"';
         }
         if ($siteTagline !== '' && $siteTagline !== $subjectAnchor) {
             $logoBriefParts[] = 'Style/personality hint (mood and palette only, never spell out as text): ' . $siteTagline;
@@ -1070,18 +1066,18 @@ final class AiSiteAssetManifestService
             $scope['default_language'] ?? null,
         ])));
         if ($locale === '') {
-            return 'Visible logo text language (HARD): if readable text is included, use the same language as the website content. Never use Chinese characters unless the website content locale is Chinese.';
+            return 'Visible logo text ban (HARD): generate a symbol-only logo. Do not include readable text in any language.';
         }
 
         if ($locale === 'ru' || \str_starts_with($locale, 'ru_')) {
-            return 'Visible logo text language (HARD): content_locale=' . $locale . '. If readable logo text is included, it must be Russian Cyrillic only. Do not use Chinese, Japanese, Korean, Hindi, English placeholder words, or mixed-language pseudo text. If a localized Russian wordmark is uncertain, omit readable text and generate a symbol-only logo.';
+            return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo. Do not include Cyrillic, Latin, CJK, placeholder, pseudo, or mixed-language text.';
         }
 
         if ($locale === 'zh' || \str_starts_with($locale, 'zh_')) {
-            return 'Visible logo text language (HARD): content_locale=' . $locale . '. If readable logo text is included, use concise Chinese text only; do not mix in unrelated foreign placeholder words.';
+            return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo. Do not include Chinese characters, Latin words, placeholder, pseudo, or mixed-language text.';
         }
 
-        return 'Visible logo text language (HARD): content_locale=' . $locale . '. If readable logo text is included, it must be localized for this locale. Do not use Chinese/Japanese/Korean characters unless this locale requires them. If localization is uncertain, omit readable text and generate a symbol-only logo.';
+        return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo. Do not include readable letters, words, brand names, slogans, placeholder text, pseudo text, or CJK characters.';
     }
 
     /**
@@ -2368,7 +2364,7 @@ final class AiSiteAssetManifestService
             . ' DO NOT include website chrome: header, navigation, footer, menu items, hamburger icons, language switchers, browser frames, mobile-app frames, UI cards, CTA buttons, clickable controls, badges styled as buttons, or multi-section page previews.'
             . ' DO NOT include any readable text in any language, including brand names, headlines, slogans, captions, labels, watermarks, price tags, readable signage, speech bubbles, pseudo-menu text, or lorem ipsum.'
             . ' Only render subject-matter imagery that can sit behind or beside separately generated HTML text.'
-            . ' Exception: identity logo/favicon slots may contain the approved brand wordmark or initial; this block-image contract is not used for identity slots.';
+            . ' Exception: identity logo/favicon slots use their own stricter symbol-only contract; this block-image contract is not used for identity slots.';
     }
 
     /**
