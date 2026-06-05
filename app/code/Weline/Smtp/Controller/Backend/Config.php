@@ -129,8 +129,17 @@ class Config extends BackendController
             return $this->jsonError(__('无效的请求方法'));
         }
         $module = 'Weline_Smtp';
-        $sendersJson = $this->request->getPost('senders');
-        $contactsJson = $this->request->getPost('sender_contacts');
+        $sendersJson = $this->getRequestPayloadValue('senders');
+        if ($sendersJson === null || $sendersJson === '') {
+            $sendersJson = $this->getRequestPayloadValue('smtp_senders_json');
+        }
+        $contactsJson = $this->getRequestPayloadValue('sender_contacts');
+        if ($contactsJson === null || $contactsJson === '') {
+            $contactsJson = $this->getRequestPayloadValue('smtp_sender_contacts_json');
+        }
+        if (($sendersJson === null || $sendersJson === '') && ($contactsJson === null || $contactsJson === '')) {
+            return $this->jsonError(__('缺少发件人配置数据'));
+        }
         if ($sendersJson !== null && $sendersJson !== '') {
             $senders = json_decode($sendersJson, true);
             if (is_array($senders)) {
@@ -191,6 +200,45 @@ class Config extends BackendController
             }
         }
         return $this->jsonSuccess(__('保存成功'));
+    }
+
+    private function getRequestPayloadValue(string $key): ?string
+    {
+        $value = $this->request->getPost($key);
+        if ($value !== null && $value !== '') {
+            return is_scalar($value) ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE);
+        }
+
+        $bodyParams = $this->request->getBodyParams(true);
+        if (is_array($bodyParams) && array_key_exists($key, $bodyParams)) {
+            $bodyValue = $bodyParams[$key];
+            return is_scalar($bodyValue) ? (string)$bodyValue : json_encode($bodyValue, JSON_UNESCAPED_UNICODE);
+        }
+
+        $rawBody = '';
+        if (method_exists($this->request, 'getParameterBag')) {
+            $rawBody = (string)$this->request->getParameterBag()->getRawBody();
+        }
+        if ($rawBody === '') {
+            return null;
+        }
+
+        $trimmed = ltrim($rawBody);
+        if ($trimmed !== '' && ($trimmed[0] === '{' || $trimmed[0] === '[')) {
+            $json = json_decode($rawBody, true);
+            if (is_array($json) && array_key_exists($key, $json)) {
+                $jsonValue = $json[$key];
+                return is_scalar($jsonValue) ? (string)$jsonValue : json_encode($jsonValue, JSON_UNESCAPED_UNICODE);
+            }
+        }
+
+        parse_str($rawBody, $params);
+        if (array_key_exists($key, $params)) {
+            $paramValue = $params[$key];
+            return is_scalar($paramValue) ? (string)$paramValue : json_encode($paramValue, JSON_UNESCAPED_UNICODE);
+        }
+
+        return null;
     }
 
     private function jsonSuccess(string $msg): string
