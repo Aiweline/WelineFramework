@@ -11,7 +11,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 # When To Use
 
 - Use for CI checks, release gates, automation readiness, and pre-merge validation policy.
-- Use for keywords such as CI, release gate, merge gate, preflight, pipeline, and release readiness.
+- Use for keywords such as CI, deploy, deployment, release gate, merge gate, preflight, pipeline, and release readiness.
 - Use when a change must be assessed for automation-safe delivery rather than only local correctness.
 
 # Source Material
@@ -45,6 +45,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 - Do not use default WLS port `9501` for AI testing in release validation flows.
 - Always stop dedicated WLS instances after validation.
 - Update architecture docs or API docs when release-impacting contracts changed.
+- For online deployment, use only the user's Chrome browser with the JumpServer / Luna Web terminal. Do not run inline SSH from Codex shell, local terminals, scripts, or background helpers; do not use the Codex built-in browser for deployment.
 
 # Inputs Required
 
@@ -72,6 +73,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 - Do not ignore flaky validation prerequisites.
 - Do not bypass missing evidence because a change appears low risk.
 - Do not collapse QA and CI gate responsibilities into one vague signoff.
+- Do not treat direct SSH access as an acceptable deployment shortcut; Chrome-operated JumpServer / Luna is the required deployment path.
 
 # Shared Collaboration Contract
 

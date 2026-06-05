@@ -142,6 +142,8 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 6. 按改动类型执行 `php bin/w setup:upgrade [--route]`、`php bin/w server:reload` 或 `php bin/w server:restart -r`。
 7. 用 `php bin/w http:request /` 或目标页面/API 验证。
 
+部署线上环境必须通过 Chrome 浏览器中的 JumpServer / Luna Web 终端完成。禁止从 Codex shell、本机终端或脚本直接 `ssh` 连接线上服务器；禁止使用 Codex 内置浏览器代替 Chrome 执行部署。
+
 禁止把服务器、控制台账号、密码、token、cookie、私钥或生产连接串写入仓库文档。
 
 ## 13. 多智能体协作
