@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Weline\Queue\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\System\Process\Processer;
 use Weline\Queue\Helper\Helper;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\Model\Queue\Type;
-use Weline\Queue\Service\QueueDispatchService;
 
 /**
  * 任务队列统一入口：模块间一律通过 w_query('queue', ...) 读写队列，避免直接依赖 Queue 模型类。
@@ -265,9 +263,6 @@ class QueueQueryProvider implements QueryProviderInterface
 
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::add', $eventData);
-        if ($this->shouldWakeScheduler($params)) {
-            $this->wakeSystemScheduler($queue);
-        }
 
         return [
             'success' => true,
@@ -313,9 +308,6 @@ class QueueQueryProvider implements QueryProviderInterface
 
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::edit', $eventData);
-        if ($this->shouldWakeScheduler($params) && $this->isQueueDispatchableForScheduler($queue)) {
-            $this->wakeSystemScheduler($queue);
-        }
 
         return [
             'success' => true,
@@ -422,9 +414,6 @@ class QueueQueryProvider implements QueryProviderInterface
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::takeover', $eventData);
         $this->eventsManager->dispatch('Weline_Queue::edit', $eventData);
-        if ($this->shouldWakeScheduler($params)) {
-            $this->wakeSystemScheduler($queue);
-        }
 
         return [
             'success' => true,
@@ -432,47 +421,6 @@ class QueueQueryProvider implements QueryProviderInterface
             'data' => $queue->getData(),
             'message' => $line,
         ];
-    }
-
-    private function wakeSystemScheduler(Queue $queue): void
-    {
-        try {
-            ObjectManager::getInstance(QueueDispatchService::class)->dispatchQueueIfEligible($queue);
-        } catch (\Throwable $e) {
-            $queue->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . 'Queue scheduler wake failed: ' . $e->getMessage()))
-                ->save();
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $params
-     */
-    private function shouldWakeScheduler(array $params): bool
-    {
-        foreach (['wake_scheduler', 'dispatch', 'auto_dispatch'] as $key) {
-            if (!\array_key_exists($key, $params)) {
-                continue;
-            }
-            $value = $params[$key];
-            if (\is_bool($value)) {
-                return $value;
-            }
-            if (\is_int($value) || \is_float($value)) {
-                return (int)$value !== 0;
-            }
-            if (\is_string($value)) {
-                return !\in_array(\strtolower(\trim($value)), ['0', 'false', 'no', 'off'], true);
-            }
-        }
-
-        return true;
-    }
-
-    private function isQueueDispatchableForScheduler(Queue $queue): bool
-    {
-        return !$queue->isFinished()
-            && $queue->getAuto()
-            && $queue->getStatus() === Queue::status_pending;
     }
 
     private function deleteQueue(array $params): array
