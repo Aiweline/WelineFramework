@@ -796,8 +796,8 @@ class AiSiteAssetQueue implements QueueInterface
             return [];
         }
 
-        $isIcon = \str_contains(\strtolower($slotId), 'site-title-icon')
-            || \in_array(\strtolower(\trim((string)($slot['field'] ?? ''))), ['icon', 'favicon', 'site.icon'], true);
+        $isIcon = \in_array(\strtolower(\trim((string)($slot['field'] ?? ''))), ['icon', 'favicon', 'site.icon'], true)
+            || \strtolower(\trim((string)($slot['kind'] ?? ''))) === 'favicon';
         $role = $isIcon ? 'icon' : 'logo';
         $candidates = $isIcon
             ? [
@@ -916,7 +916,7 @@ class AiSiteAssetQueue implements QueueInterface
         if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
             return;
         }
-        $role = \str_contains(\strtolower($slotId), 'site-title-icon') ? 'icon' : 'logo';
+        $role = $this->resolveIdentityValidationRole($slot);
         if (!AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, $mimeType, $role)) {
             throw new \RuntimeException('Identity logo/icon generation must return a transparent PNG or safe transparent SVG asset.');
         }
@@ -945,8 +945,21 @@ class AiSiteAssetQueue implements QueueInterface
             return true;
         }
 
-        $role = \str_contains(\strtolower($slotId), 'site-title-icon') ? 'icon' : 'logo';
+        $role = $this->resolveIdentityValidationRole($slot);
         return !AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, $this->mimeTypeForIdentityAssetPath($path), $role);
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function resolveIdentityValidationRole(array $slot): string
+    {
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+
+        return \in_array($field, ['icon', 'favicon', 'site.icon'], true) || $kind === 'favicon'
+            ? 'icon'
+            : 'logo';
     }
 
     private function mimeTypeForIdentityAssetPath(string $path): string
@@ -970,14 +983,14 @@ class AiSiteAssetQueue implements QueueInterface
         $field = \strtolower(\trim((string)($slot['field'] ?? '')));
         $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
         $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
-        $label = \strtolower(\trim((string)($slot['label'] ?? '')));
         $slotId = \strtolower(\trim($slotId));
+        $identityTransparentRequired = (int)($slot['identity_transparent_png_required'] ?? 0) === 1
+            || (int)($slot['transparent_png_required'] ?? 0) === 1;
 
-        return \str_contains($slotId, 'identity:website-logo')
-            || \str_contains($slotId, 'identity:site-title-icon')
+        return $identityTransparentRequired
+            || $slotType === 'logo_icon'
             || \in_array($field, ['logo', 'logo.image', 'brand.logo', 'icon', 'favicon', 'site.icon'], true)
-            || \in_array($kind, ['website_logo', 'brand_logo', 'site_title_icon', 'favicon'], true)
-            || ($slotType === 'logo_icon' && \str_starts_with($slotId, 'identity:') && (\str_contains($label, 'logo') || \str_contains($label, 'icon') || \str_contains($label, 'favicon')));
+            || \in_array($kind, ['website_logo', 'brand_logo', 'logo_option', 'favicon'], true);
     }
 
     private function isPngImageBytes(string $bytes): bool
@@ -2180,73 +2193,8 @@ class AiSiteAssetQueue implements QueueInterface
             $websiteProfile['favicon'] = $finalUrl;
         }
         $scope['website_profile'] = $websiteProfile;
-        $scope = $this->applyIdentityAssetToRenderPayloads($scope, $role, $finalUrl);
 
         return $scope;
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @return array<string,mixed>
-     */
-    private function applyIdentityAssetToRenderPayloads(array $scope, string $role, string $finalUrl): array
-    {
-        $scope = $this->applyIdentityAssetToRenderPayload($scope, $role, $finalUrl);
-
-        if (\is_array($scope['render_data_contract']['payload'] ?? null)) {
-            $payload = $this->applyIdentityAssetToRenderPayload($scope['render_data_contract']['payload'], $role, $finalUrl);
-            $scope['render_data_contract']['payload'] = $payload;
-        }
-        if (\is_array($scope['build_contracts']['render_data']['payload'] ?? null)) {
-            $payload = $this->applyIdentityAssetToRenderPayload($scope['build_contracts']['render_data']['payload'], $role, $finalUrl);
-            $scope['build_contracts']['render_data']['payload'] = $payload;
-        }
-        return $scope;
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     * @return array<string,mixed>
-     */
-    private function applyIdentityAssetToRenderPayload(array $payload, string $role, string $finalUrl): array
-    {
-        if (!\is_array($payload['plan_json'] ?? null)) {
-            $payload['plan_json'] = [];
-        }
-        if (!\is_array($payload['plan_json']['shared_components'] ?? null)) {
-            $payload['plan_json']['shared_components'] = \is_array($payload['shared_components'] ?? null)
-                ? $payload['shared_components']
-                : [];
-        }
-
-        if ($role === 'icon') {
-            if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon'] ?? null)) {
-                $payload['asset_manifest']['slots']['identity:site-title-icon']['final_url'] = $finalUrl;
-                $payload['asset_manifest']['slots']['identity:site-title-icon']['url'] = $finalUrl;
-                if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0] ?? null)) {
-                    $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['url'] = $finalUrl;
-                    $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['path'] = \ltrim($finalUrl, '/');
-                }
-            }
-            if (\is_array($payload['plan_json']['shared_components']['header']['default_config'] ?? null)) {
-                $payload['plan_json']['shared_components']['header']['default_config']['identity']['shared_icon_asset'] = $finalUrl;
-                $payload['plan_json']['shared_components']['header']['default_config']['identity.shared_icon_asset'] = $finalUrl;
-            }
-            foreach (\is_array($payload['plan_json']['pages'] ?? null) ? $payload['plan_json']['pages'] : [] as $pageType => $page) {
-                if (!\is_string($pageType) || !\is_array($page)) {
-                    continue;
-                }
-                if (\is_array($page['header']['config'] ?? null)) {
-                    $page['header']['config']['identity']['shared_icon_asset'] = $finalUrl;
-                    $page['header']['config']['identity.shared_icon_asset'] = $finalUrl;
-                }
-                $payload['plan_json']['pages'][$pageType] = $page;
-            }
-        }
-
-        unset($payload['shared_components']);
-
-        return $payload;
     }
 
     /**
@@ -2254,26 +2202,19 @@ class AiSiteAssetQueue implements QueueInterface
      */
     private function resolveIdentityAssetRole(array $slot): string
     {
-        $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
         $field = \strtolower(\trim((string)($slot['field'] ?? '')));
         $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
 
-        if (\str_contains($slotId, 'identity:website-logo')) {
-            return 'logo';
-        }
-        if (\str_contains($slotId, 'identity:site-title-icon')) {
-            return 'icon';
-        }
         if (\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)) {
             return 'logo';
         }
         if (\in_array($field, ['icon', 'favicon', 'site.icon'], true)) {
             return 'icon';
         }
-        if (\in_array($kind, ['website_logo', 'brand_logo'], true)) {
+        if (\in_array($kind, ['website_logo', 'brand_logo', 'logo_option'], true)) {
             return 'logo';
         }
-        if (\in_array($kind, ['site_title_icon', 'favicon'], true)) {
+        if ($kind === 'favicon') {
             return 'icon';
         }
 
