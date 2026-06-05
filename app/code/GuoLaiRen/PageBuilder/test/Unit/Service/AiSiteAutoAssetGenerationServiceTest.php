@@ -257,7 +257,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         self::assertStringContainsString('Operation timed out', (string)($result['failed_slot']['message'] ?? ''));
     }
 
-    public function testPrepareBuildAssetsGeneratesLogoAndTitleIconBeforeHeroWhenLimited(): void
+    public function testPrepareBuildAssetsGeneratesThemeLogoOptionsBeforeHeroWhenPrioritizedAndLimited(): void
     {
         $publicId = 'asset-identity-first-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -302,7 +302,8 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             self::assertCount(2, $generatedSlots);
             self::assertNotContains('home:hero', $generatedSlots);
             foreach ($generatedSlots as $slotId) {
-                self::assertSame('logo_icon', (string)($slots[$slotId]['slot_type'] ?? ''), 'Expected identity slots before hero image.');
+                self::assertStringStartsWith('plan:theme:logo_generation:option_', $slotId);
+                self::assertSame('logo_icon', (string)($slots[$slotId]['slot_type'] ?? ''), 'Expected theme logo option slots before hero image.');
             }
             self::assertSame('pending', (string)($slots['home:hero']['status'] ?? 'pending'));
         } finally {
@@ -383,8 +384,9 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
 
         try {
             self::assertSame(['home:hero', 'about:story'], $generatedSlots);
-            self::assertSame('pending', (string)($slots['identity:website-logo']['status'] ?? 'pending'));
-            self::assertSame('pending', (string)($slots['identity:site-title-icon']['status'] ?? 'pending'));
+            self::assertArrayNotHasKey('identity:website-logo', $slots);
+            self::assertArrayNotHasKey('identity:site-title-icon', $slots);
+            self::assertSame('pending', (string)($slots['plan:theme:logo_generation:option_1']['status'] ?? ''));
             foreach ($generatedSlots as $slotId) {
                 self::assertSame('done', (string)($slots[$slotId]['status'] ?? ''));
             }
@@ -593,22 +595,21 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $publicId = 'asset-placeholder-regenerate-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
         $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $publicId);
-        $removedPlaceholderUrl = '/pub/media/page-build/removed/ai-generated/identity-website-logo-prior.svg';
+        $slotId = 'plan:theme:logo_generation:option_1';
+        $removedPlaceholderUrl = '/pub/media/page-build/removed/ai-generated/plan-theme-logo-generation-option-1-prior.svg';
 
         $scope = [
             'site_title' => 'Removed Placeholder Test',
-            'logo' => $removedPlaceholderUrl,
-            'website_profile' => [
-                'logo' => $removedPlaceholderUrl,
-            ],
             'asset_manifest' => [
                 'slots' => [
-                    'identity:website-logo' => [
-                        'slot_id' => 'identity:website-logo',
+                    $slotId => [
+                        'slot_id' => $slotId,
+                        'option_id' => 'logo_option_1',
                         'slot_type' => 'logo_icon',
-                        'field' => 'logo',
-                        'label' => 'Website Logo',
-                        'brief' => 'Generate the website logo.',
+                        'kind' => 'logo_option',
+                        'field' => 'theme.logo_generation.options.logo_option_1',
+                        'label' => 'Logo 1',
+                        'brief' => 'Generate logo option 1.',
                         'source' => 'generated',
                         'status' => 'done',
                         'final_url' => $removedPlaceholderUrl,
@@ -639,17 +640,16 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $result = $service->prepareBuildAssets($session, 2, $scope, 2);
         $resultScope = $result['scope'];
         $manifest = \is_array($resultScope['asset_manifest']['slots'] ?? null) ? $resultScope['asset_manifest']['slots'] : [];
-        $slot = $manifest['identity:website-logo'] ?? [];
+        $slot = $manifest[$slotId] ?? [];
         $finalUrl = (string)($slot['final_url'] ?? '');
         $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($finalUrl, '/'));
 
         try {
-            self::assertContains('identity:website-logo', $result['generated_slots']);
+            self::assertContains($slotId, $result['generated_slots']);
             self::assertNotSame($removedPlaceholderUrl, $finalUrl);
             self::assertStringEndsWith('.svg', $finalUrl);
-            self::assertSame($finalUrl, (string)($resultScope['verified_assets']['identity:website-logo'] ?? ''));
-            self::assertSame($finalUrl, (string)($resultScope['logo'] ?? ''));
-            self::assertSame($finalUrl, (string)($resultScope['website_profile']['logo'] ?? ''));
+            self::assertSame($finalUrl, (string)($resultScope['verified_assets'][$slotId] ?? ''));
+            self::assertSame($finalUrl, (string)($resultScope['plan_json']['theme']['logo_generation']['options'][0]['final_url'] ?? ''));
             self::assertStringContainsString('<svg', (string)\file_get_contents($absolutePath));
         } finally {
             foreach ($manifest as $generatedSlot) {
@@ -914,7 +914,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
-    public function testPrepareBuildAssetsInjectsRequiredIdentitySlots(): void
+    public function testPrepareBuildAssetsInjectsThemeLogoGenerationOptions(): void
     {
         $publicId = 'asset-identity-required-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -939,10 +939,12 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         $manifest = \is_array($resultScope['asset_manifest']['slots'] ?? null) ? $resultScope['asset_manifest']['slots'] : [];
 
         try {
-            self::assertContains('identity:website-logo', $result['generated_slots']);
-            self::assertContains('identity:site-title-icon', $result['generated_slots']);
+            self::assertContains('plan:theme:logo_generation:option_1', $result['generated_slots']);
+            self::assertContains('plan:theme:logo_generation:option_2', $result['generated_slots']);
+            self::assertArrayNotHasKey('identity:website-logo', $manifest);
+            self::assertArrayNotHasKey('identity:site-title-icon', $manifest);
         } finally {
-            foreach (['identity:website-logo', 'identity:site-title-icon'] as $slotId) {
+            foreach ($result['generated_slots'] as $slotId) {
                 $relativePath = (string)($manifest[$slotId]['variants'][0]['path'] ?? '');
                 if ($relativePath === '') {
                     continue;
