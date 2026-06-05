@@ -365,13 +365,14 @@ class QueueQueryProvider implements QueryProviderInterface
             $reason = 'force_takeover';
         }
 
-        $liveProcess = $pid > 0 && Processer::isRunningByPid($pid);
-        if ($status === Queue::status_running && $liveProcess) {
+        $currentPid = (int)\getmypid();
+        $liveProcess = $pid > 0 && $pid !== $currentPid && Processer::isRunningByPid($pid);
+        if ($liveProcess) {
             if (!$force) {
                 return [
                     'success' => false,
                     'queue_id' => $queueId,
-                    'message' => 'Queue is running; takeover requires force=true.',
+                    'message' => 'Queue process is running; takeover requires force=true.',
                 ];
             }
             if (!Processer::killByPid($pid, true)) {
