@@ -110,6 +110,8 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 - 代码变更后优先 `php bin/w server:reload`；涉及主进程级变更时才执行完整命令 `php bin/w server:restart -r`。
 - 禁止在可复制命令中写 `server:reload|restart -r`、`[-b|-api]` 这类管道/可选项混写缩写；PowerShell 会把 `|` 当管道符，必须拆成多条完整命令或改成说明文字。
 - 验证命令必须有界，例如 `php bin/w http:request /`。
+- 在 PowerShell 中执行 PHP `-r`、one-liner 或包含多层引号/JSON/数组字面量的诊断命令时，默认不要临场拼复杂转义；优先使用临时 `.php` 脚本、PowerShell here-string、已有 CLI 命令或封装脚本，并在交付中给出可复制的最终命令。
+- 只有命令足够简单且已确认 PowerShell 解析规则时，才直接使用 `php -r` 内联代码；必要时用 `--%` 停止 PowerShell 参数解析，但必须说明其不适合需要 PowerShell 变量展开的场景。
 - 禁止用未显式指定编码的 PowerShell `Get-Content` 读取中文文档；读取中文/UTF-8 文件必须使用 `Get-Content -Encoding UTF8`，避免再次产生 `AI 鎬诲垯...` 这类乱码输出。
 - 测试结束必须执行 `php bin/w server:stop -n ai-test-{unique-id}`。
 - WLS 长循环、长连接、批量 I/O、大 JSON、模板渲染和进程心跳/READY/IPC 路径不得同步阻塞；需要等待时使用协程调度、短预算非阻塞轮询或 IPC 回调。
