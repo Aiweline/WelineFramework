@@ -148,9 +148,11 @@ class AiSitePageComponentGenerationService
             $scope,
             $this->resolvePrimaryLocale($websiteProfile, $scope)
         );
+        $effectiveLogo = $this->resolveSharedLogoAssetUrl($websiteProfile, $scope);
         $cacheKey = \md5((string)\json_encode([
             'region' => $region,
             'site' => $siteDisplayName,
+            'logo' => $effectiveLogo,
             'brief' => $this->pickString($websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, $scope['user_description'] ?? null),
             'pages' => $this->resolveScopedPageTypes($scope),
             'style' => $this->resolvePromptStyleCode($scope, Page::TYPE_HOME),
@@ -825,12 +827,57 @@ class AiSitePageComponentGenerationService
      */
     private function resolveSharedLogoAssetUrl(array $websiteProfile, array $scope): string
     {
+        $selectedLogo = $this->resolveSelectedThemeLogoAssetUrl($scope);
+        if ($selectedLogo !== '') {
+            return $selectedLogo;
+        }
+
         $manifestLogo = $this->resolveHeaderAssetUrl($scope);
         if ($manifestLogo !== '') {
             return $manifestLogo;
         }
 
         return $this->normalizePublishableLogoAssetUrl((string)($websiteProfile['logo'] ?? ''));
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     */
+    private function resolveSelectedThemeLogoAssetUrl(array $scope): string
+    {
+        $logoGeneration = \is_array($scope['plan_json']['theme']['logo_generation'] ?? null)
+            ? $scope['plan_json']['theme']['logo_generation']
+            : [];
+        if ($logoGeneration === []) {
+            return '';
+        }
+
+        $selectedUrl = $this->normalizePublishableLogoAssetUrl((string)($logoGeneration['selected_url'] ?? ''));
+        if ($selectedUrl !== '') {
+            return $selectedUrl;
+        }
+
+        $selectedOptionId = \strtolower(\trim((string)($logoGeneration['selected_option_id'] ?? '')));
+        if ($selectedOptionId === '') {
+            return '';
+        }
+
+        $options = \is_array($logoGeneration['options'] ?? null) ? $logoGeneration['options'] : [];
+        foreach ($options as $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            $optionId = \strtolower(\trim((string)($option['option_id'] ?? $option['id'] ?? '')));
+            if ($optionId !== $selectedOptionId) {
+                continue;
+            }
+            $optionUrl = $this->normalizePublishableLogoAssetUrl((string)($option['final_url'] ?? $option['url'] ?? $option['asset_url'] ?? ''));
+            if ($optionUrl !== '') {
+                return $optionUrl;
+            }
+        }
+
+        return '';
     }
 
     private function normalizePublishableLogoAssetUrl(string $value): string
@@ -1052,12 +1099,13 @@ class AiSitePageComponentGenerationService
      *   defaultConfig:array<string,mixed>,
      *   renderContext:array<string,mixed>
      * }> $components
+     * @param callable(string|int,array<string,mixed>):void|null $onTaskStarted
      * @return \Generator yields
      *   [componentKey => ['status' => 'fulfilled', 'result' => array<string,mixed>]]
      *   or
      *   [componentKey => ['status' => 'rejected', 'error' => \Throwable]]
      */
-    public function generateComponentEventsConcurrently(array $components): \Generator
+    public function generateComponentEventsConcurrently(array $components, ?callable $onTaskStarted = null, ?int $concurrency = null): \Generator
     {
         if ($components === []) {
             return;
@@ -1066,6 +1114,9 @@ class AiSitePageComponentGenerationService
         if ($this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
             foreach ($components as $componentKey => $spec) {
                 try {
+                    if ($onTaskStarted !== null) {
+                        $onTaskStarted($componentKey, $spec);
+                    }
                     $spec = $this->prepareInlineImageAssetForComponentSpec($spec);
                     yield $componentKey => [
                         'status' => 'fulfilled',
@@ -1104,7 +1155,10 @@ class AiSitePageComponentGenerationService
 
         $tasks = [];
         foreach ($components as $componentKey => $spec) {
-            $tasks[$componentKey] = function () use ($spec): array {
+            $tasks[$componentKey] = function () use ($componentKey, $spec, $onTaskStarted): array {
+                if ($onTaskStarted !== null) {
+                    $onTaskStarted($componentKey, $spec);
+                }
                 $spec = $this->prepareInlineImageAssetForComponentSpec($spec);
                 return $this->generateComponent(
                     $spec['componentCode'],
@@ -1117,8 +1171,9 @@ class AiSitePageComponentGenerationService
             };
         }
 
-        $runner = new FiberTaskRunner(defaultConcurrency: $this->resolveConcurrency(\count($tasks)));
-        foreach ($runner->runEvents($tasks) as $componentKey => $event) {
+        $resolvedConcurrency = $this->resolveConcurrency(\count($tasks), $concurrency);
+        $runner = new FiberTaskRunner(defaultConcurrency: $resolvedConcurrency);
+        foreach ($runner->runEvents($tasks, $resolvedConcurrency) as $componentKey => $event) {
             if (($event['status'] ?? '') === 'fulfilled') {
                 yield $componentKey => [
                     'status' => 'fulfilled',
@@ -1730,10 +1785,10 @@ class AiSitePageComponentGenerationService
     /**
      * Keep AI HTTP component generation bounded while allowing real fanout.
      */
-    private function resolveConcurrency(int $taskCount): int
+    private function resolveConcurrency(int $taskCount, ?int $configured = null): int
     {
         $taskCount = \max(1, $taskCount);
-        $maxConcurrent = (int) Env::get('pagebuilder.ai_site.max_http_concurrency', 5);
+        $maxConcurrent = $configured ?? (int) Env::get('pagebuilder.ai_site.max_http_concurrency', 5);
         $maxConcurrent = \max(1, \min(32, $maxConcurrent));
 
         return \min($taskCount, $maxConcurrent);
@@ -2477,6 +2532,13 @@ PROMPT
         ) {
             $lines[] = "- FAILURE_FIX_EDITABLE_FIELD_BINDING (HARD): every visitor-visible text node must be editable, including step numbers, card labels, stat values, badge text, short chips, form helper notes, privacy/security notes, image captions, and small microcopy. Add one extra_fields metadata row for each heading/body/card/stat/badge/step-number/FAQ/form-label/form-placeholder/form-note/CTA text, bind each row in php_variables with `$getConfig('field.key', 'default')`, and render only `<?= htmlspecialchars(...) ?>` or `<?= nl2br(htmlspecialchars(...)) ?>` in html_content. Do not leave raw words or numbers between tags. Before returning, delete every `<?= ... ?>` fragment from html_content and strip tags; the leftover decoded text must be empty of visitor copy.";
         }
+        if (\str_contains($message, 'css completeness')
+            || \str_contains($message, 'missing matching css selector')
+            || \str_contains($message, 'raw html without block-owned styling')
+            || \str_contains($message, 'css_responsive is empty')
+        ) {
+            $lines[] = "- FAILURE_FIX_CSS_COMPLETENESS (HARD): treat html_content and css_extra/css_responsive as one component. For every `{$componentPrefix}-*` class in html_content, add a matching CSS selector with at least one real declaration. Include root, inner, title/text/copy, action/cta, media, FAQ/card/form/channel/support roles actually rendered by this block. Do not leave any generated class as an unstyled wrapper.";
+        }
         if (\str_contains($message, 'font_visible')
             || \str_contains($message, 'font-family')
             || \str_contains($message, 'pb-font')
@@ -2877,8 +2939,10 @@ PROMPT
         $componentCode = $this->normalizeOptionalComponentCode($componentCode);
         if ($region === 'content') {
             $aiData = $this->normalizeContentBlockPayloadForJsonStructureOnly($aiData);
+            $aiData = $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
+            $this->assertContentBlockCssCompleteness($aiData, $componentCode);
 
-            return $this->normalizeVirtualThemeCssClassScope($aiData, $componentCode);
+            return $aiData;
         }
 
         $aiData = $this->applyStrictVirtualThemeComponentPolicy(
@@ -2992,6 +3056,105 @@ PROMPT
         $aiData['js_content'] = $this->isAllowedComponentInlineJs($existingJs, $aiData) ? $existingJs : '';
 
         return $aiData;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     */
+    private function assertContentBlockCssCompleteness(array $aiData, string $componentCode): void
+    {
+        $reason = $this->detectContentBlockCssCompletenessViolation($aiData);
+        if ($reason === null) {
+            return;
+        }
+
+        throw new \GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException(
+            'AI component CSS completeness failed: ' . $reason,
+            [[
+                'rule' => 'ai_payload.css_completeness',
+                'field' => $componentCode !== '' ? $componentCode : 'content',
+                'found' => $reason,
+                'expected' => 'Content block html_content and css_extra/css_responsive are generated as one complete styled component.',
+                'hint' => 'For every pb-c-* class used in html_content, include a matching CSS selector with visible layout, surface, spacing, or typography declarations.',
+            ]]
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     */
+    private function detectContentBlockCssCompletenessViolation(array $aiData): ?string
+    {
+        $html = \trim((string)($aiData['html_content'] ?? ''));
+        if ($html === '') {
+            return null;
+        }
+
+        $cssExtra = \trim((string)($aiData['css_extra'] ?? ''));
+        $cssResponsive = \trim((string)($aiData['css_responsive'] ?? ''));
+        if ($cssExtra === '') {
+            return 'css_extra is empty, so the content block would render as raw HTML without block-owned styling';
+        }
+        if ($cssResponsive === '') {
+            return 'css_responsive is empty; content blocks must include responsive rules for the generated structure';
+        }
+
+        $classes = $this->collectComponentPrefixedHtmlClassTokens($html);
+        if ($classes === []) {
+            return 'html_content has no component-prefixed classes for css_extra to target';
+        }
+
+        $css = $cssExtra . "\n" . $cssResponsive . "\n" . (string)($aiData['css_content'] ?? '');
+        $missing = [];
+        foreach ($classes as $class) {
+            if (!$this->cssHasRuleForClass($css, $class)) {
+                $missing[] = $class;
+            }
+        }
+
+        if ($missing !== []) {
+            return 'missing matching CSS selector(s) for html_content class(es): '
+                . \implode(', ', \array_slice($missing, 0, 8));
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectComponentPrefixedHtmlClassTokens(string $html): array
+    {
+        if (\trim($html) === '') {
+            return [];
+        }
+
+        if (\preg_match_all('/<[^>]*\bclass\s*=\s*(["\'])(?:(?!\1).)*\1[^>]*>/isu', $html, $matches) <= 0) {
+            return [];
+        }
+
+        $classes = [];
+        foreach ($matches[0] as $tag) {
+            foreach ($this->extractHtmlClassTokensFromTag((string)$tag) as $class) {
+                if (\preg_match('/^pb-c-[a-z0-9][a-z0-9_-]*$/iu', $class) === 1) {
+                    $classes[$class] = true;
+                }
+            }
+        }
+
+        return \array_keys($classes);
+    }
+
+    private function cssHasRuleForClass(string $css, string $class): bool
+    {
+        if (\trim($css) === '') {
+            return false;
+        }
+
+        return \preg_match(
+            '/\.' . \preg_quote($class, '/') . '\b(?![a-z0-9_-])[^{}]*\{[^{}]*:[^{};]+;/isu',
+            $css
+        ) === 1;
     }
 
     private function sanitizeContentBlockHtmlWithoutQualityGate(string $html): string
@@ -5414,6 +5577,8 @@ PROMPT;
             . "- PRODUCT_LATENCY_OUTPUT_BUDGET: return a compact premium block sized for one-pass queue execution. html_content <= 1800 chars; css_extra <= " . ($isHero ? '3000' : '2200') . " chars; css_responsive <= 650 chars; extra_fields + php_variables <= 1800 chars; js_content stays empty unless CTX_CTA_ACTION_CONTRACT requires a tiny scoped button bridge.\n"
             . "- ROLE_EXECUTION: {$roleLine}\n"
             . "- Palette roles available for CSS: {$paletteLine}. Replace symbolic roles with real hex values from CTX_CONFIRMED_THEME or these safe roles; never use stale template colors.\n"
+            . "- CSS completeness hard gate: html_content and CSS are one inseparable artifact. Every `{$prefix}-*` class used in html_content must have a matching selector block in css_extra or css_responsive with at least one real declaration. Do not return naked HTML, half-styled FAQ/cards/forms/media, or role wrappers whose classes never appear in CSS.\n"
+            . "- CSS root/responsive hard gate: css_extra must style `#componentId .{$prefix}-root` plus the actual inner/title/text/action/media/card/form/FAQ roles used by this block; css_responsive must contain real @media rules for classes that exist in html_content.\n"
             . "- CSS rules: one selector block per class actually used, all scoped under #componentId, no comments, no duplicate selector blocks, no @media in css_extra, no CSS url(...), no unfinished functions, no raw declarations outside braces. Use readable contrast and compact depth through background, border, radius, and shadow.\n"
             . "- Responsive rules: css_responsive contains exactly the needed @media (max-width: 768px) and @media (max-width: 420px) blocks. Stack split/support/form layouts, keep min-width:0/max-width:100%, reduce padding, and keep the actual `.{$prefix}-cta` compact.\n"
             . "- Editable text rule: every visible word/number in html_content must be a safe PHP echo backed by matching extra_fields and php_variables rows. Before returning, mentally remove all `<?= ... ?>` fragments and strip tags; no visitor copy may remain.\n"
@@ -11407,7 +11572,7 @@ JSON;
             . "- Renderer will not repair visitor copy after generation; the JSON you return must already contain final customer-specific visible copy.\n"
             . "- Never output internal list labels shaped like schema role + number, for example card/category/badge/step placeholders. Each card/list item needs a customer-specific title and description from the brief, Plan JSON, or verified content data.\n"
             . "- Internal identifier rewrite: if any candidate visible text still contains home_page, about_page, contact_page, page_type, section_code, task_key, plan_locale, runtime_context, shared:, page:, content/, app/code/, or var/, treat it as leaked metadata and rewrite it into natural customer-facing copy before returning.\n"
- . "- Number-label spacing audit: check every metric, badge, stat, step, timeline chip, CTA, and nav label in every script. If a number is immediately followed by Latin or Cyrillic letters in visible copy, insert a readable space or rewrite the phrase into natural copy before returning. Examples: use `10  ? `4.8  ? `24  ? never `10 ? `4.8 ? or `24 ?\n"
+ . "- Number-label spacing audit: check every metric, badge, stat, step, timeline chip, CTA, and nav label in every script. If a number is immediately followed by Latin or Cyrillic letters in visible copy, insert a readable space or rewrite the phrase into natural copy before returning. Examples: use `10 млн`, `4.8 звезды`, or `24 hours`; never `10млн`, `4.8звезды`, or `24hours`.\n"
             . "- Never render broken image placeholders. If a verified uploaded asset URL is absent, create the visual with CSS-only shapes/pseudo-elements or omit media.\n";
     }
 
@@ -11500,7 +11665,7 @@ JSON;
             . "- Before composing html_content/html_extra/footer text/nav labels, normalize every candidate sentence to source_of_truth_locale.\n"
             . $languageRule
             . "- Proofread the final visible copy in source_of_truth_locale before returning: fix misspelled words, broken word fragments, and missing spaces between sentence text and CTA/link labels. Do not concatenate two labels or a paragraph plus CTA without whitespace or punctuation.\n"
- . "- Numeric label spacing: write metric labels with a visible space or line break between numbers and words, e.g. `4.8  ? never `4.8 ?\n"
+ . "- Numeric label spacing: write metric labels with a visible space or line break between numbers and words, e.g. `4.8 звезды`; never `4.8звезды`.\n"
             . "- Final self-check before returning JSON: if any visitor-visible sentence is not in source_of_truth_locale, rewrite it now and then return.\n";
     }
 
@@ -11612,12 +11777,15 @@ JSON;
             . "- Avoid generic sameness: each block needs a role-specific composition, not the same centered title plus three cards.\n"
             . "- Repetition repair rule: if the natural draft uses the same card grid, metric row, gradient orb, icon list, or CTA treatment as another likely section, change the composition before returning JSON.\n"
             . "- Own the final rendering in the returned JSON: scoped html_content/css_extra must carry aesthetics, contrast, and hover/focus polish; css_responsive carries explicit `@media (max-width: 768px)` and `@media (max-width: 420px)` blocks. Do not return an empty css_responsive for content blocks.\n"
+            . "- Base layout foundation: treat this as a fallback quality floor, not a fixed skeleton. The root owns section background and vertical padding; the inner wrapper uses max-width 1120px-1280px, margin:0 auto, horizontal padding 20px-32px, min-width:0, and box-sizing:border-box. Use 4px/8px rhythm for gaps, card padding, media spacing, and action separation; reduce those values deliberately at 768px and 420px.\n"
+            . "- Typography foundation: headings need stable breakpoint sizes, line-height around 1.05-1.2, margin reset, and enough bottom spacing before body copy. Body, labels, badges, captions, and CTA text need line-height around 1.45-1.75, overflow-wrap:anywhere where long words can appear, and letter-spacing:0 unless a locale-safe positive value is explicitly part of the style. Do not use negative letter spacing.\n"
+            . "- Foundation versus composition: the foundation protects readability, spacing, and responsive safety. It must not turn every block into the same root > inner > centered title > cards layout. Choose composition from the approved block plan, visual_signature, user request, and section role, then apply the foundation to that composition.\n"
             . "- CTA shape contract: CTA-looking controls should read as intentional buttons in the default layout with display:inline-flex, width:auto, max-width around 280px, and flex:0 0 auto. Use a full-width wrapper if the composition needs a band.\n"
             . "- CTA label contract: CTA copy must match the page/block job. Download/app/APK/reward/game blocks use download/play/reward language; blog/learning blocks use reading/explore language; only contact/support blocks use consult/contact language.\n"
             . "- Policy-page CTA contract: privacy/terms/refund/shipping/cookie policy blocks must use policy/data/rights/terms/support actions. They must not render download, APK, play, bonus, reward, game, or install CTA text inside the policy page body, even when the global site CTA is app download.\n"
             . "- Empty-surface contract: a large flat dark/light rectangle with only a logo, one sentence, or one CTA is not premium. A non-hero title plus one paragraph plus CTA is also not premium unless it has styled support/proof/visual devices. Use content density, surface elevation, borders, shadows, media, and proof/support copy so every large panel earns its space.\n"
             . "- Brief-specific motif contract: convert the current business brief into visible art direction through safe palette choices, shaped surfaces, copy labels, badges, media treatment, and spacing rhythm. Generic casino/gaming/business panels are invalid when the brief provides richer nouns or audience context.\n"
-            . "- Responsive structure is mandatory: root shell, inner container, copy panel, media/CSS visual panel, action/form panel, and decorative layers with component-prefixed classes.\n"
+            . "- Responsive structure is mandatory for the roles actually used by this block: root shell, inner container, copy/title/text zone, media/CSS visual zone, action/form/proof zone, and any decorative layers need component-prefixed classes and matching scoped CSS. Do not add unused role wrappers just to imitate another block.\n"
             . "- At <=900px stack split layouts; at <=420px use one column. Containers/media/forms may use width:100%, max-width:100%, box-sizing:border-box, min-width:0; keep the desktop/default CTA button visually compact and avoid making it a page-width bar. Prefer action/actions for CTA wrappers so wrapper CSS is not mistaken for button CSS.\n"
             . "- If image plus form/card appears, keep both in normal grid/flex flow. Do not absolutely push cards outside the root or overlap inputs/text with media/decorations.\n"
             . "- Text over photos or busy textures needs a real scrim/panel/veil layer. Never put body copy directly on a busy image.\n"
@@ -11645,7 +11813,7 @@ JSON;
         if (\in_array($pageFlowRole, ['trust_story', 'proof'], true)) {
             $recipe = 'Trust/security/social-proof recipe: use a badge wall, credential seal, quote rail, metric strip, or verification timeline. Do not use a generic three-card row plus one image.';
         } elseif ($pageType === 'home_page') {
-            $recipe = 'Game/showcase recipe: follow visual_signature.composition_pattern when present. Prefer editorial split, feature rail, comparison band, or asymmetric media feature 闂?not the same three-card grid used elsewhere on the page. Vary media placement and surface rhythm per block.';
+            $recipe = 'Game/showcase recipe: follow visual_signature.composition_pattern when present. Prefer editorial split, feature rail, comparison band, or asymmetric media feature rather than the same three-card grid used elsewhere on the page. Vary media placement and surface rhythm per block.';
         } elseif ($pageType === 'contact_page' || \in_array($pageFlowRole, ['support', 'education'], true)) {
             $recipe = 'FAQ/support recipe: use accordion/list rhythm with an asymmetric help panel or support badge cluster. It must not look like testimonials, trust badges, or a feature grid.';
         } elseif (\in_array($pageFlowRole, ['conversion', 'final_cta'], true)) {
@@ -11671,7 +11839,8 @@ JSON;
             . $cardGameRule
             . "- Section recipe: {$recipe}\n"
             . "- Heading semantics rule: opening, hero, above-fold, and page-intro blocks must render exactly one `<h1 class='pb-c-title'>`; non-opening content blocks use `h2.pb-c-title` or lower. Do not make every section title an h2.\n"
-            . "- Spacing rhythm rule: CTA/action groups must have deliberate breathing room. When a CTA follows text, channel rows, form fields, or dividers, style its action wrapper or CTA with at least one clear margin, padding, or gap so the button never touches a line or neighboring row.\n"
+            . "- Spacing rhythm rule: use a coherent 4px/8px spacing scale for section padding, inner gaps, copy spacing, card/media padding, and action separation. CTA/action groups must have deliberate breathing room. When a CTA follows text, channel rows, form fields, or dividers, style its action wrapper or CTA with at least one clear margin, padding, or gap so the button never touches a line or neighboring row.\n"
+            . "- Baseline structure rule: every section needs a clear root, bounded inner layout, readable title/body grouping, and styled role wrappers for the content it actually renders. This is a quality baseline only; it must not force identical grids, repeated centered headers, or reused card shells across blocks.\n"
             . "- Review/testimonial structure rule: if this section renders testimonials, player voices, reviews, quotes, or social proof, build a rail/grid/list wrapper whose repeated cards are siblings. Inside each card, keep author/name, location/meta/rating, and quote/body as separate child layers so labels do not collide with paragraph text.\n"
             . "- Anti-monotony rule: adjacent blocks must not share the same three-card row, same image position, same copy labels, or same pale background/card treatment. Change composition, scale, motif, and spacing per section role.\n"
             . "- Rejected output patterns: centered title plus one paragraph plus CTA with no support/proof/visual device; centered title plus three small cards plus the same image; tiny cartoon/SVG-looking media used as a substitute for a real generated image; repeated generic CTA/category labels across blocks; hero built as a boxed card next to a small image; CTA stretched into a page-width bar; large empty dark panel with only a logo or one button; CSS-only hero made only from overlapping circles/blobs with no subject-matter stage.\n"
@@ -13411,6 +13580,7 @@ JSON;
             . "- design execution rule: apply confirmed page_design_plan and theme_context first, then current_block_context. Generate only this task's block for its page_type and block_key; you may design freely inside that contract, not why the block exists.\n"
             . "- content execution rule: every heading, body line, list/card item, CTA, form label, placeholder, alt text, and editable default must be derived from current_block_context.content_plan, field_content_requirements, data_contract, block_goal, and acceptance. If plan samples are not visitor-ready, rewrite them into finished {$contentLocale} copy; do not replace them with generic marketing filler.\n"
             . "- CSS execution rule: write fewer complete selectors instead of many fragile selectors. If a decoration is hard to express safely, omit the decoration and keep the layout valid.\n"
+            . "- base layout execution rule: apply a foundation only after choosing this block's own composition. Root/inner/copy/media/action roles should establish spacing, containment, typography, and responsive safety; they must not force a repeated skeleton. Use 4px/8px spacing rhythm, max-width 1120px-1280px for inner content when not full-bleed, min-width:0 and box-sizing:border-box on layout children, stable heading/body font sizes per breakpoint, line-height 1.45-1.75 for readable copy, and letter-spacing:0 unless a locale-safe positive value is explicitly intended.\n"
             . "- responsive execution rule: normal grid/flex flow only; stack at <=900px and use one column at <=420px. Apply min-width:0, max-width:100%, box-sizing:border-box, and overflow-wrap:anywhere to layout containers plus text-bearing children such as brand/logo text, headings, paragraphs, labels, nav items, badges/chips, cards, media captions, form fields, and CTA labels. Do not use white-space:nowrap on brand/nav/badges/buttons/headings at <=420px unless that same rule provides a safe wrap or shorter label. Review/testimonial/card rails must stay inside the component width: use grid wrapping, or put all cards inside one max-width:100% overflow-x:auto wrapper; never position extra cards beyond the viewport or let a rail increase body scrollWidth. Use overflow:hidden only for decorative media/motifs, never to hide clipped copy or controls. Apply the compact CTA override only to the actual clickable CTA button/anchor element; full-width bands, layout containers, and form wrappers may remain responsive. Prefer action/actions for wrappers so wrapper CSS is not mistaken for button CSS.\n"
             . $ctaResponsiveOverride
             . "- plan-json language rule: plan-json text is intent only. Rewrite it into final visitor copy in source_of_truth_locale before placing it in HTML.\n"
