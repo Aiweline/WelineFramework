@@ -499,6 +499,16 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
             .replace(/'/g, '&#039;');
     }
 
+    function requestJson(url, options) {
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
+            return window.Weline.Api.request(url, options);
+        }
+
+        return fetch(url, options).then(function(res) {
+            return res.json();
+        });
+    }
+
     function collectSenders() {
         var list = [];
         document.querySelectorAll('.smtp-sender-card').forEach(function(card) {
@@ -664,11 +674,11 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
         }
         var url = '<?= $this->getBackendUrl('smtp/backend/config/saveSenders') ?>';
         var body = 'senders=' + encodeURIComponent(JSON.stringify(senders)) + '&sender_contacts=' + encodeURIComponent(JSON.stringify(contacts));
-        window.Weline.Api.request(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+        requestJson(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
             .then(function(res) {
                 var d = (res && res.data) !== undefined ? res.data : res;
-                if (d.success && typeof BackendToast !== 'undefined') {
-                    BackendToast.success(d.message);
+                if (d.success) {
+                    if (typeof BackendToast !== 'undefined') BackendToast.success(d.message);
                     setTimeout(function() { window.location.reload(); }, 800);
                 } else if (!d.success && typeof BackendToast !== 'undefined') {
                     BackendToast.error(d.message || text.saveFailed);

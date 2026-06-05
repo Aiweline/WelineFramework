@@ -120,9 +120,15 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
 
     public function shouldRecoverDeadWorker(Queue $queue, int $deadPid, string $workerOutput): bool
     {
-        unset($deadPid, $workerOutput);
+        unset($workerOutput);
         $content = \json_decode((string)$queue->getContent(), true);
         if (!\is_array($content)) {
+            return false;
+        }
+        if ($deadPid <= 0) {
+            return false;
+        }
+        if (\max(0, (int)($content[self::CONTENT_AUTO_ATTEMPT_KEY] ?? 0)) >= self::MAX_PLAN_QUEUE_ATTEMPTS) {
             return false;
         }
 
