@@ -33,6 +33,13 @@ final class ObjectManagerReflectionClassMetadataCacheTest extends TestCase
         self::assertNull($target->optionalDependency);
         self::assertSame(0, $target->count);
     }
+
+    public function testMakeResolvesUnionTypedConstructorDependency(): void
+    {
+        $target = ObjectManager::make(ObjectManagerUnionTypedTargetFixture::class);
+
+        self::assertInstanceOf(ObjectManagerUnionTypedDependency::class, $target->dependency);
+    }
 }
 
 final class ObjectManagerMetadataCacheSourceFixture
@@ -84,6 +91,28 @@ final class ObjectManagerMetadataCacheTargetDependency
 }
 
 final class ObjectManagerMetadataCacheOptionalDependency
+{
+    public function __construct()
+    {
+    }
+}
+
+final class ObjectManagerUnionTypedTargetFixture
+{
+    public function __construct(
+        public ObjectManagerUnionTypedDependency|ObjectManagerUnionTypedFallbackDependency $dependency
+    ) {
+    }
+}
+
+final class ObjectManagerUnionTypedDependency
+{
+    public function __construct()
+    {
+    }
+}
+
+final class ObjectManagerUnionTypedFallbackDependency
 {
     public function __construct()
     {
