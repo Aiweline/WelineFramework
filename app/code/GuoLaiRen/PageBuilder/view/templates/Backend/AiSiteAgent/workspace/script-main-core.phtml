@@ -1279,6 +1279,28 @@
         return <?= $pbAiScriptJson((string)__('前端检测到建站进度异常，已停止自动重试和重连，请等待后台消息通知后人工处理。')) ?>;
     }
 
+    function reloadWorkspaceAfterFrontendException(operation, reason) {
+        var key = 'pb_ai_workspace_frontend_exception_reload';
+        var now = Date.now();
+        try {
+            var previous = JSON.parse(window.sessionStorage.getItem(key) || '{}');
+            var previousAt = parseInt(String(previous.at || 0), 10) || 0;
+            if (previousAt > 0 && (now - previousAt) < 10000) {
+                return false;
+            }
+            window.sessionStorage.setItem(key, JSON.stringify({
+                at: now,
+                operation: String(operation || ''),
+                reason: String(reason || '')
+            }));
+        } catch (error) {
+        }
+        window.setTimeout(function () {
+            window.location.reload();
+        }, 800);
+        return true;
+    }
+
     function notifyWorkspaceFrontendRetryStopped(operation, reason, payload) {
         if (typeof window.__pbWorkspaceNotifyFrontendRetryStopped === 'function') {
             return window.__pbWorkspaceNotifyFrontendRetryStopped(operation, reason, payload || {});
@@ -1318,6 +1340,7 @@
             }
         }
         toast('warning', message);
+        reloadWorkspaceAfterFrontendException(normalizedOperation, normalizedReason);
         return false;
     }
 
@@ -1790,7 +1813,9 @@
             return;
         }
         var state = getLatestWorkspaceStateForQueuePrompt();
-        var visible = (hasCurrentPhaseOnePlan() || lastPhaseOnePlanPresent)
+        var planStartAvailable = String(startPlanUrl || '').trim() !== '';
+        var visible = planStartAvailable
+            || (hasCurrentPhaseOnePlan() || lastPhaseOnePlanPresent)
             || isPlanInputStaleForConfirmation(state)
             || (hasStageOnePlanEvidenceForBlockingCheck(state) && resolveMissingSelectedPlanPageTypes(state).length > 0);
         var queueBusy = planStartRequestPending || planSseRunning || planGenerationActionLockActive
@@ -3324,6 +3349,9 @@
     previewLabels.logoOptionCandidates = <?= $pbAiScriptJson((string)__('Logo 候选')) ?>;
     previewLabels.logoSelectAction = <?= $pbAiScriptJson((string)__('选择')) ?>;
     previewLabels.logoSelectedAction = <?= $pbAiScriptJson((string)__('已选择')) ?>;
+    previewLabels.logoGenerateAction = <?= $pbAiScriptJson((string)__('生成')) ?>;
+    previewLabels.logoGeneratingAction = <?= $pbAiScriptJson((string)__('生成中')) ?>;
+    previewLabels.logoQueuedStatus = <?= $pbAiScriptJson((string)__('已加入生成队列')) ?>;
     previewLabels.logoNotGenerated = <?= $pbAiScriptJson((string)__('待生成')) ?>;
     previewLabels.logoGeneratedUrl = <?= $pbAiScriptJson((string)__('生成结果')) ?>;
 
@@ -13080,9 +13108,12 @@
             : '<div class="border rounded bg-white d-flex align-items-center justify-content-center text-muted small mb-2" style="aspect-ratio:2/1;">'
                 + escapeHtml(String(previewLabels.logoNotGenerated || 'Not generated'))
                 + '</div>';
-        var buttonDisabled = (!hasImage || isSelected) ? ' disabled' : '';
-        var buttonClass = isSelected ? 'btn-primary' : 'btn-outline-primary';
-        var buttonLabel = isSelected ? String(previewLabels.logoSelectedAction || 'Selected') : String(previewLabels.logoSelectAction || 'Select');
+        var buttonDisabled = isSelected ? ' disabled' : '';
+        var buttonClass = isSelected ? 'btn-primary' : (hasImage ? 'btn-outline-primary' : 'btn-outline-success');
+        var buttonLabel = isSelected
+            ? String(previewLabels.logoSelectedAction || 'Selected')
+            : (hasImage ? String(previewLabels.logoSelectAction || 'Select') : String(previewLabels.logoGenerateAction || 'Generate'));
+        var buttonActionAttr = hasImage ? ' data-pb-logo-option-select="1"' : ' data-pb-logo-option-generate="1"';
 
         return ''
             + '<div class="col-12 col-md-6 col-xl-3">'
@@ -13095,9 +13126,12 @@
             + (option.styleDirection ? '<div class="small text-muted mt-2">' + escapeHtml(option.styleDirection) + '</div>' : '')
             + (option.promptBrief ? '<div class="small mt-2">' + escapeHtml(option.promptBrief).replace(/\n/g, '<br>') + '</div>' : '')
             + (hasImage ? '<div class="small text-muted mt-2 text-break">' + escapeHtml(String(previewLabels.logoGeneratedUrl || 'Generated URL')) + ': ' + escapeHtml(option.finalUrl) + '</div>' : '')
-            + '<button type="button" class="btn btn-sm w-100 mt-2 ' + buttonClass + '" data-pb-logo-option-select="1"'
+            + '<div class="small text-muted mt-2 d-none" data-pb-logo-option-queue-status></div>'
+            + '<button type="button" class="btn btn-sm w-100 mt-2 ' + buttonClass + '"' + buttonActionAttr
             + ' data-logo-option-id="' + escapeHtml(option.optionId) + '"'
             + ' data-logo-asset-slot-id="' + escapeHtml(option.assetSlotId) + '"'
+            + ' data-logo-prompt-brief="' + escapeHtml(option.promptBrief) + '"'
+            + ' data-logo-label="' + escapeHtml(option.label || option.optionId) + '"'
             + ' data-logo-final-url="' + escapeHtml(option.finalUrl) + '"' + buttonDisabled + '>'
             + escapeHtml(buttonLabel)
             + '</button>'
@@ -14078,6 +14112,61 @@
         return true;
     }
 
+    function generateStageOneLogoOption(button) {
+        if (!button || !button.getAttribute || button.disabled) {
+            return false;
+        }
+        var assetSlotId = String(button.getAttribute('data-logo-asset-slot-id') || '').trim();
+        var promptBrief = String(button.getAttribute('data-logo-prompt-brief') || '').trim();
+        var label = String(button.getAttribute('data-logo-label') || '').trim();
+        if (!assetSlotId || !startAssetGenerationUrl) {
+            return false;
+        }
+        var card = button.closest ? button.closest('.border.rounded') : null;
+        var statusNode = card && card.querySelector ? card.querySelector('[data-pb-logo-option-queue-status]') : null;
+        var previousText = button.textContent;
+        button.disabled = true;
+        button.textContent = String(previewLabels.logoGeneratingAction || 'Generating');
+        if (statusNode) {
+            statusNode.classList.remove('d-none');
+            statusNode.textContent = String(previewLabels.logoQueuedStatus || 'Queued');
+        }
+        postForm(startAssetGenerationUrl, {
+            public_id: publicId,
+            slot_id: assetSlotId,
+            slot_type: 'logo_icon',
+            label: label || assetSlotId,
+            prompt_brief: promptBrief,
+            mode: 'generate',
+            execution_token: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+        }).then(function (data) {
+            var rootResponse = data && typeof data === 'object' ? data : {};
+            var payload = rootResponse.data && typeof rootResponse.data === 'object' ? rootResponse.data : rootResponse;
+            var queueId = String(payload.queue_id || rootResponse.queue_id || (payload.queue && payload.queue.queue_id) || '');
+            var queueStatus = String(payload.queue_status || rootResponse.queue_status || '');
+            if (statusNode) {
+                statusNode.textContent = String(previewLabels.logoQueuedStatus || 'Queued')
+                    + (queueId ? ' #' + queueId : '')
+                    + (queueStatus ? ' ' + queueStatus : '');
+            }
+            var nextState = payload.state || payload.workspace_state || payload;
+            if (nextState && typeof nextState === 'object' && (nextState.scope || nextState.asset_manifest)) {
+                hydrateWorkspaceFromState(nextState);
+            }
+            if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
+                window.PbAiOperationRunner.startFromResponse(data, 'image_asset');
+            }
+        }).catch(function (error) {
+            if (statusNode) {
+                statusNode.classList.remove('d-none');
+                statusNode.textContent = String(error && error.message ? error.message : messages.networkError);
+            }
+            button.disabled = false;
+            button.textContent = previousText;
+        });
+        return true;
+    }
+
     function bindLogoGenerationOptionButtons(container) {
         var root = typeof container === 'string' ? document.getElementById(container) : container;
         if (!root || root.dataset.pbLogoOptionSelectBound === '1') {
@@ -14086,6 +14175,12 @@
         root.dataset.pbLogoOptionSelectBound = '1';
         root.addEventListener('click', function (event) {
             if (event.defaultPrevented) {
+                return;
+            }
+            var generateButton = event.target && event.target.closest ? event.target.closest('[data-pb-logo-option-generate="1"]') : null;
+            if (generateButton && root.contains(generateButton)) {
+                event.preventDefault();
+                generateStageOneLogoOption(generateButton);
                 return;
             }
             var button = event.target && event.target.closest ? event.target.closest('[data-pb-logo-option-select="1"]') : null;
@@ -16811,10 +16906,6 @@
 
     function startWholeSchemePlanRebuildFromPanel(triggerBtn) {
         if (planStartRequestPending) {
-            return Promise.resolve(false);
-        }
-        if (!hasCurrentPhaseOnePlan() && !isPlanInputStaleForConfirmation()) {
-            toast('warning', messages.planStartUnavailable);
             return Promise.resolve(false);
         }
         return confirmWorkspaceRebuildAction(messages.planSchemeRebuildConfirmMessage, messages.planSchemeRebuildConfirmTitle).then(function (confirmed) {
