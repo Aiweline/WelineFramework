@@ -995,7 +995,7 @@
             return null;
         }
         var progressKind = resolvePayloadProgressKind(payload);
-        if (progressKind !== '' && progressKind !== 'queue_info') {
+        if (progressKind !== '' && progressKind !== 'queue_info' && progressKind !== 'plan_json_progress') {
             return null;
         }
         var stateQueueInfo = payload.state && typeof payload.state === 'object'
@@ -1025,6 +1025,7 @@
             || Object.prototype.hasOwnProperty.call(payload, 'total_tokens')
             || Object.prototype.hasOwnProperty.call(payload, 'stage1_page_progress')
             || String(payload.progress_kind || '') === 'queue_info'
+            || String(payload.progress_kind || '') === 'plan_json_progress'
         );
         if (!hasQueueSignal) {
             return null;
