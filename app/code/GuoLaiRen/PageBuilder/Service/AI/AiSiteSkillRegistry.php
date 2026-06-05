@@ -303,6 +303,8 @@ final class AiSiteSkillRegistry
             $scope['_plan_sse_request']['selected_skill_codes'] ?? null,
             $scope['selected_skill_codes'] ?? null,
             $scope['plan_json']['contract_context']['selected_skill_codes'] ?? null,
+            $scope['contract_context']['selected_skill_codes'] ?? null,
+            $scope['plan_json']['selected_skill_codes'] ?? null,
         ];
 
         foreach ($candidates as $candidate) {
@@ -324,6 +326,8 @@ final class AiSiteSkillRegistry
         $candidates = [
             $scope['plan_json']['contract_context']['skill_snapshots'] ?? null,
             $scope['contract_context']['skill_snapshots'] ?? null,
+            $scope['plan_json']['skill_snapshots'] ?? null,
+            $scope['skill_snapshots'] ?? null,
         ];
 
         foreach ($candidates as $candidate) {

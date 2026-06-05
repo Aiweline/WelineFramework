@@ -3637,7 +3637,7 @@ class AiSitePlanJsonTaskService
             || \str_contains($lower, 'quality gate did not')
             || \str_contains($lower, 'component contract')
         ) {
-            return 'AI output did not pass the section quality gate. The section will need another generation attempt.';
+            return 'AI output structure was invalid. The section will need another generation attempt.';
         }
 
         if ((\preg_match('/https?:\\/\\//i', $message) === 1)
