@@ -1743,14 +1743,18 @@ final class AiSiteAssetManifestService
 
     private function isExistingIdentityAssetUrlAcceptable(string $url, string $role): bool
     {
-        unset($role);
+        $role = \strtolower(\trim($role));
         $path = \parse_url($url, \PHP_URL_PATH);
         $path = \is_string($path) && $path !== '' ? $path : $url;
         $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
         $lowerPath = \strtolower($path);
         $isPageBuilderGeneratedAsset = \str_contains($lowerPath, '/pub/media/page-build/')
             && \str_contains($lowerPath, '/ai-generated/');
-        return !$isPageBuilderGeneratedAsset;
+        if (!$isPageBuilderGeneratedAsset) {
+            return true;
+        }
+
+        return $role === 'logo' && \str_contains($lowerPath, 'plan-theme-logo-generation-option');
     }
 
     /**
