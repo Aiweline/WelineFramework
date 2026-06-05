@@ -976,6 +976,8 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
             'operation' => 'plan',
             'execution_token' => $executionToken !== '' ? $executionToken : (string)($basePlanOperation['execution_token'] ?? ''),
             'status' => 'done',
+            'queue_status' => 'done',
+            'semantic_status' => 'done',
             'queue_id' => $queueId,
             'message' => 'Stage-one plan generation completed.',
             'progress_percent' => 100,
