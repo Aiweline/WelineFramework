@@ -106,6 +106,7 @@ class Data extends \Weline\Backend\Model\Config
                 [
                     'code' => 'default',
                     'name' => __('默认发件人'),
+                    'source_type' => 'external',
                     'smtp_host' => $legacy['smtp_host'] ?? '',
                     'smtp_port' => $legacy['smtp_port'] ?? '465',
                     'smtp_username' => $legacy['smtp_username'] ?? '',
@@ -137,7 +138,18 @@ class Data extends \Weline\Backend\Model\Config
      */
     public function setSenders(array $senders, string $module = 'Weline_Smtp'): bool
     {
-        $this->setConfig(self::key_smtp_senders, json_encode($senders, JSON_UNESCAPED_UNICODE), $module);
+        $normalized = [];
+        foreach ($senders as $sender) {
+            if (!is_array($sender)) {
+                continue;
+            }
+            $sender['source_type'] = in_array((string)($sender['source_type'] ?? 'external'), ['external', 'mail_account'], true)
+                ? (string)$sender['source_type']
+                : 'external';
+            $normalized[] = $sender;
+        }
+
+        $this->setConfig(self::key_smtp_senders, json_encode($normalized, JSON_UNESCAPED_UNICODE), $module);
         $this->smtp[$module] = [];
         return true;
     }
