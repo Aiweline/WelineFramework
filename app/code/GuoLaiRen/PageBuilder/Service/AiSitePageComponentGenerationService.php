@@ -856,7 +856,10 @@ class AiSitePageComponentGenerationService
         }
         $normalizedPath = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
         $lowerPath = \strtolower($normalizedPath);
-        if (\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
+        if (
+            \str_contains($lowerPath, '/pub/media/page-build/ai-generated/')
+            && !\str_contains($lowerPath, 'plan-theme-logo-generation-option')
+        ) {
             return '';
         }
 
