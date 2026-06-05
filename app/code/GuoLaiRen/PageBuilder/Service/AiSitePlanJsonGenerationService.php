@@ -2946,10 +2946,17 @@ final class AiSitePlanJsonGenerationService
     private function resolveStageOneLocale(array $scope, array $websiteProfile = []): string
     {
         foreach ([
+            $websiteProfile['content_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $websiteProfile['default_language'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['website_profile']['default_language'] ?? null,
+            $scope['ai_content_locale'] ?? null,
+            $scope['content_locale'] ?? null,
             $scope['plan_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['default_language'] ?? null,
-            $websiteProfile['content_locale'] ?? null,
             $websiteProfile['locale'] ?? null,
         ] as $candidate) {
             $value = \trim((string)$candidate);
@@ -2959,6 +2966,35 @@ final class AiSitePlanJsonGenerationService
         }
 
         return 'en_US';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @return array<string, mixed>
+     */
+    private function buildStageOneLanguagePromptContext(array $scope, array $websiteProfile, string $locale): array
+    {
+        $siteDefaultLanguage = $this->firstNonEmpty([
+            $websiteProfile['content_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $websiteProfile['default_language'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['website_profile']['default_language'] ?? null,
+            $scope['ai_content_locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $locale,
+        ]);
+
+        return [
+            'site_default_language' => $siteDefaultLanguage,
+            'content_locale' => $locale,
+            'language_contract' => $this->buildLanguageRuntimeContract($siteDefaultLanguage !== '' ? $siteDefaultLanguage : $locale),
+            'language_rule' => 'All planned visitor-facing copy, navigation labels, CTA labels, SEO text, alt/title/aria/placeholder text, and field_plan.sample values must use site_default_language/content_locale unless the text is a proper noun.',
+        ];
     }
 
     /**
@@ -2986,6 +3022,7 @@ final class AiSitePlanJsonGenerationService
     private function buildRequirementExpansion(array $scope, array $websiteProfile, array $pageTypes): array
     {
         $locale = $this->resolveStageOneLocale($scope, $websiteProfile);
+        $languageContext = $this->buildStageOneLanguagePromptContext($scope, $websiteProfile, $locale);
         $brief = $this->stageOneBriefText($scope, $websiteProfile);
         $siteTitle = $this->firstNonEmpty([
             $scope['site_title'] ?? null,
@@ -3003,7 +3040,12 @@ final class AiSitePlanJsonGenerationService
                 'site_title' => $siteTitle,
                 'brief' => $brief,
                 'content_locale' => $locale,
+                'site_default_language' => (string)($languageContext['site_default_language'] ?? $locale),
+                'language_rule' => (string)($languageContext['language_rule'] ?? ''),
                 'page_types' => \array_values($pageTypes),
+            ],
+            'upstream_artifacts' => [
+                'current_site_language_context' => $languageContext,
             ],
             'output_schema' => [
                 'requirement_expansion.original_brief string',
@@ -3021,6 +3063,7 @@ final class AiSitePlanJsonGenerationService
             'self_check' => [
                 'Every page_strategy item must use one of the selected page_types.',
                 'Use concrete visitor, content, and conversion language. Avoid instructions like write the title.',
+                'All visitor-facing planning text must follow current_site_language_context.site_default_language/content_locale.',
             ],
         ]);
 
@@ -3121,6 +3164,8 @@ final class AiSitePlanJsonGenerationService
         array $contract,
         string $locale
     ): string {
+        $languageContext = $this->buildStageOneLanguagePromptContext($scope, $websiteProfile, $locale);
+
         return $this->stageOnePromptAssembler->assemble([
             'system_task' => [
                 'THEME planner: return one JSON object for shared stage-one plan_json root theme, navigation, footer, shared_components, and seo_strategy.',
@@ -3131,9 +3176,12 @@ final class AiSitePlanJsonGenerationService
                 'site_title' => (string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? ''),
                 'brief' => $this->stageOneBriefText($scope, $websiteProfile),
                 'content_locale' => $locale,
+                'site_default_language' => (string)($languageContext['site_default_language'] ?? $locale),
+                'language_rule' => (string)($languageContext['language_rule'] ?? ''),
             ],
             'upstream_artifacts' => [
                 'Confirmed requirement expansion from step 1' => $requirementExpansion,
+                'current_site_language_context' => $languageContext,
                 'page_route_contract' => $contract['page_route_contract'] ?? [],
                 'theme_required_fields' => $contract['theme_required_fields'] ?? [],
             ],
@@ -3152,6 +3200,7 @@ final class AiSitePlanJsonGenerationService
                 'Before returning JSON, verify theme.logo_generation.stage is logo_generation, output_path is plan_json.theme.logo_generation, and options contains exactly four selectable logo option records.',
                 'Header/footer href values must be exact internal route paths from page_route_contract, no anchors and no query strings.',
                 'Before returning JSON, verify theme_design.typography_spacing_radius and theme_design.forbidden_styles are present and non-empty.',
+                'Before returning JSON, verify every visitor-facing theme, navigation, footer, shared component, SEO, CTA, alt/title/aria/placeholder text uses current_site_language_context.site_default_language/content_locale.',
             ],
         ]);
     }
@@ -3174,6 +3223,7 @@ final class AiSitePlanJsonGenerationService
     ): string {
         $pageContract = $this->stageOneContractService->pageContract($contract, $pageType);
         $exactBlockKeys = $this->exactStageOnePageBlockKeys($pageContract);
+        $languageContext = $this->buildStageOneLanguagePromptContext($scope, $websiteProfile, $locale);
 
         return $this->stageOnePromptAssembler->assemble([
             'system_task' => [
@@ -3187,9 +3237,12 @@ final class AiSitePlanJsonGenerationService
                 'site_title' => (string)($scope['site_title'] ?? $websiteProfile['site_title'] ?? ''),
                 'brief' => $this->stageOneBriefText($scope, $websiteProfile),
                 'content_locale' => $locale,
+                'site_default_language' => (string)($languageContext['site_default_language'] ?? $locale),
+                'language_rule' => (string)($languageContext['language_rule'] ?? ''),
             ],
             'upstream_artifacts' => [
                 'Confirmed requirement expansion from step 1' => $requirementExpansion,
+                'current_site_language_context' => $languageContext,
                 'page_contract' => $pageContract,
                 'previous_validation_issues' => $previousIssues,
             ],
@@ -3209,6 +3262,7 @@ final class AiSitePlanJsonGenerationService
                 'Output exactly ' . (string)\count($exactBlockKeys) . ' direct dynamic block keys under plan_json.pages.' . $pageType . ': ' . \implode(', ', $exactBlockKeys) . '.',
                 'Keep every generated field inside plan_json.pages.' . $pageType . '.{block_key}.',
                 'If the draft has top-level visual_signature, image_intent, field_plan, execution_script, or execution_core_copy, discard it and rebuild the full page object with direct block keys.',
+                'Before returning JSON, verify every field_plan.sample, content, title, CTA, SEO, alt/title/aria/placeholder candidate uses current_site_language_context.site_default_language/content_locale.',
             ],
         ]);
     }

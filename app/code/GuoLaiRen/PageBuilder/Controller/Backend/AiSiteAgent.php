@@ -7834,6 +7834,19 @@ class AiSiteAgent extends BaseController
                     : (\is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [])
             );
             $planJson = (new AiSitePlanJsonStateService((int)$fresh->getId()))->setConfirmed($planJson, false);
+            $stageOneLogoAssetScope = $this->prepareStageOneLogoOptionAssets($fresh, $adminId, \array_replace($scope, $derivedPatch, [
+                'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
+                'plan_json' => $planJson,
+                'plan_locale' => $this->resolvePlanLocale($scope),
+            ]));
+            if (\is_array($stageOneLogoAssetScope['plan_json'] ?? null)) {
+                $planJson = (new AiSitePlanJsonStateService((int)$fresh->getId()))->setConfirmed($stageOneLogoAssetScope['plan_json'], false);
+            }
+            $derivedPatch = \array_replace($derivedPatch, [
+                'asset_manifest' => \is_array($stageOneLogoAssetScope['asset_manifest'] ?? null) ? $stageOneLogoAssetScope['asset_manifest'] : [],
+                'verified_assets' => \is_array($stageOneLogoAssetScope['verified_assets'] ?? null) ? $stageOneLogoAssetScope['verified_assets'] : [],
+                'asset_image_generation_failures' => \is_array($stageOneLogoAssetScope['asset_image_generation_failures'] ?? null) ? $stageOneLogoAssetScope['asset_image_generation_failures'] : [],
+            ]);
             $retryablePlanFailures = \is_array($artifacts['retryable_ai_failures'] ?? null)
                 ? \array_values(\array_filter($artifacts['retryable_ai_failures'], static fn($failure): bool => \is_array($failure)))
                 : [];
@@ -9783,6 +9796,41 @@ class AiSiteAgent extends BaseController
                 static fn($row): bool => \is_array($row)
             )),
         ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function prepareStageOneLogoOptionAssets(AiSiteAgentSession $session, int $adminId, array $scope): array
+    {
+        if (!\is_array($scope['plan_json']['theme']['logo_generation']['options'] ?? null)) {
+            return $scope;
+        }
+
+        $assetScope = \array_replace($scope, [
+            'auto_generate_identity_assets_first' => 1,
+            'auto_asset_prebuild_identity_only' => 1,
+        ]);
+
+        /** @var AiSiteAutoAssetGenerationService $assetGenerationService */
+        $assetGenerationService = ObjectManager::getInstance(AiSiteAutoAssetGenerationService::class);
+        $result = $assetGenerationService->prepareBuildAssets($session, $adminId, $assetScope, 4);
+        $resultScope = \is_array($result['scope'] ?? null) ? $result['scope'] : $assetScope;
+        unset($resultScope['auto_asset_prebuild_identity_only']);
+        if (!\array_key_exists('auto_generate_identity_assets_first', $scope)) {
+            unset($resultScope['auto_generate_identity_assets_first']);
+        }
+
+        $failedSlots = \array_values(\array_filter(
+            \is_array($result['failed_slots'] ?? null) ? $result['failed_slots'] : [],
+            static fn($row): bool => \is_array($row)
+        ));
+        if ($failedSlots !== []) {
+            \w_log_warning('[AI Site Stage1 Logo Assets] non-fatal logo option generation failures: ' . \json_encode($failedSlots, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE));
+        }
+
+        return $resultScope;
     }
 
     /**
