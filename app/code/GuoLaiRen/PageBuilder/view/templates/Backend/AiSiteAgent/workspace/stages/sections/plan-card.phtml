@@ -60,31 +60,6 @@
             </div>
         </div>
 
-        <?php if ($websiteProfile !== []): ?>
-        <div class="border rounded p-3 mt-4">
-            <div class="d-flex flex-wrap align-items-start gap-3 mb-3">
-                <div class="pb-ai-brand-assets">
-                    <div class="pb-ai-brand-asset-card" data-brand-asset-role="icon" data-brand-asset-current-url="<?= htmlspecialchars((string)($websiteProfile['icon'] ?? $websiteProfile['favicon'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                        <div class="pb-ai-brand-asset-frame" data-brand-asset-frame>
-                            <img data-brand-asset-image alt=""<?= !empty($websiteProfile['icon']) || !empty($websiteProfile['favicon']) ? ' src="' . htmlspecialchars((string)($websiteProfile['icon'] ?? $websiteProfile['favicon'] ?? ''), ENT_QUOTES, 'UTF-8') . '"' : ' class="d-none"' ?>>
-                            <div class="pb-ai-brand-asset-placeholder<?= !empty($websiteProfile['icon']) || !empty($websiteProfile['favicon']) ? ' d-none' : '' ?>" data-brand-asset-placeholder><?= htmlspecialchars((string)__('Title icon will appear here'), ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="pb-ai-brand-asset-spinner">
-                                <div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>
-                            </div>
-                        </div>
-                        <div class="small fw-semibold mt-2"><?= htmlspecialchars((string)__('Website Title Icon'), ENT_QUOTES, 'UTF-8') ?></div>
-                        <div class="small text-muted mt-1 pb-ai-brand-asset-status" data-brand-asset-status><?= htmlspecialchars((string)__('Waiting for AI generation'), ENT_QUOTES, 'UTF-8') ?></div>
-                    </div>
-                </div>
-                <div class="min-w-0">
-                    <div class="fw-semibold" data-pb-site-title-preview><?= htmlspecialchars((string)($websiteProfile['site_title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-                </div>
-            </div>
-            <div class="small text-muted"><?= htmlspecialchars((string)__('SEO Title: '), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars((string)($websiteProfile['seo']['meta_title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-            <div class="small text-muted mt-1"><?= htmlspecialchars((string)__('SEO Description: '), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars((string)($websiteProfile['seo']['meta_description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-        </div>
-        <?php endif; ?>
-
         <?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/stages/sections/plan-inline-panel-head.phtml', \get_defined_vars()) ?>
 
         <?php if ($pbAiRenderInlinePanelInsideCard): ?>

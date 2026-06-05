@@ -1019,8 +1019,6 @@ final class AiSiteAssetManifestService
         if ($brandReference === '') {
             $brandReference = 'the website brand';
         }
-        $existingIcon = $this->readExistingIdentityAssetUrl($scope, 'icon');
-
         // 瀵缚顢戞總鎴犲閿涙lot.brief 韫囧懘銆忔禒?娑撴艾濮熸稉璁崇秼"瀵偓婢惰揪绱濋柆鍨帳 buildPrompt 閺?brand name 閹躲垹宕?
         // PRIMARY SUBJECT 娴ｅ秶鐤嗛敍鍫濐嚤閼锋潙鍤悳棰佺瑢鐠囧鐪伴懘杈Ν閻ㄥ嫬鎮忕粊銉у⒖ logo閿涘鈧?
         $subjectAnchor = $briefDescription !== ''
@@ -1048,54 +1046,7 @@ final class AiSiteAssetManifestService
         }
         $logoBrief = \implode("\n", $logoBriefParts);
 
-        $iconBriefParts = [];
-        if ($subjectAnchor !== '') {
-            $iconBriefParts[] = 'PRIMARY SUBJECT for the favicon/title icon (one bold recognizable symbol from this exact business; choose a domain-correct object, material, service cue, or brand-initial mark from the approved brief only; never copy example industries or unrelated symbols): '
-                . $subjectAnchor;
-        }
-        $iconBriefParts[] = 'Output requirements (HARD): square 1:1 identity image with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). Keep only one bold symbol or monogram on transparency, highly recognizable at 16-64px; no white box, solid background, rounded tile, gradient backdrop, checkerboard transparency preview, paragraph text, mockup, watermark, or screenshot frame.';
-        if ($brandReference !== '' && $brandReference !== $subjectAnchor) {
-            $iconBriefParts[] = 'Optional brand initial alongside the glyph (single letter/monogram only; never the primary subject): "' . $brandReference . '"';
-        }
-        if ($siteTagline !== '' && $siteTagline !== $subjectAnchor) {
-            $iconBriefParts[] = 'Style hint (mood/palette only): ' . $siteTagline;
-        }
-        $iconThemePalettePrompt = $this->buildConfirmedThemePalettePrompt($scope, true, true);
-        if ($iconThemePalettePrompt !== '') {
-            $iconBriefParts[] = $iconThemePalettePrompt;
-        }
-        if ($briefDescription !== '' && $briefDescription !== $subjectAnchor) {
-            $iconBriefParts[] = 'Business context: ' . $briefDescription;
-        }
-        $iconBrief = \implode("\n", $iconBriefParts);
-
-        return [
-            ...$this->buildThemeLogoGenerationOptionSlots($scope, $logoBrief),
-            [
-                'slot_id' => 'identity:site-title-icon',
-                'slot_type' => 'logo_icon',
-                'kind' => 'site_title_icon',
-                'page_type' => 'global',
-                'field' => 'icon',
-                'task_key' => 'shared:header',
-                'section_code' => 'identity',
-                'label' => 'Website Title Icon',
-                'target_size' => '512x512',
-                'aspect_ratio' => '1:1',
-                'output_format' => 'png',
-                'background' => 'transparent',
-                'transparent_png_required' => true,
-                'identity_transparent_png_required' => true,
-                'brief' => $iconBrief,
-                'prompt_brief' => $iconBrief,
-                'source' => $existingIcon !== '' ? 'uploaded' : 'planned',
-                'status' => $existingIcon !== '' ? 'locked' : 'pending',
-                'final_url' => $existingIcon,
-                'required' => 1,
-                'desired_image' => 1,
-                'locked_by_user' => $existingIcon !== '' ? 1 : 0,
-            ],
-        ];
+        return $this->buildThemeLogoGenerationOptionSlots($scope, $logoBrief);
     }
 
     /**
@@ -1201,8 +1152,19 @@ final class AiSiteAssetManifestService
      */
     private function dropLegacyWebsiteLogoIdentitySlot(array $manifest): array
     {
-        if (\is_array($manifest['slots'] ?? null) && isset($manifest['slots']['identity:website-logo'])) {
-            unset($manifest['slots']['identity:website-logo']);
+        if (!\is_array($manifest['slots'] ?? null)) {
+            return $manifest;
+        }
+
+        $removed = false;
+        foreach (['identity:website-logo', 'identity:site-title-icon'] as $slotId) {
+            if (!isset($manifest['slots'][$slotId])) {
+                continue;
+            }
+            unset($manifest['slots'][$slotId]);
+            $removed = true;
+        }
+        if ($removed) {
             $manifest['updated_at'] = \date('Y-m-d H:i:s');
         }
 
