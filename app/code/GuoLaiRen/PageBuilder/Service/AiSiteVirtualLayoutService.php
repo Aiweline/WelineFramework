@@ -140,7 +140,7 @@ class AiSiteVirtualLayoutService
 
     private function identityAssetUrlIsInvalidForRole(string $url, string $role): bool
     {
-        unset($role);
+        $role = \strtolower(\trim($role));
         $url = \trim($url);
         if ($url === '') {
             return false;
@@ -151,7 +151,11 @@ class AiSiteVirtualLayoutService
         $lowerPath = \strtolower($path);
         $isPageBuilderGeneratedAsset = \str_contains($lowerPath, '/pub/media/page-build/')
             && \str_contains($lowerPath, '/ai-generated/');
-        return $isPageBuilderGeneratedAsset;
+        if (!$isPageBuilderGeneratedAsset) {
+            return false;
+        }
+
+        return $role !== 'logo' || !\str_contains($lowerPath, 'plan-theme-logo-generation-option');
     }
 
     private function pngAppearsToHaveTransparentBackground(string $bytes): bool
