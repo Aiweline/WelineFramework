@@ -128,6 +128,39 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
         );
     }
 
+    public function testRequiredFirstGeneratedImageIntentFailsWhenHeroUsesCssOnly(): void
+    {
+        $validator = new AiSiteStageOneContractValidator();
+        $report = $validator->validatePlanJsonPage(
+            'home_page',
+            $this->planJsonPageWithBlock([
+                'image_intent' => [
+                    'needs_image' => false,
+                    'image_role' => 'no generated image',
+                    'image_subject' => 'CSS-only card suit motif',
+                    'placement' => 'background_motif',
+                    'visual_atmosphere' => 'premium gaming',
+                    'image_treatment' => 'CSS-only/no generated image motif',
+                    'reuse_policy' => 'no_generated_image',
+                    'css_motif' => 'CSS-only/no generated image; chips and suit dividers',
+                ],
+                'visual_signature' => [
+                    'composition_pattern' => 'split hero',
+                    'spatial_rhythm' => 'copy and media',
+                    'media_strategy' => 'CSS-only/no generated image; chips and suit dividers',
+                    'surface_treatment' => 'dark surface',
+                    'interaction_pattern' => 'button hover',
+                ],
+            ]),
+            $this->singleHeroContract('en_US')
+        );
+
+        $issueCodes = \array_map(static fn(array $issue): string => (string)($issue['code'] ?? ''), $report['issues'] ?? []);
+        self::assertFalse((bool)($report['passed'] ?? true), \json_encode($report['issues'] ?? [], \JSON_UNESCAPED_UNICODE));
+        self::assertContains('page_missing_generated_image_intent', $issueCodes);
+        self::assertContains('first_block_missing_generated_image_intent', $issueCodes);
+    }
+
     public function testPartialValidationTargetsDoNotShrinkRouteContract(): void
     {
         $validator = new AiSiteStageOneContractValidator();
@@ -268,7 +301,10 @@ final class AiSiteStageOneContractValidatorTest extends TestCase
                         'reuse_policy',
                         'css_motif',
                     ],
+                    'non_policy_pages_require_at_least_one_generated_image_intent' => true,
+                    'non_policy_first_block_requires_generated_image_intent' => true,
                     'first_block_requires_generated_image' => true,
+                    'first_generated_image_block_key' => 'hero',
                 ],
             ],
         ];
