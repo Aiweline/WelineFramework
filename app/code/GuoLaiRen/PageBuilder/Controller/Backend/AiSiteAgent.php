@@ -2167,13 +2167,33 @@ class AiSiteAgent extends BaseController
         );
 
         if ($confirmOnly) {
-            $state = $this->buildWorkspaceState($fresh, $adminId, 24, true);
+            $confirmedState = [
+                'public_id' => (string)$fresh->getPublicId(),
+                'stage' => $this->scopeCompatibilityService->normalizeStage((string)$fresh->getStage()) ?: AiSiteAgentSession::STAGE_PLAN,
+                'workspace_status' => (string)($confirmedScope['workspace_status'] ?? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING),
+                'publish_status' => (string)$fresh->getPublishStatus(),
+                'can_publish' => !empty($confirmedScope['can_publish']),
+                'latest_build_failed' => !empty($confirmedScope['latest_build_failed']),
+                'latest_build_failure' => \is_array($confirmedScope['latest_build_failure'] ?? null) ? $confirmedScope['latest_build_failure'] : [],
+                'publish_blocked_by_latest_ai_failure' => !empty($confirmedScope['publish_blocked_by_latest_ai_failure']),
+                'publish_blocked_reason' => (string)($confirmedScope['publish_blocked_reason'] ?? ''),
+                'workspace_track' => (string)($confirmedScope['workspace_track'] ?? ''),
+                'website_id' => (int)$fresh->getWebsiteId(),
+                'virtual_theme_id' => (int)$fresh->getVirtualThemeId(),
+                'draft_website_id' => (int)($confirmedScope['draft_website_id'] ?? 0),
+                'active_operation' => \is_array($confirmedScope['active_operation'] ?? null) ? $confirmedScope['active_operation'] : [],
+                'confirmed_plan_signature' => $confirmedPlanSignature,
+                'has_stage_one_plan' => true,
+                'plan_json_task_summary' => \is_array($scopePatch['plan_json_task_summary'] ?? null) ? $scopePatch['plan_json_task_summary'] : [],
+                'build_summary' => \is_array($scopePatch['build_summary'] ?? null) ? $scopePatch['build_summary'] : [],
+                'pending_generation_page_types' => \is_array($confirmedScope['pending_generation_page_types'] ?? null) ? $confirmedScope['pending_generation_page_types'] : [],
+            ];
             return $this->fetchJson([
                 'success' => true,
                 'message' => (string)__('Plan JSON confirmed; you can generate a selected block first.'),
                 'start_sse' => false,
                 'operation' => 'plan_confirm',
-                'data' => $this->buildWorkspaceOperationPayload($state, 'plan_confirm'),
+                'data' => $this->buildWorkspaceConfirmPayload($confirmedState, 'plan'),
             ]);
         }
 
