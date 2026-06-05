@@ -831,7 +831,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
-    public function testPrepareBuildAssetsDropsLegacyIdentityAssetsAndWritesThemeLogoOptions(): void
+    public function testPrepareBuildAssetsWritesThemeLogoOptionsOnly(): void
     {
         $publicId = 'asset-identity-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -839,24 +839,6 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
 
         $scope = [
             'site_title' => 'Identity Asset Test',
-            'asset_manifest' => [
-                'slots' => [
-                    'identity:website-logo' => [
-                        'slot_id' => 'identity:website-logo',
-                        'slot_type' => 'logo_icon',
-                        'field' => 'logo',
-                        'label' => 'Website Logo',
-                        'brief' => 'Generate the website logo.',
-                    ],
-                    'identity:site-title-icon' => [
-                        'slot_id' => 'identity:site-title-icon',
-                        'slot_type' => 'logo_icon',
-                        'field' => 'icon',
-                        'label' => 'Website Title Icon',
-                        'brief' => 'Generate the website title icon.',
-                    ],
-                ],
-            ],
         ];
 
         $service = new AiSiteAutoAssetGenerationService(
@@ -879,8 +861,6 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             : [];
 
         try {
-            self::assertArrayNotHasKey('identity:website-logo', $manifest);
-            self::assertArrayNotHasKey('identity:site-title-icon', $manifest);
             self::assertContains('plan:theme:logo_generation:option_1', $result['generated_slots']);
             self::assertContains('plan:theme:logo_generation:option_2', $result['generated_slots']);
             self::assertNotSame('', (string)($logoOptions[0]['final_url'] ?? ''));
@@ -929,8 +909,6 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         try {
             self::assertContains('plan:theme:logo_generation:option_1', $result['generated_slots']);
             self::assertContains('plan:theme:logo_generation:option_2', $result['generated_slots']);
-            self::assertArrayNotHasKey('identity:website-logo', $manifest);
-            self::assertArrayNotHasKey('identity:site-title-icon', $manifest);
         } finally {
             foreach ($result['generated_slots'] as $slotId) {
                 $relativePath = (string)($manifest[$slotId]['variants'][0]['path'] ?? '');
@@ -1059,7 +1037,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
                     'updated_at' => '2026-05-09 04:11:13',
                 ],
                 [
-                    'slot_id' => 'identity:website-logo',
+                    'slot_id' => 'plan:theme:logo_generation:option_4',
                     'message' => 'Keep this one',
                     'updated_at' => '2026-05-09 04:11:13',
                 ],
@@ -1099,7 +1077,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         try {
             $failTrail = \is_array($resultScope['asset_image_generation_failures'] ?? null) ? $resultScope['asset_image_generation_failures'] : [];
             self::assertCount(1, $failTrail);
-            self::assertSame('identity:website-logo', (string)($failTrail[0]['slot_id'] ?? ''));
+            self::assertSame('plan:theme:logo_generation:option_4', (string)($failTrail[0]['slot_id'] ?? ''));
             self::assertSame(['home:hero'], $result['generated_slots']);
         } finally {
             if ($relativePath !== '' && \is_file($absolutePath)) {
@@ -1110,7 +1088,8 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
 
     private static function transparentIdentitySvg(string $slotId): string
     {
-        $label = \str_contains($slotId, 'site-title-icon') ? 'I' : 'L';
+        unset($slotId);
+        $label = 'L';
 
         return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">'
             . '<circle cx="64" cy="64" r="42" fill="#00F5FF"/>'
