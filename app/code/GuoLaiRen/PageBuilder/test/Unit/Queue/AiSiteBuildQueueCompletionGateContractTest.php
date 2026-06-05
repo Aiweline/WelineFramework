@@ -95,6 +95,10 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString("'failure_mode' => 'build_retry_exhausted'", $attemptLimitSource);
         self::assertStringContainsString("\$failurePayload['gate_reason'] = 'automatic_attempt_limit';", $attemptLimitSource);
 
+        $deadWorkerRecoverySource = $this->extractMethodSource($source, 'shouldRecoverDeadWorker');
+        self::assertStringContainsString('if ($deadPid <= 0) {', $deadWorkerRecoverySource);
+        self::assertStringContainsString('>= self::DEFAULT_MAX_ATTEMPTS', $deadWorkerRecoverySource);
+
         $markStoppedSource = $this->extractMethodSource($source, 'markQueueStopped');
         self::assertStringContainsString("'manual_confirmation_required'", $markStoppedSource);
         self::assertStringContainsString("'automatic_attempt_limit'", $markStoppedSource);
