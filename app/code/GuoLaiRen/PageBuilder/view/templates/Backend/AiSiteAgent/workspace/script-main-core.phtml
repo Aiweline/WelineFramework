@@ -1212,7 +1212,128 @@
         return reason;
     }
 
-    function schedulePlanWorkspaceReload(reason, delayMs) {
+    function isFrontendRetryStopReloadReason(reason) {
+        var normalized = String(reason || '').trim();
+        return [
+            'plan_retryable_failure',
+            'plan_start_transport_error',
+            'confirm_transport_error',
+            'build_resume_transport_error',
+            'build_start_transport_error'
+        ].indexOf(normalized) !== -1;
+    }
+
+    function resolveWorkspaceBackendSessionUrl() {
+        var rawUrl = String(guidedUrl || window.location.href || '').trim();
+        if (rawUrl === '') {
+            return '';
+        }
+        try {
+            var parsed = new URL(rawUrl, window.location.origin);
+            if (publicId && !parsed.searchParams.get('public_id')) {
+                parsed.searchParams.set('public_id', publicId);
+            }
+            return parsed.toString();
+        } catch (error) {
+            return rawUrl;
+        }
+    }
+
+    function stopWorkspaceFrontendStreamsForRetryStop() {
+        window.__pbWorkspaceStreamPaused = true;
+        var terminalIds = ['pb-ai-plan-sse-terminal', 'pagebuilder-workspace-terminal'];
+        terminalIds.forEach(function (terminalId) {
+            var terminal = window.WelineSseTerminal ? window.WelineSseTerminal[terminalId] : null;
+            if (terminal && typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
+            }
+        });
+    }
+
+    function resolveFrontendRetryStopMessage(reason, payload) {
+        var normalized = String(reason || '').trim();
+        var payloadMessage = payload && typeof payload === 'object'
+            ? String(payload.message || payload.error_message || payload.error || '').trim()
+            : '';
+        if (payloadMessage !== '') {
+            return payloadMessage;
+        }
+        if (normalized === 'plan_retryable_failure') {
+            return <?= $pbAiScriptJson((string)__('方案生成出现失败项，前端已停止自动重试，请等待后台消息通知后人工处理。')) ?>;
+        }
+        if (normalized === 'confirm_transport_error') {
+            return <?= $pbAiScriptJson((string)__('方案确认请求连接中断，前端已停止自动刷新，请等待后台消息通知后人工处理。')) ?>;
+        }
+        if (normalized === 'build_resume_transport_error') {
+            return <?= $pbAiScriptJson((string)__('构建恢复请求连接中断，前端已停止自动恢复，请等待后台消息通知后人工处理。')) ?>;
+        }
+        if (normalized === 'build_start_transport_error') {
+            return <?= $pbAiScriptJson((string)__('构建启动请求连接中断，前端已停止自动恢复，请等待后台消息通知后人工处理。')) ?>;
+        }
+        return <?= $pbAiScriptJson((string)__('前端检测到建站进度异常，已停止自动重试和重连，请等待后台消息通知后人工处理。')) ?>;
+    }
+
+    function notifyWorkspaceFrontendRetryStopped(operation, reason, payload) {
+        if (typeof window.__pbWorkspaceNotifyFrontendRetryStopped === 'function') {
+            return window.__pbWorkspaceNotifyFrontendRetryStopped(operation, reason, payload || {});
+        }
+        var normalizedOperation = String(operation || (payload && payload.operation) || '').trim().toLowerCase() || 'workspace';
+        var normalizedReason = String(reason || 'frontend_retry_stopped').trim() || 'frontend_retry_stopped';
+        var backendSessionUrl = resolveWorkspaceBackendSessionUrl();
+        var message = resolveFrontendRetryStopMessage(normalizedReason, payload);
+        var content = message;
+        if (backendSessionUrl) {
+            content += "\n\n" + <?= $pbAiScriptJson((string)__('后台会话地址')) ?> + ': ' + backendSessionUrl;
+        }
+        window.__pbWorkspaceFrontendRetryStopped = true;
+        stopWorkspaceFrontendStreamsForRetryStop();
+        if (typeof window.w_msg === 'function') {
+            try {
+                var result = window.w_msg(
+                    'pagebuilder_ai_site_frontend_retry_stopped',
+                    'warning',
+                    <?= $pbAiScriptJson((string)__('PageBuilder 建站任务已停止前端自动重试')) ?>,
+                    content,
+                    {
+                        priority: 8,
+                        icon: 'mdi-pause-circle-outline',
+                        metadata: {
+                            public_id: publicId,
+                            operation: normalizedOperation,
+                            reason: normalizedReason,
+                            backend_session_url: backendSessionUrl
+                        }
+                    }
+                );
+                if (result && typeof result.catch === 'function') {
+                    result.catch(function () {});
+                }
+            } catch (error) {
+            }
+        }
+        toast('warning', message);
+        return false;
+    }
+
+    function clearWorkspaceFrontendRetryStopGuard() {
+        if (typeof window.__pbWorkspaceClearFrontendRetryStopGuard === 'function') {
+            window.__pbWorkspaceClearFrontendRetryStopGuard();
+            return;
+        }
+        window.__pbWorkspaceFrontendRetryStopped = false;
+    }
+
+    function schedulePlanWorkspaceReload(reason, delayMs, payload) {
+        if (isFrontendRetryStopReloadReason(reason)) {
+            notifyWorkspaceFrontendRetryStopped('plan', reason, Object.assign({}, payload || {}, {
+                operation: 'plan',
+                message: resolveFrontendRetryStopMessage(reason, payload)
+            }));
+            return;
+        }
+        if (window.__pbWorkspaceFrontendRetryStopped) {
+            return;
+        }
         if (planWorkspaceReloadTimer) {
             return;
         }
@@ -1223,7 +1344,10 @@
     }
 
     function scheduleWorkspaceTransportRecoveryReload(reason, delayMs) {
-        schedulePlanWorkspaceReload(reason, delayMs);
+        notifyWorkspaceFrontendRetryStopped('build', reason, {
+            operation: 'build',
+            message: resolveFrontendRetryStopMessage(reason, null)
+        });
     }
 
     function getPlanReloadReconcileStage(workspaceState) {
@@ -15590,7 +15714,10 @@
                     terminal.stop({ suppressTransportError: true });
                 }
                 releasePlanStreamBuffer({ clearPreviewPayload: true });
-                schedulePlanWorkspaceReload('plan_retryable_failure', 900);
+                notifyWorkspaceFrontendRetryStopped('plan', 'plan_retryable_failure', Object.assign({}, payload || {}, {
+                    operation: 'plan',
+                    message: failureMessage
+                }));
                 return;
             }
             setPlanGenerationActionLock(false);
@@ -15646,6 +15773,10 @@
                 terminal.log(message, 'error', payload || {});
             }
             releasePlanStreamBuffer({ clearPreviewPayload: true });
+            notifyWorkspaceFrontendRetryStopped('plan', 'plan_sse_error', Object.assign({}, payload || {}, {
+                operation: 'plan',
+                message: message
+            }));
         });
         terminal.on('failed', function (event) {
             planSseRunning = false;
@@ -15676,6 +15807,10 @@
                 terminal.log(message, 'error', payload || {});
             }
             releasePlanStreamBuffer({ clearPreviewPayload: true });
+            notifyWorkspaceFrontendRetryStopped('plan', 'plan_sse_failed', Object.assign({}, payload || {}, {
+                operation: 'plan',
+                message: message
+            }));
         });
         planSseHandlersBound = true;
         return terminal;
@@ -15744,6 +15879,7 @@
 
     function startPlanModeStream(mode, options) {
         var opts = options && typeof options === 'object' ? options : {};
+        clearWorkspaceFrontendRetryStopGuard();
         var runBtn = document.getElementById('pb-ai-plan-run-mode');
         var promptInput = document.getElementById('pb-ai-plan-mode-prompt');
         var promptText = String(Object.prototype.hasOwnProperty.call(opts, 'promptText') ? opts.promptText : (promptInput ? promptInput.value : '')).trim();
@@ -15798,6 +15934,11 @@
                 setPlanGenerationActionLock(false);
                 setPlanModeStatus(startErrorMessage);
                 setPlanModalProgress(startErrorMessage, 100, false, 'error');
+                setPlanRetryButtonVisible(true);
+                notifyWorkspaceFrontendRetryStopped('plan', 'plan_sse_start_failed', {
+                    operation: 'plan',
+                    message: startErrorMessage
+                });
             }
         }, PB_SSE_CONNECT_DELAY_MS);
         return true;
@@ -16207,6 +16348,7 @@
     function proceedToShowPlanModalAndRequestStart(previousPlanMarkdown, options) {
         var opts = options && typeof options === 'object' ? options : {};
         var forceRebuild = !!opts.forceRebuild;
+        clearWorkspaceFrontendRetryStopGuard();
         function resolveInitialPlanPromptMode() {
             var explicitPromptMode = String(opts.promptMode || opts.prompt_mode || '').trim();
             if (explicitPromptMode !== '') {
@@ -16264,6 +16406,10 @@
                     setPlanRetryButtonVisible(true);
                     setPlanGenerationActionLock(false);
                     toast('warning', failMsg);
+                    notifyWorkspaceFrontendRetryStopped('plan', 'plan_sse_terminal_unavailable', {
+                        operation: 'plan',
+                        message: failMsg
+                    });
                     return false;
                 }
                 window.setTimeout(function () {
@@ -16290,14 +16436,16 @@
         }
 
         function handlePlanStartTransportError() {
-            var reloadMessage = <?= $pbAiScriptJson((string)__('方案生成请求连接中断，正在刷新工作台读取后台队列的最新结果。')) ?>;
-            setPlanModalProgress(reloadMessage, 75, false);
-            renderQueueUiState('plan', { state: 'running', message: reloadMessage, percent: 75 }, { updateStatus: false });
-            setPlanRetryButtonVisible(false);
-            toast('warning', reloadMessage);
+            var stopMessage = resolveFrontendRetryStopMessage('plan_start_transport_error', null);
+            setPlanModalProgress(stopMessage, 100, false, 'error');
+            renderQueueUiState('plan', { state: 'failed', message: stopMessage, percent: 100 }, { updateStatus: false });
+            setPlanRetryButtonVisible(true);
             planStartRequestPending = false;
             setPlanGenerationActionLock(false);
-            schedulePlanWorkspaceReload('plan_start_transport_error', 900);
+            notifyWorkspaceFrontendRetryStopped('plan', 'plan_start_transport_error', {
+                operation: 'plan',
+                message: stopMessage
+            });
         }
 
         planStartRequestPending = true;
@@ -16540,6 +16688,7 @@
 
     function confirmCurrentPlanAndMaybeBuild(options) {
         var opts = options && typeof options === 'object' ? options : {};
+        clearWorkspaceFrontendRetryStopGuard();
         if (!confirmPlanUrl) {
             toast('error', messages.planStartUnavailable);
             return;
@@ -16594,8 +16743,12 @@
                 }
                 continueToBuildAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
             }).catch(function (error) {
-                toast('error', (error && error.message) ? String(error.message) : messages.networkError);
-                schedulePlanWorkspaceReload('confirm_transport_error', 900);
+                var confirmErrorMessage = (error && error.message) ? String(error.message) : resolveFrontendRetryStopMessage('confirm_transport_error', null);
+                toast('error', confirmErrorMessage);
+                notifyWorkspaceFrontendRetryStopped('plan', 'confirm_transport_error', {
+                    operation: 'plan',
+                    message: confirmErrorMessage
+                });
                 syncConfirmPlanButtonEnabled();
                 syncPlanRebuildButtonVisibility();
             });
