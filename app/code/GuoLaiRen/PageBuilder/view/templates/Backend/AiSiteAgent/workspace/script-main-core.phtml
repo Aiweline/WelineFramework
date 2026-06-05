@@ -12898,6 +12898,86 @@
     }
 
 
+    function normalizeLogoGenerationOptionsForPreview(logoPlan) {
+        var rawOptions = logoPlan && logoPlan.options;
+        var source = [];
+        if (Array.isArray(rawOptions)) {
+            source = rawOptions;
+        } else if (rawOptions && typeof rawOptions === 'object') {
+            Object.keys(rawOptions).forEach(function (key) {
+                var option = rawOptions[key];
+                if (option && typeof option === 'object' && !Array.isArray(option)) {
+                    if (!option.option_id) {
+                        option.option_id = key;
+                    }
+                    source.push(option);
+                }
+            });
+        }
+        var options = [];
+        for (var index = 0; index < 4; index += 1) {
+            var number = index + 1;
+            var item = source[index] && typeof source[index] === 'object' && !Array.isArray(source[index]) ? source[index] : {};
+            var optionId = sanitizePreviewText(item.option_id || item.id || ('logo_option_' + number), '');
+            if (!/^logo_option_[1-4]$/.test(optionId)) {
+                optionId = 'logo_option_' + number;
+            }
+            var slotId = sanitizePreviewText(item.asset_slot_id || item.slot_id || ('plan:theme:logo_generation:option_' + number), '');
+            if (slotId.indexOf('plan:theme:logo_generation:option_') !== 0) {
+                slotId = 'plan:theme:logo_generation:option_' + number;
+            }
+            var finalUrl = sanitizePreviewText(item.final_url || item.url || item.asset_url || '', '');
+            options.push({
+                optionId: optionId,
+                label: sanitizePreviewText(item.label || ('Logo ' + number), ''),
+                assetSlotId: slotId,
+                status: sanitizePreviewText(item.status || (finalUrl ? 'generated' : 'planned'), ''),
+                finalUrl: finalUrl,
+                promptBrief: sanitizePreviewText(item.prompt_brief || item.brief || '', ''),
+                styleDirection: sanitizePreviewText(item.style_direction || '', '')
+            });
+        }
+        return options;
+    }
+
+    function renderLogoGenerationOptionCard(option, selectedOptionId) {
+        var isSelected = String(selectedOptionId || '') !== '' && option.optionId === selectedOptionId;
+        var hasImage = String(option.finalUrl || '').trim() !== '';
+        var statusText = isSelected
+            ? String(previewLabels.logoSelectedAction || 'Selected')
+            : sanitizePreviewText(option.status || '', hasImage ? 'generated' : String(previewLabels.logoNotGenerated || 'Not generated'));
+        var imageHtml = hasImage
+            ? '<div class="border rounded bg-white d-flex align-items-center justify-content-center mb-2 overflow-hidden" style="aspect-ratio:2/1;">'
+                + '<img alt="" src="' + escapeHtml(option.finalUrl) + '" style="max-width:100%;max-height:100%;object-fit:contain;">'
+                + '</div>'
+            : '<div class="border rounded bg-white d-flex align-items-center justify-content-center text-muted small mb-2" style="aspect-ratio:2/1;">'
+                + escapeHtml(String(previewLabels.logoNotGenerated || 'Not generated'))
+                + '</div>';
+        var buttonDisabled = (!hasImage || isSelected) ? ' disabled' : '';
+        var buttonClass = isSelected ? 'btn-primary' : 'btn-outline-primary';
+        var buttonLabel = isSelected ? String(previewLabels.logoSelectedAction || 'Selected') : String(previewLabels.logoSelectAction || 'Select');
+
+        return ''
+            + '<div class="col-12 col-md-6 col-xl-3">'
+            + '<div class="border rounded p-2 h-100' + (isSelected ? ' border-primary bg-primary-subtle' : ' bg-white') + '">'
+            + imageHtml
+            + '<div class="d-flex align-items-center justify-content-between gap-2">'
+            + '<div class="fw-semibold small text-truncate">' + escapeHtml(option.label || option.optionId) + '</div>'
+            + '<span class="badge ' + (isSelected ? 'text-bg-primary' : 'text-bg-light') + '">' + escapeHtml(statusText) + '</span>'
+            + '</div>'
+            + (option.styleDirection ? '<div class="small text-muted mt-2">' + escapeHtml(option.styleDirection) + '</div>' : '')
+            + (option.promptBrief ? '<div class="small mt-2">' + escapeHtml(option.promptBrief).replace(/\n/g, '<br>') + '</div>' : '')
+            + (hasImage ? '<div class="small text-muted mt-2 text-break">' + escapeHtml(String(previewLabels.logoGeneratedUrl || 'Generated URL')) + ': ' + escapeHtml(option.finalUrl) + '</div>' : '')
+            + '<button type="button" class="btn btn-sm w-100 mt-2 ' + buttonClass + '" data-pb-logo-option-select="1"'
+            + ' data-logo-option-id="' + escapeHtml(option.optionId) + '"'
+            + ' data-logo-asset-slot-id="' + escapeHtml(option.assetSlotId) + '"'
+            + ' data-logo-final-url="' + escapeHtml(option.finalUrl) + '"' + buttonDisabled + '>'
+            + escapeHtml(buttonLabel)
+            + '</button>'
+            + '</div>'
+            + '</div>';
+    }
+
     function renderThemeLogoGenerationSection(planRoot) {
         var root = planRoot && typeof planRoot === 'object' ? planRoot : {};
         var theme = root.theme && typeof root.theme === 'object' && !Array.isArray(root.theme) ? root.theme : {};
@@ -12921,7 +13001,12 @@
                 + '<div class="small">' + escapeHtml(String(row.text || '')).replace(/\n/g, '<br>') + '</div>'
                 + '</div>';
         }).join('');
-        if (!rows) {
+        var options = normalizeLogoGenerationOptionsForPreview(logoPlan);
+        var selectedOptionId = sanitizePreviewText(logoPlan.selected_option_id || '', '');
+        var optionCards = options.map(function (option) {
+            return renderLogoGenerationOptionCard(option, selectedOptionId);
+        }).join('');
+        if (!rows && !optionCards) {
             return '';
         }
 
@@ -12929,6 +13014,7 @@
             + '<div class="border rounded p-3 mt-3 bg-light-subtle pb-ai-plan-preview-logo-generation" data-pb-preview-scheme-section="logo_generation">'
             + '<div class="fw-semibold small mb-2">' + escapeHtml(String(previewLabels.logoGenerationTitle || 'Logo generation plan')) + '</div>'
             + rows
+            + (optionCards ? '<div class="small text-muted mt-3 mb-2">' + escapeHtml(String(previewLabels.logoOptionCandidates || 'Logo options')) + '</div><div class="row g-2">' + optionCards + '</div>' : '')
             + '</div>';
     }
 
@@ -13792,6 +13878,96 @@
         markStageOneInlineEditDirty();
         scheduleStageOneInlineEditPersist();
         return true;
+    }
+
+    function selectStageOneLogoOption(button) {
+        if (!button || !button.getAttribute || button.disabled) {
+            return false;
+        }
+        var optionId = String(button.getAttribute('data-logo-option-id') || '').trim();
+        var assetSlotId = String(button.getAttribute('data-logo-asset-slot-id') || '').trim();
+        var finalUrl = String(button.getAttribute('data-logo-final-url') || '').trim();
+        if (!optionId || !finalUrl) {
+            return false;
+        }
+        var structured = getCurrentStageOneStructuredRootForEdit();
+        if (!structured.theme || typeof structured.theme !== 'object' || Array.isArray(structured.theme)) {
+            structured.theme = {};
+        }
+        if (!structured.theme.logo_generation || typeof structured.theme.logo_generation !== 'object' || Array.isArray(structured.theme.logo_generation)) {
+            structured.theme.logo_generation = {};
+        }
+        var logoPlan = structured.theme.logo_generation;
+        var options = normalizeLogoGenerationOptionsForPreview(logoPlan).map(function (option) {
+            var row = {
+                option_id: option.optionId,
+                label: option.label,
+                asset_slot_id: option.assetSlotId,
+                slot_type: 'logo_icon',
+                kind: 'logo_option',
+                status: option.status || 'planned',
+                url: option.finalUrl || '',
+                final_url: option.finalUrl || '',
+                prompt_brief: option.promptBrief || '',
+                style_direction: option.styleDirection || ''
+            };
+            if (option.optionId === optionId) {
+                row.asset_slot_id = assetSlotId || option.assetSlotId;
+                row.url = finalUrl;
+                row.final_url = finalUrl;
+                row.status = 'generated';
+            }
+            return row;
+        });
+        logoPlan.options = options;
+        logoPlan.option_count = 4;
+        logoPlan.selected_option_id = optionId;
+        logoPlan.selected_asset_slot_id = assetSlotId;
+        logoPlan.selected_url = finalUrl;
+        logoPlan.status = 'selected';
+        logoPlan.updated_at = new Date().toISOString();
+        structured.theme.logo_generation = logoPlan;
+        structured.last_inline_manual_edit = {
+            field_key: 'theme.logo_generation.selected_option_id',
+            edited_at: logoPlan.updated_at
+        };
+        syncStageOneStructuredDraftAfterEdit(structured);
+        if (currentPlanPayload && typeof currentPlanPayload === 'object') {
+            currentPlanPayload.json = structured;
+            currentPlanPayload.plan_json = structured;
+            currentPlanPayload.structured = structured;
+        }
+        markStageOneInlineEditDirty();
+        rerenderCurrentPlanPreview();
+        persistStageOneInlineEdits(true).then(function (saved) {
+            if (saved) {
+                setPlanModeStatus(messages.stageOneFieldAutosaved || messages.planPersisted);
+                return;
+            }
+            toast('warning', messages.planPersistFailed);
+        }).catch(function () {
+            toast('warning', messages.planPersistFailed);
+        });
+        return true;
+    }
+
+    function bindLogoGenerationOptionButtons(container) {
+        var root = typeof container === 'string' ? document.getElementById(container) : container;
+        if (!root || root.dataset.pbLogoOptionSelectBound === '1') {
+            return;
+        }
+        root.dataset.pbLogoOptionSelectBound = '1';
+        root.addEventListener('click', function (event) {
+            if (event.defaultPrevented) {
+                return;
+            }
+            var button = event.target && event.target.closest ? event.target.closest('[data-pb-logo-option-select="1"]') : null;
+            if (!button || !root.contains(button)) {
+                return;
+            }
+            event.preventDefault();
+            selectStageOneLogoOption(button);
+        });
     }
 
     function bindStageOnePlanFieldEditors(container) {
@@ -14664,6 +14840,7 @@
             return;
         }
         bindPreviewActionButtonDirectHandlers(root);
+        bindLogoGenerationOptionButtons(root);
         if (root.dataset.pbPreviewActionBound === '1') {
             return;
         }
