@@ -14711,22 +14711,22 @@ class AiSiteAgent extends BaseController
         $requestedOperation = \trim($requestedOperation);
         $runningOperation = \trim($runningOperation);
         if ($runningOperation === 'build' && \in_array($requestedOperation, ['block_regenerate', 'block_partial_patch'], true)) {
-            return (string)__('Operation completed.');
+            return (string)__('当前站点构建仍在运行，请等待完成后再发起区块 AI 操作。');
         }
         if ($runningOperation === 'build' && $requestedOperation === 'regenerate_page') {
-            return (string)__('Operation completed.');
+            return (string)__('当前站点构建仍在运行，请等待完成后再重建页面。');
         }
         if ($requestedOperation === 'build' && \in_array($runningOperation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
-            return (string)__('Operation completed.');
+            return (string)__('当前页面或区块 AI 操作仍在运行，请等待完成后再启动整站构建。');
         }
         if ($runningOperation === 'build') {
-            return (string)__('Operation completed.');
+            return (string)__('当前站点构建仍在运行，请等待完成后再试。');
         }
         if (\in_array($runningOperation, ['block_regenerate', 'block_partial_patch', 'regenerate_page'], true)) {
-            return (string)__('Operation completed.');
+            return (string)__('当前页面或区块 AI 操作仍在运行，请等待完成后再试。');
         }
 
-        return (string)__('Operation completed.');
+        return (string)__('当前工作区已有 AI 操作正在运行，请等待完成后再试。');
     }
 
     /**
@@ -14790,7 +14790,10 @@ class AiSiteAgent extends BaseController
         if (!$this->isAiSiteQueueBackedOperation($operation)) {
             return [];
         }
-        $status = \trim((string)($operationState['status'] ?? ''));
+        $queueStatus = \strtolower(\trim((string)($operationState['queue_status'] ?? '')));
+        $status = $queueStatus !== ''
+            ? $queueStatus
+            : \strtolower(\trim((string)($operationState['status'] ?? '')));
         if (!\in_array($status, ['pending', 'queued', 'running', 'processing'], true)) {
             return [];
         }
@@ -14801,6 +14804,9 @@ class AiSiteAgent extends BaseController
         }
 
         $queueId = (int)($operationState['queue_id'] ?? 0);
+        if ($queueId <= 0 && $this->isActiveOperationStale($operationState)) {
+            return [];
+        }
         if ($queueId > 0) {
             try {
                 $queueRow = $this->findAiSiteQueueRowById($queueId);
