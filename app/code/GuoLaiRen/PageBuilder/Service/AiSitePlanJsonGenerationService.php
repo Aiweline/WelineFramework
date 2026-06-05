@@ -358,7 +358,7 @@ final class AiSitePlanJsonGenerationService
             ],
             'palette' => $palette,
             'theme' => [
-                'logo_generation' => $this->buildStageOneLogoGenerationPlan($siteName, $brief, $palette),
+                'logo_generation' => $this->buildStageOneLogoGenerationPlan($siteName, $brief, $palette, $locale),
             ],
             'theme_design' => [
                 'theme_purpose' => 'Turn the supplied brief into a readable site plan that can be built locally without AI calls.',
@@ -660,10 +660,75 @@ final class AiSitePlanJsonGenerationService
                 );
             };
         }
-        $settled = $this->runStageOnePageFanoutTasks($tasks, [], $pageTypes);
-
         $retryableFailures = [];
+        $stageOneProgressStateCallback = \is_callable($options['on_stage1_progress_state'] ?? null)
+            ? $options['on_stage1_progress_state']
+            : null;
+        $persistSettledPage = function (string|int $pageKey, array $result) use (
+            &$planJson,
+            &$retryableFailures,
+            &$fanoutProgress,
+            $pageTypes,
+            $contract,
+            $stageOneProgressStateCallback,
+            $onProgress
+        ): void {
+            $pageType = (string)$pageKey;
+            if ($pageType === '' || !\in_array($pageType, $pageTypes, true)) {
+                return;
+            }
+
+            $page = \is_array($result['page'] ?? null) ? $result['page'] : [];
+            if ($page === []) {
+                $page = $this->buildFailedStageOnePage($pageType, 'Stage-one page generation returned no usable page.', self::STAGE_ONE_PAGE_MAX_AI_ATTEMPTS, $contract);
+                $result['success'] = false;
+                $result['message'] = 'Stage-one page generation returned no usable page.';
+            }
+            $planJson['pages'][$pageType] = $page;
+            $planJson['stage1_generation_attempts'][$pageType] = [
+                'attempt_no' => \max(1, (int)($result['attempt_no'] ?? 1)),
+                'max_attempts' => self::STAGE_ONE_PAGE_MAX_AI_ATTEMPTS,
+                'status' => !empty($result['success']) ? 'success' : 'failed',
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ];
+            if (empty($result['success'])) {
+                $retryableFailures[$pageType] = $this->buildRetryableStageOnePageFailure(
+                    $pageType,
+                    (string)($result['message'] ?? 'Stage-one page generation failed after automatic attempts.'),
+                    \is_array($result['validation_issues'] ?? null) ? $result['validation_issues'] : [],
+                    (int)($result['attempt_no'] ?? self::STAGE_ONE_PAGE_MAX_AI_ATTEMPTS)
+                );
+                if (!\in_array($pageType, $fanoutProgress['groups']['failed'], true)) {
+                    $fanoutProgress['groups']['failed'][] = $pageType;
+                }
+            } elseif (!\in_array($pageType, $fanoutProgress['groups']['done'], true)) {
+                $fanoutProgress['groups']['done'][] = $pageType;
+            }
+            $fanoutProgress['groups']['pending'] = \array_values(\array_filter(
+                $fanoutProgress['groups']['pending'],
+                static fn(string $candidate): bool => $candidate !== $pageType
+            ));
+            $this->emitStageOnePageFanoutProgress($pageTypes, $fanoutProgress, $onProgress);
+            if ($stageOneProgressStateCallback !== null) {
+                $stageOneProgressStateCallback([
+                    'step' => 'stage1_page_fanout',
+                    'page_types' => [$pageType],
+                    'plan_json' => $this->planJsonStateService->normalizePlanJson($planJson),
+                    'retryable_ai_failures' => \array_values($retryableFailures),
+                    'message' => !empty($result['success'])
+                        ? 'Stage-one plan page generated: ' . $pageType
+                        : 'Stage-one plan page requires retry: ' . $pageType,
+                    'updated_at' => \date('Y-m-d H:i:s'),
+                ]);
+            }
+        };
+
+        $settled = $this->runStageOnePageFanoutTasks($tasks, [], $pageTypes, $persistSettledPage);
+
         foreach ($pageTypes as $index => $pageType) {
+            if (isset($planJson['pages'][$pageType])) {
+                continue;
+            }
             $result = \is_array($settled[$pageType] ?? null)
                 ? $settled[$pageType]
                 : (\is_array($settled[$index] ?? null) ? $settled[$index] : []);
@@ -1054,6 +1119,22 @@ final class AiSitePlanJsonGenerationService
             'proper_noun_rule' => 'Brand names, product names, domain names, URLs, acronyms, model names, and user-provided proper nouns may retain original spelling when natural.',
             'failure_mode' => 'Visible copy in a different main language is a build contract violation.',
         ];
+    }
+
+    private function buildLogoTextLanguagePrompt(string $locale): string
+    {
+        $locale = \strtolower(\str_replace('-', '_', \trim($locale)));
+        if ($locale === '') {
+            return 'Visible logo text ban: generate symbol-only marks. Do not include readable letters, words, brand names, slogans, placeholder text, or pseudo text in any language.';
+        }
+        if ($locale === 'ru' || \str_starts_with($locale, 'ru_')) {
+            return 'Visible logo text ban: selected content_locale=' . $locale . '. Generate symbol-only marks. Do not include Cyrillic, Latin, CJK, placeholder, pseudo, or mixed-language text.';
+        }
+        if ($locale === 'zh' || \str_starts_with($locale, 'zh_')) {
+            return 'Visible logo text ban: selected content_locale=' . $locale . '. Generate symbol-only marks. Do not include Chinese characters, Latin words, placeholder, pseudo, or mixed-language text.';
+        }
+
+        return 'Visible logo text ban: selected content_locale=' . $locale . '. Generate symbol-only marks. Do not include readable letters, words, brand names, slogans, placeholder text, pseudo text, or CJK characters.';
     }
 
     /**
@@ -2946,6 +3027,7 @@ final class AiSitePlanJsonGenerationService
     private function resolveStageOneLocale(array $scope, array $websiteProfile = []): string
     {
         foreach ([
+            $scope['plan_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $websiteProfile['default_locale'] ?? null,
             $websiteProfile['default_language'] ?? null,
@@ -2954,7 +3036,6 @@ final class AiSitePlanJsonGenerationService
             $scope['website_profile']['default_language'] ?? null,
             $scope['ai_content_locale'] ?? null,
             $scope['content_locale'] ?? null,
-            $scope['plan_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['default_language'] ?? null,
             $websiteProfile['locale'] ?? null,
@@ -2976,6 +3057,7 @@ final class AiSitePlanJsonGenerationService
     private function buildStageOneLanguagePromptContext(array $scope, array $websiteProfile, string $locale): array
     {
         $siteDefaultLanguage = $this->firstNonEmpty([
+            $scope['plan_locale'] ?? null,
             $websiteProfile['content_locale'] ?? null,
             $websiteProfile['default_locale'] ?? null,
             $websiteProfile['default_language'] ?? null,
@@ -3440,7 +3522,7 @@ final class AiSitePlanJsonGenerationService
             ],
             'palette' => $palette,
             'theme' => [
-                'logo_generation' => $this->buildStageOneLogoGenerationPlan($siteName, $primaryGoal, $palette),
+                'logo_generation' => $this->buildStageOneLogoGenerationPlan($siteName, $primaryGoal, $palette, $locale),
             ],
             'theme_design' => [
                 'theme_purpose' => $primaryGoal,
@@ -3479,7 +3561,7 @@ final class AiSitePlanJsonGenerationService
      * @param array<string, mixed> $palette
      * @return array<string, mixed>
      */
-    private function buildStageOneLogoGenerationPlan(string $siteName, string $primaryGoal, array $palette = []): array
+    private function buildStageOneLogoGenerationPlan(string $siteName, string $primaryGoal, array $palette = [], string $locale = ''): array
     {
         $primaryColor = \trim((string)($palette['primary'] ?? ''));
         $accentColor = \trim((string)($palette['accent'] ?? ''));
@@ -3487,8 +3569,11 @@ final class AiSitePlanJsonGenerationService
         if ($paletteText === '') {
             $paletteText = 'the generated theme palette';
         }
+        $languageText = $this->buildLogoTextLanguagePrompt($locale);
         $promptBrief = 'Generate four transparent PNG website logo options for ' . $siteName
-            . ' that match ' . $paletteText . ' and support: ' . $primaryGoal;
+            . ' that match ' . $paletteText . ' and support: ' . $primaryGoal
+            . '. ' . $languageText
+            . ' Each option must use a different symbol-only composition, glyph concept, and mark silhouette.';
 
         return [
             'stage' => 'logo_generation',
@@ -3503,22 +3588,22 @@ final class AiSitePlanJsonGenerationService
             'selected_asset_slot_id' => '',
             'selected_url' => '',
             'prompt_brief' => $promptBrief,
-            'style_direction' => 'Prepare four distinct logo directions; each option must stay simple, recognizable, transparent, and readable at header size.',
+            'style_direction' => 'Prepare four distinct symbol-only logo directions; each option must stay simple, recognizable, transparent, and legible at header size. Do not reuse the same icon, pictorial motif, layout, or silhouette across options. Do not plan wordmarks or text treatments.',
             'reuse_policy' => 'Generate four logo options from this theme plan; selected option and generated image URLs must live only in plan_json.theme.logo_generation.options.',
-            'options' => $this->buildStageOneLogoGenerationOptions($siteName, $primaryGoal, $paletteText),
+            'options' => $this->buildStageOneLogoGenerationOptions($siteName, $primaryGoal, $paletteText, $languageText),
         ];
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    private function buildStageOneLogoGenerationOptions(string $siteName, string $primaryGoal, string $paletteText): array
+    private function buildStageOneLogoGenerationOptions(string $siteName, string $primaryGoal, string $paletteText, string $languageText): array
     {
         $directions = [
-            'Clean wordmark with a compact abstract mark.',
-            'Symbol-first mark with restrained wordmark support.',
-            'Geometric monogram or initial-based mark.',
-            'Minimal line-mark with a distinctive silhouette.',
+            'Clean abstract glyph based on the business subject; no letters, words, or typography.',
+            'Standalone emblem built from a concrete industry motif; no wordmark, initials, or readable text.',
+            'Geometric pictorial mark using simple shapes from the approved brief; no monogram or letterform.',
+            'Minimal line-mark with a distinctive subject silhouette; no text strip, slogan, or pseudo lettering.',
         ];
         $options = [];
         foreach ($directions as $index => $direction) {
@@ -3534,7 +3619,9 @@ final class AiSitePlanJsonGenerationService
                 'final_url' => '',
                 'prompt_brief' => 'Generate logo option ' . $number . ' for ' . $siteName
                     . ' as a transparent PNG. Match ' . $paletteText . '; support: ' . $primaryGoal
-                    . '. Direction: ' . $direction,
+                    . '. ' . $languageText
+                    . ' Direction: ' . $direction
+                    . ' This option must be visually distinct from the other three options.',
                 'style_direction' => $direction,
             ];
         }
@@ -3560,10 +3647,18 @@ final class AiSitePlanJsonGenerationService
             $planRoot['theme_design']['theme_purpose'] ?? null,
             'Create a clear website identity.',
         ]);
+        $locale = $this->firstNonEmpty([
+            $planRoot['content_locale'] ?? null,
+            $planRoot['i18n']['content_locale'] ?? null,
+            $planRoot['i18n']['primary_locale'] ?? null,
+            $planRoot['i18n']['locale'] ?? null,
+            $planRoot['plan_locale'] ?? null,
+        ]);
         $base = $this->buildStageOneLogoGenerationPlan(
             $siteName,
             $primaryGoal,
-            \is_array($planRoot['palette'] ?? null) ? $planRoot['palette'] : []
+            \is_array($planRoot['palette'] ?? null) ? $planRoot['palette'] : [],
+            $locale
         );
         $incoming = \is_array($candidate) ? $candidate : [];
         $normalized = $base;
@@ -3981,7 +4076,8 @@ final class AiSitePlanJsonGenerationService
                         'background' => '#F8FAFC',
                         'body' => '#111827',
                         'button' => '#1D4ED8',
-                    ]
+                    ],
+                    'en_US'
                 ),
             ],
             'theme_design' => $this->stageOneThemeDesignSkeleton(),
@@ -4370,7 +4466,7 @@ final class AiSitePlanJsonGenerationService
         return $segment;
     }
 
-    private function runStageOnePageFanoutTasks(array $tasks, array $segmentTasks, array $pageTypes): array
+    private function runStageOnePageFanoutTasks(array $tasks, array $segmentTasks, array $pageTypes, ?callable $onSettled = null): array
     {
         $concurrency = $this->resolveStageOnePageFanoutConcurrency(\count($pageTypes));
         $segmentConcurrency = $this->resolveStageOneBlockSegmentConcurrency(\count($segmentTasks));
@@ -4378,7 +4474,10 @@ final class AiSitePlanJsonGenerationService
             $this->runCooperativeSessionTasksSettled($segmentTasks, ['concurrency' => $segmentConcurrency]);
         }
 
-        return $this->runCooperativeSessionTasksSettled($tasks, ['concurrency' => $concurrency]);
+        return $this->runCooperativeSessionTasksSettled($tasks, [
+            'concurrency' => $concurrency,
+            'on_settled' => $onSettled,
+        ]);
     }
 
     private function supportsCooperativeConcurrency(int $concurrency): bool
@@ -4393,18 +4492,25 @@ final class AiSitePlanJsonGenerationService
         }
 
         $concurrency = \max(1, (int)($options['concurrency'] ?? 1));
+        $onSettled = \is_callable($options['on_settled'] ?? null) ? $options['on_settled'] : null;
         if ($concurrency > 1 && \class_exists(\Fiber::class)) {
             $runner = new FiberTaskRunner(defaultConcurrency: $concurrency);
             $results = [];
             foreach ($runner->runEvents($this->wrapStageOneFanoutTasks($tasks), $concurrency) as $taskKey => $event) {
                 if (($event['status'] ?? '') === 'fulfilled') {
                     $results[$taskKey] = \is_array($event['result'] ?? null) ? $event['result'] : [];
+                    if ($onSettled !== null) {
+                        $onSettled($taskKey, $results[$taskKey]);
+                    }
                     continue;
                 }
                 $error = ($event['error'] ?? null) instanceof \Throwable
                     ? $event['error']
                     : new \RuntimeException('Stage-one fanout task failed without an exception payload.');
                 $results[$taskKey] = $this->buildRejectedStageOneFanoutResult($error);
+                if ($onSettled !== null) {
+                    $onSettled($taskKey, $results[$taskKey]);
+                }
             }
 
             return $results;
@@ -4416,6 +4522,9 @@ final class AiSitePlanJsonGenerationService
                 $results[$taskKey] = \is_callable($task) ? $task() : $task;
             } catch (\Throwable $throwable) {
                 $results[$taskKey] = $this->buildRejectedStageOneFanoutResult($throwable);
+            }
+            if ($onSettled !== null) {
+                $onSettled($taskKey, \is_array($results[$taskKey] ?? null) ? $results[$taskKey] : []);
             }
         }
 

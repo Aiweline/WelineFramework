@@ -15978,7 +15978,7 @@ class AiSiteAgent extends BaseController
         $buildLoopStallPasses = 0;
 
         while (true) {
-            $taskBatch = $this->planJsonTaskService->pickConcurrentTasks($scope, $dispatchWindow);
+            $taskBatch = $this->planJsonTaskService->pickConcurrentTasks($scope, \PHP_INT_MAX);
             if ($taskBatch === []) {
                 if ($this->planJsonTaskService->hasUnfinishedBlueprintTasks($scope)) {
                     $resetScope = $this->planJsonTaskService->resetRunningTasksForInterruptedBuild(
@@ -16099,9 +16099,11 @@ class AiSiteAgent extends BaseController
 
             if (!$parallelPageModeLogged) {
                 $parallelPageModeLogged = true;
-                $this->emitBuildInfoEvent($sse, 'Shared theme ready; remaining pages will be generated in concurrent batches.', [
+                $this->emitBuildInfoEvent($sse, (string)__('Shared theme ready; remaining page blocks will be generated with a sliding concurrency window.'), [
                     'event_type' => 'build_parallel_mode_enabled',
                     'parallel' => true,
+                    'pipeline' => true,
+                    'pipeline_window' => $dispatchWindow,
                     'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                 ]);
             }
@@ -16156,36 +16158,45 @@ class AiSiteAgent extends BaseController
                 continue;
             }
 
-            $runningTaskKeys = \array_values(\array_map('strval', \array_keys($componentSpecs)));
-            foreach ($runningTaskKeys as $runningTaskKey) {
-                $scope = $this->planJsonTaskService->markTaskRunning($scope, $runningTaskKey);
-            }
-            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-            $this->emitPlanJsonTaskProgressStateFromScope(
-                $sse,
-                $scope,
-                'build',
-                (string)__('Operation completed.'),
-                $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
-            );
+            $scheduledTaskKeys = \array_values(\array_map('strval', \array_keys($componentSpecs)));
+            $startedTaskKeys = [];
+            $onPipelineTaskStarted = function (string|int $taskKey) use (&$scope, &$startedTaskKeys, &$currentStep, $sse, $session, $adminId, $totalSteps): void {
+                $taskKey = (string)$taskKey;
+                if ($taskKey === '' || \in_array($taskKey, $startedTaskKeys, true)) {
+                    return;
+                }
+                $this->assertActiveStreamLeaseAlive($session, $adminId);
+                $startedTaskKeys[] = $taskKey;
+                $scope = $this->planJsonTaskService->markTaskRunning($scope, $taskKey);
+                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                $this->emitPlanJsonTaskProgressStateFromScope(
+                    $sse,
+                    $scope,
+                    'build',
+                    (string)__('Page block pipeline task started.'),
+                    $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
+                );
+            };
 
             $batchPageTypes = $this->extractBuildBatchPageTypes($pageTasks);
             $this->emitBuildInfoEvent(
                 $sse,
-                (string)__('Starting concurrent page batch for %{count} tasks.', ['count' => (string)\count($runningTaskKeys)]),
+                (string)__('Starting concurrent page pipeline for %{count} tasks.', ['count' => (string)\count($scheduledTaskKeys)]),
                 [
                     'event_type' => 'build_parallel_batch',
                     'batch_state' => 'started',
                     'parallel' => true,
+                    'pipeline' => true,
+                    'pipeline_window' => $dispatchWindow,
                     'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
-                    'batch_size' => \count($runningTaskKeys),
+                    'batch_size' => \count($scheduledTaskKeys),
                     'page_types' => $batchPageTypes,
-                    'task_keys' => $runningTaskKeys,
+                    'task_keys' => $scheduledTaskKeys,
                 ]
             );
 
             $completedTaskKeys = [];
-            foreach ($pageComponentGenerationService->generateComponentEventsConcurrently($componentSpecs) as $taskKey => $event) {
+            foreach ($pageComponentGenerationService->generateComponentEventsConcurrently($componentSpecs, $onPipelineTaskStarted, $dispatchWindow) as $taskKey => $event) {
                 $this->assertActiveStreamLeaseAlive($session, $adminId);
                 $meta = \is_array($taskMeta[$taskKey] ?? null) ? $taskMeta[$taskKey] : [];
                 $pageType = (string)($meta['page_type'] ?? '');
@@ -16207,7 +16218,7 @@ class AiSiteAgent extends BaseController
                         $throwable,
                         [
                             'page_type' => $pageType,
-                            'task_keys' => $runningTaskKeys,
+                            'task_keys' => $scheduledTaskKeys,
                             'completed_task_keys' => $completedTaskKeys,
                             'progress_percent' => $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0,
                         ]
@@ -16232,7 +16243,7 @@ class AiSiteAgent extends BaseController
                     $adminId,
                     AiSiteAgentSession::STAGE_VISUAL_EDIT,
                     'build',
-                    __('HTML page batch synced: %{page}', ['page' => $pageLabel]),
+                    __('HTML page block synced: %{page}', ['page' => $pageLabel]),
                     $progressPercent,
                     $pageType
                 );
@@ -16332,16 +16343,19 @@ class AiSiteAgent extends BaseController
             if ($fatalBatchThrowable instanceof \Throwable) {
                 $this->emitBuildInfoEvent(
                     $sse,
-                    (string)__('Concurrent page batch failed after saved tasks were persisted.'),
+                    (string)__('Concurrent page pipeline failed after saved tasks were persisted.'),
                     [
                         'event_type' => 'build_parallel_batch',
                         'batch_state' => 'failed',
                         'parallel' => true,
+                        'pipeline' => true,
+                        'pipeline_window' => $dispatchWindow,
                         'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
-                        'batch_size' => \count($runningTaskKeys),
+                        'batch_size' => \count($scheduledTaskKeys),
                         'page_types' => $batchPageTypes,
-                        'task_keys' => $runningTaskKeys,
+                        'task_keys' => $scheduledTaskKeys,
                         'completed_task_keys' => $completedTaskKeys,
+                        'started_task_keys' => $startedTaskKeys,
                         'retry_task_keys' => $retryTaskKeys,
                         'failed_task_keys' => $failedTaskKeys,
                         'error_message' => $fatalBatchThrowable->getMessage(),
@@ -16352,16 +16366,19 @@ class AiSiteAgent extends BaseController
 
             $this->emitBuildInfoEvent(
                 $sse,
-                (string)__('Concurrent page batch completed: %{count} tasks.', ['count' => (string)\count($completedTaskKeys)]),
+                (string)__('Concurrent page pipeline completed: %{count} tasks.', ['count' => (string)\count($completedTaskKeys)]),
                 [
                     'event_type' => 'build_parallel_batch',
                     'batch_state' => 'completed',
                     'parallel' => true,
+                    'pipeline' => true,
+                    'pipeline_window' => $dispatchWindow,
                     'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
-                    'batch_size' => \count($runningTaskKeys),
+                    'batch_size' => \count($scheduledTaskKeys),
                     'page_types' => $batchPageTypes,
-                    'task_keys' => $runningTaskKeys,
+                    'task_keys' => $scheduledTaskKeys,
                     'completed_task_keys' => $completedTaskKeys,
+                    'started_task_keys' => $startedTaskKeys,
                     'retry_task_keys' => $retryTaskKeys,
                     'failed_task_keys' => $failedTaskKeys,
                 ]
@@ -17804,7 +17821,7 @@ class AiSiteAgent extends BaseController
         $buildLoopStallPasses = 0;
 
         while (true) {
-            $taskBatch = $this->planJsonTaskService->pickConcurrentTasks($scope, $dispatchWindow);
+            $taskBatch = $this->planJsonTaskService->pickConcurrentTasks($scope, \PHP_INT_MAX);
             if ($taskBatch === []) {
                 if ($this->planJsonTaskService->hasUnfinishedBlueprintTasks($scope)) {
                     $resetScope = $this->planJsonTaskService->resetRunningTasksForInterruptedBuild(
@@ -17934,9 +17951,11 @@ class AiSiteAgent extends BaseController
 
             if (!$parallelPageModeLogged) {
                 $parallelPageModeLogged = true;
-                $this->emitBuildInfoEvent($sse, 'Shared theme ready; remaining pages will be generated in concurrent batches.', [
+                $this->emitBuildInfoEvent($sse, (string)__('Shared theme ready; remaining page blocks will be generated with a sliding concurrency window.'), [
                     'event_type' => 'build_parallel_mode_enabled',
                     'parallel' => true,
+                    'pipeline' => true,
+                    'pipeline_window' => $dispatchWindow,
                     'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
                 ]);
             }
@@ -17949,6 +17968,7 @@ class AiSiteAgent extends BaseController
                     $scope,
                     $pageTasks,
                     $pageTypeLabels,
+                    $dispatchWindow,
                     $currentStep,
                     $totalSteps
                 );
@@ -18007,36 +18027,45 @@ class AiSiteAgent extends BaseController
                 continue;
             }
 
-            $runningTaskKeys = \array_values(\array_map('strval', \array_keys($componentSpecs)));
-            foreach ($runningTaskKeys as $runningTaskKey) {
-                $scope = $this->planJsonTaskService->markTaskRunning($scope, $runningTaskKey);
-            }
-            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-            $this->emitPlanJsonTaskProgressStateFromScope(
-                $sse,
-                $scope,
-                'build',
-                (string)__('Operation completed.'),
-                $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
-            );
+            $scheduledTaskKeys = \array_values(\array_map('strval', \array_keys($componentSpecs)));
+            $startedTaskKeys = [];
+            $onPipelineTaskStarted = function (string|int $taskKey) use (&$scope, &$startedTaskKeys, &$currentStep, $sse, $session, $adminId, $totalSteps): void {
+                $taskKey = (string)$taskKey;
+                if ($taskKey === '' || \in_array($taskKey, $startedTaskKeys, true)) {
+                    return;
+                }
+                $this->assertActiveStreamLeaseAlive($session, $adminId);
+                $startedTaskKeys[] = $taskKey;
+                $scope = $this->planJsonTaskService->markTaskRunning($scope, $taskKey);
+                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                $this->emitPlanJsonTaskProgressStateFromScope(
+                    $sse,
+                    $scope,
+                    'build',
+                    (string)__('Page block pipeline task started.'),
+                    $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
+                );
+            };
 
             $batchPageTypes = $this->extractBuildBatchPageTypes($pageTasks);
             $this->emitBuildInfoEvent(
                 $sse,
-                (string)__('Starting concurrent page batch for %{count} tasks.', ['count' => (string)\count($runningTaskKeys)]),
+                (string)__('Starting concurrent page pipeline for %{count} tasks.', ['count' => (string)\count($scheduledTaskKeys)]),
                 [
                     'event_type' => 'build_parallel_batch',
                     'batch_state' => 'started',
                     'parallel' => true,
+                    'pipeline' => true,
+                    'pipeline_window' => $dispatchWindow,
                     'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-                    'batch_size' => \count($runningTaskKeys),
+                    'batch_size' => \count($scheduledTaskKeys),
                     'page_types' => $batchPageTypes,
-                    'task_keys' => $runningTaskKeys,
+                    'task_keys' => $scheduledTaskKeys,
                 ]
             );
 
             $completedTaskKeys = [];
-            foreach ($pageComponentGenerationService->generateComponentEventsConcurrently($componentSpecs) as $taskKey => $event) {
+            foreach ($pageComponentGenerationService->generateComponentEventsConcurrently($componentSpecs, $onPipelineTaskStarted, $dispatchWindow) as $taskKey => $event) {
                 $this->assertActiveStreamLeaseAlive($session, $adminId);
                 $meta = \is_array($taskMeta[$taskKey] ?? null) ? $taskMeta[$taskKey] : [];
                 $pageType = (string)($meta['page_type'] ?? '');
@@ -18058,7 +18087,7 @@ class AiSiteAgent extends BaseController
                         $throwable,
                         [
                             'page_type' => $pageType,
-                            'task_keys' => $runningTaskKeys,
+                            'task_keys' => $scheduledTaskKeys,
                             'completed_task_keys' => $completedTaskKeys,
                             'progress_percent' => $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0,
                         ]
@@ -18083,7 +18112,7 @@ class AiSiteAgent extends BaseController
                     $adminId,
                     AiSiteAgentSession::STAGE_VISUAL_EDIT,
                     'build',
-                    __('Theme page batch synced: %{page}', ['page' => $pageLabel]),
+                    __('Theme page block synced: %{page}', ['page' => $pageLabel]),
                     $progressPercent,
                     $pageType
                 );
@@ -18106,7 +18135,7 @@ class AiSiteAgent extends BaseController
                             new \RuntimeException('AI generated empty or unusable section block: ' . (string)$taskKey),
                             [
                                 'page_type' => $pageType,
-                                'task_keys' => $runningTaskKeys,
+                                'task_keys' => $scheduledTaskKeys,
                                 'completed_task_keys' => $completedTaskKeys,
                                 'progress_percent' => $progressPercent,
                             ]
@@ -18243,7 +18272,7 @@ class AiSiteAgent extends BaseController
                         [
                             'page_type' => $pageType,
                             'section_code' => $sectionCode,
-                            'task_keys' => $runningTaskKeys,
+                            'task_keys' => $scheduledTaskKeys,
                             'completed_task_keys' => $completedTaskKeys,
                             'failure_stage' => 'post_generation_materialization',
                             'component_code' => (string)($sectionComponent['code'] ?? ''),
@@ -18266,16 +18295,19 @@ class AiSiteAgent extends BaseController
             if ($fatalBatchThrowable instanceof \Throwable) {
                 $this->emitBuildInfoEvent(
                     $sse,
-                    (string)__('Concurrent page batch failed after saved tasks were persisted.'),
+                    (string)__('Concurrent page pipeline failed after saved tasks were persisted.'),
                     [
                         'event_type' => 'build_parallel_batch',
                         'batch_state' => 'failed',
                         'parallel' => true,
+                        'pipeline' => true,
+                        'pipeline_window' => $dispatchWindow,
                         'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-                        'batch_size' => \count($runningTaskKeys),
+                        'batch_size' => \count($scheduledTaskKeys),
                         'page_types' => $batchPageTypes,
-                        'task_keys' => $runningTaskKeys,
+                        'task_keys' => $scheduledTaskKeys,
                         'completed_task_keys' => $completedTaskKeys,
+                        'started_task_keys' => $startedTaskKeys,
                         'retry_task_keys' => $retryTaskKeys,
                         'failed_task_keys' => $failedTaskKeys,
                         'error_message' => $fatalBatchThrowable->getMessage(),
@@ -18286,16 +18318,19 @@ class AiSiteAgent extends BaseController
 
             $this->emitBuildInfoEvent(
                 $sse,
-                (string)__('Concurrent page batch completed: %{count} tasks.', ['count' => (string)\count($completedTaskKeys)]),
+                (string)__('Concurrent page pipeline completed: %{count} tasks.', ['count' => (string)\count($completedTaskKeys)]),
                 [
                     'event_type' => 'build_parallel_batch',
                     'batch_state' => 'completed',
                     'parallel' => true,
+                    'pipeline' => true,
+                    'pipeline_window' => $dispatchWindow,
                     'workspace_track' => AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
-                    'batch_size' => \count($runningTaskKeys),
+                    'batch_size' => \count($scheduledTaskKeys),
                     'page_types' => $batchPageTypes,
-                    'task_keys' => $runningTaskKeys,
+                    'task_keys' => $scheduledTaskKeys,
                     'completed_task_keys' => $completedTaskKeys,
+                    'started_task_keys' => $startedTaskKeys,
                     'retry_task_keys' => $retryTaskKeys,
                     'failed_task_keys' => $failedTaskKeys,
                 ]
@@ -18304,7 +18339,7 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 'build',
-                (string)__('Page block batch completed: %{done}/%{total}', [
+                (string)__('Page block pipeline completed: %{done}/%{total}', [
                     'done' => (string)(int)($this->planJsonTaskService->summarize($scope)['done'] ?? 0),
                     'total' => (string)(int)($this->planJsonTaskService->summarize($scope)['total'] ?? 0),
                 ]),
@@ -18442,43 +18477,79 @@ class AiSiteAgent extends BaseController
         array $scope,
         array $pageTasks,
         array $pageTypeLabels,
+        int $dispatchWindow,
         int $currentStep,
         int $totalSteps
     ): array {
-        $runningTaskKeys = [];
+        $scheduledTasks = [];
+        $scheduledTaskKeys = [];
         foreach ($pageTasks as $task) {
             $taskKey = \trim((string)($task['task_key'] ?? ''));
             if ($taskKey === '') {
                 continue;
             }
-            $runningTaskKeys[] = $taskKey;
-            $scope = $this->planJsonTaskService->markTaskRunning($scope, $taskKey);
+            $scheduledTasks[] = $task;
+            $scheduledTaskKeys[] = $taskKey;
         }
-        if ($runningTaskKeys === []) {
+        if ($scheduledTasks === []) {
             return ['scope' => $scope, 'current_step' => $currentStep];
         }
 
-        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-        $this->emitPlanJsonTaskProgressStateFromScope(
+        $pipelineWindow = \max(1, \min(\count($scheduledTasks), \max(1, $dispatchWindow)));
+        $nextTaskIndex = 0;
+        $activeTasks = [];
+        $startedTaskKeys = [];
+        $completedTaskKeys = [];
+
+        $startNextFakeTask = function () use (
+            &$scope,
+            &$nextTaskIndex,
+            &$activeTasks,
+            &$startedTaskKeys,
+            $scheduledTasks,
+            $pipelineWindow,
             $sse,
-            $scope,
-            'build',
-            'Fake build batch started.',
-            $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
-        );
-        $this->emitBuildInfoEvent($sse, 'Fake mode generated page blocks without AI calls.', [
-            'event_type' => 'build_fake_mode_batch',
+            $session,
+            $adminId,
+            &$currentStep,
+            $totalSteps
+        ): void {
+            while (\count($activeTasks) < $pipelineWindow && $nextTaskIndex < \count($scheduledTasks)) {
+                $task = $scheduledTasks[$nextTaskIndex++];
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                if ($taskKey === '') {
+                    continue;
+                }
+                $this->assertActiveStreamLeaseAlive($session, $adminId);
+                $scope = $this->planJsonTaskService->markTaskRunning($scope, $taskKey);
+                $activeTasks[$taskKey] = $task;
+                $startedTaskKeys[] = $taskKey;
+                $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+                $this->emitPlanJsonTaskProgressStateFromScope(
+                    $sse,
+                    $scope,
+                    'build',
+                    'Fake build pipeline task started.',
+                    $currentStep > 0 ? (int)(($currentStep / $totalSteps) * 100) : 0
+                );
+            }
+        };
+
+        $startNextFakeTask();
+        $this->emitBuildInfoEvent($sse, 'Fake mode generated page blocks with a sliding pipeline window.', [
+            'event_type' => 'build_fake_mode_pipeline',
             'batch_state' => 'started',
-            'task_keys' => $runningTaskKeys,
+            'pipeline' => true,
+            'pipeline_window' => $pipelineWindow,
+            'task_keys' => $scheduledTaskKeys,
+            'started_task_keys' => $startedTaskKeys,
         ]);
 
-        $completedTaskKeys = [];
-        foreach ($pageTasks as $task) {
+        while ($activeTasks !== []) {
+            $taskKey = (string)\array_key_first($activeTasks);
+            $task = \is_array($activeTasks[$taskKey] ?? null) ? $activeTasks[$taskKey] : [];
+            unset($activeTasks[$taskKey]);
             $this->assertActiveStreamLeaseAlive($session, $adminId);
-            $taskKey = \trim((string)($task['task_key'] ?? ''));
-            if ($taskKey === '') {
-                continue;
-            }
             $pageType = \trim((string)($task['page_type'] ?? ''));
             $sectionCode = \trim((string)($task['section_code'] ?? ''));
             $pageLabel = (string)($pageTypeLabels[$pageType] ?? $pageType);
@@ -18569,19 +18640,23 @@ class AiSiteAgent extends BaseController
                 'fake_mode' => 1,
             ]));
             $completedTaskKeys[] = $taskKey;
+            $startNextFakeTask();
         }
 
-        $this->emitBuildInfoEvent($sse, 'Fake mode page block batch completed.', [
-            'event_type' => 'build_fake_mode_batch',
+        $this->emitBuildInfoEvent($sse, 'Fake mode page block pipeline completed.', [
+            'event_type' => 'build_fake_mode_pipeline',
             'batch_state' => 'completed',
-            'task_keys' => $runningTaskKeys,
+            'pipeline' => true,
+            'pipeline_window' => $pipelineWindow,
+            'task_keys' => $scheduledTaskKeys,
+            'started_task_keys' => $startedTaskKeys,
             'completed_task_keys' => $completedTaskKeys,
         ]);
         $this->emitPlanJsonTaskProgressStateFromScope(
             $sse,
             $scope,
             'build',
-            (string)__('Page block batch completed: %{done}/%{total}', [
+            (string)__('Page block pipeline completed: %{done}/%{total}', [
                 'done' => (string)(int)($this->planJsonTaskService->summarize($scope)['done'] ?? 0),
                 'total' => (string)(int)($this->planJsonTaskService->summarize($scope)['total'] ?? 0),
             ]),
