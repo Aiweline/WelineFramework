@@ -28,6 +28,7 @@ This skill performs lightweight route and UI smoke validation. It is optimized f
 - Check for obvious backend, frontend, or API regressions.
 - Choose HTTP or browser-smoke validation proportional to the change, but treat browser-visible frontend work as Browser-first.
 - Catch route wiring issues before deeper acceptance work begins.
+- Never create or update E2E/Playwright specs, test cases, fixtures, or regression cases unless the user explicitly asks.
 
 # Workflow
 
@@ -45,7 +46,7 @@ This skill performs lightweight route and UI smoke validation. It is optimized f
 
 - Do not use `routes.xml`.
 - Run `php bin/w setup:upgrade --route` when route registration changed.
-- Provide HTTP or E2E validation evidence where relevant.
+- Provide HTTP or Browser smoke validation evidence where relevant; use E2E execution only when the user explicitly asks for it.
 - Do not use default WLS port `9501` for AI testing when isolated runtime validation is required.
 - Do not claim visible behavior is fixed from HTTP alone when the user asked about rendered labels, layouts, SEO tags, or interactive UI state.
 - For browser-visible frontend changes that can be served locally, final smoke validation must use the Codex in-app Browser plugin rather than only route tests, source inspection, or command-line HTTP checks.

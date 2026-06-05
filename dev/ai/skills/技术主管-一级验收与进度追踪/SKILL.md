@@ -34,7 +34,7 @@ This skill performs first-level acceptance for work returned by specialists. It 
 # Workflow
 
 1. Read the original task definition, decomposition notes, and acceptance criteria.
-2. Review specialist outputs by category: implementation, tests, runtime checks, and documentation.
+2. Review specialist outputs by category: implementation, validation evidence, runtime checks, and documentation.
 3. Compare claimed completion against actual changed areas and reported commands.
 4. Confirm that required module README, architecture docs, and API docs were updated when relevant.
 5. Mark each item as accepted, partially accepted, or returned for correction.
@@ -48,13 +48,13 @@ This skill performs first-level acceptance for work returned by specialists. It 
 - Update architecture docs if the design changes.
 - Update API docs if interfaces change.
 - Write fix reports inside the related module doc directory, not the repository root.
-- Provide unit test and E2E or HTTP validation evidence where relevant.
+- Provide real-entry, HTTP, Browser, WLS, existing-command, or documentation validation evidence where relevant; unit/E2E evidence is only expected when the user explicitly requested test work.
 
 # Inputs Required
 
 - Original request and decomposition record.
 - Specialist implementation summaries.
-- Test commands, runtime outputs, and documentation diffs.
+- Validation commands, runtime outputs, and documentation diffs.
 - Any known risk waivers or deferred issues.
 
 # Expected Output
@@ -67,7 +67,7 @@ This skill performs first-level acceptance for work returned by specialists. It 
 # Validation
 
 - Check that each accepted item has real evidence, not just a claim.
-- Check that tests match the changed surface area.
+- Check that validation evidence matches the changed surface area.
 - Check that documentation obligations were fulfilled where required.
 - Check that unresolved risks are explicitly recorded.
 

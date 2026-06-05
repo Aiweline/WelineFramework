@@ -1,7 +1,7 @@
 {
-  "name": "weline-local",
+  "name": "weline-framework",
   "interface": {
-    "displayName": "Weline Local"
+    "displayName": "WelineFramework"
   },
   "plugins": [
     {

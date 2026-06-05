@@ -25,7 +25,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 # Responsibilities
 
 - Define and enforce the validation set required before release or merge.
-- Check that commands, tests, and docs support automated delivery.
+- Check that commands, existing validation, and docs support automated delivery.
 - Flag missing gates, weak evidence, or unsafe release assumptions.
 - Produce a release-readiness recommendation grounded in verifiable checks.
 
@@ -33,7 +33,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 
 1. Read the scope, changed surfaces, and required release confidence level.
 2. Review which validation steps are mandatory for merge or release.
-3. Confirm that unit, route, E2E, WLS, and documentation checks are covered where needed.
+3. Confirm that route, HTTP, Browser, WLS, existing-command, and documentation checks are covered where needed; unit/E2E checks only apply when the user explicitly requested test work or an existing external CI gate already requires them.
 4. Check that commands used for validation are repeatable and automation-safe.
 5. Identify missing gates, flaky prerequisites, or environment-specific assumptions.
 6. Summarize release readiness and blocking items.
@@ -41,7 +41,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 
 # Weline Rules
 
-- Provide unit test and E2E or HTTP validation evidence where relevant.
+- Provide HTTP, Browser, WLS, existing-command, or documentation validation evidence where relevant; unit/E2E evidence is only expected when explicitly requested by the user or required by an existing external CI gate.
 - Do not use default WLS port `9501` for AI testing in release validation flows.
 - Always stop dedicated WLS instances after validation.
 - Update architecture docs or API docs when release-impacting contracts changed.

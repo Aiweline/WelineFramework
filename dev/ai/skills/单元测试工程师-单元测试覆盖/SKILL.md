@@ -1,18 +1,17 @@
 ---
 name: 单元测试工程师-单元测试覆盖
-description: Unit test engineer skill for PHPUnit or Pest coverage, service-level assertions, and focused regression protection.
+description: Unit test engineer skill for PHPUnit or Pest coverage, service-level assertions, and focused regression protection. Disabled by default; use only when the user explicitly asks to write, update, or run unit tests.
 version: 1.1.1
 ---
 
 # Role
 
-This skill creates or updates unit tests for WelineFramework code. It focuses on service-level behavior, model or helper logic, and deterministic regression protection that can run quickly and prove the changed logic directly.
+This skill is disabled by default. Use it only when the current user request explicitly asks to write, update, or run unit tests for WelineFramework code.
 
 # When To Use
 
-- Use for PHPUnit, Pest, service tests, unit-level regression tests, and focused logic verification.
-- Use for keywords such as unit test, PHPUnit, Pest, service test, helper test, and coverage.
-- Use when changed logic can and should be proven without a full browser or runtime stack.
+- Use only for explicit user requests mentioning unit test, PHPUnit, Pest, service test, helper test, coverage, or "补单测".
+- Do not infer this skill from ordinary bug fixes, business-logic changes, or validation needs.
 
 # Source Material
 
@@ -25,25 +24,26 @@ This skill creates or updates unit tests for WelineFramework code. It focuses on
 
 # Responsibilities
 
-- Create targeted unit tests around changed logic.
+- Create targeted unit tests around changed logic only after confirming explicit user intent.
 - Extract logic into testable seams when direct testing is otherwise impossible.
 - Keep assertions precise enough to protect against regression.
 - Provide fast-running evidence that complements, rather than replaces, route or UI checks.
 
 # Workflow
 
-1. Read the task scope and identify the narrowest reliable unit boundary.
-2. Confirm whether the behavior belongs in a service, helper, model, or collaborator test.
-3. Add failing or missing test coverage that reproduces the expected behavior.
-4. Update implementation only as needed to make the behavior testable and correct.
-5. Run focused unit-test commands for the affected module or class.
-6. Review for assertion quality, readability, and regression value.
-7. Report the executed command and what behavior the test now protects.
+1. Confirm the current user request explicitly asks for unit-test authoring or execution.
+2. Read the task scope and identify the narrowest reliable unit boundary.
+3. Confirm whether the behavior belongs in a service, helper, model, or collaborator test.
+4. Add failing or missing test coverage that reproduces the expected behavior.
+5. Update implementation only as needed to make the behavior testable and correct.
+6. Run focused unit-test commands for the affected module or class when execution was requested or needed for the requested unit-test work.
+7. Review for assertion quality, readability, and regression value.
+8. Report the executed command and what behavior the test now protects.
 
 # Weline Rules
 
 - Prefer small, isolated, testable changes.
-- Provide unit test evidence where relevant.
+- Do not author, update, or run unit tests unless the current user request explicitly asks for unit-test work.
 - Keep business logic in services instead of controllers or templates when testability matters.
 - Do not hardcode user-facing text.
 
@@ -51,6 +51,7 @@ This skill creates or updates unit tests for WelineFramework code. It focuses on
 
 - The changed logic and its owning module.
 - Expected behavior, edge cases, and regression risks.
+- The explicit user request that authorizes unit-test work.
 - Existing tests or target test directory.
 - The preferred focused test command.
 
@@ -70,6 +71,7 @@ This skill creates or updates unit tests for WelineFramework code. It focuses on
 # Constraints
 
 - Do not substitute E2E-only evidence for unit-testable logic.
+- Do not use this skill to bypass the repository default ban on test-case authoring.
 - Do not write broad brittle tests when one focused regression test is enough.
 - Do not bury critical assertions in indirect helper chains.
 - Do not let unit tests depend on unrelated runtime state if isolation is possible.

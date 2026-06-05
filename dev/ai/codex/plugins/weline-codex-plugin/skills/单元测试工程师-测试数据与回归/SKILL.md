@@ -1,18 +1,17 @@
 ---
 name: 单元测试工程师-测试数据与回归
-description: Unit test engineer skill for stable fixtures, edge-case data design, and regression-oriented test inputs in WelineFramework.
+description: Unit test engineer skill for stable fixtures, edge-case data design, and regression-oriented test inputs in WelineFramework. Disabled by default; use only when the user explicitly asks for test data, fixtures, or regression test inputs.
 version: 1.1.1
 ---
 
 # Role
 
-This skill designs the data side of unit-level regression protection. It focuses on fixtures, edge-case input matrices, and deterministic reproduction data that makes logic regressions visible and maintainable.
+This skill is disabled by default. Use it only when the current user request explicitly asks for test data, fixtures, or regression test inputs.
 
 # When To Use
 
-- Use for fixture design, data providers, edge-case matrices, and regression input preparation.
-- Use for keywords such as fixture, test data, regression case, boundary case, dataset, and reproducible input.
-- Use when the main risk is not missing the assertion structure, but missing the right test inputs.
+- Use only for explicit user requests mentioning fixture, test data, regression case, dataset, boundary-case input, or reproducible test input.
+- Do not infer this skill from ordinary bug fixes, validation needs, or edge-case reasoning.
 
 # Source Material
 
@@ -24,31 +23,33 @@ This skill designs the data side of unit-level regression protection. It focuses
 
 # Responsibilities
 
-- Build stable and realistic test inputs for changed logic.
+- Build stable and realistic test inputs for changed logic only after confirming explicit user intent.
 - Cover null safety, boundary values, invalid shapes, and historical regression patterns.
 - Keep test data readable and close to the business rule being protected.
 - Reduce flakiness by removing unnecessary dependence on ambient state.
 
 # Workflow
 
-1. Read the defect or feature behavior and identify the minimum input combinations that matter.
-2. Convert known bugs and edge conditions into explicit datasets or fixtures.
-3. Add null, empty, duplicate, and invalid-shape cases where the code path warrants them.
-4. Keep test data local, named, and understandable.
-5. Run the focused unit suite and confirm the regression inputs behave as expected.
-6. Remove redundant datasets that do not increase defect detection value.
-7. Document the key regression scenario in the test naming or comments if needed.
+1. Confirm the current user request explicitly asks for test data, fixtures, or regression test inputs.
+2. Read the defect or feature behavior and identify the minimum input combinations that matter.
+3. Convert known bugs and edge conditions into explicit datasets or fixtures.
+4. Add null, empty, duplicate, and invalid-shape cases where the requested test path warrants them.
+5. Keep test data local, named, and understandable.
+6. Run the focused unit suite only when execution was requested or needed for the requested test-data work.
+7. Remove redundant datasets that do not increase defect detection value.
+8. Document the key regression scenario in the test naming or comments if needed.
 
 # Weline Rules
 
 - Prefer small, isolated, testable changes.
-- Provide unit test evidence where relevant.
+- Do not author, update, or run unit tests, fixtures, regression cases, or test data unless the current user request explicitly asks for that work.
 - Follow PHP null-safety expectations when building regression cases.
 - Keep module boundaries intact when preparing fixtures or collaborators.
 
 # Inputs Required
 
 - The changed logic and known failure modes.
+- The explicit user request that authorizes test-data or fixture work.
 - Historical bug symptoms, edge cases, or stack-trace triggers.
 - Existing fixture style in the target module.
 - Focused unit-test command for verification.
@@ -69,6 +70,7 @@ This skill designs the data side of unit-level regression protection. It focuses
 # Constraints
 
 - Do not add bulky generic fixtures that hide the real regression case.
+- Do not use this skill to bypass the repository default ban on test-case authoring.
 - Do not depend on random values or time-sensitive data without control.
 - Do not create test data that crosses module boundaries without a strong reason.
 - Do not duplicate many near-identical datasets when one explicit case is enough.

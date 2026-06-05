@@ -40,7 +40,7 @@ This skill owns task intake, scope clarification, work decomposition, sequencing
 2. Restate the requested outcome in delivery terms, including scope, exclusions, and acceptance targets.
 3. Split the work into bounded specialist tasks by role, module, and risk area.
 4. Mark which tasks are parallel, which tasks block others, and which tasks require shared decisions.
-5. Define required validation for each task, such as unit tests, HTTP checks, E2E checks, WLS verification, or documentation updates.
+5. Define required validation for each task, such as real-entry checks, HTTP checks, Browser smoke, WLS verification, existing commands, or documentation updates; unit/E2E test-case work is only valid when the user explicitly asks.
 6. Record progress checkpoints and first-level acceptance gates for the implementation phase.
 7. Handoff execution to specialists and keep routing decisions aligned with repository rules.
 8. When a subtask is incomplete, blocked, or returned without evidence, update the lead ledger and send it back with precise correction criteria. Escalate to a human only for scope, safety, irreversible, credential, or conflict decisions.
@@ -52,7 +52,7 @@ This skill owns task intake, scope clarification, work decomposition, sequencing
 - Keep module boundaries intact.
 - Prefer small, isolated, testable changes.
 - Do not write detailed fix reports to the repository root.
-- Require unit test and E2E or HTTP evidence where relevant.
+- Require real-entry, HTTP, Browser, WLS, existing-command, or documentation evidence where relevant; require unit/E2E evidence only when the user explicitly asked for that test work.
 
 # Inputs Required
 

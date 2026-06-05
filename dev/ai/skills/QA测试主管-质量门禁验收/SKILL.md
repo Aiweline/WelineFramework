@@ -1,16 +1,16 @@
 ---
 name: QA测试主管-质量门禁验收
-description: QA lead skill for evidence review, gate enforcement, release-readiness assessment, and quality signoff recommendations.
+description: QA lead skill for evidence review, gate enforcement, release-readiness assessment, and quality signoff recommendations. It treats new or updated test cases as prohibited unless the user explicitly requested them.
 version: 1.1.1
 ---
 
 # Role
 
-This skill enforces quality gates on returned work. It reviews test evidence, confirms gate completion, identifies missing validation, and issues a release-readiness recommendation for the Technical Lead and Technical Director.
+This skill enforces quality gates on returned work. It reviews validation evidence, confirms gate completion, identifies missing validation, and issues a release-readiness recommendation for the Technical Lead and Technical Director.
 
 # When To Use
 
-- Use when development and testing evidence is available and a quality-gate decision is required.
+- Use when development and validation evidence is available and a quality-gate decision is required.
 - Use for keywords such as quality gate, test signoff, release readiness, acceptance evidence, and regression review.
 - Use when returned work must be accepted, rejected, or conditionally accepted from a QA standpoint.
 
@@ -24,7 +24,7 @@ This skill enforces quality gates on returned work. It reviews test evidence, co
 
 # Responsibilities
 
-- Review whether required test layers were actually executed.
+- Review whether required validation layers were actually executed.
 - Reject weak evidence, missing coverage, or mismatched validation claims.
 - Track residual risks, known gaps, and deferred items explicitly.
 - Produce a QA gate recommendation rather than a vague status note.
@@ -32,7 +32,7 @@ This skill enforces quality gates on returned work. It reviews test evidence, co
 # Workflow
 
 1. Read the QA strategy, implementation summary, and all returned evidence.
-2. Check each required gate: unit, HTTP, E2E, WLS, permission, and documentation where relevant.
+2. Check each required gate: real-entry, HTTP, Browser, WLS, permission, existing-command, and documentation where relevant.
 3. Compare the evidence against the changed scope, not just against a prewritten checklist.
 4. Mark gates as passed, failed, or missing, and explain why.
 5. Summarize residual risks and any conditional release concerns.
@@ -41,7 +41,8 @@ This skill enforces quality gates on returned work. It reviews test evidence, co
 
 # Weline Rules
 
-- Provide unit test and E2E or HTTP validation evidence where relevant.
+- Provide real-entry, HTTP, Browser, WLS, existing-command, or documentation evidence where relevant.
+- Do not require, create, update, or treat missing unit tests, E2E specs, fixtures, or test cases as blockers unless the user explicitly requested those test assets.
 - Do not use default WLS port `9501` for AI testing when runtime evidence is required.
 - Always require dedicated WLS instance cleanup in runtime validation records.
 - Update module README, architecture docs, or API docs when the change requires it.
@@ -50,7 +51,7 @@ This skill enforces quality gates on returned work. It reviews test evidence, co
 
 - The QA strategy and required gates.
 - The implementation summary and changed files or surfaces.
-- All test outputs, runtime logs, and documentation updates.
+- All validation outputs, runtime logs, and documentation updates.
 - Any requested release timeline or risk tolerance.
 
 # Expected Output
