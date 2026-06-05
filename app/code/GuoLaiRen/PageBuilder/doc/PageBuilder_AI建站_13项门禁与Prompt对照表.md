@@ -24,6 +24,21 @@
 | page_rollup | 页面 status 从 block status 汇总 | 不要求 AI 计算 page rollup |
 | publish_ready | 所选页面全部有效 block `status=1` | 发布 prompt 不读取既有计划 |
 
+## CTA 与事件配置
+
+AI 建站的 CTA、表单、下载、联系、购买等可衡量动作，事件计划必须写在最近的 block 节点：
+
+```js
+plan_json.pages.{page_type}.{block_key}.analytics_events
+```
+
+`analytics_events` 是 block 自身的执行提示，不是新的真相源。Stage1 负责为有动作的 block 规划事件；Stage3 构建 prompt 负责把事件落到实际交互控件上：
+
+- 普通点击 CTA 使用 `weline-pixel::<event_name>` 类名标记在真实 `<a>` 或 `<button>` 上。
+- 无真实路由的 CTA 继续使用 `data-pb-ai-action="primary_cta"` 触发 PageBuilder 的 `pb:cta` 桥接，同时保留 `weline-pixel::<event_name>`。
+- 表单提交等非普通点击动作使用组件内 scoped listener，并按默认 `weline-pixel-events` 技能调用 `window.WelinePixel.track(...)`。
+- 禁止在 AI 生成块中注入 GA、Meta、TikTok、Bing 等第三方像素脚本或直接请求像素端点。
+
 ## Prompt 组装
 
 构建 prompt 只能按需组装当前任务上下文：
@@ -37,4 +52,3 @@
 ```
 
 不得为了构建 prompt 重新落库完整 移除派生计划、历史plan_json 生成流程 或其它派生大对象。
-

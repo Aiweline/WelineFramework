@@ -847,7 +847,7 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         }
     }
 
-    public function testPrepareBuildAssetsWritesIdentityAssetsBackToScope(): void
+    public function testPrepareBuildAssetsDropsLegacyIdentityAssetsAndWritesThemeLogoOptions(): void
     {
         $publicId = 'asset-identity-' . \bin2hex(\random_bytes(4));
         $session = new AiSiteAgentSession();
@@ -889,20 +889,24 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
         );
         $result = $service->prepareBuildAssets($session, 2, $scope, 2);
         $resultScope = $result['scope'];
-        $logoUrl = (string)($resultScope['logo'] ?? '');
-        $iconUrl = (string)($resultScope['icon'] ?? '');
-        $faviconUrl = (string)($resultScope['favicon'] ?? '');
+        $manifest = \is_array($resultScope['asset_manifest']['slots'] ?? null) ? $resultScope['asset_manifest']['slots'] : [];
+        $logoOptions = \is_array($resultScope['plan_json']['theme']['logo_generation']['options'] ?? null)
+            ? $resultScope['plan_json']['theme']['logo_generation']['options']
+            : [];
 
         try {
-            self::assertNotSame('', $logoUrl);
-            self::assertNotSame('', $iconUrl);
-            self::assertSame($iconUrl, $faviconUrl);
-            self::assertSame($logoUrl, (string)($resultScope['website_profile']['logo'] ?? ''));
-            self::assertSame($iconUrl, (string)($resultScope['website_profile']['icon'] ?? ''));
-            self::assertSame($iconUrl, (string)($resultScope['website_profile']['favicon'] ?? ''));
+            self::assertArrayNotHasKey('identity:website-logo', $manifest);
+            self::assertArrayNotHasKey('identity:site-title-icon', $manifest);
+            self::assertContains('plan:theme:logo_generation:option_1', $result['generated_slots']);
+            self::assertContains('plan:theme:logo_generation:option_2', $result['generated_slots']);
+            self::assertNotSame('', (string)($logoOptions[0]['final_url'] ?? ''));
+            self::assertNotSame('', (string)($logoOptions[1]['final_url'] ?? ''));
+            self::assertSame('', (string)($resultScope['logo'] ?? ''));
+            self::assertSame('', (string)($resultScope['icon'] ?? ''));
+            self::assertSame('', (string)($resultScope['favicon'] ?? ''));
         } finally {
-            foreach ([$logoUrl, $iconUrl] as $url) {
-                $relativePath = \ltrim($url, '/');
+            foreach ($result['generated_slots'] as $slotId) {
+                $relativePath = (string)($manifest[$slotId]['variants'][0]['path'] ?? '');
                 if ($relativePath === '') {
                     continue;
                 }

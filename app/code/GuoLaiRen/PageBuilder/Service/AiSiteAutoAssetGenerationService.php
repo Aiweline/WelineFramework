@@ -1398,73 +1398,8 @@ class AiSiteAutoAssetGenerationService
             $websiteProfile['favicon'] = $finalUrl;
         }
         $scope['website_profile'] = $websiteProfile;
-        $scope = $this->applyIdentityAssetToRenderPayloads($scope, $role, $finalUrl);
 
         return $scope;
-    }
-
-    /**
-     * @param array<string,mixed> $scope
-     * @return array<string,mixed>
-     */
-    private function applyIdentityAssetToRenderPayloads(array $scope, string $role, string $finalUrl): array
-    {
-        $scope = $this->applyIdentityAssetToRenderPayload($scope, $role, $finalUrl);
-
-        if (\is_array($scope['render_data_contract']['payload'] ?? null)) {
-            $payload = $this->applyIdentityAssetToRenderPayload($scope['render_data_contract']['payload'], $role, $finalUrl);
-            $scope['render_data_contract']['payload'] = $payload;
-        }
-        if (\is_array($scope['build_contracts']['render_data']['payload'] ?? null)) {
-            $payload = $this->applyIdentityAssetToRenderPayload($scope['build_contracts']['render_data']['payload'], $role, $finalUrl);
-            $scope['build_contracts']['render_data']['payload'] = $payload;
-        }
-        return $scope;
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     * @return array<string,mixed>
-     */
-    private function applyIdentityAssetToRenderPayload(array $payload, string $role, string $finalUrl): array
-    {
-        if (!\is_array($payload['plan_json'] ?? null)) {
-            $payload['plan_json'] = [];
-        }
-        if (!\is_array($payload['plan_json']['shared_components'] ?? null)) {
-            $payload['plan_json']['shared_components'] = \is_array($payload['shared_components'] ?? null)
-                ? $payload['shared_components']
-                : [];
-        }
-
-        if ($role === 'icon') {
-            if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon'] ?? null)) {
-                $payload['asset_manifest']['slots']['identity:site-title-icon']['final_url'] = $finalUrl;
-                $payload['asset_manifest']['slots']['identity:site-title-icon']['url'] = $finalUrl;
-                if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0] ?? null)) {
-                    $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['url'] = $finalUrl;
-                    $payload['asset_manifest']['slots']['identity:site-title-icon']['variants'][0]['path'] = \ltrim($finalUrl, '/');
-                }
-            }
-            if (\is_array($payload['plan_json']['shared_components']['header']['default_config'] ?? null)) {
-                $payload['plan_json']['shared_components']['header']['default_config']['identity']['shared_icon_asset'] = $finalUrl;
-                $payload['plan_json']['shared_components']['header']['default_config']['identity.shared_icon_asset'] = $finalUrl;
-            }
-            foreach (\is_array($payload['plan_json']['pages'] ?? null) ? $payload['plan_json']['pages'] : [] as $pageType => $page) {
-                if (!\is_string($pageType) || !\is_array($page)) {
-                    continue;
-                }
-                if (\is_array($page['header']['config'] ?? null)) {
-                    $page['header']['config']['identity']['shared_icon_asset'] = $finalUrl;
-                    $page['header']['config']['identity.shared_icon_asset'] = $finalUrl;
-                }
-                $payload['plan_json']['pages'][$pageType] = $page;
-            }
-        }
-
-        unset($payload['shared_components']);
-
-        return $payload;
     }
 
     /**
@@ -1472,26 +1407,19 @@ class AiSiteAutoAssetGenerationService
      */
     private function resolveIdentityAssetRole(array $slot): string
     {
-        $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
         $field = \strtolower(\trim((string)($slot['field'] ?? '')));
         $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
 
-        if (\str_contains($slotId, 'identity:website-logo')) {
-            return 'logo';
-        }
-        if (\str_contains($slotId, 'identity:site-title-icon')) {
-            return 'icon';
-        }
         if (\in_array($field, ['logo', 'logo.image', 'brand.logo'], true)) {
             return 'logo';
         }
         if (\in_array($field, ['icon', 'favicon', 'site.icon'], true)) {
             return 'icon';
         }
-        if (\in_array($kind, ['website_logo', 'brand_logo'], true)) {
+        if (\in_array($kind, ['website_logo', 'brand_logo', 'logo_option'], true)) {
             return 'logo';
         }
-        if (\in_array($kind, ['site_title_icon', 'favicon'], true)) {
+        if ($kind === 'favicon') {
             return 'icon';
         }
 
