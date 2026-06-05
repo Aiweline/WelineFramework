@@ -62,7 +62,7 @@ This skill is disabled by default. Use it only when the current user request exp
 
 # Validation
 
-- Run focused unit tests that consume the new datasets or fixtures.
+- Run focused unit tests that consume the new datasets or fixtures only when the user explicitly requested unit-test execution.
 - Confirm the added cases cover meaningful branches or prior bugs.
 - Confirm no dataset depends on unrelated mutable global state.
 - Confirm fixture complexity stays justified by risk.
