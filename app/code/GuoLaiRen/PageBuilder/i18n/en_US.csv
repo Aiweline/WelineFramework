@@ -816,8 +816,6 @@ Component,Component
 "Logo will appear here","Logo will appear here"
 "Website Logo","Website Logo"
 "Waiting for AI generation","Waiting for AI generation"
-"Title icon will appear here","Title icon will appear here"
-"Website Title Icon","Website Title Icon"
 表单会自动保存；方案生成会进入后台队列，右侧会同步显示进度。,表单会自动保存；方案生成会进入后台队列，右侧会同步显示进度。
 默认启用通用设计能力；选择的技能和设计方向会一起进入方案契约。,默认启用通用设计能力；选择的技能和设计方向会一起进入方案契约。
 "plan_json 方案：待生成","plan_json 方案：待生成"

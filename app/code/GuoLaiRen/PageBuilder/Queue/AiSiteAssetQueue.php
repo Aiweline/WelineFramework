@@ -983,7 +983,7 @@ class AiSiteAssetQueue implements QueueInterface
         $field = \strtolower(\trim((string)($slot['field'] ?? '')));
         $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
         $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
-        $slotId = \strtolower(\trim($slotId));
+        unset($slotId);
         $identityTransparentRequired = (int)($slot['identity_transparent_png_required'] ?? 0) === 1
             || (int)($slot['transparent_png_required'] ?? 0) === 1;
 
