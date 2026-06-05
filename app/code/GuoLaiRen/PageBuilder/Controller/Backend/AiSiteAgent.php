@@ -9014,6 +9014,7 @@ class AiSiteAgent extends BaseController
         $pollIntervalMs = self::OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS;
         $idleLoops = 0;
         $stageCode = $this->resolveAiSiteQueueStage($operation);
+        $planJsonProgressOnly = $this->isPlanJsonObservedProgressOperation($operation);
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -9029,7 +9030,9 @@ class AiSiteAgent extends BaseController
         $lastTaskProgressStateSignature = '';
         $lastStageOnePageProgressSignature = '';
         $includeQueuePayload = $operation === 'plan';
-        $initialQueueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $includeQueuePayload);
+        $initialQueueRow = $planJsonProgressOnly
+            ? null
+            : $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $includeQueuePayload);
         $eventCorrelation = $this->buildObservedOperationEventCorrelation(
             $operation,
             $executionToken,
@@ -9045,30 +9048,32 @@ class AiSiteAgent extends BaseController
             $eventCorrelation
         );
         $lastEventId = $this->forwardObservedOperationEvents($sse, $session, $adminId, $recentEvents, $lastEventId, $initialQueueRow);
-        if (\is_array($initialQueueRow) && $initialQueueRow !== [] && $sse->isAlive()) {
+        if (!$planJsonProgressOnly && \is_array($initialQueueRow) && $initialQueueRow !== [] && $sse->isAlive()) {
             $this->emitQueueObserverQueueDetailEvents($sse, $initialQueueRow, $operation);
         }
         $lastQueueStatus = '';
         $lastQueuePid = 0;
-        [$lastQueueProcess, $lastQueueResultLength, $lastQueueStatus, $lastQueuePid] = $this->forwardObservedQueueSignals(
-            $sse,
-            $initialQueueRow,
-            $operation,
-            $lastQueueProcess,
-            $lastQueueResultLength,
-            $lastQueueStatus,
-            $lastQueuePid
-        );
+        if (!$planJsonProgressOnly) {
+            [$lastQueueProcess, $lastQueueResultLength, $lastQueueStatus, $lastQueuePid] = $this->forwardObservedQueueSignals(
+                $sse,
+                $initialQueueRow,
+                $operation,
+                $lastQueueProcess,
+                $lastQueueResultLength,
+                $lastQueueStatus,
+                $lastQueuePid
+            );
+        }
         $this->emitObservedPlanJsonTaskProgressState(
             $sse,
             $scope,
             $operation,
-            $initialQueueRow,
+            $planJsonProgressOnly ? null : $initialQueueRow,
             $lastTaskProgressStateSignature
         );
         $this->emitObservedPlanStageOnePageProgressState(
             $sse,
-            $initialQueueRow,
+            $scope,
             $operation,
             $lastStageOnePageProgressSignature
         );
@@ -9101,7 +9106,9 @@ class AiSiteAgent extends BaseController
             );
             $activeOperation = $this->resolveActiveOperationForExecutionToken($scope, $executionToken);
             $queueId = (int)($activeOperation['queue_id'] ?? $queueId);
-            $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $includeQueuePayload);
+            $queueRow = $planJsonProgressOnly
+                ? null
+                : $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $includeQueuePayload);
             $eventCorrelation = $this->buildObservedOperationEventCorrelation(
                 $operation,
                 $executionToken,
@@ -9122,9 +9129,12 @@ class AiSiteAgent extends BaseController
                 $lastQueuePid,
             ];
             $stageOneProgressBefore = $lastStageOnePageProgressSignature;
+            $taskProgressBefore = $lastTaskProgressStateSignature;
             if ($newEvents !== []) {
                 $freshAfterEvents = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
-                $queueRowAfterEvents = $this->findAiSiteOperationQueueRow($freshAfterEvents, $operation, $queueId, $includeQueuePayload);
+                $queueRowAfterEvents = $planJsonProgressOnly
+                    ? null
+                    : $this->findAiSiteOperationQueueRow($freshAfterEvents, $operation, $queueId, $includeQueuePayload);
                 if (\is_array($queueRowAfterEvents) && $queueRowAfterEvents !== []) {
                     $fresh = $freshAfterEvents;
                     $scope = $this->scopeCompatibilityService->normalizeScope(
@@ -9136,15 +9146,17 @@ class AiSiteAgent extends BaseController
                 }
                 $lastEventId = $this->forwardObservedOperationEvents($sse, $session, $adminId, $newEvents, $lastEventId, $queueRow);
             }
-            [$lastQueueProcess, $lastQueueResultLength, $lastQueueStatus, $lastQueuePid] = $this->forwardObservedQueueSignals(
-                $sse,
-                $queueRow,
-                $operation,
-                $lastQueueProcess,
-                $lastQueueResultLength,
-                $lastQueueStatus,
-                $lastQueuePid
-            );
+            if (!$planJsonProgressOnly) {
+                [$lastQueueProcess, $lastQueueResultLength, $lastQueueStatus, $lastQueuePid] = $this->forwardObservedQueueSignals(
+                    $sse,
+                    $queueRow,
+                    $operation,
+                    $lastQueueProcess,
+                    $lastQueueResultLength,
+                    $lastQueueStatus,
+                    $lastQueuePid
+                );
+            }
             $queueProgressChanged = $queueProgressBefore !== [
                 $lastQueueProcess,
                 $lastQueueResultLength,
@@ -9153,7 +9165,7 @@ class AiSiteAgent extends BaseController
             ];
             $this->emitObservedPlanStageOnePageProgressState(
                 $sse,
-                $queueRow,
+                $scope,
                 $operation,
                 $lastStageOnePageProgressSignature
             );
@@ -9162,10 +9174,16 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 $operation,
-                $queueRow,
+                $planJsonProgressOnly ? null : $queueRow,
                 $lastTaskProgressStateSignature
             );
-            if (!$this->isObservedOperationStillRunning($activeOperation, $operation, $executionToken, $queueRow)) {
+            $queueProgressChanged = $queueProgressChanged || $taskProgressBefore !== $lastTaskProgressStateSignature;
+            if ($planJsonProgressOnly) {
+                $planJsonTerminalState = $this->resolveObservedPlanJsonTerminalState($scope, $operation);
+                if (!empty($planJsonTerminalState['terminal'])) {
+                    break;
+                }
+            } elseif (!$this->isObservedOperationStillRunning($activeOperation, $operation, $executionToken, $queueRow)) {
                 $loopQueueStatus = \trim((string)($queueRow['status'] ?? ''));
                 // Comment removed.
                 if (!$this->isObservedQueueInProgress($queueRow)) {
@@ -9214,6 +9232,9 @@ class AiSiteAgent extends BaseController
             $queueRow,
             $queueStatus
         );
+        $planJsonTerminalState = $planJsonProgressOnly
+            ? $this->resolveObservedPlanJsonTerminalState($scope, $operation)
+            : [];
         if ($queueStatus === 'done') {
             $operationToken = \trim((string)($activeOperation['execution_token'] ?? ''));
             if ($operationToken === '') {
@@ -9249,43 +9270,63 @@ class AiSiteAgent extends BaseController
         $activeInProgress = \in_array($status, ['pending', 'queued', 'running', 'processing'], true);
         $queueInProgress = $this->isObservedQueueInProgress($queueRow);
         $queueTerminal = $this->isObservedQueueTerminal($queueRow);
-        $success = !$timedOut
-            && !\in_array($status, ['error', 'cancelled', 'pending', 'queued', 'running', 'processing'], true)
-            && !$queueInProgress;
-        if ($queueStatus === 'done' && $queueTerminal) {
-            $success = true;
-        } elseif (\in_array($queueStatus, ['error', 'stop'], true) && $queueTerminal) {
-            $success = false;
+        $queueFinalCheckAvailable = !$planJsonProgressOnly || $this->hasObservedQueueFinalCheckRow($queueRow);
+        if ($planJsonProgressOnly) {
+            $success = !$timedOut
+                && !empty($planJsonTerminalState['complete'])
+                && $queueFinalCheckAvailable
+                && !$this->isObservedQueueFailure($queueRow);
+        } else {
+            $success = !$timedOut
+                && !\in_array($status, ['error', 'cancelled', 'pending', 'queued', 'running', 'processing'], true)
+                && !$queueInProgress;
+            if ($queueStatus === 'done' && $queueTerminal) {
+                $success = true;
+            } elseif (\in_array($queueStatus, ['error', 'stop'], true) && $queueTerminal) {
+                $success = false;
+            }
         }
         $message = \trim((string)($activeOperation['message'] ?? ''));
         if ($timedOut) {
             // Comment removed.
-                $message = (string)__('Operation completed.');
+            $message = (string)__('Operation timed out.');
+        } elseif ($planJsonProgressOnly && $this->isObservedQueueFailure($queueRow)) {
+            $message = $this->resolveObservedQueueMessage($queueRow, false);
+            if ($message === '') {
+                $message = (string)__('Queue final status check failed; please retry.');
+            }
+        } elseif ($planJsonProgressOnly && !$queueFinalCheckAvailable) {
+            $message = (string)__('Queue final status could not be verified; please retry.');
+        } elseif ($planJsonProgressOnly && !empty($planJsonTerminalState['message'])) {
+            $message = (string)$planJsonTerminalState['message'];
         } elseif ($message === '') {
             $message = $this->resolveObservedQueueMessage($queueRow, $success);
         }
-        if ($queueStatus === 'done' && $sse->isAlive()) {
+        if ($sse->isAlive() && \is_array($queueRow) && $queueRow !== [] && ($queueStatus === 'done' || $planJsonProgressOnly)) {
             $queueState = $this->buildQueueObserverPublicState($queueRow);
-            $queueInfo = $this->buildQueueObserverPanelPayload($queueRow);
             $sse->sendEvent('info', [
                 'message' => $message,
                 'operation' => $operation,
                 'queue_id' => (int)($queueRow['queue_id'] ?? 0),
                 'queue_status' => $queueStatus,
                 'queue_state' => $queueState,
-                'queue_info' => $queueInfo,
                 'state' => $state,
                 'token_usage' => \is_array($queueState['token_usage'] ?? null) ? $queueState['token_usage'] : [],
-                'progress_kind' => 'queue_info',
+                'progress_kind' => $planJsonProgressOnly ? 'queue_final_check' : 'queue_info',
                 'observer_detail' => true,
-                'queue_panel_update' => true,
+                'queue_panel_update' => !$planJsonProgressOnly,
             ]);
         }
 
-        if (!$timedOut && !$success && ($activeInProgress || $queueInProgress)) {
+        if (
+            !$timedOut
+            && !$success
+            && (!$planJsonProgressOnly || empty($planJsonTerminalState['terminal']))
+            && ($activeInProgress || $queueInProgress)
+        ) {
             return [
                 'success' => true,
-                    'message' => (string)__('Operation completed.'),
+                'message' => (string)__('Operation completed.'),
                 'data' => $this->buildObservedOperationResultData($operation, $state),
                 'state' => $state,
                 'http_code' => 200,
@@ -9293,13 +9334,23 @@ class AiSiteAgent extends BaseController
             ];
         }
 
-        return [
+        $result = [
             'success' => $success,
             'message' => $message,
             'data' => $this->buildObservedOperationResultData($operation, $state),
             'state' => $state,
             'http_code' => $success ? 200 : 409,
         ];
+        if ($planJsonProgressOnly) {
+            $result['queue_status'] = $queueStatus;
+            $result['progress_kind'] = 'queue_final_check';
+            $result['queue_final_check'] = [
+                'available' => $queueFinalCheckAvailable,
+                'failed' => $this->isObservedQueueFailure($queueRow),
+            ];
+        }
+
+        return $result;
     }
 
     private function streamDeferredQueueProgressUntilTerminal(
@@ -9311,14 +9362,11 @@ class AiSiteAgent extends BaseController
         int $queueId
     ): void {
         $stageCode = $this->resolveAiSiteQueueStage($operation);
-        $lastQueueProcess = '';
-        $lastQueueResultLength = 0;
-        $lastQueueStatus = '';
-        $lastQueuePid = 0;
         $lastTaskProgressStateSignature = '';
         $lastStageOnePageProgressSignature = '';
         $pollIntervalMs = self::OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS;
         $maxObserveCycles = (int)\ceil(self::OBSERVER_QUEUE_PROGRESS_MAX_OBSERVE_MS / \max(1, $pollIntervalMs));
+        $planJsonTerminalState = [];
 
         for ($observeCycle = 0; $observeCycle < $maxObserveCycles && $sse->isAlive(); $observeCycle++) {
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
@@ -9330,23 +9378,10 @@ class AiSiteAgent extends BaseController
             if ($effectiveQueueId <= 0) {
                 $effectiveQueueId = $queueId;
             }
-            $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $effectiveQueueId, $operation === 'plan');
-            if (\is_array($queueRow) && $queueRow !== []) {
-                $queueId = (int)($queueRow['queue_id'] ?? $queueId);
-            }
-
-            [$lastQueueProcess, $lastQueueResultLength, $lastQueueStatus, $lastQueuePid] = $this->forwardObservedQueueSignals(
-                $sse,
-                $queueRow,
-                $operation,
-                $lastQueueProcess,
-                $lastQueueResultLength,
-                $lastQueueStatus,
-                $lastQueuePid
-            );
+            $queueId = $effectiveQueueId > 0 ? $effectiveQueueId : $queueId;
             $this->emitObservedPlanStageOnePageProgressState(
                 $sse,
-                $queueRow,
+                $scope,
                 $operation,
                 $lastStageOnePageProgressSignature
             );
@@ -9354,11 +9389,12 @@ class AiSiteAgent extends BaseController
                 $sse,
                 $scope,
                 $operation,
-                $queueRow,
+                null,
                 $lastTaskProgressStateSignature
             );
 
-            if (!$this->isObservedQueueInProgress($queueRow)) {
+            $planJsonTerminalState = $this->resolveObservedPlanJsonTerminalState($scope, $operation);
+            if (!empty($planJsonTerminalState['terminal'])) {
                 break;
             }
 
@@ -9371,17 +9407,18 @@ class AiSiteAgent extends BaseController
         }
 
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($fresh, $stageCode)
+        );
         $queueRow = $this->findAiSiteOperationQueueRow($fresh, $operation, $queueId, $operation === 'plan');
-        if ($this->isObservedQueueInProgress($queueRow)) {
+        $planJsonTerminalState = $this->resolveObservedPlanJsonTerminalState($scope, $operation);
+        if (empty($planJsonTerminalState['terminal'])) {
             $sse->sendEvent('info', [
-            'message' => (string)__('Operation completed.'),
+                'message' => (string)__('Operation completed.'),
                 'operation' => $operation,
                 'queue_id' => $queueId,
-                'queue_status' => (string)($queueRow['status'] ?? 'running'),
-                'queue_process' => (string)($queueRow['process'] ?? ''),
-                'queue_state' => \is_array($queueRow) ? $this->buildQueueObserverPublicState($queueRow) : [],
-                'queue_info' => \is_array($queueRow) ? $this->buildQueueObserverPanelPayload($queueRow) : [],
-                'progress_kind' => 'queue_info',
+                'queue_status' => \is_array($queueRow) ? (string)($queueRow['status'] ?? '') : '',
+                'progress_kind' => 'plan_json_progress',
                 'observer_detail' => true,
                 'deferred_queue_progress' => true,
                 'queue_waiting_for_scheduler' => false,
@@ -9395,10 +9432,18 @@ class AiSiteAgent extends BaseController
             $this->buildWorkspaceState($fresh, $adminId, 80, false)
         );
         $queueStatus = \trim((string)($queueRow['status'] ?? ''));
-        $success = $queueStatus === 'done';
-        $message = $this->resolveObservedQueueMessage($queueRow, $success);
+        $queueFinalCheckAvailable = $this->hasObservedQueueFinalCheckRow($queueRow);
+        $queueFailure = $this->isObservedQueueFailure($queueRow);
+        $success = !empty($planJsonTerminalState['complete']) && $queueFinalCheckAvailable && !$queueFailure;
+        if ($queueFailure) {
+            $message = $this->resolveObservedQueueMessage($queueRow, false);
+        } elseif (!$queueFinalCheckAvailable) {
+            $message = (string)__('Queue final status could not be verified; please retry.');
+        } else {
+            $message = (string)($planJsonTerminalState['message'] ?? '');
+        }
         if ($message === '') {
-            $message = $success ? 'Queue operation completed.' : 'Queue operation stopped.';
+            $message = $success ? (string)__('Operation completed.') : (string)__('Operation failed.');
         }
         $sse->complete([
             'success' => $success,
@@ -9407,6 +9452,11 @@ class AiSiteAgent extends BaseController
             'data' => $this->buildObservedOperationResultData($operation, $state),
             'state' => $state,
             'queue_status' => $queueStatus,
+            'progress_kind' => 'queue_final_check',
+            'queue_final_check' => [
+                'available' => $queueFinalCheckAvailable,
+                'failed' => $queueFailure,
+            ],
         ]);
     }
 
@@ -10188,21 +10238,501 @@ class AiSiteAgent extends BaseController
         );
     }
 
+    private function isPlanJsonObservedProgressOperation(string $operation): bool
+    {
+        return \in_array(\trim($operation), ['plan', 'build'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolveObservedPlanJsonTerminalState(array $scope, string $operation): array
+    {
+        $snapshot = $this->buildObservedPlanJsonProgressSnapshot($scope, $operation);
+        if ($snapshot === []) {
+            return [
+                'terminal' => false,
+                'complete' => false,
+                'failed' => false,
+                'message' => '',
+                'snapshot' => [],
+            ];
+        }
+
+        $pending = (int)($snapshot['pending'] ?? 0);
+        $running = (int)($snapshot['running'] ?? 0);
+        $failed = (int)($snapshot['failed'] ?? 0);
+        $cancelled = (int)($snapshot['cancelled'] ?? 0);
+        $invalid = (int)($snapshot['invalid_status'] ?? 0);
+        $missingHtml = (int)($snapshot['missing_html'] ?? 0);
+        $complete = !empty($snapshot['passed']);
+        $failedTerminal = $failed > 0 || $cancelled > 0 || $invalid > 0 || $missingHtml > 0;
+
+        return [
+            'terminal' => $complete || $failedTerminal,
+            'complete' => $complete,
+            'failed' => $failedTerminal,
+            'message' => $complete
+                ? (string)__('Operation completed.')
+                : ($failedTerminal ? (string)__('Operation failed.') : ''),
+            'snapshot' => $snapshot,
+            'reason' => (string)($snapshot['reason'] ?? ''),
+            'pending' => $pending,
+            'running' => $running,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildObservedPlanJsonProgressSnapshot(array $scope, string $operation): array
+    {
+        return match (\trim($operation)) {
+            'plan' => $this->buildObservedPlanStagePlanJsonProgressSnapshot($scope),
+            'build' => $this->buildObservedBuildPlanJsonProgressSnapshot($scope),
+            default => [],
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildObservedBuildPlanJsonProgressSnapshot(array $scope): array
+    {
+        $gate = $this->planJsonTaskService->inspectBuildCompletionGate($scope);
+        $summary = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
+        $pageBlockProgress = \is_array($gate['page_block_progress'] ?? null) ? $gate['page_block_progress'] : [];
+
+        return \array_replace($summary, [
+            'total' => (int)($gate['total'] ?? $summary['total'] ?? 0),
+            'done' => (int)($gate['done'] ?? $summary['done'] ?? 0),
+            'pending' => (int)($gate['pending'] ?? $summary['pending'] ?? 0),
+            'running' => (int)($gate['running'] ?? $summary['running'] ?? 0),
+            'failed' => (int)($gate['failed'] ?? $summary['failed'] ?? 0),
+            'cancelled' => (int)($gate['cancelled'] ?? $summary['cancelled'] ?? 0),
+            'invalid_status' => (int)($gate['invalid_status'] ?? $summary['invalid_status'] ?? 0),
+            'missing_html' => (int)($gate['missing_html'] ?? $summary['missing_html'] ?? 0),
+            'passed' => !empty($gate['passed']),
+            'reason' => (string)($gate['reason'] ?? ''),
+            'page_block_progress' => $pageBlockProgress,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildObservedPlanStagePlanJsonProgressSnapshot(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planJson = $this->planJsonStateService()->normalizePlanJson($planJson);
+        $pagesByType = [];
+        foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $pageKey => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $pageType = \trim((string)($page['page_type'] ?? $page['type'] ?? (\is_string($pageKey) ? $pageKey : '')));
+            if ($pageType === '') {
+                continue;
+            }
+            $page['page_type'] = $pageType;
+            $pagesByType[$pageType] = $page;
+        }
+
+        try {
+            $expectedPageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        } catch (\Throwable) {
+            $expectedPageTypes = \is_array($scope['page_types'] ?? null) ? \array_values($scope['page_types']) : [];
+        }
+        $expectedPageTypes = \array_values(\array_filter(\array_map(
+            static fn(mixed $value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            $expectedPageTypes
+        )));
+        if ($expectedPageTypes === []) {
+            $expectedPageTypes = \array_values(\array_keys($pagesByType));
+        }
+
+        $summary = [
+            'total' => 0,
+            'done' => 0,
+            'pending' => 0,
+            'running' => 0,
+            'failed' => 0,
+            'cancelled' => 0,
+            'invalid_status' => 0,
+            'missing_html' => 0,
+            'groups' => [],
+            'page_block_progress' => [
+                'expected_page_types' => $expectedPageTypes,
+                'rows' => [],
+                'shortfalls' => [],
+            ],
+        ];
+        $stageProgress = [
+            'total' => \count($expectedPageTypes),
+            'concurrency' => 0,
+            'done' => [],
+            'done_count' => 0,
+            'running' => [],
+            'running_count' => 0,
+            'failed' => [],
+            'failed_count' => 0,
+            'pending' => [],
+            'pending_count' => 0,
+            'remaining_count' => 0,
+            'details' => [],
+        ];
+
+        foreach ($expectedPageTypes as $pageType) {
+            $page = \is_array($pagesByType[$pageType] ?? null) ? $pagesByType[$pageType] : [];
+            $blocks = $page !== [] ? $this->extractObservedPlanJsonPageBlocks($page) : [];
+            $group = [
+                'page_type' => $pageType,
+                'total' => 0,
+                'done' => 0,
+                'pending' => 0,
+                'running' => 0,
+                'failed' => 0,
+                'cancelled' => 0,
+                'tasks' => [],
+            ];
+
+            if ($page === []) {
+                $summary['total']++;
+                $summary['pending']++;
+                $group['total']++;
+                $group['pending']++;
+                $stageProgress['pending'][] = $pageType;
+                $stageProgress['details'][] = [
+                    'page_type' => $pageType,
+                    'status' => 'pending',
+                    'message' => (string)__('Waiting for page plan.'),
+                ];
+                $summary['page_block_progress']['shortfalls'][] = [
+                    'page_type' => $pageType,
+                    'reason' => 'missing_plan_json_page',
+                ];
+                $summary['groups'][$pageType] = $group;
+                continue;
+            }
+
+            if ($blocks === []) {
+                $bucket = $this->resolveObservedPlanStagePageBucket($page);
+                $summary['total']++;
+                $summary[$bucket]++;
+                $group['total']++;
+                $group[$bucket]++;
+                $group['tasks'][] = [
+                    'task_key' => 'page:' . $pageType,
+                    'page_type' => $pageType,
+                    'block_key' => '',
+                    'status' => $bucket,
+                    'label' => (string)($page['title'] ?? $page['label'] ?? $pageType),
+                    'message' => (string)($page['message'] ?? $page['error_message'] ?? $page['error'] ?? ''),
+                    'updated_at' => (string)($page['updated_at'] ?? ''),
+                ];
+            } else {
+                foreach ($blocks as $blockKey => $block) {
+                    $bucket = $this->resolveObservedPlanStageBlockBucket($block);
+                    $task = [
+                        'task_key' => 'page:' . $pageType . ':' . $blockKey,
+                        'page_type' => $pageType,
+                        'block_key' => $blockKey,
+                        'status' => $bucket,
+                        'label' => (string)($block['title'] ?? $block['label'] ?? $blockKey),
+                        'message' => (string)($block['message'] ?? $block['error_message'] ?? $block['error'] ?? ''),
+                        'updated_at' => (string)($block['updated_at'] ?? ''),
+                    ];
+                    $summary['total']++;
+                    $summary[$bucket]++;
+                    $group['total']++;
+                    $group[$bucket]++;
+                    $group['tasks'][] = $task;
+                    $summary['page_block_progress']['rows'][] = [
+                        'page_type' => $pageType,
+                        'block_key' => $blockKey,
+                        'status' => $bucket,
+                        'message' => $task['message'],
+                        'updated_at' => $task['updated_at'],
+                    ];
+                }
+            }
+
+            $pageBucket = $this->resolveObservedPlanStageGroupBucket($group);
+            $stageProgress[$pageBucket][] = $pageType;
+            $stageProgress['details'][] = [
+                'page_type' => $pageType,
+                'status' => $pageBucket,
+                'message' => (string)($page['message'] ?? ''),
+                'block_total' => (int)$group['total'],
+                'block_done_count' => (int)$group['done'],
+                'block_running_count' => (int)$group['running'],
+                'block_failed_count' => (int)$group['failed'],
+                'block_pending_count' => (int)$group['pending'],
+                'block_rows' => \array_map(
+                    static fn(array $task): array => [
+                        'block_key' => (string)($task['block_key'] ?? ''),
+                        'status' => (string)($task['status'] ?? 'pending'),
+                        'message' => (string)($task['message'] ?? ''),
+                    ],
+                    $group['tasks']
+                ),
+            ];
+            $summary['groups'][$pageType] = $group;
+        }
+
+        foreach (['done', 'running', 'failed', 'pending'] as $bucket) {
+            $stageProgress[$bucket . '_count'] = \count($stageProgress[$bucket]);
+        }
+        $stageProgress['remaining_count'] = (int)$stageProgress['running_count'] + (int)$stageProgress['pending_count'];
+        $stageProgress['concurrency'] = (int)$stageProgress['running_count'];
+        $summary['passed'] = (int)$summary['total'] > 0
+            && (int)$summary['pending'] === 0
+            && (int)$summary['running'] === 0
+            && (int)$summary['failed'] === 0
+            && (int)$summary['cancelled'] === 0
+            && (int)$summary['invalid_status'] === 0;
+        $summary['reason'] = match (true) {
+            (int)$summary['total'] <= 0 => 'missing_plan_json_blocks',
+            (int)$summary['failed'] > 0 => 'failed_plan_json_blocks',
+            (int)$summary['cancelled'] > 0 => 'cancelled_plan_json_blocks',
+            (int)$summary['invalid_status'] > 0 => 'invalid_plan_json_block_status',
+            (int)$summary['running'] > 0 || (int)$summary['pending'] > 0 => 'unfinished_plan_json_blocks',
+            default => '',
+        };
+        $summary['stage1_page_progress'] = $stageProgress;
+
+        return $summary;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     * @return array<string, array<string, mixed>>
+     */
+    private function extractObservedPlanJsonPageBlocks(array $page): array
+    {
+        $metaKeys = [
+            'page_key' => true,
+            'page_type' => true,
+            'type' => true,
+            'status' => true,
+            'message' => true,
+            'error' => true,
+            'error_message' => true,
+            'updated_at' => true,
+            'started_at' => true,
+            'finished_at' => true,
+            'attempt_no' => true,
+            'result_ref' => true,
+            'title' => true,
+            'label' => true,
+            'page_label' => true,
+            'page_title' => true,
+            'page_goal' => true,
+            'page_status' => true,
+            'content_locale' => true,
+            'shared_context_hash' => true,
+            'theme_context_hash' => true,
+            'assembly_version' => true,
+            'generation_method' => true,
+            'page_design_plan' => true,
+            'theme_alignment_summary' => true,
+            'page_context_hash' => true,
+            'blocks' => true,
+            'block_previews' => true,
+            'seo' => true,
+            'primary_keywords' => true,
+            'secondary_keywords' => true,
+            'meta_title' => true,
+            'meta_description' => true,
+            'meta_keywords' => true,
+            'route' => true,
+            'route_path' => true,
+            'slug' => true,
+            'path' => true,
+            'layout' => true,
+            'style_code' => true,
+            'style_settings' => true,
+            'design_tokens' => true,
+            'theme_css_ref' => true,
+            'navigation' => true,
+            'menus' => true,
+            'links' => true,
+            'settings' => true,
+            'preview_url' => true,
+            'preview_full_url' => true,
+            'visual_preview_url' => true,
+            'visual_edit_url' => true,
+            'virtual_preview_url' => true,
+            'virtual_edit_url' => true,
+            'assets' => true,
+            'sections' => true,
+            'section_refinements' => true,
+            'ai_description' => true,
+            'content' => true,
+            'description' => true,
+            'summary' => true,
+            'html' => true,
+            'html_content' => true,
+            'fields' => true,
+            'ordered_block_keys' => true,
+        ];
+        $blocks = [];
+        foreach ($page as $key => $block) {
+            if (!\is_string($key) || isset($metaKeys[\trim($key)]) || !\is_array($block)) {
+                continue;
+            }
+            $blockKey = \trim((string)($block['block_key'] ?? $block['section_key'] ?? $key));
+            if ($blockKey === '') {
+                continue;
+            }
+            $block['block_key'] = $blockKey;
+            $blocks[$blockKey] = $block;
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $page
+     */
+    private function resolveObservedPlanStagePageBucket(array $page): string
+    {
+        $status = $this->planJsonStateService()->normalizeBlockStatus($page['status'] ?? AiSitePlanJsonStateService::STATUS_PENDING);
+        return match ($status) {
+            AiSitePlanJsonStateService::STATUS_DONE => 'done',
+            AiSitePlanJsonStateService::STATUS_RUNNING => 'running',
+            AiSitePlanJsonStateService::STATUS_FAILED => 'failed',
+            default => $this->hasObservedPlanStageContent($page) ? 'done' : 'pending',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function resolveObservedPlanStageBlockBucket(array $block): string
+    {
+        $status = $this->planJsonStateService()->normalizeBlockStatus($block['status'] ?? AiSitePlanJsonStateService::STATUS_PENDING);
+        return match ($status) {
+            AiSitePlanJsonStateService::STATUS_DONE => 'done',
+            AiSitePlanJsonStateService::STATUS_RUNNING => 'running',
+            AiSitePlanJsonStateService::STATUS_FAILED => 'failed',
+            default => $this->hasObservedPlanStageContent($block) ? 'done' : 'pending',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     */
+    private function hasObservedPlanStageContent(array $node): bool
+    {
+        foreach (['title', 'label', 'component', 'component_code', 'section_code', 'role', 'fields', 'demo', 'description', 'content_plan', 'style_plan', 'block_goal'] as $key) {
+            if (!\array_key_exists($key, $node)) {
+                continue;
+            }
+            $value = $node[$key];
+            if (\is_string($value) && \trim($value) !== '') {
+                return true;
+            }
+            if (\is_array($value) && $value !== []) {
+                return true;
+            }
+            if ($value !== null && $value !== false && !\is_string($value) && !\is_array($value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $group
+     */
+    private function resolveObservedPlanStageGroupBucket(array $group): string
+    {
+        if ((int)($group['failed'] ?? 0) > 0) {
+            return 'failed';
+        }
+        if ((int)($group['running'] ?? 0) > 0) {
+            return 'running';
+        }
+        if ((int)($group['pending'] ?? 0) > 0) {
+            return 'pending';
+        }
+
+        return (int)($group['done'] ?? 0) > 0 ? 'done' : 'pending';
+    }
+
     /**
      * @param array<string, mixed>|null $queueRow
      */
+    private function isObservedQueueFailure(?array $queueRow): bool
+    {
+        if (!\is_array($queueRow) || $queueRow === []) {
+            return false;
+        }
+        $status = \strtolower(\trim((string)($queueRow['status'] ?? '')));
+
+        return \in_array($status, ['error', 'stop', 'stopped', 'cancelled', 'canceled'], true);
+    }
+
+    /**
+     * @param array<string, mixed>|null $queueRow
+     */
+    private function hasObservedQueueFinalCheckRow(?array $queueRow): bool
+    {
+        return \is_array($queueRow)
+            && $queueRow !== []
+            && \trim((string)($queueRow['status'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     * @return array<string, mixed>
+     */
+    private function summarizeObservedPlanJsonSnapshotForPayload(array $snapshot): array
+    {
+        $total = (int)($snapshot['total'] ?? 0);
+        $done = (int)($snapshot['done'] ?? 0);
+        $pending = (int)($snapshot['pending'] ?? 0);
+        $running = (int)($snapshot['running'] ?? 0);
+        $failed = (int)($snapshot['failed'] ?? 0);
+        $cancelled = (int)($snapshot['cancelled'] ?? 0);
+        $invalid = (int)($snapshot['invalid_status'] ?? 0);
+        $missingHtml = (int)($snapshot['missing_html'] ?? 0);
+
+        return [
+            'total' => $total,
+            'done' => $done,
+            'pending' => $pending,
+            'running' => $running,
+            'failed' => $failed,
+            'cancelled' => $cancelled,
+            'invalid_status' => $invalid,
+            'missing_html' => $missingHtml,
+            'remaining' => \max(0, $pending + $running),
+            'passed' => !empty($snapshot['passed']) ? 1 : 0,
+            'reason' => (string)($snapshot['reason'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
     private function emitObservedPlanStageOnePageProgressState(
         SseWriter $sse,
-        ?array $queueRow,
+        array $scope,
         string $operation,
         string &$lastSignature
     ): void {
-        if ($operation !== 'plan' || !$sse->isAlive() || !\is_array($queueRow) || $queueRow === []) {
+        if ($operation !== 'plan' || !$sse->isAlive()) {
             return;
         }
 
-        $queueState = $this->buildQueueObserverPublicState($queueRow);
-        $progress = \is_array($queueState['stage1_page_progress'] ?? null) ? $queueState['stage1_page_progress'] : [];
+        $snapshot = $this->buildObservedPlanStagePlanJsonProgressSnapshot($scope);
+        $progress = \is_array($snapshot['stage1_page_progress'] ?? null) ? $snapshot['stage1_page_progress'] : [];
         if ($progress === []) {
             return;
         }
@@ -10221,28 +10751,27 @@ class AiSiteAgent extends BaseController
         $remaining = \array_key_exists('remaining_count', $progress)
             ? \max(0, (int)$progress['remaining_count'])
             : (($running + $pending) > 0 ? $running + $pending : \max(0, $total - $done - $failed));
-        $progressPercent = $total > 0 ? 60 + (int)\floor(($done / \max(1, $total)) * 22) : (int)($queueRow['progress_percent'] ?? 0);
-        $message = \trim((string)($queueRow['process'] ?? ''));
-        if ($message === '' || \str_starts_with($message, 'Stage 1 page fanout:')) {
-            $message = 'Stage 1 page fanout: total ' . $total . ' | done ' . $done . ' | remaining ' . $remaining;
-        }
-        $queueInfo = $this->queueObserverHelperService()->buildPanelPayload($queueRow, $queueState);
+        $progressPercent = $total > 0 ? (int)\floor(($done / \max(1, $total)) * 100) : 0;
+        $message = (string)__('Plan progress: pages %{pages_done}/%{pages_total}, blocks %{blocks_done}/%{blocks_total}, remaining %{remaining}', [
+            'pages_done' => (string)$done,
+            'pages_total' => (string)$total,
+            'blocks_done' => (string)((int)($snapshot['done'] ?? 0)),
+            'blocks_total' => (string)((int)($snapshot['total'] ?? 0)),
+            'remaining' => (string)$remaining,
+        ]);
 
         $sse->sendEvent('progress', [
             'message' => $message,
             'operation' => 'plan',
             'progress_percent' => \max(0, \min(99, $progressPercent)),
-            'progress_kind' => 'queue_info',
+            'progress_kind' => 'plan_json_progress',
             'stage1_step' => 'plan_json_page',
-            'stage1_phase' => 'fanout_progress',
+            'stage1_phase' => 'plan_json_scan',
             'stage1_page_progress' => $progress,
-            'queue_id' => (int)($queueRow['queue_id'] ?? 0),
-            'queue_status' => (string)($queueRow['status'] ?? ''),
-            'queue_process' => $message,
-            'queue_state' => $queueState,
-            'queue_info' => $queueInfo,
+            'plan_json_execution_summary' => $this->summarizeObservedPlanJsonSnapshotForPayload($snapshot),
+            'page_block_progress' => \is_array($snapshot['page_block_progress'] ?? null) ? $snapshot['page_block_progress'] : [],
             'observer_detail' => true,
-            'queue_panel_update' => true,
+            'queue_panel_update' => false,
         ]);
     }
 
@@ -10265,22 +10794,26 @@ class AiSiteAgent extends BaseController
         }
 
         $summary = $this->planJsonTaskService->summarize($scope);
+        $snapshot = $this->buildObservedBuildPlanJsonProgressSnapshot($scope);
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($activeOperation['queue_status'] ?? ''));
-        $queueStatus = \trim((string)($queueRow['status'] ?? ''));
-        $aiGenerating = \in_array($queueStatus, ['pending', 'queued', 'running'], true)
-            || \in_array($activeStatus, ['queued', 'running'], true);
+        $pending = \max(0, (int)($summary['pending'] ?? 0));
+        $running = \max(0, (int)($summary['running'] ?? 0));
+        $failed = \max(0, (int)($summary['failed'] ?? 0));
+        $total = \max(0, (int)($summary['total'] ?? 0));
+        $done = \max(0, (int)($summary['done'] ?? 0));
+        $remaining = \max(0, $pending + $running);
+        $aiGenerating = $remaining > 0
+            || \in_array($activeStatus, ['pending', 'queued', 'running', 'processing'], true);
 
         if ((int)($summary['total'] ?? 0) <= 0 && !$aiGenerating) {
             return;
         }
 
         $signaturePayload = [
-            'queue_id' => (int)($queueRow['queue_id'] ?? $activeOperation['queue_id'] ?? 0),
-            'queue_status' => $queueStatus,
-            'queue_pid' => (int)($queueRow['pid'] ?? 0),
             'active_status' => $activeStatus,
             'summary' => $summary,
+            'snapshot' => $this->summarizeObservedPlanJsonSnapshotForPayload($snapshot),
             'ai_generating' => $aiGenerating,
         ];
         $signature = \sha1(\json_encode($signaturePayload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '');
@@ -10289,10 +10822,19 @@ class AiSiteAgent extends BaseController
         }
         $lastSignature = $signature;
 
-        $message = $queueStatus === 'running'
-            ? (string)__('Operation completed.')
-            : (string)__('Operation failed.');
-        $progressPercent = isset($activeOperation['progress_percent']) ? (int)$activeOperation['progress_percent'] : $this->resolveTaskSummaryProgressPercent($summary);
+        if ($failed > 0) {
+            $message = (string)__('Operation failed.');
+        } elseif ($total > 0 && $remaining === 0) {
+            $message = (string)__('Operation completed.');
+        } else {
+            $message = (string)__('Build progress: blocks %{done}/%{total}, running %{running}, remaining %{remaining}', [
+                'done' => (string)$done,
+                'total' => (string)$total,
+                'running' => (string)$running,
+                'remaining' => (string)$remaining,
+            ]);
+        }
+        $progressPercent = $this->resolveTaskSummaryProgressPercent($summary);
 
         $payload = $this->planJsonTaskProgressStatePayload(
             $summary,
@@ -10300,9 +10842,13 @@ class AiSiteAgent extends BaseController
             $message,
             $progressPercent,
             $aiGenerating,
-            $queueRow,
+            null,
             $activeStatus
         );
+        $payload['plan_json_execution_summary'] = $this->summarizeObservedPlanJsonSnapshotForPayload($snapshot);
+        if (\is_array($snapshot['page_block_progress'] ?? null) && $snapshot['page_block_progress'] !== []) {
+            $payload['page_block_progress'] = $snapshot['page_block_progress'];
+        }
         $this->emitTaskProgressStateEvent($sse, $payload);
     }
 

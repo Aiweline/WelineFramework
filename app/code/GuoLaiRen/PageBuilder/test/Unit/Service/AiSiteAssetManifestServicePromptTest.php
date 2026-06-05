@@ -29,6 +29,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         ];
 
         $prompt = $service->buildPrompt($slot, $scope);
+        $firstLine = \explode("\n", $prompt)[0] ?? '';
 
         self::assertStringContainsString('Block-only image artifact contract', $prompt);
         self::assertStringContainsString('not as a rendered website or page screenshot', $prompt);
@@ -45,6 +46,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
     public function testLogoSlotPromptUsesSubjectFirstContractInsteadOfBrandFirst(): void
     {
         // Logo prompts must lead with the visual subject instead of asking the image model to render the brand name as readable text.
+        $service = new AiSiteAssetManifestService();
 
         $slot = [
             'slot_id' => 'identity:website-logo',
@@ -63,6 +65,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         ];
 
         $prompt = $service->buildPrompt($slot, $scope);
+        $firstLine = \explode("\n", $prompt)[0] ?? '';
 
         // 濠电偞鍨堕幑渚€顢欐繝鍕閻庯綆鍋嗛梽鍕煙鐎电孝妞ゆ柨锕悡顐﹀炊瑜庨崵鍥煏閸℃绠荤€殿喕鍗抽、娑橆煥鎼粹€冲濠电偞鍨堕幐鎾磻閹剧粯鍋犳繛鎴烆焽閻掕法绱掓潏銊х畺缂佸顦靛顒傛崉閵娧呮殸濠碉紕鍋戦崐娑㈩敋瑜忛埀顒€鐏氶敃銏犵暦閵夆晩鏁冮柨娑樺閹虫繈姊洪崨濠冪€柕鍫濇处椤繂鈹戦鐐殌闁稿﹥鎮傚畷锝堫樄闁哄被鍔戦、娆撳礂閻撳簶鍋撻幎鑺ュ仯?        $firstLine = \explode("\n", $prompt)[0] ?? '';
         self::assertStringStartsWith('PRIMARY SUBJECT', $firstLine);
@@ -202,6 +205,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         $heroSlot = $slots['page:home_page:content-home-page-home-hero'];
         self::assertSame('hero_image', (string)($heroSlot['slot_type'] ?? ''));
         self::assertStringContainsString('Play royal card games tonight', (string)($heroSlot['label'] ?? ''));
+        $brief = (string)($heroSlot['brief'] ?? '');
 
         // banner slot.brief 闂傚鍋勫ú銈夊箠濮椻偓婵＄绠涢弮鍌ゆ祫?PRIMARY SUBJECT 闁诲孩顔栭崰鎺楀磻閹炬剚鐔嗛柟顖滃瑜把呯磼鏉堛劎绠栫紒瀣槸椤繈顢楅埀顒勶綖閵堝鍋ｉ柛銉戝本效闂佹椿浜濇刊鐣岀不濞戙垹宸濇繛锝庡厴閸嬫捁绠涘☉妯碱槱闂佹儳绻掗幊鎾剁不濞戙垺鐓曢柨鏂挎惈婵℃寧銇?1 闂?        $brief = (string)($heroSlot['brief'] ?? '');
         self::assertStringStartsWith('PRIMARY SUBJECT', $brief);
@@ -321,6 +325,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
     public function testRequiredThemeLogoGenerationSlotBriefsAreSubjectFirst(): void
     {
+        $service = new AiSiteAssetManifestService();
         // 闂傚倷绀侀妵妯肩矆娓氣偓閹?buildRequiredIdentitySlots 闂備礁鎲￠崝鏍偡閵夆晛鐭?manifest 闂?slot.brief 闂備礁鎼€氱兘宕归婧惧亾闂堟稒婀伴柟宄版嚇楠炴﹢鎳犻鈧弸鐘绘⒑缁嬭法绠伴柣妤冨仧濡?        // 濠电偞鍨堕弻銊╊敄閸涱喗娅犻柣妯虹－椤?"Generate the official website logo for X" 闁诲孩顔栭崰鎺楀磻閹炬剚鐔嗛柟顖滃瑜把呯磼鏉堛劎绠栭悗鐢靛帶椤繈骞囨担纭呮櫑 AI 闂佽崵鍠愰悷杈╃礊閳ь剚銇勯弴鐘差暭缂?        // 闂備焦鐪归崹濂割敊婵犲嫮鍗氶悗娑欘焽閳?X 闁荤喐绮忛崺鍥垂婵傚憡瀵橀柛鏇ㄥ灡閺咁剟鏌涢顒傚埌濠殿喖娴风槐鎺楀磼濠垫劕鏁界紓浣诡殘閸犳牕鐣峰┑瀣叀闁告侗鍨抽ˇ顐︽⒑閹稿海鈯曠紒瀣崌閻涱噣宕堕鈧幑鍫曟煏婵炲灝鍔ょ紒鐘冲灥椤啴濡堕崼顐㈡暯婵?PRIMARY SUBJECT 濠电偠鎻徊鍓у垝閸垺瀚婚柣鏂款殠閸ゆ洟鏌涘┑鍡楊伌婵炲牃鏅濈槐鎺楀箻閸涙壆顦伴梺?        $service = new AiSiteAssetManifestService();
 
         $scope = [
