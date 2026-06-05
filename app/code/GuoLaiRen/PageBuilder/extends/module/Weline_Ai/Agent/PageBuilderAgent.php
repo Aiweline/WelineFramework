@@ -329,7 +329,7 @@ SYSTEM_PROMPT;
                         'tools' => $toolDefs,
                         'temperature' => (float)($params['temperature'] ?? 0.7),
                         'max_tokens' => (int)($params['max_tokens'] ?? 16000),
-                        'timeout' => (int)($params['timeout'] ?? 180),
+                        'timeout' => (int)($params['timeout'] ?? 0),
                         'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration) {
                             $streamCallback('thinking', [
                                 'content' => $chunk,
@@ -363,7 +363,7 @@ SYSTEM_PROMPT;
                         'tools' => $toolDefs,
                         'temperature' => (float)($params['temperature'] ?? 0.7),
                         'max_tokens' => (int)($params['max_tokens'] ?? 16000),
-                        'timeout' => (int)($params['timeout'] ?? 180),
+                        'timeout' => (int)($params['timeout'] ?? 0),
                     ]);
 
                     // 非流式：整块推送 thinking 和 content
@@ -513,7 +513,7 @@ SYSTEM_PROMPT;
                     'messages' => $finalMessages,
                     'temperature' => 0.3,
                     'max_tokens' => (int)($params['max_tokens'] ?? 16000),
-                    'timeout' => (int)($params['timeout'] ?? 180),
+                    'timeout' => (int)($params['timeout'] ?? 0),
                     'response_format' => ['type' => 'json_object'],
                 ];
                 try {
@@ -589,7 +589,7 @@ SYSTEM_PROMPT;
                         'messages' => $finalMessages,
                         'temperature' => 0.3,
                         'max_tokens' => (int)($params['max_tokens'] ?? 16000),
-                        'timeout' => (int)($params['timeout'] ?? 180),
+                        'timeout' => (int)($params['timeout'] ?? 0),
                         'response_format' => ['type' => 'json_object'],
                         'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration) {
                             $streamCallback('thinking', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]);
@@ -614,7 +614,7 @@ SYSTEM_PROMPT;
                         'messages' => $finalMessages,
                         'temperature' => 0.3,
                         'max_tokens' => (int)($params['max_tokens'] ?? 16000),
-                        'timeout' => (int)($params['timeout'] ?? 180),
+                        'timeout' => (int)($params['timeout'] ?? 0),
                         'response_format' => ['type' => 'json_object'],
                     ]);
                 }

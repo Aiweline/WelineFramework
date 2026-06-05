@@ -3097,11 +3097,24 @@
         return null;
     }
 
+    var retryableAiFailureResumeInFlight = {};
+
     function triggerRetryableAiFailureResumeOperation(operation) {
         var normalized = String(operation || '').trim();
+        if (!normalized) {
+            return false;
+        }
+        if (retryableAiFailureResumeInFlight[normalized]) {
+            return false;
+        }
         document.documentElement.dataset.pbRetryableAiTriggerOperation = normalized;
         if (normalized === 'plan') {
-            return !!workspaceApi.retryPhaseOnePlanGeneration({ forceRebuild: false, manualQueueAction: true });
+            retryableAiFailureResumeInFlight[normalized] = true;
+            var started = !!workspaceApi.retryPhaseOnePlanGeneration({ forceRebuild: false, manualQueueAction: true });
+            if (!started) {
+                delete retryableAiFailureResumeInFlight[normalized];
+            }
+            return started;
         }
         if (normalized === 'build') {
             if (!hasRetryableAiFailures(getLatestWorkspaceStateForQueuePrompt(), 'build')) {
@@ -3117,7 +3130,8 @@
             }
             if (retryPayload && retryAiOperationUrl) {
                 document.documentElement.dataset.pbRetryableAiTriggerPosted = '1';
-                postForm(retryAiOperationUrl, retryPayload).then(function (data) {
+                retryableAiFailureResumeInFlight[normalized] = true;
+                postForm(retryAiOperationUrl, retryPayload, { timeoutMs: 15000 }).then(function (data) {
                     if (data && data.data && typeof data.data === 'object') {
                         hydrateWorkspaceFromState(data.data);
                     }
@@ -3138,10 +3152,16 @@
                     toast('error', data && data.message ? String(data.message) : messages.refineUnavailable);
                 }).catch(function (error) {
                     toast('error', error && error.message ? error.message : messages.refineUnavailable);
+                }).finally(function () {
+                    delete retryableAiFailureResumeInFlight[normalized];
                 });
                 return true;
             }
+            retryableAiFailureResumeInFlight[normalized] = true;
             startOrObserveBuildFromVisualEditEntry();
+            window.setTimeout(function () {
+                delete retryableAiFailureResumeInFlight[normalized];
+            }, 1500);
             return true;
         }
         return false;
@@ -3199,11 +3219,23 @@
             if (event && typeof event.preventDefault === 'function') {
                 event.preventDefault();
             }
+            if (event && typeof event.stopPropagation === 'function') {
+                event.stopPropagation();
+            }
+            if (event && typeof event.stopImmediatePropagation === 'function') {
+                event.stopImmediatePropagation();
+            }
             return;
         }
         retryableAiFailurePointerGuardAt = now;
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
+        }
+        if (event && typeof event.stopPropagation === 'function') {
+            event.stopPropagation();
+        }
+        if (event && typeof event.stopImmediatePropagation === 'function') {
+            event.stopImmediatePropagation();
         }
         handleRetryableAiFailureButtonClick(target, operation);
     }
@@ -3222,6 +3254,16 @@
                 button.onclick = function (event) {
                     if (event && typeof event.preventDefault === 'function') {
                         event.preventDefault();
+                    }
+                    if (event && typeof event.stopPropagation === 'function') {
+                        event.stopPropagation();
+                    }
+                    if (event && typeof event.stopImmediatePropagation === 'function') {
+                        event.stopImmediatePropagation();
+                    }
+                    var now = Date.now();
+                    if ((now - retryableAiFailurePointerGuardAt) < 600) {
+                        return;
                     }
                     handleRetryableAiFailureButtonClick(button, operation);
                 };
