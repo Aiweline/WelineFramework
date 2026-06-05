@@ -3709,12 +3709,6 @@
         var kind = readAssetSlotValue(slot, ['kind']).toLowerCase();
         var slotId = readAssetSlotValue(slot, ['slot_id', 'id', 'key']).toLowerCase();
         var label = readAssetSlotValue(slot, ['label']).toLowerCase();
-        if (role === 'logo') {
-            return ['logo', 'logo.image', 'brand.logo'].indexOf(field) !== -1
-                || kind === 'website_logo'
-                || slotId.indexOf('website-logo') !== -1
-                || label.indexOf('website logo') !== -1;
-        }
         if (role === 'icon') {
             return ['icon', 'favicon', 'site.icon'].indexOf(field) !== -1
                 || kind === 'site_title_icon'
@@ -3741,9 +3735,7 @@
         if (slotUrl) {
             return slotUrl;
         }
-        if (role === 'logo') {
-            return String((profile && profile.logo) || '').trim();
-        }
+        void role;
         return String((profile && (profile.icon || profile.favicon)) || '').trim();
     }
 
@@ -3759,16 +3751,17 @@
             return error;
         }
         if (status === 'queued') {
-            return role === 'logo' ? 'Logo generation queued...' : 'Title icon generation queued...';
+            return 'Title icon generation queued...';
         }
         if (status === 'generating' || status === 'running') {
-            return role === 'logo' ? 'Generating logo...' : 'Generating title icon...';
+            return 'Generating title icon...';
         }
         if (assetUrl) {
-            return role === 'logo' ? 'Logo auto-saved from AI asset slot.' : 'Title icon auto-saved from AI asset slot.';
+            return 'Title icon auto-saved from AI asset slot.';
         }
 
-        return role === 'logo' ? 'Waiting for AI logo generation.' : 'Waiting for AI title icon generation.';
+        void role;
+        return 'Waiting for AI title icon generation.';
     }
 
     function syncBrandIdentityPanelsFromWorkspaceState(workspaceState) {
@@ -3810,7 +3803,7 @@
                 if (placeholder) {
                     placeholder.classList.toggle('d-none', !!assetUrl);
                     if (!assetUrl) {
-                        placeholder.textContent = role === 'logo' ? 'Logo will appear here' : 'Title icon will appear here';
+                        placeholder.textContent = 'Title icon will appear here';
                     }
                 }
                 if (assetUrl && assetUrl !== previousUrl) {

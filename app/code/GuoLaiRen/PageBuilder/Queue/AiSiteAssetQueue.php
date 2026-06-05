@@ -2219,50 +2219,7 @@ class AiSiteAssetQueue implements QueueInterface
                 : [];
         }
 
-        if ($role === 'logo') {
-            if (\is_array($payload['plan_json']['shared_components']['header']['default_config'] ?? null)) {
-                $payload['plan_json']['shared_components']['header']['default_config']['logo']['url'] = $finalUrl;
-                $payload['plan_json']['shared_components']['header']['default_config']['logo']['image'] = $finalUrl;
-                $payload['plan_json']['shared_components']['header']['default_config']['logo.url'] = $finalUrl;
-                $payload['plan_json']['shared_components']['header']['default_config']['logo.image'] = $finalUrl;
-                $payload['plan_json']['shared_components']['header']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
-                $payload['plan_json']['shared_components']['header']['default_config']['identity.shared_logo_asset'] = $finalUrl;
-            }
-            if (\is_array($payload['plan_json']['shared_components']['footer']['default_config'] ?? null)) {
-                $payload['plan_json']['shared_components']['footer']['default_config']['identity']['shared_logo_asset'] = $finalUrl;
-                $payload['plan_json']['shared_components']['footer']['default_config']['identity.shared_logo_asset'] = $finalUrl;
-                $payload['plan_json']['shared_components']['footer']['default_config']['brand']['logo'] = $finalUrl;
-                $payload['plan_json']['shared_components']['footer']['default_config']['brand.logo'] = $finalUrl;
-            }
-            foreach (\is_array($payload['plan_json']['pages'] ?? null) ? $payload['plan_json']['pages'] : [] as $pageType => $page) {
-                if (!\is_string($pageType) || !\is_array($page)) {
-                    continue;
-                }
-                if (\is_array($page['header']['config'] ?? null)) {
-                    $page['header']['config']['logo']['url'] = $finalUrl;
-                    $page['header']['config']['logo']['image'] = $finalUrl;
-                    $page['header']['config']['logo.url'] = $finalUrl;
-                    $page['header']['config']['logo.image'] = $finalUrl;
-                    $page['header']['config']['identity']['shared_logo_asset'] = $finalUrl;
-                    $page['header']['config']['identity.shared_logo_asset'] = $finalUrl;
-                }
-                if (\is_array($page['footer']['config'] ?? null)) {
-                    $page['footer']['config']['identity']['shared_logo_asset'] = $finalUrl;
-                    $page['footer']['config']['identity.shared_logo_asset'] = $finalUrl;
-                    $page['footer']['config']['brand']['logo'] = $finalUrl;
-                    $page['footer']['config']['brand.logo'] = $finalUrl;
-                }
-                $payload['plan_json']['pages'][$pageType] = $page;
-            }
-            if (\is_array($payload['asset_manifest']['slots']['identity:website-logo'] ?? null)) {
-                $payload['asset_manifest']['slots']['identity:website-logo']['final_url'] = $finalUrl;
-                $payload['asset_manifest']['slots']['identity:website-logo']['url'] = $finalUrl;
-                if (\is_array($payload['asset_manifest']['slots']['identity:website-logo']['variants'][0] ?? null)) {
-                    $payload['asset_manifest']['slots']['identity:website-logo']['variants'][0]['url'] = $finalUrl;
-                    $payload['asset_manifest']['slots']['identity:website-logo']['variants'][0]['path'] = \ltrim($finalUrl, '/');
-                }
-            }
-        } elseif ($role === 'icon') {
+        if ($role === 'icon') {
             if (\is_array($payload['asset_manifest']['slots']['identity:site-title-icon'] ?? null)) {
                 $payload['asset_manifest']['slots']['identity:site-title-icon']['final_url'] = $finalUrl;
                 $payload['asset_manifest']['slots']['identity:site-title-icon']['url'] = $finalUrl;
