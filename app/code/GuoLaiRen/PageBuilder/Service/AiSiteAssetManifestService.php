@@ -1031,8 +1031,12 @@ final class AiSiteAssetManifestService
                 . $subjectAnchor;
         }
         $logoBriefParts[] = 'Output requirements (HARD): identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background), production-ready horizontal logo or wordmark, simple brand mark. Keep only logo pixels on transparency; no white box, colored rectangle, rounded card, gradient backdrop, checkerboard transparency preview, extra scene, mockup, paragraph text, watermark, or screenshot frame.';
+        $logoTextLanguageInstruction = $this->buildLogoTextLanguageInstruction($scope);
+        if ($logoTextLanguageInstruction !== '') {
+            $logoBriefParts[] = $logoTextLanguageInstruction;
+        }
         if ($brandReference !== '' && $brandReference !== $subjectAnchor) {
-            $logoBriefParts[] = 'Optional brand wordmark text alongside the glyph (small, secondary; never the primary subject; never invent characters out of this name): "' . $brandReference . '"';
+            $logoBriefParts[] = 'Optional brand wordmark text alongside the glyph (small, secondary; never the primary subject; localize or omit it when it conflicts with the required logo text language; never invent characters out of this name): "' . $brandReference . '"';
         }
         if ($siteTagline !== '' && $siteTagline !== $subjectAnchor) {
             $logoBriefParts[] = 'Style/personality hint (mood and palette only, never spell out as text): ' . $siteTagline;
@@ -1047,6 +1051,37 @@ final class AiSiteAssetManifestService
         $logoBrief = \implode("\n", $logoBriefParts);
 
         return $this->buildThemeLogoGenerationOptionSlots($scope, $logoBrief);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function buildLogoTextLanguageInstruction(array $scope): string
+    {
+        $locale = \strtolower(\str_replace('-', '_', $this->firstString([
+            $scope['plan_json']['i18n']['content_locale'] ?? null,
+            $scope['plan_json']['i18n']['primary_locale'] ?? null,
+            $scope['plan_json']['i18n']['locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['plan_generated_locale'] ?? null,
+            $scope['plan_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+        ])));
+        if ($locale === '') {
+            return 'Visible logo text language (HARD): if readable text is included, use the same language as the website content. Never use Chinese characters unless the website content locale is Chinese.';
+        }
+
+        if ($locale === 'ru' || \str_starts_with($locale, 'ru_')) {
+            return 'Visible logo text language (HARD): content_locale=' . $locale . '. If readable logo text is included, it must be Russian Cyrillic only. Do not use Chinese, Japanese, Korean, Hindi, English placeholder words, or mixed-language pseudo text. If a localized Russian wordmark is uncertain, omit readable text and generate a symbol-only logo.';
+        }
+
+        if ($locale === 'zh' || \str_starts_with($locale, 'zh_')) {
+            return 'Visible logo text language (HARD): content_locale=' . $locale . '. If readable logo text is included, use concise Chinese text only; do not mix in unrelated foreign placeholder words.';
+        }
+
+        return 'Visible logo text language (HARD): content_locale=' . $locale . '. If readable logo text is included, it must be localized for this locale. Do not use Chinese/Japanese/Korean characters unless this locale requires them. If localization is uncertain, omit readable text and generate a symbol-only logo.';
     }
 
     /**
