@@ -119,17 +119,6 @@ class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindi
      */
     private function requiresTransparentIdentityPng(array $params): bool
     {
-        if (!empty($params['identity_transparent_png_required']) || !empty($params['transparent_png_required'])) {
-            return true;
-        }
-
-        $slotId = \strtolower(\trim((string)($params['slot_id'] ?? '')));
-        if ($slotId === '') {
-            return false;
-        }
-
-        return \str_starts_with($slotId, 'identity:')
-            || \str_contains($slotId, 'identity:website-logo')
-            || \str_contains($slotId, 'identity:site-title-icon');
+        return !empty($params['identity_transparent_png_required']) || !empty($params['transparent_png_required']);
     }
 }

@@ -4751,11 +4751,12 @@ class AiSiteAgent extends BaseController
                 $row['meta_description'] = (string)($blueprint['meta_description'] ?? ($row['meta_description'] ?? ''));
                 $row['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($row['meta_keywords'] ?? ''));
                 $row['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
+                $sectionBlock = $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent);
                 $row['blocks'] = $this->composeHtmlBlocksForPage(
                     $pageType,
                     $this->resolveExistingAiHtmlBlocksForPage($pageType, $scope, $virtualPages),
                     \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [],
-                    $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent),
+                    $sectionBlock,
                     $scope['website_profile'],
                     $scope
                 );
@@ -4763,7 +4764,12 @@ class AiSiteAgent extends BaseController
                 $virtualPages[$pageType] = $row;
                 $scope = $this->withPlanJsonPages($scope, $virtualPages);
                 $scope['preview_page_type'] = $pageType;
-                $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
+                $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
+                    'page_type' => $pageType,
+                    'section_code' => $sectionCode,
+                    'section_block' => $sectionBlock,
+                    'component' => $sectionComponent,
+                ]);
                 $this->logHotPathStage('block_regenerate.preview_ready_html_section', $generateStartedAt, [
                     'page_type' => $pageType,
                     'component_code' => $componentCode,
@@ -4811,18 +4817,26 @@ class AiSiteAgent extends BaseController
                     'plan_json' => \array_replace(\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [], ['pages' => $this->planJsonPages($scope)]),
                 ]));
                 if (isset($virtualPages[$pageType]) && \is_array($virtualPages[$pageType])) {
+                    $sectionBlock = $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent);
                     $virtualPages[$pageType]['blocks'] = $this->composeHtmlBlocksForPage(
                         $pageType,
                         $this->resolveExistingAiHtmlBlocksForPage($pageType, $scope, $virtualPages),
                         \is_array($scope['plan_json']['shared_components'] ?? null) ? $scope['plan_json']['shared_components'] : [],
-                        $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent),
+                        $sectionBlock,
                         $scope['website_profile'],
                         $scope
                     );
+                } else {
+                    $sectionBlock = $this->htmlBlocksBuildService->buildGeneratedSectionBlock($sectionComponent);
                 }
                 $scope = $this->withPlanJsonPages($scope, $virtualPages);
                 $scope['preview_page_type'] = $pageType;
-                $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
+                $scope = $this->planJsonTaskService->markTaskDone($scope, $taskKey, [
+                    'page_type' => $pageType,
+                    'section_code' => $sectionCode,
+                    'section_block' => $sectionBlock,
+                    'component' => $sectionComponent,
+                ]);
                 $this->logHotPathStage('block_regenerate.preview_ready_virtual_theme_section', $layoutStartedAt, [
                     'page_type' => $pageType,
                     'component_code' => $componentCode,
@@ -4847,6 +4861,7 @@ class AiSiteAgent extends BaseController
             }
         }
 
+        $scope = $this->refreshInlineImageStateFromPersistedScope($session, $adminId, $scope);
         $scope['plan_json_task_summary'] = $this->planJsonTaskService->summarize($scope);
         if (\is_array($scope['build_summary'] ?? null)) {
             unset($scope['build_summary']['task_summary']);
@@ -16158,7 +16173,12 @@ class AiSiteAgent extends BaseController
                 $scope = $this->withPlanJsonPages($scope, $virtualPages);
                 $scope['virtual_theme_id'] = 0;
                 $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? $pageType));
-                $scope = $this->planJsonTaskService->markTaskDone($scope, (string)$taskKey, ['page_type' => $pageType, 'section_code' => $sectionCode]);
+                $scope = $this->planJsonTaskService->markTaskDone($scope, (string)$taskKey, [
+                    'page_type' => $pageType,
+                    'section_code' => $sectionCode,
+                    'section_block' => $sectionBlock,
+                    'component' => $sectionComponent,
+                ]);
                 $materialized = $this->materializeGeneratedPages(
                     AiSiteScopeCompatibilityService::WORKSPACE_TRACK_html_blocks,
                     (int)$draftWebsite['website_id'],
@@ -16168,6 +16188,7 @@ class AiSiteAgent extends BaseController
                     [$pageType => $row]
                 );
                 $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
+                $scope = $this->refreshInlineImageStateFromPersistedScope($session, $adminId, $scope);
                 $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
                 $pageId = (int)($scope['materialized_pages_by_type'][$pageType]['page_id'] ?? 0);

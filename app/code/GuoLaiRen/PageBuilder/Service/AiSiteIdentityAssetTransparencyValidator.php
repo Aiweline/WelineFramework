@@ -173,7 +173,7 @@ final class AiSiteIdentityAssetTransparencyValidator
                 return true;
             }
 
-            $isIconTile = \in_array($role, ['icon', 'favicon', 'site_title_icon'], true)
+            $isIconTile = \in_array($role, ['icon', 'favicon'], true)
                 && $width <= 80
                 && $height <= 80
                 && $x <= 8.0

@@ -140,6 +140,7 @@ class AiSiteVirtualLayoutService
 
     private function identityAssetUrlIsInvalidForRole(string $url, string $role): bool
     {
+        unset($role);
         $url = \trim($url);
         if ($url === '') {
             return false;
@@ -150,30 +151,7 @@ class AiSiteVirtualLayoutService
         $lowerPath = \strtolower($path);
         $isPageBuilderGeneratedAsset = \str_contains($lowerPath, '/pub/media/page-build/')
             && \str_contains($lowerPath, '/ai-generated/');
-        if (!$isPageBuilderGeneratedAsset) {
-            return false;
-        }
-
-        $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
-        if (!\str_contains($lowerPath, $expectedToken) || (!\str_ends_with($lowerPath, '.png') && !\str_ends_with($lowerPath, '.svg'))) {
-            return true;
-        }
-
-        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
-        if (!\is_file($absolutePath)) {
-            return true;
-        }
-        $bytes = @\file_get_contents($absolutePath);
-        if (!\is_string($bytes) || $bytes === '') {
-            return true;
-        }
-
-        $assetRole = $role === 'logo' ? 'logo' : 'icon';
-        return !AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset(
-            $bytes,
-            \str_ends_with($lowerPath, '.svg') ? 'image/svg+xml' : 'image/png',
-            $assetRole
-        );
+        return $isPageBuilderGeneratedAsset;
     }
 
     private function pngAppearsToHaveTransparentBackground(string $bytes): bool

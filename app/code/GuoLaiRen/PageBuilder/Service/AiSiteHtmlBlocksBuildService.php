@@ -54,7 +54,8 @@ class AiSiteHtmlBlocksBuildService
                     ['component_label' => (string)($section['name'] ?? $blockId)]
                 ),
                 'content',
-                (string)($section['code'] ?? '')
+                (string)($section['code'] ?? ''),
+                \is_array($section['assets'] ?? null) ? $section['assets'] : []
             );
             $sectionCount++;
         }
@@ -106,7 +107,8 @@ class AiSiteHtmlBlocksBuildService
                 ['component_label' => (string)($section['name'] ?? $blockId)]
             ),
             'content',
-            $componentCode
+            $componentCode,
+            \is_array($section['assets'] ?? null) ? $section['assets'] : []
         );
     }
 
@@ -212,7 +214,8 @@ class AiSiteHtmlBlocksBuildService
         string $phtml,
         array $config,
         string $region = 'content',
-        string $componentCode = ''
+        string $componentCode = '',
+        array $assets = []
     ): array
     {
         $block = [
@@ -222,6 +225,9 @@ class AiSiteHtmlBlocksBuildService
             'config' => $config,
             'field_schema' => $this->buildGeneratedFieldSchema($phtml, $config, $type, $region),
         ];
+        if ($assets !== []) {
+            $block['assets'] = $assets;
+        }
 
         if ($phtml !== '') {
             $block[self::META_TEMPLATE_PHTML] = $phtml;
