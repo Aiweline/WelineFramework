@@ -19062,7 +19062,7 @@ class AiSiteAgent extends BaseController
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
     {
-        return \trim($operation) === 'plan';
+        return \in_array(\trim($operation), ['plan', 'build'], true);
     }
 
     /**
