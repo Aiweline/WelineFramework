@@ -6352,7 +6352,7 @@ PROMPT;
         }
 
         return \preg_match(
- '/\b(?:download|apk|app|install|play|start|begin|open|join|claim|submit|send|contact|baixar|instalar|jogar|come(?:c| ?ar|iniciar|enviar|contatar)\b| ?iu',
+            '/\b(?:download|apk|app|install|play|start|begin|open|join|claim|submit|send|contact|baixar|instalar|jogar|comecar|começar|iniciar|enviar|contatar)\b/iu',
             $label
         ) === 1;
     }
@@ -11000,9 +11000,9 @@ JSON;
         return "PHP / HTML / CSS / JSON safety (critical -invalid output breaks the site build):\n"
             . "- Output exactly one JSON object only, with exactly these string keys: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content. The first non-whitespace character must be { and the last non-whitespace character must be }. Do not append a second object, raw CSS, `php_variables:` labels, markdown, or explanation after the closing brace. Every value must be a valid JSON string: escape double quotes as \\\", represent newlines inside strings as \\n. Do not truncate strings mid-escape.\n"
             . "- JSON escape discipline: never place a backslash before normal HTML text, class names, tag names, or visitor copy. Legal backslash escapes are only \\\", \\\\, \\/, \\n, \\r, \\t, and \\uXXXX; invalid sequences like \\d, \\R, or \\< break the build.\n"
-            . "- Field php_variables: for content blocks, use only one simple assignment per line shaped exactly like `$title = $getConfig('content.title', 'Finished localized title');`. No arrays, no conditionals, no loops, no helpers, no function declarations, no `$this`, no superglobals, and no PHP open/close tags. For shared header/footer, php_variables remains empty.\n"
+            . "- Field php_variables: for content blocks, use only one simple assignment per line shaped exactly like `\$title = \$getConfig('content.title', 'Finished localized title');`. No arrays, no conditionals, no loops, no helpers, no function declarations, no `\$this`, no superglobals, and no PHP open/close tags. For shared header/footer, php_variables remains empty.\n"
             . "- In php_variables, arrays are not allowed in this virtual-theme build. Never paste JavaScript object literals or JSON blobs here. The PHP token => must not appear in php_variables.\n"
-            . "- Do not redeclare or break framework-provided variables ($page, $getConfig, $componentId, $cls, $parseLinks, $navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
+            . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
             . "- Field extra_fields: for content blocks, declare every visitor-visible editable value used by html_content. Format examples: `group:ai_content => AI editable content`, `content.title => Title:text:Finished localized title`, `content.description => Description:textarea:Finished localized body`, `cta.text => CTA text:text:Book demo`. Body/intro/copy requirements in this build normally use `content.description`; do not create `content.body` unless CTX_REQUIRED_EDITABLE_FIELDS explicitly lists that exact key. Add `cta.url => CTA URL:text:<real CTX_CTA_ACTION_CONTRACT target>` only when a real target is supplied; never use `/`, `#`, or invented paths as examples/defaults. Add `media.image_url => Image:image:<exact verified final_url from verified_asset_src_allowlist>` and `media.image_alt => Image alt:text:Finished localized alt` only when this prompt supplies a verified asset URL. For shared header/footer, extra_fields remains empty.\n"
             . "- html_extra, html_extra_column, html_content: HTML fragments only. No <style>, no <script>, no @component_start/@fields_start metadata. The only allowed PHP inside html_content is safe field output using htmlspecialchars or nl2br(htmlspecialchars), where the echoed variable is assigned in php_variables from the same declared field.\n"
             . "- HTML_IN_JSON: html_content must be parsed markup, not visible source text. The decoded html_content string should begin with `<section`; do not output removed skeleton labels, raw `<section ...>` examples, `class='...'`, CSS declarations, or escaped `&lt;section` as visitor-visible copy.\n"
@@ -11027,7 +11027,8 @@ JSON;
             . "- CSS reliability mode: every declaration must be `property: value;`; put a semicolon before the next property. Use scoped selectors with the supplied component prefix only; optional @keyframes names must also use the component prefix. `box-sizing` must be exactly `border-box`. Avoid mask/clip-path/filter chains unless trivially correct. Do not introduce CSS comments. When in doubt about a complex value, fall back to a safer hex/shadow/spacing token rather than truncating mid-function.\n"
             . "- Typography guidance: css_extra should explicitly style both `#componentId .pb-c-title` and at least one body/root selector (`#componentId .pb-c-root`, `#componentId .pb-c-copy`, or `#componentId .pb-c-text`) with brand-appropriate font-family stacks. Use a named family first, then generic fallback when practical.\n"
             . "- Color contrast: never pair dark foreground text with dark backgrounds or light foreground text with light backgrounds; define readable text/CTA/focus states in CSS before returning.\n"
-            . "- Content links/actions: generated content blocks should use `<a class='pb-c-cta'>` only when the href is a real CTX_CTA_ACTION_CONTRACT target or exactly appears in allowed_internal_paths. If no real route is available but a primary action is required, use `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'>` and component-scoped js_content to emit the action event. Never output `href='#'`, hash-only anchors, invented internal paths, query strings, download routes, FAQ routes, game routes, or wrap a card/div/grid/panel/section inside an `<a>` or `<button>`.\n"
+            . "- Content links/actions: generated content blocks should use `<a class='pb-c-cta'>` only when the href is a real CTX_CTA_ACTION_CONTRACT target or exactly appears in allowed_internal_paths. If no real route is available but a primary action is required, use `<button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars(\$ctaText ?? 'Finished localized CTA', ENT_QUOTES, 'UTF-8') ?></button>` and component-scoped js_content to emit the action event. Never output `href='#'`, hash-only anchors, invented internal paths, query strings, download routes, FAQ routes, game routes, or wrap a card/div/grid/panel/section inside an `<a>` or `<button>`. Every `.pb-c-cta` anchor/button must contain visible safe PHP echoed CTA text; an empty CTA element with only attributes is invalid.\n"
+            . "- FAQ interaction contract: if html_content contains `.pb-c-faq-list`, `.pb-c-faq-item`, `.pb-c-question`, a chevron, plus/minus, or an accordion/support FAQ role, every FAQ row must expose a localized question title in `.pb-c-question` or h3.pb-c-question and a separate `.pb-c-answer` paragraph. Number chips, icons, or chevrons cannot be the only visible question content. When the design shows collapsed/expandable rows, use a button-like `.pb-c-question` control with type='button' and aria-expanded plus tiny scoped js_content that toggles only this component's row open state; otherwise render answers visibly without chevron affordances.\n"
             . "- Repeated-card structure recipe: repeated content containers such as `.pb-c-card`, `.pb-c-item`, `.pb-c-panel`, `.pb-c-review`, `.pb-c-faq-item`, and `.pb-c-channel` must be direct sibling children of one rail/grid/list wrapper. Each item must close before the next item opens. A testimonial/review card should use clear internal layers: card header/author, compact meta/rating row, then a separate quote/body paragraph below that row; never put the quote paragraph inside the star/meta row, and never start the next `.pb-c-card` before the previous card's body and wrapper are closed.\n"
             . "- Repeated-card self-check: before returning JSON, scan html_content from left to right. The valid shape is `div.pb-c-rail > div.pb-c-card ... </div> + div.pb-c-card ... </div> + div.pb-c-card ... </div>`. If one `.pb-c-card` appears while another `.pb-c-card` is still open, rewrite the HTML skeleton instead of relying on renderer repair.\n"
             . "- Page hierarchy: do not make the section one flat theme-color slab. Use palette roles, surface elevation, dividers, texture, cards, or spacing to distinguish this block from adjacent blocks.\n"
@@ -15441,38 +15442,98 @@ JSON;
 
     private function lookupLocalizedPageTypeTitle(string $pageType, string $locale): string
     {
-        $labels = [
-            Page::TYPE_HOME => 'Home',
-            Page::TYPE_ABOUT => 'About',
-            Page::TYPE_CONTACT => 'Contact',
-            Page::TYPE_BLOG_LIST => 'Blog',
-            Page::TYPE_BLOG => 'Blog',
-            Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
-            Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
-            Page::TYPE_REFUND_POLICY => 'Refund Policy',
-            Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
-            Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
+        $labelsByFamily = [
+            'zh' => [
+                Page::TYPE_HOME => '首页',
+                Page::TYPE_ABOUT => '关于我们',
+                Page::TYPE_CONTACT => '联系我们',
+                Page::TYPE_BLOG_LIST => '博客',
+                Page::TYPE_BLOG => '博客',
+                Page::TYPE_PRIVACY_POLICY => '隐私政策',
+                Page::TYPE_TERMS_OF_SERVICE => '服务条款',
+                Page::TYPE_REFUND_POLICY => '退款政策',
+                Page::TYPE_SHIPPING_POLICY => '配送政策',
+                Page::TYPE_COOKIE_POLICY => 'Cookie 政策',
+            ],
+            'pt' => [
+                Page::TYPE_HOME => 'Início',
+                Page::TYPE_ABOUT => 'Sobre',
+                Page::TYPE_CONTACT => 'Contato',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Política de Privacidade',
+                Page::TYPE_TERMS_OF_SERVICE => 'Termos de Serviço',
+                Page::TYPE_REFUND_POLICY => 'Política de Reembolso',
+                Page::TYPE_SHIPPING_POLICY => 'Política de Envio',
+                Page::TYPE_COOKIE_POLICY => 'Política de Cookies',
+            ],
+            'en' => [
+                Page::TYPE_HOME => 'Home',
+                Page::TYPE_ABOUT => 'About',
+                Page::TYPE_CONTACT => 'Contact',
+                Page::TYPE_BLOG_LIST => 'Blog',
+                Page::TYPE_BLOG => 'Blog',
+                Page::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+                Page::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+                Page::TYPE_REFUND_POLICY => 'Refund Policy',
+                Page::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+                Page::TYPE_COOKIE_POLICY => 'Cookie Policy',
+            ],
         ];
+        $family = $this->promptLocaleFamily($locale);
+        $labels = $labelsByFamily[$family] ?? $labelsByFamily['en'];
 
         return (string)($labels[$pageType] ?? '');
     }
 
     private function lookupLocalizedBuildText(string $key, string $locale): string
     {
-        $labels = [
-            'policy_info' => 'Policy Info',
-            'featured_pages' => 'Featured Pages',
-            'all_pages' => 'All Pages',
-            'all_rights_reserved' => 'All rights reserved.',
-            'brand_summary' => 'A curated destination with clear information, trusted support, and simple next steps.',
-            'contact_us' => 'Contact Us',
-            'explore_more' => 'Explore More',
-            'get_started' => 'Get Started',
-            'download_now' => 'Download Now',
-            'claim_bonus' => 'Claim Bonus',
-            'start_playing' => 'Start Playing',
-            'site_name_fallback' => 'Website',
+        $labelsByFamily = [
+            'zh' => [
+                'policy_info' => '法律信息',
+                'featured_pages' => '重点页面',
+                'all_pages' => '全部页面',
+                'all_rights_reserved' => '版权所有。',
+                'brand_summary' => '一个信息清晰、支持可信、下一步明确的网站。',
+                'contact_us' => '联系我们',
+                'explore_more' => '查看更多',
+                'get_started' => '开始使用',
+                'download_now' => '立即下载',
+                'claim_bonus' => '领取奖励',
+                'start_playing' => '开始游戏',
+                'site_name_fallback' => '网站',
+            ],
+            'pt' => [
+                'policy_info' => 'Informações legais',
+                'featured_pages' => 'Páginas principais',
+                'all_pages' => 'Todas as páginas',
+                'all_rights_reserved' => 'Todos os direitos reservados.',
+                'brand_summary' => 'Um destino selecionado com informações claras, suporte confiável e próximos passos simples.',
+                'contact_us' => 'Fale conosco',
+                'explore_more' => 'Explorar mais',
+                'get_started' => 'Começar',
+                'download_now' => 'Baixar agora',
+                'claim_bonus' => 'Resgatar bônus',
+                'start_playing' => 'Começar a jogar',
+                'site_name_fallback' => 'Site',
+            ],
+            'en' => [
+                'policy_info' => 'Policy Info',
+                'featured_pages' => 'Featured Pages',
+                'all_pages' => 'All Pages',
+                'all_rights_reserved' => 'All rights reserved.',
+                'brand_summary' => 'A curated destination with clear information, trusted support, and simple next steps.',
+                'contact_us' => 'Contact Us',
+                'explore_more' => 'Explore More',
+                'get_started' => 'Get Started',
+                'download_now' => 'Download Now',
+                'claim_bonus' => 'Claim Bonus',
+                'start_playing' => 'Start Playing',
+                'site_name_fallback' => 'Website',
+            ],
         ];
+        $family = $this->promptLocaleFamily($locale);
+        $labels = $labelsByFamily[$family] ?? $labelsByFamily['en'];
 
         return (string)($labels[$key] ?? '');
     }

@@ -382,6 +382,29 @@ final class AiSiteBlockPartialPatchServiceTest extends TestCase
         self::assertStringContainsString('_pb_server_template_phtml_preserved_by_backend', $prompt);
     }
 
+    public function testPatchPromptRequiresFaqQuestionTitlesExpansionAndCtaText(): void
+    {
+        $scope = $this->scope();
+        $scope['plan_json']['pages']['home']['faq_or_rules'] = $this->block(
+            'faq_or_rules',
+            'Quick Answers',
+            '<section class="pb-c-root"><div class="pb-c-faq-list"><div class="pb-c-faq-item"><div class="pb-c-question"><span class="pb-c-qnum">1</span><span class="pb-c-chevron"></span></div><p class="pb-c-answer">Support copy.</p></div></div><button type="button" class="pb-c-cta" data-pb-ai-action="primary_cta"></button></section>',
+            'content/faq-or-rules'
+        );
+        $read = (new AiSiteBlockPartialPatchService())->readCurrentBlockFromScope($scope, 'home', 'faq_or_rules');
+
+        $service = new AiSiteBlockPartialPatchService();
+        $prompt = (function (array $read, array $scope, string $instruction): string {
+            return $this->buildPatchPrompt($read, $scope, $instruction);
+        })->call($service, $read, $scope, 'Fix the FAQ rows so users can expand answers.');
+
+        self::assertStringContainsString('FAQ and CTA interaction contract', $prompt);
+        self::assertStringContainsString('visible localized question title', $prompt);
+        self::assertStringContainsString('aria-expanded', $prompt);
+        self::assertStringContainsString('Every `.pb-c-cta` anchor or button must contain a visible localized label', $prompt);
+        self::assertStringContainsString('CTA controls with only data attributes are invalid', $prompt);
+    }
+
     public function testGenerateReplacementRepairsMalformedJsonPatchResponse(): void
     {
         $scope = $this->scope();
