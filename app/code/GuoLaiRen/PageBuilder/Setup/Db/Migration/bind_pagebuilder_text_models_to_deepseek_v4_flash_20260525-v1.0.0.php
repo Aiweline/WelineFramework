@@ -12,7 +12,7 @@ use Weline\Framework\Manager\ObjectManager;
 class BindPagebuilderTextModelsToDeepseekV4Flash20260525V100 extends AbstractMigration
 {
     private const TARGET_TEXT_MODEL = 'deepseek-v4-flash';
-    private const TARGET_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+    private const TARGET_IMAGE_MODEL = 'gemini-2.5-flash-image';
 
     public function getDescription(): string
     {
