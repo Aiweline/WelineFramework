@@ -3141,7 +3141,7 @@ final class AiSitePlanJsonGenerationService
                 'Return keys: i18n, site_strategy, theme_style, palette, theme, theme_design, navigation_plan, footer_plan, shared_components, seo_strategy.',
                 'Do not return only theme_design, only palette, or only navigation/footer. The top-level JSON object must include every root key listed above.',
                 'Complete root theme artifact skeleton: ' . $this->json($this->stageOneThemeRootSkeleton()),
-                'theme.logo_generation is mandatory. It must describe the website logo generation plan at plan_json.theme.logo_generation and set asset_slot_id to identity:website-logo.',
+                'theme.logo_generation is mandatory. It must describe the website logo generation plan at plan_json.theme.logo_generation and include exactly four options keyed logo_option_1 through logo_option_4, each with asset_slot_id plan:theme:logo_generation:option_N.',
                 'Do not output legacy logo generation locations outside plan_json.theme.logo_generation.',
                 'theme_design must include every required field from theme_required_fields.theme_design, especially theme_purpose, style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, tone_of_voice, cta_tone, forbidden_styles, and selection_reason.',
                 'theme_design.typography_spacing_radius must include font_family, heading_scale, body_scale, spacing_scale, and radius_scale.',
@@ -3149,7 +3149,7 @@ final class AiSitePlanJsonGenerationService
             ],
             'self_check' => [
                 'Before returning JSON, verify the root object has i18n, site_strategy, theme_style, palette, theme, theme_design, navigation_plan, footer_plan, shared_components, and seo_strategy.',
-                'Before returning JSON, verify theme.logo_generation.stage is logo_generation and theme.logo_generation.output_path is plan_json.theme.logo_generation.',
+                'Before returning JSON, verify theme.logo_generation.stage is logo_generation, output_path is plan_json.theme.logo_generation, and options contains exactly four selectable logo option records.',
                 'Header/footer href values must be exact internal route paths from page_route_contract, no anchors and no query strings.',
                 'Before returning JSON, verify theme_design.typography_spacing_radius and theme_design.forbidden_styles are present and non-empty.',
             ],
@@ -3433,19 +3433,59 @@ final class AiSitePlanJsonGenerationService
         if ($paletteText === '') {
             $paletteText = 'the generated theme palette';
         }
+        $promptBrief = 'Generate four transparent PNG website logo options for ' . $siteName
+            . ' that match ' . $paletteText . ' and support: ' . $primaryGoal;
 
         return [
             'stage' => 'logo_generation',
             'status' => 'planned',
-            'asset_slot_id' => 'identity:website-logo',
-            'slot_type' => 'logo_icon',
-            'kind' => 'website_logo',
-            'scope' => 'global_identity',
+            'asset_slot_id' => 'plan:theme:logo_generation',
+            'slot_type' => 'logo_options',
+            'kind' => 'logo_generation_options',
+            'scope' => 'plan_theme',
             'output_path' => 'plan_json.theme.logo_generation',
-            'prompt_brief' => 'Generate a transparent PNG website logo for ' . $siteName . ' that matches ' . $paletteText . ' and supports: ' . $primaryGoal,
-            'style_direction' => 'Distinct, simple, and readable at header size; avoid generic placeholder marks.',
-            'reuse_policy' => 'Generate once from this theme plan; downstream consumers should resolve logo identity from plan_json.theme.logo_generation.',
+            'option_count' => 4,
+            'selected_option_id' => '',
+            'selected_asset_slot_id' => '',
+            'selected_url' => '',
+            'prompt_brief' => $promptBrief,
+            'style_direction' => 'Prepare four distinct logo directions; each option must stay simple, recognizable, transparent, and readable at header size.',
+            'reuse_policy' => 'Generate four logo options from this theme plan; selected option and generated image URLs must live only in plan_json.theme.logo_generation.options.',
+            'options' => $this->buildStageOneLogoGenerationOptions($siteName, $primaryGoal, $paletteText),
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buildStageOneLogoGenerationOptions(string $siteName, string $primaryGoal, string $paletteText): array
+    {
+        $directions = [
+            'Clean wordmark with a compact abstract mark.',
+            'Symbol-first mark with restrained wordmark support.',
+            'Geometric monogram or initial-based mark.',
+            'Minimal line-mark with a distinctive silhouette.',
+        ];
+        $options = [];
+        foreach ($directions as $index => $direction) {
+            $number = $index + 1;
+            $options[] = [
+                'option_id' => 'logo_option_' . $number,
+                'label' => 'Logo ' . $number,
+                'asset_slot_id' => 'plan:theme:logo_generation:option_' . $number,
+                'slot_type' => 'logo_icon',
+                'kind' => 'logo_option',
+                'status' => 'planned',
+                'url' => '',
+                'final_url' => '',
+                'prompt_brief' => 'Generate logo option ' . $number . ' for ' . $siteName
+                    . ' as a transparent PNG. Match ' . $paletteText . '; support: ' . $primaryGoal
+                    . '. Direction: ' . $direction,
+                'style_direction' => $direction,
+            ];
+        }
+
+        return $options;
     }
 
     /**
@@ -3479,13 +3519,133 @@ final class AiSitePlanJsonGenerationService
                 $normalized[$field] = $text;
             }
         }
+        $normalized['options'] = $this->normalizeStageOneLogoGenerationOptions(
+            $incoming['options'] ?? [],
+            \is_array($base['options'] ?? null) ? $base['options'] : []
+        );
+        $optionIds = [];
+        foreach ($normalized['options'] as $option) {
+            $optionId = \trim((string)($option['option_id'] ?? ''));
+            if ($optionId !== '') {
+                $optionIds[$optionId] = true;
+            }
+        }
+        $selectedOptionId = \trim((string)($incoming['selected_option_id'] ?? ''));
+        if ($selectedOptionId !== '' && !isset($optionIds[$selectedOptionId])) {
+            $selectedOptionId = '';
+        }
+        $selectedAssetSlotId = \trim((string)($incoming['selected_asset_slot_id'] ?? ''));
+        $selectedUrl = $this->firstNonEmpty([
+            $incoming['selected_url'] ?? null,
+            $incoming['selected_final_url'] ?? null,
+            $incoming['final_url'] ?? null,
+            $incoming['url'] ?? null,
+        ]);
+        foreach ($normalized['options'] as $option) {
+            if ($selectedOptionId !== '' && (string)($option['option_id'] ?? '') === $selectedOptionId) {
+                $selectedAssetSlotId = $this->firstNonEmpty([$selectedAssetSlotId, $option['asset_slot_id'] ?? null]);
+                $selectedUrl = $this->firstNonEmpty([$selectedUrl, $option['final_url'] ?? null, $option['url'] ?? null]);
+                break;
+            }
+            if ($selectedOptionId === '' && $selectedUrl !== '') {
+                $optionUrl = $this->firstNonEmpty([$option['final_url'] ?? null, $option['url'] ?? null]);
+                if ($optionUrl === $selectedUrl) {
+                    $selectedOptionId = (string)($option['option_id'] ?? '');
+                    $selectedAssetSlotId = $this->firstNonEmpty([$selectedAssetSlotId, $option['asset_slot_id'] ?? null]);
+                    break;
+                }
+            }
+        }
         $normalized['stage'] = 'logo_generation';
-        $normalized['asset_slot_id'] = 'identity:website-logo';
-        $normalized['slot_type'] = 'logo_icon';
-        $normalized['kind'] = 'website_logo';
+        $normalized['asset_slot_id'] = 'plan:theme:logo_generation';
+        $normalized['slot_type'] = 'logo_options';
+        $normalized['kind'] = 'logo_generation_options';
         $normalized['output_path'] = 'plan_json.theme.logo_generation';
+        $normalized['option_count'] = 4;
+        $normalized['selected_option_id'] = $selectedOptionId;
+        $normalized['selected_asset_slot_id'] = $selectedOptionId !== '' ? $selectedAssetSlotId : '';
+        $normalized['selected_url'] = $selectedOptionId !== '' ? $selectedUrl : '';
 
         return $normalized;
+    }
+
+    /**
+     * @param mixed $candidate
+     * @param list<array<string, mixed>> $baseOptions
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeStageOneLogoGenerationOptions(mixed $candidate, array $baseOptions): array
+    {
+        $incomingByKey = [];
+        if (\is_array($candidate)) {
+            foreach ($candidate as $key => $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $optionId = \trim((string)($row['option_id'] ?? $row['id'] ?? ''));
+                $slotId = \trim((string)($row['asset_slot_id'] ?? $row['slot_id'] ?? ''));
+                if ($optionId === '' && \is_string($key)) {
+                    $optionId = \trim($key);
+                }
+                if ($optionId === '' && \is_int($key)) {
+                    $optionId = 'logo_option_' . ($key + 1);
+                }
+                if ($optionId === '' && $slotId !== '' && \preg_match('/option[_:-]?([1-4])/', $slotId, $matches)) {
+                    $optionId = 'logo_option_' . $matches[1];
+                }
+                if ($optionId !== '') {
+                    $incomingByKey[$optionId] = $row;
+                }
+                if ($slotId !== '') {
+                    $incomingByKey[$slotId] = $row;
+                }
+            }
+        }
+
+        $options = [];
+        for ($index = 0; $index < 4; $index++) {
+            $number = $index + 1;
+            $base = \is_array($baseOptions[$index] ?? null) ? $baseOptions[$index] : [];
+            $optionId = 'logo_option_' . $number;
+            $slotId = 'plan:theme:logo_generation:option_' . $number;
+            $incoming = \is_array($incomingByKey[$optionId] ?? null)
+                ? $incomingByKey[$optionId]
+                : (\is_array($incomingByKey[$slotId] ?? null) ? $incomingByKey[$slotId] : []);
+            $option = \array_replace($base, [
+                'option_id' => $optionId,
+                'label' => 'Logo ' . $number,
+                'asset_slot_id' => $slotId,
+                'slot_type' => 'logo_icon',
+                'kind' => 'logo_option',
+                'status' => 'planned',
+                'url' => '',
+                'final_url' => '',
+            ]);
+            foreach (['label', 'status', 'prompt_brief', 'style_direction', 'revised_prompt', 'error', 'updated_at'] as $field) {
+                $text = \trim((string)($incoming[$field] ?? ''));
+                if ($text !== '') {
+                    $option[$field] = $text;
+                }
+            }
+            $finalUrl = $this->firstNonEmpty([
+                $incoming['final_url'] ?? null,
+                $incoming['url'] ?? null,
+                $incoming['asset_url'] ?? null,
+                $base['final_url'] ?? null,
+                $base['url'] ?? null,
+            ]);
+            if ($finalUrl !== '') {
+                $option['final_url'] = $finalUrl;
+                $option['url'] = $finalUrl;
+                $status = \strtolower(\trim((string)($option['status'] ?? '')));
+                if ($status === '' || \in_array($status, ['planned', 'pending'], true)) {
+                    $option['status'] = 'generated';
+                }
+            }
+            $options[] = $option;
+        }
+
+        return $options;
     }
 
     /**

@@ -691,6 +691,7 @@ final class AiSiteAssetManifestService
     public function syncFromPlanJson(array $scope): array
     {
         $manifest = $this->normalize(\is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : []);
+        $manifest = $this->dropLegacyWebsiteLogoIdentitySlot($manifest);
         $currentPlanJsonSlots = $this->buildRequiredContentBlockSlots($scope);
         $manifest = $this->dropStalePlanJsonScopedSlots($manifest, $currentPlanJsonSlots);
         foreach ($this->extractSlotsFromScope($scope) as $slot) {
@@ -1018,7 +1019,6 @@ final class AiSiteAssetManifestService
         if ($brandReference === '') {
             $brandReference = 'the website brand';
         }
-        $existingLogo = $this->readExistingIdentityAssetUrl($scope, 'logo');
         $existingIcon = $this->readExistingIdentityAssetUrl($scope, 'icon');
 
         // 瀵缚顢戞總鎴犲閿涙lot.brief 韫囧懘銆忔禒?娑撴艾濮熸稉璁崇秼"瀵偓婢惰揪绱濋柆鍨帳 buildPrompt 閺?brand name 閹躲垹宕?
@@ -1070,30 +1070,7 @@ final class AiSiteAssetManifestService
         $iconBrief = \implode("\n", $iconBriefParts);
 
         return [
-            [
-                'slot_id' => 'identity:website-logo',
-                'slot_type' => 'logo_icon',
-                'kind' => 'website_logo',
-                'page_type' => 'global',
-                'field' => 'logo',
-                'task_key' => 'shared:header',
-                'section_code' => 'identity',
-                'label' => 'Website Logo',
-                'target_size' => '1024x512',
-                'aspect_ratio' => '2:1',
-                'output_format' => 'png',
-                'background' => 'transparent',
-                'transparent_png_required' => true,
-                'identity_transparent_png_required' => true,
-                'brief' => $logoBrief,
-                'prompt_brief' => $logoBrief,
-                'source' => $existingLogo !== '' ? 'uploaded' : 'planned',
-                'status' => $existingLogo !== '' ? 'locked' : 'pending',
-                'final_url' => $existingLogo,
-                'required' => 1,
-                'desired_image' => 1,
-                'locked_by_user' => $existingLogo !== '' ? 1 : 0,
-            ],
+            ...$this->buildThemeLogoGenerationOptionSlots($scope, $logoBrief),
             [
                 'slot_id' => 'identity:site-title-icon',
                 'slot_type' => 'logo_icon',
@@ -1119,6 +1096,117 @@ final class AiSiteAssetManifestService
                 'locked_by_user' => $existingIcon !== '' ? 1 : 0,
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function buildThemeLogoGenerationOptionSlots(array $scope, string $logoBrief): array
+    {
+        $options = $this->readThemeLogoGenerationOptions($scope);
+        $slots = [];
+        for ($index = 0; $index < 4; $index++) {
+            $number = $index + 1;
+            $option = \is_array($options[$index] ?? null) ? $options[$index] : [];
+            $optionId = $this->firstString([$option['option_id'] ?? null, 'logo_option_' . $number]);
+            if (!\preg_match('/^logo_option_[1-4]$/', $optionId)) {
+                $optionId = 'logo_option_' . $number;
+            }
+            $slotId = $this->normalizeSlotId($this->firstString([
+                $option['asset_slot_id'] ?? null,
+                $option['slot_id'] ?? null,
+                'plan:theme:logo_generation:option_' . $number,
+            ]));
+            if (!\str_starts_with($slotId, 'plan:theme:logo_generation:option_')) {
+                $slotId = 'plan:theme:logo_generation:option_' . $number;
+            }
+            $optionBrief = $this->firstString([$option['prompt_brief'] ?? null, $option['brief'] ?? null]);
+            $styleDirection = $this->firstString([$option['style_direction'] ?? null]);
+            $briefParts = [$logoBrief];
+            if ($optionBrief !== '' && $optionBrief !== $logoBrief) {
+                $briefParts[] = 'Option-specific prompt: ' . $optionBrief;
+            }
+            if ($styleDirection !== '') {
+                $briefParts[] = 'Option style direction: ' . $styleDirection;
+            }
+            $finalUrl = $this->firstString([
+                $option['final_url'] ?? null,
+                $option['url'] ?? null,
+                $option['asset_url'] ?? null,
+            ]);
+            $status = $this->firstString([$option['status'] ?? null, $finalUrl !== '' ? 'generated' : 'pending']);
+            if ($finalUrl !== '') {
+                $status = 'generated';
+            }
+            $slots[] = [
+                'slot_id' => $slotId,
+                'option_id' => $optionId,
+                'logo_option_id' => $optionId,
+                'slot_type' => 'logo_icon',
+                'kind' => 'logo_option',
+                'page_type' => 'global',
+                'field' => 'theme.logo_generation.options.' . $optionId,
+                'task_key' => 'theme:logo_generation',
+                'section_code' => 'theme_logo_generation',
+                'label' => $this->firstString([$option['label'] ?? null, 'Logo ' . $number]),
+                'target_size' => '1024x512',
+                'aspect_ratio' => '2:1',
+                'output_format' => 'png',
+                'background' => 'transparent',
+                'transparent_png_required' => true,
+                'identity_transparent_png_required' => true,
+                'brief' => \implode("\n", $briefParts),
+                'prompt_brief' => \implode("\n", $briefParts),
+                'source' => $finalUrl !== '' ? 'generated' : 'planned',
+                'status' => $status,
+                'final_url' => $finalUrl,
+                'url' => $finalUrl,
+                'required' => 0,
+                'desired_image' => 1,
+                'locked_by_user' => 0,
+            ];
+        }
+
+        return $slots;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function readThemeLogoGenerationOptions(array $scope): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $theme = \is_array($planJson['theme'] ?? null) ? $planJson['theme'] : [];
+        $logoGeneration = \is_array($theme['logo_generation'] ?? null) ? $theme['logo_generation'] : [];
+        $rawOptions = \is_array($logoGeneration['options'] ?? null) ? $logoGeneration['options'] : [];
+        $options = [];
+        foreach ($rawOptions as $key => $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            if (!isset($option['option_id']) && \is_string($key) && $key !== '') {
+                $option['option_id'] = $key;
+            }
+            $options[] = $option;
+        }
+
+        return \array_slice($options, 0, 4);
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @return array<string, mixed>
+     */
+    private function dropLegacyWebsiteLogoIdentitySlot(array $manifest): array
+    {
+        if (\is_array($manifest['slots'] ?? null) && isset($manifest['slots']['identity:website-logo'])) {
+            unset($manifest['slots']['identity:website-logo']);
+            $manifest['updated_at'] = \date('Y-m-d H:i:s');
+        }
+
+        return $manifest;
     }
 
     /**
