@@ -17353,11 +17353,23 @@
         if (!guardPhaseOnePlanConfirmation()) {
             return;
         }
+        var confirmPlanReloadTimer = null;
+        var clearConfirmPlanReloadTimer = function () {
+            if (confirmPlanReloadTimer) {
+                window.clearTimeout(confirmPlanReloadTimer);
+                confirmPlanReloadTimer = null;
+            }
+        };
         if (typeof showLoading === 'function') {
             showLoading();
         }
+        confirmPlanReloadTimer = window.setTimeout(function () {
+            confirmPlanReloadTimer = null;
+            window.location.reload();
+        }, 5000);
         persistStageOneInlineEdits(true).then(function (patched) {
             if (!patched) {
+                clearConfirmPlanReloadTimer();
                 if (typeof hideLoading === 'function') {
                     hideLoading();
                 }
@@ -17379,6 +17391,7 @@
             }).then(function (data) {
                 if (!data || !data.success) {
                     if (opts.forceConfirmStalePlan !== true && isPlanInputStaleConfirmationResponse(data)) {
+                        clearConfirmPlanReloadTimer();
                         if (typeof hideLoading === 'function') {
                             hideLoading();
                         }
@@ -17391,6 +17404,7 @@
                         });
                         return;
                     }
+                    clearConfirmPlanReloadTimer();
                     if (typeof hideLoading === 'function') {
                         hideLoading();
                     }
@@ -17402,6 +17416,7 @@
                     hydrateWorkspaceFromState(data.data);
                 }
                 hidePlanGenerationModal();
+                clearConfirmPlanReloadTimer();
                 if (typeof hideLoading === 'function') {
                     hideLoading();
                 }
@@ -17415,6 +17430,7 @@
                 }
                 continueToBuildAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
             }).catch(function (error) {
+                clearConfirmPlanReloadTimer();
                 var confirmErrorMessage = (error && error.message) ? String(error.message) : resolveFrontendRetryStopMessage('confirm_transport_error', null);
                 if (typeof hideLoading === 'function') {
                     hideLoading();
@@ -17428,6 +17444,7 @@
                 syncPlanRebuildButtonVisibility();
             });
         }).catch(function () {
+            clearConfirmPlanReloadTimer();
             if (typeof hideLoading === 'function') {
                 hideLoading();
             }
