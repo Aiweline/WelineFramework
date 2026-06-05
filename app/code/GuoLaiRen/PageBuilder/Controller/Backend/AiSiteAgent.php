@@ -13812,6 +13812,10 @@ class AiSiteAgent extends BaseController
             return false;
         }
 
+        if (\in_array($operation, ['plan', 'build'], true)) {
+            return true;
+        }
+
         foreach ([$scopePatch, $operationDetails] as $payload) {
             if ($this->payloadRequestsQueueTakeover($payload)) {
                 return true;
@@ -13855,22 +13859,51 @@ class AiSiteAgent extends BaseController
     ): array {
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
-        $activeStatus = \strtolower(\trim((string)($activeOperation['queue_status'] ?? '')));
-        if (!\in_array($activeStatus, ['pending', 'queued', 'running', 'processing'], true)) {
-            return [];
+        $operationStates = [];
+        $seenOperationStateKeys = [];
+        $appendOperationState = static function (array $state) use ($operation, &$operationStates, &$seenOperationStateKeys): void {
+            $stateOperation = \trim((string)($state['operation'] ?? $operation));
+            if ($stateOperation !== '' && $stateOperation !== $operation) {
+                return;
+            }
+            $queueId = (int)($state['queue_id'] ?? 0);
+            $token = \trim((string)($state['execution_token'] ?? $state['token'] ?? ''));
+            $key = $operation . ':' . $queueId . ':' . $token;
+            if (isset($seenOperationStateKeys[$key])) {
+                return;
+            }
+            $seenOperationStateKeys[$key] = true;
+            $state['operation'] = $operation;
+            $operationStates[] = $state;
+        };
+        $operationStateIsInProgress = static function (array $state): bool {
+            $status = \strtolower(\trim((string)($state['queue_status'] ?? $state['status'] ?? '')));
+
+            return \in_array($status, ['pending', 'queued', 'running', 'processing'], true);
+        };
+
+        if ($activeOperationName === $operation) {
+            $appendOperationState($activeOperation);
         }
-        if ($activeOperationName !== '' && $activeOperationName !== $operation) {
-            return [];
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        if (\is_array($activeOperations[$operation] ?? null)) {
+            $appendOperationState($activeOperations[$operation]);
         }
 
         $candidateRows = [];
         $seenQueueIds = [];
-        $linkedQueueId = (int)($activeOperation['queue_id'] ?? 0);
-        if ($linkedQueueId > 0) {
+        foreach ($operationStates as $operationState) {
+            $linkedQueueId = (int)($operationState['queue_id'] ?? 0);
+            if ($linkedQueueId <= 0) {
+                continue;
+            }
             $linkedRow = $this->findAiSiteQueueRowById($linkedQueueId);
-            if (\is_array($linkedRow) && $this->isObservedQueueInProgress($linkedRow)) {
-                $candidateRows[] = $linkedRow;
-                $seenQueueIds[$linkedQueueId] = true;
+            if (\is_array($linkedRow) && $this->isObservedQueueInProgress($linkedRow) && $this->isAiSiteQueueRowForOperation($linkedRow, $operation)) {
+                $queueId = (int)($linkedRow['queue_id'] ?? 0);
+                if ($queueId > 0 && empty($seenQueueIds[$queueId])) {
+                    $candidateRows[] = $linkedRow;
+                    $seenQueueIds[$queueId] = true;
+                }
             }
         }
 
@@ -13912,7 +13945,15 @@ class AiSiteAgent extends BaseController
                 ];
             }
 
-            $scope = $this->markActiveOperationForceTakenOverForFreshStart($scope, $activeOperation, $operation, $queueId);
+            $markOperationState = $operationStates[0] ?? \array_replace(
+                $this->buildOperationQueueEnvelope($session, $operation, '', 'cancelled'),
+                [
+                    'operation' => $operation,
+                    'queue_id' => $queueId,
+                    'queue_status' => 'cancelled',
+                ]
+            );
+            $scope = $this->markActiveOperationForceTakenOverForFreshStart($scope, $markOperationState, $operation, $queueId);
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
             $this->appendWorkspaceEvent(
                 $session->getId(),
@@ -13927,8 +13968,11 @@ class AiSiteAgent extends BaseController
             return ['taken_over' => true, 'scope' => $scope];
         }
 
-        if ($activeOperationName === $operation) {
-            $scope = $this->markActiveOperationForceTakenOverForFreshStart($scope, $activeOperation, $operation, 0);
+        foreach ($operationStates as $operationState) {
+            if (!$operationStateIsInProgress($operationState)) {
+                continue;
+            }
+            $scope = $this->markActiveOperationForceTakenOverForFreshStart($scope, $operationState, $operation, (int)($operationState['queue_id'] ?? 0));
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
             $this->appendWorkspaceEvent(
                 $session->getId(),
@@ -13936,7 +13980,7 @@ class AiSiteAgent extends BaseController
                 $stage,
                 'operation_queue_takeover',
                 'Active operation was force-released because no live queue row was attached.',
-                ['operation' => $operation, 'queue_id' => 0],
+                ['operation' => $operation, 'queue_id' => (int)($operationState['queue_id'] ?? 0)],
                 AiSiteAgentSessionEvent::LEVEL_WARNING
             );
 
@@ -13966,6 +14010,7 @@ class AiSiteAgent extends BaseController
 
         return $this->writeActiveOperationStateToScope($scope, \array_replace($activeOperation, [
             'operation' => $operation,
+            'status' => 'cancelled',
             'queue_status' => 'cancelled',
             'message' => 'Force takeover completed; waiting for a fresh system-scheduled operation.',
             'retry_allowed' => 1,
@@ -14470,6 +14515,35 @@ class AiSiteAgent extends BaseController
             $reusableQueueRow = $this->findAiSiteOperationQueueRow($session, $operation);
         }
         $reuseFailureMessage = '';
+        if (
+            \is_array($reusableQueueRow)
+            && $reusableQueueRow !== []
+            && $this->shouldForceQueueTakeoverForOperation($operation, $scopePatch, $operationDetails)
+            && $this->isAiSiteQueueRowLiveInProgress($reusableQueueRow)
+        ) {
+            $reusableQueueId = $this->resolveAiSiteQueueRowId($reusableQueueRow);
+            if ($reusableQueueId > 0) {
+                $takeover = w_query('queue', 'takeover', [
+                    'queue_id' => $reusableQueueId,
+                    'force' => true,
+                    'owner' => 'system_scheduler',
+                    'reason' => 'pagebuilder_replace_existing_queue',
+                    'mark_force_rebuild' => true,
+                    'clear_output' => false,
+                    'wake_scheduler' => false,
+                ]);
+                if (!\is_array($takeover) || empty($takeover['success'])) {
+                    $takeoverMessage = \is_array($takeover)
+                        ? \trim((string)($takeover['message'] ?? ''))
+                        : '';
+                    throw new \RuntimeException($takeoverMessage !== '' ? $takeoverMessage : 'Queue takeover failed.');
+                }
+                $reloadedQueueRow = $this->findAiSiteQueueRowById($reusableQueueId, true);
+                if (\is_array($reloadedQueueRow) && $reloadedQueueRow !== []) {
+                    $reusableQueueRow = $reloadedQueueRow;
+                }
+            }
+        }
         if (\is_array($reusableQueueRow) && $reusableQueueRow !== [] && $this->shouldReuseAiSiteQueueRow($reusableQueueRow, $preserveRunningQueueRow, $operation, $scopePatch, $operationDetails)) {
             $reusableQueueId = $this->resolveAiSiteQueueRowId($reusableQueueRow);
             $updated = w_query('queue', 'update', [

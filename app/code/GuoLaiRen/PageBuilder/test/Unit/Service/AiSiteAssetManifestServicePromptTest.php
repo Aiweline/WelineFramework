@@ -319,7 +319,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         self::assertSame('generated', (string)($slot['status'] ?? ''));
     }
 
-    public function testRequiredIdentityLogoSlotBriefIsSubjectFirst(): void
+    public function testRequiredThemeLogoGenerationSlotBriefsAreSubjectFirst(): void
     {
         // 闂傚倷绀侀妵妯肩矆娓氣偓閹?buildRequiredIdentitySlots 闂備礁鎲￠崝鏍偡閵夆晛鐭?manifest 闂?slot.brief 闂備礁鎼€氱兘宕归婧惧亾闂堟稒婀伴柟宄版嚇楠炴﹢鎳犻鈧弸鐘绘⒑缁嬭法绠伴柣妤冨仧濡?        // 濠电偞鍨堕弻銊╊敄閸涱喗娅犻柣妯虹－椤?"Generate the official website logo for X" 闁诲孩顔栭崰鎺楀磻閹炬剚鐔嗛柟顖滃瑜把呯磼鏉堛劎绠栭悗鐢靛帶椤繈骞囨担纭呮櫑 AI 闂佽崵鍠愰悷杈╃礊閳ь剚銇勯弴鐘差暭缂?        // 闂備焦鐪归崹濂割敊婵犲嫮鍗氶悗娑欘焽閳?X 闁荤喐绮忛崺鍥垂婵傚憡瀵橀柛鏇ㄥ灡閺咁剟鏌涢顒傚埌濠殿喖娴风槐鎺楀磼濠垫劕鏁界紓浣诡殘閸犳牕鐣峰┑瀣叀闁告侗鍨抽ˇ顐︽⒑閹稿海鈯曠紒瀣崌閻涱噣宕堕鈧幑鍫曟煏婵炲灝鍔ょ紒鐘冲灥椤啴濡堕崼顐㈡暯婵?PRIMARY SUBJECT 濠电偠鎻徊鍓у垝閸垺瀚婚柣鏂款殠閸ゆ洟鏌涘┑鍡楊伌婵炲牃鏅濈槐鎺楀箻閸涙壆顦伴梺?        $service = new AiSiteAssetManifestService();
 
@@ -332,20 +332,19 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
         $manifest = $service->syncFromPlanJson($scope);
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
-        self::assertArrayHasKey('identity:website-logo', $slots);
+        self::assertArrayNotHasKey('identity:website-logo', $slots);
+        self::assertArrayNotHasKey('identity:site-title-icon', $slots);
 
-        $logoBrief = (string)($slots['identity:website-logo']['brief'] ?? '');
-        self::assertStringStartsWith('PRIMARY SUBJECT for the logo glyph', $logoBrief);
-        self::assertStringContainsString('India-focused online card gaming club', $logoBrief);
-        self::assertStringContainsString('Output requirements (HARD):', $logoBrief);
-        self::assertStringContainsString('transparent background', $logoBrief);
-        self::assertStringNotContainsString('Generate the official website logo for', $logoBrief);
-
-        self::assertArrayHasKey('identity:site-title-icon', $slots);
-        $iconBrief = (string)($slots['identity:site-title-icon']['brief'] ?? '');
-        self::assertStringStartsWith('PRIMARY SUBJECT for the favicon/title icon', $iconBrief);
-        self::assertStringContainsString('India-focused online card gaming club', $iconBrief);
-        self::assertStringNotContainsString('Generate the website title icon / favicon for', $iconBrief);
+        for ($number = 1; $number <= 4; $number++) {
+            $slotId = 'plan:theme:logo_generation:option_' . $number;
+            self::assertArrayHasKey($slotId, $slots);
+            $logoBrief = (string)($slots[$slotId]['brief'] ?? '');
+            self::assertStringStartsWith('PRIMARY SUBJECT for the logo glyph', $logoBrief);
+            self::assertStringContainsString('India-focused online card gaming club', $logoBrief);
+            self::assertStringContainsString('Output requirements (HARD):', $logoBrief);
+            self::assertStringContainsString('transparent background', $logoBrief);
+            self::assertStringNotContainsString('Generate the official website logo for', $logoBrief);
+        }
     }
 
     public function testNonLogoSlotPromptStripsLayoutAndComponentCuesFromReferenceInsights(): void
