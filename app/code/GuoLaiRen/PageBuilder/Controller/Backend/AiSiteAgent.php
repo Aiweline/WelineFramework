@@ -160,7 +160,7 @@ class AiSiteAgent extends BaseController
     private const OBSERVER_QUEUE_SETTLE_DELAY_MS = 3000;
     private const OBSERVER_QUEUE_PROGRESS_POLL_INTERVAL_MS = 250;
     private const OBSERVER_QUEUE_PROGRESS_MAX_OBSERVE_MS = 720000;
-    private const PLAN_JSON_TASK_MAX_GENERATION_ATTEMPTS = 3;
+    private const PLAN_JSON_TASK_MAX_GENERATION_ATTEMPTS = 2;
     private const DEFAULT_PAGE_SECTION_BUILD_DISPATCH_WINDOW = 5;
     private const AI_SITE_QUEUE_CONTENT_LIGHT_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key,process';
     private const AI_SITE_QUEUE_CONTENT_PAYLOAD_FIELDS = 'queue_id,type_id,pid,name,module,status,finished,start_at,end_at,biz_key,content,process,result';
@@ -7468,6 +7468,8 @@ class AiSiteAgent extends BaseController
                 $queueDbMode = $sse instanceof QueueDbWriter;
                 if ($queueDbMode) {
                     $sse->recordRawAiStreamChunk($chunk);
+                    $sse->maybeHeartbeat();
+                    return;
                 }
                 $planAiStreamBuffer .= $chunk;
                 $delta = $this->streamCodecService->extractPlanMarkdownJsonStreamDelta($planAiStreamBuffer, $planMarkdownStreamState);

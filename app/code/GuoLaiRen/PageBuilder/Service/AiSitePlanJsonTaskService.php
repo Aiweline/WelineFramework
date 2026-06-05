@@ -64,7 +64,7 @@ class AiSitePlanJsonTaskService
     private const PLAN_BLOCK_STATUS_RUNNING = 2;
     private const PLAN_BLOCK_STATUS_DONE = 1;
     private const PLAN_BLOCK_STATUS_FAILED = -1;
-    private const PLAN_JSON_TASK_MAX_AUTOMATIC_ATTEMPTS = 3;
+    private const PLAN_JSON_TASK_MAX_AUTOMATIC_ATTEMPTS = 2;
     public const RETRYABLE_AI_FAILURES_SCOPE_KEY = 'retryable_ai_failures';
     private const BUILD_LOCKED_PLAN_SCOPE_KEYS = [
         'page_types',

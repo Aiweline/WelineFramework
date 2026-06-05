@@ -20,7 +20,7 @@ use Weline\Queue\QueueInterface;
 
 class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInterface
 {
-    private const MAX_PLAN_QUEUE_ATTEMPTS = 3;
+    private const MAX_PLAN_QUEUE_ATTEMPTS = 2;
     private const CONTENT_AUTO_ATTEMPT_KEY = '_plan_auto_attempt';
     private const CONTENT_MAX_AUTO_ATTEMPTS_KEY = 'max_auto_attempts';
     private const CONTENT_AUTO_RETRY_SCHEDULED_KEY = '_auto_retry_scheduled';
