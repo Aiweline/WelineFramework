@@ -3311,6 +3311,14 @@
         publishCheckConfirmAction: <?= $pbAiScriptJson((string)__('确认发布')) ?>
     };
 
+    previewLabels.logoGenerationTab = <?= $pbAiScriptJson((string)__('Logo 生成')) ?>;
+    previewLabels.logoGenerationTitle = <?= $pbAiScriptJson((string)__('Logo 生成方案')) ?>;
+    previewLabels.logoAssetSlot = <?= $pbAiScriptJson((string)__('Logo 资产槽')) ?>;
+    previewLabels.logoStatus = <?= $pbAiScriptJson((string)__('Logo 状态')) ?>;
+    previewLabels.logoPromptBrief = <?= $pbAiScriptJson((string)__('Logo 生成提示')) ?>;
+    previewLabels.logoStyleDirection = <?= $pbAiScriptJson((string)__('Logo 风格方向')) ?>;
+    previewLabels.logoReusePolicy = <?= $pbAiScriptJson((string)__('Logo 复用规则')) ?>;
+
     var lastToastByKey = {};
     function normalizeToastType(type) {
         var normalizedType = String(type || '').trim().toLowerCase();
@@ -3766,7 +3774,7 @@
             el.textContent = siteTitle;
         });
 
-        ['logo', 'icon'].forEach(function (role) {
+        ['icon'].forEach(function (role) {
             var slot = resolveIdentityAssetSlot(workspaceState, role);
             var assetUrl = resolveBrandAssetUrl(profile, slot, role);
             var loading = isIdentityAssetLoading(slot);
@@ -6268,9 +6276,10 @@
         var pages = Array.prototype.slice.call(document.querySelectorAll('.pb-ai-plan-preview-page'));
         var hasRequirementExpansion = !!document.querySelector('[data-pb-preview-scheme-section="requirement_expansion"]');
         var hasThemeDesign = !!document.querySelector('[data-pb-preview-scheme-section="theme_design"]');
+        var hasLogoGeneration = !!document.querySelector('[data-pb-preview-scheme-section="logo_generation"]');
         tabs.innerHTML = '';
         if (empty) {
-            empty.classList.toggle('d-none', pages.length > 0 || hasRequirementExpansion || hasThemeDesign);
+            empty.classList.toggle('d-none', pages.length > 0 || hasRequirementExpansion || hasThemeDesign || hasLogoGeneration);
         }
         var activeKey = '';
         if (hasRequirementExpansion) {
@@ -6280,6 +6289,10 @@
         if (hasThemeDesign) {
             appendPlanPreviewSwitchButton(tabs, 'theme_design', <?= $pbAiScriptJson((string)__('主题设计'), $pbAiScriptJsonHexFlags) ?>, activeKey === '');
             activeKey = activeKey || 'theme_design';
+        }
+        if (hasLogoGeneration) {
+            appendPlanPreviewSwitchButton(tabs, 'logo_generation', previewLabels.logoGenerationTab || 'Logo generation', activeKey === '');
+            activeKey = activeKey || 'logo_generation';
         }
         pages.forEach(function (page, index) {
             var pageType = String(page.getAttribute('data-pb-preview-page-type') || '').trim();
@@ -12880,6 +12893,40 @@
     }
 
 
+    function renderThemeLogoGenerationSection(planRoot) {
+        var root = planRoot && typeof planRoot === 'object' ? planRoot : {};
+        var theme = root.theme && typeof root.theme === 'object' && !Array.isArray(root.theme) ? root.theme : {};
+        var logoPlan = theme.logo_generation && typeof theme.logo_generation === 'object' && !Array.isArray(theme.logo_generation)
+            ? theme.logo_generation
+            : null;
+        if (!logoPlan) {
+            return '';
+        }
+        var rows = [
+            { label: previewLabels.logoAssetSlot || 'Logo asset slot', text: sanitizePreviewText(logoPlan.asset_slot_id || '', '') },
+            { label: previewLabels.logoStatus || 'Logo status', text: sanitizePreviewText(logoPlan.status || '', '') },
+            { label: previewLabels.logoPromptBrief || 'Logo prompt brief', text: sanitizePreviewText(logoPlan.prompt_brief || '', '') },
+            { label: previewLabels.logoStyleDirection || 'Logo style direction', text: sanitizePreviewText(logoPlan.style_direction || '', '') },
+            { label: previewLabels.logoReusePolicy || 'Logo reuse policy', text: sanitizePreviewText(logoPlan.reuse_policy || '', '') }
+        ].filter(function (row) {
+            return String(row.text || '').trim() !== '';
+        }).map(function (row) {
+            return '<div class="mb-2">'
+                + '<div class="small text-muted">' + escapeHtml(String(row.label || '')) + '</div>'
+                + '<div class="small">' + escapeHtml(String(row.text || '')).replace(/\n/g, '<br>') + '</div>'
+                + '</div>';
+        }).join('');
+        if (!rows) {
+            return '';
+        }
+
+        return ''
+            + '<div class="border rounded p-3 mt-3 bg-light-subtle pb-ai-plan-preview-logo-generation" data-pb-preview-scheme-section="logo_generation">'
+            + '<div class="fw-semibold small mb-2">' + escapeHtml(String(previewLabels.logoGenerationTitle || 'Logo generation plan')) + '</div>'
+            + rows
+            + '</div>';
+    }
+
     function buildPreviewActionButton(action, label, tone, meta) {
         var attrs = '';
         var payload = meta && typeof meta === 'object' ? meta : {};
@@ -13515,6 +13562,7 @@
             + '<div class="pb-ai-plan-structured-preview">'
             + renderRequirementExpansionEditSection(root)
             + renderThemeDirectEditSection(root, sharedBlocks ? '<section class="pb-ai-plan-preview-shared">' + sharedBlocks + '</section>' : '')
+            + renderThemeLogoGenerationSection(root)
             + pageHtml
             + '</div>';
     }
