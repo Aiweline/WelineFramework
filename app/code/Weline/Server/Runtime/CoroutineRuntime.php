@@ -27,7 +27,7 @@ final class CoroutineRuntime
         $nextDelay = $this->scheduler->getNextTimerDelay();
         if ($nextDelay !== null) {
             $delayUsec = (int) \ceil($nextDelay * 1_000_000);
-            if ($delayUsec > 0 && $delayUsec < self::MIN_READY_TIMER_WAIT_USEC && $defaultUsec > 0) {
+            if ($delayUsec < self::MIN_READY_TIMER_WAIT_USEC && $defaultUsec > 0) {
                 $delayUsec = \min($defaultUsec, self::MIN_READY_TIMER_WAIT_USEC);
             }
             if ($delayUsec < $timeoutUsec) {
