@@ -3131,7 +3131,7 @@
             if (retryPayload && retryAiOperationUrl) {
                 document.documentElement.dataset.pbRetryableAiTriggerPosted = '1';
                 retryableAiFailureResumeInFlight[normalized] = true;
-                postForm(retryAiOperationUrl, retryPayload, { timeoutMs: 15000 }).then(function (data) {
+                postForm(retryAiOperationUrl, retryPayload).then(function (data) {
                     if (data && data.data && typeof data.data === 'object') {
                         hydrateWorkspaceFromState(data.data);
                     }
@@ -3490,6 +3490,9 @@
         var fd = new FormData();
         Object.keys(fields || {}).forEach(function (k) { fd.append(k, fields[k]); });
         var timeoutMs = Math.max(0, parseInt(String(opts.timeoutMs || opts.timeout_ms || 0), 10) || 0);
+        if (timeoutMs <= 0 && retryAiOperationUrl && String(url || '') === String(retryAiOperationUrl || '')) {
+            timeoutMs = 15000;
+        }
         var abortController = null;
         var timeoutHandle = 0;
         if (timeoutMs > 0 && typeof AbortController !== 'undefined') {
