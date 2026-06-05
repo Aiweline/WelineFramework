@@ -232,6 +232,7 @@ class AiSiteAgentQueueObserverStreamService
             $activeOperation['updated_at'] = \date('Y-m-d H:i:s');
         } elseif (\in_array($queueStatus, ['done', 'complete', 'completed', 'stop', 'stopped', 'cancelled', 'canceled'], true)) {
             $activeOperation['queue_status'] = \in_array($queueStatus, ['done', 'complete', 'completed'], true) ? 'done' : 'cancelled';
+            $activeOperation['status'] = $activeOperation['queue_status'];
             $activeOperation['semantic_status'] = $activeOperation['queue_status'];
             $activeOperation = $this->applySchedulerWaitingState($activeOperation, false);
             if ($activeOperation['queue_status'] === 'done') {

@@ -26,6 +26,16 @@ if (!is_object($user) || !method_exists($user, 'getId')) {
     }
 }
 $customerId = is_object($user) && method_exists($user, 'getId') ? (int)$user->getId() : 0;
+if ($customerId <= 0) {
+    try {
+        $frontendSession = SessionFactory::getInstance()->createFrontendSession();
+        if (method_exists($frontendSession, 'getUserId')) {
+            $sessionCustomerId = $frontendSession->getUserId();
+            $customerId = is_numeric($sessionCustomerId) ? (int)$sessionCustomerId : 0;
+        }
+    } catch (\Throwable) {
+    }
+}
 /** @var MailCustomerAccountService $mailService */
 $mailService = ObjectManager::getInstance(MailCustomerAccountService::class);
 /** @var MailFakeMailboxService $mailboxService */

@@ -6343,6 +6343,7 @@
 
 
     var REQUIRED_PAGE_TYPE = 'home_page';
+    var DEFAULT_PAGE_TYPE_SELECTION = ['home_page', 'about_page'];
     var TASK_ALWAYS_VISIBLE_PAGE_TYPE_MAP = {
         shared: true,
         home_page: true
@@ -6363,6 +6364,55 @@
             out.unshift(REQUIRED_PAGE_TYPE);
         }
         return out;
+    }
+
+    function selectablePageTypes() {
+        var labels = pageTypeLabelMap && typeof pageTypeLabelMap === 'object' ? pageTypeLabelMap : {};
+        return Object.keys(labels).filter(function (pageType) {
+            return String(pageType || '').trim() !== '';
+        });
+    }
+
+    function defaultPageTypeSelection() {
+        var all = selectablePageTypes();
+        var allowed = Object.create(null);
+        all.forEach(function (pageType) {
+            allowed[pageType] = true;
+        });
+        var defaults = DEFAULT_PAGE_TYPE_SELECTION.filter(function (pageType) {
+            return all.length === 0 || !!allowed[pageType];
+        });
+        return ensureRequiredPageTypeSelected(defaults);
+    }
+
+    function pageTypeSelectionCoversAllSelectableTypes(values) {
+        var all = selectablePageTypes();
+        if (all.length === 0) {
+            return false;
+        }
+        var selected = Object.create(null);
+        ensureRequiredPageTypeSelected(Array.isArray(values) ? values : []).forEach(function (pageType) {
+            selected[pageType] = true;
+        });
+        return all.every(function (pageType) {
+            return !!selected[pageType];
+        });
+    }
+
+    function normalizeIncomingPageTypesForCustomization(values, incomingCustomized) {
+        var source = Array.isArray(values) ? values : [];
+        var isNonCustomized = incomingCustomized === false || (incomingCustomized === null && !pageTypesUserCustomized);
+        if (source.length === 0) {
+            if (incomingCustomized === true) {
+                return [REQUIRED_PAGE_TYPE];
+            }
+            return isNonCustomized ? defaultPageTypeSelection() : [];
+        }
+        var normalized = ensureRequiredPageTypeSelected(source);
+        if (isNonCustomized && pageTypeSelectionCoversAllSelectableTypes(normalized)) {
+            return defaultPageTypeSelection();
+        }
+        return normalized;
     }
 
     function syncPageTypeCheckLabelState(check) {
@@ -6429,17 +6479,41 @@
         var scope = workspaceState.scope && typeof workspaceState.scope === 'object'
             ? workspaceState.scope
             : null;
+        if (!scope && (Array.isArray(workspaceState.page_types) || Object.prototype.hasOwnProperty.call(workspaceState, 'page_types_user_customized'))) {
+            scope = workspaceState;
+        }
         var hasIncomingCustomizedFlag = !!(scope && Object.prototype.hasOwnProperty.call(scope, 'page_types_user_customized'));
         var incomingCustomized = hasIncomingCustomizedFlag
             ? normalizePageTypesUserCustomizedFlag(scope.page_types_user_customized)
             : null;
         var scopePageTypes = scope && Array.isArray(scope.page_types) ? scope.page_types : [];
+        var effectiveScopePageTypes = normalizeIncomingPageTypesForCustomization(scopePageTypes, incomingCustomized);
+        if (effectiveScopePageTypes.length === 0 && incomingCustomized === true) {
+            effectiveScopePageTypes = [REQUIRED_PAGE_TYPE];
+        }
         var currentSelection = selectedPageTypes();
-        var incomingMatchesCurrentSelection = pageTypeSelectionEquals(scopePageTypes, currentSelection);
+        var incomingMatchesCurrentSelection = pageTypeSelectionEquals(effectiveScopePageTypes, currentSelection);
         var skipServerOverwrite = pageTypesSelectionLocallyCustomized && !incomingMatchesCurrentSelection;
-        if (scopePageTypes.length > 0) {
+        var reconciledScopePageTypes = skipServerOverwrite
+            ? currentSelection.slice()
+            : effectiveScopePageTypes.slice();
+        if (scope && typeof scope === 'object') {
+            var scopeDefaultsPatch = Object.assign({}, scope);
+            if (reconciledScopePageTypes.length > 0) {
+                scopeDefaultsPatch.page_types = ensureRequiredPageTypeSelected(reconciledScopePageTypes);
+            }
+            scopeDefaultsPatch.page_types_user_customized = (incomingCustomized || pageTypesSelectionLocallyCustomized) ? 1 : 0;
+            patchGuidedScopeDefaults(scopeDefaultsPatch);
+            scope.page_types = scopeDefaultsPatch.page_types;
+            scope.page_types_user_customized = scopeDefaultsPatch.page_types_user_customized;
+        }
+        if (reconciledScopePageTypes.length > 0) {
+            workspaceState.page_types = ensureRequiredPageTypeSelected(reconciledScopePageTypes);
+            workspaceState.page_types_user_customized = (incomingCustomized || pageTypesSelectionLocallyCustomized) ? 1 : 0;
+        }
+        if (reconciledScopePageTypes.length > 0) {
             if (!skipServerOverwrite) {
-                serverPageTypesFallback = scopePageTypes.slice();
+                serverPageTypesFallback = ensureRequiredPageTypeSelected(reconciledScopePageTypes);
                 syncDomPageTypeChecks(serverPageTypesFallback);
             }
             if (typeof window.applyTaskSummarySelectionFilter === 'function') {
@@ -6452,6 +6526,8 @@
                 pageTypesSelectionLocallyCustomized = incomingCustomized;
             }
         }
+        hydrateGuidedProfileInputs();
+        applyRunVirtualThemeButtonsDisabledState();
     }
 
     function selectedPageTypes() {
@@ -6511,7 +6587,7 @@
         var fbDomain = typeof fb.target_domain === 'string' ? String(fb.target_domain).trim().toLowerCase() : '';
         var localeVal = getPrimaryDefaultLocaleValue();
         var planLocaleVal = getPrimaryPlanLocaleValue();
-        var pageTypes = Array.isArray(selectedTypesOverride) && selectedTypesOverride.length
+        var pageTypes = Array.isArray(selectedTypesOverride)
             ? ensureRequiredPageTypeSelected(selectedTypesOverride)
             : selectedPageTypes();
         return {
@@ -6644,10 +6720,18 @@
             return false;
         }
         if (!pageTypesUserCustomized) {
-            var unchecked = checks.filter(function (item) { return !item.checked; });
-            unchecked.forEach(function (item) { item.checked = true; });
-            syncSameValuePageTypeChecks(REQUIRED_PAGE_TYPE, true);
-            return unchecked.length > 0;
+            var before = selectedPageTypes();
+            var next = pageTypeSelectionCoversAllSelectableTypes(before)
+                ? defaultPageTypeSelection()
+                : normalizeIncomingPageTypesForCustomization(
+                    Array.isArray(serverPageTypesFallback) && serverPageTypesFallback.length > 0
+                        ? serverPageTypesFallback
+                        : before,
+                    false
+                );
+            syncDomPageTypeChecks(next);
+            serverPageTypesFallback = selectedPageTypes();
+            return !pageTypeSelectionEquals(before, serverPageTypesFallback);
         }
         var selected = checks.filter(function (item) { return item.checked; });
         if (selected.length > 0) {
@@ -7541,9 +7625,18 @@
                 return;
             }
             setNeedsFormSaveStatus('saved');
-            if (data.data && typeof data.data === 'object') {
-                syncWorkspacePageTypeState(data.data);
-                hydrateWorkspaceFromState(data.data);
+            var responseState = data && data.data && typeof data.data === 'object'
+                ? data.data
+                : (data && data.state && typeof data.state === 'object'
+                    ? data.state
+                    : (data && data.scope && typeof data.scope === 'object' ? { scope: data.scope } : null));
+            if (responseState && typeof responseState === 'object') {
+                syncWorkspacePageTypeState(responseState);
+                hydrateWorkspaceFromState(responseState);
+            } else {
+                patchGuidedScopeDefaults(scopePatch || {});
+                hydrateGuidedProfileInputs();
+                applyRunVirtualThemeButtonsDisabledState();
             }
         }).catch(function (err) {
             console.error('Auto-save error:', err);
@@ -16494,7 +16587,8 @@
                 public_id: publicId,
                 scope_patch: JSON.stringify(buildVirtualThemePatch()),
                 prompt_mode: resolveInitialPlanPromptMode(),
-                confirm_regenerate: confirmRegenerate ? '1' : '0'
+                confirm_regenerate: confirmRegenerate ? '1' : '0',
+                fake_mode: isGuidedFakeModeSession() ? '1' : '0'
             }, {
                 // 方案启动会 hydrate scope、注册队列并组装 workspace payload，本地 WLS 上常超过 20s。
                 timeoutMs: 120000
