@@ -11,8 +11,11 @@ Some start-plan response branches were still hydrating the full workspace state 
 - Confirmation and reuse responses now use a compact start-plan state patch.
 - Running plan reuse responses now reuse the queue-oriented state returned by `startOperation`.
 - Existing active queue guard responses now return `buildQueuedOperationState(...)` directly instead of wrapping a full workspace state.
+- PageBuilder queue handoff calls pass `wake_scheduler => false` when creating, resetting, or taking over queue rows, so controller requests do not start queue workers.
 - Scheduler-aware integration assertions allow the system scheduler to move the queue from `pending` to `running` before the test reads it, while still asserting that the controller did not self-dispatch the queue.
 
 ## Contract
 
 Start endpoints such as `post-start-plan` should not call full workspace hydration as a fallback for queue start responses. Full workspace state is still available through the workspace state/polling endpoints; queue start responses should carry only operation status, `execution_token`, `stream_url`, `queue_id`, and `queue_wait` data.
+
+Queue creation and reset must remain a pure handoff. The query-provider default is allowed to wake the scheduler for generic queue use, but PageBuilder start endpoints must opt out and leave dispatch to the system scheduler.
