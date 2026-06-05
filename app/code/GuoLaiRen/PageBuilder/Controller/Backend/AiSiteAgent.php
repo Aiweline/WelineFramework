@@ -2937,6 +2937,7 @@ class AiSiteAgent extends BaseController
                                         'pid' => 0,
                                         'finished' => 0,
                                     ],
+                                    'wake_scheduler' => false,
                                 ]);
                                 if (\is_array($refreshed) && !empty($refreshed['success'])) {
                                     $effectiveExecutionToken = (string)($content['execution_token'] ?? $effectiveExecutionToken);
@@ -2977,6 +2978,7 @@ class AiSiteAgent extends BaseController
                         'pid' => 0,
                         'finished' => 0,
                     ],
+                    'wake_scheduler' => false,
                 ]);
                 if (\is_array($updated) && !empty($updated['success'])) {
                     return [
@@ -2997,6 +2999,7 @@ class AiSiteAgent extends BaseController
             'status' => 'pending',
             'auto' => true,
             'biz_key' => $bizKey,
+            'wake_scheduler' => false,
         ]);
 
         return [
@@ -13876,6 +13879,7 @@ class AiSiteAgent extends BaseController
                 'reason' => 'pagebuilder_force_takeover',
                 'mark_force_rebuild' => true,
                 'clear_output' => false,
+                'wake_scheduler' => false,
             ]);
             if (!\is_array($takeover) || empty($takeover['success'])) {
                 return [
@@ -14451,6 +14455,7 @@ class AiSiteAgent extends BaseController
             $updated = w_query('queue', 'update', [
                 'queue_id' => $reusableQueueId,
                 'patch' => $this->buildAiSiteQueueReusePatch($queueName, $content, $bizKey, $typeId),
+                'wake_scheduler' => false,
             ]);
             if (\is_array($updated) && ($updated['success'] ?? false)) {
                 $queueId = (int)($updated['queue_id'] ?? 0);
@@ -14480,6 +14485,7 @@ class AiSiteAgent extends BaseController
             'status' => 'pending',
             'auto' => true,
             'biz_key' => $bizKey,
+            'wake_scheduler' => false,
         ]);
         $queueId = (int)(\is_array($created) ? ($created['queue_id'] ?? 0) : 0);
         if ($queueId <= 0 || !(\is_array($created) && ($created['success'] ?? false))) {
