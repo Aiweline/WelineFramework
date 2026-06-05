@@ -65,4 +65,48 @@ final class AiSiteStageOneContractServiceTest extends TestCase
         self::assertNotContains('hero_download', $required);
         self::assertNotContains('final_download_cta', $required);
     }
+
+    public function testNonPolicyImagePlanningRulesStayRequiredAfterNormalize(): void
+    {
+        $service = new AiSiteStageOneContractService();
+        $contract = $service->normalize([
+            'contract_version' => AiSiteStageOneContractService::CONTRACT_VERSION,
+            'image_planning_rules' => [
+                'non_policy_pages_require_at_least_one_generated_image_intent' => false,
+                'non_policy_first_block_requires_generated_image_intent' => false,
+            ],
+        ], [
+            'brief_description' => 'Create a polished Teen Patti Master homepage with download proof and trust sections.',
+        ], ['home_page'], 'en_US', 'en_US');
+
+        self::assertTrue((bool)($contract['image_planning_rules']['non_policy_pages_require_at_least_one_generated_image_intent'] ?? false));
+        self::assertTrue((bool)($contract['image_planning_rules']['non_policy_first_block_requires_generated_image_intent'] ?? false));
+        self::assertFalse((bool)($contract['image_planning_rules']['planned_image_without_verified_asset_must_degrade_to_css_visual'] ?? true));
+        self::assertTrue((bool)($contract['image_planning_rules']['planned_image_without_verified_asset_must_fail_no_filler_media'] ?? false));
+        self::assertTrue((bool)($contract['page_contracts']['home_page']['first_block_requires_generated_image'] ?? false));
+        self::assertSame('hero', (string)($contract['page_contracts']['home_page']['first_generated_image_block_key'] ?? ''));
+    }
+
+    public function testPolicyPagesDoNotBecomeGeneratedImageRequiredAfterNormalize(): void
+    {
+        $service = new AiSiteStageOneContractService();
+        $contract = $service->normalize([
+            'contract_version' => AiSiteStageOneContractService::CONTRACT_VERSION,
+            'page_contracts' => [
+                'privacy_policy' => [
+                    'non_policy_pages_require_at_least_one_generated_image_intent' => true,
+                    'non_policy_first_block_requires_generated_image_intent' => true,
+                    'first_block_requires_generated_image' => true,
+                    'first_generated_image_block_key' => 'hero',
+                ],
+            ],
+        ], [
+            'brief_description' => 'Create a polished privacy policy page.',
+        ], ['privacy_policy'], 'en_US', 'en_US');
+
+        self::assertFalse((bool)($contract['page_contracts']['privacy_policy']['non_policy_pages_require_at_least_one_generated_image_intent'] ?? true));
+        self::assertFalse((bool)($contract['page_contracts']['privacy_policy']['non_policy_first_block_requires_generated_image_intent'] ?? true));
+        self::assertFalse((bool)($contract['page_contracts']['privacy_policy']['first_block_requires_generated_image'] ?? true));
+        self::assertSame('', (string)($contract['page_contracts']['privacy_policy']['first_generated_image_block_key'] ?? 'unexpected'));
+    }
 }

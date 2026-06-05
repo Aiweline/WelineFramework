@@ -1021,7 +1021,34 @@ final class AiSiteStageOneContractValidator
      */
     private function validatePageImageCoverage(array $blocks, array $requiredImageBlockKeys, array $pageContract, string $pageType, array &$issues): void
     {
-        // Generated media is a design preference, not a page-completion gate.
+        $generatedImageKeys = \array_fill_keys(\array_map('strval', $requiredImageBlockKeys), true);
+        if (!empty($pageContract['non_policy_pages_require_at_least_one_generated_image_intent']) && $generatedImageKeys === []) {
+            $issues[] = $this->issue('page_missing_generated_image_intent', 'pages.' . $pageType . '.image_intent', 'high', [
+                'page_type' => $pageType,
+                'expected' => 'At least one non-policy page block must declare image_intent.needs_image=true with concrete generated-image subject, placement, atmosphere, and treatment.',
+            ]);
+        }
+
+        if (empty($pageContract['first_block_requires_generated_image'])) {
+            return;
+        }
+
+        $expectedBlockKey = \trim((string)($pageContract['first_generated_image_block_key'] ?? ''));
+        if ($expectedBlockKey === '') {
+            $required = \is_array($pageContract['required_block_keys'] ?? null) ? \array_values($pageContract['required_block_keys']) : [];
+            $expectedBlockKey = \trim((string)($required[0] ?? ''));
+        }
+        if ($expectedBlockKey === '') {
+            return;
+        }
+
+        if (!isset($generatedImageKeys[$expectedBlockKey])) {
+            $issues[] = $this->issue('first_block_missing_generated_image_intent', 'pages.' . $pageType . '.' . $expectedBlockKey . '.image_intent.needs_image', 'high', [
+                'page_type' => $pageType,
+                'block_key' => $expectedBlockKey,
+                'expected' => 'The first/opening generated-image block must declare image_intent.needs_image=true before block build starts.',
+            ]);
+        }
     }
 
     /**

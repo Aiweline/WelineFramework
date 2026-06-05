@@ -112,6 +112,8 @@ final class AiSiteStageOneContractService
                 'composition_overuse_severity' => 'medium',
                 'requires_image_intent' => true,
                 'image_intent_keys' => self::IMAGE_INTENT_KEYS,
+                'non_policy_pages_require_at_least_one_generated_image_intent' => !$isPolicyPage,
+                'non_policy_first_block_requires_generated_image_intent' => !$isPolicyPage,
                 'first_block_requires_generated_image' => $preferredGeneratedImageBlockKey !== ''
                     && $firstRequiredBlockKey !== ''
                     && $preferredGeneratedImageBlockKey === $firstRequiredBlockKey,
@@ -230,10 +232,10 @@ final class AiSiteStageOneContractService
                 'needs_image_false_requires_css_motif_and_treatment' => true,
                 'opening_or_media_asset_blocks_prefer_generated_image_intent' => true,
                 'non_policy_pages_prefer_rich_visual_media' => true,
-                'non_policy_pages_require_at_least_one_generated_image_intent' => false,
-                'non_policy_first_block_requires_generated_image_intent' => false,
-                'planned_image_without_verified_asset_must_degrade_to_css_visual' => true,
-                'planned_image_without_verified_asset_must_fail_no_filler_media' => false,
+                'non_policy_pages_require_at_least_one_generated_image_intent' => true,
+                'non_policy_first_block_requires_generated_image_intent' => true,
+                'planned_image_without_verified_asset_must_degrade_to_css_visual' => false,
+                'planned_image_without_verified_asset_must_fail_no_filler_media' => true,
                 'filler_image_assets_forbidden' => true,
             ],
             'visual_quality_rules' => [
@@ -308,6 +310,8 @@ final class AiSiteStageOneContractService
                 $basePreferredImageKey = \trim((string)($basePageContract['first_generated_image_block_key'] ?? ''));
                 $sourcePreferredImageKey = \trim((string)($sourcePageContracts[$pageType]['first_generated_image_block_key'] ?? ''));
                 $preferredGeneratedImageBlockKey = $sourcePreferredImageKey !== '' ? $sourcePreferredImageKey : $basePreferredImageKey;
+                $requiresPageGeneratedImage = !empty($basePageContract['non_policy_pages_require_at_least_one_generated_image_intent']);
+                $requiresFirstGeneratedImage = !empty($basePageContract['non_policy_first_block_requires_generated_image_intent']);
                 $firstRequiredBlockKey = \trim((string)($basePageContract['required_block_keys'][0] ?? ''));
                 $pageContracts[$pageType] = \array_replace($basePageContract, $sourcePageContracts[$pageType], [
                     'requires_visual_signature' => true,
@@ -316,10 +320,13 @@ final class AiSiteStageOneContractService
                     'forbid_repeated_composition_patterns_within_page' => true,
                     'requires_image_intent' => true,
                     'image_intent_keys' => self::IMAGE_INTENT_KEYS,
-                    'first_block_requires_generated_image' => $preferredGeneratedImageBlockKey !== ''
+                    'non_policy_pages_require_at_least_one_generated_image_intent' => $requiresPageGeneratedImage,
+                    'non_policy_first_block_requires_generated_image_intent' => $requiresFirstGeneratedImage,
+                    'first_block_requires_generated_image' => $requiresFirstGeneratedImage
+                        && $preferredGeneratedImageBlockKey !== ''
                         && $firstRequiredBlockKey !== ''
                         && $preferredGeneratedImageBlockKey === $firstRequiredBlockKey,
-                    'first_generated_image_block_key' => $preferredGeneratedImageBlockKey,
+                    'first_generated_image_block_key' => $requiresFirstGeneratedImage ? $preferredGeneratedImageBlockKey : '',
                     'block_count_handoff_required' => true,
                 ]);
             }
@@ -352,7 +359,10 @@ final class AiSiteStageOneContractService
             ? $normalized['page_route_contract']['allowed_internal_paths']
             : [];
         $normalized['image_planning_rules'] = \is_array($normalized['image_planning_rules'] ?? null) ? $normalized['image_planning_rules'] : [];
-        $normalized['image_planning_rules']['non_policy_first_block_requires_generated_image_intent'] = false;
+        $normalized['image_planning_rules']['non_policy_pages_require_at_least_one_generated_image_intent'] = true;
+        $normalized['image_planning_rules']['non_policy_first_block_requires_generated_image_intent'] = true;
+        $normalized['image_planning_rules']['planned_image_without_verified_asset_must_degrade_to_css_visual'] = false;
+        $normalized['image_planning_rules']['planned_image_without_verified_asset_must_fail_no_filler_media'] = true;
         $normalized['contract_hash'] = $this->hashStablePayload($normalized);
 
         return $normalized;
