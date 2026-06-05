@@ -129,6 +129,11 @@ class AiSitePlanJsonTaskService
         'assembly_version' => true,
         'generation_method' => true,
         'page_design_plan' => true,
+        'asset_distribution_policy' => true,
+        'theme_context_snapshot' => true,
+        'site_design_system' => true,
+        'asset_manifest_ref' => true,
+        'contract_summary' => true,
         'theme_alignment_summary' => true,
         'page_context_hash' => true,
         'blocks' => true,
@@ -187,14 +192,112 @@ class AiSitePlanJsonTaskService
      */
     public function ensureTaskScope(array $scope, array $websiteProfile, string $workspaceTrack): array
     {
-        unset($websiteProfile, $workspaceTrack);
         $scope = $this->normalizePlanJsonConfirmedState($scope);
+        $scope['_plan_json_workspace_track'] = \trim($workspaceTrack) !== ''
+            ? \trim($workspaceTrack)
+            : (string)($scope['_plan_json_workspace_track'] ?? $scope['workspace_track'] ?? '');
+        $scope = $this->ensurePlanJsonBlockContractHandoff($scope, $websiteProfile);
         $validation = $this->validatePlanJsonPagesForBuild($scope);
         if (!($validation['valid'] ?? false)) {
             return $this->markPlanJsonExecutionBlocked($scope, $validation);
         }
 
         return $this->ensurePlanJsonBlockExecutionState($scope);
+    }
+
+    /**
+     * Attach the block-level visual/image contract before task extraction.
+     *
+     * The execution queue reads only plan_json.pages.{page_type}.{block_key}, so
+     * the media contract must be written back there before blocks are scheduled.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @return array<string, mixed>
+     */
+    private function ensurePlanJsonBlockContractHandoff(array $scope, array $websiteProfile): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = $this->extractPlanJsonPages($scope);
+        if ($planJson === [] || $pages === []) {
+            return $scope;
+        }
+        if ($this->hasPlanJsonBlockContractHandoff($pages)) {
+            return $scope;
+        }
+        if ($this->hasGeneratedPlanJsonBlockArtifacts($pages)) {
+            return $scope;
+        }
+
+        $sharedPlan = \is_array($planJson['shared_plan'] ?? null) ? $planJson['shared_plan'] : [];
+        $siteDesignSystem = $this->firstNonEmptyPlanJsonArray([
+            $planJson['site_design_system'] ?? null,
+            $sharedPlan['site_design_system'] ?? null,
+            $scope['site_design_system'] ?? null,
+        ]);
+        $assetManifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
+        $assembled = (new AiSiteBlockContractAssemblerService())->assemble(
+            $scope,
+            $websiteProfile,
+            $planJson,
+            $pages,
+            $siteDesignSystem,
+            $assetManifest
+        );
+        $assembledPages = \is_array($assembled['pages'] ?? null) ? $assembled['pages'] : [];
+        if ($assembledPages === []) {
+            return $scope;
+        }
+
+        $planJson['pages'] = $assembledPages;
+        foreach (['site_design_system', 'asset_distribution_policy', 'asset_manifest_ref', 'contract_summary'] as $key) {
+            if (\is_array($assembled[$key] ?? null) && $assembled[$key] !== []) {
+                $planJson[$key] = $assembled[$key];
+            }
+        }
+        $scope['plan_json'] = $planJson;
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $pages
+     */
+    private function hasPlanJsonBlockContractHandoff(array $pages): bool
+    {
+        $hasBlocks = false;
+        foreach ($pages as $page) {
+            foreach ($this->extractPlanJsonPageBlocks($page) as $block) {
+                $hasBlocks = true;
+                if (!\is_array($block['block_contract'] ?? null) || !\array_key_exists('asset_requirements', $block)) {
+                    return false;
+                }
+            }
+        }
+
+        return $hasBlocks;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $pages
+     */
+    private function hasGeneratedPlanJsonBlockArtifacts(array $pages): bool
+    {
+        foreach ($pages as $page) {
+            foreach ($this->extractPlanJsonPageBlocks($page) as $block) {
+                $status = (int)($block['status'] ?? self::PLAN_BLOCK_STATUS_PENDING);
+                if (\in_array($status, [self::PLAN_BLOCK_STATUS_RUNNING, self::PLAN_BLOCK_STATUS_DONE], true)) {
+                    return true;
+                }
+                foreach (['html', 'html_content', 'phtml', 'fields', 'default_config', 'ai_data', 'assets'] as $key) {
+                    if (isset($block[$key]) && $block[$key] !== '' && $block[$key] !== []) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -3258,73 +3361,77 @@ class AiSitePlanJsonTaskService
         $sitePlanContext = $this->compactPlanJsonRootForTaskContext($planJson);
         $tasks = [];
         $sharedTaskKeys = [];
-        foreach (['header', 'footer'] as $sharedIndex => $region) {
-            $taskKey = 'shared:' . $region;
-            $sharedTaskKeys[] = $taskKey;
-            $componentType = $region === 'header' ? 'shared header' : 'shared footer';
-            $tasks[] = [
-                'task_key' => $taskKey,
-                'task_type' => 'shared_component',
-                'scope_key' => 'plan_json.shared_components.' . $region,
-                'group_key' => 'shared',
-                'region' => $region,
-                'component_code' => $region === 'header' ? 'header/ai-site-header' : 'footer/ai-site-footer',
-                'section_code' => $region === 'header' ? 'header/ai-site-header' : 'footer/ai-site-footer',
-                'label' => $region === 'header' ? 'Shared Header' : 'Shared Footer',
-                'sort_order' => 10 + ($sharedIndex * 10),
-                'dependencies' => [],
-                'can_parallel' => true,
-                'materialize_after_done' => true,
-                'materialize_policy' => 'shared',
-                'prompt_template_key' => 'plan_json_shared_component_execute',
-                'progress_weight' => 1.0,
-                'result_ref' => [
+        $workspaceTrack = \trim((string)($scope['_plan_json_workspace_track'] ?? $scope['workspace_track'] ?? ''));
+        $includeSharedTasks = $workspaceTrack === '' || $workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME;
+        if ($includeSharedTasks) {
+            foreach (['header', 'footer'] as $sharedIndex => $region) {
+                $taskKey = 'shared:' . $region;
+                $sharedTaskKeys[] = $taskKey;
+                $componentType = $region === 'header' ? 'shared header' : 'shared footer';
+                $tasks[] = [
+                    'task_key' => $taskKey,
+                    'task_type' => 'shared_component',
+                    'scope_key' => 'plan_json.shared_components.' . $region,
+                    'group_key' => 'shared',
                     'region' => $region,
-                ],
-                'runtime_context' => \array_replace_recursive($runtimeRoot, [
-                    'content_locale' => $contentLocale,
-                    'site_default_language' => $siteDefaultLanguage,
-                    'default_language' => $siteDefaultLanguage,
-                    'language_contract' => $languageContract,
-                    'context_refs' => [
-                        'site_context_ref' => 'plan_json',
-                        'shared_component_ref' => 'plan_json.shared_components.' . $region,
+                    'component_code' => $region === 'header' ? 'header/ai-site-header' : 'footer/ai-site-footer',
+                    'section_code' => $region === 'header' ? 'header/ai-site-header' : 'footer/ai-site-footer',
+                    'label' => $region === 'header' ? 'Shared Header' : 'Shared Footer',
+                    'sort_order' => 10 + ($sharedIndex * 10),
+                    'dependencies' => [],
+                    'can_parallel' => true,
+                    'materialize_after_done' => true,
+                    'materialize_policy' => 'shared',
+                    'prompt_template_key' => 'plan_json_shared_component_execute',
+                    'progress_weight' => 1.0,
+                    'result_ref' => [
+                        'region' => $region,
                     ],
-                ]),
-                'plan_context' => [
-                    'source' => 'plan_json',
-                    'site_context' => $sitePlanContext,
-                    'content_locale' => $contentLocale,
-                    'site_default_language' => $siteDefaultLanguage,
-                    'shared_region' => $region,
-                    'shared_prompt_context' => \is_array($runtimeRoot['shared_prompt_context'] ?? null) ? $runtimeRoot['shared_prompt_context'] : [],
-                ],
-                'task_script' => [
-                    'component_type' => $componentType,
-                    'story_goal' => 'Generate the visitor-facing ' . $componentType . ' from plan_json root navigation, footer, theme, and locale context.',
-                    'field_content_requirements' => [],
-                    'output_contract' => $this->planJsonExecutionOutputContract($componentType, []),
-                    'acceptance' => $this->planJsonExecutionAcceptanceContract($componentType),
-                    'content_keys' => [],
-                    'policy_slices' => ['navigation.route_contract', 'layout.4_8_spacing', 'responsive.no_horizontal_scroll'],
-                    'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic', 'color.readable_contrast'],
-                ],
-                'block_task' => [
-                    'block_type' => $componentType,
-                    'task_goal' => 'Generate the shared ' . $region . ' once and reuse it across every selected page.',
-                    'content_plan' => [],
-                    'style_plan' => $sitePlanContext,
-                    'output_contract' => $this->planJsonExecutionOutputContract($componentType, []),
-                    'acceptance' => $this->planJsonExecutionAcceptanceContract($componentType),
-                ],
-                'implementation_contract' => [
-                    'source' => 'plan_json.shared_components.' . $region,
-                    'region' => $region,
-                    'data_contract' => [],
-                    'output_contract' => $this->planJsonExecutionOutputContract($componentType, []),
-                    'acceptance' => $this->planJsonExecutionAcceptanceContract($componentType),
-                ],
-            ];
+                    'runtime_context' => \array_replace_recursive($runtimeRoot, [
+                        'content_locale' => $contentLocale,
+                        'site_default_language' => $siteDefaultLanguage,
+                        'default_language' => $siteDefaultLanguage,
+                        'language_contract' => $languageContract,
+                        'context_refs' => [
+                            'site_context_ref' => 'plan_json',
+                            'shared_component_ref' => 'plan_json.shared_components.' . $region,
+                        ],
+                    ]),
+                    'plan_context' => [
+                        'source' => 'plan_json',
+                        'site_context' => $sitePlanContext,
+                        'content_locale' => $contentLocale,
+                        'site_default_language' => $siteDefaultLanguage,
+                        'shared_region' => $region,
+                        'shared_prompt_context' => \is_array($runtimeRoot['shared_prompt_context'] ?? null) ? $runtimeRoot['shared_prompt_context'] : [],
+                    ],
+                    'task_script' => [
+                        'component_type' => $componentType,
+                        'story_goal' => 'Generate the visitor-facing ' . $componentType . ' from plan_json root navigation, footer, theme, and locale context.',
+                        'field_content_requirements' => [],
+                        'output_contract' => $this->planJsonExecutionOutputContract($componentType, []),
+                        'acceptance' => $this->planJsonExecutionAcceptanceContract($componentType),
+                        'content_keys' => [],
+                        'policy_slices' => ['navigation.route_contract', 'layout.4_8_spacing', 'responsive.no_horizontal_scroll'],
+                        'acceptance_rule_ids' => ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic', 'color.readable_contrast'],
+                    ],
+                    'block_task' => [
+                        'block_type' => $componentType,
+                        'task_goal' => 'Generate the shared ' . $region . ' once and reuse it across every selected page.',
+                        'content_plan' => [],
+                        'style_plan' => $sitePlanContext,
+                        'output_contract' => $this->planJsonExecutionOutputContract($componentType, []),
+                        'acceptance' => $this->planJsonExecutionAcceptanceContract($componentType),
+                    ],
+                    'implementation_contract' => [
+                        'source' => 'plan_json.shared_components.' . $region,
+                        'region' => $region,
+                        'data_contract' => [],
+                        'output_contract' => $this->planJsonExecutionOutputContract($componentType, []),
+                        'acceptance' => $this->planJsonExecutionAcceptanceContract($componentType),
+                    ],
+                ];
+            }
         }
         $pageIndex = 0;
 

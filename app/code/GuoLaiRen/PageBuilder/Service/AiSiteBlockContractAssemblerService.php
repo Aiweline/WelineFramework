@@ -7,6 +7,77 @@ namespace GuoLaiRen\PageBuilder\Service;
 final class AiSiteBlockContractAssemblerService
 {
     private const CONTRACT_VERSION = '2.2';
+    private const PAGE_META_KEYS = [
+        'page_key' => true,
+        'page_type' => true,
+        'type' => true,
+        'status' => true,
+        'message' => true,
+        'error' => true,
+        'error_message' => true,
+        'updated_at' => true,
+        'started_at' => true,
+        'finished_at' => true,
+        'attempt_no' => true,
+        'result_ref' => true,
+        'title' => true,
+        'label' => true,
+        'page_label' => true,
+        'page_title' => true,
+        'page_goal' => true,
+        'page_status' => true,
+        'content_locale' => true,
+        'shared_context_hash' => true,
+        'theme_context_hash' => true,
+        'assembly_version' => true,
+        'generation_method' => true,
+        'page_design_plan' => true,
+        'asset_distribution_policy' => true,
+        'theme_context_snapshot' => true,
+        'site_design_system' => true,
+        'asset_manifest_ref' => true,
+        'contract_summary' => true,
+        'theme_alignment_summary' => true,
+        'page_context_hash' => true,
+        'blocks' => true,
+        'block_previews' => true,
+        'ordered_block_keys' => true,
+        'primary_keywords' => true,
+        'secondary_keywords' => true,
+        'seo' => true,
+        'meta_title' => true,
+        'meta_description' => true,
+        'meta_keywords' => true,
+        'route' => true,
+        'route_path' => true,
+        'slug' => true,
+        'path' => true,
+        'layout' => true,
+        'style_code' => true,
+        'style_settings' => true,
+        'design_tokens' => true,
+        'theme_css_ref' => true,
+        'navigation' => true,
+        'menus' => true,
+        'links' => true,
+        'settings' => true,
+        'preview_url' => true,
+        'preview_full_url' => true,
+        'visual_preview_url' => true,
+        'visual_edit_url' => true,
+        'virtual_preview_url' => true,
+        'virtual_edit_url' => true,
+        'assets' => true,
+        'sections' => true,
+        'section_refinements' => true,
+        'ai_description' => true,
+        'content' => true,
+        'description' => true,
+        'summary' => true,
+        'html' => true,
+        'html_content' => true,
+        'fields' => true,
+    ];
 
     public function __construct(
         private readonly ?AiSiteBlockMorphologyRegistry $morphologyRegistry = null,
@@ -247,7 +318,7 @@ final class AiSiteBlockContractAssemblerService
      */
     private function looksLikeDynamicBlockNode(string $key, array $node): bool
     {
-        if (\in_array($key, ['seo', 'page_design_plan', 'asset_distribution_policy', 'theme_context_snapshot'], true)) {
+        if (isset(self::PAGE_META_KEYS[$key])) {
             return false;
         }
 
@@ -257,8 +328,7 @@ final class AiSiteBlockContractAssemblerService
             }
         }
 
-        return \array_key_exists('status', $node)
-            && (\array_key_exists('html', $node) || \array_key_exists('fields', $node) || \array_key_exists('demo', $node));
+        return true;
     }
 
     /**
@@ -868,10 +938,16 @@ final class AiSiteBlockContractAssemblerService
     private function neonCardImageSubject(string $goal, string $role, string $pageType): string
     {
         $context = $goal !== '' ? '; block purpose: ' . $goal : '';
+        $roleKey = $this->normalizeRole($role);
         $identity = \mb_strtolower($role . ' ' . $goal, 'UTF-8');
 
         if (\preg_match('/opening|hero|banner|masthead/iu', $identity) === 1) {
             return 'immersive neon card-game lobby hero scene with glowing poker cards, mahjong tiles, chips, green felt table texture, tournament light wall, and safe center crop' . $context;
+        }
+        if (\in_array($roleKey, ['details', 'feature', 'content'], true)
+            || \preg_match('/game\s*modes?|features?|showcase|benefits?|bonuses?|android\s*play|apk\s*flow|room\s*selection/iu', $identity) === 1
+        ) {
+            return 'block-specific neon card-game feature scene with poker cards, mahjong tiles, chips, live table UI, cyan-magenta lighting, and props that match the current section' . $context;
         }
         if (\preg_match('/proof|trust|review|testimonial|rating|security|safe|responsible|玩家|信任|安全/iu', $identity) === 1) {
             return 'player trust proof scene in a neon card room: verified player cards, fair-play table details, responsible-play cue, support badge surfaces, no generic shield-only icon' . $context;
