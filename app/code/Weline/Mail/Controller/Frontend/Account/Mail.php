@@ -21,7 +21,7 @@ class Mail extends FrontendController
         $service = ObjectManager::getInstance(MailCustomerAccountService::class);
         $fakeMode = $this->postValue('mail_fake') === '1';
         $result = $service->apply(
-            (int)$this->getLoginUser()->getId(),
+            $this->currentCustomerId(),
             (int)$this->postValue('domain_id', '0'),
             $this->postValue('local_part'),
             $this->postValue('display_name'),
@@ -52,7 +52,7 @@ class Mail extends FrontendController
         /** @var MailFakeMailboxService $mailboxService */
         $mailboxService = ObjectManager::getInstance(MailFakeMailboxService::class);
         $result = $mailboxService->send(
-            (int)$this->getLoginUser()->getId(),
+            $this->currentCustomerId(),
             (int)$this->postValue('account_id', '0'),
             $this->postValue('to_email'),
             $this->postValue('subject'),
@@ -73,7 +73,7 @@ class Mail extends FrontendController
         /** @var MailFakeMailboxService $mailboxService */
         $mailboxService = ObjectManager::getInstance(MailFakeMailboxService::class);
         $result = $mailboxService->receiveTest(
-            (int)$this->getLoginUser()->getId(),
+            $this->currentCustomerId(),
             (int)$this->postValue('account_id', '0')
         );
 
@@ -91,7 +91,7 @@ class Mail extends FrontendController
         /** @var MailCustomerAccountService $service */
         $service = ObjectManager::getInstance(MailCustomerAccountService::class);
         $result = $service->updateStatus(
-            (int)$this->getLoginUser()->getId(),
+            $this->currentCustomerId(),
             (int)$this->postValue('account_id', '0'),
             $status
         );
@@ -152,5 +152,17 @@ class Mail extends FrontendController
         }
 
         return $default;
+    }
+
+    private function currentCustomerId(): int
+    {
+        $user = $this->getLoginUser();
+        $customerId = is_object($user) && method_exists($user, 'getId') ? (int)$user->getId() : 0;
+        if ($customerId > 0) {
+            return $customerId;
+        }
+
+        $sessionId = $this->getLoginUserId();
+        return is_numeric($sessionId) ? (int)$sessionId : 0;
     }
 }

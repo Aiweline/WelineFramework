@@ -132,6 +132,65 @@ class ObjectManager implements ManagerInterface
         return self::$classExistsCache[$class];
     }
 
+    private static function getReflectionTypeNames(?\ReflectionType $type): array
+    {
+        if ($type === null) {
+            return [];
+        }
+
+        if ($type instanceof \ReflectionNamedType) {
+            return [$type->getName()];
+        }
+
+        if ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType) {
+            $names = [];
+            foreach ($type->getTypes() as $childType) {
+                foreach (self::getReflectionTypeNames($childType) as $name) {
+                    $names[] = $name;
+                }
+            }
+            return $names;
+        }
+
+        return [];
+    }
+
+    private static function getFirstNamedReflectionType(?\ReflectionType $type): ?string
+    {
+        foreach (self::getReflectionTypeNames($type) as $name) {
+            if ($name !== 'null') {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private static function getClassReflectionTypeName(?\ReflectionType $type): ?string
+    {
+        foreach (self::getReflectionTypeNames($type) as $name) {
+            if ($name === 'null') {
+                continue;
+            }
+            if (self::cachedClassExists($name) || interface_exists($name, true)) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private static function reflectionTypeIncludesName(?\ReflectionType $type, string $expectedName): bool
+    {
+        foreach (self::getReflectionTypeNames($type) as $name) {
+            if ($name === $expectedName) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static function currentRequestFiber(): ?\Fiber
     {
         if (!class_exists(\Weline\Framework\Runtime\Runtime::class)) {
@@ -1269,7 +1328,7 @@ class ObjectManager implements ManagerInterface
             if ($data_param !== null && $parameters !== []) {
                 $last_param = end($parameters);
                 $lastType = $last_param?->getType();
-                if ($lastType && $lastType->getName() === 'array') {
+                if (self::reflectionTypeIncludesName($lastType, 'array')) {
                     $final_params[count($parameters) - 1] = $data_param;
                 }
             }
@@ -1522,15 +1581,15 @@ class ObjectManager implements ManagerInterface
                     if ($param->getType()) {
                         $type = $param->getType();
                         $paramMeta['type'] = $type;
-                        $typeName = $type->getName();
+                        $typeName = self::getClassReflectionTypeName($type) ?? self::getFirstNamedReflectionType($type);
                         
                         // PHP 8 性能优化：处理 Union Types 和可空类型
                         if ($type instanceof \ReflectionUnionType) {
                             // Union Types: 查找类类型（排除null）
                             $types = $type->getTypes();
                             foreach ($types as $unionType) {
-                                $unionTypeName = $unionType->getName();
-                                if ($unionTypeName !== 'null' && self::cachedClassExists($unionTypeName)) {
+                                $unionTypeName = self::getClassReflectionTypeName($unionType) ?? self::getFirstNamedReflectionType($unionType);
+                                if (is_string($unionTypeName) && $unionTypeName !== 'null' && self::cachedClassExists($unionTypeName)) {
                                     $typeName = $unionTypeName;
                                     $paramMeta['isClass'] = true;
                                     break;
@@ -1754,7 +1813,7 @@ class ObjectManager implements ManagerInterface
     ): mixed {
         $param_name = $param->getName();
         $param_type = $param->getType();
-        $param_type_name = $param_type ? $param_type->getName() : null;
+        $param_type_name = self::getClassReflectionTypeName($param_type) ?? self::getFirstNamedReflectionType($param_type);
         
         // 优先级1：用户提供的参数（按名称）
         if (isset($userParams[$param_name])) {

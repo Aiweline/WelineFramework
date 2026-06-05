@@ -133,6 +133,7 @@ final class AiSiteStageOneContractService
                 'site_strategy',
                 'theme_style',
                 'palette',
+                'theme',
                 'theme_design',
                 'navigation_plan',
                 'footer_plan',
