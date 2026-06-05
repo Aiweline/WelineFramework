@@ -268,6 +268,28 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         window.__pbWorkspaceFrontendRetryStopped = false;
     }
 
+    function reloadWorkspaceAfterFrontendException(operation, reason) {
+        var key = 'pb_ai_workspace_frontend_exception_reload';
+        var now = Date.now();
+        try {
+            var previous = JSON.parse(window.sessionStorage.getItem(key) || '{}');
+            var previousAt = parseInt(String(previous.at || 0), 10) || 0;
+            if (previousAt > 0 && (now - previousAt) < 10000) {
+                return false;
+            }
+            window.sessionStorage.setItem(key, JSON.stringify({
+                at: now,
+                operation: String(operation || ''),
+                reason: String(reason || '')
+            }));
+        } catch (error) {
+        }
+        window.setTimeout(function () {
+            window.location.reload();
+        }, 800);
+        return true;
+    }
+
     function notifyFrontendRetryStopped(operation, reason, payload) {
         var normalizedOperation = String(operation || (payload && payload.operation) || '').trim().toLowerCase() || 'workspace';
         var normalizedReason = String(reason || 'frontend_retry_stopped').trim() || 'frontend_retry_stopped';
@@ -339,6 +361,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             backend_session_url: backendSessionUrl,
             message: message
         }, 'warning', message);
+        reloadWorkspaceAfterFrontendException(normalizedOperation, normalizedReason);
         return false;
     }
 
