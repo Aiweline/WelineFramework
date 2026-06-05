@@ -1382,6 +1382,17 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $latestProgressBody = $this->extractFunctionBody($taskProgress, 'publishPlanQueueLatestPageProgress');
         self::assertStringContainsString('var remainingCount = parsePlanQueueNonNegativeCount(normalized.remaining_count, null);', $latestProgressBody);
         self::assertStringContainsString('remainingCount = resolvePlanQueueRemainingCount(normalized, total, doneCount, runningCount, failedCount, pendingCount);', $latestProgressBody);
+
+        self::assertStringContainsString('function parsePlanQueueAiStreamTelemetry(message)', $taskProgress);
+        self::assertStringContainsString('function renderPlanQueueAiStreamTelemetryDetails(info, message)', $taskProgress);
+        self::assertStringContainsString('AI 实时生成详情', $taskProgress);
+        self::assertStringContainsString('正在接收 AI 正文流', $taskProgress);
+        $latestMessageBody = $this->extractFunctionBody($taskProgress, 'publishPlanQueueLatestMessage');
+        self::assertStringContainsString('renderPlanQueueAiStreamTelemetryDetails(info || {}, text)', $latestMessageBody);
+        self::assertStringContainsString('latestEl.innerHTML = telemetryHtml;', $latestMessageBody);
+        self::assertStringNotContainsString('__pbUpdatePlanQueueLatestMessage', $latestMessageBody);
+        $latestInfoBody = $this->extractFunctionBody($taskProgress, 'publishPlanQueueLatestProgressFromInfo');
+        self::assertStringContainsString('publishPlanQueueLatestMessage(latestMessage, queueInfo);', $latestInfoBody);
     }
 
     public function testFrontendTransportFailuresStopAndNotifyInsteadOfAutoRetrying(): void
