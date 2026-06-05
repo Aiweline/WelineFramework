@@ -1384,6 +1384,37 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('remainingCount = resolvePlanQueueRemainingCount(normalized, total, doneCount, runningCount, failedCount, pendingCount);', $latestProgressBody);
     }
 
+    public function testFrontendTransportFailuresStopAndNotifyInsteadOfAutoRetrying(): void
+    {
+        $runtime = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-runtime.phtml');
+        self::assertIsString($runtime);
+
+        $notifyBody = $this->extractFunctionBody($runtime, 'notifyFrontendRetryStopped');
+        self::assertStringContainsString('window.w_msg(', $notifyBody);
+        self::assertStringContainsString('后台会话地址', $notifyBody);
+        self::assertStringContainsString('stopDeferredQueueStatePoll();', $notifyBody);
+        self::assertStringContainsString('closeOperationSource();', $notifyBody);
+        self::assertStringContainsString('previewBridge.pauseWorkspaceStream()', $notifyBody);
+        self::assertStringContainsString('backend_session_url: backendSessionUrl', $notifyBody);
+
+        $ensureBody = $this->extractFunctionBody($runtime, 'ensureWorkspaceStreamRunning');
+        self::assertStringContainsString('frontendRetryStopActive || window.__pbWorkspaceFrontendRetryStopped', $ensureBody);
+
+        $pollBody = $this->extractFunctionBody($runtime, 'startDeferredQueueStatePoll');
+        self::assertStringContainsString("notifyFrontendRetryStopped(normalizedOperation, 'workspace_state_poll_error'", $pollBody);
+        self::assertStringContainsString('if (!frontendRetryStopActive && deferredQueueStatePollOperation)', $pollBody);
+
+        $startBody = $this->extractFunctionBody($runtime, 'startOperationStream');
+        self::assertStringContainsString("notifyFrontendRetryStopped(operation, 'operation_sse_transport_error'", $startBody);
+        self::assertStringContainsString("notifyFrontendRetryStopped(operation, 'operation_sse_closed'", $startBody);
+        self::assertStringContainsString("notifyFrontendRetryStopped(operation, 'operation_sse_last_error'", $startBody);
+        self::assertStringNotContainsString("resumeOperationStreamForQueueWatch(operation, readCachedWorkspaceState() || {}, 'transport-error')", $startBody);
+        self::assertStringNotContainsString("ensureWorkspaceStreamRunning('operation-sse-closed')", $startBody);
+
+        $responseBody = $this->extractFunctionBody($runtime, 'startFromResponse');
+        self::assertStringContainsString('clearFrontendRetryStopGuard();', $responseBody);
+    }
+
     public function testWorkspaceToastUsesShortStructuralMessagesForOperationSuccess(): void
     {
         $script = $this->workspaceScript();

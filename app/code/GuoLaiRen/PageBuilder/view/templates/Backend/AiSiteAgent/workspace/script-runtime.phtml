@@ -6,6 +6,7 @@ $publishCheckUrl = (string)($publishCheckUrl ?? '');
 $operationSseUrl = (string)($operationSseUrl ?? '');
 $workspaceStreamSseUrl = (string)($workspaceStreamSseUrl ?? '');
 $workspaceStateUrl = (string)($workspaceStateUrl ?? '');
+$guidedUrl = (string)($guidedUrl ?? '');
 $activeOperation = \is_array($activeOperation ?? null) ? $activeOperation : [];
 $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
 ?>
@@ -187,6 +188,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     var operationSseBaseUrl = <?= \json_encode($operationSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceStreamSseBaseUrl = <?= \json_encode((string)($workspaceStreamSseUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceStateUrl = <?= \json_encode((string)($workspaceStateUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceGuidedUrl = <?= \json_encode((string)($guidedUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceStatePollUrl = workspaceStateUrl;
     var operationSseDeferredHandoffKeys = Object.create(null);
     var activeOperation = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
@@ -215,6 +217,8 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     // 0 means no wall-clock cutoff: once SSE hands off to state polling,
     // the poller stops only when the real queue state becomes terminal.
     var DEFERRED_QUEUE_STATE_POLL_TTL_MS = 0;
+    var frontendRetryStopActive = false;
+    var frontendRetryStopNotifiedKeys = Object.create(null);
 
     var lastOperationTerminalFingerprint = '';
     var blockRefreshState = (window.__pbBlockRefreshState && typeof window.__pbBlockRefreshState === 'object')
@@ -241,6 +245,97 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         return window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object'
             ? window.__pbWorkspaceApi
             : {};
+    }
+
+    function resolveBackendWorkspaceSessionUrl() {
+        var rawUrl = String(workspaceGuidedUrl || window.location.href || '').trim();
+        if (!rawUrl) {
+            return '';
+        }
+        try {
+            var parsed = new URL(rawUrl, window.location.origin);
+            if (publicId && !parsed.searchParams.get('public_id')) {
+                parsed.searchParams.set('public_id', publicId);
+            }
+            return parsed.toString();
+        } catch (error) {
+            return rawUrl;
+        }
+    }
+
+    function clearFrontendRetryStopGuard() {
+        frontendRetryStopActive = false;
+        window.__pbWorkspaceFrontendRetryStopped = false;
+    }
+
+    function notifyFrontendRetryStopped(operation, reason, payload) {
+        var normalizedOperation = String(operation || (payload && payload.operation) || '').trim().toLowerCase() || 'workspace';
+        var normalizedReason = String(reason || 'frontend_retry_stopped').trim() || 'frontend_retry_stopped';
+        var backendSessionUrl = resolveBackendWorkspaceSessionUrl();
+        var payloadMessage = payload && typeof payload === 'object'
+            ? String(payload.message || payload.error_message || payload.error || '').trim()
+            : '';
+        var message = payloadMessage || <?= \json_encode((string)__('前端检测到建站进度异常，已停止自动重试和重连，请等待后台消息通知后人工处理。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        var title = <?= \json_encode((string)__('PageBuilder 建站任务已停止前端自动重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+        var content = message;
+        if (backendSessionUrl) {
+            content += "\n\n" + <?= \json_encode((string)__('后台会话地址'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ': ' + backendSessionUrl;
+        }
+        var notifyKey = normalizedOperation + ':' + normalizedReason + ':' + backendSessionUrl;
+
+        frontendRetryStopActive = true;
+        window.__pbWorkspaceFrontendRetryStopped = true;
+        stopDeferredQueueStatePoll();
+        closeOperationSource();
+        if (typeof previewBridge.pauseWorkspaceStream === 'function') {
+            previewBridge.pauseWorkspaceStream();
+        } else {
+            var term = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
+            if (term && typeof term.stop === 'function') {
+                term.stop({ suppressTransportError: true });
+            }
+            window.__pbWorkspaceStreamPaused = true;
+        }
+        if (typeof enableNavigationAfterOperation === 'function') {
+            enableNavigationAfterOperation();
+        }
+
+        if (!frontendRetryStopNotifiedKeys[notifyKey]) {
+            frontendRetryStopNotifiedKeys[notifyKey] = true;
+            if (typeof window.w_msg === 'function') {
+                try {
+                    var wmsgResult = window.w_msg(
+                        'pagebuilder_ai_site_frontend_retry_stopped',
+                        'warning',
+                        title,
+                        content,
+                        {
+                            priority: 8,
+                            icon: 'mdi-pause-circle-outline',
+                            metadata: {
+                                public_id: publicId,
+                                operation: normalizedOperation,
+                                reason: normalizedReason,
+                                backend_session_url: backendSessionUrl
+                            }
+                        }
+                    );
+                    if (wmsgResult && typeof wmsgResult.catch === 'function') {
+                        wmsgResult.catch(function () {});
+                    }
+                } catch (error) {
+                    // Keep the UI stopped even if the notification bridge is unavailable.
+                }
+            }
+        }
+        toast('warning', message);
+        logOperationToWorkspaceTerminal('frontend_retry_stopped', {
+            operation: normalizedOperation,
+            reason: normalizedReason,
+            backend_session_url: backendSessionUrl,
+            message: message
+        }, 'warning', message);
+        return false;
     }
 
     function stopObserverSyncTerminalPulse() {
@@ -378,6 +473,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
     window.__pbResolveWorkspaceStreamSseUrl = resolveWorkspaceStreamSseUrl;
 
     function ensureWorkspaceStreamRunning(sourceTag) {
+        if (frontendRetryStopActive || window.__pbWorkspaceFrontendRetryStopped) {
+            return false;
+        }
         if (window.__pbWorkspaceStreamPaused) {
             window.__pbWorkspaceStreamPaused = false;
         }
@@ -688,9 +786,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             if (typeof enableNavigationAfterOperation === 'function') {
                 enableNavigationAfterOperation();
             }
-            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                previewBridge.resumeWorkspaceStream();
-            }
+            notifyFrontendRetryStopped(op, 'deferred_queue_terminal_error', failurePayload);
             offerRetryForFailedOperation(op, failurePayload);
             return;
         }
@@ -1452,10 +1548,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 deferredQueueStatePollSignature = signature;
                 syncDeferredQueueWorkspaceState(normalizedOperation, workspaceState);
             }).catch(function () {
-                // The next tick retries; stale responses are never buffered.
+                notifyFrontendRetryStopped(normalizedOperation, 'workspace_state_poll_error', {
+                    operation: normalizedOperation,
+                    message: <?= \json_encode((string)__('工作区状态刷新失败，前端已停止自动轮询。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                });
             }).then(function () {
                 deferredQueueStatePollInFlight = false;
-                scheduleDeferredQueueStatePollNext(false);
+                if (!frontendRetryStopActive && deferredQueueStatePollOperation) {
+                    scheduleDeferredQueueStatePollNext(false);
+                }
             });
         }
 
@@ -3597,9 +3698,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             }
         } catch (preSourceError) {
             resetOperationUiOnFailure(operation);
-            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                previewBridge.resumeWorkspaceStream();
-            }
+            notifyFrontendRetryStopped(operation, 'operation_sse_prepare_failed', {
+                operation: operation,
+                message: <?= \json_encode((string)__('操作事件流准备失败，前端已停止自动重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+            });
             return false;
         }
 
@@ -3614,23 +3716,16 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             transportErrorStateProbeStarted = true;
             settled = true;
             closeOperationSource(source);
-            var fallbackMessage = <?= \json_encode((string)__('操作事件流断开，正在恢复工作区 SSE 同步。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            var fallbackMessage = <?= \json_encode((string)__('操作事件流断开，前端已停止自动重连，请等待后台消息通知后人工处理。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
             logOperationToWorkspaceTerminal('transport_error_sse_resume', {
                 operation: operation,
                 message: fallbackMessage
             }, 'warning', fallbackMessage);
-            var streamRecovered = ensureWorkspaceStreamRunning('transport-error')
-                || resumeOperationStreamForQueueWatch(operation, readCachedWorkspaceState() || {}, 'transport-error');
-            if (!streamRecovered) {
-                startDeferredQueueStatePoll(operation);
-            }
-            if (typeof enableNavigationAfterOperation === 'function') {
-                enableNavigationAfterOperation();
-            }
-            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                previewBridge.resumeWorkspaceStream();
-            }
-            return true;
+            notifyFrontendRetryStopped(operation, 'operation_sse_transport_error', {
+                operation: operation,
+                message: fallbackMessage
+            });
+            return false;
         }
 
         var operationSseConnectDelayMs = PB_SSE_CONNECT_DELAY_MS;
@@ -3647,11 +3742,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             try {
                 source = new EventSource(streamUrl);
             } catch (eventSourceError) {
-                toast('error', 'Failed to open operation SSE stream.');
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
                 resetOperationUiOnFailure(operation);
+                notifyFrontendRetryStopped(operation, 'operation_sse_open_failed', {
+                    operation: operation,
+                    message: <?= \json_encode((string)__('操作事件流创建失败，前端已停止自动重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                });
                 return;
             }
             runningSource = source;
@@ -3734,9 +3829,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
+                notifyFrontendRetryStopped(operation, 'operation_sse_server_error', payload);
                 offerRetryForFailedOperation(operation, payload);
             });
 
@@ -4285,9 +4378,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
+                notifyFrontendRetryStopped(normalizedDoneOperation, 'operation_sse_done_error', normalizedDonePayload);
                 offerRetryForFailedOperation(normalizedDoneOperation, normalizedDonePayload);
                 return;
             }
@@ -4459,9 +4550,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 if (typeof enableNavigationAfterOperation === 'function') {
                     enableNavigationAfterOperation();
                 }
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
+                notifyFrontendRetryStopped(operation, 'operation_sse_last_error', failurePayload);
                 offerRetryForFailedOperation(operation, failurePayload);
                 return;
             }
@@ -4472,12 +4561,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 settled = true;
                 closeOperationSource(source);
                 markOperationSseDeferredHandoff(operation, executionToken);
-                if (!ensureWorkspaceStreamRunning('operation-sse-closed')) {
-                    startDeferredQueueStatePoll(operation);
-                }
-                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
-                    previewBridge.resumeWorkspaceStream();
-                }
+                notifyFrontendRetryStopped(operation, 'operation_sse_closed', {
+                    operation: operation,
+                    message: <?= \json_encode((string)__('操作事件流已关闭，前端已停止自动恢复。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                });
                 return;
             }
             handleTransportErrorStateFallback();
@@ -4517,6 +4604,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         if (!data || !data.success) {
             return false;
         }
+        clearFrontendRetryStopGuard();
         var payload = pickOperationResponsePayload(data) || {};
         if (data.data && typeof data.data === 'object') {
             hydrateWorkspaceFromState(data.data);

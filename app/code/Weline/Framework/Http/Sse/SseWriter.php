@@ -43,8 +43,6 @@ use Weline\Framework\Runtime\SchedulerSystem;
  */
 class SseWriter
 {
-    private const DEFAULT_YIELD_DELAY_MS = 1;
-
     /**
      * 是否已启动
      */
@@ -80,7 +78,7 @@ class SseWriter
     /**
      * 让步延迟毫秒数（0 = 立即让步）
      */
-    private int $yieldDelayMs = self::DEFAULT_YIELD_DELAY_MS;
+    private int $yieldDelayMs = 0;
     
     /**
      * 设置重试间隔
