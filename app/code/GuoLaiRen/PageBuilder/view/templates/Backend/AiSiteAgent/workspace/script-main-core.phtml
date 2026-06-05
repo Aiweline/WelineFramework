@@ -17353,8 +17353,14 @@
         if (!guardPhaseOnePlanConfirmation()) {
             return;
         }
+        if (typeof showLoading === 'function') {
+            showLoading();
+        }
         persistStageOneInlineEdits(true).then(function (patched) {
             if (!patched) {
+                if (typeof hideLoading === 'function') {
+                    hideLoading();
+                }
                 toast('warning', messages.planPersistFailed);
                 syncConfirmPlanButtonEnabled();
                 return;
@@ -17373,6 +17379,9 @@
             }).then(function (data) {
                 if (!data || !data.success) {
                     if (opts.forceConfirmStalePlan !== true && isPlanInputStaleConfirmationResponse(data)) {
+                        if (typeof hideLoading === 'function') {
+                            hideLoading();
+                        }
                         promptPlanInputStaleConfirmation(data).then(function (confirmed) {
                             if (confirmed) {
                                 confirmCurrentPlanAndMaybeBuild(Object.assign({}, opts, { forceConfirmStalePlan: true }));
@@ -17382,6 +17391,9 @@
                         });
                         return;
                     }
+                    if (typeof hideLoading === 'function') {
+                        hideLoading();
+                    }
                     toast('error', (data && data.message) ? String(data.message) : messages.networkError);
                     syncConfirmPlanButtonEnabled();
                     return;
@@ -17390,6 +17402,9 @@
                     hydrateWorkspaceFromState(data.data);
                 }
                 hidePlanGenerationModal();
+                if (typeof hideLoading === 'function') {
+                    hideLoading();
+                }
                 toast('success', (data && data.message) ? String(data.message) : messages.planConfirmSaved);
                 if (opts.startBuildAfterConfirm === true) {
                     var buildTypes = ensureRequiredPageTypeSelected(opts.selectedTypes && opts.selectedTypes.length ? opts.selectedTypes : selectedPageTypes());
@@ -17401,6 +17416,9 @@
                 continueToBuildAfterPlanConfirm(data && data.data && typeof data.data === 'object' ? data.data : null);
             }).catch(function (error) {
                 var confirmErrorMessage = (error && error.message) ? String(error.message) : resolveFrontendRetryStopMessage('confirm_transport_error', null);
+                if (typeof hideLoading === 'function') {
+                    hideLoading();
+                }
                 toast('error', confirmErrorMessage);
                 notifyWorkspaceFrontendRetryStopped('plan', 'confirm_transport_error', {
                     operation: 'plan',
@@ -17410,6 +17428,9 @@
                 syncPlanRebuildButtonVisibility();
             });
         }).catch(function () {
+            if (typeof hideLoading === 'function') {
+                hideLoading();
+            }
             toast('warning', messages.planPersistFailed);
             syncConfirmPlanButtonEnabled();
         });

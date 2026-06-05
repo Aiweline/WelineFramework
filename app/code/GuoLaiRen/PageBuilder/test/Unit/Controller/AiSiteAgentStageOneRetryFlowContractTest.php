@@ -322,6 +322,12 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         $fakeBatch = $this->extractMethodSource($controllerSource, 'runFakeVirtualThemePlanJsonPageTaskBatch');
 
         self::assertStringContainsString('syncFakePlanJsonSectionBlockToPreviewPage($scope, $task, $sectionBlock)', $fakeBatch);
+        self::assertStringContainsString("'event_type' => 'build_fake_mode_pipeline'", $fakeBatch);
+        self::assertStringNotContainsString('build_fake_mode_batch', $fakeBatch);
+        self::assertLessThan(
+            \strrpos($fakeBatch, '$startNextFakeTask();'),
+            \strpos($fakeBatch, '$completedTaskKeys[] = $taskKey;')
+        );
 
         $syncMethod = $this->extractMethodSource($controllerSource, 'syncFakePlanJsonSectionBlockToPreviewPage');
         self::assertStringContainsString('$pages = $this->planJsonPages($scope);', $syncMethod);
@@ -346,7 +352,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
     public function testRealVirtualThemePageTasksWriteGeneratedHtmlBackToPlanJsonBlocks(): void
     {
         $controllerSource = (string)\file_get_contents((new ReflectionClass(AiSiteAgent::class))->getFileName());
-        $anchor = "__('Theme page batch synced: %{page}'";
+        $anchor = "__('Theme page block synced: %{page}'";
         $anchorStart = \strpos($controllerSource, $anchor);
         self::assertIsInt($anchorStart);
         $needle = "\$scope = \$this->planJsonTaskService->markTaskDone(\$scope, (string)\$taskKey, [";

@@ -2293,7 +2293,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             || \str_contains($lower, 'stage-2 plan-json task context')
             || \str_contains($lower, 'scope-level prompt fallback')
         ) {
-            return 'AI output did not pass the section quality gate. The section will need another generation attempt.';
+            return 'AI output structure was invalid. The section will need another generation attempt.';
         }
 
         if ((\preg_match('/https?:\\/\\//i', $message) === 1)
