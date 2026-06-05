@@ -541,6 +541,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var queueStatus = readQueueStatusForDeferredState(state, normalizedOperation);
         var queueWaitingForScheduler = runtimeTruthyFlag(active && active.queue_waiting_for_scheduler)
             || runtimeTruthyFlag(payload && payload.queue_waiting_for_scheduler)
+            || runtimeTruthyFlag(payload && payload.queue_wait && payload.queue_wait.queue_waiting_for_scheduler)
             || runtimeTruthyFlag(state && state.queue_waiting_for_scheduler);
         if (!isQueueStatusInProgressForWatch(queueStatus) && !queueWaitingForScheduler) {
             return false;
@@ -4650,11 +4651,15 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         var operation = normalized.operation;
         var streamUrl = normalized.streamUrl;
         var hasObservableStreamStart = !!(executionToken && streamUrl);
+        var queueWait = payload && payload.queue_wait && typeof payload.queue_wait === 'object'
+            ? payload.queue_wait
+            : null;
         var shouldDeferToQueuePoll = !hasObservableStreamStart && !!(
             payload
             && (
                 payload.deferred_queue_progress
                 || payload.queue_waiting_for_scheduler
+                || (queueWait && queueWait.queue_waiting_for_scheduler)
                 || (payload.active_operation && typeof payload.active_operation === 'object' && (
                     payload.active_operation.queue_waiting_for_scheduler
                 ))
