@@ -182,6 +182,7 @@ class AiSiteAssetQueue implements QueueInterface
                 $imageScopePatch = \is_array($imagePatch['patch'] ?? null) ? $imagePatch['patch'] : [];
                 $scope = $manifestService->rememberGeneratedSlotInScope($scope, $manifest, $slotId);
                 $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $previousUrl);
+                $scope = $this->applyThemeLogoOptionPatchToScope($scope, $slot, $previousUrl);
                 $reuseState = \array_merge([
                     'asset_manifest' => $manifest,
                     'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
@@ -191,7 +192,7 @@ class AiSiteAssetQueue implements QueueInterface
                     'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
                         ? $scope['asset_image_generation_failures']
                         : [],
-                ], $this->buildIdentityAssetScopePatch($scope), $imageScopePatch);
+                ], $this->buildIdentityAssetScopePatch($scope), $this->buildThemeLogoGenerationScopePatch($scope), $imageScopePatch);
                 $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge(
                     $reuseState,
                     $this->buildReferenceImageInsightScopePatch($scope)
@@ -213,7 +214,7 @@ class AiSiteAssetQueue implements QueueInterface
                     'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
                     'state' => $reuseState,
                     'reused' => true,
-                ] + $this->buildIdentityAssetScopePatch($scope));
+                ] + $this->buildIdentityAssetScopePatch($scope) + $this->buildThemeLogoGenerationScopePatch($scope));
 
                 return 'Image asset generation reused: ' . $slotId;
             }
@@ -288,6 +289,7 @@ class AiSiteAssetQueue implements QueueInterface
                 ];
                 $manifest = $manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
                 $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
+                $scope = $this->applyThemeLogoOptionPatchToScope($scope, $slot, $finalUrl);
                 $scope = $this->clearAssetImageGenerationFailureForSlot($scope, $slotId);
                 $imagePatch = $this->applyGeneratedImagePatchToScope($scope, $content, $slot, $previousUrl, $finalUrl);
                 $scope = \is_array($imagePatch['scope'] ?? null) ? $imagePatch['scope'] : $scope;
@@ -312,7 +314,7 @@ class AiSiteAssetQueue implements QueueInterface
                     'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
                         ? $scope['asset_image_generation_failures']
                         : [],
-                ], $this->buildIdentityAssetScopePatch($scope), $imageScopePatch);
+                ], $this->buildIdentityAssetScopePatch($scope), $this->buildThemeLogoGenerationScopePatch($scope), $imageScopePatch);
                 $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge([
                     'asset_manifest' => $manifest,
                     'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
@@ -322,7 +324,7 @@ class AiSiteAssetQueue implements QueueInterface
                     'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
                         ? $scope['asset_image_generation_failures']
                         : [],
-                ], $this->buildIdentityAssetScopePatch($scope), $this->buildReferenceImageInsightScopePatch($scope), $imageScopePatch));
+                ], $this->buildIdentityAssetScopePatch($scope), $this->buildThemeLogoGenerationScopePatch($scope), $this->buildReferenceImageInsightScopePatch($scope), $imageScopePatch));
 
                 $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest, 'state' => $successState]);
                 $sse->sendEvent('asset_generation_done', [
@@ -340,7 +342,7 @@ class AiSiteAssetQueue implements QueueInterface
                     'asset_manifest' => $manifest,
                     'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
                     'state' => $successState,
-                ] + $this->buildIdentityAssetScopePatch($scope));
+                ] + $this->buildIdentityAssetScopePatch($scope) + $this->buildThemeLogoGenerationScopePatch($scope));
 
                 return 'Identity asset generated from transparent vector identity: ' . $slotId;
             }
@@ -395,6 +397,7 @@ class AiSiteAssetQueue implements QueueInterface
             ];
             $manifest = $manifestService->recordGenerated($manifest, $slotId, $finalUrl, $variant);
             $scope = $this->applyIdentityAssetPatchToScope($scope, $slot, $finalUrl);
+            $scope = $this->applyThemeLogoOptionPatchToScope($scope, $slot, $finalUrl);
             $scope = $this->clearAssetImageGenerationFailureForSlot($scope, $slotId);
             $imagePatch = $this->applyGeneratedImagePatchToScope($scope, $content, $slot, $previousUrl, $finalUrl);
             $scope = \is_array($imagePatch['scope'] ?? null) ? $imagePatch['scope'] : $scope;
@@ -419,7 +422,7 @@ class AiSiteAssetQueue implements QueueInterface
                 'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
                     ? $scope['asset_image_generation_failures']
                     : [],
-            ], $this->buildIdentityAssetScopePatch($scope), $imageScopePatch);
+            ], $this->buildIdentityAssetScopePatch($scope), $this->buildThemeLogoGenerationScopePatch($scope), $imageScopePatch);
             $sessionService->mergeScope((int)$session->getId(), $adminId, \array_merge([
                 'asset_manifest' => $manifest,
                 'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
@@ -429,7 +432,7 @@ class AiSiteAssetQueue implements QueueInterface
                 'asset_image_generation_failures' => \is_array($scope['asset_image_generation_failures'] ?? null)
                     ? $scope['asset_image_generation_failures']
                     : [],
-            ], $this->buildIdentityAssetScopePatch($scope), $this->buildReferenceImageInsightScopePatch($scope), $imageScopePatch));
+            ], $this->buildIdentityAssetScopePatch($scope), $this->buildThemeLogoGenerationScopePatch($scope), $this->buildReferenceImageInsightScopePatch($scope), $imageScopePatch));
 
             $sse->sendEvent('asset_manifest_updated', ['slot_id' => $slotId, 'asset_manifest' => $manifest, 'state' => $successState]);
             $sse->sendEvent('asset_generation_done', [
@@ -447,7 +450,7 @@ class AiSiteAssetQueue implements QueueInterface
                 'asset_manifest' => $manifest,
                 'verified_assets' => $manifestService->extractVerifiedAssets($manifest),
                 'state' => $successState,
-            ] + $this->buildIdentityAssetScopePatch($scope));
+            ] + $this->buildIdentityAssetScopePatch($scope) + $this->buildThemeLogoGenerationScopePatch($scope));
 
             return 'Image asset generation completed: ' . $slotId;
         } catch (\Throwable $throwable) {
@@ -2015,6 +2018,147 @@ class AiSiteAssetQueue implements QueueInterface
 
     /**
      * @param array<string,mixed> $scope
+     * @return array<string,mixed>
+     */
+    private function buildThemeLogoGenerationScopePatch(array $scope): array
+    {
+        if (\is_array($scope['plan_json']['theme']['logo_generation'] ?? null)) {
+            return ['plan_json' => $scope['plan_json']];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,mixed> $slot
+     * @return array<string,mixed>
+     */
+    private function applyThemeLogoOptionPatchToScope(array $scope, array $slot, string $finalUrl): array
+    {
+        $finalUrl = \trim($finalUrl);
+        $optionId = $this->resolveThemeLogoOptionId($slot);
+        if ($finalUrl === '' || $optionId === '') {
+            return $scope;
+        }
+        $slotId = \trim((string)($slot['slot_id'] ?? ''));
+        $scope = $this->applyThemeLogoOptionPatchToPayload($scope, $optionId, $slotId, $finalUrl);
+
+        if (\is_array($scope['render_data_contract']['payload'] ?? null)) {
+            $scope['render_data_contract']['payload'] = $this->applyThemeLogoOptionPatchToPayload(
+                $scope['render_data_contract']['payload'],
+                $optionId,
+                $slotId,
+                $finalUrl
+            );
+        }
+        if (\is_array($scope['build_contracts']['render_data']['payload'] ?? null)) {
+            $scope['build_contracts']['render_data']['payload'] = $this->applyThemeLogoOptionPatchToPayload(
+                $scope['build_contracts']['render_data']['payload'],
+                $optionId,
+                $slotId,
+                $finalUrl
+            );
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     * @return array<string,mixed>
+     */
+    private function applyThemeLogoOptionPatchToPayload(array $payload, string $optionId, string $slotId, string $finalUrl): array
+    {
+        if (!\is_array($payload['plan_json'] ?? null)) {
+            $payload['plan_json'] = [];
+        }
+        if (!\is_array($payload['plan_json']['theme'] ?? null)) {
+            $payload['plan_json']['theme'] = [];
+        }
+        if (!\is_array($payload['plan_json']['theme']['logo_generation'] ?? null)) {
+            $payload['plan_json']['theme']['logo_generation'] = [
+                'stage' => 'logo_generation',
+                'status' => 'planned',
+                'asset_slot_id' => 'plan:theme:logo_generation',
+                'output_path' => 'plan_json.theme.logo_generation',
+            ];
+        }
+
+        $logoGeneration = $payload['plan_json']['theme']['logo_generation'];
+        $rawOptions = \is_array($logoGeneration['options'] ?? null) ? \array_values($logoGeneration['options']) : [];
+        $options = [];
+        $generatedCount = 0;
+        for ($index = 0; $index < 4; $index++) {
+            $number = $index + 1;
+            $currentOptionId = 'logo_option_' . $number;
+            $currentSlotId = 'plan:theme:logo_generation:option_' . $number;
+            $option = \is_array($rawOptions[$index] ?? null) ? $rawOptions[$index] : [];
+            $option['option_id'] = $currentOptionId;
+            $option['asset_slot_id'] = $currentSlotId;
+            $option['slot_type'] = 'logo_icon';
+            $option['kind'] = 'logo_option';
+            if (!isset($option['label']) || \trim((string)$option['label']) === '') {
+                $option['label'] = 'Logo ' . $number;
+            }
+            if ($currentOptionId === $optionId) {
+                $option['url'] = $finalUrl;
+                $option['final_url'] = $finalUrl;
+                $option['status'] = 'generated';
+                $option['updated_at'] = \date('Y-m-d H:i:s');
+            }
+            if (\trim((string)($option['final_url'] ?? $option['url'] ?? '')) !== '') {
+                $generatedCount++;
+            }
+            $options[] = $option;
+        }
+        $logoGeneration['options'] = $options;
+        $logoGeneration['option_count'] = 4;
+        $logoGeneration['updated_at'] = \date('Y-m-d H:i:s');
+        if (\trim((string)($logoGeneration['selected_option_id'] ?? '')) === $optionId) {
+            $logoGeneration['selected_asset_slot_id'] = $slotId !== '' ? $slotId : 'plan:theme:logo_generation:' . \str_replace('logo_', '', $optionId);
+            $logoGeneration['selected_url'] = $finalUrl;
+            $logoGeneration['status'] = 'selected';
+        } elseif ($generatedCount >= 4) {
+            $logoGeneration['status'] = 'generated';
+        } elseif ($generatedCount > 0 && \strtolower(\trim((string)($logoGeneration['status'] ?? ''))) !== 'selected') {
+            $logoGeneration['status'] = 'partial';
+        }
+        $payload['plan_json']['theme']['logo_generation'] = $logoGeneration;
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function resolveThemeLogoOptionId(array $slot): string
+    {
+        foreach ([
+            $slot['option_id'] ?? null,
+            $slot['logo_option_id'] ?? null,
+            $slot['field'] ?? null,
+            $slot['slot_id'] ?? null,
+            $slot['id'] ?? null,
+            $slot['key'] ?? null,
+        ] as $value) {
+            $text = \strtolower(\trim((string)$value));
+            if ($text === '') {
+                continue;
+            }
+            if (\preg_match('/logo_option_([1-4])/', $text, $matches)) {
+                return 'logo_option_' . $matches[1];
+            }
+            if (\preg_match('/option[_:-]([1-4])/', $text, $matches)) {
+                return 'logo_option_' . $matches[1];
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string,mixed> $scope
      * @param array<string,mixed> $slot
      * @return array<string,mixed>
      */
@@ -2024,12 +2168,12 @@ class AiSiteAssetQueue implements QueueInterface
         if ($role === '' || \trim($finalUrl) === '') {
             return $scope;
         }
+        if ($role === 'logo') {
+            return $this->applyThemeLogoOptionPatchToScope($scope, $slot, $finalUrl);
+        }
 
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
-        if ($role === 'logo') {
-            $scope['logo'] = $finalUrl;
-            $websiteProfile['logo'] = $finalUrl;
-        } elseif ($role === 'icon') {
+        if ($role === 'icon') {
             $scope['icon'] = $finalUrl;
             $scope['favicon'] = $finalUrl;
             $websiteProfile['icon'] = $finalUrl;
