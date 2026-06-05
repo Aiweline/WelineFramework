@@ -479,6 +479,9 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $ignoreTerminalBody = $this->extractFunctionBody($script, 'shouldIgnoreResolvedPlanTerminalFailure');
         $queueUiBody = $this->extractFunctionBody($script, 'renderQueueUiState');
         $retryBody = $this->extractFunctionBody($script, 'setPlanRetryButtonVisible');
+        $retryVisibilityBody = $this->extractFunctionBody($script, 'shouldShowPlanRetryButtonFromWorkspaceState');
+        $queueUnfinishedBody = $this->extractFunctionBody($script, 'isPhaseOneQueueUnfinished');
+        $failureListBody = $this->extractFunctionBody($script, 'syncPlanFailureListFromWorkspaceState');
         $rebuildVisibilityBody = $this->extractFunctionBody($script, 'syncPlanRebuildButtonVisibility');
         $generatedTypesBody = $this->extractFunctionBody($script, 'resolveGeneratedPlanPageTypesFromState');
         $missingPagesBody = $this->extractFunctionBody($script, 'resolveMissingSelectedPlanPageTypes');
@@ -517,9 +520,20 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(state, failedOperation)', $ignoreTerminalBody);
         self::assertStringContainsString('restoreResolvedPlanSuccessUiFromWorkspaceState();', $script);
         self::assertStringContainsString('setPlanRetryButtonVisible(false);', $script);
+        self::assertStringContainsString('function isPlanAiGenerationTelemetryActive(workspaceState, extraMessage)', $script);
+        self::assertStringContainsString("text.indexOf('AI 正在生成内容')", $script);
+        self::assertStringContainsString("text.indexOf('正文流不写入队列日志')", $script);
+        self::assertStringContainsString('已接收\\s*[\\d,]+\\s*段', $script);
+        self::assertStringContainsString('isPlanAiGenerationTelemetryActive(state)', $queueUnfinishedBody);
         self::assertStringContainsString("status = 'completed';", $queueUiBody);
         self::assertStringContainsString('shouldIgnoreResolvedPlanTerminalFailure({}, message)', $queueUiBody);
-        self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(getLatestWorkspaceStateForQueuePrompt(), {})', $retryBody);
+        self::assertStringContainsString('var planTelemetryActive = queueKind === \'plan\' && isPlanAiGenerationTelemetryActive(latestPlanState, message);', $queueUiBody);
+        self::assertStringContainsString('|| planTelemetryActive', $queueUiBody);
+        self::assertStringContainsString('isPlanAiGenerationTelemetryActive(workspaceState)', $failureListBody);
+        self::assertStringContainsString('if (shouldShow && isPlanAiGenerationTelemetryActive(latestState))', $retryBody);
+        self::assertStringContainsString('isPlanAiGenerationTelemetryActive(latestState)', $retryBody);
+        self::assertStringContainsString("isPlanAiGenerationTelemetryActive(state)", $retryVisibilityBody);
+        self::assertStringContainsString('shouldTreatPlanFailureAsResolvedBySuccess(latestState, {})', $retryBody);
     }
 
     public function testFrontendDeletesRemovedTaskPlanEntrypoints(): void
