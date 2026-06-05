@@ -8626,14 +8626,34 @@ class AiSiteAgent extends BaseController
                 (int)($activeOperation['queue_id'] ?? 0)
             );
             if ($this->isObservedQueueInProgress($queueRow)) {
-                $this->streamDeferredQueueProgressUntilTerminal(
+                $queueStatusForObserver = \trim((string)($queueRow['status'] ?? ''));
+                $queueWaitingForScheduler = \in_array($queueStatusForObserver, ['pending', 'queued'], true);
+                $observed = $this->observeDuplicateOperationStream(
                     $sse,
                     $session,
                     $adminId,
                     $operation,
                     $executionToken,
-                    (int)($queueRow['queue_id'] ?? 0)
+                    true
                 );
+                if (!(bool)($observed['success'] ?? true)) {
+                    $sse->sendError(
+                        (string)($observed['message'] ?? 'Operation failed.'),
+                        (int)($observed['http_code'] ?? 500)
+                    );
+                }
+                $sse->complete([
+                    'success' => (bool)($observed['success'] ?? true),
+                    'message' => (string)($observed['message'] ?? 'Operation completed.'),
+                    'operation' => $operation,
+                    'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
+                    'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
+                    'deferred_queue_progress' => true,
+                    'queue_waiting_for_scheduler' => $queueWaitingForScheduler,
+                    'can_close_stream' => true,
+                    'continue_other_operations' => true,
+                    'queue_status' => $queueStatusForObserver,
+                ]);
                 return;
             }
         }
@@ -8647,6 +8667,19 @@ class AiSiteAgent extends BaseController
             if (\is_array($terminalQueueRow) && \trim((string)($terminalQueueRow['status'] ?? '')) === 'done') {
                 $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
                 if ((bool)($observed['deferred_queue_progress'] ?? false)) {
+                    $queueStatusForObserver = \trim((string)($terminalQueueRow['status'] ?? ''));
+                    $sse->complete([
+                        'success' => true,
+                        'message' => (string)($observed['message'] ?? 'Operation completed.'),
+                        'operation' => $operation,
+                        'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
+                        'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
+                        'deferred_queue_progress' => true,
+                        'queue_waiting_for_scheduler' => \in_array($queueStatusForObserver, ['pending', 'queued'], true),
+                        'can_close_stream' => true,
+                        'continue_other_operations' => true,
+                        'queue_status' => $queueStatusForObserver,
+                    ]);
                     return;
                 }
                 if (!(bool)($observed['success'] ?? true)) {
@@ -8656,14 +8689,18 @@ class AiSiteAgent extends BaseController
                     );
                 }
                 if (\trim($operation) === 'plan') {
-                    $this->streamDeferredQueueProgressUntilTerminal(
-                        $sse,
-                        $session,
-                        $adminId,
-                        $operation,
-                        $executionToken,
-                        (int)($terminalQueueRow['queue_id'] ?? 0)
-                    );
+                    $sse->complete([
+                        'success' => (bool)($observed['success'] ?? true),
+                        'message' => (string)($observed['message'] ?? 'Operation completed.'),
+                        'operation' => $operation,
+                        'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
+                        'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
+                        'deferred_queue_progress' => false,
+                        'queue_waiting_for_scheduler' => false,
+                        'can_close_stream' => true,
+                        'continue_other_operations' => true,
+                        'queue_status' => \trim((string)($terminalQueueRow['status'] ?? '')),
+                    ]);
                     return;
                 }
                 $sse->complete([
@@ -8794,17 +8831,6 @@ class AiSiteAgent extends BaseController
             $queueStillInProgress = $this->isObservedQueueInProgress($queueRow);
             $emitDeferredQueueHandoff = (bool)($observed['deferred_queue_progress'] ?? false) && $queueStillInProgress;
             $queueStatusStillInProgress = \in_array($queueStatusForObserver, ['pending', 'queued', 'running', 'processing'], true);
-            if (\trim($operation) === 'plan') {
-                $this->streamDeferredQueueProgressUntilTerminal(
-                    $sse,
-                    $session,
-                    $adminId,
-                    $operation,
-                    $executionToken,
-                    (int)($queueRow['queue_id'] ?? 0)
-                );
-                return;
-            }
             $sse->complete([
                 'success' => (bool)($observed['success'] ?? true),
                 'message' => (string)($observed['message'] ?? 'Operation completed.'),
@@ -8828,14 +8854,33 @@ class AiSiteAgent extends BaseController
             );
             if (\is_array($queueRow) && $queueRow !== []) {
                 if (\trim($operation) === 'plan') {
-                    $this->streamDeferredQueueProgressUntilTerminal(
+                    $queueStatusForObserver = \trim((string)($queueRow['status'] ?? ''));
+                    $observed = $this->observeDuplicateOperationStream(
                         $sse,
                         $session,
                         $adminId,
                         $operation,
                         $executionToken,
-                        (int)($queueRow['queue_id'] ?? 0)
+                        true
                     );
+                    if (!(bool)($observed['success'] ?? true)) {
+                        $sse->sendError(
+                            (string)($observed['message'] ?? __('Operation completed.')),
+                            (int)($observed['http_code'] ?? 500)
+                        );
+                    }
+                    $sse->complete([
+                        'success' => (bool)($observed['success'] ?? true),
+                        'message' => (string)($observed['message'] ?? 'Operation completed.'),
+                        'operation' => $operation,
+                        'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
+                        'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
+                        'deferred_queue_progress' => $this->isObservedQueueInProgress($queueRow),
+                        'queue_waiting_for_scheduler' => \in_array($queueStatusForObserver, ['pending', 'queued'], true),
+                        'can_close_stream' => true,
+                        'continue_other_operations' => true,
+                        'queue_status' => $queueStatusForObserver,
+                    ]);
                     return;
                 }
                 $sse->sendEvent('info', [
@@ -14448,6 +14493,10 @@ class AiSiteAgent extends BaseController
             'stream_url' => $this->buildOperationStreamUrl($freshForQueue->getPublicId(), $executionToken),
             'data' => $state,
             'queue_wait' => $queueWait,
+            'deferred_queue_progress' => (bool)($queueWait['queue_waiting_for_scheduler'] ?? false),
+            'queue_waiting_for_scheduler' => (bool)($queueWait['queue_waiting_for_scheduler'] ?? false),
+            'can_close_stream' => (bool)($queueWait['can_close_stream'] ?? false),
+            'continue_other_operations' => (bool)($queueWait['continue_other_operations'] ?? false),
         ];
     }
 
@@ -14931,6 +14980,10 @@ class AiSiteAgent extends BaseController
             ],
             'data' => $state,
             'queue_wait' => $this->buildAiSiteQueueSchedulerWaitPayload($runningOperation, $queueId, 'existing_active_queue'),
+            'deferred_queue_progress' => $queueId > 0,
+            'queue_waiting_for_scheduler' => $operationStatus !== 'running',
+            'can_close_stream' => true,
+            'continue_other_operations' => true,
         ];
     }
 
@@ -19797,7 +19850,7 @@ class AiSiteAgent extends BaseController
 
     private function shouldKeepQueuedObserverStreamOpen(string $operation): bool
     {
-        return \in_array(\trim($operation), ['plan', 'build'], true);
+        return false;
     }
 
     /**
