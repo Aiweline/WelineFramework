@@ -9,9 +9,9 @@ This plugin packages WelineFramework's Codex-facing development skills into a re
 - `skills/gitnexus-*`: GitNexus workflow skills referenced by the repository AI entry point.
 - `skills/_index.md`, `skills/README.md`, `skills/TEAM_WORKFLOW.md`, `skills/ROLE_SKILL_BINDING.md`, and `skills/MIGRATION_REPORT.md`: routing and migration support docs.
 
-## Local Marketplace
+## Marketplace
 
-The repo-local marketplace lives at:
+The marketplace lives at:
 
 - `dev/ai/codex/.agents/plugins/marketplace.json`
 
@@ -19,11 +19,19 @@ The plugin source is:
 
 - `dev/ai/codex/plugins/weline-codex-plugin`
 
-Install flow:
+Install from this checkout:
 
 ```powershell
 codex plugin marketplace add dev/ai/codex
-codex plugin add weline-codex-plugin@weline-local
+codex plugin add weline-codex-plugin@weline-framework
+codex plugin list
+```
+
+Install from GitHub after the `dev` branch is pushed:
+
+```powershell
+codex plugin marketplace add Aiweline/WelineFramework --ref dev --sparse dev/ai/codex
+codex plugin add weline-codex-plugin@weline-framework
 codex plugin list
 ```
 

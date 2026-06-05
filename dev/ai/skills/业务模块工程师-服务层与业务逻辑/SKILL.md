@@ -27,7 +27,7 @@ This skill owns service-layer implementation and business-rule placement inside 
 - Place business logic in services instead of controllers or templates.
 - Define stable module-local service contracts and collaboration boundaries.
 - Keep persistence concerns in models and orchestration concerns in services.
-- Structure code to support unit testing and future reuse.
+- Structure code to support clear validation and future reuse without requiring default test authoring.
 
 # Workflow
 
@@ -35,8 +35,8 @@ This skill owns service-layer implementation and business-rule placement inside 
 2. Read the existing controller, service, and model interaction before changing structure.
 3. Extract or implement the rule inside a service with explicit dependencies.
 4. Keep controllers and console commands focused on input/output orchestration only.
-5. Add unit tests around the extracted service behavior.
-6. Validate the end-to-end feature path through its real entry point.
+5. Do not add or update unit tests unless the user explicitly asks for test coverage.
+6. Validate the feature path through its real entry point, API, command, Browser, or other existing validation surface.
 7. Report the service boundary and any new contract assumptions.
 
 # Weline Rules
@@ -45,7 +45,7 @@ This skill owns service-layer implementation and business-rule placement inside 
 - Keep module boundaries intact.
 - Do not hardcode user-facing text.
 - Use i18n for user-facing text.
-- Provide unit test evidence where relevant.
+- Provide real-entry or existing-command validation evidence where relevant; unit-test evidence is only expected when the user explicitly requested unit-test work.
 - For broken cart/list display rows, verify stale foreign keys or deleted backing records before rewriting templates; prefer service-layer snapshot persistence or rebinding when the visible item must survive upstream record churn.
 - When live data exists in storage but the rendered page still shows placeholders, treat template fallback and controller cache as part of the business delivery path, not as separate frontend-only concerns.
 
@@ -59,12 +59,12 @@ This skill owns service-layer implementation and business-rule placement inside 
 # Expected Output
 
 - A service-layer implementation or refactor with clearer business boundaries.
-- Unit-test or focused validation evidence for the business rule.
+- Focused validation evidence for the business rule.
 - Notes about affected controller, API, or model interactions.
 
 # Validation
 
-- Run targeted unit tests for extracted or changed service behavior.
+- Run real-entry, API, command, Browser, or existing validation checks for extracted or changed service behavior; run unit tests only when the user explicitly asked for unit-test work.
 - Run a route, command, or API check through the real entry point when relevant.
 - Confirm controllers no longer contain unnecessary business-rule branches.
 - Confirm models remain persistence-focused rather than becoming orchestration hubs.

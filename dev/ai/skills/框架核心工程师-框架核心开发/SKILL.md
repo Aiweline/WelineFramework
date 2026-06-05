@@ -38,8 +38,8 @@ This skill implements framework-level changes in WelineFramework core areas. It 
 3. Apply framework-level thinking by default for every code change: reject module-specific compatibility patches as the first move and trace the owning shared entry point first.
 4. Locate the minimal framework entry points that own the behavior.
 5. Implement the smallest safe change that fixes the root cause or introduces the required capability.
-6. Add or update tests and documentation when the change affects shared contracts.
-7. Validate with the most direct command path, such as setup, HTTP, or targeted tests.
+6. Update documentation when the change affects shared contracts; add or update tests only when the user explicitly asks.
+7. Validate with the most direct command path, such as setup, HTTP, Browser, WLS, or existing commands.
 8. Report affected boundaries, migration impact, and residual risk.
 
 # Weline Rules
@@ -68,7 +68,7 @@ This skill implements framework-level changes in WelineFramework core areas. It 
 
 # Validation
 
-- Run targeted setup, HTTP, or test commands that cover the changed framework path.
+- Run targeted setup, HTTP, Browser, WLS, or existing commands that cover the changed framework path; run test commands only when the user explicitly asked for test work.
 - Check that module-facing contracts still behave as expected.
 - Confirm that no generated artifacts were edited directly.
 - Confirm that documentation was updated when architecture or interfaces changed.

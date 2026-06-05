@@ -38,7 +38,7 @@ This skill builds or modifies business modules in WelineFramework. It handles mo
 3. Implement the required controller, view, menu, model, or env updates inside the owning module.
 4. Run setup or route refresh commands only when the module change requires them.
 5. If the task changes fake-data providers, seeders, or other import-backed module assets and the user asks to "导入" or otherwise execute the flow, run the module's import/sync command instead of stopping at code edits.
-6. Add unit, route-level, import, or data-surface checks appropriate to the feature.
+6. Validate through route-level, import, data-surface, Browser, or existing command checks appropriate to the feature; add or update unit tests only when the user explicitly asks.
 7. Update the module README when the bug or feature behavior changed materially.
 8. Return focused evidence for the changed feature path.
 
@@ -72,7 +72,7 @@ This skill builds or modifies business modules in WelineFramework. It handles mo
 
 - Run `php bin/w setup:upgrade` when schema or module setup changed.
 - Run `php bin/w setup:upgrade --route` when controller routing changed.
-- Run focused HTTP or unit checks on the changed module path.
+- Run focused HTTP, Browser, import, or existing command checks on the changed module path; run unit checks only when the user explicitly asked for unit-test work.
 - Confirm user-facing text is externalized through i18n.
 - Confirm frontend request interactions are registered through the theme API path and not implemented as direct browser-side HTTP calls.
 - When the task is data-import driven, prove the result with the import command output plus either database evidence or the visible module surface that consumes the imported data.

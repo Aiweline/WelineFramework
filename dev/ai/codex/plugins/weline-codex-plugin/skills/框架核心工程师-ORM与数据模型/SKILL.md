@@ -37,7 +37,7 @@ This skill owns Weline ORM behavior, schema declaration rules, query execution c
 3. Update model annotations, indexes, providers, or query flows in the owning framework path.
 4. Ensure every select, insert, update, or delete flow is executed with the proper ORM terminal call.
 5. Use `setup:upgrade` when schema declarations change.
-6. Add regression tests or targeted checks that prove the data path works.
+6. Use targeted checks that prove the data path works; add regression tests only when the user explicitly asks.
 7. Report any compatibility impact on downstream modules.
 
 # Weline Rules
@@ -54,7 +54,7 @@ This skill owns Weline ORM behavior, schema declaration rules, query execution c
 - The affected model, table, or provider.
 - Expected read/write behavior and any schema delta.
 - Calling modules or consumers that depend on the data contract.
-- Validation expectations such as setup, unit tests, or HTTP checks.
+- Validation expectations such as setup, HTTP checks, data checks, or user-requested unit tests.
 
 # Expected Output
 
@@ -65,7 +65,7 @@ This skill owns Weline ORM behavior, schema declaration rules, query execution c
 # Validation
 
 - Run `php bin/w setup:upgrade` when schema annotations change.
-- Run focused tests or commands that exercise the affected query flow.
+- Run focused commands or existing validation that exercise the affected query flow; run tests only when the user explicitly asked for test work.
 - Confirm ORM execution calls are present on mutating or fetching chains.
 - Confirm no business-layer dialect SQL leaked into framework consumers.
 

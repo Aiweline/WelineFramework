@@ -504,8 +504,28 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
             return window.Weline.Api.request(url, options);
         }
 
-        return fetch(url, options).then(function(res) {
-            return res.json();
+        if (typeof window.fetch === 'function') {
+            return window.fetch(url, options).then(function(res) {
+                return res.json();
+            });
+        }
+
+        return new Promise(function(resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open(options.method || 'GET', url, true);
+            var headers = options.headers || {};
+            Object.keys(headers).forEach(function(name) {
+                xhr.setRequestHeader(name, headers[name]);
+            });
+            xhr.onload = function() {
+                try {
+                    resolve(JSON.parse(xhr.responseText || '{}'));
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            xhr.onerror = reject;
+            xhr.send(options.body || null);
         });
     }
 
@@ -657,8 +677,10 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
         form.submit();
     });
 
-    document.getElementById('smtpSendersForm').addEventListener('submit', function(e) {
-        e.preventDefault();
+    var savingSenders = false;
+    function saveSenders(e) {
+        if (e) e.preventDefault();
+        if (savingSenders) return;
         var senders = collectSenders();
         var contacts = collectContacts();
         if (senders.length === 0) {
@@ -672,22 +694,34 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
             if (typeof BackendToast !== 'undefined') BackendToast.error(text.pickMailAccount);
             return;
         }
+        savingSenders = true;
         var url = '<?= $this->getBackendUrl('smtp/backend/config/saveSenders') ?>';
-        var body = 'senders=' + encodeURIComponent(JSON.stringify(senders)) + '&sender_contacts=' + encodeURIComponent(JSON.stringify(contacts));
-        requestJson(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+        var body = JSON.stringify({
+            senders: senders,
+            sender_contacts: contacts,
+            smtp_senders_json: JSON.stringify(senders),
+            smtp_sender_contacts_json: JSON.stringify(contacts)
+        });
+        requestJson(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body })
             .then(function(res) {
                 var d = (res && res.data) !== undefined ? res.data : res;
                 if (d.success) {
                     if (typeof BackendToast !== 'undefined') BackendToast.success(d.message);
                     setTimeout(function() { window.location.reload(); }, 800);
-                } else if (!d.success && typeof BackendToast !== 'undefined') {
-                    BackendToast.error(d.message || text.saveFailed);
+                } else {
+                    if (typeof BackendToast !== 'undefined') BackendToast.error(d.message || text.saveFailed);
+                    savingSenders = false;
                 }
             })
             .catch(function() {
                 if (typeof BackendToast !== 'undefined') BackendToast.error(text.saveFailed);
+                savingSenders = false;
             });
-    });
+    }
+
+    document.getElementById('smtpSendersForm').addEventListener('submit', saveSenders);
+    var saveButton = document.querySelector('#smtpSendersForm button[type="submit"]');
+    if (saveButton) saveButton.addEventListener('click', saveSenders);
 
     document.querySelectorAll('.smtp-sender-card').forEach(updateSource);
     if (document.querySelectorAll('.smtp-sender-card').length === 0) {

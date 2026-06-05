@@ -1,17 +1,17 @@
 ---
 name: QA测试主管-测试策略治理
-description: QA lead skill for test strategy, coverage planning, risk-based validation design, and cross-role quality governance.
+description: QA lead skill for validation strategy, risk-based evidence planning, and cross-role quality governance. It must not request new or updated test cases unless the user explicitly asks for test authoring.
 version: 1.1.1
 ---
 
 # Role
 
-This skill defines the test strategy for a delivery item. It decides which risks require unit, HTTP, E2E, WLS, or documentation checks and turns those needs into a coherent quality plan before acceptance.
+This skill defines the validation strategy for a delivery item. It decides which risks require real-entry, HTTP, Browser, WLS, documentation, or existing-command checks and turns those needs into a coherent quality plan before acceptance.
 
 # When To Use
 
-- Use for test planning, coverage strategy, risk-based validation, and cross-role quality governance.
-- Use for keywords such as QA strategy, test plan, coverage, regression scope, quality risk, and validation design.
+- Use for validation planning, evidence strategy, risk-based validation, and cross-role quality governance.
+- Use for keywords such as QA strategy, validation plan, coverage review, quality risk, and validation design.
 - Use when a task spans multiple validation layers and needs a coordinated testing approach.
 
 # Source Material
@@ -25,18 +25,18 @@ This skill defines the test strategy for a delivery item. It decides which risks
 # Responsibilities
 
 - Decide which validation layers are required for the change.
-- Match test depth to business risk, architecture risk, and runtime sensitivity.
+- Match validation depth to business risk, architecture risk, and runtime sensitivity.
 - Define entry criteria, exit criteria, and evidence expectations for QA execution.
-- Prevent under-testing of high-risk changes and over-testing of trivial changes.
-- Prevent regression-test solidification before the user-visible flow has passed the required browser smoke gate.
+- Prevent weak evidence on high-risk changes and excessive validation on trivial changes.
+- Prevent unit-test, test-case, or E2E regression solidification unless the user explicitly asks for test authoring.
 
 # Workflow
 
 1. Read the task scope, changed surfaces, and implementation risks.
 2. Classify the change into data, route, UI, runtime, permission, and documentation impacts.
-3. If the change is browser-visible and can be served locally, require Codex in-app Browser smoke verification as the primary acceptance gate before test solidification.
-4. Define the minimum required unit, HTTP, E2E, WLS, and documentation checks.
-5. Mark unit or E2E additions as post-smoke locking work when behavior is still being shaped during implementation.
+3. If the change is browser-visible and can be served locally, require Codex in-app Browser smoke verification as the primary acceptance gate.
+4. Define the minimum required real-entry, HTTP, Browser, WLS, existing-command, and documentation checks.
+5. Mark any unit-test, test-case, fixture, or E2E spec authoring as out of scope unless the current user request explicitly asks for it.
 6. Identify mandatory isolation rules, especially for WLS validation.
 7. Assign owners or handoff requirements for each validation layer.
 8. Define acceptance evidence and residual-risk reporting requirements.
@@ -48,9 +48,9 @@ This skill defines the test strategy for a delivery item. It decides which risks
 - Do not use default WLS port `9501` for AI testing.
 - Always start a dedicated WLS test instance with a unique name when WLS validation is required.
 - Always stop the AI test instance after testing.
-- Provide unit test and E2E or HTTP validation evidence where relevant.
+- Provide real-entry, HTTP, Browser, WLS, existing-command, or documentation evidence where relevant.
 - For browser-visible frontend work, do not accept unit tests, route tests, or command-line HTTP checks as the final proof when Codex Browser verification is possible.
-- During active feature development, do not require new or rewritten regression tests as the first completion signal; the visible flow must pass browser smoke first.
+- Do not require new or rewritten unit tests, E2E specs, fixtures, regression cases, or test data unless the user explicitly asks.
 
 # Inputs Required
 
@@ -62,7 +62,7 @@ This skill defines the test strategy for a delivery item. It decides which risks
 # Expected Output
 
 - A layered validation plan with clear required checks.
-- A risk-to-test mapping for the change.
+- A risk-to-validation mapping for the change.
 - Evidence requirements and gate definitions for execution roles.
 
 # Validation
@@ -70,11 +70,11 @@ This skill defines the test strategy for a delivery item. It decides which risks
 - Check that the strategy covers each changed risk surface.
 - Check that WLS-sensitive changes include isolated runtime validation.
 - Check that the required evidence is proportionate and executable.
-- Check that the plan distinguishes mandatory tests from optional confidence checks.
+- Check that the plan distinguishes mandatory validation from optional confidence checks and prohibited test-case authoring.
 
 # Constraints
 
-- Do not collapse all testing into one generic “run tests” instruction.
+- Do not collapse all validation into one generic “run tests” instruction.
 - Do not approve a strategy that ignores runtime-sensitive or permission-sensitive risks.
 - Do not let convenience replace isolation rules for WLS validation.
 - Do not replace developer responsibility with QA-only catch-up testing.

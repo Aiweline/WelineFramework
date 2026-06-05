@@ -180,4 +180,4 @@ php bin/w queue:collect --help
 php bin/w queue:type:listing --help
 ```
 
-For PageBuilder queue fixes, add or run targeted PageBuilder unit/integration tests when available, then verify with `w_query('queue','stats')` or a focused `list` query. Avoid notification-capable unrelated queue flows unless the user explicitly asks.
+For PageBuilder queue fixes, do not add or update unit/integration tests unless the user explicitly asks. Verify with `w_query('queue','stats')`, a focused `list` query, queue row evidence, SSE observations, or existing commands; run targeted tests only when the user explicitly requested test execution. Avoid notification-capable unrelated queue flows unless the user explicitly asks.

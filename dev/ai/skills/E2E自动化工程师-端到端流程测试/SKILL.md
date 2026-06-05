@@ -1,18 +1,17 @@
 ---
 name: E2E自动化工程师-端到端流程测试
-description: E2E automation engineer skill for Playwright-driven flow validation, browser interaction coverage, and end-to-end regression checks.
+description: E2E automation engineer skill for Playwright-driven flow validation, browser interaction coverage, and end-to-end regression checks. Disabled by default for E2E case/spec work; use only when the user explicitly asks for E2E tests or execution.
 version: 1.1.1
 ---
 
 # Role
 
-This skill validates real user flows through browser automation and route-backed execution. It focuses on full-path behavior, cross-page interactions, and integration correctness that cannot be proven by unit tests alone.
+This skill is disabled by default for E2E case/spec work. Use it only when the current user request explicitly asks for E2E tests, Playwright execution, or end-to-end test evidence.
 
 # When To Use
 
-- Use for Playwright, browser flow testing, multi-step UI paths, and end-to-end regression checks.
-- Use for keywords such as E2E, Playwright, browser flow, end-to-end, UI interaction, and acceptance path.
-- Use when the changed behavior crosses multiple controllers, pages, or services.
+- Use only for explicit user requests mentioning E2E, Playwright, end-to-end test, browser flow test, or E2E acceptance evidence.
+- Do not infer this skill from ordinary browser-visible work; use Browser smoke validation instead.
 
 # Source Material
 
@@ -25,30 +24,32 @@ This skill validates real user flows through browser automation and route-backed
 # Responsibilities
 
 - Validate the real user journey, not just one rendered fragment.
-- Use the repository-supported Playwright execution path.
+- Use the repository-supported Playwright execution path only when E2E execution was explicitly requested.
 - Keep E2E scope focused on behavior that needs browser-level proof.
 - Return actionable evidence when a user flow breaks.
 
 # Workflow
 
-1. Identify the exact business flow that needs end-to-end proof.
-2. Choose the narrowest spec, case id, or grep target that covers the changed behavior.
-3. Prepare any required isolated runtime or route state before running the browser check.
-4. Run the supported framework E2E command rather than an ad hoc runner path.
-5. Inspect failures at the user-flow step where behavior diverges.
-6. Re-run the smallest confirming scope after fixes.
-7. Report the executed scenario, result, and remaining gaps.
+1. Confirm the current user request explicitly asks for E2E tests, E2E execution, or Playwright evidence.
+2. Identify the exact business flow that needs end-to-end proof.
+3. Choose the narrowest existing spec, case id, or grep target that covers the changed behavior.
+4. Prepare any required isolated runtime or route state before running the browser check.
+5. Run the supported framework E2E command rather than an ad hoc runner path.
+6. Inspect failures at the user-flow step where behavior diverges.
+7. Re-run the smallest confirming scope after fixes.
+8. Report the executed scenario, result, and remaining gaps.
 
 # Weline Rules
 
 - Use `php bin/w e2e:run` for repository-supported browser testing.
-- Provide E2E or HTTP validation evidence where relevant.
+- Do not create or update E2E/Playwright specs, test cases, fixtures, or regression cases unless the user explicitly asks.
 - Do not use default WLS port `9501` for AI testing if the flow depends on a dedicated instance.
 - Always stop dedicated WLS instances after runtime-sensitive E2E validation.
 
 # Inputs Required
 
 - The user flow, module, and target pages.
+- The explicit user request that authorizes E2E test work.
 - Any login, seed data, or runtime prerequisites.
 - The preferred spec file, module filter, case id, or grep scope.
 - Expected success criteria for the browser journey.
@@ -69,6 +70,7 @@ This skill validates real user flows through browser automation and route-backed
 # Constraints
 
 - Do not replace real browser validation with only unit evidence when the risk is end-to-end.
+- Do not use this skill to bypass the repository default ban on E2E/test-case authoring.
 - Do not run unsupported Playwright invocation patterns from the wrong directory context.
 - Do not bloat one E2E check into a full unrelated suite unless necessary.
 - Do not hide flaky prerequisites; report them explicitly.

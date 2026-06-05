@@ -289,7 +289,7 @@ Before delivering UI code, verify these items:
 - [ ] Light mode text has sufficient contrast (4.5:1 minimum)
 - [ ] Glass/transparent elements visible in light mode
 - [ ] Borders visible in both modes
-- [ ] Test both modes before delivery
+- [ ] Preview both modes before delivery
 
 ### Layout
 - [ ] Floating elements have proper spacing from edges
