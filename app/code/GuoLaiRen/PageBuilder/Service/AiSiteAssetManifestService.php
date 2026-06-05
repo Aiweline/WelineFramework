@@ -1157,11 +1157,25 @@ final class AiSiteAssetManifestService
         }
 
         $removed = false;
-        foreach (['identity:website-logo', 'identity:site-title-icon'] as $slotId) {
-            if (!isset($manifest['slots'][$slotId])) {
+        foreach ($manifest['slots'] as $slotKey => $slot) {
+            if (!\is_array($slot)) {
                 continue;
             }
-            unset($manifest['slots'][$slotId]);
+            $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? $slotKey)));
+            $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
+            $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+            $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+            if (
+                !\str_starts_with($slotId, 'identity:')
+                || $slotType !== 'logo_icon'
+                || (
+                    !\in_array($field, ['logo', 'logo.image', 'brand.logo', 'icon', 'favicon', 'site.icon'], true)
+                    && !\in_array($kind, ['website_logo', 'brand_logo', 'favicon'], true)
+                )
+            ) {
+                continue;
+            }
+            unset($manifest['slots'][$slotKey]);
             $removed = true;
         }
         if ($removed) {
