@@ -43,6 +43,8 @@ use Weline\Framework\Runtime\SchedulerSystem;
  */
 class SseWriter
 {
+    private const DEFAULT_YIELD_DELAY_MS = 1;
+
     /**
      * 是否已启动
      */
@@ -78,7 +80,7 @@ class SseWriter
     /**
      * 让步延迟毫秒数（0 = 立即让步）
      */
-    private int $yieldDelayMs = 0;
+    private int $yieldDelayMs = self::DEFAULT_YIELD_DELAY_MS;
     
     /**
      * 设置重试间隔
@@ -320,13 +322,7 @@ class SseWriter
             // #endregion
 
             // 缓冲区满，yield 让出控制权，下一轮再试
-            if ($this->cooperativeYield) {
-                if ($this->yieldDelayMs > 0) {
-                    SchedulerSystem::yieldDelay($this->yieldDelayMs);
-                } else {
-                    SchedulerSystem::yield();
-                }
-            }
+            $this->cooperativeYield();
         }
 
         // #region agent debug log
@@ -416,6 +412,20 @@ class SseWriter
         return $this;
     }
 
+    private function cooperativeYield(): void
+    {
+        if (!$this->cooperativeYield) {
+            return;
+        }
+
+        if ($this->yieldDelayMs > 0) {
+            SchedulerSystem::yieldDelay($this->yieldDelayMs);
+            return;
+        }
+
+        SchedulerSystem::yield();
+    }
+
     /**
      * 发送后让出控制权（协作式调度）
      *
@@ -442,11 +452,7 @@ class SseWriter
             return $this;
         }
 
-        if ($this->yieldDelayMs > 0) {
-            SchedulerSystem::yieldDelay($this->yieldDelayMs);
-        } else {
-            SchedulerSystem::yield();
-        }
+        $this->cooperativeYield();
 
         // #region agent debug log
         if (Env::get('dev.mode') || Env::get('wls.debug', false)) {

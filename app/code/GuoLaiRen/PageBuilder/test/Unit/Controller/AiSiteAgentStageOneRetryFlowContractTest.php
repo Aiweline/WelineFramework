@@ -64,11 +64,13 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringNotContainsString('persistRecoveredCompletionGatePlanJson', $queueSource);
     }
 
-    public function testPlanQueueAutomaticRetryStopsAfterThreeAttemptsAndRequiresManualRetry(): void
+    public function testPlanQueueAutomaticRetryStopsAfterTwoAttemptsAndRequiresManualRetry(): void
     {
         $queueSource = (string)\file_get_contents((new ReflectionClass(AiSitePlanQueue::class))->getFileName());
+        $serviceSource = (string)\file_get_contents((new ReflectionClass(AiSitePlanJsonGenerationService::class))->getFileName());
 
-        self::assertStringContainsString('private const MAX_PLAN_QUEUE_ATTEMPTS = 3;', $queueSource);
+        self::assertStringContainsString('private const MAX_PLAN_QUEUE_ATTEMPTS = 2;', $queueSource);
+        self::assertStringContainsString('private const STAGE_ONE_PAGE_MAX_AI_ATTEMPTS = 2;', $serviceSource);
         self::assertStringContainsString("private const CONTENT_AUTO_ATTEMPT_KEY = '_plan_auto_attempt';", $queueSource);
         self::assertStringContainsString("private const CONTENT_MAX_AUTO_ATTEMPTS_KEY = 'max_auto_attempts';", $queueSource);
         self::assertStringContainsString("private const CONTENT_AUTO_RETRY_SCHEDULED_KEY = '_auto_retry_scheduled';", $queueSource);
@@ -116,7 +118,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString("replaceRetryableAiFailures(\$scope, 'plan', \$planFailures)", $clearRetryable);
     }
 
-    public function testPlanQueueAutomaticRetryGateAllowsOnlyThreeFakeAttempts(): void
+    public function testPlanQueueAutomaticRetryGateAllowsOnlyTwoFakeAttempts(): void
     {
         $queue = new AiSitePlanQueue();
         $method = new \ReflectionMethod($queue, 'canScheduleAutomaticPlanRetry');
@@ -124,7 +126,7 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
 
         self::assertTrue((bool)$method->invoke($queue, []));
         self::assertTrue((bool)$method->invoke($queue, ['_plan_auto_attempt' => 1]));
-        self::assertTrue((bool)$method->invoke($queue, ['_plan_auto_attempt' => 2]));
+        self::assertFalse((bool)$method->invoke($queue, ['_plan_auto_attempt' => 2]));
         self::assertFalse((bool)$method->invoke($queue, ['_plan_auto_attempt' => 3]));
         self::assertFalse((bool)$method->invoke($queue, ['_plan_auto_attempt' => 4]));
 
@@ -253,6 +255,9 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         self::assertStringContainsString('resolveStageOnePageFanoutConcurrency(\\count($pageTypes))', $serviceSource);
         self::assertStringContainsString('runCooperativeSessionTasksSettled($tasks', $serviceSource);
         self::assertStringContainsString("'concurrency' => \$concurrency", $serviceSource);
+        self::assertStringContainsString('new FiberTaskRunner(defaultConcurrency: $concurrency)', $serviceSource);
+        self::assertStringContainsString('runEvents($this->wrapStageOneFanoutTasks($tasks), $concurrency)', $serviceSource);
+        self::assertStringContainsString('buildRejectedStageOneFanoutResult(', $serviceSource);
         self::assertStringContainsString('resolveStageOneBlockSegmentConcurrency(', $serviceSource);
         self::assertStringContainsString('supportsCooperativeConcurrency($segmentConcurrency)', $serviceSource);
         self::assertStringContainsString('FiberTaskRunner::currentPump() === null', $serviceSource);

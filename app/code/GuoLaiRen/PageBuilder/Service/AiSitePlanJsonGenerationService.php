@@ -39,7 +39,7 @@ final class AiSitePlanJsonGenerationService
         'a11y.alt_focus_semantic',
     ];
 
-    private const STAGE_ONE_PAGE_MAX_AI_ATTEMPTS = 3;
+    private const STAGE_ONE_PAGE_MAX_AI_ATTEMPTS = 2;
 
     private readonly ?AiSitePageBlueprintService $pageBlueprintService;
 
@@ -4078,13 +4078,81 @@ final class AiSitePlanJsonGenerationService
 
     private function runCooperativeSessionTasksSettled(array $tasks, array $options = []): array
     {
-        unset($options);
+        if ($tasks === []) {
+            return [];
+        }
+
+        $concurrency = \max(1, (int)($options['concurrency'] ?? 1));
+        if ($concurrency > 1 && \class_exists(\Fiber::class)) {
+            $runner = new FiberTaskRunner(defaultConcurrency: $concurrency);
+            $results = [];
+            foreach ($runner->runEvents($this->wrapStageOneFanoutTasks($tasks), $concurrency) as $taskKey => $event) {
+                if (($event['status'] ?? '') === 'fulfilled') {
+                    $results[$taskKey] = \is_array($event['result'] ?? null) ? $event['result'] : [];
+                    continue;
+                }
+                $error = ($event['error'] ?? null) instanceof \Throwable
+                    ? $event['error']
+                    : new \RuntimeException('Stage-one fanout task failed without an exception payload.');
+                $results[$taskKey] = $this->buildRejectedStageOneFanoutResult($error);
+            }
+
+            return $results;
+        }
+
         $results = [];
-        foreach ($tasks as $task) {
-            $results[] = \is_callable($task) ? $task() : $task;
+        foreach ($tasks as $taskKey => $task) {
+            try {
+                $results[$taskKey] = \is_callable($task) ? $task() : $task;
+            } catch (\Throwable $throwable) {
+                $results[$taskKey] = $this->buildRejectedStageOneFanoutResult($throwable);
+            }
         }
 
         return $results;
+    }
+
+    /**
+     * @param array<string|int, mixed> $tasks
+     * @return array<string|int, callable(string|int): mixed>
+     */
+    private function wrapStageOneFanoutTasks(array $tasks): array
+    {
+        $wrapped = [];
+        foreach ($tasks as $taskKey => $task) {
+            $wrapped[$taskKey] = static function () use ($task): mixed {
+                if (!\is_callable($task)) {
+                    return $task;
+                }
+
+                return $task();
+            };
+        }
+
+        return $wrapped;
+    }
+
+    /**
+     * @return array{success:bool,page:array<string,mixed>,attempt_no:int,message:string,validation_issues:list<array<string,mixed>>}
+     */
+    private function buildRejectedStageOneFanoutResult(\Throwable $throwable): array
+    {
+        $message = \trim($throwable->getMessage());
+        if ($message === '') {
+            $message = 'Stage-one fanout task failed.';
+        }
+
+        return [
+            'success' => false,
+            'page' => [],
+            'attempt_no' => self::STAGE_ONE_PAGE_MAX_AI_ATTEMPTS,
+            'message' => $message,
+            'validation_issues' => [[
+                'code' => 'stage1_fanout_task_exception',
+                'message' => $message,
+                'severity' => 'high',
+            ]],
+        ];
     }
 
 

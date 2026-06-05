@@ -107,7 +107,7 @@ class AiSiteWorkbenchPhpunitSimulationIntegrationTest extends AbstractAiSiteWork
         try {
             $buildResult = null;
             $lastBuildError = null;
-            $buildAttempts = 3;
+            $buildAttempts = 2;
             for ($attempt = 1; $attempt <= $buildAttempts; $attempt++) {
                 try {
                     $buildWriter = new InMemorySseWriter();

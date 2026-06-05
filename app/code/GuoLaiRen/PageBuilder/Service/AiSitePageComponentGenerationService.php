@@ -29,7 +29,7 @@ class AiSitePageComponentGenerationService
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
     public const REQUEST_KEY_FAST_BLOCK_ARTIFACT = 'pagebuilder.ai.fast_block_artifact';
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
-    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
+    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
     // Hard completion checks only block malformed component structure.
     private const ENFORCE_COMPONENT_QUALITY_VALIDATION = false;
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
