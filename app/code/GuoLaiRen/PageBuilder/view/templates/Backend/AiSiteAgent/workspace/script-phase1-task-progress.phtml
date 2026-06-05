@@ -24,7 +24,13 @@
         tokenLabel: <?= \json_encode((string)__('Token'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         inputTokensLabel: <?= \json_encode((string)__('输入 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         outputTokensLabel: <?= \json_encode((string)__('输出 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        totalTokensLabel: <?= \json_encode((string)__('总 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        totalTokensLabel: <?= \json_encode((string)__('总 tokens'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        aiStreamTitle: <?= \json_encode((string)__('AI 实时生成详情'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        aiStreamChunksLabel: <?= \json_encode((string)__('接收段数'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        aiStreamBytesLabel: <?= \json_encode((string)__('接收字节'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        aiStreamKiBLabel: <?= \json_encode((string)__('约 KiB'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        aiStreamLatestLabel: <?= \json_encode((string)__('最新消息'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        aiStreamStructuredPending: <?= \json_encode((string)__('正在接收 AI 正文流；页面和区块级结构化进度出现后会自动切换为详细 fanout 进度。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
     };
     var LIVE_LOG_MAX_LINES = 200;
 
@@ -314,6 +320,117 @@
             + '</div>';
     }
 
+    function normalizePlanQueueLatestMessageText(message) {
+        var text = String(message || '').replace(/\r\n|\r/g, '\n').trim();
+        if (text === '') {
+            return '';
+        }
+        var lines = text.split('\n').map(function (line) {
+            return String(line || '').trim();
+        }).filter(Boolean);
+        return lines.length > 0 ? lines[lines.length - 1] : text;
+    }
+
+    function parsePlanQueueTelemetryInteger(value) {
+        var parsed = parseInt(String(value || '').replace(/[^\d]/g, ''), 10);
+        return !isNaN(parsed) && parsed >= 0 ? parsed : 0;
+    }
+
+    function formatPlanQueueByteCount(bytes) {
+        var count = parsePlanQueueTelemetryInteger(bytes);
+        if (count <= 0) {
+            return '0 B';
+        }
+        return count + ' B';
+    }
+
+    function formatPlanQueueKiB(bytes) {
+        var count = parsePlanQueueTelemetryInteger(bytes);
+        if (count <= 0) {
+            return '0';
+        }
+        return (count / 1024).toFixed(count >= 1024 * 1024 ? 1 : 2);
+    }
+
+    function parsePlanQueueAiStreamTelemetry(message) {
+        var text = normalizePlanQueueLatestMessageText(message);
+        if (text === '') {
+            return null;
+        }
+        var match = text.match(/已接收\s*([\d,]+)\s*段\s*\/\s*([\d,]+)\s*B/i);
+        if (!match) {
+            return null;
+        }
+        return {
+            chunks: parsePlanQueueTelemetryInteger(match[1]),
+            bytes: parsePlanQueueTelemetryInteger(match[2]),
+            message: text
+        };
+    }
+
+    function renderPlanQueueMetric(label, value, tone) {
+        var badgeTone = String(tone || 'secondary');
+        return '<div class="col-6 col-lg-3">'
+            + '<div class="border rounded px-2 py-1 bg-white h-100">'
+            + '<div class="text-muted small">' + escapeHtml(label) + '</div>'
+            + '<div class="d-flex align-items-center gap-1">'
+            + '<span class="badge text-bg-' + escapeHtml(badgeTone) + '">&nbsp;</span>'
+            + '<strong class="small text-break">' + escapeHtml(value) + '</strong>'
+            + '</div>'
+            + '</div>'
+            + '</div>';
+    }
+
+    function renderPlanQueueAiStreamTelemetryDetails(info, message) {
+        var telemetry = parsePlanQueueAiStreamTelemetry(message);
+        if (!telemetry) {
+            return '';
+        }
+        var queueInfo = info && typeof info === 'object' ? info : {};
+        var status = String(queueInfo.queue_status || queueInfo.status || '').trim();
+        var job = String(queueInfo.job_key || queueInfo.biz_key || queueInfo.job_type || '').trim();
+        var token = String(queueInfo.token || queueInfo.execution_token || '').trim();
+        var usage = resolveTokenUsage(queueInfo);
+        var tokenParts = [];
+        if (usage.input_tokens !== null) {
+            tokenParts.push(queueMessages.inputTokensLabel + ' ' + formatTokenCount(usage.input_tokens));
+        }
+        if (usage.output_tokens !== null) {
+            tokenParts.push(queueMessages.outputTokensLabel + ' ' + formatTokenCount(usage.output_tokens));
+        }
+        if (usage.total_tokens !== null) {
+            tokenParts.push(queueMessages.totalTokensLabel + ' ' + formatTokenCount(usage.total_tokens));
+        }
+        var metaParts = [];
+        if (job !== '') {
+            metaParts.push('<span class="text-muted">Job</span> <code>' + escapeHtml(job) + '</code>');
+        }
+        if (token !== '') {
+            metaParts.push('<span class="text-muted">Token</span> <code>' + escapeHtml(token) + '</code>');
+        }
+        if (tokenParts.length > 0) {
+            metaParts.push('<span class="text-muted">' + escapeHtml(tokenParts.join(' · ')) + '</span>');
+        }
+        return '<div class="pb-ai-plan-ai-stream-detail">'
+            + '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">'
+            + '<span class="fw-semibold">' + escapeHtml(queueMessages.aiStreamTitle) + '</span>'
+            + '<span class="badge text-bg-' + escapeHtml(planQueueStatusBadgeClass(status || 'running')) + '">' + escapeHtml(status || 'running') + '</span>'
+            + '</div>'
+            + '<div class="row g-2 mb-2">'
+            + renderPlanQueueMetric(queueMessages.aiStreamChunksLabel, String(telemetry.chunks), 'info')
+            + renderPlanQueueMetric(queueMessages.aiStreamBytesLabel, formatPlanQueueByteCount(telemetry.bytes), 'primary')
+            + renderPlanQueueMetric(queueMessages.aiStreamKiBLabel, formatPlanQueueKiB(telemetry.bytes), 'secondary')
+            + renderPlanQueueMetric(queueMessages.totalTokensLabel, formatTokenCount(usage.total_tokens), 'success')
+            + '</div>'
+            + (metaParts.length > 0 ? '<div class="small mb-2 d-flex flex-wrap gap-2">' + metaParts.join('<span class="text-muted">·</span>') + '</div>' : '')
+            + '<div class="small text-muted mb-2">' + escapeHtml(queueMessages.aiStreamStructuredPending) + '</div>'
+            + '<div class="border-top pt-2 mt-2">'
+            + '<div class="text-muted small mb-1">' + escapeHtml(queueMessages.aiStreamLatestLabel) + '</div>'
+            + '<div class="font-monospace text-break">' + escapeHtml(telemetry.message) + '</div>'
+            + '</div>'
+            + '</div>';
+    }
+
     function parsePlanQueueNonNegativeCount(value, fallback) {
         var parsed = parseInt(String(value), 10);
         if (!isFinite(parsed)) {
@@ -558,21 +675,18 @@
         return true;
     }
 
-    function publishPlanQueueLatestMessage(message) {
-        if (window.__pbUpdatePlanQueueLatestMessage && typeof window.__pbUpdatePlanQueueLatestMessage === 'function') {
-            window.__pbUpdatePlanQueueLatestMessage(message);
-            return;
-        }
+    function publishPlanQueueLatestMessage(message, info) {
         var latestEl = document.getElementById('pb-ai-plan-queue-latest-message');
         if (!latestEl) {
             return;
         }
-        var text = String(message || '').replace(/\r\n|\r/g, '\n').trim();
-        var lines = text.split('\n').map(function (line) {
-            return String(line || '').trim();
-        }).filter(Boolean);
-        text = lines.length > 0 ? lines[lines.length - 1] : text;
-        latestEl.textContent = text;
+        var text = normalizePlanQueueLatestMessageText(message);
+        var telemetryHtml = renderPlanQueueAiStreamTelemetryDetails(info || {}, text);
+        if (telemetryHtml !== '') {
+            latestEl.innerHTML = telemetryHtml;
+        } else {
+            latestEl.textContent = text;
+        }
         latestEl.classList.toggle('d-none', text === '');
     }
 
@@ -582,7 +696,7 @@
         if (publishPlanQueueLatestPageProgress(resolvePlanQueueLatestPageProgress(queueInfo), latestMessage)) {
             return true;
         }
-        publishPlanQueueLatestMessage(latestMessage);
+        publishPlanQueueLatestMessage(latestMessage, queueInfo);
         return true;
     }
 
