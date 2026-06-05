@@ -287,6 +287,10 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         window.__pbWorkspaceFrontendRetryStopped = true;
         stopDeferredQueueStatePoll();
         closeOperationSource();
+        var planTerm = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-plan-sse-terminal'] : null;
+        if (planTerm && typeof planTerm.stop === 'function') {
+            planTerm.stop({ suppressTransportError: true });
+        }
         if (typeof previewBridge.pauseWorkspaceStream === 'function') {
             previewBridge.pauseWorkspaceStream();
         } else {
@@ -337,6 +341,9 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }, 'warning', message);
         return false;
     }
+
+    window.__pbWorkspaceNotifyFrontendRetryStopped = notifyFrontendRetryStopped;
+    window.__pbWorkspaceClearFrontendRetryStopGuard = clearFrontendRetryStopGuard;
 
     function stopObserverSyncTerminalPulse() {
         if (observerSyncStatusPulseTimer) {
@@ -1485,7 +1492,11 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
                 setPlanModeStatus(planFailureMessage);
             }
             if (typeof window.__pbSchedulePlanWorkspaceReload === 'function') {
-                window.__pbSchedulePlanWorkspaceReload('plan_retryable_failure', 900);
+                window.__pbSchedulePlanWorkspaceReload('plan_retryable_failure', 900, {
+                    operation: 'plan',
+                    state: workspaceState,
+                    message: planFailureMessage
+                });
             }
             return true;
         }
