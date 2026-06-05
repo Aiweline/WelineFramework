@@ -35,6 +35,13 @@ class AiSitePageComponentGenerationService
     private const AI_REQUEST_TIMEOUT_SECONDS = 180;
     private const COMPONENT_CSS_CLASS_SCOPE_FALLBACK = 'pb-ai-site-component';
     private const COMPONENT_CSS_SCOPE_PLACEHOLDER = '#componentId';
+    private const PLAN_JSON_PAGE_ASSET_META_KEYS = [
+        'assets' => true,
+        'blocks' => true,
+        'block_previews' => true,
+        'ordered_block_keys' => true,
+        'sections' => true,
+    ];
     private const TEMPLATE_SCAFFOLD_BRAND_TERMS = [
         'LudoEmpire',
         'PokerArena',
@@ -850,60 +857,10 @@ class AiSitePageComponentGenerationService
         $normalizedPath = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
         $lowerPath = \strtolower($normalizedPath);
         if (\str_contains($lowerPath, '/pub/media/page-build/ai-generated/')) {
-            if (
-                !\str_contains($lowerPath, 'identity-website-logo')
-                || !$this->generatedLogoAssetHasTransparentBackground($normalizedPath)
-            ) {
-                return '';
-            }
+            return '';
         }
 
         return $value;
-    }
-
-    private function generatedLogoAssetHasTransparentBackground(string $path): bool
-    {
-        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
-        if (!\is_file($absolutePath)) {
-            return false;
-        }
-        $bytes = @\file_get_contents($absolutePath);
-        if (!\is_string($bytes) || $bytes === '') {
-            return false;
-        }
-        $lowerPath = \strtolower($path);
-        if (\str_ends_with($lowerPath, '.svg')) {
-            return AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, 'image/svg+xml', 'logo');
-        }
-        if (\strncmp($bytes, "\x89PNG\r\n\x1A\n", 8) !== 0) {
-            return false;
-        }
-        if (\function_exists('imagecreatefromstring')) {
-            $image = @\imagecreatefromstring($bytes);
-            if ($image !== false) {
-                $width = \imagesx($image);
-                $height = \imagesy($image);
-                $points = [
-                    [0, 0],
-                    [\max(0, $width - 1), 0],
-                    [0, \max(0, $height - 1)],
-                    [\max(0, $width - 1), \max(0, $height - 1)],
-                ];
-                $transparent = 0;
-                foreach ($points as [$x, $y]) {
-                    $alpha = (\imagecolorat($image, $x, $y) >> 24) & 0x7F;
-                    if ($alpha >= 80) {
-                        $transparent++;
-                    }
-                }
-                \imagedestroy($image);
-
-                return $transparent >= 3;
-            }
-        }
-
-        $colorType = \ord($bytes[25] ?? "\0");
-        return \in_array($colorType, [4, 6], true) || \str_contains($bytes, 'tRNS');
     }
 
     /**
@@ -2713,6 +2670,10 @@ PROMPT
  //  ? ?
  // strict recovery prompt  ?AI ?
         if ($throwable instanceof \GuoLaiRen\PageBuilder\Exception\AiSiteComponentContractException) {
+            return true;
+        }
+
+        if ($this->isEmptyAiStreamCompletionFailure($throwable)) {
             return true;
         }
 
@@ -8440,6 +8401,10 @@ PROMPT;
 
     private function shouldFallbackToNonStreamComponentGeneration(\Throwable $throwable): bool
     {
+        if ($this->isEmptyAiStreamCompletionFailure($throwable)) {
+            return true;
+        }
+
         $message = \mb_strtolower($this->collectThrowableMessages($throwable));
         foreach ([
             'tls connect error',
@@ -8463,6 +8428,10 @@ PROMPT;
         if (!$throwable instanceof \Throwable) {
             return false;
         }
+        if ($this->isEmptyAiStreamCompletionFailure($throwable)) {
+            return true;
+        }
+
         $message = \mb_strtolower($this->collectThrowableMessages($throwable));
         foreach ([
             'model unavailable',
@@ -8625,6 +8594,31 @@ PROMPT;
         }
 
         return \implode(' | ', $messages);
+    }
+
+    private function isEmptyAiStreamCompletionFailure(\Throwable $throwable): bool
+    {
+        for ($current = $throwable; $current instanceof \Throwable; $current = $current->getPrevious()) {
+            $message = \mb_strtolower($current->getMessage(), 'UTF-8');
+            if (
+                (\str_contains($message, '流式') && \str_contains($message, '未返回任何内容'))
+                || \str_contains($message, 'ai stream generation completed without content')
+                || \str_contains($message, 'stream generation completed without content')
+                || \str_contains($message, 'empty ai stream completion')
+                || (
+                    \str_contains($message, 'stream')
+                    && (
+                        \str_contains($message, 'completed without content')
+                        || \str_contains($message, 'without any content')
+                        || \str_contains($message, 'returned no content')
+                    )
+                )
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -9096,7 +9090,7 @@ PROMPT;
 
     /**
      * Shared header/footer tasks may legally reuse global identity assets such as
-     * logo and title icon. Include only those verified global slots in the
+     * logo and favicon. Include only those verified global slots in the
      * allowlist so shared prompts stay constrained without blocking brand reuse.
      *
      * @param array<string,mixed> $scope
@@ -9187,6 +9181,9 @@ PROMPT;
         $assets = [];
         foreach ($page as $candidateBlockKey => $block) {
             if (!\is_array($block) || !\is_string($candidateBlockKey)) {
+                continue;
+            }
+            if (isset(self::PLAN_JSON_PAGE_ASSET_META_KEYS[$candidateBlockKey])) {
                 continue;
             }
             if (!$this->planJsonBlockMatchesAssetTarget($block, $candidateBlockKey, $blockKey, $sectionCode, $taskKey)) {
