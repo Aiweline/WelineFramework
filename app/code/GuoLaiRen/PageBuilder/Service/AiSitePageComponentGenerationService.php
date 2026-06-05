@@ -751,7 +751,14 @@ class AiSitePageComponentGenerationService
                 $visibleSectionTitle = $this->filterVisibleCopyForLocale($visibleSectionTitle, $contentLocale);
             }
             if ($visibleSectionTitle === '') {
-                $visibleSectionTitle = $this->humanizeIdentifier($sectionKey !== '' ? $sectionKey : $sectionCode);
+                $localizedFallback = $contentLocale !== ''
+                    && !$this->isEnglishLocale($contentLocale)
+                    && $this->promptLocaleFamily($contentLocale) === 'en'
+                        ? ''
+                        : $this->localizeBuildText('section_fallback', $contentLocale);
+                $visibleSectionTitle = $localizedFallback !== ''
+                    ? $localizedFallback
+                    : ($this->isEnglishLocale($contentLocale) ? $this->humanizeIdentifier($sectionKey !== '' ? $sectionKey : $sectionCode) : '');
             }
 
             $sections[] = [
@@ -1229,7 +1236,7 @@ class AiSitePageComponentGenerationService
                 'reason' => 'slot_id_missing',
                 'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
             ]);
-            return $this->degradeUnavailableInlineImageAsset($spec, '', 'slot_id_missing');
+            $this->failUnavailableRequiredInlineImageAsset($spec, '', 'slot_id_missing');
         }
 
         if ($this->isInlineImageGenerationDisabledForCurrentBuild($defaultConfig, $renderContext)) {
@@ -1238,7 +1245,7 @@ class AiSitePageComponentGenerationService
                 'slot_id' => $slotId,
                 'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
             ]);
-            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, self::INLINE_IMAGE_GENERATION_DISABLED_REASON);
+            $this->failUnavailableRequiredInlineImageAsset($spec, $slotId, self::INLINE_IMAGE_GENERATION_DISABLED_REASON);
         }
 
         if ($this->isInlineImageGenerationSuspendedForCurrentBuild($renderContext)) {
@@ -1247,7 +1254,7 @@ class AiSitePageComponentGenerationService
                 'slot_id' => $slotId,
                 'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
             ]);
-            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'deferred_after_failure');
+            $this->failUnavailableRequiredInlineImageAsset($spec, $slotId, 'deferred_after_failure');
         }
 
         $generator = $renderContext['_inline_image_asset_generator'] ?? null;
@@ -1256,7 +1263,7 @@ class AiSitePageComponentGenerationService
                 'reason' => 'generator_missing',
                 'section_code' => $this->firstConfigString($defaultConfig, ['runtime.section_code']),
             ]);
-            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'generator_missing');
+            $this->failUnavailableRequiredInlineImageAsset($spec, $slotId, 'generator_missing');
         }
 
         try {
@@ -1268,7 +1275,7 @@ class AiSitePageComponentGenerationService
                 'slot_id' => $slotId,
                 'error' => $this->summarizeThrowable($throwable),
             ]);
-            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'generation_failed');
+            $this->failUnavailableRequiredInlineImageAsset($spec, $slotId, 'generation_failed', $throwable);
         }
         if (!\is_array($result)) {
             $this->suspendInlineImageGenerationForCurrentBuild('invalid_generator_payload');
@@ -1276,7 +1283,7 @@ class AiSitePageComponentGenerationService
                 'reason' => 'invalid_generator_payload',
                 'slot_id' => $slotId,
             ]);
-            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'invalid_generator_payload');
+            $this->failUnavailableRequiredInlineImageAsset($spec, $slotId, 'invalid_generator_payload');
         }
 
         $url = \trim((string)($result['final_url'] ?? $result['url'] ?? ''));
@@ -1286,7 +1293,7 @@ class AiSitePageComponentGenerationService
                 'reason' => 'empty_final_url',
                 'slot_id' => $slotId,
             ]);
-            return $this->degradeUnavailableInlineImageAsset($spec, $slotId, 'empty_final_url');
+            $this->failUnavailableRequiredInlineImageAsset($spec, $slotId, 'empty_final_url');
         }
 
         $alt = $this->firstConfigString($defaultConfig, ['visual.image_alt', 'content.heading', 'title', 'runtime.section_name']);
@@ -1440,74 +1447,60 @@ class AiSitePageComponentGenerationService
     }
 
     /**
-     * Image generation is an enhancement dependency. A provider outage or quota
-     * issue must not block one-pass page generation.
+     * Required generated images are a build dependency. If the asset cannot be
+     * confirmed before block rendering, fail the block so the queue can retry
+     * instead of publishing a CSS-only substitute.
      *
      * @param array<string,mixed> $spec
-     * @return array<string,mixed>
      */
-    private function degradeUnavailableInlineImageAsset(array $spec, string $slotId, string $reason): array
+    private function failUnavailableRequiredInlineImageAsset(
+        array $spec,
+        string $slotId,
+        string $reason,
+        ?\Throwable $previous = null
+    ): never
     {
         $defaultConfig = \is_array($spec['defaultConfig'] ?? null) ? $spec['defaultConfig'] : [];
         $renderContext = \is_array($spec['renderContext'] ?? null) ? $spec['renderContext'] : [];
         $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
             ? $renderContext['_visual_contract']
             : $this->decodeRuntimeVisualContract($defaultConfig);
-        $originalRequired = (int)($visualContract['required'] ?? 0) === 1
-            || \trim((string)($defaultConfig['runtime.section_image_required'] ?? '')) === '1';
         if ($slotId === '') {
             $slotId = \trim((string)($visualContract['slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? ''));
         }
-
-        foreach (['runtime.section_image_url', 'visual.image_url', 'image.url', 'media.image_url'] as $key) {
-            unset($defaultConfig[$key]);
+        $pageType = $this->firstConfigString($defaultConfig, ['runtime.section_page_type']);
+        $sectionCode = $this->firstConfigString($defaultConfig, ['runtime.section_code', 'runtime.section_key', 'runtime.block_key']);
+        if ($sectionCode === '' && \is_array($renderContext['_plan_json_task'] ?? null)) {
+            $sectionCode = \trim((string)($renderContext['_plan_json_task']['section_code'] ?? $renderContext['_plan_json_task']['block_key'] ?? ''));
         }
-        $defaultConfig['runtime.section_image_required'] = '0';
-        $defaultConfig['runtime.section_image_unavailable'] = '1';
-        $defaultConfig['runtime.section_image_unavailable_reason'] = $reason;
-        $defaultConfig['visual.image_unavailable'] = '1';
-        $defaultConfig['visual.image_unavailable_reason'] = $reason;
+        if ($pageType === '' && \is_array($renderContext['_plan_json_task'] ?? null)) {
+            $pageType = \trim((string)($renderContext['_plan_json_task']['page_type'] ?? ''));
+        }
+
+        $details = [];
+        $details[] = 'reason=' . ($reason !== '' ? $reason : 'unknown');
         if ($slotId !== '') {
-            $defaultConfig['runtime.section_image_slot_id'] = $slotId;
-            $defaultConfig['visual.image_slot_id'] = $slotId;
+            $details[] = 'slot=' . $slotId;
         }
-
-        $visualContract['required'] = 0;
-        if ($originalRequired) {
-            $defaultConfig['runtime.section_image_contract_required'] = '1';
-            $visualContract['contract_required'] = 1;
-            $visualContract['original_required'] = 1;
+        if ($pageType !== '') {
+            $details[] = 'page=' . $pageType;
         }
-        $visualContract['image_unavailable'] = 1;
-        $visualContract['unavailable_reason'] = $reason;
-        $visualContract['fallback_strategy'] = 'css_product_ui_media';
-        unset($visualContract['final_url'], $visualContract['url'], $visualContract['src']);
-        $renderContext['_visual_contract'] = $visualContract;
-        if ($slotId !== '' && \is_array($renderContext['_required_image_assets'] ?? null)) {
-            unset($renderContext['_required_image_assets'][$slotId]);
-            if ($renderContext['_required_image_assets'] === []) {
-                unset($renderContext['_required_image_assets']);
+        if ($sectionCode !== '') {
+            $details[] = 'section=' . $sectionCode;
+        }
+        if ($previous instanceof \Throwable) {
+            $previousSummary = $this->clipText($this->summarizeThrowable($previous), 220);
+            if ($previousSummary !== '') {
+                $details[] = 'provider_error=' . $previousSummary;
             }
         }
-        $renderContext['_inline_image_unavailable'] = [
-            'slot_id' => $slotId,
-            'reason' => $reason,
-        ];
-        if (\in_array($reason, ['deferred_after_failure', self::INLINE_IMAGE_GENERATION_DISABLED_REASON], true)) {
-            $defaultConfig['runtime.section_image_deferred_retry'] = '1';
-            $visualContract['image_deferred'] = 1;
-            $visualContract['deferred_reason'] = $reason;
-            $renderContext['_visual_contract'] = $visualContract;
-            $renderContext['_inline_image_deferred_retry'] = [
-                'slot_id' => $slotId,
-                'reason' => $reason,
-            ];
-        }
 
-        $spec['defaultConfig'] = $defaultConfig;
-        $spec['renderContext'] = $renderContext;
-
-        return $spec;
+        throw new \RuntimeException(
+            'required_image_asset_unresolved: Required generated image must be generated and confirmed before block rendering; '
+            . \implode(' ', $details),
+            0,
+            $previous
+        );
     }
 
     /**
@@ -6137,6 +6130,41 @@ PROMPT;
         return \trim($plain);
     }
 
+    /**
+     * @return list<string>
+     */
+    private function extractVisibleHtmlTextChunks(string $html): array
+    {
+        if (\trim($html) === '') {
+            return [];
+        }
+
+        $html = \preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
+        $html = \preg_replace('/<script\b[^>]*>.*?<\/script>/is', '', $html) ?? $html;
+        $html = \preg_replace('/<style\b[^>]*>.*?<\/style>/is', '', $html) ?? $html;
+        $chunks = [];
+        $matchCount = \preg_match_all(
+            '/<(?P<tag>h[1-6]|p|a|button|li|label|figcaption|small|strong|em|span|div)\b[^>]*>(?P<body>[\s\S]*?)<\/\k<tag>>/iu',
+            $html,
+            $matches,
+            \PREG_SET_ORDER
+        );
+        if ($matchCount === false || $matchCount < 1) {
+            return [];
+        }
+
+        foreach ($matches as $match) {
+            $text = $this->extractVisibleHtmlText((string)($match['body'] ?? ''));
+            $text = \trim((string)\preg_replace('/\s+/u', ' ', $text));
+            if ($text === '') {
+                continue;
+            }
+            $chunks[] = $text;
+        }
+
+        return \array_slice(\array_values(\array_unique($chunks)), 0, 80);
+    }
+
     private function assertGeneratedHtmlFragmentWellFormed(string $html): void
     {
         $reason = $this->detectMalformedGeneratedHtmlReason($html);
@@ -6394,8 +6422,6 @@ PROMPT;
 
     private function detectHardGeneratedSectionHtmlPolicyViolation(string $html, string $locale = ''): ?string
     {
-        unset($locale);
-
         $trimmed = \trim($html);
         if ($trimmed === '') {
             return null;
@@ -6408,6 +6434,18 @@ PROMPT;
         $tagStructureReason = $this->detectHtmlTagStructureViolation($trimmed);
         if ($tagStructureReason !== null) {
             return $tagStructureReason;
+        }
+
+        $visibleText = $this->extractVisibleHtmlText($trimmed);
+        $copyReason = $this->detectVisibleCopyLocaleViolation($visibleText, $locale);
+        if ($copyReason !== null) {
+            return $copyReason;
+        }
+        foreach ($this->extractVisibleHtmlTextChunks($trimmed) as $chunk) {
+            $copyReason = $this->detectVisibleCopyLocaleViolation($chunk, $locale);
+            if ($copyReason !== null) {
+                return $copyReason;
+            }
         }
 
         return null;
@@ -11681,11 +11719,16 @@ JSON;
      */
     private function buildStage3TaskLanguageContract(string $contentLocale): array
     {
+        $localeProfile = $this->buildLocalePromptProfile($contentLocale);
+
         return [
             'source_of_truth_locale' => $contentLocale,
+            'locale_profile' => $localeProfile,
             'visible_copy_rule' => 'All visitor-visible headings, body copy, CTA labels, nav/footer text, form labels, alt/title/aria/placeholder text must be written in source_of_truth_locale.',
             'plan_text_rule' => 'The confirmed plan and task samples are intent only; rewrite or translate them before visible output.',
             'proper_noun_rule' => 'Brand names, domain names, product names, URLs, acronyms, model names, and user-provided proper nouns may keep original spelling when natural.',
+            'script_rule' => 'Use locale_profile.required_visible_script and locale_profile.text_direction for final visible copy. Do not leave Chinese, English, or planning-language prose unless it is an approved proper noun.',
+            'forbidden_visible_sources' => ['block_goal', 'task_goal', 'story_goal', 'why_this_block', 'planning_reason', 'block_contract', 'visual_signature', 'image_intent', 'asset_requirements', 'execution_script'],
             'self_check' => 'Before returning JSON, scan every visible string and rewrite any sentence that is not in source_of_truth_locale.',
         ];
     }
@@ -11704,6 +11747,9 @@ JSON;
         }
         if (\trim((string)($contract['source_of_truth_locale'] ?? '')) === '' && $contentLocale !== '') {
             $contract['source_of_truth_locale'] = $contentLocale;
+        }
+        if (!\is_array($contract['locale_profile'] ?? null) && $contentLocale !== '') {
+            $contract['locale_profile'] = $this->buildLocalePromptProfile($contentLocale);
         }
 
         return $contract;
@@ -12204,14 +12250,21 @@ JSON;
             return "Block visual contract:\n"
                 . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
                 . "- image_required: yes\n"
-                . "- Pending image slot {$slotId}: this block still requires generated media, but no verified final_url/template is available yet. Do not invent a placeholder image URL and do not claim CSS-only media is a generated image.\n"
-                . "- Required image confirmation rule: if a later FINAL IMAGE CONTRACT supplies an exact image URL/template, that editable <img> binding is mandatory for this block. If this run must return JSON before the asset exists, return no fake image tags, build a temporary polished CSS/product-UI visual surface, and preserve the unresolved image markers so the block can be retried with the generated asset.\n";
+                . "- Pending image slot {$slotId}: this block still requires generated media, but no verified final_url/template is available yet. Block rendering must wait for a confirmed generated image instead of producing a final CSS-only substitute.\n"
+                . "- Required image confirmation rule: do not invent a placeholder image URL, do not claim CSS-only media is a generated image, and do not return visitor-facing final HTML for this block until the FINAL IMAGE CONTRACT supplies an exact image URL/template.\n";
         }
         if ((int)($visualContract['image_unavailable'] ?? 0) === 1) {
+            if ($contractOriginallyRequired) {
+                return "Block visual contract:\n"
+                    . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
+                    . "- image_required: yes\n"
+                    . "- image_unavailable: yes; this is an unresolved required generated-image dependency, not a CSS-only design choice. Block generation must fail/retry before final HTML is accepted.\n"
+                    . "- Do not invent image URLs, do not render empty <img> tags, do not replace the required generated image with CSS-only media, and do not show unavailable-image diagnostics as visitor copy.\n";
+            }
+
             return "Block visual contract:\n"
                 . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
                 . "- image_required: no\n"
-                . ($contractOriginallyRequired ? "- original_image_required: yes; this is an unresolved generated-image dependency, not a CSS-only design choice. Keep media copy, alt planning, and layout ready for the retry image slot.\n" : '')
                 . "- image_unavailable: yes; build a polished CSS-only or product-UI media surface for this section.\n"
                 . "- Do not invent image URLs, do not render empty <img> tags, and do not show unavailable-image diagnostics as visitor copy.\n";
         }
@@ -13437,6 +13490,12 @@ JSON;
         $currentBlockContract = $this->resolveBlockContract($PlanJsonTask);
         $contentLocale = \trim((string)($runtimeContext['content_locale'] ?? $this->resolveScopePrimaryLocale($scope)));
         $languageContract = $this->resolveStage3TaskLanguageContract($runtimeContext, $contentLocale);
+        $localeContext = \is_array($runtimeContext['locale_context'] ?? null)
+            ? $runtimeContext['locale_context']
+            : (\is_array($languageContract['locale_profile'] ?? null) ? $languageContract['locale_profile'] : []);
+        $visibleCopyContract = \is_array($runtimeContext['visible_copy_contract'] ?? null)
+            ? $runtimeContext['visible_copy_contract']
+            : (\is_array($blockTask['visible_copy_contract'] ?? null) ? $blockTask['visible_copy_contract'] : []);
         $policySlicesPrompt = $this->planJsonTaskPolicySlicesPromptAddon($PlanJsonTask, $contextLabel, $scope);
         $contextScale = $this->resolvePlanJsonTaskContextScale($PlanJsonTask);
         $includeExtendedContext = $contextScale >= 0.8;
@@ -13533,6 +13592,7 @@ JSON;
                 'block_key' => (string)($PlanJsonTask['block_key'] ?? $planContext['block_key'] ?? ''),
                 'section_code' => (string)($PlanJsonTask['section_code'] ?? $planContext['section_code'] ?? ''),
                 'content_locale' => $contentLocale,
+                'locale_context' => $localeContext,
                 'context_refs' => $contextRefs,
             ], 900) . "\n"
             . $languageContractPrompt
@@ -13555,6 +13615,8 @@ JSON;
             . "5 current_block_context: " . $this->jsonEncodeForPrompt([
                 'content_locale' => $contentLocale,
                 'language_contract' => $languageContract,
+                'locale_context' => $localeContext,
+                'visible_copy_contract' => $visibleCopyContract,
                 'block_context_source' => 'plan_json.pages dynamic block + current task runtime_context + block_contract',
                 'block_goal' => (string)($planContext['block_goal'] ?? ''),
                 'stage1_block_content' => (string)($planContext['stage1_block_content'] ?? ''),
@@ -13594,7 +13656,8 @@ JSON;
             . "- priority rule: user prompt intent is primary for content/design decisions; this frozen context is the confirmed block-level execution form of that intent. If site_context contains a clearer explicit user instruction, honor it while keeping schema, locale, asset, and safety contracts valid.\n"
             . "- block-context execution rule: generate only current_block_context for task_identity.task_key. Do not borrow content, layout, CTA labels, image slots, or acceptance rules from sibling blocks, stale blueprints, full scope, UI projection, or memory.\n"
             . "- design execution rule: apply confirmed page_design_plan and theme_context first, then current_block_context. Generate only this task's block for its page_type and block_key; you may design freely inside that contract, not why the block exists.\n"
-            . "- content execution rule: every heading, body line, list/card item, CTA, form label, placeholder, alt text, and editable default must be derived from current_block_context.content_plan, field_content_requirements, data_contract, block_goal, and acceptance. If plan samples are not visitor-ready, rewrite them into finished {$contentLocale} copy; do not replace them with generic marketing filler.\n"
+            . "- content execution rule: every heading, body line, list/card item, CTA, form label, placeholder, alt text, and editable default must be derived from current_block_context.content_plan, field_content_requirements, data_contract, and acceptance. If plan samples are not visitor-ready, rewrite them into finished {$contentLocale} copy; do not replace them with generic marketing filler.\n"
+            . "- visible-copy source rule: current_block_context.visible_copy_contract.intent_only_sources are never visible copy sources. They may guide structure and priorities, but exact block_goal/task_goal/story_goal/contract sentences must not appear in HTML or editable defaults.\n"
             . "- CSS execution rule: write fewer complete selectors instead of many fragile selectors. If a decoration is hard to express safely, omit the decoration and keep the layout valid.\n"
             . "- base layout execution rule: apply a foundation only after choosing this block's own composition. Root/inner/copy/media/action roles should establish spacing, containment, typography, and responsive safety; they must not force a repeated skeleton. Use 4px/8px spacing rhythm, max-width 1120px-1280px for inner content when not full-bleed, min-width:0 and box-sizing:border-box on layout children, stable heading/body font sizes per breakpoint, line-height 1.45-1.75 for readable copy, and letter-spacing:0 unless a locale-safe positive value is explicitly intended.\n"
             . "- responsive execution rule: normal grid/flex flow only; stack at <=900px and use one column at <=420px. Apply min-width:0, max-width:100%, box-sizing:border-box, and overflow-wrap:anywhere to layout containers plus text-bearing children such as brand/logo text, headings, paragraphs, labels, nav items, badges/chips, cards, media captions, form fields, and CTA labels. Do not use white-space:nowrap on brand/nav/badges/buttons/headings at <=420px unless that same rule provides a safe wrap or shorter label. Review/testimonial/card rails must stay inside the component width: use grid wrapping, or put all cards inside one max-width:100% overflow-x:auto wrapper; never position extra cards beyond the viewport or let a rail increase body scrollWidth. Use overflow:hidden only for decorative media/motifs, never to hide clipped copy or controls. Apply the compact CTA override only to the actual clickable CTA button/anchor element; full-width bands, layout containers, and form wrappers may remain responsive. Prefer action/actions for wrappers so wrapper CSS is not mistaken for button CSS.\n"
@@ -13790,14 +13853,6 @@ JSON;
         }
         if (isset($defaultConfig['content.description']) && $this->sanitizeVisibleCopy((string)$defaultConfig['content.description']) === '') {
             $defaultConfig['content.description'] = '';
-        }
-
-        $storyGoal = $this->sanitizeVisibleCopy((string)($taskScript['story_goal'] ?? ''));
-        if ($locale !== '') {
-            $storyGoal = $this->filterVisibleCopyForLocale($storyGoal, $locale);
-        }
-        if ($storyGoal !== '' && \trim((string)($defaultConfig['content.title'] ?? '')) === '') {
-            $defaultConfig['content.title'] = $this->clipText($storyGoal, 72);
         }
 
         $defaultConfig = $this->applyPlanJsonContentPlanDefaults($defaultConfig, $blockTask, $locale);
@@ -14461,14 +14516,15 @@ JSON;
     private function looksLikeGeneratedIdentifierLabel(string $value): bool
     {
         $trimmed = \trim($value);
-        if ($trimmed === '' || $trimmed !== \mb_strtolower($trimmed)) {
+        if ($trimmed === '') {
             return false;
         }
-        if (\preg_match('/^[a-z0-9]+(?:[ _-]+[a-z0-9]+){1,6}$/', $trimmed) !== 1) {
+        $normalized = \mb_strtolower($trimmed);
+        if (\preg_match('/^[a-z0-9]+(?:[ _-]+[a-z0-9]+){1,6}$/', $normalized) !== 1) {
             return false;
         }
 
-        $tokens = \preg_split('/[ _-]+/', $trimmed) ?: [];
+        $tokens = \preg_split('/[ _-]+/', $normalized) ?: [];
         $generic = \array_fill_keys([
             'about',
             'accordion',
@@ -14569,6 +14625,16 @@ JSON;
             'planning observation',
             'page rhythm',
             'design variation',
+            "\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}",
+            "\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}",
+            "\u{9762}\u{5411}\u{4E2D}\u{6587}\u{7528}\u{6237}",
+            "\u{901A}\u{8FC7} SEO",
+            "\u{5B9E}\u{73B0}\u{76EE}\u{6807}",
+            '聚合核心价值',
+            '主要行动入口',
+            '面向中文用户',
+            '通过 SEO',
+            '实现目标',
         ] as $marker) {
             $marker = \mb_strtolower($marker);
             if ($marker !== '' && \mb_stripos($normalized, $marker) !== false) {
@@ -14596,6 +14662,11 @@ JSON;
 
         $matches = [];
         $patterns = [
+            '/\b(?:visitors?|users?)\s+(?:see|can\s+review|can\s+verify|understand|are\s+guided|are\s+ready)\b.{0,140}\b(?:proof|cta|action|before\s+publishing|content|trust)\b/iu',
+            '/\b(?:show|showcase|present|display|highlight|emphasize|strengthen|build|structure|design|render|include)\b.{0,120}\b(?:cta|card|cards|section|block|layout|grid|content|trust|proof|selling\s+points?|hierarchy)\b/iu',
+            '/(?:rewrite|render|use|provide|present|include|output)\s+(?:concrete|visitor-facing|download|category|trust|proof|cta|feature).{0,90}(?:copy|language|labels?|path|cards?)/iu',
+            '/\b(?:priority\s+from\s+stage\s+one|field\s+sample|planning\s+observation|page\s+rhythm|design\s+variation|stage[- ]?[123]|plan[-_ ]?json|block[_ ]?goal|task[_ ]?goal|story[_ ]?goal|why[_ ]?this[_ ]?block)\b/iu',
+            '/(?:\x{805A}\x{5408}\x{6838}\x{5FC3}\x{4EF7}\x{503C}|\x{4E3B}\x{8981}\x{884C}\x{52A8}\x{5165}\x{53E3}|\x{9762}\x{5411}\x{4E2D}\x{6587}\x{7528}\x{6237}|\x{901A}\x{8FC7}\s*SEO|\x{5B9E}\x{73B0}\x{76EE}\x{6807})/iu',
  '/^(?: ?\b.{0,120}[.!? ?\s*$/iu',
  '/(?: ??(?: tion|block).{0,24}(?: ?.{0,16}(?: ?|selling\s+points?)/iu',
  '/(?: splay|show|present).{0,28}(?: ?hierarchy|visual\s+hierarchy).{0,90}(?: ?points?|differences?|trust)/iu',
@@ -14608,6 +14679,9 @@ JSON;
  '/(?: ?.{0,40}(?: ?.{0,40}(?: ?/iu',
         ];
         foreach ($patterns as $pattern) {
+            if (@\preg_match($pattern, '') === false) {
+                continue;
+            }
             if (\preg_match($pattern, $value, $found) === 1) {
                 $matches[] = (string)($found[0] ?? $pattern);
             }
@@ -15775,6 +15849,17 @@ JSON;
         }
 
         $fallback = \trim($fallback);
+        if ($locale !== '' && !$this->isEnglishLocale($locale)) {
+            $localizedFallback = $this->promptLocaleFamily($locale) === 'en'
+                ? ''
+                : $this->localizeBuildText('section_fallback', $locale);
+            if ($localizedFallback !== '') {
+                return $localizedFallback;
+            }
+
+            return '';
+        }
+
         return $fallback !== '' ? $fallback : 'Section';
     }
 
@@ -15795,6 +15880,9 @@ JSON;
             return '';
         }
         if ($locale !== '' && !$this->isEnglishLocale($locale) && $this->containsEnglishBoilerplateVisibleCopy($value)) {
+            return '';
+        }
+        if ($locale !== '' && !$this->isEnglishLocale($locale) && $this->hasDominantLatinProseForNonEnglishLocale($value, $locale)) {
             return '';
         }
 
@@ -15896,6 +15984,18 @@ JSON;
                 Page::TYPE_SHIPPING_POLICY => 'Política de Envio',
                 Page::TYPE_COOKIE_POLICY => 'Política de Cookies',
             ],
+            'ar' => [
+                Page::TYPE_HOME => 'الرئيسية',
+                Page::TYPE_ABOUT => 'من نحن',
+                Page::TYPE_CONTACT => 'اتصل بنا',
+                Page::TYPE_BLOG_LIST => 'المدونة',
+                Page::TYPE_BLOG => 'المدونة',
+                Page::TYPE_PRIVACY_POLICY => 'سياسة الخصوصية',
+                Page::TYPE_TERMS_OF_SERVICE => 'شروط الخدمة',
+                Page::TYPE_REFUND_POLICY => 'سياسة الاسترداد',
+                Page::TYPE_SHIPPING_POLICY => 'سياسة الشحن',
+                Page::TYPE_COOKIE_POLICY => 'سياسة ملفات تعريف الارتباط',
+            ],
             'en' => [
                 Page::TYPE_HOME => 'Home',
                 Page::TYPE_ABOUT => 'About',
@@ -15931,6 +16031,7 @@ JSON;
                 'claim_bonus' => '领取奖励',
                 'start_playing' => '开始游戏',
                 'site_name_fallback' => '网站',
+                'section_fallback' => '页面区块',
             ],
             'pt' => [
                 'policy_info' => 'Informações legais',
@@ -15945,6 +16046,22 @@ JSON;
                 'claim_bonus' => 'Resgatar bônus',
                 'start_playing' => 'Começar a jogar',
                 'site_name_fallback' => 'Site',
+                'section_fallback' => 'Seção',
+            ],
+            'ar' => [
+                'policy_info' => 'معلومات قانونية',
+                'featured_pages' => 'صفحات مميزة',
+                'all_pages' => 'كل الصفحات',
+                'all_rights_reserved' => 'جميع الحقوق محفوظة.',
+                'brand_summary' => 'وجهة واضحة بمعلومات موثوقة ودعم مباشر وخطوات سهلة.',
+                'contact_us' => 'اتصل بنا',
+                'explore_more' => 'استكشف المزيد',
+                'get_started' => 'ابدأ الآن',
+                'download_now' => 'حمّل الآن',
+                'claim_bonus' => 'احصل على المكافأة',
+                'start_playing' => 'ابدأ اللعب',
+                'site_name_fallback' => 'الموقع',
+                'section_fallback' => 'قسم',
             ],
             'en' => [
                 'policy_info' => 'Policy Info',
@@ -15959,6 +16076,7 @@ JSON;
                 'claim_bonus' => 'Claim Bonus',
                 'start_playing' => 'Start Playing',
                 'site_name_fallback' => 'Website',
+                'section_fallback' => 'Section',
             ],
         ];
         $family = $this->promptLocaleFamily($locale);
@@ -15978,6 +16096,9 @@ JSON;
         }
         if ($this->isHindiLocale($locale)) {
             return 'hi';
+        }
+        if ($this->isArabicLocale($locale)) {
+            return 'ar';
         }
         if ($this->isChineseLocale($locale)) {
             return 'zh';
@@ -16001,6 +16122,11 @@ JSON;
     private function isHindiLocale(string $locale): bool
     {
         return \preg_match('/^(?:hi|hi[_-]in)(?:[_-]|$)/i', \trim($locale)) === 1;
+    }
+
+    private function isArabicLocale(string $locale): bool
+    {
+        return \preg_match('/^ar(?:[_-]|$)/i', \trim($locale)) === 1;
     }
 
     private function humanizeIdentifier(string $value): string
@@ -16197,7 +16323,10 @@ JSON;
                 $label = (string)($route['label'] ?? $this->humanizeIdentifier($routeType));
             }
             if ($label !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($label)) {
-                $label = $this->humanizeIdentifier($routeType);
+                $label = $this->localizePageTypeTitle($routeType, $locale);
+                if ($label === '' && $this->isEnglishLocale($locale)) {
+                    $label = $this->humanizeIdentifier($routeType);
+                }
             }
             if ($label === '') {
                 continue;
@@ -16275,7 +16404,10 @@ JSON;
                 $label = (string)($route['label'] ?? $this->humanizeIdentifier($type));
             }
             if ($label !== '' && $this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($label)) {
-                $label = $this->humanizeIdentifier($type);
+                $label = $this->localizePageTypeTitle($type, $locale);
+                if ($label === '' && $this->isEnglishLocale($locale)) {
+                    $label = $this->humanizeIdentifier($type);
+                }
             }
             if ($label === '') {
                 continue;
@@ -16576,7 +16708,7 @@ JSON;
         }
         $text = \html_entity_decode($text, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
         $text = (string)\preg_replace('/https?:\/\/\S+|\/pub\/media\/\S+/iu', ' ', $text);
- $segments = \preg_split('/[\r\n.!?;: ?? ?|]+/u', $text) ?: [$text];
+        $segments = \preg_split('/[\r\n.!?;:|\s]+/u', $text) ?: [$text];
 
         foreach ($segments as $segment) {
             $segment = \trim((string)\preg_replace('/\s+/u', ' ', (string)$segment));
@@ -16606,6 +16738,12 @@ JSON;
             if (
                 \count($words) >= 3
                 && \preg_match('/\b(?:home|about|featured|pages|policy|info|privacy|terms|support|reserved|rights|destination|clear|trusted|simple|next|steps|download|play|get|started|contact|subscribe|explore|learn|more)\b/iu', $segment) === 1
+            ) {
+                return true;
+            }
+            if (
+                \count($words) >= 2
+                && \preg_match('/\b(?:trust|security|proof|final|cta|hero|feature|features|card|cards|section|block|download|play|start|started|contact|support|learn|more|explore|button|label|headline|content|copy)\b/iu', $segment) === 1
             ) {
                 return true;
             }
@@ -16734,8 +16872,154 @@ JSON;
      */
     private function assertRenderedHtmlMatchesLocale(string $html, array $renderContext): void
     {
-        // Content language is prompt guidance and browser QA, not a hard structure gate.
-        return;
+        $locale = $this->resolveGeneratedContentLocaleForPolicy($renderContext);
+        $visibleText = $this->extractVisibleHtmlText($html);
+        $reason = $this->detectVisibleCopyLocaleViolation($visibleText, $locale, $renderContext);
+        if ($reason !== null) {
+            throw new \RuntimeException('Generated component locale hard policy failed: ' . $reason);
+        }
+
+        foreach ($this->extractVisibleHtmlTextChunks($html) as $chunk) {
+            $reason = $this->detectVisibleCopyLocaleViolation($chunk, $locale, $renderContext);
+            if ($reason !== null) {
+                throw new \RuntimeException('Generated component locale hard policy failed: ' . $reason);
+            }
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function detectVisibleCopyLocaleViolation(string $visibleText, string $locale = '', array $renderContext = []): ?string
+    {
+        $locale = \trim($locale);
+        $visibleText = \trim((string)\preg_replace('/\s+/u', ' ', $visibleText));
+        if ($visibleText === '' || $locale === '') {
+            return null;
+        }
+
+        if ($this->containsPromptPlanningLeakText($visibleText)) {
+            return 'planning or contract instruction text leaked into visible copy: ' . $this->clipText($visibleText, 160);
+        }
+
+        if ($this->hasDisallowedCjkVisibleCopyForLocale($visibleText, $locale, $renderContext)) {
+            return 'non-target CJK planning or UI copy leaked into visible copy: ' . $this->clipText($visibleText, 160);
+        }
+
+        if (!$this->isEnglishLocale($locale)) {
+            $allowedLatinTerms = $this->collectAllowedLatinTermsFromRenderContext($renderContext);
+            if ($this->hasDominantLatinProseForNonEnglishLocale($visibleText, $locale, $allowedLatinTerms)) {
+                return $this->summarizeNonTargetLatinCopyForLocaleError($visibleText, $allowedLatinTerms);
+            }
+            if ($this->looksLikeGeneratedIdentifierLabel($visibleText) && !$this->isAllowedLatinIdentityText($visibleText, $allowedLatinTerms)) {
+                return 'identifier-style English label leaked into non-English visible copy: ' . $this->clipText($visibleText, 120);
+            }
+        }
+
+        if ($this->isArabicLocale($locale) && $this->requiresArabicScriptForVisibleCopy($visibleText, $renderContext)) {
+            return 'Arabic locale visible copy must contain Arabic script: ' . $this->clipText($visibleText, 160);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function hasDisallowedCjkVisibleCopyForLocale(string $visibleText, string $locale, array $renderContext = []): bool
+    {
+        if (!$this->isNonCjkLocale($locale) || !$this->hasAnyCjkContent($visibleText)) {
+            return false;
+        }
+
+        $allowed = $this->collectAllowedCjkTermsFromRenderContext($renderContext);
+        if ($allowed === []) {
+            return true;
+        }
+
+        if (\preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+/u', $visibleText, $matches) <= 0) {
+            return false;
+        }
+        foreach ($matches[0] ?? [] as $segment) {
+            $segment = \trim((string)$segment);
+            if ($segment !== '' && !isset($allowed[$segment])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @return array<string,bool>
+     */
+    private function collectAllowedCjkTermsFromRenderContext(array $renderContext): array
+    {
+        $sources = [];
+        $this->collectAllowedLatinTermSources($renderContext['_website_profile'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['_scope_identity'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['page'] ?? [], $sources);
+        $this->collectAllowedLatinTermSources($renderContext['component_config'] ?? [], $sources);
+
+        $allowed = [];
+        foreach ($sources as $source) {
+            if (\preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+/u', $source, $matches) <= 0) {
+                continue;
+            }
+            foreach ($matches[0] ?? [] as $segment) {
+                $segment = \trim((string)$segment);
+                if ($segment !== '') {
+                    $allowed[$segment] = true;
+                }
+            }
+        }
+
+        return $allowed;
+    }
+
+    /**
+     * @param array<string,bool> $allowedLatinTerms
+     */
+    private function isAllowedLatinIdentityText(string $visibleText, array $allowedLatinTerms): bool
+    {
+        if ($allowedLatinTerms === []) {
+            return false;
+        }
+        if (\preg_match_all('/\b[A-Za-z][A-Za-z0-9\'-]*\b/u', $visibleText, $matches) < 1) {
+            return false;
+        }
+        foreach ($matches[0] ?? [] as $word) {
+            $normalized = \strtolower(\trim((string)$word, " \t\n\r\0\x0B'\"-"));
+            if ($normalized !== '' && !isset($allowedLatinTerms[$normalized])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     */
+    private function requiresArabicScriptForVisibleCopy(string $visibleText, array $renderContext): bool
+    {
+        if (\preg_match('/\p{Arabic}/u', $visibleText) === 1) {
+            return false;
+        }
+        if ($this->hasAnyCjkContent($visibleText)) {
+            return false;
+        }
+        $allowedLatinTerms = $this->collectAllowedLatinTermsFromRenderContext($renderContext);
+        $letters = \preg_match_all('/\p{L}/u', $visibleText);
+        if ($letters < 18) {
+            return false;
+        }
+        if ($this->isAllowedLatinIdentityText($visibleText, $allowedLatinTerms)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -17689,6 +17973,16 @@ JSON;
 
     private function describeLocaleForAiPrompt(string $locale): string
     {
+        $profile = $this->buildLocalePromptProfile($locale);
+        $languageName = \trim((string)($profile['language_name'] ?? ''));
+        $script = \trim((string)($profile['script'] ?? ''));
+        $direction = \trim((string)($profile['text_direction'] ?? ''));
+        if ($languageName !== '' && $languageName !== 'the selected locale') {
+            return $languageName
+                . ($script !== '' ? ' / ' . $script . ' script' : '')
+                . ($direction === 'rtl' ? ' / RTL' : '');
+        }
+
         return match ($locale) {
             'zh_Hans_CN' => 'Simplified Chinese',
             'zh_Hant_TW' => 'Traditional Chinese',
@@ -17698,5 +17992,87 @@ JSON;
             'ru_RU' => 'Russian',
             default => $locale,
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildLocalePromptProfile(string $locale): array
+    {
+        $normalized = \strtolower(\str_replace('-', '_', \trim($locale)));
+        $languageName = 'the selected locale';
+        $script = 'locale-native';
+        $direction = 'ltr';
+        $requiredScript = 'the native writing system for the selected locale';
+
+        if ($normalized === 'zh' || \str_starts_with($normalized, 'zh_')) {
+            $languageName = \str_contains($normalized, 'hant') ? 'Traditional Chinese' : 'Simplified Chinese';
+            $script = 'Han Chinese';
+            $requiredScript = 'Chinese characters';
+        } elseif ($normalized === 'ar' || \str_starts_with($normalized, 'ar_')) {
+            $languageName = 'Arabic';
+            $script = 'Arabic';
+            $direction = 'rtl';
+            $requiredScript = 'Arabic script';
+        } elseif ($normalized === 'ru' || \str_starts_with($normalized, 'ru_')) {
+            $languageName = 'Russian';
+            $script = 'Cyrillic';
+            $requiredScript = 'Cyrillic Russian text';
+        } elseif ($normalized === 'th' || \str_starts_with($normalized, 'th_')) {
+            $languageName = 'Thai';
+            $script = 'Thai';
+            $requiredScript = 'Thai script';
+        } elseif ($normalized === 'hi' || \str_starts_with($normalized, 'hi_')) {
+            $languageName = 'Hindi';
+            $script = 'Devanagari';
+            $requiredScript = 'Devanagari Hindi text';
+        } elseif ($normalized === 'de' || \str_starts_with($normalized, 'de_')) {
+            $languageName = 'German';
+            $script = 'Latin';
+            $requiredScript = 'German prose';
+        } elseif ($normalized === 'fr' || \str_starts_with($normalized, 'fr_')) {
+            $languageName = 'French';
+            $script = 'Latin';
+            $requiredScript = 'French prose';
+        } elseif ($normalized === 'es' || \str_starts_with($normalized, 'es_')) {
+            $languageName = 'Spanish';
+            $script = 'Latin';
+            $requiredScript = 'Spanish prose';
+        } elseif ($normalized === 'it' || \str_starts_with($normalized, 'it_')) {
+            $languageName = 'Italian';
+            $script = 'Latin';
+            $requiredScript = 'Italian prose';
+        } elseif ($normalized === 'ja' || \str_starts_with($normalized, 'ja_')) {
+            $languageName = 'Japanese';
+            $script = 'Japanese';
+            $requiredScript = 'Japanese text';
+        } elseif ($normalized === 'ko' || \str_starts_with($normalized, 'ko_')) {
+            $languageName = 'Korean';
+            $script = 'Hangul';
+            $requiredScript = 'Korean Hangul text';
+        } elseif ($normalized === 'pt' || \str_starts_with($normalized, 'pt_')) {
+            $languageName = 'Portuguese';
+            $script = 'Latin';
+            $requiredScript = 'Portuguese prose';
+        } elseif ($normalized === 'en' || \str_starts_with($normalized, 'en_')) {
+            $languageName = 'English';
+            $script = 'Latin';
+            $requiredScript = 'English prose';
+        }
+
+        return [
+            'locale' => $locale,
+            'language_name' => $languageName,
+            'script' => $script,
+            'text_direction' => $direction,
+            'required_visible_script' => $requiredScript,
+            'copy_instruction' => 'Write natural customer-facing ' . $languageName . ' copy. Translate or rewrite planning text before it appears in HTML.',
+            'forbidden_visible_copy' => [
+                'Chinese/CJK planning prose when source_of_truth_locale is not CJK',
+                'English boilerplate or section labels when source_of_truth_locale is not English',
+                'raw block_goal/task_goal/story_goal/why_this_block/planning_reason sentences',
+                'schema keys, prompt labels, or contract field names',
+            ],
+        ];
     }
 }
