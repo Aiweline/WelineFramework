@@ -1,6 +1,6 @@
 ---
 name: pagebuilder-ai-site-plan-json
-description: PageBuilder AI site generation data schema guardrail. Use when modifying PageBuilder AI site planning, prompts, generated plan_json, build queues, SSE/workspace state, frontend status display, docs, or tests so all page and block generation data stays in plan_json.pages.{page_type}.{block_key} instead of new truth sources like build_plan_v2, page_plans, plan_workbench, stage1_contract, execution_blueprint, or build_tasks.
+description: PageBuilder AI site generation data schema guardrail. Use when modifying PageBuilder AI site planning, prompts, generated plan_json, build queues, SSE/workspace state, frontend status display, docs, or user-requested tests so all page and block generation data stays in plan_json.pages.{page_type}.{block_key} instead of new truth sources like build_plan_v2, page_plans, plan_workbench, stage1_contract, execution_blueprint, or build_tasks.
 ---
 
 # PageBuilder AI Site Plan JSON
@@ -81,7 +81,7 @@ When changing PageBuilder AI generation data:
 3. Update prompts to ask AI to output that exact path.
 4. Update queue/build/SSE/frontend readers to read that exact path.
 5. Update writers to write back to the same node.
-6. Add tests that prove old sources do not unlock gates or drive generation.
+6. If the user explicitly asks for test coverage, add tests that prove old sources do not unlock gates or drive generation; otherwise verify through source review, existing commands, queue/SSE behavior, or focused runtime evidence without creating test assets.
 7. Update docs that still describe a side table or derived plan as truth.
 
 ## Prompt Guidance
@@ -111,4 +111,3 @@ Never ask the AI to output a separate page table, build plan, workbench, executi
 ## No Migration Rule
 
 Do not migrate old data. If old scopes only contain `pages.home_page.blocks[]`, `page_plans`, `plan_workbench`, `stage1_contract`, or `build_plan_v2`, treat them as invalid for the new build path and regenerate the plan.
-
