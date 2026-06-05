@@ -2139,7 +2139,8 @@ class AiSiteAgent extends BaseController
 
         $confirmOnly = (int)$this->getRequestBodyValue('confirm_only', 0) === 1
             || (int)$this->getRequestBodyValue('build_deferred', 0) === 1
-            || \strtolower(\trim((string)$this->getRequestBodyValue('start_build', '1'))) === '0';
+            || \strtolower(\trim((string)$this->getRequestBodyValue('start_build', '1'))) === '0'
+            || $this->hasBuildQueueForPlanConfirmation($session, $confirmedScope);
 
         $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
         if (!$confirmOnly) {
@@ -2212,6 +2213,48 @@ class AiSiteAgent extends BaseController
         }
 
         return $this->fetchJson($buildStartResult);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function hasBuildQueueForPlanConfirmation(AiSiteAgentSession $session, array $scope): bool
+    {
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        if ($this->isBuildOperationInProgress($activeOperation)) {
+            return true;
+        }
+
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        if ($this->isBuildOperationInProgress(\is_array($activeOperations['build'] ?? null) ? $activeOperations['build'] : [])) {
+            return true;
+        }
+
+        $buildQueueInfo = \is_array($scope['build_queue_info'] ?? null) ? $scope['build_queue_info'] : [];
+        if ($this->isBuildOperationInProgress($buildQueueInfo)) {
+            return true;
+        }
+
+        $buildQueueRow = $this->findAiSiteOperationQueueRow($session, 'build');
+        return \is_array($buildQueueRow) && $this->isAiSiteQueueRowLiveInProgress($buildQueueRow);
+    }
+
+    /**
+     * @param array<string, mixed> $operationState
+     */
+    private function isBuildOperationInProgress(array $operationState): bool
+    {
+        if ($operationState === []) {
+            return false;
+        }
+
+        $operation = \trim((string)($operationState['operation'] ?? 'build'));
+        if ($operation !== 'build') {
+            return false;
+        }
+
+        $status = \strtolower(\trim((string)($operationState['queue_status'] ?? $operationState['status'] ?? '')));
+        return \in_array($status, ['pending', 'queued', 'running', 'processing'], true);
     }
 
     private function handlePlanSse(): void
