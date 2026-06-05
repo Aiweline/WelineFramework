@@ -1057,7 +1057,6 @@
         syncRebuildBuildStageButtonState(workspaceState);
         scheduleRetryableAiFailureResumePrompt(workspaceState);
         syncBrandIdentityThemeFromWorkspaceState(workspaceState);
-        syncBrandIdentityPanelsFromWorkspaceState(workspaceState);
         syncAssetPanelFromWorkspaceState(workspaceState);
         syncReferenceImagePanelFromWorkspaceState(workspaceState);
         updateTaskSummaryFromState(workspaceState);
@@ -3598,7 +3597,7 @@
 
     function syncBrandIdentityThemeFromWorkspaceState(workspaceState) {
         var palette = resolveBrandIdentityThemePalette(workspaceState);
-        document.querySelectorAll('.pb-ai-brand-assets, #pb-ai-asset-slot-list').forEach(function (container) {
+        document.querySelectorAll('#pb-ai-asset-slot-list').forEach(function (container) {
             [
                 ['--pb-ai-brand-primary', palette.primary],
                 ['--pb-ai-brand-accent', palette.accent || palette.primary],
@@ -3698,125 +3697,6 @@
     function buildAssetSlotPurposeText(slot) {
         var purpose = normalizeAssetPanelSafeText(readAssetSlotValue(slot, ['slot_type', 'kind', 'role']), 64);
         return purpose ? (humanizeAssetPanelKey(purpose) || purpose) : '';
-    }
-
-    function normalizeAssetStatus(status) {
-        return String(status || '').trim().toLowerCase();
-    }
-
-    function slotMatchesIdentityRole(slot, role) {
-        var field = readAssetSlotValue(slot, ['field']).toLowerCase();
-        var kind = readAssetSlotValue(slot, ['kind']).toLowerCase();
-        var slotId = readAssetSlotValue(slot, ['slot_id', 'id', 'key']).toLowerCase();
-        var label = readAssetSlotValue(slot, ['label']).toLowerCase();
-        if (role === 'icon') {
-            return ['icon', 'favicon', 'site.icon'].indexOf(field) !== -1
-                || kind === 'site_title_icon'
-                || slotId.indexOf('title-icon') !== -1
-                || slotId.indexOf('favicon') !== -1
-                || label.indexOf('title icon') !== -1
-                || label.indexOf('favicon') !== -1;
-        }
-        return false;
-    }
-
-    function resolveIdentityAssetSlot(workspaceState, role) {
-        var slots = normalizeAssetManifestSlots(readAssetManifestFromWorkspaceState(workspaceState));
-        for (var i = 0; i < slots.length; i += 1) {
-            if (slotMatchesIdentityRole(slots[i], role)) {
-                return slots[i];
-            }
-        }
-        return null;
-    }
-
-    function resolveBrandAssetUrl(profile, slot, role) {
-        var slotUrl = readAssetSlotValue(slot, ['final_url', 'url']);
-        if (slotUrl) {
-            return slotUrl;
-        }
-        void role;
-        return String((profile && (profile.icon || profile.favicon)) || '').trim();
-    }
-
-    function isIdentityAssetLoading(slot) {
-        var status = normalizeAssetStatus(readAssetSlotValue(slot, ['status', 'queue_status']));
-        return ['queued', 'generating', 'running'].indexOf(status) !== -1;
-    }
-
-    function resolveIdentityAssetStatusText(role, slot, assetUrl) {
-        var status = normalizeAssetStatus(readAssetSlotValue(slot, ['status', 'queue_status']));
-        var error = readAssetSlotValue(slot, ['error_message', 'error']);
-        if (error) {
-            return error;
-        }
-        if (status === 'queued') {
-            return 'Title icon generation queued...';
-        }
-        if (status === 'generating' || status === 'running') {
-            return 'Generating title icon...';
-        }
-        if (assetUrl) {
-            return 'Title icon auto-saved from AI asset slot.';
-        }
-
-        void role;
-        return 'Waiting for AI title icon generation.';
-    }
-
-    function syncBrandIdentityPanelsFromWorkspaceState(workspaceState) {
-        var profile = readWebsiteProfileFromWorkspaceState(workspaceState);
-        var scope = workspaceState && workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
-        var siteTitle = String((profile.site_title || scope.site_title || '') || '').trim();
-        document.querySelectorAll('[data-pb-site-title-preview]').forEach(function (el) {
-            el.textContent = siteTitle;
-        });
-
-        ['icon'].forEach(function (role) {
-            var slot = resolveIdentityAssetSlot(workspaceState, role);
-            var assetUrl = resolveBrandAssetUrl(profile, slot, role);
-            var loading = isIdentityAssetLoading(slot);
-            var statusText = resolveIdentityAssetStatusText(role, slot, assetUrl);
-            var hasError = !!readAssetSlotValue(slot, ['error_message', 'error']);
-            document.querySelectorAll('[data-brand-asset-role="' + role + '"]').forEach(function (card) {
-                var image = card.querySelector('[data-brand-asset-image]');
-                var placeholder = card.querySelector('[data-brand-asset-placeholder]');
-                var status = card.querySelector('[data-brand-asset-status]');
-                var previousUrl = String(card.getAttribute('data-brand-asset-current-url') || '');
-                card.classList.toggle('loading', loading);
-                if (status) {
-                    status.textContent = statusText;
-                    status.classList.remove('text-danger', 'text-success', 'text-muted');
-                    status.classList.add(hasError ? 'text-danger' : (assetUrl ? 'text-success' : 'text-muted'));
-                }
-                if (image) {
-                    if (assetUrl) {
-                        if (image.getAttribute('src') !== assetUrl) {
-                            image.setAttribute('src', assetUrl);
-                        }
-                        image.classList.remove('d-none');
-                    } else {
-                        image.removeAttribute('src');
-                        image.classList.add('d-none');
-                    }
-                }
-                if (placeholder) {
-                    placeholder.classList.toggle('d-none', !!assetUrl);
-                    if (!assetUrl) {
-                        placeholder.textContent = 'Title icon will appear here';
-                    }
-                }
-                if (assetUrl && assetUrl !== previousUrl) {
-                    card.setAttribute('data-brand-asset-current-url', assetUrl);
-                    card.classList.remove('is-updated');
-                    void card.offsetWidth;
-                    card.classList.add('is-updated');
-                } else if (!assetUrl) {
-                    card.setAttribute('data-brand-asset-current-url', '');
-                    card.classList.remove('is-updated');
-                }
-            });
-        });
     }
 
     function collectAssetSlotViewModel(slot) {
@@ -6231,6 +6111,238 @@
         showConfirmedPlanModal(String(viewConfirmedPlanBtn.getAttribute('data-plan-type') || 'stage1'));
     });
 
+    var planPagePreviewProgressByKey = Object.create(null);
+
+    function isPlanPreviewProgressPageKey(key) {
+        var normalized = String(key || '').trim();
+        return normalized !== ''
+            && normalized !== 'shared'
+            && ['logo_generation', 'requirement_expansion', 'theme_design'].indexOf(normalized) === -1;
+    }
+
+    function normalizePlanPreviewProgressStatus(status) {
+        var normalized = String(status || '').trim().toLowerCase();
+        if (normalized === 'done' || normalized === 'passed' || normalized === 'persisted' || normalized === 'complete' || normalized === 'completed') {
+            return 'done';
+        }
+        if (normalized === 'failed' || normalized === 'error' || normalized === 'retryable_failure' || normalized === 'blocked') {
+            return 'failed';
+        }
+        if (normalized === 'running' || normalized === 'processing' || normalized === 'retrying' || normalized === 'queued' || normalized === 'pending') {
+            return 'running';
+        }
+        return normalized || 'idle';
+    }
+
+    function normalizePlanPreviewProgressCount(value) {
+        var parsed = parseInt(String(value == null ? '' : value), 10);
+        return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    }
+
+    function readStageOneProgressPageType(item) {
+        if (!item || typeof item !== 'object') {
+            return String(item || '').trim();
+        }
+        return String(item.page_type || item.pageType || item.type || item.key || '').trim();
+    }
+
+    function collectStageOneProgressDetails(progress) {
+        var details = progress && typeof progress === 'object' ? progress.details : null;
+        if (Array.isArray(details)) {
+            return details;
+        }
+        if (details && typeof details === 'object') {
+            return Object.keys(details).map(function (key) {
+                var row = details[key] && typeof details[key] === 'object' ? Object.assign({}, details[key]) : {};
+                if (!row.page_type) {
+                    row.page_type = key;
+                }
+                return row;
+            });
+        }
+        return [];
+    }
+
+    function countStageOneProgressBlocks(row) {
+        var blocks = Array.isArray(row.block_rows)
+            ? row.block_rows
+            : (Array.isArray(row.block_statuses) ? row.block_statuses : []);
+        var counts = { total: 0, done: 0, running: 0, failed: 0, pending: 0 };
+        blocks.forEach(function (block) {
+            block = block && typeof block === 'object' ? block : {};
+            counts.total += 1;
+            var status = normalizePlanPreviewProgressStatus(block.status || block.state);
+            if (status === 'done') {
+                counts.done += 1;
+            } else if (status === 'failed') {
+                counts.failed += 1;
+            } else if (status === 'running') {
+                counts.running += 1;
+            } else {
+                counts.pending += 1;
+            }
+        });
+        return counts;
+    }
+
+    function ensureStageOneProgressBucket(buckets, pageType) {
+        if (!isPlanPreviewProgressPageKey(pageType)) {
+            return null;
+        }
+        if (!buckets[pageType]) {
+            buckets[pageType] = {
+                page_type: pageType,
+                total: 0,
+                done: 0,
+                running: 0,
+                failed: 0,
+                pending: 0,
+                page_index: 0,
+                page_total: 0,
+                page_status: 'idle'
+            };
+        }
+        return buckets[pageType];
+    }
+
+    function applyStageOneProgressDetailToBucket(bucket, row) {
+        if (!bucket || !row || typeof row !== 'object') {
+            return;
+        }
+        var blockCounts = countStageOneProgressBlocks(row);
+        var explicitTotal = normalizePlanPreviewProgressCount(row.block_total || row.total || row.expected_blocks || row.executable_blocks);
+        var total = explicitTotal > 0 ? explicitTotal : blockCounts.total;
+        var done = normalizePlanPreviewProgressCount(row.block_done_count || row.done || row.completed_blocks);
+        var running = normalizePlanPreviewProgressCount(row.block_running_count || row.running);
+        var failed = normalizePlanPreviewProgressCount(row.block_failed_count || row.failed);
+        var pending = normalizePlanPreviewProgressCount(row.block_pending_count || row.pending || row.todo);
+        var rowStatus = normalizePlanPreviewProgressStatus(row.status || row.state || row.queue_status);
+        if (bucket.page_status === 'idle' && rowStatus !== 'idle') {
+            bucket.page_status = rowStatus;
+        }
+        if (blockCounts.total > 0) {
+            done = Math.max(done, blockCounts.done);
+            running = Math.max(running, blockCounts.running);
+            failed = Math.max(failed, blockCounts.failed);
+            pending = Math.max(pending, blockCounts.pending);
+        }
+        if (total <= 0) {
+            total = done + running + failed + pending;
+        }
+        if ((bucket.page_status === 'done' || rowStatus === 'done') && total > 0 && done <= 0) {
+            done = total;
+        }
+        if (rowStatus === 'running' && running <= 0 && done < total) {
+            running = 1;
+        }
+        if (rowStatus === 'failed' && failed <= 0) {
+            failed = 1;
+        }
+        bucket.total = Math.max(bucket.total, total);
+        bucket.done = Math.max(bucket.done, done);
+        bucket.running = Math.max(bucket.running, running);
+        bucket.failed = Math.max(bucket.failed, failed);
+        bucket.pending = Math.max(bucket.pending, pending);
+    }
+
+    function buildPlanPreviewProgressPresentation(bucket) {
+        bucket = bucket && typeof bucket === 'object' ? bucket : {};
+        var total = normalizePlanPreviewProgressCount(bucket.total);
+        var done = normalizePlanPreviewProgressCount(bucket.done);
+        var running = normalizePlanPreviewProgressCount(bucket.running);
+        var failed = normalizePlanPreviewProgressCount(bucket.failed);
+        var pageIndex = normalizePlanPreviewProgressCount(bucket.page_index);
+        var pageTotal = normalizePlanPreviewProgressCount(bucket.page_total);
+        var pageStatus = normalizePlanPreviewProgressStatus(bucket.page_status);
+        var doneLabel = <?= $pbAiScriptJson((string)__('已完成'), $pbAiScriptJsonHexFlags) ?>;
+        var failedLabel = <?= $pbAiScriptJson((string)__('失败'), $pbAiScriptJsonHexFlags) ?>;
+        if (total > 0) {
+            var current = Math.max(done, done + (running > 0 ? 1 : 0), failed > 0 ? done + failed : 0);
+            current = Math.max(0, Math.min(total, current));
+            if (done >= total) {
+                return { status: 'done', text: doneLabel };
+            }
+            if (failed > 0 && running <= 0) {
+                return { status: 'failed', text: failedLabel + ' ' + current + '/' + total };
+            }
+            return { status: 'running', text: current + '/' + total };
+        }
+        if (pageStatus === 'done') {
+            return { status: 'done', text: doneLabel };
+        }
+        if (pageStatus === 'failed') {
+            return { status: 'failed', text: failedLabel };
+        }
+        if (pageTotal > 0 && pageIndex > 0) {
+            return { status: 'running', text: Math.min(pageIndex, pageTotal) + '/' + pageTotal };
+        }
+        return { status: 'idle', text: '' };
+    }
+
+    function applyPlanPreviewProgressToButton(btn) {
+        if (!btn) {
+            return;
+        }
+        var key = String(btn.getAttribute('data-pb-plan-page-preview-tab') || '').trim();
+        var label = String(btn.getAttribute('data-pb-plan-page-preview-label') || btn.textContent || key || '').trim();
+        var entry = key && planPagePreviewProgressByKey[key] ? planPagePreviewProgressByKey[key] : null;
+        var text = entry ? String(entry.text || '').trim() : '';
+        btn.textContent = text !== '' ? (label + ' / ' + text) : label;
+        btn.classList.toggle('text-success', !!entry && entry.status === 'done');
+        btn.classList.toggle('text-danger', !!entry && entry.status === 'failed');
+        btn.classList.toggle('text-warning', !!entry && entry.status === 'running');
+    }
+
+    function syncPlanPagePreviewProgressFromStageOneProgress(progress) {
+        var source = progress && typeof progress === 'object' ? progress : {};
+        var buckets = Object.create(null);
+        var totalPages = normalizePlanPreviewProgressCount(source.total);
+        [
+            { key: 'done', status: 'done' },
+            { key: 'running', status: 'running' },
+            { key: 'failed', status: 'failed' },
+            { key: 'pending', status: 'pending' }
+        ].forEach(function (config) {
+            var list = Array.isArray(source[config.key]) ? source[config.key] : [];
+            list.forEach(function (item, index) {
+                var pageType = readStageOneProgressPageType(item);
+                var bucket = ensureStageOneProgressBucket(buckets, pageType);
+                if (!bucket) {
+                    return;
+                }
+                bucket.page_total = totalPages;
+                bucket.page_status = config.status;
+                if (config.status === 'done') {
+                    bucket.done = Math.max(bucket.done, bucket.total > 0 ? bucket.total : 1);
+                    bucket.page_index = Math.max(bucket.page_index, index + 1);
+                } else if (config.status === 'failed') {
+                    bucket.failed = Math.max(bucket.failed, 1);
+                    bucket.page_index = Math.max(bucket.page_index, normalizePlanPreviewProgressCount(source.done_count) + normalizePlanPreviewProgressCount(source.running_count) + index + 1);
+                } else if (config.status === 'running') {
+                    bucket.running = Math.max(bucket.running, 1);
+                    bucket.page_index = normalizePlanPreviewProgressCount(source.done_count) + index + 1;
+                }
+            });
+        });
+        collectStageOneProgressDetails(source).forEach(function (row) {
+            row = row && typeof row === 'object' ? row : {};
+            var pageType = readStageOneProgressPageType(row);
+            var bucket = ensureStageOneProgressBucket(buckets, pageType);
+            applyStageOneProgressDetailToBucket(bucket, row);
+        });
+        Object.keys(buckets).forEach(function (pageType) {
+            var presentation = buildPlanPreviewProgressPresentation(buckets[pageType]);
+            planPagePreviewProgressByKey[pageType] = {
+                status: presentation.status,
+                text: presentation.text
+            };
+            if (presentation.status !== 'idle' || presentation.text !== '') {
+                markPageGenerationStatus(pageType, presentation.status, presentation.text);
+            }
+        });
+        syncPlanPagePreviewTabs();
+    }
+
     function filterPlanPreviewPage(pageType) {
         var key = String(pageType || '').trim();
         document.querySelectorAll('[data-pb-preview-scheme-section]').forEach(function (section) {
@@ -6251,16 +6363,18 @@
     }
 
     function appendPlanPreviewSwitchButton(tabs, key, label, active) {
-        if (!tabs || String(key || '').trim() === '') {
+        var normalizedKey = String(key || '').trim();
+        if (!tabs || normalizedKey === '') {
             return null;
         }
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'btn btn-sm ' + (active ? 'btn-primary active' : 'btn-outline-primary');
-        btn.setAttribute('data-pb-plan-page-preview-tab', String(key || '').trim());
+        btn.setAttribute('data-pb-plan-page-preview-tab', normalizedKey);
+        btn.setAttribute('data-pb-plan-page-preview-label', String(label || key || '').trim());
         btn.setAttribute('role', 'tab');
         btn.setAttribute('aria-selected', active ? 'true' : 'false');
-        btn.textContent = String(label || key || '').trim();
+        applyPlanPreviewProgressToButton(btn);
         tabs.appendChild(btn);
         return btn;
     }
@@ -6275,22 +6389,23 @@
         var hasRequirementExpansion = !!document.querySelector('[data-pb-preview-scheme-section="requirement_expansion"]');
         var hasThemeDesign = !!document.querySelector('[data-pb-preview-scheme-section="theme_design"]');
         var hasLogoGeneration = !!document.querySelector('[data-pb-preview-scheme-section="logo_generation"]');
+        var seenKeys = Object.create(null);
         tabs.innerHTML = '';
-        if (empty) {
-            empty.classList.toggle('d-none', pages.length > 0 || hasRequirementExpansion || hasThemeDesign || hasLogoGeneration);
-        }
         var activeKey = '';
+        if (hasLogoGeneration) {
+            appendPlanPreviewSwitchButton(tabs, 'logo_generation', previewLabels.logoGenerationTab || 'Logo generation', activeKey === '');
+            seenKeys.logo_generation = true;
+            activeKey = activeKey || 'logo_generation';
+        }
         if (hasRequirementExpansion) {
             appendPlanPreviewSwitchButton(tabs, 'requirement_expansion', <?= $pbAiScriptJson((string)__('需求拓展'), $pbAiScriptJsonHexFlags) ?>, activeKey === '');
+            seenKeys.requirement_expansion = true;
             activeKey = activeKey || 'requirement_expansion';
         }
         if (hasThemeDesign) {
             appendPlanPreviewSwitchButton(tabs, 'theme_design', <?= $pbAiScriptJson((string)__('主题设计'), $pbAiScriptJsonHexFlags) ?>, activeKey === '');
+            seenKeys.theme_design = true;
             activeKey = activeKey || 'theme_design';
-        }
-        if (hasLogoGeneration) {
-            appendPlanPreviewSwitchButton(tabs, 'logo_generation', previewLabels.logoGenerationTab || 'Logo generation', activeKey === '');
-            activeKey = activeKey || 'logo_generation';
         }
         pages.forEach(function (page, index) {
             var pageType = String(page.getAttribute('data-pb-preview-page-type') || '').trim();
@@ -6300,8 +6415,20 @@
             var heading = page.querySelector('h3,h2,h4');
             var label = heading ? String(heading.textContent || '').trim() : fallbackPageLabel(pageType, '');
             appendPlanPreviewSwitchButton(tabs, pageType, label || pageType, activeKey === '');
+            seenKeys[pageType] = true;
             activeKey = activeKey || pageType;
         });
+        Object.keys(planPagePreviewProgressByKey).forEach(function (pageType) {
+            if (!isPlanPreviewProgressPageKey(pageType) || seenKeys[pageType]) {
+                return;
+            }
+            appendPlanPreviewSwitchButton(tabs, pageType, fallbackPageLabel(pageType, '') || pageType, activeKey === '');
+            seenKeys[pageType] = true;
+            activeKey = activeKey || pageType;
+        });
+        if (empty) {
+            empty.classList.toggle('d-none', tabs.children.length > 0 || pages.length > 0 || hasRequirementExpansion || hasThemeDesign || hasLogoGeneration);
+        }
         if (tabs.dataset.pbBound !== '1') {
             tabs.dataset.pbBound = '1';
             tabs.addEventListener('click', function (event) {
