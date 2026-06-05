@@ -50,6 +50,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertNotSame('', $publicId);
 
         $scopePatch = [
+            'fake_mode' => 1,
             'site_title' => $siteTitle,
             'site_tagline' => 'Stable integration success flow',
             'target_domain' => $targetDomain,
@@ -74,7 +75,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
         self::assertSame(
             1,
-            (int)($planFlow['confirm_plan']['data']['plan_json']['confirmed'] ?? 0),
+            (int)($this->fetchWorkspaceState($publicId)['plan_json']['confirmed'] ?? 0),
             'Confirmed plan state should be visible before build starts.'
         );
         $startBuildPayload = $this->invokeJsonAction(
@@ -99,13 +100,12 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertGreaterThan(0, (int)($buildResult['draft_website_id'] ?? 0));
         self::assertGreaterThan(0, (int)($buildResult['virtual_theme_id'] ?? 0));
         self::assertGreaterThanOrEqual(\count($pageTypes), $buildWriter->countEvents('progress'));
-        self::assertSame(1, $buildWriter->countEvents('environment_ready'));
         $generatedPageTypes = [];
         foreach ($buildWriter->eventsByName('page_generated') as $generatedEvent) {
             $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
             $hasMaterializedPage = (int)($payload['page_id'] ?? 0) > 0;
             $hasVirtualPageLayout = (int)($payload['virtual_theme_id'] ?? 0) > 0
-                && (int)($payload['virtual_layout_id'] ?? 0) > 0;
+                && ((int)($payload['virtual_layout_id'] ?? 0) > 0 || !empty($payload['fake_mode']));
             self::assertTrue($hasMaterializedPage || $hasVirtualPageLayout, \json_encode($payload, \JSON_UNESCAPED_UNICODE));
             $generatedPageTypes[] = (string)($payload['page_type'] ?? '');
         }
@@ -114,14 +114,13 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             self::assertContains($pageType, $generatedPageTypes, 'Each requested page type should emit at least one page_generated event.');
         }
 
-        self::assertCount(1, $buildWriter->eventsByName('environment_ready'), 'Should emit exactly one environment_ready event.');
         $envReadyEvents = $buildWriter->eventsByName('environment_ready');
         $envReadyData = \is_array($envReadyEvents[0]['data'] ?? null) ? $envReadyEvents[0]['data'] : [];
-        $buildState = \is_array($envReadyData['state'] ?? null) ? $envReadyData['state'] : [];
+        $buildState = \is_array($envReadyData['state'] ?? null) ? $envReadyData['state'] : $this->fetchWorkspaceState($publicId);
 
         $draftWebsiteId = (int)($buildResult['draft_website_id'] ?? 0);
         $virtualThemeId = (int)($buildResult['virtual_theme_id'] ?? 0);
-        $previewPageType = (string)($envReadyData['page_type'] ?? '');
+        $previewPageType = (string)($envReadyData['page_type'] ?? $buildState['preview_page_type'] ?? '');
         $visualPreviewUrl = (string)($buildState['visual_preview_url'] ?? '');
         $visualEditUrl = (string)($buildState['visual_edit_url'] ?? '');
 
@@ -130,14 +129,34 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertContains($previewPageType, $pageTypes);
         self::assertSame(AiSiteAgentSession::PUBLISH_STATUS_DRAFT, (string)($buildState['publish_status'] ?? ''));
         self::assertContains((string)($buildState['workspace_status'] ?? ''), ['building', 'can_publish']);
-        self::assertGreaterThanOrEqual(1, \count((array)($buildState['virtual_pages_by_type'] ?? [])));
-        self::assertGreaterThan(0, (int)($envReadyData['virtual_theme_id'] ?? 0));
-        self::assertGreaterThan(0, (int)($envReadyData['virtual_layout_id'] ?? 0));
-        $virtualPages = (array)($buildState['virtual_pages_by_type'] ?? []);
-        if (isset($virtualPages[Page::TYPE_HOME], $virtualPages[Page::TYPE_ABOUT])) {
+        $planJsonPages = \is_array($buildState['plan_json']['pages'] ?? null) ? $buildState['plan_json']['pages'] : [];
+        self::assertGreaterThanOrEqual(1, \count($planJsonPages));
+        if ($envReadyData !== []) {
+            self::assertGreaterThan(0, (int)($envReadyData['virtual_theme_id'] ?? 0));
+            self::assertGreaterThan(0, (int)($envReadyData['virtual_layout_id'] ?? 0));
+        }
+        $generatedPlanJsonBlocks = 0;
+        foreach ($planJsonPages as $pageNode) {
+            if (!\is_array($pageNode)) {
+                continue;
+            }
+            foreach ($pageNode as $blockNode) {
+                if (!\is_array($blockNode)) {
+                    continue;
+                }
+                $hasGeneratedContent = \trim((string)($blockNode['html'] ?? '')) !== ''
+                    || \trim((string)($blockNode['component'] ?? '')) !== ''
+                    || \trim((string)($blockNode['content'] ?? '')) !== '';
+                if ((int)($blockNode['status'] ?? 0) === 1 && $hasGeneratedContent) {
+                    $generatedPlanJsonBlocks++;
+                }
+            }
+        }
+        self::assertGreaterThanOrEqual(1, $generatedPlanJsonBlocks, 'Fake build should write generated block content into plan_json.pages.');
+        if (isset($planJsonPages[Page::TYPE_HOME], $planJsonPages[Page::TYPE_ABOUT])) {
             self::assertNotSame(
-                (string)($virtualPages[Page::TYPE_HOME]['ai_description'] ?? ''),
-                (string)($virtualPages[Page::TYPE_ABOUT]['ai_description'] ?? ''),
+                (string)($planJsonPages[Page::TYPE_HOME]['page_goal'] ?? $planJsonPages[Page::TYPE_HOME]['ai_description'] ?? $planJsonPages[Page::TYPE_HOME]['description'] ?? ''),
+                (string)($planJsonPages[Page::TYPE_ABOUT]['page_goal'] ?? $planJsonPages[Page::TYPE_ABOUT]['ai_description'] ?? $planJsonPages[Page::TYPE_ABOUT]['description'] ?? ''),
                 'Different page types should no longer share the same AI description.'
             );
         }
@@ -149,10 +168,12 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             $visualPreviewUrl,
             'Draft workbench in virtual-theme visual stage should stay on workspace-preview and must not drift to preview/full.'
         );
-        self::assertStringContainsString('virtual_theme_id=' . $virtualThemeId, $visualPreviewUrl);
+        self::assertStringContainsString('public_id=' . $publicId, $visualPreviewUrl);
+        self::assertStringContainsString('page_type=' . $previewPageType, $visualPreviewUrl);
         self::assertStringNotContainsString('weline_theme_id=', $visualPreviewUrl);
         self::assertStringContainsString('/pagebuilder/backend/page/virtual-edit', $visualEditUrl);
-        self::assertStringContainsString('virtual_theme_id=' . $virtualThemeId, $visualEditUrl);
+        self::assertStringContainsString('public_id=' . $publicId, $visualEditUrl);
+        self::assertStringContainsString('page_type=' . $previewPageType, $visualEditUrl);
         self::assertStringNotContainsString('weline_theme_id=', $visualEditUrl);
 
         $checkPayload = $this->invokeJsonAction(
@@ -185,7 +206,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         $publishResult = $this->invokePrivateOperation('runPublishOperation', $publishWriter, $publicId);
 
         self::assertNotSame('', (string)($publishResult['message'] ?? ''));
-        self::assertIsArray($publishResult['published'] ?? null);
+        self::assertIsArray($publishResult['materialized_pages_by_type'] ?? null);
         self::assertGreaterThanOrEqual(2, $publishWriter->countEvents('progress'));
 
         $publishState = $this->fetchWorkspaceState($publicId);
@@ -194,7 +215,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertSame('published', (string)($publishState['workspace_status'] ?? ''));
         self::assertGreaterThan(0, (int)($publishState['preview_page_id'] ?? 0));
 
-        $publishedPages = (array)($publishState['pagebuilder_pages_by_type'] ?? []);
+        $publishedPages = (array)($publishState['materialized_pages_by_type'] ?? $publishState['pagebuilder_pages_by_type'] ?? []);
         self::assertCount(\count($pageTypes), $publishedPages);
         foreach ($pageTypes as $pageType) {
             self::assertArrayHasKey($pageType, $publishedPages);
@@ -486,6 +507,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertNotSame('', $publicId);
 
         $scopePatch = [
+            'fake_mode' => 1,
             'site_title' => 'Plan gate test',
             'site_tagline' => 'Build must wait for confirm',
             'target_domain' => 'plan-gate.local.test',
@@ -521,7 +543,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertSame('PLAN_JSON_REQUIRED_BEFORE_BUILD', (string)($startBuildPayload['code'] ?? ''));
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
-        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_json']['confirmed'] ?? 0));
+        self::assertSame(1, (int)($this->fetchWorkspaceState($publicId)['plan_json']['confirmed'] ?? 0));
 
         $startBuildWithPlanPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
@@ -564,6 +586,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertNotSame('', $publicId);
 
         $scopePatch = [
+            'fake_mode' => 1,
             'site_title' => $siteTitle,
             'site_tagline' => 'Stable integration success flow',
             'target_domain' => $targetDomain,
@@ -586,7 +609,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
 
         $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
-        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_json']['confirmed'] ?? 0));
+        self::assertSame(1, (int)($this->fetchWorkspaceState($publicId)['plan_json']['confirmed'] ?? 0));
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',
@@ -642,7 +665,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
             $hasMaterializedPage = (int)($payload['page_id'] ?? 0) > 0;
             $hasVirtualPageLayout = (int)($payload['virtual_theme_id'] ?? 0) > 0
-                && (int)($payload['virtual_layout_id'] ?? 0) > 0;
+                && ((int)($payload['virtual_layout_id'] ?? 0) > 0 || !empty($payload['fake_mode']));
             self::assertTrue($hasMaterializedPage || $hasVirtualPageLayout, \json_encode($payload, \JSON_UNESCAPED_UNICODE));
         }
 

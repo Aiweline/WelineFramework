@@ -443,6 +443,16 @@ $showAllToggleUrl = $showAllSessions
         }
     }
 
+    function isCreateFakeModeRequest() {
+        try {
+            var params = new URLSearchParams(String(window.location.search || ''));
+            var value = String(params.get('fake_mode') || '').trim().toLowerCase();
+            return value === '1' || value === 'true' || value === 'yes' || value === 'on';
+        } catch (e) {
+            return false;
+        }
+    }
+
     function collectCreatePayload() {
         var mode = directionModeEl ? String(directionModeEl.value || 'auto') : 'auto';
         var code = directionSelectEl ? String(directionSelectEl.value || '') : '';
@@ -450,7 +460,8 @@ $showAllToggleUrl = $showAllSessions
             site_title: createTitleEl ? String(createTitleEl.value || '').trim() : '',
             brief_description: createBriefEl ? String(createBriefEl.value || '').trim() : '',
             design_direction_mode: mode,
-            design_direction_code: mode === 'manual' ? code : ''
+            design_direction_code: mode === 'manual' ? code : '',
+            fake_mode: isCreateFakeModeRequest() ? '1' : '0'
         };
     }
 
@@ -538,7 +549,15 @@ $showAllToggleUrl = $showAllSessions
                 body: createBody
             }).then(function (r) { return r.json(); }).then(function (data) {
                 if (data && data.success && data.workspace_url) {
-                    window.location.href = data.workspace_url;
+                    var nextUrl = String(data.workspace_url || '');
+                    if (payload.fake_mode === '1') {
+                        try {
+                            var parsedUrl = new URL(nextUrl, window.location.href);
+                            parsedUrl.searchParams.set('fake_mode', '1');
+                            nextUrl = parsedUrl.toString();
+                        } catch (e) {}
+                    }
+                    window.location.href = nextUrl;
                     return;
                 }
                 var msg = (data && data.message) ? data.message : <?= json_encode(__('创建会话失败，请重试'), JSON_THROW_ON_ERROR) ?>;

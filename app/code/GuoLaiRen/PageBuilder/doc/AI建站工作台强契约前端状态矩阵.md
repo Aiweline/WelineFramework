@@ -18,6 +18,12 @@ Frontend status readers consume only canonical workspace/SSE fields:
 
 Do not read legacy queue-status aliases. If `queue_status` is missing, fix the backend writer or SSE normalizer.
 
+## Page Type Selection
+
+- `scope.page_types` is the authoritative selected page-type list for the workspace form.
+- `scope.page_types_user_customized=false` means the default selection is `home_page` and `about_page`; the frontend must not expand it to every available page type.
+- If an older workspace state contains every selectable page type while `page_types_user_customized=false`, the frontend should normalize it back to the default selection and autosave the corrected scope.
+
 ## Status Matrix
 
 | Canonical value | UI state | Button rule |

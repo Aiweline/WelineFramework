@@ -239,11 +239,6 @@ $pbAiPhaseOnePlanPresent = $planJsonHasPages($scopePlanJson);
 
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
-$selectedPageTypes = \array_values(\array_filter(\array_map(static fn($type): string => \trim((string)$type), $pageTypes), static fn(string $type): bool => $type !== ''));
-if ($selectedPageTypes === []) {
-    $selectedPageTypes = ['home_page', 'about_page'];
-}
-$selectedPageTypesSafe = \is_array($selectedPageTypes ?? null) ? $selectedPageTypes : ['home_page', 'about_page'];
 $pageTypesUserCustomizedRaw = $scope['page_types_user_customized'] ?? null;
 if (\is_bool($pageTypesUserCustomizedRaw)) {
     $pageTypesUserCustomized = $pageTypesUserCustomizedRaw;
@@ -254,6 +249,11 @@ if (\is_bool($pageTypesUserCustomizedRaw)) {
 } else {
     $pageTypesUserCustomized = false;
 }
+$selectedPageTypes = \array_values(\array_filter(\array_map(static fn($type): string => \trim((string)$type), $pageTypes), static fn(string $type): bool => $type !== ''));
+if ($selectedPageTypes === []) {
+    $selectedPageTypes = $pageTypesUserCustomized ? ['home_page'] : ['home_page', 'about_page'];
+}
+$selectedPageTypesSafe = \is_array($selectedPageTypes ?? null) ? $selectedPageTypes : ['home_page', 'about_page'];
 $pageTypeLabels = $this->getData('page_type_labels');
 $pageTypeLabels = \is_array($pageTypeLabels) ? $pageTypeLabels : [];
 if ($pageTypeLabels === []) {
