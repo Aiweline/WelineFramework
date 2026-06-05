@@ -36,6 +36,7 @@ class Config extends BackendController
     public function index(): string
     {
         $senders = $this->data->getSenders('Weline_Smtp');
+        $mailAccounts = $this->loadMailSmtpAccounts();
         $contacts = [];
         foreach ($senders as $s) {
             $code = $s['code'] ?? '';
@@ -45,6 +46,7 @@ class Config extends BackendController
         }
         $legacy = $this->data->get();
         $this->assign('senders', $senders);
+        $this->assign('mail_accounts', $mailAccounts);
         $this->assign('sender_contacts', $contacts);
         $this->assign('legacy', $legacy);
         return $this->fetch('Weline_Smtp::Backend/Config');
@@ -141,9 +143,37 @@ class Config extends BackendController
                     }
                 }
                 foreach ($senders as &$s) {
-                    $code = $s['code'] ?? '';
+                    $code = trim((string)($s['code'] ?? ''));
+                    $s['code'] = $code;
                     if ($code !== '' && (trim((string)($s['smtp_password'] ?? '')) === '') && isset($existingByCode[$code]['smtp_password'])) {
                         $s['smtp_password'] = $existingByCode[$code]['smtp_password'];
+                    }
+                    $sourceType = (string)($s['source_type'] ?? 'external');
+                    $sourceType = in_array($sourceType, ['external', 'mail_account'], true) ? $sourceType : 'external';
+                    $s['source_type'] = $sourceType;
+                    if ($sourceType === 'mail_account') {
+                        $mailAccountId = (int)($s['mail_account_id'] ?? 0);
+                        if ($mailAccountId <= 0) {
+                            return $this->jsonError(__('请选择自建邮箱账号'));
+                        }
+                        $mailConfig = $this->loadMailSmtpAccountConfig($mailAccountId);
+                        if ($mailConfig === null) {
+                            return $this->jsonError(__('自建邮箱账号不存在或未启用'));
+                        }
+                        $s['mail_account_id'] = (string)$mailAccountId;
+                        $s['mail_account_email'] = (string)($mailConfig['email'] ?? '');
+                        $s['mail_domain_id'] = (string)($mailConfig['domain_id'] ?? '');
+                        $s['mail_domain_name'] = (string)($mailConfig['domain_name'] ?? '');
+                        $s['mail_engine'] = (string)($mailConfig['engine'] ?? '');
+                        $s['mail_is_fake'] = !empty($mailConfig['is_fake']) ? '1' : '0';
+                        $s['smtp_host'] = (string)($mailConfig['smtp_host'] ?? '');
+                        $s['smtp_port'] = (string)($mailConfig['smtp_port'] ?? '587');
+                        $s['smtp_secure'] = (string)($mailConfig['smtp_secure'] ?? 'tls');
+                        $s['smtp_auth'] = (string)($mailConfig['smtp_auth'] ?? '1');
+                        $s['smtp_username'] = (string)($mailConfig['email'] ?? '');
+                        if (trim((string)($s['name'] ?? '')) === '') {
+                            $s['name'] = (string)($mailConfig['display_name'] ?? $mailConfig['email'] ?? $code);
+                        }
                     }
                 }
                 unset($s);
@@ -173,5 +203,31 @@ class Config extends BackendController
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode(['success' => false, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function loadMailSmtpAccounts(): array
+    {
+        try {
+            $result = w_query('mail', 'getSmtpAccounts', ['limit' => 200]);
+            if (is_array($result) && !empty($result['success']) && is_array($result['items'] ?? null)) {
+                return $result['items'];
+            }
+        } catch (\Throwable) {
+        }
+
+        return [];
+    }
+
+    private function loadMailSmtpAccountConfig(int $accountId): ?array
+    {
+        try {
+            $result = w_query('mail', 'getSmtpAccountConfig', ['account_id' => $accountId]);
+            if (is_array($result) && !empty($result['success']) && is_array($result['config'] ?? null)) {
+                return $result['config'];
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
     }
 }

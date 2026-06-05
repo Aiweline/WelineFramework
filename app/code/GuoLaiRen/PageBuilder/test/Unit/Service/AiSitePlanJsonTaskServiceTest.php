@@ -151,10 +151,13 @@ class AiSitePlanJsonTaskServiceTest extends TestCase
         self::assertSame([], $findings);
     }
 
-    public function testPlanJsonBlockStopsAutomaticQueueSelectionAfterThreeAttempts(): void
+    public function testPlanJsonBlockStopsAutomaticQueueSelectionAfterTwoAttempts(): void
     {
         $service = new AiSitePlanJsonTaskService(new AiSitePageBlueprintService());
+        $source = (string)\file_get_contents((new \ReflectionClass(AiSitePlanJsonTaskService::class))->getFileName());
         $taskKey = 'page:home_page:content/home-page-hero';
+
+        self::assertStringContainsString('private const PLAN_JSON_TASK_MAX_AUTOMATIC_ATTEMPTS = 2;', $source);
 
         $scope = $service->ensureTaskScope([
             'page_types' => ['home_page'],
@@ -173,12 +176,6 @@ class AiSitePlanJsonTaskServiceTest extends TestCase
         }
 
         self::assertSame(2, $scope['plan_json']['pages']['home_page']['hero']['attempt_no'] ?? null);
-        self::assertContains($taskKey, \array_column($service->listPendingTasks($scope), 'task_key'));
-
-        $scope = $service->markTaskRunning($scope, $taskKey);
-        $scope = $service->markTaskFailed($scope, $taskKey, 'AI provider failed again.');
-
-        self::assertSame(3, $scope['plan_json']['pages']['home_page']['hero']['attempt_no'] ?? null);
         self::assertSame(-1, $scope['plan_json']['pages']['home_page']['hero']['status'] ?? null);
         self::assertNotContains($taskKey, \array_column($service->listPendingTasks($scope), 'task_key'));
     }
