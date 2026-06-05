@@ -15,7 +15,7 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString("private const CONTENT_ATTEMPT_KEY = 'attempt';", $source);
         self::assertStringContainsString("private const CONTENT_MAX_ATTEMPTS_KEY = 'max_attempts';", $source);
         self::assertStringContainsString("private const CONTENT_LAST_GATE_REASON_KEY = 'last_gate_reason';", $source);
-        self::assertStringContainsString('private const DEFAULT_MAX_ATTEMPTS = 3;', $source);
+        self::assertStringContainsString('private const DEFAULT_MAX_ATTEMPTS = 2;', $source);
         self::assertStringNotContainsString('completion_gate_snapshot', $source);
         self::assertStringContainsString("private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';", $source);
         self::assertStringContainsString('finalizePlanJsonTaskStatesAfterRunLoop($scope)', $source);

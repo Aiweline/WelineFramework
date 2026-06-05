@@ -122,6 +122,50 @@ class MailFakeMailboxService
         return ['success' => true, 'message' => __('测试收件已写入收件箱')];
     }
 
+    public function sendFromAccount(int $accountId, string|array $to, string $subject, string $body): array
+    {
+        if ($accountId <= 0) {
+            return ['success' => false, 'message' => __('请选择已启用的测试邮箱账号')];
+        }
+
+        /** @var MailAccount $account */
+        $account = ObjectManager::getInstance(MailAccount::class)->clear()->load($accountId);
+        if (!$account->getId() || !$this->isUsableFakeAccount($account)) {
+            return ['success' => false, 'message' => __('请选择已启用的测试邮箱账号')];
+        }
+
+        $recipients = $this->normalizeRecipients($to);
+        $subject = trim($subject);
+        $body = trim($body);
+
+        if ($recipients === []) {
+            return ['success' => false, 'message' => __('收件邮箱格式不正确')];
+        }
+
+        if ($subject === '' || $body === '') {
+            return ['success' => false, 'message' => __('主题和正文不能为空')];
+        }
+
+        $fromEmail = (string)$account->getData(MailAccount::schema_fields_EMAIL);
+        $toEmailList = implode(', ', $recipients);
+        $now = date('Y-m-d H:i:s');
+        $this->saveMessage($accountId, self::FOLDER_SENT, $fromEmail, $toEmailList, $subject, $body, true, 'sent', $now);
+
+        $deliveredLocally = false;
+        foreach ($recipients as $recipientEmail) {
+            $recipient = $this->loadAccountByEmail($recipientEmail);
+            if ($recipient && $this->isUsableFakeAccount($recipient)) {
+                $this->saveMessage((int)$recipient->getId(), self::FOLDER_INBOX, $fromEmail, $recipientEmail, $subject, $body, false, 'delivered', $now);
+                $deliveredLocally = true;
+            }
+        }
+
+        return [
+            'success' => true,
+            'message' => $deliveredLocally ? __('测试邮件已发送并投递到本地收件箱') : __('测试邮件已写入发件箱'),
+        ];
+    }
+
     public function isUsableFakeAccount(MailAccount $account): bool
     {
         if ((string)$account->getData(MailAccount::schema_fields_STATUS) !== 'active') {
@@ -210,5 +254,36 @@ class MailFakeMailboxService
         }
 
         return substr($subject, 0, 180);
+    }
+
+    /**
+     * @return string[]
+     */
+    private function normalizeRecipients(string|array $to): array
+    {
+        $emails = [];
+        if (is_string($to)) {
+            $emails[] = $to;
+        } elseif (isset($to['email'])) {
+            $emails[] = (string)$to['email'];
+        } else {
+            foreach ($to as $entry) {
+                if (is_array($entry) && isset($entry['email'])) {
+                    $emails[] = (string)$entry['email'];
+                } elseif (is_string($entry)) {
+                    $emails[] = $entry;
+                }
+            }
+        }
+
+        $valid = [];
+        foreach ($emails as $email) {
+            $email = strtolower(trim($email));
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $valid[] = $email;
+            }
+        }
+
+        return array_values(array_unique($valid));
     }
 }

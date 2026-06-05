@@ -201,6 +201,13 @@ final class SseWriterTest extends TestCase
         $this->assertTrue(true);
     }
 
+    public function testDefaultCooperativeYieldUsesShortDelay(): void
+    {
+        $sse = new SseWriter();
+
+        $this->assertSame(1, $this->readPrivateInt($sse, 'yieldDelayMs'));
+    }
+
     public function testSetCooperativeYieldConfiguresBehavior(): void
     {
         $sse = new SseWriter();
@@ -208,6 +215,11 @@ final class SseWriterTest extends TestCase
         $result = $sse->setCooperativeYield(true, 5);
 
         $this->assertSame($sse, $result);
+        $this->assertSame(5, $this->readPrivateInt($sse, 'yieldDelayMs'));
+
+        $sse->setCooperativeYield(true, 0);
+
+        $this->assertSame(0, $this->readPrivateInt($sse, 'yieldDelayMs'));
     }
 
     public function testSendEventAndYieldSendsEventAndYields(): void
@@ -275,5 +287,16 @@ final class SseWriterTest extends TestCase
         $this->streams[] = $stream;
 
         return $stream;
+    }
+
+    private function readPrivateInt(object $object, string $property): int
+    {
+        $value = (function (string $property) {
+            return $this->{$property};
+        })->call($object, $property);
+
+        self::assertIsInt($value);
+
+        return $value;
     }
 }

@@ -22,7 +22,7 @@ use Weline\Queue\QueueInterface;
 
 class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInterface
 {
-    private const DEFAULT_MAX_ATTEMPTS = 3;
+    private const DEFAULT_MAX_ATTEMPTS = 2;
     private const CONTENT_ATTEMPT_KEY = 'attempt';
     private const CONTENT_MAX_ATTEMPTS_KEY = 'max_attempts';
     private const CONTENT_LAST_GATE_REASON_KEY = 'last_gate_reason';
