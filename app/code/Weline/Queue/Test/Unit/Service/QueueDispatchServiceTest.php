@@ -202,6 +202,27 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString('setResult($message)', $reconcileMethodSource);
     }
 
+    public function testRecoverableNoPidRunningQueuesMustPassRecoveryContract(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $reconcileMethodSource = $this->extractPrivateMethodSource($source, 'reconcileRunningQueues');
+
+        $recoverableOffset = \strpos($reconcileMethodSource, 'resolveDeadWorkerRecoverableQueue($queue) instanceof DeadWorkerRecoverableQueueInterface');
+        $contractOffset = \strpos($reconcileMethodSource, 'shouldRecoverDeadWorker($queue, 0, $output)');
+        $errorOffset = \strpos($reconcileMethodSource, 'marked error to avoid repeated AI dispatch');
+        $genericNoPidOffset = \strrpos($reconcileMethodSource, 'setStatus($queue::status_pending)');
+
+        self::assertNotFalse($recoverableOffset);
+        self::assertNotFalse($contractOffset);
+        self::assertNotFalse($errorOffset);
+        self::assertNotFalse($genericNoPidOffset);
+        self::assertLessThan($contractOffset, $recoverableOffset);
+        self::assertLessThan($errorOffset, $contractOffset);
+        self::assertLessThan($genericNoPidOffset, $errorOffset);
+        self::assertStringContainsString('setStatus($queue::status_error)', $reconcileMethodSource);
+        self::assertStringContainsString('setFinished(true)', $reconcileMethodSource);
+    }
+
     public function testDeadWorkerRecoveryUsesQueueTypeContract(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');

@@ -97,6 +97,10 @@ final class AiSiteAgentStageOneRetryFlowContractTest extends TestCase
         $retryGuard = $this->extractMethodSource($queueSource, 'canScheduleAutomaticPlanRetry');
         self::assertStringContainsString('< self::MAX_PLAN_QUEUE_ATTEMPTS', $retryGuard);
 
+        $deadWorkerRecovery = $this->extractMethodSource($queueSource, 'shouldRecoverDeadWorker');
+        self::assertStringContainsString('if ($deadPid <= 0) {', $deadWorkerRecovery);
+        self::assertStringContainsString('>= self::MAX_PLAN_QUEUE_ATTEMPTS', $deadWorkerRecovery);
+
         $sameQueueRetry = $this->extractMethodSource($queueSource, 'prepareSamePlanQueueRetry');
         self::assertStringContainsString('$content[self::CONTENT_AUTO_RETRY_SCHEDULED_KEY] = 1;', $sameQueueRetry);
         self::assertStringContainsString('$content[\'_force_rebuild\'] = 0;', $sameQueueRetry);
