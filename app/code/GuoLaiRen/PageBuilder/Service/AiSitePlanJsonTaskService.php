@@ -3228,10 +3228,30 @@ class AiSitePlanJsonTaskService
             $scope['ai_content_locale'] ?? null,
             $scope['selected_content_locale'] ?? null,
             $scope['selected_locale'] ?? null,
+            $planJson['content_locale'] ?? null,
+            $planJson['i18n']['content_locale'] ?? null,
+            $planJson['i18n']['primary_locale'] ?? null,
+            $planJson['i18n']['locale'] ?? null,
+            $scope['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['website_profile']['default_language'] ?? null,
             $scope['plan_locale'] ?? null,
             $scope['default_locale'] ?? null,
             $scope['default_language'] ?? null,
+        ]);
+        $siteDefaultLanguage = $this->firstNonEmptyPlanJsonText([
+            $scope['website_profile']['content_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['website_profile']['default_language'] ?? null,
+            $planJson['content_locale'] ?? null,
+            $planJson['i18n']['content_locale'] ?? null,
+            $planJson['i18n']['primary_locale'] ?? null,
+            $planJson['i18n']['locale'] ?? null,
             $scope['content_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $contentLocale,
         ]);
         $languageContract = $this->buildLanguageRuntimeContract($contentLocale);
         $runtimeRoot = $this->planJsonRuntimeContext($scope, $planJson, $contentLocale);
@@ -3263,6 +3283,8 @@ class AiSitePlanJsonTaskService
                 ],
                 'runtime_context' => \array_replace_recursive($runtimeRoot, [
                     'content_locale' => $contentLocale,
+                    'site_default_language' => $siteDefaultLanguage,
+                    'default_language' => $siteDefaultLanguage,
                     'language_contract' => $languageContract,
                     'context_refs' => [
                         'site_context_ref' => 'plan_json',
@@ -3272,6 +3294,8 @@ class AiSitePlanJsonTaskService
                 'plan_context' => [
                     'source' => 'plan_json',
                     'site_context' => $sitePlanContext,
+                    'content_locale' => $contentLocale,
+                    'site_default_language' => $siteDefaultLanguage,
                     'shared_region' => $region,
                     'shared_prompt_context' => \is_array($runtimeRoot['shared_prompt_context'] ?? null) ? $runtimeRoot['shared_prompt_context'] : [],
                 ],
@@ -3403,6 +3427,8 @@ class AiSitePlanJsonTaskService
                 $acceptance = $this->planJsonExecutionAcceptanceContract($blockType);
                 $runtimeContext = \array_replace_recursive($runtimeRoot, [
                     'content_locale' => $contentLocale,
+                    'site_default_language' => $siteDefaultLanguage,
+                    'default_language' => $siteDefaultLanguage,
                     'language_contract' => $languageContract,
                     'context_refs' => [
                         'site_context_ref' => 'plan_json',
@@ -3413,6 +3439,8 @@ class AiSitePlanJsonTaskService
                 $planContext = [
                     'source' => 'plan_json.pages',
                     'site_context' => $sitePlanContext,
+                    'content_locale' => $contentLocale,
+                    'site_default_language' => $siteDefaultLanguage,
                     'page_type' => $pageType,
                     'page' => $this->compactPlanJsonPageForTaskContext($page),
                     'page_goal' => (string)($page['page_goal'] ?? $page['goal'] ?? ''),

@@ -239,7 +239,7 @@ SYSTEM_PROMPT;
                         'tools' => $toolDefs,
                         'temperature' => (float)($params['temperature'] ?? 0.6),
                         'max_tokens' => (int)($params['max_tokens'] ?? 8000),
-                        'timeout' => (int)($params['timeout'] ?? 180),
+                        'timeout' => (int)($params['timeout'] ?? 0),
                         'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration) {
                             $streamCallback('thinking', [
                                 'content' => $chunk,
@@ -272,7 +272,7 @@ SYSTEM_PROMPT;
                         'tools' => $toolDefs,
                         'temperature' => (float)($params['temperature'] ?? 0.6),
                         'max_tokens' => (int)($params['max_tokens'] ?? 8000),
-                        'timeout' => (int)($params['timeout'] ?? 180),
+                        'timeout' => (int)($params['timeout'] ?? 0),
                     ]);
 
                     $reasoningContent = $response['reasoning_content'] ?? '';
