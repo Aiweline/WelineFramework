@@ -21,6 +21,8 @@
 | block_running | `status=2` 视为运行中 | 不重复启动同一 block |
 | block_done | `status=1` 且写回 html/fields | 生成 prompt 只负责当前 block |
 | block_failed | `status=-1` 且写回 error | 重试 prompt 只携带当前 block 和必要上下文 |
+| image_contract_handoff | 非政策页的图文节奏、`needs_image`、`asset_requirements` 和 `asset_distribution_policy` 已写回当前 plan_json | Stage1 必须规划图文结合；Stage3 必须执行当前 block 的 verified image `<img>` 绑定 |
+| image_verified_or_retry | 必需图片 block 成功时有 `final_url` / `verified_assets` / block `assets`；失败时有 retry 标记且不得伪造 URL | block prompt 必须先确认图片，未确认时只能临时 CSS/product UI fallback，不能宣称已满足生成图契约 |
 | page_rollup | 页面 status 从 block status 汇总 | 不要求 AI 计算 page rollup |
 | publish_ready | 所选页面全部有效 block `status=1` | 发布 prompt 不读取既有计划 |
 
