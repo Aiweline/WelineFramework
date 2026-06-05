@@ -49,12 +49,13 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         $service = new AiSiteAssetManifestService();
 
         $slot = [
-            'slot_id' => 'identity:website-logo',
+            'slot_id' => 'plan:theme:logo_generation:option_1',
             'slot_type' => 'logo_icon',
-            'block_key' => 'identity',
-            'field' => 'logo',
-            'brief' => 'Generate the official website logo for "Teenipiya". Strong constraints: PNG output with transparent alpha background.',
-            'label' => 'Website logo',
+            'option_id' => 'logo_option_1',
+            'kind' => 'logo_option',
+            'field' => 'theme.logo_generation.options.logo_option_1',
+            'brief' => 'Generate a logo option for "Teenipiya". Strong constraints: PNG output with transparent alpha background.',
+            'label' => 'Logo 1',
         ];
         $scope = [
             'website_profile' => [
@@ -94,12 +95,12 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         $service = new AiSiteAssetManifestService();
 
         $slot = [
-            'slot_id' => 'identity:site-title-icon',
+            'slot_id' => 'profile:favicon',
             'slot_type' => 'logo_icon',
-            'kind' => 'site_title_icon',
-            'field' => 'icon',
-            'brief' => 'Generate the website title icon / favicon for "Teenipiya". Strong constraints: square 1:1 composition.',
-            'label' => 'Website Title Icon',
+            'kind' => 'favicon',
+            'field' => 'favicon',
+            'brief' => 'Generate the website favicon for "Teenipiya". Strong constraints: square 1:1 composition.',
+            'label' => 'Favicon',
         ];
         $scope = [
             'website_profile' => [
@@ -112,11 +113,11 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
         $firstLine = \explode("\n", $prompt)[0] ?? '';
         self::assertStringStartsWith('PRIMARY SUBJECT', $firstLine);
-        self::assertStringContainsString('favicon/title icon glyph MUST visually depict this business', $firstLine);
+        self::assertStringContainsString('favicon glyph MUST visually depict this business', $firstLine);
         self::assertStringContainsString('India-focused online card gaming club', $firstLine);
 
         // favicon brief 濠电姰鍨奸崺鏍ь焽濞嗘帇浜归柣鎰嚟閳绘洟鏌ｉ弮鍫缂佺姵鍨甸—鍐Χ閸℃﹩娼″銈庡亾缁犳挸顕ｉ妸鈺傚仭闁哄瀵у▍?
-        self::assertStringNotContainsString('Generate the website title icon / favicon for "Teenipiya"', $prompt);
+        self::assertStringNotContainsString('Generate the website favicon for "Teenipiya"', $prompt);
         self::assertStringContainsString('Icon specification:', $prompt);
     }
 
@@ -337,8 +338,15 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
         $manifest = $service->syncFromPlanJson($scope);
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
-        self::assertArrayNotHasKey('identity:website-logo', $slots);
-        self::assertArrayNotHasKey('identity:site-title-icon', $slots);
+        foreach ($slots as $slot) {
+            if (!\is_array($slot)) {
+                continue;
+            }
+            self::assertFalse(
+                \str_starts_with((string)($slot['slot_id'] ?? ''), 'identity:')
+                && (string)($slot['slot_type'] ?? '') === 'logo_icon'
+            );
+        }
 
         for ($number = 1; $number <= 4; $number++) {
             $slotId = 'plan:theme:logo_generation:option_' . $number;
@@ -397,11 +405,13 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
         $service = new AiSiteAssetManifestService();
 
         $slot = [
-            'slot_id' => 'identity:website-logo',
+            'slot_id' => 'plan:theme:logo_generation:option_1',
             'slot_type' => 'logo_icon',
-            'field' => 'logo',
+            'option_id' => 'logo_option_1',
+            'kind' => 'logo_option',
+            'field' => 'theme.logo_generation.options.logo_option_1',
             'brief' => 'Brand logo.',
-            'label' => 'Website logo',
+            'label' => 'Logo 1',
         ];
         $scope = [
             'website_profile' => ['site_title' => 'Teenipiya'],

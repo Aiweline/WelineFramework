@@ -1123,6 +1123,7 @@ class AiSiteAutoAssetGenerationService
 
     private function identityAssetUrlIsInvalidForRole(string $url, string $role): bool
     {
+        unset($role);
         $url = \trim($url);
         if ($url === '') {
             return false;
@@ -1133,28 +1134,7 @@ class AiSiteAutoAssetGenerationService
         $lowerPath = \strtolower($path);
         $isPageBuilderGeneratedAsset = \str_contains($lowerPath, '/pub/media/page-build/')
             && \str_contains($lowerPath, '/ai-generated/');
-        if (!$isPageBuilderGeneratedAsset) {
-            return false;
-        }
-        $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
-        $hasSupportedExtension = \str_ends_with($lowerPath, '.png') || \str_ends_with($lowerPath, '.svg');
-        if (!\str_contains($lowerPath, $expectedToken) || !$hasSupportedExtension) {
-            return true;
-        }
-        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
-        if (!\is_file($absolutePath)) {
-            return true;
-        }
-        $bytes = @\file_get_contents($absolutePath);
-        if (!\is_string($bytes) || $bytes === '') {
-            return true;
-        }
-
-        return !AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset(
-            $bytes,
-            $this->mimeTypeForIdentityAssetPath($path),
-            $role
-        );
+        return $isPageBuilderGeneratedAsset;
     }
 
     /**

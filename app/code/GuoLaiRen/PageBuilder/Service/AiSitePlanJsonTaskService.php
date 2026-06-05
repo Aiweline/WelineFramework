@@ -4280,8 +4280,127 @@ class AiSitePlanJsonTaskService
                 $block[$targetKey] = $candidate;
             }
         }
+        $assets = $this->resolveGeneratedPlanJsonBlockAssets($resultRef, $sectionBlock, $component, $fields, $defaultConfig);
+        if ($assets !== []) {
+            $block['assets'] = $assets;
+        }
 
         return $block;
+    }
+
+    /**
+     * @param array<string, mixed> $resultRef
+     * @param array<string, mixed> $sectionBlock
+     * @param array<string, mixed> $component
+     * @param array<string, mixed> $fields
+     * @param array<string, mixed> $defaultConfig
+     * @return array<string, array<string, string>>
+     */
+    private function resolveGeneratedPlanJsonBlockAssets(
+        array $resultRef,
+        array $sectionBlock,
+        array $component,
+        array $fields,
+        array $defaultConfig
+    ): array {
+        $contextConfig = \array_replace($defaultConfig, $fields);
+        $assets = $this->normalizePlanJsonBlockAssets($this->firstNonEmptyPlanJsonArray([
+            $resultRef['assets'] ?? null,
+            $sectionBlock['assets'] ?? null,
+            $component['assets'] ?? null,
+            $component['generated_assets'] ?? null,
+        ]), $contextConfig);
+        if ($assets !== []) {
+            return $assets;
+        }
+
+        $slotId = $this->firstNonEmptyPlanJsonText([
+            $contextConfig['runtime.section_image_slot_id'] ?? null,
+            $contextConfig['visual.image_slot_id'] ?? null,
+        ]);
+        $url = $this->firstNonEmptyPlanJsonText([
+            $contextConfig['runtime.section_image_url'] ?? null,
+            $contextConfig['media.image_url'] ?? null,
+            $contextConfig['visual.image_url'] ?? null,
+            $contextConfig['image.url'] ?? null,
+        ]);
+        if ($slotId === '' || $url === '') {
+            return [];
+        }
+
+        return $this->normalizePlanJsonBlockAssets([
+            $slotId => [
+                'slot_id' => $slotId,
+                'final_url' => $url,
+                'url' => $url,
+                'field' => 'media.image_url',
+                'image_role' => 'generated-asset',
+                'status' => 'generated',
+                'alt' => $this->firstNonEmptyPlanJsonText([
+                    $contextConfig['media.image_alt'] ?? null,
+                    $contextConfig['visual.image_alt'] ?? null,
+                    $contextConfig['runtime.section_image_alt'] ?? null,
+                ]),
+            ],
+        ], $contextConfig);
+    }
+
+    /**
+     * @param array<string|int, mixed> $rawAssets
+     * @param array<string, mixed> $contextConfig
+     * @return array<string, array<string, string>>
+     */
+    private function normalizePlanJsonBlockAssets(array $rawAssets, array $contextConfig = []): array
+    {
+        $assets = [];
+        foreach ($rawAssets as $fallbackSlotId => $rawAsset) {
+            $asset = \is_array($rawAsset) ? $rawAsset : [];
+            $slotId = $this->firstNonEmptyPlanJsonText([
+                $asset['slot_id'] ?? null,
+                \is_string($fallbackSlotId) ? $fallbackSlotId : null,
+                $contextConfig['runtime.section_image_slot_id'] ?? null,
+                $contextConfig['visual.image_slot_id'] ?? null,
+            ]);
+            $url = \is_scalar($rawAsset)
+                ? \trim((string)$rawAsset)
+                : $this->firstNonEmptyPlanJsonText([
+                    $asset['final_url'] ?? null,
+                    $asset['url'] ?? null,
+                    $asset['src'] ?? null,
+                ]);
+            if ($slotId === '' || $url === '') {
+                continue;
+            }
+
+            $row = [
+                'slot_id' => $slotId,
+                'final_url' => $url,
+                'url' => $url,
+                'field' => $this->firstNonEmptyPlanJsonText([$asset['field'] ?? null]) ?: 'media.image_url',
+                'image_role' => $this->firstNonEmptyPlanJsonText([$asset['image_role'] ?? null, $asset['role'] ?? null]) ?: 'generated-asset',
+                'status' => $this->firstNonEmptyPlanJsonText([$asset['status'] ?? null]) ?: 'generated',
+            ];
+            $alt = $this->firstNonEmptyPlanJsonText([
+                $asset['alt'] ?? null,
+                $asset['image_alt'] ?? null,
+                $contextConfig['media.image_alt'] ?? null,
+                $contextConfig['visual.image_alt'] ?? null,
+                $contextConfig['runtime.section_image_alt'] ?? null,
+            ]);
+            if ($alt !== '') {
+                $row['alt'] = $alt;
+            }
+            foreach (['page_type', 'block_key', 'section_code', 'task_key', 'source'] as $metaKey) {
+                $metaValue = $this->firstNonEmptyPlanJsonText([$asset[$metaKey] ?? null]);
+                if ($metaValue !== '') {
+                    $row[$metaKey] = $metaValue;
+                }
+            }
+
+            $assets[$slotId] = $row;
+        }
+
+        return $assets;
     }
 
     /**
