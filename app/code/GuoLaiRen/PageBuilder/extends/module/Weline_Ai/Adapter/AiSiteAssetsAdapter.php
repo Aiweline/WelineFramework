@@ -16,7 +16,7 @@ class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindi
     {
         return [
             'text2text' => 'deepseek-v4-flash',
-            'text2image' => 'gemini-3.1-flash-image-preview',
+            'text2image' => 'gemini-2.5-flash-image',
         ];
     }
 

@@ -1114,12 +1114,99 @@ final class AiSitePlanJsonGenerationService
      */
     private function buildLanguageRuntimeContract(string $locale): array
     {
+        $localeProfile = $this->buildLocalePromptProfile($locale);
+
         return [
             'source_of_truth_locale' => $locale,
+            'locale_profile' => $localeProfile,
             'visible_copy_rule' => 'All visitor-facing copy for headings, body, buttons, navigation, footer, form labels, alt/title/aria/placeholder text must use source_of_truth_locale.',
             'plan_text_rule' => 'Stage-one and PlanJson text is intent only; translate or rewrite it before rendering visible copy.',
             'proper_noun_rule' => 'Brand names, product names, domain names, URLs, acronyms, model names, and user-provided proper nouns may retain original spelling when natural.',
+            'script_rule' => 'Use locale_profile.required_visible_script and locale_profile.text_direction for all planned visitor-facing text. Do not leave Chinese, English, or planning-language prose unless it is an approved proper noun.',
+            'forbidden_visible_sources' => ['page_goal', 'block_goal', 'task_goal', 'why_this_block', 'planning_reason', 'block_contract', 'visual_signature', 'image_intent', 'asset_requirements', 'execution_script'],
             'failure_mode' => 'Visible copy in a different main language is a build contract violation.',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildLocalePromptProfile(string $locale): array
+    {
+        $normalized = \strtolower(\str_replace('-', '_', \trim($locale)));
+        $languageName = 'the selected locale';
+        $script = 'locale-native script';
+        $direction = 'ltr';
+        $requiredScript = 'the native writing system for the selected locale';
+
+        if ($normalized === 'zh' || \str_starts_with($normalized, 'zh_')) {
+            $languageName = \str_contains($normalized, 'hant') ? 'Traditional Chinese' : 'Simplified Chinese';
+            $script = 'Han Chinese';
+            $requiredScript = 'Chinese characters';
+        } elseif ($normalized === 'ar' || \str_starts_with($normalized, 'ar_')) {
+            $languageName = 'Arabic';
+            $script = 'Arabic';
+            $direction = 'rtl';
+            $requiredScript = 'Arabic script';
+        } elseif ($normalized === 'ru' || \str_starts_with($normalized, 'ru_')) {
+            $languageName = 'Russian';
+            $script = 'Cyrillic';
+            $requiredScript = 'Cyrillic Russian text';
+        } elseif ($normalized === 'th' || \str_starts_with($normalized, 'th_')) {
+            $languageName = 'Thai';
+            $script = 'Thai';
+            $requiredScript = 'Thai script';
+        } elseif ($normalized === 'hi' || \str_starts_with($normalized, 'hi_')) {
+            $languageName = 'Hindi';
+            $script = 'Devanagari';
+            $requiredScript = 'Devanagari Hindi text';
+        } elseif ($normalized === 'de' || \str_starts_with($normalized, 'de_')) {
+            $languageName = 'German';
+            $script = 'Latin';
+            $requiredScript = 'German prose';
+        } elseif ($normalized === 'fr' || \str_starts_with($normalized, 'fr_')) {
+            $languageName = 'French';
+            $script = 'Latin';
+            $requiredScript = 'French prose';
+        } elseif ($normalized === 'es' || \str_starts_with($normalized, 'es_')) {
+            $languageName = 'Spanish';
+            $script = 'Latin';
+            $requiredScript = 'Spanish prose';
+        } elseif ($normalized === 'it' || \str_starts_with($normalized, 'it_')) {
+            $languageName = 'Italian';
+            $script = 'Latin';
+            $requiredScript = 'Italian prose';
+        } elseif ($normalized === 'ja' || \str_starts_with($normalized, 'ja_')) {
+            $languageName = 'Japanese';
+            $script = 'Japanese';
+            $requiredScript = 'Japanese text';
+        } elseif ($normalized === 'ko' || \str_starts_with($normalized, 'ko_')) {
+            $languageName = 'Korean';
+            $script = 'Hangul';
+            $requiredScript = 'Korean Hangul text';
+        } elseif ($normalized === 'pt' || \str_starts_with($normalized, 'pt_')) {
+            $languageName = 'Portuguese';
+            $script = 'Latin';
+            $requiredScript = 'Portuguese prose';
+        } elseif ($normalized === 'en' || \str_starts_with($normalized, 'en_')) {
+            $languageName = 'English';
+            $script = 'Latin';
+            $requiredScript = 'English prose';
+        }
+
+        return [
+            'locale' => $locale,
+            'language_name' => $languageName,
+            'script' => $script,
+            'text_direction' => $direction,
+            'required_visible_script' => $requiredScript,
+            'copy_instruction' => 'Write natural customer-facing ' . $languageName . ' copy. Translate or rewrite planning text before it appears in plan_json visitor-copy fields.',
+            'forbidden_visible_copy' => [
+                'Chinese/CJK planning prose when source_of_truth_locale is not CJK',
+                'English boilerplate or section labels when source_of_truth_locale is not English',
+                'raw page_goal/block_goal/task_goal/why_this_block/planning_reason sentences',
+                'schema keys, prompt labels, or contract field names',
+            ],
         ];
     }
 
@@ -3077,10 +3164,13 @@ final class AiSitePlanJsonGenerationService
             $locale,
         ]);
 
+        $languageContract = $this->buildLanguageRuntimeContract($siteDefaultLanguage !== '' ? $siteDefaultLanguage : $locale);
+
         return [
             'site_default_language' => $siteDefaultLanguage,
             'content_locale' => $locale,
-            'language_contract' => $this->buildLanguageRuntimeContract($siteDefaultLanguage !== '' ? $siteDefaultLanguage : $locale),
+            'language_contract' => $languageContract,
+            'locale_context' => \is_array($languageContract['locale_profile'] ?? null) ? $languageContract['locale_profile'] : [],
             'language_rule' => 'All planned visitor-facing copy, navigation labels, CTA labels, SEO text, alt/title/aria/placeholder text, and field_plan.sample values must use site_default_language/content_locale unless the text is a proper noun.',
         ];
     }

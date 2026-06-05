@@ -27,6 +27,8 @@ final class AiSiteBlockContractAssemblerService
         'page_goal' => true,
         'page_status' => true,
         'content_locale' => true,
+        'language_contract' => true,
+        'locale_context' => true,
         'shared_context_hash' => true,
         'theme_context_hash' => true,
         'assembly_version' => true,

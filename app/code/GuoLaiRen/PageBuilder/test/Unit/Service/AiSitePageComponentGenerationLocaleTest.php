@@ -197,7 +197,7 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         ));
     }
 
-    public function testPortugueseRenderedHtmlLocaleGateDoesNotBlockChineseBlockGoalCopy(): void
+    public function testPortugueseRenderedHtmlLocaleGateRejectsChineseBlockGoalCopy(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
@@ -207,17 +207,20 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
             $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
         };
 
-        self::assertNull($assertMatchesLocale->call(
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('locale hard policy');
+
+        $assertMatchesLocale->call(
             $service,
             '<section><h2>Regras Antes de Jogar</h2><p>Teenipiya '
                 . "\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}\u{3001}\u{7279}\u{8272}\u{5185}\u{5BB9}"
                 . "\u{3001}\u{4FE1}\u{4EFB}\u{4FE1}\u{606F}\u{548C}\u{4E3B}\u{8981}\u{884C}\u{52A8}\u{5165}\u{53E3}"
                 . '</p></section>',
             ['content_locale' => 'pt_BR']
-        ));
+        );
     }
 
-    public function testPortugueseHardHtmlPolicyDoesNotBlockVisibleChinesePlanningCopy(): void
+    public function testPortugueseHardHtmlPolicyRejectsVisibleChinesePlanningCopy(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
@@ -235,20 +238,69 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
             'pt_BR'
         );
 
-        self::assertNull($reason);
+        self::assertIsString($reason);
+        self::assertStringContainsString('planning', $reason);
         self::assertNull($detectHardPolicyViolation->call(
             $service,
             '<section><p>Baixe o APK com seguranca e consulte as regras principais.</p></section>',
             'pt_BR'
         ));
-        self::assertNull($detectHardPolicyViolation->call(
+        $zhReason = $detectHardPolicyViolation->call(
             $service,
             '<section><p>Teenipiya ' . "\u{805A}\u{5408}\u{6838}\u{5FC3}\u{4EF7}\u{503C}" . '</p></section>',
             'zh_Hans_CN'
-        ));
+        );
+        self::assertIsString($zhReason);
+        self::assertStringContainsString('planning', $zhReason);
     }
 
-    public function testPortugueseRenderedHtmlLocaleGateDoesNotBlockShortChineseCtaLabel(): void
+    public function testPortugueseRenderedHtmlLocaleGateRejectsShortChineseCtaLabel(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $assertMatchesLocale = function (string $html, array $renderContext): void {
+            $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
+        };
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('locale hard policy');
+
+        $assertMatchesLocale->call(
+            $service,
+            '<section><h2>Teen Patti de Confianca</h2><button type="button">' . "\u{4E0B}\u{8F7D}Teenipiya APK" . '</button></section>',
+            ['content_locale' => 'pt_BR']
+        );
+    }
+
+    public function testArabicRenderedHtmlLocaleGateRejectsEnglishIdentifierHeading(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $assertMatchesLocale = function (string $html, array $renderContext): void {
+            $this->assertRenderedHtmlMatchesLocale($html, $renderContext);
+        };
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('locale hard policy');
+
+        $assertMatchesLocale->call(
+            $service,
+            '<section><h2>Trust security</h2><p>Download and play with secure rewards.</p></section>',
+            [
+                'content_locale' => 'ar_SA',
+                '_website_profile' => [
+                    'site_title' => 'Teen Patti Master',
+                    'product_name' => 'Teen Patti Master',
+                ],
+            ]
+        );
+    }
+
+    public function testArabicRenderedHtmlLocaleGateAllowsArabicCopyWithLatinBrand(): void
     {
         $service = new AiSitePageComponentGenerationService(
             pageBlueprintService: new AiSitePageBlueprintService(),
@@ -260,8 +312,14 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
 
         self::assertNull($assertMatchesLocale->call(
             $service,
-            '<section><h2>Teen Patti de Confianca</h2><button type="button">' . "\u{4E0B}\u{8F7D}Teenipiya APK" . '</button></section>',
-            ['content_locale' => 'pt_BR']
+            '<section><h2>تنزيل Teen Patti Master بأمان</h2><p>ابدأ اللعب مع إرشادات واضحة ومكافآت موثوقة.</p></section>',
+            [
+                'content_locale' => 'ar_SA',
+                '_website_profile' => [
+                    'site_title' => 'Teen Patti Master',
+                    'product_name' => 'Teen Patti Master',
+                ],
+            ]
         ));
     }
 
