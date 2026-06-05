@@ -1306,16 +1306,122 @@ class AiSitePageComponentGenerationService
         $requiredAssets = \is_array($renderContext['_required_image_assets'] ?? null) ? $renderContext['_required_image_assets'] : [];
         $requiredAssets[$slotId] = $url;
         $renderContext['_required_image_assets'] = $requiredAssets;
-        $renderContext['_visual_contract'] = \array_replace($visualContract, ['slot_id' => $slotId, 'final_url' => $url]);
-        $renderContext['_inline_generated_asset'] = [
+        $inlineGeneratedAsset = [
             'slot_id' => $slotId,
             'final_url' => $url,
+            'url' => $url,
+            'field' => 'media.image_url',
+            'image_role' => 'generated-asset',
+            'alt' => $alt,
+            'status' => 'generated',
+            'source' => 'inline_block',
         ];
+        $renderContext['_visual_contract'] = \array_replace($visualContract, ['slot_id' => $slotId, 'final_url' => $url]);
+        $renderContext['_inline_generated_asset'] = $inlineGeneratedAsset;
+        $inlineGeneratedAssets = \is_array($renderContext['_inline_generated_assets'] ?? null)
+            ? $renderContext['_inline_generated_assets']
+            : [];
+        $inlineGeneratedAssets[$slotId] = $inlineGeneratedAsset;
+        $renderContext['_inline_generated_assets'] = $inlineGeneratedAssets;
 
         $spec['defaultConfig'] = $defaultConfig;
         $spec['renderContext'] = $renderContext;
 
         return $spec;
+    }
+
+    /**
+     * @param array<string,mixed> $renderContext
+     * @param array<string,mixed> $defaultConfig
+     * @return array<string,array<string,string>>
+     */
+    private function extractBlockLocalAssetsFromRenderContext(array $renderContext, array $defaultConfig): array
+    {
+        $assets = [];
+        if (\is_array($renderContext['_inline_generated_asset'] ?? null)) {
+            $this->appendBlockLocalAsset($assets, $renderContext['_inline_generated_asset'], '', $defaultConfig);
+        }
+        if (\is_array($renderContext['_inline_generated_assets'] ?? null)) {
+            foreach ($renderContext['_inline_generated_assets'] as $fallbackSlotId => $asset) {
+                $this->appendBlockLocalAsset($assets, $asset, $fallbackSlotId, $defaultConfig);
+            }
+        }
+        foreach (['verified_assets', '_required_image_assets'] as $contextKey) {
+            if (!\is_array($renderContext[$contextKey] ?? null)) {
+                continue;
+            }
+            foreach ($renderContext[$contextKey] as $fallbackSlotId => $asset) {
+                $this->appendBlockLocalAsset($assets, $asset, $fallbackSlotId, $defaultConfig);
+            }
+        }
+        if (\is_array($renderContext['_visual_contract'] ?? null)) {
+            $this->appendBlockLocalAsset($assets, $renderContext['_visual_contract'], '', $defaultConfig);
+        }
+
+        return $assets;
+    }
+
+    /**
+     * @param array<string,array<string,string>> $assets
+     * @param array<string,mixed> $defaultConfig
+     */
+    private function appendBlockLocalAsset(array &$assets, mixed $rawAsset, int|string $fallbackSlotId, array $defaultConfig = []): void
+    {
+        $asset = \is_array($rawAsset) ? $rawAsset : [];
+        $slotId = \trim((string)($asset['slot_id'] ?? (\is_string($fallbackSlotId) ? $fallbackSlotId : '')));
+        if ($slotId === '') {
+            $slotId = $this->firstConfigString($defaultConfig, ['runtime.section_image_slot_id', 'visual.image_slot_id']);
+        }
+        $url = \is_scalar($rawAsset)
+            ? \trim((string)$rawAsset)
+            : $this->firstConfigString($asset, ['final_url', 'url', 'src']);
+        if ($slotId === '' || $url === '') {
+            return;
+        }
+
+        $field = $this->firstConfigString($asset, ['field']);
+        if ($field === '') {
+            $field = 'media.image_url';
+        }
+        $imageRole = $this->firstConfigString($asset, ['image_role', 'role']);
+        if ($imageRole === '') {
+            $imageRole = 'generated-asset';
+        }
+        $status = $this->firstConfigString($asset, ['status']);
+        if ($status === '') {
+            $status = 'generated';
+        }
+        $alt = $this->firstConfigString($asset, ['alt', 'image_alt']);
+        if ($alt === '') {
+            $alt = $this->firstConfigString($defaultConfig, [
+                'media.image_alt',
+                'visual.image_alt',
+                'runtime.section_image_alt',
+                'content.heading',
+                'title',
+                'runtime.section_name',
+            ]);
+        }
+
+        $row = [
+            'slot_id' => $slotId,
+            'final_url' => $url,
+            'url' => $url,
+            'field' => $field,
+            'image_role' => $imageRole,
+            'status' => $status,
+        ];
+        if ($alt !== '') {
+            $row['alt'] = $alt;
+        }
+        foreach (['page_type', 'block_key', 'section_code', 'task_key', 'source'] as $metaKey) {
+            $metaValue = $this->firstConfigString($asset, [$metaKey]);
+            if ($metaValue !== '') {
+                $row[$metaKey] = $metaValue;
+            }
+        }
+
+        $assets[$slotId] = $row;
     }
 
     /**
@@ -1871,6 +1977,7 @@ class AiSitePageComponentGenerationService
         $defaultConfig = $this->applyAiPayloadOwnershipToDefaultConfig($defaultConfig, $region, $aiData);
         $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig, $region);
         $persistedConfig = $this->pinSharedIdentityConfigAfterSanitize($persistedConfig, $region, $renderContext);
+        $blockLocalAssets = $this->extractBlockLocalAssetsFromRenderContext($renderContext, $persistedConfig);
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
         $generatedStyleCss = \trim((string)($aiData['css_extra'] ?? '') . "\n" . (string)($aiData['css_responsive'] ?? ''));
@@ -1881,7 +1988,7 @@ class AiSitePageComponentGenerationService
                 $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html, $semanticComponentCode, $generatedStyleCss, $renderContext);
             }
 
-            return [
+            $artifact = [
                 'code' => $componentCode,
                 'name' => $name,
                 'region' => $region,
@@ -1890,6 +1997,11 @@ class AiSitePageComponentGenerationService
                 'default_config' => $persistedConfig,
                 'ai_data' => $aiData,
             ];
+            if ($blockLocalAssets !== []) {
+                $artifact['assets'] = $blockLocalAssets;
+            }
+
+            return $artifact;
         }
 
         $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
@@ -1915,7 +2027,7 @@ class AiSitePageComponentGenerationService
             $this->assertRenderedHtmlPassesBuildQualityGate($componentCode, $html, $semanticComponentCode, $generatedStyleCss, $renderContext);
         }
 
-        return [
+        $artifact = [
             'code' => $componentCode,
             'name' => $name,
             'region' => $region,
@@ -1924,6 +2036,11 @@ class AiSitePageComponentGenerationService
             'default_config' => $persistedConfig,
             'ai_data' => $aiData,
         ];
+        if ($blockLocalAssets !== []) {
+            $artifact['assets'] = $blockLocalAssets;
+        }
+
+        return $artifact;
     }
 
     /**
@@ -9025,9 +9142,9 @@ PROMPT;
         string $taskKey = '',
         string $slotId = ''
     ): array {
+        $assets = $this->extractVerifiedAssetsFromPlanJsonBlockAssets($scope, $pageType, $blockKey, $sectionCode, $taskKey, $slotId);
         $manifest = \is_array($scope['asset_manifest'] ?? null) ? $scope['asset_manifest'] : [];
         $slots = \is_array($manifest['slots'] ?? null) ? $manifest['slots'] : [];
-        $assets = [];
         foreach ($slots as $fallbackId => $slot) {
             if (!\is_array($slot) || $this->isPlaceholderAssetSlot($slot)) {
                 continue;
@@ -9040,10 +9157,129 @@ PROMPT;
             if (!$this->assetSlotMatchesTarget($slot, $candidateSlotId, $pageType, $blockKey, $sectionCode, $taskKey, $slotId)) {
                 continue;
             }
-            $assets[$candidateSlotId] = $finalUrl;
+            if (!isset($assets[$candidateSlotId])) {
+                $assets[$candidateSlotId] = $finalUrl;
+            }
         }
 
         return $assets;
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @return array<string,string>
+     */
+    private function extractVerifiedAssetsFromPlanJsonBlockAssets(
+        array $scope,
+        string $pageType,
+        string $blockKey,
+        string $sectionCode,
+        string $taskKey,
+        string $slotId
+    ): array {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $page = \is_array($pages[$pageType] ?? null) ? $pages[$pageType] : [];
+        if ($page === []) {
+            return [];
+        }
+
+        $assets = [];
+        foreach ($page as $candidateBlockKey => $block) {
+            if (!\is_array($block) || !\is_string($candidateBlockKey)) {
+                continue;
+            }
+            if (!$this->planJsonBlockMatchesAssetTarget($block, $candidateBlockKey, $blockKey, $sectionCode, $taskKey)) {
+                continue;
+            }
+            $rawAssets = \is_array($block['assets'] ?? null) ? $block['assets'] : [];
+            if ($rawAssets === []) {
+                continue;
+            }
+            $defaultConfig = \array_replace(
+                \is_array($block['default_config'] ?? null) ? $block['default_config'] : [],
+                \is_array($block['fields'] ?? null) ? $block['fields'] : []
+            );
+            $assetRows = [];
+            foreach ($rawAssets as $fallbackSlotId => $asset) {
+                $this->appendBlockLocalAsset($assetRows, $asset, $fallbackSlotId, $defaultConfig);
+            }
+            foreach ($assetRows as $candidateSlotId => $asset) {
+                $finalUrl = \trim((string)($asset['final_url'] ?? $asset['url'] ?? ''));
+                if ($finalUrl === '') {
+                    continue;
+                }
+                $slot = \array_replace([
+                    'page_type' => $pageType,
+                    'block_key' => $candidateBlockKey,
+                    'section_code' => $this->firstConfigString($block, ['section_code', 'component_code', 'code']),
+                    'task_key' => $this->firstConfigString(\is_array($block['result_ref'] ?? null) ? $block['result_ref'] : [], ['task_key']),
+                ], $asset);
+                if (!$this->assetSlotMatchesTarget($slot, $candidateSlotId, $pageType, $blockKey, $sectionCode, $taskKey, $slotId)) {
+                    continue;
+                }
+                $assets[$candidateSlotId] = $finalUrl;
+            }
+        }
+
+        return $assets;
+    }
+
+    /**
+     * @param array<string,mixed> $block
+     */
+    private function planJsonBlockMatchesAssetTarget(
+        array $block,
+        string $candidateBlockKey,
+        string $blockKey,
+        string $sectionCode,
+        string $taskKey
+    ): bool {
+        if ($blockKey === '' && $sectionCode === '' && $taskKey === '') {
+            return true;
+        }
+        if ($blockKey !== '') {
+            foreach ([$candidateBlockKey, $block['block_key'] ?? null, $block['section_key'] ?? null] as $candidate) {
+                if (\trim((string)$candidate) === $blockKey) {
+                    return true;
+                }
+            }
+        }
+
+        $candidateSectionCode = $this->firstConfigString($block, ['section_code', 'component_code', 'code']);
+        if ($sectionCode !== '' && $this->assetSectionIdentityMatches($candidateSectionCode, $sectionCode)) {
+            return true;
+        }
+
+        $resultRef = \is_array($block['result_ref'] ?? null) ? $block['result_ref'] : [];
+        $candidateTaskKey = $this->firstConfigString($block, ['task_key']);
+        if ($candidateTaskKey === '') {
+            $candidateTaskKey = $this->firstConfigString($resultRef, ['task_key']);
+        }
+
+        return $taskKey !== '' && $candidateTaskKey === $taskKey;
+    }
+
+    private function assetSectionIdentityMatches(string $candidate, string $sectionCode): bool
+    {
+        $candidate = \trim($candidate);
+        $sectionCode = \trim($sectionCode);
+        if ($candidate === '' || $sectionCode === '') {
+            return false;
+        }
+        if ($candidate === $sectionCode) {
+            return true;
+        }
+
+        $normalize = static function (string $value): string {
+            $value = \str_replace('\\', '/', $value);
+            $value = \preg_replace('#^content/#', '', $value) ?? $value;
+            $value = \str_replace(['/', '_'], '-', $value);
+
+            return \strtolower(\trim($value, '-'));
+        };
+
+        return $normalize($candidate) === $normalize($sectionCode);
     }
 
     /**
