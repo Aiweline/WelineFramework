@@ -7,6 +7,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Model\MailAccount;
 use Weline\Mail\Model\MailDomain;
+use Weline\Mail\Model\MailMessage;
 use Weline\Mail\Service\DnsRecordAdvisor;
 use Weline\Mail\Service\StalwartEngineAdapter;
 
@@ -30,10 +31,20 @@ class Index extends BackendController
         $accountModel = ObjectManager::getInstance(MailAccount::class);
         $accounts = $accountModel->clear()->select()->fetch()->getItems();
 
+        /** @var MailMessage $messageModel */
+        $messageModel = ObjectManager::getInstance(MailMessage::class);
+        $messages = $messageModel->clear()
+            ->order(MailMessage::schema_fields_ID, 'DESC')
+            ->limit(20)
+            ->select()
+            ->fetch()
+            ->getItems();
+
         $this->assign('environment', $engine->checkEnvironment());
         $this->assign('install_plan', $engine->buildInstallPlan());
         $this->assign('domains', $domains);
         $this->assign('accounts', $accounts);
+        $this->assign('messages', $messages);
         $this->assign('dns_result', $domain !== '' ? $dnsAdvisor->check($domain, $hostname) : null);
         $this->assign('client_settings', $domain !== '' && $hostname !== '' ? $engine->clientSettings($domain, $hostname) : null);
         return $this->fetch();
@@ -43,10 +54,19 @@ class Index extends BackendController
     {
         $domain = strtolower(trim((string)$this->request->getParam('domain_name', '')));
         $hostname = strtolower(trim((string)$this->request->getParam('hostname', '')));
+        $engine = strtolower(trim((string)$this->request->getParam('engine', 'stalwart')));
         $quota = max(128, (int)$this->request->getParam('default_quota_mb', 1024));
 
         if ($domain === '' || $hostname === '') {
             return $this->fetchJson(['code' => 400, 'msg' => __('域名和邮件主机名不能为空')]);
+        }
+
+        if (!in_array($engine, ['stalwart', 'fake'], true)) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('邮件引擎参数无效')]);
+        }
+
+        if ($engine === 'fake' && !$this->isFakeTestDomain($domain)) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('Fake 测试引擎只允许 .invalid 或 .test 域名')]);
         }
 
         /** @var MailDomain $model */
@@ -59,7 +79,7 @@ class Index extends BackendController
         $model->clear()
             ->setData(MailDomain::schema_fields_DOMAIN_NAME, $domain)
             ->setData(MailDomain::schema_fields_HOSTNAME, $hostname)
-            ->setData(MailDomain::schema_fields_ENGINE, 'stalwart')
+            ->setData(MailDomain::schema_fields_ENGINE, $engine)
             ->setData(MailDomain::schema_fields_STATUS, 'pending')
             ->setData(MailDomain::schema_fields_DEFAULT_QUOTA_MB, $quota)
             ->setData(MailDomain::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
@@ -131,5 +151,10 @@ class Index extends BackendController
             ->save();
 
         return $this->fetchJson(['code' => 200, 'msg' => __('邮箱域名状态已更新')]);
+    }
+
+    private function isFakeTestDomain(string $domain): bool
+    {
+        return str_ends_with($domain, '.invalid') || str_ends_with($domain, '.test');
     }
 }

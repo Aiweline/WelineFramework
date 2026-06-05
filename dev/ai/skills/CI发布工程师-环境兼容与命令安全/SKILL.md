@@ -11,7 +11,7 @@ This skill owns environment compatibility and command safety for automated execu
 # When To Use
 
 - Use for shell composition, Windows quoting, environment compatibility, command wrappers, and automation portability issues.
-- Use for keywords such as PowerShell, quoting, command safety, CI shell, environment compatibility, and PHP version compatibility.
+- Use for keywords such as PowerShell, quoting, command safety, CI shell, environment compatibility, deployment command safety, and PHP version compatibility.
 - Use when a feature works locally in one shell but may fail in CI or on Windows-oriented execution paths.
 
 # Source Material
@@ -46,6 +46,7 @@ This skill owns environment compatibility and command safety for automated execu
 - In WLS-sensitive code, do not use `sleep`, `die`, or `exit`.
 - Keep validation commands repeatable and automation-safe.
 - If a framework command times out while running a self-healing or nested `php` path, do not treat the timeout alone as proof that the schema/setup change failed; verify the target registration or schema surface directly before concluding.
+- Deployment to online servers must be operated through the user's Chrome browser in JumpServer / Luna Web terminal. Inline SSH from Codex shell, local terminals, scripts, or background helpers is forbidden; the Codex built-in browser is also forbidden for deployment.
 
 # Inputs Required
 
@@ -74,6 +75,7 @@ This skill owns environment compatibility and command safety for automated execu
 - Do not assume Linux-style shell behavior applies to Windows automation.
 - Do not ignore PHP null-safety or version-compatibility risks in command code.
 - Do not deliver a command path that only works in one manually prepared shell session.
+- Do not provide or execute direct `ssh` deployment commands for online servers. Keep server-side deployment commands inside the Chrome-operated JumpServer / Luna terminal.
 
 # Shared Collaboration Contract
 
