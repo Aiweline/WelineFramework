@@ -40,12 +40,25 @@ Important event names:
 | --- | --- | --- |
 | `operation` | string | Workspace operation such as `plan`, `build`, `regenerate_page`, `publish`, or `image_asset`. |
 | `message` | string | Human-readable status text. |
-| `queue_status` | string | The only queue status field exposed to frontend readers. |
-| `plan_json_execution_summary` | object | Derived display summary from `plan_json.pages.{page_type}.{block_key}`. |
-| `progress_kind` | string | Payload category such as `queue_info`, `task_progress`, or `asset_progress`. |
+| `queue_status` | string | The only queue status field exposed to frontend readers. For plan/build progress loops it is reserved for the final queue check, not progress calculation. |
+| `plan_json_execution_summary` | object | Derived display summary from `plan_json.pages.{page_type}.{block_key}`. For plan/build SSE progress this is the authoritative progress source. |
+| `stage1_page_progress` | object | Plan-stage page concurrency and remaining-count snapshot derived from `plan_json.pages`. |
+| `page_block_progress` | object/list | Build-stage page/block progress snapshot derived from `plan_json.pages.{page_type}.{block_key}`. |
+| `queue_final_check` | object | Final one-time queue verification result after plan/build `plan_json` progress is terminal. |
+| `progress_kind` | string | Payload category such as `plan_json_progress`, `task_progress`, `queue_final_check`, `queue_info`, or `asset_progress`. |
 | `progress_percent` | int | 0-100 display progress. |
 
 Unsupported old aliases must not be read as queue status fallbacks. If `queue_status` is missing, fix the writer.
+
+## Plan/Build Progress Source
+
+For `plan` and `build` observer streams, SSE progress must scan `plan_json` state only:
+
+- `plan` progress is derived from `plan_json.pages` and emits `progress_kind: plan_json_progress` with `stage1_page_progress`.
+- `build` progress is derived from `plan_json.pages.{page_type}.{block_key}` and emits `progress_kind: task_progress` with `page_block_progress`.
+- The SSE progress loop must not poll queue rows for progress, process text, result deltas, PID, or queue panel payloads.
+- When the `plan_json` scan reaches a terminal state, SSE performs one final queue status verification and reports it as `progress_kind: queue_final_check`.
+- Final queue verification can fail the response if the queue row is missing or reports a failure status, but it must not be used as the progress source.
 
 ## Queue Status Values
 
