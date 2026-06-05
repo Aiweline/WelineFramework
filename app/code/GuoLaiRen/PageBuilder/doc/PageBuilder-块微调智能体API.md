@@ -39,7 +39,7 @@
 | --- | --- | --- | --- |
 | `public_id` | string | 是 | AI 建站工作区会话公开 ID。 |
 | `page_type` | string | 是 | 页面类型，例如 `home`、`about`、`contact`，必须存在于当前工作区。 |
-| `block_id` | string | 是 | 目标 block ID。若为空，后端会尝试使用 `component_code`。 |
+| `block_id` | string | 是 | 目标 block ID。若为空，后端会尝试使用 `component_code`。后端会按 `plan_json` 的 `block_key`、`block_id`、`component_code`、`section_code` 以及去除 `page_type` 前缀后的预览 DOM ID 归一识别。 |
 | `component_code` | string | 否 | 组件编码或 section code，可作为 `block_id` 的兜底输入。 |
 | `instruction` | string | 是 | 给智能体的微调指令。应描述具体变更，不要要求重建整页。 |
 | `component_label` | string | 否 | 用于事件日志展示的组件名称。 |

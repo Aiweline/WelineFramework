@@ -976,14 +976,15 @@ class AiSiteBlockPartialPatchService
             return null;
         }
 
-        $needles = $this->normalizeLookupCandidates($blockId);
+        $needles = $this->normalizeLookupCandidates($blockId, $pageType);
         foreach ($page as $key => $block) {
             if (!\is_string($key) || !$this->isDynamicPlanBlockKey($key) || !\is_array($block)) {
                 continue;
             }
             $values = \array_merge([$key], $this->buildBlockLookupValues($block));
             foreach ($values as $value) {
-                if (\in_array($this->normalizeLookupKey($value), $needles, true)) {
+                $haystacks = $this->normalizeLookupCandidates((string)$value, $pageType);
+                if (\array_intersect($haystacks, $needles) !== []) {
                     return ['block_key' => $key, 'block' => $block];
                 }
             }
@@ -1121,7 +1122,7 @@ class AiSiteBlockPartialPatchService
     /**
      * @return list<string>
      */
-    private function normalizeLookupCandidates(string $value): array
+    private function normalizeLookupCandidates(string $value, string $pageType = ''): array
     {
         $key = $this->normalizeLookupKey($value);
         if ($key === '') {
@@ -1129,6 +1130,7 @@ class AiSiteBlockPartialPatchService
         }
 
         $candidates = [$key];
+        $candidates[] = $this->normalizePageScopedLookupToken($pageType, $value);
         $candidates[] = $this->normalizeLookupKey(\str_replace(['content/', '/'], ['', '-'], $value));
         $candidates[] = $this->normalizeLookupKey('content/' . $value);
         $candidates[] = $this->normalizeLookupKey(\str_replace(['_', '/'], ['-', '-'], $value));
@@ -1147,9 +1149,67 @@ class AiSiteBlockPartialPatchService
             }
             $candidates[] = $this->normalizeLookupKey($part);
             $candidates[] = $this->normalizeLookupKey(\str_replace(['content/', '/'], ['', '-'], $part));
+            $candidates[] = $this->normalizePageScopedLookupToken($pageType, $part);
         }
 
         return \array_values(\array_unique(\array_filter($candidates, static fn(string $candidate): bool => $candidate !== '')));
+    }
+
+    private function normalizePageScopedLookupToken(string $pageType, string $value): string
+    {
+        $token = \strtolower(\trim($value));
+        if ($token === '') {
+            return '';
+        }
+        $token = \str_replace('\\', '/', $token);
+        if (\str_starts_with($token, 'content/')) {
+            $token = \substr($token, \strlen('content/'));
+        }
+        $token = \preg_replace('/[\/._\-\s]+/', '_', $token) ?? $token;
+        $token = \trim($token, '_');
+        if ($token === '') {
+            return '';
+        }
+        foreach ($this->normalizePageTypeLookupTokens($pageType) as $pageToken) {
+            if ($pageToken !== '' && \str_starts_with($token, $pageToken . '_')) {
+                return \substr($token, \strlen($pageToken) + 1);
+            }
+        }
+
+        return $token;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizePageTypeLookupTokens(string $pageType): array
+    {
+        $token = \strtolower(\trim($pageType));
+        if ($token === '') {
+            return [];
+        }
+        $token = \str_replace('\\', '/', $token);
+        $token = \preg_replace('/[\/._\-\s]+/', '_', $token) ?? $token;
+        $token = \trim($token, '_');
+        if ($token === '') {
+            return [];
+        }
+
+        $tokens = [$token];
+        if (\str_ends_with($token, '_page')) {
+            $tokens[] = \substr($token, 0, -5);
+        } else {
+            $tokens[] = $token . '_page';
+        }
+        if (\in_array($token, ['home', 'home_page', 'homepage'], true)) {
+            $tokens[] = 'home';
+            $tokens[] = 'home_page';
+            $tokens[] = 'homepage';
+        }
+        $tokens = \array_values(\array_unique(\array_filter($tokens, static fn(string $candidate): bool => $candidate !== '')));
+        \usort($tokens, static fn(string $left, string $right): int => \strlen($right) <=> \strlen($left));
+
+        return $tokens;
     }
 
     private function normalizeLookupKey(string $value): string
