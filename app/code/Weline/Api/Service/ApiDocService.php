@@ -34,6 +34,35 @@ class ApiDocService
         $this->moduleHandle = ObjectManager::getInstance(Handle::class);
         $this->queryProviderRegistry = ObjectManager::getInstance(QueryProviderRegistry::class);
     }
+
+    private function getReflectionTypeName(?\ReflectionType $type): string
+    {
+        if ($type === null) {
+            return 'mixed';
+        }
+
+        if ($type instanceof \ReflectionNamedType) {
+            return $type->getName();
+        }
+
+        if ($type instanceof \ReflectionUnionType) {
+            $names = [];
+            foreach ($type->getTypes() as $childType) {
+                $names[] = $this->getReflectionTypeName($childType);
+            }
+            return implode('|', $names);
+        }
+
+        if ($type instanceof \ReflectionIntersectionType) {
+            $names = [];
+            foreach ($type->getTypes() as $childType) {
+                $names[] = $this->getReflectionTypeName($childType);
+            }
+            return implode('&', $names);
+        }
+
+        return (string)$type;
+    }
     
     /**
      * 生成所有API文档
@@ -394,7 +423,7 @@ class ApiDocService
             $paramName = $param->getName();
             $paramInfo = [
                 'name' => $paramName,
-                'type' => $param->getType() ? $param->getType()->getName() : 'mixed',
+                'type' => $this->getReflectionTypeName($param->getType()),
                 'required' => !$param->isOptional(),
                 'source' => 'method_signature', // 参数来源：方法签名
             ];

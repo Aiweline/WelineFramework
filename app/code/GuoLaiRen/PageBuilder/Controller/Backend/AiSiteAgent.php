@@ -909,10 +909,15 @@ class AiSiteAgent extends BaseController
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }
 
+        $workspaceParams = ['public_id' => $session->getPublicId()];
+        if ($fakeModeEnabled) {
+            $workspaceParams['fake_mode'] = '1';
+        }
+
         return $this->fetchJson([
             'success' => true,
             'public_id' => $session->getPublicId(),
-            'workspace_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $session->getPublicId()]),
+            'workspace_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', $workspaceParams),
         ]);
     }
 
@@ -1686,6 +1691,9 @@ class AiSiteAgent extends BaseController
                 $scopePatch[$directionRequestKey] = $directionRequestValue;
             }
         }
+        if ($this->isTruthyRequestFlag('fake_mode') || (int)($scopePatch['fake_mode'] ?? 0) === 1) {
+            $scopePatch['fake_mode'] = 1;
+        }
         $requestedSelectedSkillCodes = $this->getRequestBodyValue(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, null);
         if ($requestedSelectedSkillCodes !== null || \array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $scopePatch)) {
             $scopePatch[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY] = $this->scopeCompatibilityService->normalizeSelectedSkillCodes(
@@ -1696,6 +1704,9 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN),
             $scopePatch
         ));
+        if ((int)($scope['fake_mode'] ?? 0) === 1) {
+            $scopePatch['fake_mode'] = 1;
+        }
         $targetDomain = \trim((string)($scope['target_domain'] ?? ''));
         if ($targetDomain === '') {
             return $this->jsonError(
@@ -1858,6 +1869,9 @@ class AiSiteAgent extends BaseController
             'page_types' => $requestedPageTypes,
             AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY => 1,
         ];
+        if ((int)($scope['fake_mode'] ?? 0) === 1) {
+            $planOperationDetails['fake_mode'] = 1;
+        }
         if ($hasRetryablePlanFailures && $effectivePlanPromptMode === 'resume_plan') {
             $planOperationDetails['resume_failed_tasks'] = 1;
         }
@@ -1880,6 +1894,7 @@ class AiSiteAgent extends BaseController
                 'design_direction_code' => (string)($scope['design_direction_code'] ?? ''),
                 'design_direction_snapshot' => \is_array($scope['design_direction_snapshot'] ?? null) ? $scope['design_direction_snapshot'] : [],
                 'design_direction_hash' => (string)($scope['design_direction_hash'] ?? ''),
+                'fake_mode' => (int)($scope['fake_mode'] ?? 0) === 1 ? 1 : 0,
             ],
         ]), '', AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING, $planOperationDetails);
         if (empty($result['success'])) {
@@ -1931,6 +1946,7 @@ class AiSiteAgent extends BaseController
                         'design_direction_code' => (string)($scope['design_direction_code'] ?? ''),
                         'design_direction_snapshot' => \is_array($scope['design_direction_snapshot'] ?? null) ? $scope['design_direction_snapshot'] : [],
                         'design_direction_hash' => (string)($scope['design_direction_hash'] ?? ''),
+                        'fake_mode' => (int)($scope['fake_mode'] ?? 0) === 1 ? 1 : 0,
                     ],
                 ]), '', AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING, $planOperationDetails);
                 if (empty($result['success'])) {
@@ -8023,9 +8039,10 @@ class AiSiteAgent extends BaseController
             $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_PLAN)
         );
         $scope = $this->writeActiveOperationStateToScope($scope, $nextOperation);
-        if (($nextOperation['status'] ?? '') === 'done') {
+        $nextOperationStatus = \trim((string)($nextOperation['queue_status'] ?? ($nextOperation['status'] ?? '')));
+        if ($nextOperationStatus === 'done') {
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING;
-        } elseif (\in_array((string)($nextOperation['status'] ?? ''), ['queued', 'running'], true)) {
+        } elseif (\in_array($nextOperationStatus, ['queued', 'running'], true)) {
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
         }
         $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
@@ -13584,6 +13601,9 @@ class AiSiteAgent extends BaseController
             $scopePatch = $this->planJsonTaskService->stripPlanJsonMutationScopePatch($scopePatch, $baseScope);
         }
         $scope = \array_replace($scope, $scopePatch);
+        if ((int)($scope['fake_mode'] ?? 0) === 1) {
+            $scopePatch['fake_mode'] = 1;
+        }
         if ($operation === 'plan' && (int)($scopePatch['_force_rebuild'] ?? 0) === 1) {
             unset($scope['_artifact_refs']);
             foreach ([
@@ -14391,6 +14411,10 @@ class AiSiteAgent extends BaseController
                 ?? $detailRequestPayload[AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY]
                 ?? []
         );
+        $fakeModeQueued = (int)($scopePatch['fake_mode'] ?? $operationDetails['fake_mode'] ?? $requestPayload['fake_mode'] ?? $detailRequestPayload['fake_mode'] ?? 0) === 1;
+        if ($fakeModeQueued) {
+            $content['fake_mode'] = 1;
+        }
         if (
             $selectedSkillCodes !== []
             || \array_key_exists(AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY, $scopePatch)
@@ -18561,21 +18585,51 @@ class AiSiteAgent extends BaseController
                 : (string)__('Operation failed.'),
             ['details' => ['keys' => \array_values(\array_map('strval', \array_keys($payload))), 'autosave' => $isAutosave ? 1 : 0]]
         );
-        if ($isAutosave) {
-            return $this->fetchJson([
-                'success' => true,
-                'message' => (string)__('Operation completed.'),
-                'autosave' => true,
-            ]);
-        }
-        if ($isAutosave) {
-            return $this->fetchJson([
-                'success' => true,
-                'message' => (string)__('Operation completed.'),
-                'autosave' => true,
-            ]);
-        }
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        if ($isAutosave) {
+            $stage = $this->scopeCompatibilityService->normalizeStage($fresh->getStage());
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($fresh, $stage)
+            );
+            $autosaveScope = [];
+            foreach ([
+                'site_title',
+                'site_tagline',
+                'target_domain',
+                'selected_domain',
+                'default_locale',
+                'plan_locale',
+                'brief_description',
+                'user_description',
+                'page_types',
+                AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY,
+                AiSiteScopeCompatibilityService::SELECTED_SKILL_CODES_KEY,
+                'extra_page_types_panel_open',
+                'reference_images',
+                'site_profile_manual',
+                'design_direction_mode',
+                'design_direction_code',
+                'design_direction_snapshot',
+                'design_direction_match_reason',
+                'design_direction_locked',
+            ] as $scopeKey) {
+                if (\array_key_exists($scopeKey, $scope)) {
+                    $autosaveScope[$scopeKey] = $scope[$scopeKey];
+                }
+            }
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => (string)__('Operation completed.'),
+                'autosave' => true,
+                'data' => [
+                    'public_id' => $fresh->getPublicId(),
+                    'stage' => $stage,
+                    'scope' => $autosaveScope,
+                    'page_types' => \is_array($scope['page_types'] ?? null) ? \array_values($scope['page_types']) : [],
+                ],
+            ]);
+        }
 
         return $this->fetchJson(['success' => true, 'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true)]);
     }
