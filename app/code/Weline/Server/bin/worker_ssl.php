@@ -3120,7 +3120,8 @@ while (true) {
             }
         }
 
-        if ($fiberMaxActive > 0 && \count($activeFibers) >= $fiberMaxActive) {
+        $activeAdmissionFibers = wlsCountActiveFibersForAdmission($activeFibers);
+        if (!$isSseProtocolRequest && $fiberMaxActive > 0 && $activeAdmissionFibers >= $fiberMaxActive) {
             $activeRequests--;
             $body = 'Service Unavailable';
             $resp = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: "
@@ -3403,6 +3404,22 @@ while (true) {
  * @param array<int, array{conn: resource, peerName: string, buffer: string}> $pendingPeek
  * @param array<int, float> $pendingPeekStartTimes
  */
+/**
+ * @param array<int, array<string, mixed>> $activeFibers
+ */
+function wlsCountActiveFibersForAdmission(array $activeFibers): int
+{
+    $count = 0;
+    foreach ($activeFibers as $fiberState) {
+        if (($fiberState['is_sse_protocol'] ?? false) === true) {
+            continue;
+        }
+        $count++;
+    }
+
+    return $count;
+}
+
 function wlsSslAcceptNewConnections(
     mixed $socket,
     array &$read,
