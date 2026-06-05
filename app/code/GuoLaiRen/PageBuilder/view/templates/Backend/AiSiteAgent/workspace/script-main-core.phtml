@@ -927,6 +927,9 @@
     }
 
     function syncPlanTerminalFailureUiFromWorkspaceState(workspaceState) {
+        if (isPlanAiGenerationTelemetryActive(workspaceState)) {
+            return false;
+        }
         var failedOperation = findPlanFailureOperationFromWorkspaceState(workspaceState);
         if (!failedOperation) {
             return false;
@@ -1089,7 +1092,7 @@
     };
     workspaceApi.retryPhaseOnePlanGeneration = function (options) {
         var opts = options && typeof options === 'object' ? options : {};
-        if (planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan')) {
+        if (planStartRequestPending || planSseRunning || isPlanAiGenerationTelemetryActive(null) || hasRunningQueueForUi(null, 'plan')) {
             toast('warning', getRetryableAiFailureMessage(null, 'plan'));
             return false;
         }
@@ -1407,7 +1410,7 @@
         if (getPlanReloadReconcileStage(state) !== 'plan') {
             return false;
         }
-        if (hasRunningQueueForUi(state, 'plan') || hasBuildOperationRunningForUi(state)) {
+        if (hasRunningQueueForUi(state, 'plan') || isPlanAiGenerationTelemetryActive(state) || hasBuildOperationRunningForUi(state)) {
             return false;
         }
         return hasRetryableAiFailures(state, 'plan');
@@ -1425,7 +1428,7 @@
         if (getPlanReloadReconcileStage(state) !== 'plan') {
             return false;
         }
-        if (hasRunningQueueForUi(state, 'plan') || hasBuildOperationRunningForUi(state)) {
+        if (hasRunningQueueForUi(state, 'plan') || isPlanAiGenerationTelemetryActive(state) || hasBuildOperationRunningForUi(state)) {
             return false;
         }
         if (hasPhaseOnePlanBlockingErrors(state) || hasRetryableAiFailures(state, 'plan')) {
@@ -1517,6 +1520,9 @@
 
     function isPhaseOneQueueUnfinished() {
         var state = getLatestWorkspaceStateForQueuePrompt();
+        if (isPlanAiGenerationTelemetryActive(state)) {
+            return true;
+        }
         if (isWorkspacePlanQueueTerminal(state)) {
             return false;
         }
@@ -1700,7 +1706,7 @@
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
         var scope = state.scope && typeof state.scope === 'object' ? state.scope : {};
-        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan')) {
+        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan') || isPlanAiGenerationTelemetryActive(state)) {
             return '';
         }
         var failedOperation = findPlanFailureOperationFromWorkspaceState(state);
@@ -1743,7 +1749,7 @@
         var state = workspaceState && typeof workspaceState === 'object'
             ? workspaceState
             : getLatestWorkspaceStateForQueuePrompt();
-        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan')) {
+        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan') || isPlanAiGenerationTelemetryActive(state)) {
             return '';
         }
         var actual = resolveGeneratedPlanPageTypesFromState(state);
@@ -1785,7 +1791,7 @@
             || isPlanInputStaleForConfirmation(state)
             || (hasStageOnePlanEvidenceForBlockingCheck(state) && resolveMissingSelectedPlanPageTypes(state).length > 0);
         var queueBusy = planStartRequestPending || planSseRunning || planGenerationActionLockActive
-            || hasRunningQueueForUi(state, 'plan') || hasBuildOperationRunningForUi(state);
+            || hasRunningQueueForUi(state, 'plan') || isPlanAiGenerationTelemetryActive(state) || hasBuildOperationRunningForUi(state);
         btn.classList.toggle('d-none', !visible);
         btn.disabled = !visible || queueBusy;
         if (visible && btn.textContent !== String(messages.schemeRebuildButton || '')) {
@@ -1805,7 +1811,7 @@
         var missingPages = hasStageOnePlanEvidenceForBlockingCheck(state)
             ? resolveMissingSelectedPlanPageTypes(state)
             : [];
-        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan')) {
+        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan') || isPlanAiGenerationTelemetryActive(state)) {
             statusEl.textContent = String(messages.planGenerating || statusEl.textContent || '');
             statusEl.classList.remove('text-warning');
             return;
@@ -2205,6 +2211,60 @@
         return lines.length > 0 ? lines[lines.length - 1] : text;
     }
 
+    function isPlanAiGenerationTelemetryMessage(message) {
+        var text = normalizePlanQueueLatestMessage(message);
+        if (text === '') {
+            return false;
+        }
+        return text.indexOf('AI 正在生成内容') !== -1
+            || text.indexOf('正文流不写入队列日志') !== -1
+            || /已接收\s*[\d,]+\s*段\s*\/\s*[\d,]+\s*B/i.test(text);
+    }
+
+    function collectPlanAiGenerationTelemetryCandidates(workspaceState, extraMessage) {
+        var state = workspaceState && typeof workspaceState === 'object'
+            ? workspaceState
+            : getLatestWorkspaceStateForQueuePrompt();
+        var candidates = [];
+        function pushFromInfo(info) {
+            if (!info || typeof info !== 'object') {
+                return;
+            }
+            [
+                info.process,
+                info.message,
+                info.latest_message,
+                info.terminal_summary,
+                info.result_tail,
+                info.result,
+                info.queue_process,
+                info.queue_result_delta
+            ].forEach(function (value) {
+                var text = String(value || '').trim();
+                if (text !== '') {
+                    candidates.push(text);
+                }
+            });
+        }
+        if (extraMessage) {
+            candidates.push(String(extraMessage || ''));
+        }
+        pushFromInfo(state.active_operation);
+        if (state.active_operations && typeof state.active_operations === 'object') {
+            pushFromInfo(state.active_operations.plan);
+        }
+        if (state.queue_status && typeof state.queue_status === 'object') {
+            pushFromInfo(state.queue_status.plan);
+            pushFromInfo(state.queue_status);
+        }
+        pushFromInfo(resolveCanonicalQueueInfoFromWorkspaceStateForUi(state, 'plan'));
+        return candidates;
+    }
+
+    function isPlanAiGenerationTelemetryActive(workspaceState, extraMessage) {
+        return collectPlanAiGenerationTelemetryCandidates(workspaceState, extraMessage).some(isPlanAiGenerationTelemetryMessage);
+    }
+
     var planQueueLatestProgressPublishing = false;
 
     function updatePlanQueueLatestMessage(message) {
@@ -2247,8 +2307,9 @@
         var percent = Math.max(0, Math.min(100, parseInt(state.percent || state.progress || 0, 10) || 0));
         var message = String(state.message || state.process || '').trim();
         var latestPlanState = queueKind === 'plan' ? getLatestWorkspaceStateForQueuePrompt() : {};
+        var planTelemetryActive = queueKind === 'plan' && isPlanAiGenerationTelemetryActive(latestPlanState, message);
         var planStillRunning = queueKind === 'plan'
-            && (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(latestPlanState, 'plan'));
+            && (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(latestPlanState, 'plan') || planTelemetryActive);
         if (planStillRunning && !isQueueUiBusyStatus(status)) {
             status = 'running';
             percent = Math.max(1, Math.min(99, percent || 1));
@@ -2760,7 +2821,7 @@
         if (!listEl) {
             return;
         }
-        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(workspaceState, 'plan')) {
+        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(workspaceState, 'plan') || isPlanAiGenerationTelemetryActive(workspaceState)) {
             listEl.classList.add('d-none');
             listEl.innerHTML = '';
             return;
@@ -5254,6 +5315,7 @@
             || !!planGenerationActionLockActive
             || !!planStartRequestPending
             || !!planSseRunning
+            || isPlanAiGenerationTelemetryActive(null)
             || hasRunningQueueForUi(null, 'plan')
             || !String(startPlanUrl || '').trim()
             || !isTargetDomainRequiredForPlanActionSatisfied();
@@ -15175,16 +15237,20 @@
             return;
         }
         var shouldShow = !!visible;
-        if (shouldShow && shouldTreatPlanFailureAsResolvedBySuccess(getLatestWorkspaceStateForQueuePrompt(), {})) {
+        var latestState = getLatestWorkspaceStateForQueuePrompt();
+        if (shouldShow && isPlanAiGenerationTelemetryActive(latestState)) {
+            shouldShow = false;
+        }
+        if (shouldShow && shouldTreatPlanFailureAsResolvedBySuccess(latestState, {})) {
             shouldShow = false;
         }
         retryBtn.classList.toggle('d-none', !shouldShow);
-        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning || hasRunningQueueForUi(null, 'plan') || hasBuildOperationRunningForUi(getLatestWorkspaceStateForQueuePrompt());
+        retryBtn.disabled = planGenerationActionLockActive || !shouldShow || planStartRequestPending || planSseRunning || isPlanAiGenerationTelemetryActive(latestState) || hasRunningQueueForUi(null, 'plan') || hasBuildOperationRunningForUi(latestState);
     }
 
     function shouldShowPlanRetryButtonFromWorkspaceState(workspaceState) {
         var state = workspaceState && typeof workspaceState === 'object' ? workspaceState : {};
-        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan')) {
+        if (isPhaseOneQueueUnfinished() || hasRunningQueueForUi(state, 'plan') || isPlanAiGenerationTelemetryActive(state)) {
             return false;
         }
         var resolvedFailure = findPlanFailureOperationFromWorkspaceState(state);
