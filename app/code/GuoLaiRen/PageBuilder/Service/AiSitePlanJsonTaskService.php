@@ -124,6 +124,8 @@ class AiSitePlanJsonTaskService
         'page_goal' => true,
         'page_status' => true,
         'content_locale' => true,
+        'language_contract' => true,
+        'locale_context' => true,
         'shared_context_hash' => true,
         'theme_context_hash' => true,
         'assembly_version' => true,
@@ -196,6 +198,7 @@ class AiSitePlanJsonTaskService
         $scope['_plan_json_workspace_track'] = \trim($workspaceTrack) !== ''
             ? \trim($workspaceTrack)
             : (string)($scope['_plan_json_workspace_track'] ?? $scope['workspace_track'] ?? '');
+        $scope = $this->ensurePlanJsonBlockLanguageHandoff($scope, $websiteProfile);
         $scope = $this->ensurePlanJsonBlockContractHandoff($scope, $websiteProfile);
         $validation = $this->validatePlanJsonPagesForBuild($scope);
         if (!($validation['valid'] ?? false)) {
@@ -203,6 +206,73 @@ class AiSitePlanJsonTaskService
         }
 
         return $this->ensurePlanJsonBlockExecutionState($scope);
+    }
+
+    /**
+     * Persist the selected content locale contract into the same plan_json nodes
+     * that drive block execution, so prompts do not depend on broad scope fallbacks.
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @return array<string, mixed>
+     */
+    private function ensurePlanJsonBlockLanguageHandoff(array $scope, array $websiteProfile): array
+    {
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $pages = $this->extractPlanJsonPages($scope);
+        if ($planJson === [] || $pages === []) {
+            return $scope;
+        }
+
+        $contentLocale = $this->resolvePlanJsonContentLocaleForHandoff($scope, $websiteProfile, $planJson);
+        if ($contentLocale === '') {
+            return $scope;
+        }
+
+        $languageContract = $this->buildLanguageRuntimeContract($contentLocale);
+        $localeContext = \is_array($languageContract['locale_profile'] ?? null)
+            ? $languageContract['locale_profile']
+            : $this->buildLocalePromptProfile($contentLocale);
+        $planJson['content_locale'] = $contentLocale;
+        $i18n = \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [];
+        $i18n['content_locale'] = $contentLocale;
+        $i18n['primary_locale'] = $contentLocale;
+        $i18n['language_contract'] = $languageContract;
+        $planJson['i18n'] = $i18n;
+        $planJson['language_contract'] = $languageContract;
+        $planJson['locale_context'] = $localeContext;
+
+        foreach ($pages as $pageType => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            $page['content_locale'] = $contentLocale;
+            $page['language_contract'] = $languageContract;
+            $page['locale_context'] = $localeContext;
+            foreach ($this->extractPlanJsonPageBlocks($page) as $blockKey => $block) {
+                $block['content_locale'] = $contentLocale;
+                $block['language_contract'] = $languageContract;
+                $block['locale_context'] = $localeContext;
+                $block['visible_copy_contract'] = $this->buildPlanJsonBlockVisibleCopyContract($contentLocale);
+                if (\is_array($block['block_contract'] ?? null)) {
+                    $block['block_contract']['language_contract'] = $languageContract;
+                    $block['block_contract']['visible_copy_contract'] = $block['visible_copy_contract'];
+                }
+                $page[$blockKey] = $block;
+            }
+            $pages[$pageType] = $page;
+        }
+        $planJson['pages'] = $pages;
+        $scope['plan_json'] = $planJson;
+        $scope['content_locale'] = $contentLocale;
+        $scope['language_contract'] = $languageContract;
+
+        if (\is_array($scope['website_profile'] ?? null)) {
+            $scope['website_profile']['content_locale'] = $contentLocale;
+            $scope['website_profile']['default_locale'] = $contentLocale;
+        }
+
+        return $scope;
     }
 
     /**
@@ -1002,12 +1072,140 @@ class AiSitePlanJsonTaskService
      */
     private function buildLanguageRuntimeContract(string $locale): array
     {
+        $localeProfile = $this->buildLocalePromptProfile($locale);
+
         return [
             'source_of_truth_locale' => $locale,
+            'locale_profile' => $localeProfile,
             'visible_copy_rule' => 'All visitor-facing copy for headings, body, buttons, navigation, footer, form labels, alt/title/aria/placeholder text must use source_of_truth_locale.',
             'plan_text_rule' => 'plan_json text is intent only; translate or rewrite it before rendering visible copy.',
             'proper_noun_rule' => 'Brand names, product names, domain names, URLs, acronyms, model names, and user-provided proper nouns may retain original spelling when natural.',
+            'script_rule' => 'Use the locale_profile.required_visible_script and locale_profile.text_direction for final visible copy. Do not leave Chinese, English, or planning-language prose unless it is an approved proper noun.',
+            'forbidden_visible_sources' => ['block_goal', 'task_goal', 'why_this_block', 'planning_reason', 'block_contract', 'visual_signature', 'image_intent', 'asset_requirements', 'execution_script'],
             'failure_mode' => 'Visible copy in a different main language is a build contract violation.',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $planJson
+     */
+    private function resolvePlanJsonContentLocaleForHandoff(array $scope, array $websiteProfile, array $planJson): string
+    {
+        return $this->firstNonEmptyPlanJsonText([
+            $scope['ai_content_locale'] ?? null,
+            $scope['selected_content_locale'] ?? null,
+            $scope['selected_locale'] ?? null,
+            $scope['default_locale'] ?? null,
+            $websiteProfile['default_locale'] ?? null,
+            $scope['website_profile']['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $websiteProfile['default_language'] ?? null,
+            $scope['website_profile']['default_language'] ?? null,
+            $scope['content_locale'] ?? null,
+            $websiteProfile['content_locale'] ?? null,
+            $scope['website_profile']['content_locale'] ?? null,
+            $planJson['content_locale'] ?? null,
+            $planJson['i18n']['content_locale'] ?? null,
+            $planJson['i18n']['primary_locale'] ?? null,
+            $planJson['i18n']['locale'] ?? null,
+            $scope['plan_locale'] ?? null,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildLocalePromptProfile(string $locale): array
+    {
+        $normalized = \strtolower(\str_replace('-', '_', \trim($locale)));
+        $languageName = 'the selected locale';
+        $script = 'locale-native script';
+        $direction = 'ltr';
+        $requiredScript = 'the native writing system for the selected locale';
+
+        if ($normalized === 'zh' || \str_starts_with($normalized, 'zh_')) {
+            $languageName = \str_contains($normalized, 'hant') ? 'Traditional Chinese' : 'Simplified Chinese';
+            $script = 'Han Chinese';
+            $requiredScript = 'Chinese characters';
+        } elseif ($normalized === 'ar' || \str_starts_with($normalized, 'ar_')) {
+            $languageName = 'Arabic';
+            $script = 'Arabic';
+            $direction = 'rtl';
+            $requiredScript = 'Arabic script';
+        } elseif ($normalized === 'ru' || \str_starts_with($normalized, 'ru_')) {
+            $languageName = 'Russian';
+            $script = 'Cyrillic';
+            $requiredScript = 'Cyrillic Russian text';
+        } elseif ($normalized === 'th' || \str_starts_with($normalized, 'th_')) {
+            $languageName = 'Thai';
+            $script = 'Thai';
+            $requiredScript = 'Thai script';
+        } elseif ($normalized === 'hi' || \str_starts_with($normalized, 'hi_')) {
+            $languageName = 'Hindi';
+            $script = 'Devanagari';
+            $requiredScript = 'Devanagari Hindi text';
+        } elseif ($normalized === 'de' || \str_starts_with($normalized, 'de_')) {
+            $languageName = 'German';
+            $script = 'Latin';
+            $requiredScript = 'German prose';
+        } elseif ($normalized === 'fr' || \str_starts_with($normalized, 'fr_')) {
+            $languageName = 'French';
+            $script = 'Latin';
+            $requiredScript = 'French prose';
+        } elseif ($normalized === 'es' || \str_starts_with($normalized, 'es_')) {
+            $languageName = 'Spanish';
+            $script = 'Latin';
+            $requiredScript = 'Spanish prose';
+        } elseif ($normalized === 'it' || \str_starts_with($normalized, 'it_')) {
+            $languageName = 'Italian';
+            $script = 'Latin';
+            $requiredScript = 'Italian prose';
+        } elseif ($normalized === 'ja' || \str_starts_with($normalized, 'ja_')) {
+            $languageName = 'Japanese';
+            $script = 'Japanese';
+            $requiredScript = 'Japanese text';
+        } elseif ($normalized === 'ko' || \str_starts_with($normalized, 'ko_')) {
+            $languageName = 'Korean';
+            $script = 'Hangul';
+            $requiredScript = 'Korean Hangul text';
+        } elseif ($normalized === 'pt' || \str_starts_with($normalized, 'pt_')) {
+            $languageName = 'Portuguese';
+            $script = 'Latin';
+            $requiredScript = 'Portuguese prose';
+        } elseif ($normalized === 'en' || \str_starts_with($normalized, 'en_')) {
+            $languageName = 'English';
+            $script = 'Latin';
+            $requiredScript = 'English prose';
+        }
+
+        return [
+            'locale' => $locale,
+            'language_name' => $languageName,
+            'script' => $script,
+            'text_direction' => $direction,
+            'required_visible_script' => $requiredScript,
+            'copy_instruction' => 'Write natural customer-facing ' . $languageName . ' copy. Translate or rewrite planning text before it appears in HTML.',
+            'forbidden_visible_copy' => [
+                'Chinese/CJK planning prose when source_of_truth_locale is not CJK',
+                'English boilerplate or section labels when source_of_truth_locale is not English',
+                'raw block_goal/task_goal/why_this_block/planning_reason sentences',
+                'schema keys, prompt labels, or contract field names',
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildPlanJsonBlockVisibleCopyContract(string $contentLocale): array
+    {
+        return [
+            'source_of_truth_locale' => $contentLocale,
+            'visitor_copy_sources' => ['field_plan.sample', 'content_plan.content_copy', 'realtime_content', 'verified data facts'],
+            'intent_only_sources' => ['block_goal', 'task_goal', 'story_goal', 'why_this_block', 'planning_reason', 'block_contract', 'visual_signature', 'image_intent', 'asset_requirements', 'execution_script'],
+            'rule' => 'Intent-only sources explain what to build; never paste them as headings, body text, cards, badges, CTA labels, alt/title/aria text, or placeholders.',
         ];
     }
 
@@ -3530,13 +3728,22 @@ class AiSitePlanJsonTaskService
                 ]);
                 $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
                 $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
+                $blockLanguageContract = \is_array($block['language_contract'] ?? null) ? $block['language_contract'] : $languageContract;
+                $blockLocaleContext = \is_array($block['locale_context'] ?? null)
+                    ? $block['locale_context']
+                    : (\is_array($blockLanguageContract['locale_profile'] ?? null) ? $blockLanguageContract['locale_profile'] : []);
+                $visibleCopyContract = \is_array($block['visible_copy_contract'] ?? null)
+                    ? $block['visible_copy_contract']
+                    : $this->buildPlanJsonBlockVisibleCopyContract($contentLocale);
                 $outputContract = $this->planJsonExecutionOutputContract($blockType, $contentKeys);
                 $acceptance = $this->planJsonExecutionAcceptanceContract($blockType);
                 $runtimeContext = \array_replace_recursive($runtimeRoot, [
                     'content_locale' => $contentLocale,
                     'site_default_language' => $siteDefaultLanguage,
                     'default_language' => $siteDefaultLanguage,
-                    'language_contract' => $languageContract,
+                    'language_contract' => $blockLanguageContract,
+                    'locale_context' => $blockLocaleContext,
+                    'visible_copy_contract' => $visibleCopyContract,
                     'context_refs' => [
                         'site_context_ref' => 'plan_json',
                         'page_context_ref' => 'plan_json.pages.' . $pageType,
@@ -3554,6 +3761,9 @@ class AiSitePlanJsonTaskService
                     'block_key' => $blockKey,
                     'section_key' => $sectionKey,
                     'section_code' => $sectionCode,
+                    'language_contract' => $blockLanguageContract,
+                    'locale_context' => $blockLocaleContext,
+                    'visible_copy_contract' => $visibleCopyContract,
                     'block_type' => $blockType,
                     'page_flow_role' => $pageFlowRole,
                     'block_goal' => $blockGoal,
@@ -3614,6 +3824,10 @@ class AiSitePlanJsonTaskService
                         'block_type' => $blockType,
                         'page_flow_role' => $pageFlowRole,
                         'task_goal' => $blockGoal,
+                        'content_locale' => $contentLocale,
+                        'language_contract' => $blockLanguageContract,
+                        'locale_context' => $blockLocaleContext,
+                        'visible_copy_contract' => $visibleCopyContract,
                         'content_plan' => $contentPlan,
                         'style_plan' => $stylePlan,
                         'visual_signature' => $visualSignature,
