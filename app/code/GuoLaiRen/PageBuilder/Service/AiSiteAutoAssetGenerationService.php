@@ -1732,8 +1732,8 @@ class AiSiteAutoAssetGenerationService
             return [];
         }
 
-        $isIcon = \str_contains(\strtolower($slotId), 'site-title-icon')
-            || \in_array(\strtolower(\trim((string)($slot['field'] ?? ''))), ['icon', 'favicon', 'site.icon'], true);
+        $isIcon = \in_array(\strtolower(\trim((string)($slot['field'] ?? ''))), ['icon', 'favicon', 'site.icon'], true)
+            || \strtolower(\trim((string)($slot['kind'] ?? ''))) === 'favicon';
         $role = $isIcon ? 'icon' : 'logo';
         $candidates = $isIcon
             ? [
@@ -1820,7 +1820,7 @@ class AiSiteAutoAssetGenerationService
         if (!$this->isTransparentIdentityAssetSlot($slotId, $slot)) {
             return;
         }
-        $role = \str_contains(\strtolower($slotId), 'site-title-icon') ? 'icon' : 'logo';
+        $role = $this->resolveIdentityValidationRole($slot);
         if (!AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, $mimeType, $role)) {
             throw new \RuntimeException('Identity logo/icon generation must return a transparent PNG or safe transparent SVG asset.');
         }
@@ -1849,8 +1849,21 @@ class AiSiteAutoAssetGenerationService
             return true;
         }
 
-        $role = \str_contains(\strtolower($slotId), 'site-title-icon') ? 'icon' : 'logo';
+        $role = $this->resolveIdentityValidationRole($slot);
         return !AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset($bytes, $this->mimeTypeForIdentityAssetPath($path), $role);
+    }
+
+    /**
+     * @param array<string,mixed> $slot
+     */
+    private function resolveIdentityValidationRole(array $slot): string
+    {
+        $field = \strtolower(\trim((string)($slot['field'] ?? '')));
+        $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
+
+        return \in_array($field, ['icon', 'favicon', 'site.icon'], true) || $kind === 'favicon'
+            ? 'icon'
+            : 'logo';
     }
 
     private function mimeTypeForIdentityAssetPath(string $path): string
@@ -1874,14 +1887,14 @@ class AiSiteAutoAssetGenerationService
         $field = \strtolower(\trim((string)($slot['field'] ?? '')));
         $kind = \strtolower(\trim((string)($slot['kind'] ?? '')));
         $slotType = \strtolower(\trim((string)($slot['slot_type'] ?? '')));
-        $label = \strtolower(\trim((string)($slot['label'] ?? '')));
         $slotId = \strtolower(\trim($slotId));
+        $identityTransparentRequired = (int)($slot['identity_transparent_png_required'] ?? 0) === 1
+            || (int)($slot['transparent_png_required'] ?? 0) === 1;
 
-        return \str_contains($slotId, 'identity:website-logo')
-            || \str_contains($slotId, 'identity:site-title-icon')
+        return $identityTransparentRequired
+            || $slotType === 'logo_icon'
             || \in_array($field, ['logo', 'logo.image', 'brand.logo', 'icon', 'favicon', 'site.icon'], true)
-            || \in_array($kind, ['website_logo', 'brand_logo', 'site_title_icon', 'favicon'], true)
-            || ($slotType === 'logo_icon' && \str_starts_with($slotId, 'identity:') && (\str_contains($label, 'logo') || \str_contains($label, 'icon') || \str_contains($label, 'favicon')));
+            || \in_array($kind, ['website_logo', 'brand_logo', 'logo_option', 'favicon'], true);
     }
 
     private function isPngImageBytes(string $bytes): bool
