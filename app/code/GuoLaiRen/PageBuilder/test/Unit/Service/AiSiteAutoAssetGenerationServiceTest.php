@@ -333,20 +333,6 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
             ],
             'asset_manifest' => [
                 'slots' => [
-                    'identity:website-logo' => [
-                        'slot_id' => 'identity:website-logo',
-                        'slot_type' => 'logo_icon',
-                        'required' => 1,
-                        'label' => 'Website logo',
-                        'brief' => 'A transparent website logo.',
-                    ],
-                    'identity:site-title-icon' => [
-                        'slot_id' => 'identity:site-title-icon',
-                        'slot_type' => 'logo_icon',
-                        'required' => 1,
-                        'label' => 'Site title icon',
-                        'brief' => 'A transparent title icon.',
-                    ],
                     'home:hero' => [
                         'slot_id' => 'home:hero',
                         'slot_type' => 'hero_image',
@@ -384,8 +370,6 @@ final class AiSiteAutoAssetGenerationServiceTest extends TestCase
 
         try {
             self::assertSame(['home:hero', 'about:story'], $generatedSlots);
-            self::assertArrayNotHasKey('identity:website-logo', $slots);
-            self::assertArrayNotHasKey('identity:site-title-icon', $slots);
             self::assertSame('pending', (string)($slots['plan:theme:logo_generation:option_1']['status'] ?? ''));
             foreach ($generatedSlots as $slotId) {
                 self::assertSame('done', (string)($slots[$slotId]['status'] ?? ''));
