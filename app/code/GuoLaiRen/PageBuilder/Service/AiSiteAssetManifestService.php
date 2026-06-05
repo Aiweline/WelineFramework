@@ -1774,7 +1774,8 @@ final class AiSiteAssetManifestService
             || \in_array($pageType, ['global'], true);
 
         return \in_array($field, ['logo', 'logo.image', 'brand.logo'], true)
-            || \in_array($kind, ['website_logo', 'brand_logo'], true)
+            || \in_array($kind, ['website_logo', 'brand_logo', 'logo_option'], true)
+            || \str_starts_with($slotId, 'plan:theme:logo_generation:option_')
             || ($isIdentityContext && \str_contains($slotId, 'logo'))
             || ($isIdentityContext && \str_contains($slotType, 'logo') && !\str_contains($kind, 'favicon'))
             || ($isIdentityContext && \str_contains($label, 'logo') && !\str_contains($label, 'favicon'));
