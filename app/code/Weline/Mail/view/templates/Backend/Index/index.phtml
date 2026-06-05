@@ -4,6 +4,7 @@ $environment = $environment ?? [];
 $installPlan = $install_plan ?? [];
 $domains = $domains ?? [];
 $accounts = $accounts ?? [];
+$messages = $messages ?? [];
 $dnsResult = $dns_result ?? null;
 $clientSettings = $client_settings ?? null;
 $checks = $environment['checks'] ?? [];
@@ -62,6 +63,7 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title"><?= __('原生安装计划') ?></h5>
+                <p class="text-muted mb-2"><?= __('Fake 测试引擎仅用于 .invalid / .test 域名的本地业务冒烟，真实生产域名仍需要 Stalwart 环境。') ?></p>
                 <ol class="mb-3">
                     <?php foreach (($installPlan['steps'] ?? []) as $step): ?>
                         <li><?= $escape($step) ?></li>
@@ -87,6 +89,14 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
                     <div class="mb-3">
                         <label class="form-label"><?= __('邮件主机名') ?></label>
                         <input class="form-control" name="hostname" placeholder="mail.example.com" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('邮件引擎') ?></label>
+                        <select class="form-select" name="engine" required>
+                            <option value="stalwart">Stalwart</option>
+                            <option value="fake"><?= __('Fake 测试引擎') ?></option>
+                        </select>
+                        <div class="form-text"><?= __('Fake 仅允许 .invalid / .test 域名，用于收发信业务冒烟。') ?></div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label"><?= __('默认容量 MB') ?></label>
@@ -204,13 +214,14 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
                 <h5 class="card-title"><?= __('邮箱域名') ?></h5>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle">
-                        <thead><tr><th>ID</th><th><?= __('域名') ?></th><th><?= __('主机名') ?></th><th><?= __('状态') ?></th><th><?= __('操作') ?></th></tr></thead>
+                        <thead><tr><th>ID</th><th><?= __('域名') ?></th><th><?= __('主机名') ?></th><th><?= __('引擎') ?></th><th><?= __('状态') ?></th><th><?= __('操作') ?></th></tr></thead>
                         <tbody>
                         <?php foreach ($domains as $domain): ?>
                             <tr>
                                 <td><?= (int)$domain->getId() ?></td>
                                 <td><?= $escape($domain->getData('domain_name')) ?></td>
                                 <td><?= $escape($domain->getData('hostname')) ?></td>
+                                <td><?= $escape($domain->getData('engine')) ?></td>
                                 <td><?= $escape($domain->getData('status')) ?></td>
                                 <td>
                                     <div class="d-flex flex-wrap gap-1">
@@ -256,6 +267,51 @@ $escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOT
                                 <td><?= $escape($account->getData('status')) ?></td>
                             </tr>
                         <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title"><?= __('Fake 邮件审计') ?></h5>
+                <p class="text-muted"><?= __('显示最近 20 封 fake 模式写入的收件箱和发件箱邮件，用于后台冒烟核对。') ?></p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th><?= __('账号ID') ?></th>
+                            <th><?= __('邮件夹') ?></th>
+                            <th><?= __('发件人') ?></th>
+                            <th><?= __('收件人') ?></th>
+                            <th><?= __('主题') ?></th>
+                            <th><?= __('投递状态') ?></th>
+                            <th><?= __('时间') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if ($messages === []): ?>
+                            <tr><td colspan="8" class="text-muted"><?= __('暂无 fake 邮件记录') ?></td></tr>
+                        <?php else: ?>
+                            <?php foreach ($messages as $message): ?>
+                                <tr>
+                                    <td><?= (int)$message->getId() ?></td>
+                                    <td><?= (int)$message->getData('account_id') ?></td>
+                                    <td><?= $escape($message->getData('folder')) ?></td>
+                                    <td><?= $escape($message->getData('from_email')) ?></td>
+                                    <td><?= $escape($message->getData('to_email')) ?></td>
+                                    <td><?= $escape($message->getData('subject')) ?></td>
+                                    <td><?= $escape($message->getData('delivery_status')) ?></td>
+                                    <td><?= $escape($message->getData('created_at')) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
