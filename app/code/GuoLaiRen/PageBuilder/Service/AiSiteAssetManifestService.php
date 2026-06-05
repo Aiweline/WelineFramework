@@ -401,7 +401,7 @@ final class AiSiteAssetManifestService
         // 缁?1 鐞涘矉绱板楦款攽婵傛垹瀹?PRIMARY SUBJECT閿涘牊娓舵妯圭喘閸忓牏楠囬敍澶堚偓?
         if ($primarySubject !== '') {
             if ($isFaviconLikeSlot) {
-                $parts[] = 'PRIMARY SUBJECT (CRITICAL 閳?the favicon/title icon glyph MUST visually depict this business; do not invent unrelated mascots, animals, or fantasy creatures): ' . $primarySubject;
+                $parts[] = 'PRIMARY SUBJECT (CRITICAL 閳?the favicon glyph MUST visually depict this business; do not invent unrelated mascots, animals, or fantasy creatures): ' . $primarySubject;
             } elseif ($isLogoSlot) {
                 $parts[] = 'PRIMARY SUBJECT (CRITICAL 閳?the logo mark/glyph MUST visually depict this business; reject any unrelated mascot, animal, or fantasy figure that does not match the industry): ' . $primarySubject;
             } else {
@@ -459,7 +459,7 @@ final class AiSiteAssetManifestService
         $isHeroSlot = $this->slotDeclaresStrictHeroImage($slot);
 
         if ($isFaviconLikeSlot) {
-            $parts[] = 'Title icon / favicon output requirements (HARD): generate a production-ready square 1:1 identity image with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). The symbol/monogram is isolated on transparency; there must be no white background, solid color background, rounded square tile, card, gradient backdrop, photo scene, website mockup, watermark, screenshot frame, or paragraph text. Keep it recognizable at 16-64px with one bold business-relevant symbol or monogram.';
+            $parts[] = 'Favicon output requirements (HARD): generate a production-ready square 1:1 identity image with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). The symbol/monogram is isolated on transparency; there must be no white background, solid color background, rounded square tile, card, gradient backdrop, photo scene, website mockup, watermark, screenshot frame, or paragraph text. Keep it recognizable at 16-64px with one bold business-relevant symbol or monogram.';
         } elseif ($isLogoSlot) {
             $parts[] = 'Logo output requirements (HARD): generate a production-ready identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). Keep only the brand mark/wordmark pixels on transparency; do not place the logo on a white box, colored rectangle, rounded card, wall, photo scene, gradient backdrop, website mockup, screenshot frame, or any other background surface.';
         } elseif ($isHeroSlot) {
@@ -679,9 +679,9 @@ final class AiSiteAssetManifestService
         $slotId = \strtolower(\trim((string)($slot['slot_id'] ?? '')));
 
         return \in_array($field, ['icon', 'favicon', 'site.icon'], true)
-            || \str_contains($kind, 'favicon') || \str_contains($kind, 'title_icon')
-            || \str_contains($label, 'favicon') || \str_contains($label, 'title icon')
-            || \str_contains($slotId, 'favicon') || \str_contains($slotId, 'title-icon');
+            || \str_contains($kind, 'favicon')
+            || \str_contains($label, 'favicon')
+            || \str_contains($slotId, 'favicon');
     }
 
     /**
@@ -1743,34 +1743,14 @@ final class AiSiteAssetManifestService
 
     private function isExistingIdentityAssetUrlAcceptable(string $url, string $role): bool
     {
+        unset($role);
         $path = \parse_url($url, \PHP_URL_PATH);
         $path = \is_string($path) && $path !== '' ? $path : $url;
         $path = '/' . \ltrim(\preg_replace('#/+#', '/', \str_replace('\\', '/', $path)) ?? $path, '/');
         $lowerPath = \strtolower($path);
         $isPageBuilderGeneratedAsset = \str_contains($lowerPath, '/pub/media/page-build/')
             && \str_contains($lowerPath, '/ai-generated/');
-        if (!$isPageBuilderGeneratedAsset) {
-            return true;
-        }
-        $expectedToken = $role === 'logo' ? 'identity-website-logo' : 'identity-site-title-icon';
-        if (!\str_contains($lowerPath, $expectedToken) || (!\str_ends_with($lowerPath, '.png') && !\str_ends_with($lowerPath, '.svg'))) {
-            return false;
-        }
-        $absolutePath = BP . \str_replace('/', \DIRECTORY_SEPARATOR, \ltrim($path, '/'));
-        if (!\is_file($absolutePath)) {
-            return false;
-        }
-        $bytes = @\file_get_contents($absolutePath);
-        if (!\is_string($bytes) || $bytes === '') {
-            return false;
-        }
-
-        $role = $role === 'logo' ? 'logo' : 'icon';
-        return AiSiteIdentityAssetTransparencyValidator::isAcceptableIdentityAsset(
-            $bytes,
-            \str_ends_with($lowerPath, '.svg') ? 'image/svg+xml' : 'image/png',
-            $role
-        );
+        return !$isPageBuilderGeneratedAsset;
     }
 
     /**
@@ -2371,7 +2351,7 @@ final class AiSiteAssetManifestService
         }
 
         if ($isLogoSlot) {
-            $assetName = $isFaviconLikeSlot ? 'title icon / favicon' : 'logo';
+            $assetName = $isFaviconLikeSlot ? 'favicon' : 'logo';
             return 'Confirmed site theme palette (HARD): ' . $paletteLine . "\n"
                 . 'Brand asset color contract (HARD): the ' . $assetName . ' MUST visibly follow the confirmed site theme palette above for glyph, accent, or subtle shadow only. The canvas background stays transparent alpha, not a palette-colored tile. Do not introduce unrelated default brand colors unless the exact hex exists in this palette. If the business subject has natural colors outside the palette, express that subject through silhouette, material, texture, or composition while keeping color usage palette-compatible.';
         }
