@@ -672,6 +672,9 @@
             + renderPlanQueueProgressBar('Pending', pendingCount, total, 'secondary', pending)
             + renderPlanQueueTaskDetails(normalized.details);
         latestEl.classList.remove('d-none');
+        if (bridge && typeof bridge.syncPlanPagePreviewProgressFromStageOneProgress === 'function') {
+            bridge.syncPlanPagePreviewProgressFromStageOneProgress(normalized);
+        }
         return true;
     }
 
