@@ -1,0 +1,35 @@
+{
+  "name": "weline-codex-plugin",
+  "version": "0.1.0",
+  "description": "WelineFramework development skills and repository guardrails for Codex.",
+  "author": {
+    "name": "WelineFramework"
+  },
+  "homepage": "https://github.com/WelineFramework",
+  "license": "MIT",
+  "keywords": [
+    "weline",
+    "welineframework",
+    "codex",
+    "skills",
+    "php-framework"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "WelineFramework",
+    "shortDescription": "WelineFramework skills, guardrails, and GitNexus workflows.",
+    "longDescription": "Bundles the WelineFramework AI skill system for Codex: engineering rules, role-based skills, QA and release gates, UI guidance, WLS runtime guidance, documentation workflows, and GitNexus code-intelligence skills.",
+    "developerName": "WelineFramework",
+    "category": "Development",
+    "capabilities": [
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Use WelineFramework rules to plan this change.",
+      "Route this Weline task to the right skill.",
+      "Review this Weline change with release gates."
+    ],
+    "brandColor": "#0F766E"
+  }
+}

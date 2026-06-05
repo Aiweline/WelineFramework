@@ -157,6 +157,33 @@ class QueueDispatchService
                 continue;
             }
 
+            if ($this->resolveDeadWorkerRecoverableQueue($queue) instanceof DeadWorkerRecoverableQueueInterface) {
+                $output = '';
+                if ($this->shouldRecoverDeadWorker($queue, 0, $output)) {
+                    $message = $this->deadWorkerRecoveryMessage($queue, 0, $output);
+                    $queue->setStatus($queue::status_pending)
+                        ->setFinished(false)
+                        ->setPid(0)
+                        ->setAuto(true)
+                        ->setData(Queue::schema_fields_start_at, null)
+                        ->setData(Queue::schema_fields_end_at, null)
+                        ->setResult($message)
+                        ->setProcess($this->appendProcessMessage($queue->getProcess(), $message))
+                        ->save();
+                    continue;
+                }
+
+                $message = 'Running recoverable queue has no PID and recovery is not allowed; marked error to avoid repeated AI dispatch.';
+                $queue->setStatus($queue::status_error)
+                    ->setFinished(true)
+                    ->setPid(0)
+                    ->setData(Queue::schema_fields_end_at, \date('Y-m-d H:i:s'))
+                    ->setResult($this->appendProcessMessage($queue->getResult(), $message))
+                    ->setProcess($this->appendProcessMessage($queue->getProcess(), $message))
+                    ->save();
+                continue;
+            }
+
             $message = (string)__('运行中队列没有记录 PID，已重置为 pending 等待重新调度。');
             $queue->setStatus($queue::status_pending)
                 ->setResult($this->appendProcessMessage($queue->getResult(), $message))
