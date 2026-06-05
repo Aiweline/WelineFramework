@@ -3444,7 +3444,7 @@ final class AiSitePlanJsonGenerationService
             'output_path' => 'plan_json.theme.logo_generation',
             'prompt_brief' => 'Generate a transparent PNG website logo for ' . $siteName . ' that matches ' . $paletteText . ' and supports: ' . $primaryGoal,
             'style_direction' => 'Distinct, simple, and readable at header size; avoid generic placeholder marks.',
-            'reuse_policy' => 'Generate once, then reuse the final logo URL across shared header, footer, and website profile identity.',
+            'reuse_policy' => 'Generate once from this theme plan; downstream consumers should resolve logo identity from plan_json.theme.logo_generation.',
         ];
     }
 
