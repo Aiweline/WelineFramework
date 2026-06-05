@@ -84,7 +84,7 @@ final class AiSiteAssetManifestServicePromptTest extends TestCase
 
         // slot.brief 濠?"Generate the official website logo for X" 闂傚鍋勫ú銈夊箠濮椻偓婵＄绠涢弴鐔蜂粡濡炪倖鍔х徊楣冨汲椤撱垺鐓曢柟閭﹀幘閹虫洜绱掓潏銊х疄闁哄苯妫濆畷褰掝敊閻撳氦绁村┑鐐村灦閹逛線顢欐繝鍕閻庯綆鍠栫粈鍐煠绾板崬澧扮€?
         self::assertStringNotContainsString('Generate the official website logo for "Teenipiya"', $prompt);
-        self::assertStringContainsString('Logo specification:', $prompt);
+        self::assertStringContainsString('Slot brief (reference only', $prompt);
 
         // 闂傚鍋勫ú銈夊箠濮椻偓婵＄绠涘☉妯虹彉婵犮垼娉涢…顒€鈻撻埡鍐＜闁规儳鎳愰悾杈ㄣ亜閿曗偓瀵泛顭囬懡銈嗘殰妞ゆ柨澧介ˇ顕€姊绘笟鍥у闁诲繑绻堝畷?prompt 婵犵數濮靛ú鏍磹鐠佸磭鏄?
         self::assertStringContainsString('Reinforced contract', $prompt);
