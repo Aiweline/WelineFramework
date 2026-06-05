@@ -319,7 +319,9 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
 
         self::assertNull($detect->call(
             $service,
-            "<section class='pb-c-root'><div class='pb-c-inner'><div class='pb-c-action'><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Baixar APK', ENT_QUOTES, 'UTF-8') ?></button></div></div></section>",
+            <<<'HTML'
+<section class='pb-c-root'><div class='pb-c-inner'><div class='pb-c-action'><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Baixar APK', ENT_QUOTES, 'UTF-8') ?></button></div></div></section>
+HTML,
             'content/home-page-final-cta'
         ));
     }
@@ -407,23 +409,46 @@ final class AiSitePageComponentGenerationLocaleTest extends TestCase
         self::assertStringContainsString('Repeated-card self-check', $prompt);
     }
 
+    public function testComponentPromptRequiresFaqQuestionTitlesExpansionAndCtaText(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            pageBlueprintService: new AiSitePageBlueprintService(),
+        );
+
+        $buildPrompt = function (): string {
+            return $this->buildComponentJsonPhpSafetyRulesEn();
+        };
+
+        $prompt = $buildPrompt->call($service);
+
+        self::assertStringContainsString('Every `.pb-c-cta` anchor/button must contain visible safe PHP echoed CTA text', $prompt);
+        self::assertStringContainsString('FAQ interaction contract', $prompt);
+        self::assertStringContainsString('Number chips, icons, or chevrons cannot be the only visible question content', $prompt);
+        self::assertStringContainsString('aria-expanded', $prompt);
+        self::assertStringContainsString('toggles only this component', $prompt);
+    }
+
     public function testContentFrameworkKeepsResponsiveCssTopLevelAndInstallsActionBridge(): void
     {
         $builder = new FrameworkBuilder();
 
         $phtml = $builder->buildComponent('content', ['name' => 'CTA test'], [
             'extra_fields' => 'cta.text => CTA text:text:Baixar APK',
-            'php_variables' => "$ctaText = $getConfig('cta.text', 'Baixar APK');",
+            'php_variables' => <<<'PHP'
+$ctaText = $getConfig('cta.text', 'Baixar APK');
+PHP,
             'css_extra' => '#componentId .pb-c-root{padding:40px;}',
             'css_responsive' => '@media (max-width: 768px){#componentId .pb-c-inner{display:block;}}@media (max-width: 420px){#componentId .pb-c-root{padding:20px;}}',
-            'html_content' => "<section class='pb-c-root'><div class='pb-c-inner'><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Baixar APK', ENT_QUOTES, 'UTF-8') ?></button></div></section>",
+            'html_content' => <<<'HTML'
+<section class='pb-c-root'><div class='pb-c-inner'><button type='button' class='pb-c-cta' data-pb-ai-action='primary_cta'><?= htmlspecialchars($ctaText ?? 'Baixar APK', ENT_QUOTES, 'UTF-8') ?></button></div></section>
+HTML,
             'js_content' => '',
         ]);
 
         self::assertStringContainsString("CustomEvent('pb:cta'", $phtml);
         self::assertStringContainsString('data-pb-ai-bound', $phtml);
-        self::assertStringNotContainsString("    @media (max-width: 768px){#<?= $componentId ?> .pb-c-inner", $phtml);
-        self::assertStringContainsString("\n@media (max-width: 768px){#<?= $componentId ?> .pb-c-inner", $phtml);
+        self::assertStringNotContainsString('    @media (max-width: 768px){#<?= $componentId ?> .pb-c-inner', $phtml);
+        self::assertStringContainsString("\n" . '@media (max-width: 768px){#<?= $componentId ?> .pb-c-inner', $phtml);
     }
 
     /**

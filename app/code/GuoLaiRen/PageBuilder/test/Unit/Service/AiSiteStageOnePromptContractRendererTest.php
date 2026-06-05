@@ -34,6 +34,9 @@ final class AiSiteStageOnePromptContractRendererTest extends TestCase
         self::assertStringContainsString('"page_design_plan"', $prompt);
         self::assertStringContainsString('"hero_download":{"block_key":"hero_download"', $prompt);
         self::assertStringContainsString('Top-level keys named block_key, page_flow_role, content, design_tags, visual_signature, image_intent, field_plan, or execution_script', $prompt);
+        self::assertStringContainsString('Home first-block lock', $prompt);
+        self::assertStringContainsString('the first dynamic block under plan_json.pages.home_page must be the Banner/Hero block', $prompt);
+        self::assertStringContainsString('never place text-only stats, FAQ, reviews, support, or other body content before the home Banner/Hero', $prompt);
     }
 
     public function testRepairContractNamesNestedPageTypeWrapperFailure(): void
