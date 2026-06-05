@@ -13,8 +13,8 @@ The confirm-plan endpoint has the same contract when it confirms a plan and star
 - Confirmation and reuse responses now use a compact start-plan state patch.
 - Running plan reuse responses now reuse the queue-oriented state returned by `startOperation`.
 - Existing active queue guard responses now return `buildQueuedOperationState(...)` directly instead of wrapping a full workspace state.
-- PageBuilder queue handoff calls pass `wake_scheduler => false` when creating, resetting, or taking over queue rows, so controller requests do not start queue workers.
-- Repeated plan or build starts now replace the previous same-slot queue run: reuse the existing `queue_slot` row, terminate any live old pid through `queue.takeover`, then reset the row to `pending` with the latest payload.
+- Queue handoff calls no longer use the removed `wake_scheduler` parameter; the Queue query provider persists rows and dispatches queue events only, leaving execution to the queue scheduler.
+- Repeated plan or build starts observe the previous same-slot queue run when it is still `pending`, `queued`, `running`, or `processing`; the controller returns the existing queue metadata instead of taking over or killing the old pid.
 - `post-confirm-plan` build start uses the shared `startOperation('build')` handoff, and confirm-only responses return a compact confirm payload instead of rebuilding full workspace state.
 - Scheduler-aware integration assertions allow the system scheduler to move the queue from `pending` to `running` before the test reads it, while still asserting that the controller did not self-dispatch the queue.
 
@@ -22,6 +22,6 @@ The confirm-plan endpoint has the same contract when it confirms a plan and star
 
 Start endpoints such as `post-start-plan` and `post-confirm-plan` should not call full workspace hydration as a fallback for queue start responses. Full workspace state is still available through the workspace state/polling endpoints; queue start responses should carry only operation status, `execution_token`, `stream_url`, `queue_id`, and `queue_wait` data.
 
-Queue creation and reset must remain a pure handoff. The query-provider default is allowed to wake the scheduler for generic queue use, but PageBuilder start endpoints must opt out and leave dispatch to the system scheduler.
+Queue creation and reset must remain a pure handoff. The query provider must not use request parameters such as `wake_scheduler`, `dispatch`, or `auto_dispatch` to synchronously wake queue execution; dispatch belongs to the queue scheduler.
 
-For plan and build starts, the session has one durable queue slot per stage. A fresh click should not create a competing queue while an older same-slot worker is still alive; it should take over that row, kill the old pid when present, clear stale runtime state, and leave the row pending for the scheduler.
+For plan and build starts, the session has one durable queue slot per stage. A fresh click should not create a competing queue while an older same-slot queue is still active; it should return the existing queue metadata. Only when no active same-slot queue exists should the controller create or reset a pending row for the scheduler.
