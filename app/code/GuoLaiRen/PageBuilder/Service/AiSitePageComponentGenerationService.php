@@ -1453,6 +1453,8 @@ class AiSitePageComponentGenerationService
         $visualContract = \is_array($renderContext['_visual_contract'] ?? null)
             ? $renderContext['_visual_contract']
             : $this->decodeRuntimeVisualContract($defaultConfig);
+        $originalRequired = (int)($visualContract['required'] ?? 0) === 1
+            || \trim((string)($defaultConfig['runtime.section_image_required'] ?? '')) === '1';
         if ($slotId === '') {
             $slotId = \trim((string)($visualContract['slot_id'] ?? $defaultConfig['runtime.section_image_slot_id'] ?? ''));
         }
@@ -1471,6 +1473,11 @@ class AiSitePageComponentGenerationService
         }
 
         $visualContract['required'] = 0;
+        if ($originalRequired) {
+            $defaultConfig['runtime.section_image_contract_required'] = '1';
+            $visualContract['contract_required'] = 1;
+            $visualContract['original_required'] = 1;
+        }
         $visualContract['image_unavailable'] = 1;
         $visualContract['unavailable_reason'] = $reason;
         $visualContract['fallback_strategy'] = 'css_product_ui_media';
@@ -12184,6 +12191,7 @@ JSON;
         $subject = (string)($visualContract['subject'] ?? '');
         $style = (string)($visualContract['style'] ?? '');
         $strictHeroCover = (int)($visualContract['strict_hero_cover'] ?? 0) === 1;
+        $contractOriginallyRequired = (int)($visualContract['contract_required'] ?? $visualContract['original_required'] ?? 0) === 1;
         $requiredAssetContract = ($required && $slotId !== '' && $finalUrl !== '')
             ? $this->buildVerifiedAssetPromptContract([$slotId => $finalUrl])
             : '';
@@ -12195,14 +12203,15 @@ JSON;
         if ($required && $slotId !== '' && $finalUrl === '') {
             return "Block visual contract:\n"
                 . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
-                . "- image_required: no\n"
-                . "- Pending image slot {$slotId}: generated media is unavailable for this run. Do not invent a placeholder image URL and do not claim CSS-only media is a generated image.\n"
-                    . "- If a later FINAL IMAGE CONTRACT supplies an exact image URL/template, prefer that editable <img> binding. If no verified final_url/template is available, return no fake image tags and build a polished CSS-only or product-UI media surface so the page block can still complete.\n";
+                . "- image_required: yes\n"
+                . "- Pending image slot {$slotId}: this block still requires generated media, but no verified final_url/template is available yet. Do not invent a placeholder image URL and do not claim CSS-only media is a generated image.\n"
+                . "- Required image confirmation rule: if a later FINAL IMAGE CONTRACT supplies an exact image URL/template, that editable <img> binding is mandatory for this block. If this run must return JSON before the asset exists, return no fake image tags, build a temporary polished CSS/product-UI visual surface, and preserve the unresolved image markers so the block can be retried with the generated asset.\n";
         }
         if ((int)($visualContract['image_unavailable'] ?? 0) === 1) {
             return "Block visual contract:\n"
                 . "- visual_contract: " . $this->jsonEncodeForPrompt($visualContract, 1600) . "\n"
                 . "- image_required: no\n"
+                . ($contractOriginallyRequired ? "- original_image_required: yes; this is an unresolved generated-image dependency, not a CSS-only design choice. Keep media copy, alt planning, and layout ready for the retry image slot.\n" : '')
                 . "- image_unavailable: yes; build a polished CSS-only or product-UI media surface for this section.\n"
                 . "- Do not invent image URLs, do not render empty <img> tags, and do not show unavailable-image diagnostics as visitor copy.\n";
         }
@@ -13468,16 +13477,22 @@ JSON;
                 $PlanJsonTask
             );
         }
-        $strictHeroCoverForPrompt = (int)($assetContext['strict_hero_cover'] ?? $runtimeContext['current_asset']['strict_hero_cover'] ?? $PlanJsonTask['visual_contract']['strict_hero_cover'] ?? 0) === 1;
+        $currentAssetForPrompt = \is_array($runtimeContext['current_asset'] ?? null) ? $runtimeContext['current_asset'] : [];
+        $visualContractForPrompt = \is_array($PlanJsonTask['visual_contract'] ?? null) ? $PlanJsonTask['visual_contract'] : [];
+        $strictHeroCoverForPrompt = (int)($assetContext['strict_hero_cover'] ?? $currentAssetForPrompt['strict_hero_cover'] ?? $visualContractForPrompt['strict_hero_cover'] ?? 0) === 1;
         $verifiedAssetShapeRule = $strictHeroCoverForPrompt
             ? "- Required slot shape: because CTX_CURRENT_ASSET.strict_hero_cover=1, make that same editable <img> a cover layer with CSS object-fit/absolute/inset/width/height, then place overlay text above it; do not replace the editable <img> with CSS background-image only. Add a component-prefixed hero image class to the <img> and style the exact same selector with position:absolute; inset:0; width:100%; height:100%; object-fit:cover.\n"
             : "- Required slot shape: CTX_CURRENT_ASSET.strict_hero_cover is not enabled, so the editable <img> must become a page-specific media surface, visual card, device/status panel, story frame, proof badge, or compact opening accent that fits this page. Do not turn it into a full-cover hero/background layer solely because a block/template is named hero or banner.\n";
         $noVerifiedImageVisualRule = $strictHeroCoverForPrompt
             ? "- CSS-only strict hero rule: CTX_CURRENT_ASSET.strict_hero_cover=1, so satisfy the HERO_ROLE_OUTLINE from the component-specific contract. The `.pb-c-media` element must contain `.pb-c-media-stage`, `.pb-c-media-subject`, `.pb-c-media-detail`, and `.pb-c-media-label` children; never leave `.pb-c-media` empty. Style `.pb-c-media` with position:absolute; inset:0; and a confirmed palette hex background; style `.pb-c-media-stage`, `.pb-c-media-subject`, `.pb-c-media-detail`, `.pb-c-media-label`, `.pb-c-motif`, and `.pb-c-orbit` as structured editorial/product surfaces, not generic circles/blobs; the label text must name a concrete subject from the approved brief; style `.pb-c-overlay` with a confirmed dark/brand overlay token and opacity; style `.pb-c-text-panel` with a readable confirmed palette panel background; and put `.pb-c-cta` inside `.pb-c-action` with visible outer spacing.\n"
             : "- CSS-only non-strict visual rule: CTX_CURRENT_ASSET.strict_hero_cover=0 or absent, so do not use HERO_ROLE_OUTLINE. Use CTX_BLOCK_VISUAL_SIGNATURE and page_design_plan to choose a page-specific editorial/support/proof/form/policy/CTA composition with CSS-only motifs, proof devices, rails, badges, panels, or compact media surfaces. Do not force full-bleed cover media, overlay, orbit/motif layers, or text-panel treatment because of a hero/banner name.\n";
+        $currentBlockRequiresImage = $this->imageIntentNeedsImage($currentBlockImageIntent)
+            || (int)($assetContext['required'] ?? $currentAssetForPrompt['required'] ?? $visualContractForPrompt['required'] ?? 0) === 1
+            || (int)($assetContext['contract_required'] ?? $currentAssetForPrompt['contract_required'] ?? $visualContractForPrompt['contract_required'] ?? 0) === 1;
         $verifiedAssetRule = $verifiedAssets !== []
             ? "- verified_assets: " . $this->jsonEncodeForPrompt($verifiedAssets, 1800) . "\n"
                 . "- HARD CONTRACT: every verified_asset final_url for this section MUST appear as a real editable <img> in html_content by adapting the concrete template below. Do not skip any. Unused generated images waste API tokens.\n"
+                . "- Image-text composition contract: do not paste the image as a lonely asset. Pair each generated image with localized heading/body/CTA/proof copy from the current block, and style the image as an integrated media panel, proof visual, editorial frame, or cover layer according to the block contract.\n"
                 . "- Rules: use the supplied final_url value without changing it as the media.image_url default/fallback; match the asset by slot_id context. If no asset matches this section, render CSS-only decorative structure; never use <svg>.\n"
                 . "- Slot placement contract: place the editable <img> for the matching slot inside this component's root wrapper before decorative-only layers. For non-hero sections, use it as a media card, portrait/avatar rail, proof image, or editorial visual; never omit it because the section is text-heavy.\n"
                 . "- Editable tag contract: html_content must contain a real <img> tag adapted from verified_asset_editable_img_shape. That same <img> must keep data-pb-ai-asset-slot and data-pb-ai-image-role='generated-asset' values from the copied editable_img, while src/alt render from media.image_url/media.image_alt fields. You may add a component-prefixed class.\n"
@@ -13486,6 +13501,7 @@ JSON;
                 . $this->buildVerifiedAssetPromptContract($verifiedAssets)
             : "- verified_assets: []\n"
                 . "- NO_VERIFIED_IMAGE_MODE: no verified real image URL is available for this task. html_content must not contain <img>, src=, data-pb-ai-image-role, data-pb-ai-asset-slot, CSS url(...), `/pub/media/`, stock-photo URLs, or guessed file paths.\n"
+                . ($currentBlockRequiresImage ? "- REQUIRED_IMAGE_PENDING: the frozen block image_intent/visual contract still requires generated media, but this run has no confirmed final_url. Do not reinterpret the block as CSS-only by design; build only a temporary localized product/editorial media surface and keep the output ready for retry with the exact asset slot.\n" : '')
                 . $noVerifiedImageVisualRule
                 . "- verified asset rule: render visual media as CSS-only shapes/pseudo-elements or omit media; do not invent image URLs or placeholder media.\n";
         $ctaResponsiveOverride = "- CTA responsive override: if any frozen task/context/design field says CTA, button, or CTA/form controls should fill available width, apply full-width behavior to bands, rows, forms, inputs, or mobile containers first. Prefer action/actions for wrappers so wrapper CSS is not mistaken for button CSS. The actual CTA button should remain a recognizable button in the default layout and must not be styled as a desktop page-width bar.\n";
