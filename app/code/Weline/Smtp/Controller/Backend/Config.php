@@ -77,7 +77,7 @@ class Config extends BackendController
         } else {
             $this->getMessageManager()->addError($has_error);
         }
-        $this->redirect($this->getBackendUrl('smtp/backend/config'));
+        $this->redirect($this->_url->getBackendUrl('smtp/backend/config'));
     }
 
     #[Acl('Weline_Smtp::smtp_config_test', '测试发送', 'mdi-send', '测试 SMTP 发送', 'Weline_Smtp::system_smtp_config')]
@@ -118,7 +118,7 @@ class Config extends BackendController
                 $this->getMessageManager()->addError($e->getMessage());
             }
         }
-        $this->redirect($this->getBackendUrl('smtp/backend/config'));
+        $this->redirect($this->_url->getBackendUrl('smtp/backend/config'));
     }
 
     /** 保存多发件人配置（JSON）及联系人 */

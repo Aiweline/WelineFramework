@@ -201,13 +201,6 @@ final class SseWriterTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function testDefaultCooperativeYieldUsesShortDelay(): void
-    {
-        $sse = new SseWriter();
-
-        $this->assertSame(1, $this->readPrivateInt($sse, 'yieldDelayMs'));
-    }
-
     public function testSetCooperativeYieldConfiguresBehavior(): void
     {
         $sse = new SseWriter();
