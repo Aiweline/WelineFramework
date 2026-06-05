@@ -81,7 +81,7 @@ final class AiSiteStageOnePromptContractRenderer
             '- Block key lock: required_block_keys are exact machine keys, not labels. Do not translate, pluralize, rename, or replace them with synonyms such as featured_articles, content_list, story_cards, details, overview, list, grid, or cards.',
             '- The page object must include page_goal, theme_alignment_summary, page_design_plan, and non-empty dynamic block objects keyed directly by block_key under the page (for example pages.home_page.hero). Do not return a blocks array as the persisted page state.',
             '- Blocks must stay within min/max, include every required block_key exactly once, hit target_blocks exactly when present, avoid generic block_key values, and keep block_key unique within the page.',
-            '- Every block must include the required structural fields: content, design_tags, visual_signature, image_intent, exactly ' . AiSiteStageOneContractService::FIELD_PLAN_COUNT . ' field_plan rows, and execution_script.core_copy. Write visitor-facing copy where possible, but the hard gate is structure only; copy wording, image choice, and image count are generation guidance.',
+            '- Every block must include the required structural fields: content, design_tags, visual_signature, image_intent, analytics_events, exactly ' . AiSiteStageOneContractService::FIELD_PLAN_COUNT . ' field_plan rows, and execution_script.core_copy. Write visitor-facing copy where possible, but the hard gate is structure only; copy wording, image choice, and image count are generation guidance.',
             '- Required design_tags keys for every block: ' . $this->json(\is_array($pageContract['required_design_tag_keys'] ?? null) ? $pageContract['required_design_tag_keys'] : AiSiteStageOneContractService::DESIGN_TAG_KEYS) . '; put implementation_note inside design_tags, not beside it.',
             '- Required visual_signature keys for every block: ' . $this->json(\is_array($pageContract['visual_signature_keys'] ?? null) ? $pageContract['visual_signature_keys'] : AiSiteStageOneContractService::VISUAL_SIGNATURE_KEYS) . '. composition_pattern, spatial_rhythm, media_strategy, surface_treatment, and interaction_pattern must each be concrete and non-empty. Static content should still write a block-specific pattern such as "static reading panel; focus-visible links only; no ambient motion" instead of an empty string. Adjacent duplicate checks are quality diagnostics; they should guide variety but must not be treated as a reason to invent unrelated blocks.',
             '- Visual signature rule: name the actual layout family and treatment for this block, such as split editorial hero, staggered proof rail, icon-led feature matrix, timeline band, form-support split, FAQ accordion, policy checklist, or final CTA stage. Do not repeat the same hero/card/media arrangement across page blocks.',
@@ -93,6 +93,9 @@ final class AiSiteStageOnePromptContractRenderer
             '- Field plan intent examples (choose fields by block intent, not by block_key text alone): ' . $this->json($this->fieldPlanIntentExamples()) . '.',
             '- Visible body copy handoff: every block, including contact_cta/final_cta/download_cta blocks, should contain at least one real visitor-facing body sentence in execution_script.core_copy, field_plan row 1 supporting_copy, realtime_content.supporting_copy, feature_points, or content. This is generation guidance; the hard contract is the presence of the required structure.',
             '- CTA block copy rule: cta/contact_cta/final_cta/download_cta blocks must include both a visible supporting sentence and an explicit action label. The supporting sentence must explain the next visitor step without inventing contact values, response times, deposit/withdrawal promises, or unsupported rewards.',
+            '- Analytics event plan rule: every block with a measurable visitor action must include block-level analytics_events directly under plan_json.pages.' . $pageType . '.{block_key}. Include primary CTA, lead form, contact, download, booking, signup, product, cart, checkout, and navigation CTA actions. Use an empty array only when the block has no meaningful action.',
+            '- Analytics event shape: each analytics_events item must include event_name, trigger, target, selector_hint, and metadata. Use Weline Visitor event names from the default-loaded weline-pixel-events skill, such as hero_cta_click, pricing_cta_click, lead_submit, signup_click, contact_click, download_click, booking_click, demo_request_click, add_to_cart, buy_now, begin_checkout, or route_click. Avoid vague names like click, button_click, section_click, or ai_event.',
+            '- Analytics handoff rule: selector_hint must point to the exact CTA/form/product control later rendered by this block, for example .pb-c-cta, form[data-pb-lead-form], or .pb-c-card .pb-c-cta. metadata should include source=pagebuilder_ai_site, page_type, block_key, cta_label/form_name/href when applicable, and no personal data or secrets.',
             '- Every field_plan row must include field, sample, and implementation_note. sample should be the actual text/asset brief the customer could approve as-is; wording quality is generation guidance, not a structural gate.',
             '- field_plan.sample and field_plan.implementation_note must not be generic filler text or prompt language, and must not start with write, rewrite, describe the/this block, describe the/this field, use this field, do not output, 鍥寸粫, 绐佸嚭, 璇存槑, 瀹屽杽, or 浼樺寲. Visitor-facing form hint text such as "Describe your issue..." is allowed only as the final input hint itself; never name the HTML input hint attribute or call it a filler value.',
             '- Visible copy should use the Website content locale and reuse concrete nouns/actions from the brief and frozen page/block plan. This is prompt guidance; the Stage-1 hard gate checks structure.',
@@ -303,6 +306,20 @@ final class AiSiteStageOnePromptContractRenderer
                     'reuse_policy' => 'reuse_when_intent_matches',
                     'css_motif' => '',
                 ],
+                'analytics_events' => [
+                    [
+                        'event_name' => 'hero_cta_click',
+                        'trigger' => 'click',
+                        'target' => 'primary_cta',
+                        'selector_hint' => '.pb-c-cta',
+                        'metadata' => [
+                            'source' => 'pagebuilder_ai_site',
+                            'page_type' => 'home_page',
+                            'block_key' => 'hero',
+                            'cta_label' => 'Start playing',
+                        ],
+                    ],
+                ],
                 'field_plan' => [
                     ['field' => 'headline', 'sample' => 'Enter the neon card room', 'implementation_note' => 'Render as the main H1.'],
                     ['field' => 'supporting_copy', 'sample' => 'Fast table entry, trusted play cues, and clear game highlights for mobile players.', 'implementation_note' => 'Render below the headline.'],
@@ -338,6 +355,7 @@ final class AiSiteStageOnePromptContractRenderer
                     'reuse_policy' => 'no_generated_image',
                     'css_motif' => 'glass testimonial cards with accent side borders and gold star badges',
                 ],
+                'analytics_events' => [],
                 'field_plan' => [
                     ['field' => 'headline', 'sample' => 'Trusted by Players', 'implementation_note' => 'Render above review cards.'],
                     ['field' => 'supporting_copy', 'sample' => 'Secure gameplay with quick support.', 'implementation_note' => 'Render as proof copy.'],
@@ -572,6 +590,7 @@ final class AiSiteStageOnePromptContractRenderer
                 'design_tags' => '{complete object}',
                 'visual_signature' => '{complete object}',
                 'image_intent' => '{complete object}',
+                'analytics_events' => '[event records for CTA/form/product actions, or []]',
                 'field_plan' => '[exactly 3 rows]',
                 'execution_script' => '{complete object with core_copy}',
             ];

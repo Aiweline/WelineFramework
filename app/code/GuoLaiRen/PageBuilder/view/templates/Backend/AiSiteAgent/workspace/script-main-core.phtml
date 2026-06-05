@@ -1091,6 +1091,10 @@
     };
     workspaceApi.retryPhaseOnePlanGeneration = function (options) {
         var opts = options && typeof options === 'object' ? options : {};
+        if (opts.manualQueueAction !== true) {
+            toast('warning', messages.planStartUnavailable);
+            return false;
+        }
         if (planStartRequestPending || planSseRunning || isPlanAiGenerationTelemetryActive(null) || hasRunningQueueForUi(null, 'plan')) {
             toast('warning', getRetryableAiFailureMessage(null, 'plan'));
             return false;
@@ -3072,7 +3076,7 @@
         var normalized = String(operation || '').trim();
         document.documentElement.dataset.pbRetryableAiTriggerOperation = normalized;
         if (normalized === 'plan') {
-            return !!workspaceApi.retryPhaseOnePlanGeneration({ forceRebuild: false });
+            return !!workspaceApi.retryPhaseOnePlanGeneration({ forceRebuild: false, manualQueueAction: true });
         }
         if (normalized === 'build') {
             if (!hasRetryableAiFailures(getLatestWorkspaceStateForQueuePrompt(), 'build')) {
@@ -10912,6 +10916,15 @@
         timestamp: 0
     };
 
+    function withManualQueueButtonPayload(payload) {
+        return Object.assign({}, payload || {}, { manual_trigger: 'button' });
+    }
+
+    function hasManualQueueButtonPayload(payload) {
+        var normalized = payload && typeof payload === 'object' ? payload : {};
+        return String(normalized.manual_trigger || normalized.manualTrigger || '').trim() === 'button';
+    }
+
     function markEmbeddedPreviewActionDebug(status, payload, detail) {
         if (!document.body || !document.body.dataset) {
             return;
@@ -10955,6 +10968,11 @@
         if (shouldSuppressEmbeddedPreviewAction(normalizedAction, normalizedPayload)) {
             return true;
         }
+        if (normalizedAction === 'regenerate-block' && !hasManualQueueButtonPayload(normalizedPayload)) {
+            markEmbeddedPreviewActionDebug('blocked', normalizedPayload, 'missing_button_trigger');
+            toast('warning', messages.refineUnavailable);
+            return true;
+        }
         markEmbeddedPreviewActionDebug('dispatch', normalizedPayload, '');
         if (normalizedAction === 'refine') {
             openRefineComponentModal(normalizedPayload);
@@ -10972,7 +10990,7 @@
     }
 
     function getEmbeddedActionButtonInlineDispatch() {
-        return "return (window.__pbDispatchComponentActionFromButton ? window.__pbDispatchComponentActionFromButton(this, event) : (function(target, e) { if (!target) { return true; } if (e && typeof e.preventDefault === 'function') { e.preventDefault(); } var wrapper = target.closest ? target.closest('.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper') : null; if (!wrapper || !window.parent || window.parent === window) { return true; } var currentPageType = ''; try { currentPageType = new URLSearchParams(window.location.search).get('page_type') || ''; } catch (err) { currentPageType = ''; } var payload = { type: 'pb-component-action', action: target.getAttribute('data-pb-action') || '', component: wrapper.getAttribute('data-component') || wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-block-id') || '', component_code: wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-component') || wrapper.getAttribute('data-block-id') || '', block_id: wrapper.getAttribute('data-block-id') || wrapper.getAttribute('data-ai-block-id') || wrapper.getAttribute('data-component') || '', page_type: wrapper.getAttribute('data-page-type') || currentPageType, region: wrapper.getAttribute('data-region') || '', index: wrapper.getAttribute('data-index') || '' }; try { if (window.parent.PbAiWorkspacePreview && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === 'function' && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } } catch (err) {} window.parent.postMessage(payload, '*'); return false; })(this, event));";
+        return "return (window.__pbDispatchComponentActionFromButton ? window.__pbDispatchComponentActionFromButton(this, event) : (function(target, e) { if (!target) { return true; } if (e && typeof e.preventDefault === 'function') { e.preventDefault(); } var wrapper = target.closest ? target.closest('.pb-ai-block-wrapper, .tpmst-component-wrapper, .pb-component-wrapper') : null; if (!wrapper || !window.parent || window.parent === window) { return true; } var currentPageType = ''; try { currentPageType = new URLSearchParams(window.location.search).get('page_type') || ''; } catch (err) { currentPageType = ''; } var payload = { type: 'pb-component-action', action: target.getAttribute('data-pb-action') || '', component: wrapper.getAttribute('data-component') || wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-block-id') || '', component_code: wrapper.getAttribute('data-component-code') || wrapper.getAttribute('data-component') || wrapper.getAttribute('data-block-id') || '', block_id: wrapper.getAttribute('data-block-id') || wrapper.getAttribute('data-ai-block-id') || wrapper.getAttribute('data-component') || '', page_type: wrapper.getAttribute('data-page-type') || currentPageType, region: wrapper.getAttribute('data-region') || '', index: wrapper.getAttribute('data-index') || '', manual_trigger: 'button' }; try { if (window.parent.PbAiWorkspacePreview && typeof window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction === 'function' && window.parent.PbAiWorkspacePreview.handleEmbeddedPreviewAction(payload)) { if (e && typeof e.stopPropagation === 'function') { e.stopPropagation(); } if (e && typeof e.stopImmediatePropagation === 'function') { e.stopImmediatePropagation(); } return false; } } catch (err) {} window.parent.postMessage(payload, '*'); return false; })(this, event));";
     }
 
     function ensureEmbeddedActionButtonInlineDispatch(button) {
@@ -11029,7 +11047,7 @@
     }
 
     function runEmbeddedPreviewDockAction(action) {
-        var payload = Object.assign({}, embeddedPreviewActionDockPayload || {}, { action: action });
+        var payload = withManualQueueButtonPayload(Object.assign({}, embeddedPreviewActionDockPayload || {}, { action: action }));
         if (!payload.component && !payload.component_code && !payload.block_id) {
             toast('error', messages.refineUnavailable);
             return;
@@ -11614,7 +11632,7 @@
                         if (typeof event.stopImmediatePropagation === 'function') {
                             event.stopImmediatePropagation();
                         }
-                        if (dispatchEmbeddedPreviewActionPayload(action, actionPayload)) {
+                        if (dispatchEmbeddedPreviewActionPayload(action, withManualQueueButtonPayload(actionPayload))) {
                             return;
                         }
                     }, true);
@@ -11660,7 +11678,7 @@
                         event.stopImmediatePropagation();
                     }
                 }
-                dispatchEmbeddedPreviewActionPayload(action, payload);
+                dispatchEmbeddedPreviewActionPayload(action, withManualQueueButtonPayload(payload));
             }
 
             function handleEmbeddedPreviewActionPointerDown(event) {
@@ -11774,7 +11792,7 @@
                 return;
             }
             if (payload.type === 'pb-ai-workspace-preview' && String(payload.action || '') === 'request-ai-generate') {
-                handleEmbeddedPreviewGenerateRequest(String(payload.page_type || ''));
+                handleEmbeddedPreviewGenerateRequest(String(payload.page_type || ''), payload);
             }
         });
     }
@@ -11833,16 +11851,6 @@
     var imageRegenerateSubmitBtn = document.getElementById('pb-ai-image-regenerate-submit');
     if (imageRegenerateSubmitBtn) {
         imageRegenerateSubmitBtn.addEventListener('click', submitImageRegenerateModal);
-    }
-
-    var refineInstructionInput = document.getElementById('pb-ai-refine-component-instruction');
-    if (refineInstructionInput) {
-        refineInstructionInput.addEventListener('keydown', function (event) {
-            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                event.preventDefault();
-                submitRefineComponent();
-            }
-        });
     }
 
     document.querySelectorAll('.pb-guided-step[data-goto-stage]').forEach(function (el) {
@@ -12027,7 +12035,6 @@
             if (typeof window.applyTaskSummarySelectionFilter === 'function') {
                 window.applyTaskSummarySelectionFilter();
             }
-            triggerIncrementalRegenerateForAddedPageTypes();
         });
     });
 
@@ -17149,8 +17156,12 @@
         ensurePlanJsonConfirmedBeforeBuild(triggerBtn, normalizedTypes, opts);
     }
 
-    function handleEmbeddedPreviewGenerateRequest(pageType) {
+    function handleEmbeddedPreviewGenerateRequest(pageType, payload) {
         var pt = String(pageType || '').trim();
+        if (!hasManualQueueButtonPayload(payload)) {
+            toast('warning', messages.planStartUnavailable);
+            return;
+        }
         if (pt !== '' && window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview.switchPreviewByType === 'function') {
             window.PbAiWorkspacePreview.switchPreviewByType(pt);
         }

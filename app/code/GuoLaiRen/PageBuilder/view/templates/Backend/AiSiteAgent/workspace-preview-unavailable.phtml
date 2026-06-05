@@ -77,7 +77,8 @@ $btnLabelBuilding = (string)__('构建中');
             window.parent.postMessage({
                 type: 'pb-ai-workspace-preview',
                 action: 'request-ai-generate',
-                page_type: pageType
+                page_type: pageType,
+                manual_trigger: 'button'
             }, origin);
         } catch (e) {}
     });
