@@ -19,7 +19,7 @@ class PlanGenerationAdapter implements ScenarioAdapterInterface, AdapterSkillBin
 
     public function getDefaultSkillCodes(): array
     {
-        return ['claude-design', 'weline-pixel-events'];
+        return ['claude-design', 'impeccable', 'weline-pixel-events'];
     }
 
     public function getDefaultStyleCodes(): array

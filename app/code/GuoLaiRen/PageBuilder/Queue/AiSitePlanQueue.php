@@ -955,7 +955,32 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         $this->assertPlanJsonPagesTree($planJson);
         $pageTypes = $this->resolveCompletedPlanPageTypes($planJson);
         $planLocale = $this->resolveCompletedPlanLocale($scope, $planJson);
-        $sourceSignature = \trim((string)($scope['plan_generated_source_signature'] ?? ''));
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $existingPlanOperation = \is_array($activeOperations['plan'] ?? null) ? $activeOperations['plan'] : [];
+        $sourceSignature = '';
+        foreach ([$activeOperation, $existingPlanOperation] as $operationCandidate) {
+            if ($operationCandidate === []) {
+                continue;
+            }
+            $candidateOperation = \trim((string)($operationCandidate['operation'] ?? ''));
+            if ($candidateOperation !== '' && $candidateOperation !== 'plan') {
+                continue;
+            }
+            $candidateToken = \trim((string)($operationCandidate['execution_token'] ?? ''));
+            if ($executionToken !== '' && $candidateToken !== '' && $candidateToken !== $executionToken) {
+                continue;
+            }
+            $candidateDetails = \is_array($operationCandidate['details'] ?? null) ? $operationCandidate['details'] : [];
+            $candidateSignature = \trim((string)($candidateDetails['source_signature'] ?? ''));
+            if ($candidateSignature !== '') {
+                $sourceSignature = $candidateSignature;
+                break;
+            }
+        }
+        if ($sourceSignature === '') {
+            $sourceSignature = \trim((string)($scope['plan_generated_source_signature'] ?? ''));
+        }
         if ($sourceSignature === '') {
             try {
                 $sourceSignature = (string)$this->invokePrivate(
@@ -968,9 +993,6 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
             }
         }
 
-        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
-        $existingPlanOperation = \is_array($activeOperations['plan'] ?? null) ? $activeOperations['plan'] : [];
         $basePlanOperation = $existingPlanOperation !== [] ? $existingPlanOperation : $activeOperation;
         $planOperation = \array_replace($basePlanOperation, [
             'operation' => 'plan',
@@ -988,6 +1010,15 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
             'failure_mode' => '',
             'updated_at' => \date('Y-m-d H:i:s'),
         ]);
+        $planOperationDetails = \is_array($planOperation['details'] ?? null) ? $planOperation['details'] : [];
+        $planOperationDetails = \array_replace($planOperationDetails, [
+            'plan_locale' => $planLocale,
+            'page_types' => \array_values(\array_map('strval', $pageTypes)),
+        ]);
+        if ($sourceSignature !== '') {
+            $planOperationDetails['source_signature'] = $sourceSignature;
+        }
+        $planOperation['details'] = $planOperationDetails;
         $activeOperations['plan'] = $planOperation;
 
         $patch = [
