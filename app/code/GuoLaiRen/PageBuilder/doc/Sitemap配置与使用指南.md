@@ -326,7 +326,7 @@ Content-Type: application/xml
 Cache-Control: public, must-revalidate
 ```
 
-**详细文档：** 参见 `doc/Sitemap-Nginx配置修复.md`
+如果访问仍返回 502，优先检查站点 Nginx 静态文件映射、`pub/sitemaps` 文件权限，并在确认配置正确后重新加载 Nginx。
 
 ---
 
@@ -499,4 +499,4 @@ app/code/GuoLaiRen/PageBuilder/
 
 - [Sitemap 协议规范](https://www.sitemaps.org/protocol.html)
 - [Google 站点地图指南](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview)
-- [Weline SEO 模块文档](../../Weline/Seo/doc/Sitemap扩展开发指南.md)
+- [Weline SEO 模块文档](../../../Weline/Seo/doc/Sitemap扩展开发指南.md)

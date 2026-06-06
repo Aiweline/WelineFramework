@@ -142,6 +142,7 @@ if ($isEnvPhpInstalled($envPhpFile)) {
                 putenv('PATH=' . $pgsqlBin . (DIRECTORY_SEPARATOR === '\\' ? ';' : ':') . getenv('PATH'));
             }
             (new EnsurePgsqlData($projectRoot))->ensure();
+            $env = (new EnvLoader($projectRoot))->load(true);
             $setupDb = new SetupPgsqlDatabase($projectRoot, $env);
             if (!$setupDb->run()) {
                 fwrite(STDERR, "ERROR: PostgreSQL 连接失败，无法执行 setup:upgrade。\n");
@@ -371,6 +372,7 @@ if (is_dir($pgsqlBin)) {
 
 // 5a. 若 extend/server/pgsql 存在，确保 data 已初始化并启动（与 install.sh Linux 数据目录一致）
 (new EnsurePgsqlData($projectRoot))->ensure();
+$env = (new EnvLoader($projectRoot))->load(true);
 
 // 5a2. 数据库驱动自动安装：pdo_pgsql 未加载时执行 env:install pdo_pgsql -y，成功时重新执行本脚本（--from 5b）以便新进程加载扩展
 if (!extension_loaded('pdo_pgsql')) {

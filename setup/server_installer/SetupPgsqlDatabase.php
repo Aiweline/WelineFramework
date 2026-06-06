@@ -192,12 +192,23 @@ final class SetupPgsqlDatabase
     private function envValue(string $key, string $default): string
     {
         $value = trim((string)($this->env[$key] ?? ''));
-        return $value !== '' ? $value : $default;
+        if ($value !== '') {
+            return $value;
+        }
+        $fromProcess = getenv($key);
+        if (is_string($fromProcess) && trim($fromProcess) !== '') {
+            return trim($fromProcess);
+        }
+        return $default;
     }
 
     private function hasEnvValue(string $key): bool
     {
-        return isset($this->env[$key]) && trim((string)$this->env[$key]) !== '';
+        if (isset($this->env[$key]) && trim((string)$this->env[$key]) !== '') {
+            return true;
+        }
+        $fromProcess = getenv($key);
+        return is_string($fromProcess) && trim($fromProcess) !== '';
     }
 
     private function hasExistingValue(array $existing, string $key): bool
@@ -279,7 +290,7 @@ final class SetupPgsqlDatabase
         $execOut = [];
         @exec($cmd . ' 2>&1', $execOut, $code);
         if ($code !== 0) {
-            echo "  自动设置 postgres 密码未成功。手动执行: psql -h 127.0.0.1 -p 5432 -U postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
+            echo "  自动设置 postgres 密码未成功。手动执行: psql -h 127.0.0.1 -p {$port} -U postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
             return false;
         }
         echo "  已自动为 postgres 用户设置密码，正在重试连接...\n";
@@ -302,6 +313,7 @@ final class SetupPgsqlDatabase
             return;
         }
         $isMac = (PHP_OS_FAMILY === 'Darwin');
+        $port = $this->envValue('DB_PORT', '5432');
         echo "\n";
         echo "========================================\n";
         echo "  未配置 DB_* 时会自动生成项目级数据库，例如：" . $this->buildProjectDatabaseName() . "\n";
@@ -317,7 +329,7 @@ final class SetupPgsqlDatabase
             echo "\n";
         } else {
             echo "  Linux 若使用 extend 内 PostgreSQL（当前用户运行），可为 postgres 用户设密码：\n";
-            echo "    psql -h 127.0.0.1 -p 5432 -U postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
+            echo "    psql -h 127.0.0.1 -p {$port} -U postgres -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"\n";
             echo "\n";
         }
         echo "  修改后重新执行：php setup/server_installer/run.php  或  bin/install.sh\n";

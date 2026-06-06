@@ -8,7 +8,8 @@
 
 你负责用 html_content 实现核心内容（卡片、FAQ、画廊等），用 css_extra 写样式。
 
-```json
+返回一个 JSON 对象，字段结构如下；不要输出 markdown 代码围栏：
+
 {
     "extra_fields": "额外配置字段（可选）",
     "php_variables": "额外 PHP 变量（可选）",
@@ -17,4 +18,3 @@
     "html_content": "核心内容 HTML（必填！— 放在 .<?= $cls ?>-body 内）— class 格式：<?= $cls ?>-xxx",
     "js_content": "交互逻辑（可选）— 使用 component 变量"
 }
-```

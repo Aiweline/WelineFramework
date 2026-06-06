@@ -8,7 +8,8 @@
 
 你负责用 css_extra 增强视觉（渐变背景、hover 动画、阴影、滚动效果），用 js_content 实现交互（滚动固定、菜单展开动画）。
 
-```json
+返回一个 JSON 对象，字段结构如下；不要输出 markdown 代码围栏：
+
 {
     "extra_fields": "额外配置字段（可选）",
     "php_variables": "额外 PHP 变量（可选）",
@@ -16,4 +17,3 @@
     "html_extra": "额外装饰 HTML（可选 — 禁止输出导航或 Logo）",
     "js_content": "交互逻辑（可选 — 滚动固定、移动端菜单等）— 使用 component 变量"
 }
-```

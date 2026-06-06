@@ -2667,6 +2667,10 @@
                     }
                 });
             }
+            var collectedFailureCount = collectRetryableAiFailureItems(state, normalizedOperation).length;
+            if (collectedFailureCount > 0) {
+                candidates.push(collectedFailureCount);
+            }
         } else {
             candidates.push(parseInt(String(state.retryable_ai_failure_count || 0), 10) || 0);
             candidates.push(parseInt(String(summary.count || 0), 10) || 0);
@@ -2739,6 +2743,106 @@
                 appendObjectMap(bucket.failed_items);
             }
         }
+        function appendPlanJsonBlockFailureItem(pageType, blockKey, block, source) {
+            var item = block && typeof block === 'object' ? block : {};
+            var normalizedStatus = resolvePlanNodeStatus(item, 'pending');
+            var explicitError = String(item.error || item.error_message || '').trim();
+            var message = String(item.error || item.error_message || item.failure_reason || item.message || '').trim();
+            if (normalizedStatus !== 'failed' && explicitError === '') {
+                return;
+            }
+            var normalizedPageType = String(pageType || item.page_type || '').trim();
+            var normalizedBlockKey = String(blockKey || item.block_key || item.section_key || item.block_id || '').trim();
+            if (normalizedPageType === '' && normalizedBlockKey === '') {
+                return;
+            }
+            appendItem({
+                operation: 'build',
+                item_type: 'plan_json_block',
+                item_key: 'page:' + normalizedPageType + ':' + normalizedBlockKey,
+                retry_scope: 'plan_json_block',
+                page_type: normalizedPageType,
+                section_code: normalizedBlockKey,
+                block_key: normalizedBlockKey,
+                message: message,
+                failure_source: source
+            });
+        }
+        function appendPlanJsonBlockFailuresFromPlanJson(planJson, source) {
+            var root = planJson && typeof planJson === 'object' && !Array.isArray(planJson) ? planJson : {};
+            var pages = root.pages && typeof root.pages === 'object' ? root.pages : {};
+            Object.keys(pages).forEach(function (pageType) {
+                var page = pages[pageType];
+                if (!page || typeof page !== 'object' || Array.isArray(page)) {
+                    return;
+                }
+                normalizePlanJsonPageBlocks(pageType, page).forEach(function (block) {
+                    appendPlanJsonBlockFailureItem(
+                        String(block.page_type || pageType || '').trim(),
+                        String(block.block_key || block.section_key || '').trim(),
+                        block,
+                        source
+                    );
+                });
+            });
+        }
+        function appendPlanJsonProgressFailureRows(progress, source) {
+            var rows = [];
+            if (Array.isArray(progress)) {
+                rows = progress;
+            } else if (progress && typeof progress === 'object' && Array.isArray(progress.rows)) {
+                rows = progress.rows;
+            }
+            rows.forEach(function (row) {
+                if (!row || typeof row !== 'object' || Array.isArray(row)) {
+                    return;
+                }
+                var normalizedStatus = normalizePlanNodeStatus(row.status || row.block_status || row.task_status || '');
+                var explicitError = String(row.error || row.error_message || row.failure_reason || '').trim();
+                var message = String(row.error || row.error_message || row.failure_reason || row.message || '').trim();
+                if (normalizedStatus !== 'failed' && explicitError === '') {
+                    return;
+                }
+                var pageType = String(row.page_type || row.page_key || row.page || '').trim();
+                var blockKey = String(row.block_key || row.section_key || row.block_id || row.item_key || '').trim();
+                if (pageType === '' && blockKey === '') {
+                    return;
+                }
+                appendItem({
+                    operation: 'build',
+                    item_type: 'plan_json_block_progress',
+                    item_key: String(row.item_key || ('page:' + pageType + ':' + blockKey)),
+                    retry_scope: 'plan_json_block',
+                    page_type: pageType,
+                    section_code: blockKey,
+                    block_key: blockKey,
+                    message: message,
+                    failure_source: source
+                });
+            });
+        }
+        function appendPlanJsonProgressFailureSources(container, source) {
+            if (!container || typeof container !== 'object' || Array.isArray(container)) {
+                return;
+            }
+            appendPlanJsonProgressFailureRows(container.plan_json_block_progress, source);
+            appendPlanJsonProgressFailureRows(container.page_block_progress, source);
+        }
+        function appendPlanJsonBlockFailureSources() {
+            if (normalizedOperation !== '' && normalizedOperation !== 'build') {
+                return;
+            }
+            appendPlanJsonBlockFailuresFromPlanJson(state.plan_json, 'plan_json.pages');
+            appendPlanJsonBlockFailuresFromPlanJson(scope.plan_json, 'scope.plan_json.pages');
+            appendPlanJsonProgressFailureSources(state, 'workspace_state');
+            appendPlanJsonProgressFailureSources(scope, 'scope');
+            appendPlanJsonProgressFailureSources(state.build_queue_info, 'build_queue_info');
+            appendPlanJsonProgressFailureSources(resolveCanonicalQueueInfoFromWorkspaceStateForUi(state, 'build'), 'queue_status');
+            appendPlanJsonProgressFailureSources(state.active_operation, 'active_operation');
+            if (state.active_operations && typeof state.active_operations === 'object') {
+                appendPlanJsonProgressFailureSources(state.active_operations.build, 'active_operations.build');
+            }
+        }
         var summary = state.retryable_ai_failure_summary && typeof state.retryable_ai_failure_summary === 'object'
             ? state.retryable_ai_failure_summary
             : {};
@@ -2753,6 +2857,7 @@
             }
             appendBucket(ledger);
         });
+        appendPlanJsonBlockFailureSources();
         if (items.length === 0 && normalizedOperation === 'build') {
             [state.latest_build_failure].forEach(appendItem);
         }
@@ -2760,9 +2865,12 @@
         return items.filter(function (item) {
             var itemKey = String((item && item.item_key) || (item && item.page_type) || '').trim();
             var retryScope = String((item && item.retry_scope) || '').trim();
+            var pageType = String((item && item.page_type) || '').trim();
+            var sectionCode = String((item && (item.section_code || item.block_key)) || '').trim();
+            var message = String((item && (item.message || item.error)) || '').trim();
             var op = String((item && item.operation) || normalizedOperation || '').trim();
-            var fingerprint = op + ':' + retryScope + ':' + itemKey;
-            if (fingerprint === '::' || seen[fingerprint]) {
+            var fingerprint = [op, retryScope, itemKey, pageType, sectionCode, message].join(':');
+            if (fingerprint === ':::::' || seen[fingerprint]) {
                 return false;
             }
             seen[fingerprint] = true;

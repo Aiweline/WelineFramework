@@ -413,7 +413,7 @@ fbq('track', 'Lead', {
 **需要帮助？** 
 - 查看完整文档：`readme.md`
 - 技术支持：联系开发团队
-- 在线文档：[PageBuilder 文档中心](../../doc/)
+- 在线文档：[PageBuilder 文档中心](./README.md)
 
 **祝您转化率爆表！** 🎉
 

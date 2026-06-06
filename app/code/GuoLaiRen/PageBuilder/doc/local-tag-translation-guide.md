@@ -523,7 +523,6 @@ php bin/w cache:clear -f
 ## 📚 相关文档
 
 - [i18n 翻译指南](./i18n-translation-guide.md) - `__()` 函数使用
-- [Editor.js 更新日志](./CHANGELOG-EDITORJS.md) - 编辑器集成说明
 - [示例内容说明](./README-EXAMPLES.md) - 示例页面使用
 
 ---

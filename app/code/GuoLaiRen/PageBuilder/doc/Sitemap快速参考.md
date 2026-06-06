@@ -134,7 +134,7 @@ chmod -R 755 pub/sitemaps/
 
 | 问题 | 解决方案 |
 |------|---------|
-| **访问返回 502** | 🔧 Nginx 配置问题，详见 `Sitemap-Nginx配置修复.md`<br>执行 `nginx -s reload` 应用修复 |
+| **访问返回 502** | 检查 Nginx 静态文件映射、`pub/sitemaps` 权限，并在确认配置后执行 `nginx -s reload` |
 | Sitemap 为空 | 检查是否有已发布的页面 |
 | Provider 未注册 | 执行 `extends-scan` 刷新 |
 | 文件权限错误 | `chmod -R 755 pub/sitemaps/` |

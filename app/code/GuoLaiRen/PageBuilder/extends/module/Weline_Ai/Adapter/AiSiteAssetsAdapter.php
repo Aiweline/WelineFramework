@@ -71,9 +71,10 @@ class AiSiteAssetsAdapter implements ScenarioAdapterInterface, AdapterSkillBindi
             . "5. Never return flat gray placeholders, emoji stand-ins, CSS-only motifs, or text-only panels when a real generated image is requested.\n";
 
         if ($this->requiresTransparentIdentityPng($params)) {
-            $contract .= "4. Identity logo/icon contract (HARD): output a transparent identity asset: transparent PNG alpha, or safe SVG with no canvas background. The canvas must be transparent; only the brand mark, symbol, or wordmark pixels may be visible.\n"
-                . "5. Identity logo/icon exclusions (HARD): no white box, solid-color tile, rounded square card, gradient backdrop, photo scene, wall mockup, app icon tile, screenshot frame, watermark, or paragraph text.\n"
-                . "6. If the selected image model cannot produce transparent identity output, the generation must fail contract validation instead of returning a JPEG/WebP or opaque background asset.\n";
+            $contract .= "6. Identity logo/icon contract (HARD): output a transparent symbol-only identity asset: transparent PNG alpha, or safe SVG with no canvas background. The canvas must be transparent; only non-typographic icon, pictorial mark, or abstract glyph pixels may be visible.\n"
+                . "7. Identity logo/icon text ban (HARD): do not render a site name, brand name, initials, monogram, wordmark, slogan, user requirement text, readable letters, pseudo text, labels, watermarks, or paragraph text.\n"
+                . "8. Identity logo/icon exclusions (HARD): no white box, solid-color tile, rounded square card, gradient backdrop, photo scene, wall mockup, app icon tile, screenshot frame, watermark, or paragraph text.\n"
+                . "9. If the selected image model cannot produce transparent identity output, the generation must fail contract validation instead of returning a JPEG/WebP or opaque background asset.\n";
         }
 
         return $contract;

@@ -29,6 +29,7 @@ final class AiSiteBlockContractAssemblerService
         'content_locale' => true,
         'language_contract' => true,
         'locale_context' => true,
+        'visible_copy_contract' => true,
         'shared_context_hash' => true,
         'theme_context_hash' => true,
         'assembly_version' => true,
@@ -36,6 +37,11 @@ final class AiSiteBlockContractAssemblerService
         'page_design_plan' => true,
         'asset_distribution_policy' => true,
         'theme_context_snapshot' => true,
+        'shared_prompt_context' => true,
+        'site_context' => true,
+        'root_context' => true,
+        'website_profile' => true,
+        'source_truth_contract' => true,
         'site_design_system' => true,
         'asset_manifest_ref' => true,
         'contract_summary' => true,
@@ -79,6 +85,26 @@ final class AiSiteBlockContractAssemblerService
         'html' => true,
         'html_content' => true,
         'fields' => true,
+    ];
+
+    private const ROOT_CONTEXT_KEYS = [
+        'content_locale' => true,
+        'language_contract' => true,
+        'locale_context' => true,
+        'visible_copy_contract' => true,
+        'shared_prompt_context' => true,
+        'theme_context_snapshot' => true,
+        'site_context' => true,
+        'root_context' => true,
+        'website_profile' => true,
+        'source_truth_contract' => true,
+        'site_design_system' => true,
+        'asset_manifest_ref' => true,
+        'contract_summary' => true,
+        'shared_context_hash' => true,
+        'theme_context_hash' => true,
+        'assembly_version' => true,
+        'generation_method' => true,
     ];
 
     public function __construct(
@@ -299,6 +325,9 @@ final class AiSiteBlockContractAssemblerService
             if (\in_array((string)$key, ['blocks', 'sections', 'components'], true)) {
                 continue;
             }
+            if (\is_string($key) && isset(self::ROOT_CONTEXT_KEYS[$key])) {
+                continue;
+            }
             if (\is_string($key) && \is_array($value) && $this->looksLikeDynamicBlockNode($key, $value)) {
                 continue;
             }
@@ -308,11 +337,28 @@ final class AiSiteBlockContractAssemblerService
 
         foreach ($blocks as $index => $block) {
             $blockKey = $this->resolveBlockKey($block, (int)$index);
+            $block = $this->stripRootContextFields($block);
             $block['block_key'] = $blockKey;
+            if (\is_array($block['block_contract'] ?? null)) {
+                unset($block['block_contract']['language_contract'], $block['block_contract']['visible_copy_contract']);
+            }
             $page[$blockKey] = $block;
         }
 
         return $page;
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @return array<string, mixed>
+     */
+    private function stripRootContextFields(array $node): array
+    {
+        foreach (self::ROOT_CONTEXT_KEYS as $key => $_) {
+            unset($node[$key]);
+        }
+
+        return $node;
     }
 
     /**

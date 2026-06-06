@@ -428,18 +428,18 @@ final class AiSiteAssetManifestService
 
         // 缁?4 鐞涘矉绱癰rand name 閳ユ柡鈧?娴犲懎缍?logo 閺冩湹缍旀稉?wordmark text閿涙稑鍙剧€瑰啩绮庢担婊堫棑閺嶈壈鍎楅弲顖ょ礉娑撳秶鏁鹃弬鍥х摟閵?
         if ($siteTitle !== '') {
-            if ($isLogoSlot) {
-                $parts[] = 'Brand name context (do NOT render as readable text inside the logo; use it only to understand the business identity): ' . $siteTitle;
-            } else {
+            if (!$isLogoSlot) {
                 $parts[] = 'Brand context (do not render as text on the image): ' . $siteTitle;
             }
         }
 
         // 缁?5 鐞涘矉绱皌agline 娴犲懍缍旀稉鐑樺剰缂?妞嬪孩鐗哥拫鍐ㄧ摍閿涘奔绗夐悽缁樻瀮鐎涙ぜ鈧?
         if ($siteTagline !== '') {
-            $parts[] = $isLogoSlot
-                ? 'Brand personality for styling (mood/color palette only; never spell out this tagline inside the logo): ' . $siteTagline
-                : 'Brand personality (reflect this tone in visual style): ' . $siteTagline;
+            if ($isLogoSlot) {
+                $parts[] = 'Identity style hint: derive mood, palette, and subject cues from PRIMARY SUBJECT and confirmed theme only; never draw, spell, abbreviate, or typeset the tagline or user text.';
+            } else {
+                $parts[] = 'Brand personality (reflect this tone in visual style): ' . $siteTagline;
+            }
         }
         $confirmedThemePalettePrompt = $this->buildConfirmedThemePalettePrompt($scope, $isLogoSlot, $isFaviconLikeSlot);
         if ($confirmedThemePalettePrompt !== '') {
@@ -459,9 +459,9 @@ final class AiSiteAssetManifestService
         $isHeroSlot = $this->slotDeclaresStrictHeroImage($slot);
 
         if ($isFaviconLikeSlot) {
-            $parts[] = 'Favicon output requirements (HARD): generate a production-ready square 1:1 identity image with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). The symbol/monogram is isolated on transparency; there must be no white background, solid color background, rounded square tile, card, gradient backdrop, photo scene, website mockup, watermark, screenshot frame, or paragraph text. Keep it recognizable at 16-64px with one bold business-relevant symbol or monogram.';
+            $parts[] = 'Favicon output requirements (HARD): generate a production-ready square 1:1 symbol-only identity image with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). The pictorial symbol is isolated on transparency; there must be no white background, solid color background, rounded square tile, card, gradient backdrop, photo scene, website mockup, watermark, screenshot frame, initials, monogram, readable text, pseudo text, or paragraph text. Keep it recognizable at 16-64px with one bold business-relevant symbol.';
         } elseif ($isLogoSlot) {
-            $parts[] = 'Logo output requirements (HARD): generate a production-ready symbol-only identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). Keep only the brand mark/glyph pixels on transparency. Do NOT include readable letters, words, brand names, slogans, paragraph text, pseudo text, watermarks, or long typographic strips. Do not place the logo on a white box, colored rectangle, rounded card, wall, photo scene, gradient backdrop, website mockup, screenshot frame, or any other background surface.';
+            $parts[] = 'Logo output requirements (HARD): generate a production-ready symbol-only identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background). Keep only non-typographic icon/glyph pixels on transparency. Do NOT include readable letters, initials, monograms, words, brand names, slogans, user requirement text, paragraph text, pseudo text, watermarks, or long typographic strips. Do not place the logo on a white box, colored rectangle, rounded card, wall, photo scene, gradient backdrop, website mockup, screenshot frame, or any other background surface.';
         } elseif ($isHeroSlot) {
             $parts[] = 'Hero banner default output requirements: when the user has not explicitly requested another hero image composition, compose for a 1920x750 website banner crop. Fill the entire canvas edge-to-edge with one immersive full-width scene. A transparent background is not needed 閳?cover the full canvas with the subject matter and keep important subjects inside the center-safe area so CSS object-fit:cover can crop cleanly.';
             $parts[] = 'Hero visual quality bar (CRITICAL): premium cinematic website banner background, very wide horizontal composition, edge-to-edge coverage, strong depth, realistic lighting, high-end commercial art direction. Do NOT generate flat vector art, SVG-like shapes, childish cartoon, icon collage, clip-art, rough geometric placeholder art, cardboard-looking cards, UI mockups, or simplistic low-detail illustration. Prefer realistic/editorial photography or photoreal premium 3D only when the subject cannot be photographed.';
@@ -654,6 +654,11 @@ final class AiSiteAssetManifestService
             '',
             $brief
         ) ?? $brief;
+        $siteTitle = \trim($siteTitle);
+        if ($siteTitle !== '') {
+            $quotedSiteTitle = \preg_quote($siteTitle, '/');
+            $brief = \preg_replace('/["\']?' . $quotedSiteTitle . '["\']?/iu', 'the approved business subject', $brief) ?? $brief;
+        }
 
         return \trim($brief);
     }
@@ -1015,27 +1020,18 @@ final class AiSiteAssetManifestService
             $scope['brief_description'] ?? null,
             $scope['user_description'] ?? null,
         ]);
-        $brandReference = $siteTitle !== '' ? $siteTitle : ($siteTagline !== '' ? $siteTagline : $briefDescription);
-        if ($brandReference === '') {
-            $brandReference = 'the website brand';
-        }
-        // 瀵缚顢戞總鎴犲閿涙lot.brief 韫囧懘銆忔禒?娑撴艾濮熸稉璁崇秼"瀵偓婢惰揪绱濋柆鍨帳 buildPrompt 閺?brand name 閹躲垹宕?
-        // PRIMARY SUBJECT 娴ｅ秶鐤嗛敍鍫濐嚤閼锋潙鍤悳棰佺瑢鐠囧鐪伴懘杈Ν閻ㄥ嫬鎮忕粊銉у⒖ logo閿涘鈧?
         $subjectAnchor = $briefDescription !== ''
             ? $briefDescription
-            : ($siteTagline !== '' ? $siteTagline : $brandReference);
+            : 'the business subject from the approved user requirement';
 
         $logoBriefParts = [];
         if ($subjectAnchor !== '') {
             $logoBriefParts[] = 'PRIMARY SUBJECT for the logo glyph (the mark MUST visually depict this exact business; derive concrete iconography only from the approved brief, products, services, materials, culture, and visual plan; never copy example industries or unrelated symbols): '
                 . $subjectAnchor;
         }
-        $logoBriefParts[] = 'Output requirements (HARD): symbol-only identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background), production-ready simple brand mark/glyph. Do NOT include readable letters, words, brand names, slogans, paragraph text, pseudo text, watermark, or long typographic strips. Keep only logo mark pixels on transparency; no white box, colored rectangle, rounded card, gradient backdrop, checkerboard transparency preview, extra scene, mockup, or screenshot frame.';
-        if ($brandReference !== '' && $brandReference !== $subjectAnchor) {
-            $logoBriefParts[] = 'Brand name context only (never render this as visible text inside the logo): "' . $brandReference . '"';
-        }
+        $logoBriefParts[] = 'Output requirements (HARD): symbol-only identity logo with a real transparent background (transparent PNG alpha, or safe SVG with no canvas background), production-ready simple brand mark/glyph. Do NOT include readable letters, initials, monograms, words, brand names, slogans, user requirement text, paragraph text, pseudo text, watermark, or long typographic strips. Keep only logo mark pixels on transparency; no white box, colored rectangle, rounded card, gradient backdrop, checkerboard transparency preview, extra scene, mockup, or screenshot frame.';
         if ($siteTagline !== '' && $siteTagline !== $subjectAnchor) {
-            $logoBriefParts[] = 'Style/personality hint (mood and palette only, never spell out as text): ' . $siteTagline;
+            $logoBriefParts[] = 'Style/personality hint: derive mood from the approved user requirement and confirmed theme only; never draw, spell, abbreviate, or typeset the tagline or user text.';
         }
         $logoThemePalettePrompt = $this->buildConfirmedThemePalettePrompt($scope, true, false);
         if ($logoThemePalettePrompt !== '') {
@@ -1066,18 +1062,18 @@ final class AiSiteAssetManifestService
             $scope['default_language'] ?? null,
         ])));
         if ($locale === '') {
-            return 'Visible logo text ban (HARD): generate a symbol-only logo. Do not include readable text in any language.';
+            return 'Visible logo text ban (HARD): generate a symbol-only logo icon. Do not include readable text, initials, monograms, brand names, slogans, user requirement text, or pseudo text in any language.';
         }
 
         if ($locale === 'ru' || \str_starts_with($locale, 'ru_')) {
-            return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo. Do not include Cyrillic, Latin, CJK, placeholder, pseudo, or mixed-language text.';
+            return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo icon. Do not include Cyrillic, Latin, CJK, initials, monograms, placeholder, pseudo, user requirement, or mixed-language text.';
         }
 
         if ($locale === 'zh' || \str_starts_with($locale, 'zh_')) {
-            return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo. Do not include Chinese characters, Latin words, placeholder, pseudo, or mixed-language text.';
+            return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo icon. Do not include Chinese characters, Latin words, initials, monograms, placeholder, pseudo, user requirement, or mixed-language text.';
         }
 
-        return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo. Do not include readable letters, words, brand names, slogans, placeholder text, pseudo text, or CJK characters.';
+        return 'Visible logo text ban (HARD): content_locale=' . $locale . '. Generate a symbol-only logo icon. Do not include readable letters, initials, monograms, words, brand names, slogans, user requirement text, placeholder text, pseudo text, or CJK characters.';
     }
 
     /**
@@ -1103,12 +1099,9 @@ final class AiSiteAssetManifestService
             if (!\str_starts_with($slotId, 'plan:theme:logo_generation:option_')) {
                 $slotId = 'plan:theme:logo_generation:option_' . $number;
             }
-            $optionBrief = $this->firstString([$option['prompt_brief'] ?? null, $option['brief'] ?? null]);
             $styleDirection = $this->firstString([$option['style_direction'] ?? null]);
             $briefParts = [$logoBrief];
-            if ($optionBrief !== '' && $optionBrief !== $logoBrief) {
-                $briefParts[] = 'Option-specific prompt: ' . $optionBrief;
-            }
+            $briefParts[] = 'Option prompt guard (HARD): ignore any plan text that asks to draw, spell, abbreviate, or typeset a site name, brand name, initials, monogram, user requirement, slogan, label, option label, or pseudo text.';
             if ($styleDirection !== '') {
                 $briefParts[] = 'Option style direction: ' . $styleDirection;
             }

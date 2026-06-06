@@ -1214,16 +1214,16 @@ final class AiSitePlanJsonGenerationService
     {
         $locale = \strtolower(\str_replace('-', '_', \trim($locale)));
         if ($locale === '') {
-            return 'Visible logo text ban: generate symbol-only marks. Do not include readable letters, words, brand names, slogans, placeholder text, or pseudo text in any language.';
+            return 'Visible logo text ban (HARD): generate symbol-only icon marks. Do not include readable letters, initials, monograms, words, brand names, slogans, user requirement text, placeholder text, or pseudo text in any language.';
         }
         if ($locale === 'ru' || \str_starts_with($locale, 'ru_')) {
-            return 'Visible logo text ban: selected content_locale=' . $locale . '. Generate symbol-only marks. Do not include Cyrillic, Latin, CJK, placeholder, pseudo, or mixed-language text.';
+            return 'Visible logo text ban (HARD): selected content_locale=' . $locale . '. Generate symbol-only icon marks. Do not include Cyrillic, Latin, CJK, initials, monograms, placeholder, pseudo, user requirement, or mixed-language text.';
         }
         if ($locale === 'zh' || \str_starts_with($locale, 'zh_')) {
-            return 'Visible logo text ban: selected content_locale=' . $locale . '. Generate symbol-only marks. Do not include Chinese characters, Latin words, placeholder, pseudo, or mixed-language text.';
+            return 'Visible logo text ban (HARD): selected content_locale=' . $locale . '. Generate symbol-only icon marks. Do not include Chinese characters, Latin words, initials, monograms, placeholder, pseudo, user requirement, or mixed-language text.';
         }
 
-        return 'Visible logo text ban: selected content_locale=' . $locale . '. Generate symbol-only marks. Do not include readable letters, words, brand names, slogans, placeholder text, pseudo text, or CJK characters.';
+        return 'Visible logo text ban (HARD): selected content_locale=' . $locale . '. Generate symbol-only icon marks. Do not include readable letters, initials, monograms, words, brand names, slogans, user requirement text, placeholder text, pseudo text, or CJK characters.';
     }
 
     /**
@@ -3802,8 +3802,9 @@ final class AiSitePlanJsonGenerationService
             $paletteText = 'the generated theme palette';
         }
         $languageText = $this->buildLogoTextLanguagePrompt($locale);
-        $promptBrief = 'Generate four transparent PNG website logo options for ' . $siteName
-            . ' that match ' . $paletteText . ' and support: ' . $primaryGoal
+        $promptBrief = 'Generate four transparent PNG symbol-only website logo icons from the approved business requirement.'
+            . ' Do not render the site name, brand name, initials, monograms, user requirement text, slogans, labels, or any readable/pseudo text.'
+            . ' Match ' . $paletteText . ' and support: ' . $primaryGoal
             . '. ' . $languageText
             . ' Each option must use a different symbol-only composition, glyph concept, and mark silhouette.';
 
@@ -3820,7 +3821,7 @@ final class AiSitePlanJsonGenerationService
             'selected_asset_slot_id' => '',
             'selected_url' => '',
             'prompt_brief' => $promptBrief,
-            'style_direction' => 'Prepare four distinct symbol-only logo directions; each option must stay simple, recognizable, transparent, and legible at header size. Do not reuse the same icon, pictorial motif, layout, or silhouette across options. Do not plan wordmarks or text treatments.',
+            'style_direction' => 'Prepare four distinct symbol-only logo icon directions; each option must stay simple, recognizable, transparent, and legible at header size. Do not reuse the same icon, pictorial motif, layout, or silhouette across options. Do not plan wordmarks, initials, monograms, or text treatments.',
             'reuse_policy' => 'Generate four logo options from this theme plan; selected option and generated image URLs must live only in plan_json.theme.logo_generation.options.',
             'options' => $this->buildStageOneLogoGenerationOptions($siteName, $primaryGoal, $paletteText, $languageText),
         ];
@@ -3832,8 +3833,8 @@ final class AiSitePlanJsonGenerationService
     private function buildStageOneLogoGenerationOptions(string $siteName, string $primaryGoal, string $paletteText, string $languageText): array
     {
         $directions = [
-            'Clean abstract glyph based on the business subject; no letters, words, or typography.',
-            'Standalone emblem built from a concrete industry motif; no wordmark, initials, or readable text.',
+            'Clean abstract glyph based on the business subject; no letters, initials, words, or typography.',
+            'Standalone emblem built from a concrete industry motif; no wordmark, initials, monogram, or readable text.',
             'Geometric pictorial mark using simple shapes from the approved brief; no monogram or letterform.',
             'Minimal line-mark with a distinctive subject silhouette; no text strip, slogan, or pseudo lettering.',
         ];
@@ -3849,11 +3850,12 @@ final class AiSitePlanJsonGenerationService
                 'status' => 'planned',
                 'url' => '',
                 'final_url' => '',
-                'prompt_brief' => 'Generate logo option ' . $number . ' for ' . $siteName
-                    . ' as a transparent PNG. Match ' . $paletteText . '; support: ' . $primaryGoal
+                'prompt_brief' => 'Generate logo option ' . $number
+                    . ' as a transparent PNG symbol-only icon. Derive the glyph from the approved business requirement, not from the site name.'
+                    . ' Match ' . $paletteText . '; support: ' . $primaryGoal
                     . '. ' . $languageText
                     . ' Direction: ' . $direction
-                    . ' This option must be visually distinct from the other three options.',
+                    . ' This option must be visually distinct from the other three options. Do not render brand names, initials, monograms, user requirement text, labels, or any readable/pseudo text.',
                 'style_direction' => $direction,
             ];
         }
