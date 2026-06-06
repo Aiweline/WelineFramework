@@ -14910,9 +14910,7 @@
             }
             return postUrlEncoded(confirmPlanUrl, {
                 public_id: publicId,
-                stage: 'plan',
-                confirm_only: '1',
-                start_build: '0'
+                stage: 'plan'
             }).then(function (data) {
                 if (!data || !data.success) {
                     toast('error', (data && data.message) ? String(data.message) : messages.networkError);
@@ -17421,36 +17419,6 @@
         ensurePlanJsonConfirmedBeforeBuild(null, types, {});
     }
 
-    function isPlanInputStaleConfirmationResponse(data) {
-        if (!data || typeof data !== 'object') {
-            return false;
-        }
-        return String(data.code || '') === 'PLAN_INPUT_STALE'
-            && (!!data.requires_confirmation || String(data.confirmation_code || '') === 'PLAN_INPUT_STALE_CONFIRM');
-    }
-
-    function promptPlanInputStaleConfirmation(data) {
-        var confirmMessage = String(
-            (data && (data.confirm_message || data.message))
-            || messages.planInputStaleConfirmMessage
-            || messages.planInputStaleRegenerateRequired
-            || ''
-        );
-        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-            return window.BackendConfirm.show(confirmMessage, {
-                title: String(messages.planInputStaleConfirmTitle || ''),
-                confirmText: String(messages.planInputStaleConfirmText || ''),
-                cancelText: String(messages.planInputStaleCancelText || '')
-            }).then(function (confirmed) {
-                return !!confirmed;
-            }).catch(function () {
-                return false;
-            });
-        }
-        toast('warning', confirmMessage);
-        return Promise.resolve(false);
-    }
-
     function confirmCurrentPlanAndMaybeBuild(options) {
         var opts = options && typeof options === 'object' ? options : {};
         clearWorkspaceFrontendRetryStopGuard();
@@ -17489,29 +17457,11 @@
                 public_id: publicId,
                 stage: 'plan'
             };
-            if (opts.forceConfirmStalePlan === true) {
-                fields.force_confirm_stale_plan = '1';
-            }
             postUrlEncoded(confirmPlanUrl, {
                 public_id: fields.public_id,
-                stage: fields.stage,
-                force_confirm_stale_plan: fields.force_confirm_stale_plan || '0'
+                stage: fields.stage
             }).then(function (data) {
                 if (!data || !data.success) {
-                    if (opts.forceConfirmStalePlan !== true && isPlanInputStaleConfirmationResponse(data)) {
-                        clearConfirmPlanReloadTimer();
-                        if (typeof hideLoading === 'function') {
-                            hideLoading();
-                        }
-                        promptPlanInputStaleConfirmation(data).then(function (confirmed) {
-                            if (confirmed) {
-                                confirmCurrentPlanAndMaybeBuild(Object.assign({}, opts, { forceConfirmStalePlan: true }));
-                                return;
-                            }
-                            syncConfirmPlanButtonEnabled();
-                        });
-                        return;
-                    }
                     clearConfirmPlanReloadTimer();
                     if (typeof hideLoading === 'function') {
                         hideLoading();

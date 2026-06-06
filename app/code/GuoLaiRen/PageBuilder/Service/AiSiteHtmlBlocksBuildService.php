@@ -1050,14 +1050,14 @@ class AiSiteHtmlBlocksBuildService
                 . '</a>';
         }
 
-        return '<header class="ai-block ai-block-site-header" style="padding:18px 28px;border-bottom:1px solid #e5e7eb;background:rgba(255,255,255,0.94);backdrop-filter:blur(12px);display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;">'
-            . '<div style="display:grid;gap:4px;min-width:0;">'
-            . '<strong style="font-size:18px;line-height:1.2;color:#0f172a;">' . $siteTitle . '</strong>'
-            . ($siteTagline !== '' ? '<span style="font-size:13px;line-height:1.6;color:#64748b;">' . $siteTagline . '</span>' : '')
+        return '<header class="ai-block ai-block-site-header" style="box-sizing:border-box;width:100%;max-width:100vw;overflow:hidden;padding:18px 28px;border-bottom:1px solid #e5e7eb;background:rgba(255,255,255,0.94);backdrop-filter:blur(12px);display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;">'
+            . '<div style="display:grid;gap:4px;min-width:0;max-width:100%;">'
+            . '<strong style="font-size:18px;line-height:1.2;color:#0f172a;white-space:normal;overflow-wrap:break-word;">' . $siteTitle . '</strong>'
+            . ($siteTagline !== '' ? '<span style="font-size:13px;line-height:1.6;color:#64748b;white-space:normal;overflow-wrap:break-word;">' . $siteTagline . '</span>' : '')
             . '</div>'
-            . '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;">'
+            . '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;min-width:0;max-width:100%;">'
             . \implode('', $navHtml)
-            . '<span style="display:inline-flex;align-items:center;padding:10px 14px;border-radius:999px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;">' . $currentPageLabel . '</span>'
+            . '<span style="display:inline-flex;align-items:center;max-width:100%;padding:10px 14px;border-radius:999px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;white-space:normal;overflow-wrap:break-word;">' . $currentPageLabel . '</span>'
             . '</div></header>';
     }
 
@@ -1173,23 +1173,23 @@ class AiSiteHtmlBlocksBuildService
             if ($items === []) {
                 continue;
             }
-            $groupHtml[] = '<div style="display:grid;gap:10px;min-width:180px;">'
-                . '<strong style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#f8fafc;">' . $this->escape($group['title'] ?? '') . '</strong>'
+            $groupHtml[] = '<div style="display:grid;gap:10px;min-width:0;">'
+                . '<strong style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#f8fafc;white-space:normal;overflow-wrap:break-word;">' . $this->escape($group['title'] ?? '') . '</strong>'
                 . '<div style="display:grid;gap:8px;">' . \implode('', $items) . '</div>'
                 . '</div>';
         }
 
         $visitorExperience = $this->escape((string)($config['visitor_experience'] ?? ''));
 
-        return '<footer class="ai-block ai-block-site-footer" style="padding:28px;background:#020617;color:#e2e8f0;display:grid;gap:20px;">'
-            . '<div style="display:grid;gap:8px;">'
-            . '<strong style="font-size:18px;line-height:1.2;color:#fff;">' . $siteTitle . '</strong>'
-            . ($brief !== '' ? '<p style="margin:0;max-width:760px;font-size:14px;line-height:1.7;color:#94a3b8;">' . $brief . '</p>' : '')
+        return '<footer class="ai-block ai-block-site-footer" style="box-sizing:border-box;width:100%;max-width:100vw;overflow:hidden;padding:28px;background:#020617;color:#e2e8f0;display:grid;gap:20px;">'
+            . '<div style="display:grid;gap:8px;min-width:0;max-width:100%;">'
+            . '<strong style="font-size:18px;line-height:1.2;color:#fff;white-space:normal;overflow-wrap:break-word;">' . $siteTitle . '</strong>'
+            . ($brief !== '' ? '<p style="margin:0;max-width:760px;font-size:14px;line-height:1.7;color:#94a3b8;white-space:normal;overflow-wrap:break-word;">' . $brief . '</p>' : '')
             . '</div>'
-            . '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px 24px;">' . \implode('', $groupHtml) . '</div>'
-            . '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;color:#64748b;font-size:12px;">'
-            . '<span>&copy; 2026 ' . $siteTitle . '</span>'
-            . ($domain !== '' ? '<span>' . $domain . '</span>' : '<span>' . ($visitorExperience !== '' ? $visitorExperience : 'Always improving the visitor experience') . '</span>')
+            . '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:18px 24px;min-width:0;">' . \implode('', $groupHtml) . '</div>'
+            . '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;color:#64748b;font-size:12px;min-width:0;">'
+            . '<span style="max-width:100%;white-space:normal;overflow-wrap:break-word;">&copy; 2026 ' . $siteTitle . '</span>'
+            . ($domain !== '' ? '<span style="max-width:100%;white-space:normal;overflow-wrap:break-word;">' . $domain . '</span>' : '<span style="max-width:100%;white-space:normal;overflow-wrap:break-word;">' . ($visitorExperience !== '' ? $visitorExperience : 'Always improving the visitor experience') . '</span>')
             . '</div></footer>';
     }
 
