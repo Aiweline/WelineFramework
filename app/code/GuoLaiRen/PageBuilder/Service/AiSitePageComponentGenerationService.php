@@ -32,7 +32,7 @@ class AiSitePageComponentGenerationService
     private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
     // Hard completion checks only block malformed component structure.
     private const ENFORCE_COMPONENT_QUALITY_VALIDATION = false;
-    private const AI_REQUEST_TIMEOUT_SECONDS = 0;
+    private const AI_REQUEST_TIMEOUT_SECONDS = 180;
     private const COMPONENT_CSS_CLASS_SCOPE_FALLBACK = 'pb-ai-site-component';
     private const COMPONENT_CSS_SCOPE_PLACEHOLDER = '#componentId';
     private const PLAN_JSON_PAGE_ASSET_META_KEYS = [
@@ -11819,7 +11819,7 @@ JSON;
     {
         $scopeRule = match ($componentScope) {
             'header' => '- Header quality floor: css_extra must visibly restyle the shell/nav/CTA with depth, contrast, active/hover states, and a brand-specific motif; a plain border-only header is invalid.' . "\n",
-            'footer' => '- Footer quality floor: css_extra must create a distinct closing surface with grouped information rhythm, trust/support emphasis, texture or shape detail, and mobile spacing; a flat link list is invalid. html_extra/html_extra_column must include concrete grouped links and support/legal labels, not empty wrappers.' . "\n",
+            'footer' => '- Footer quality floor: the framework-owned footer shell, configured link columns, logo, and optional footer_extra_text create the closing surface. For shared footer JSON, do not force html_extra/html_extra_column or css_extra; keep the tiny schema contract unless the latest user request explicitly asks to restyle this shared footer.' . "\n",
             default => '- Section quality floor: html_content should include a component-specific wrapper plus visible design devices such as a generated-image media frame, CSS-only motif, trust/metric strip, timeline/process rail, comparison band, badge cluster, proof/support group, or editorial callout; css_extra should style those devices. This is design guidance, not a completion gate.' . "\n",
         };
 

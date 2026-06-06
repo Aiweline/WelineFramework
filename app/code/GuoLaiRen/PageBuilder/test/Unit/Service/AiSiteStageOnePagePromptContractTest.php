@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
+use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use PHPUnit\Framework\TestCase;
 
 final class AiSiteStageOnePagePromptContractTest extends TestCase
@@ -25,6 +26,8 @@ final class AiSiteStageOnePagePromptContractTest extends TestCase
         self::assertStringContainsString('Field plan copy rule:', $source);
         self::assertStringContainsString("'field' => 'headline'", $source);
         self::assertStringContainsString('Trusted play starts here.', $source);
+        self::assertStringContainsString('Never output no-image text in any language for a required image slot', $source);
+        self::assertStringContainsString('لا توجد صورة مولدة', $source);
         self::assertStringContainsString('Output exactly ', $source);
         self::assertStringContainsString('stageOnePageReturnSkeleton', $source);
     }
@@ -46,5 +49,36 @@ final class AiSiteStageOnePagePromptContractTest extends TestCase
         self::assertStringContainsString('Complete theme_design skeleton:', $source);
         self::assertStringContainsString('stageOneThemeDesignSkeleton', $source);
         self::assertStringContainsString("'forbidden_styles' => ['generic placeholder copy', 'invented routes', 'oversized decoration']", $source);
+    }
+
+    public function testRequiredImageIntentRejectsLocalizedNoImagePlaceholders(): void
+    {
+        $service = new AiSitePlanJsonGenerationService();
+
+        $intentMethod = new \ReflectionMethod($service, 'normalizeBlockImageIntentForPlanJson');
+        $intentMethod->setAccessible(true);
+        $intent = $intentMethod->invoke($service, [
+            'needs_image' => true,
+            'image_subject' => 'لا توجد صورة مولدة',
+            'image_role' => 'section image',
+        ]);
+
+        self::assertSame(true, $intent['needs_image'] ?? null);
+        self::assertStringContainsString('Concrete generated image', (string)($intent['image_subject'] ?? ''));
+        self::assertStringNotContainsString('لا توجد صورة', (string)($intent['image_subject'] ?? ''));
+
+        $assetMethod = new \ReflectionMethod($service, 'normalizeAssetRequirementsForPlanJson');
+        $assetMethod->setAccessible(true);
+        $assets = $assetMethod->invoke($service, [
+            [
+                'required' => true,
+                'subject' => '没有生成图片',
+                'prompt' => 'sin imagen',
+            ],
+        ]);
+
+        self::assertSame(true, $assets[0]['required'] ?? null);
+        self::assertStringContainsString('Concrete generated image', (string)($assets[0]['subject'] ?? ''));
+        self::assertArrayNotHasKey('prompt', $assets[0]);
     }
 }

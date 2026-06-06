@@ -1768,6 +1768,13 @@ final class AiSitePlanJsonGenerationService
                 continue;
             }
             $raw = $value[$key];
+            if ($key === 'needs_image') {
+                $bool = $this->normalizePlanJsonBoolean($raw);
+                if ($bool !== null) {
+                    $intent[$key] = $bool;
+                }
+                continue;
+            }
             if (\is_bool($raw)) {
                 $intent[$key] = $raw;
                 continue;
@@ -1780,7 +1787,132 @@ final class AiSitePlanJsonGenerationService
             }
         }
 
+        if (($intent['needs_image'] ?? false) === true) {
+            $subject = $this->normalizeGeneratedImagePromptText((string)($intent['image_subject'] ?? ''));
+            if ($subject === '') {
+                $subject = 'Concrete generated image for this block narrative, with subject-specific scene, supporting props, composition, lighting, and no text baked into the image.';
+            }
+            $intent['image_subject'] = $subject;
+            $intent['image_role'] = $this->normalizeGeneratedImagePromptText((string)($intent['image_role'] ?? 'section_image')) ?: 'section_image';
+            $intent['image_treatment'] = $this->normalizeGeneratedImagePromptText((string)($intent['image_treatment'] ?? '')) ?: 'Polished generated image with responsive crop, natural depth, and no placeholder or CSS-only treatment.';
+            $intent['reuse_policy'] = 'generate_or_reuse_verified_image_for_exact_slot';
+        }
+
         return $intent;
+    }
+
+    /**
+     * @return bool|null
+     */
+    private function normalizePlanJsonBoolean(mixed $value): ?bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return ((int)$value) === 1;
+        }
+        if (!\is_scalar($value)) {
+            return null;
+        }
+
+        $text = \strtolower(\trim((string)$value));
+        return match ($text) {
+            '1', 'true', 'yes', 'y', 'on', 'required', 'needs_image' => true,
+            '0', 'false', 'no', 'n', 'off', 'none', 'no_image', 'no generated image' => false,
+            default => null,
+        };
+    }
+
+    private function normalizeGeneratedImagePromptText(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+        if ($this->isGeneratedImagePromptAbsenceText($value)) {
+            return '';
+        }
+
+        $value = (string)\preg_replace('/^\s*(?:css[- ]?only|css[- ]?backed|css\s+motif|css)\s+/iu', '', $value);
+        $value = (string)\preg_replace('/\b(?:css[- ]?only|css[- ]?backed|css\s+motif|css\s+pattern|decorative\s+css|no\s+generated\s+image|no\s+image|without\s+image|placeholder\s+image|fake\s+screenshot)\b/iu', '', $value);
+        $value = (string)\preg_replace('/\s+/u', ' ', $value);
+        $value = \trim($value, " \t\n\r\0\x0B-:;,.|");
+
+        if ($value === '' || $this->isGeneratedImagePromptAbsenceText($value)) {
+            return '';
+        }
+        if ($value === '' || \preg_match('/^(?:motif|pattern|icon|shape|gradient|decoration)$/iu', $value) === 1) {
+            return '';
+        }
+
+        return $value;
+    }
+
+    private function isGeneratedImagePromptAbsenceText(string $value): bool
+    {
+        $value = (string)\preg_replace('/\s+/u', ' ', \trim($value));
+        if ($value === '') {
+            return false;
+        }
+
+        foreach ([
+            '/\b(?:no\s+generated\s+image|no\s+image|without\s+image|placeholder\s+image|fake\s+screenshot)\b/iu',
+            '/(?:لا\s*(?:توجد|يوجد)\s*(?:صورة|صور|صوره)\s*(?:مولدة|مطلوبة)?|بدون\s*(?:صورة|صور|صوره)|(?:صورة|صور|صوره)\s*(?:غير\s*)?مطلوبة|لا\s*حاجة\s*(?:إلى|ل)?\s*(?:صورة|صور|صوره))/u',
+            '/(?:无(?:需|须)?(?:生成)?(?:图片|图像)|没有(?:生成)?(?:图片|图像)|不(?:需要|生成|使用)(?:图片|图像)|无需(?:生成)?(?:图片|图像)|无图|无图片)/u',
+            '/(?:sin\s+imagen|sin\s+imagen\s+generada|sans\s+image|sem\s+imagem|ohne\s+bild|nessuna\s+immagine)/iu',
+        ] as $pattern) {
+            if (\preg_match($pattern, $value) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return mixed
+     */
+    private function normalizeAssetRequirementsForPlanJson(mixed $value): mixed
+    {
+        $value = $this->stripPlanJsonExplanatoryFields($value);
+        if (!\is_array($value)) {
+            return $value;
+        }
+
+        foreach ($value as $index => $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $required = $this->normalizePlanJsonBoolean($item['required'] ?? false) === true;
+            if (!$required) {
+                $value[$index] = $item;
+                continue;
+            }
+
+            $item['required'] = true;
+            foreach (['subject', 'prompt', 'brief', 'treatment'] as $key) {
+                if (!\is_scalar($item[$key] ?? null)) {
+                    continue;
+                }
+                $cleaned = $this->normalizeGeneratedImagePromptText((string)$item[$key]);
+                if ($cleaned !== '') {
+                    $item[$key] = $cleaned;
+                } elseif ($key === 'subject') {
+                    $item[$key] = 'Concrete generated image for this block narrative, with subject-specific scene, supporting props, composition, lighting, and no text baked into the image.';
+                } elseif ($key === 'treatment') {
+                    $item[$key] = 'Polished generated image with responsive crop, natural depth, and no placeholder or CSS-only treatment.';
+                } else {
+                    unset($item[$key]);
+                }
+            }
+            if (\trim((string)($item['subject'] ?? '')) === '') {
+                $item['subject'] = 'Concrete generated image for this block narrative, with subject-specific scene, supporting props, composition, lighting, and no text baked into the image.';
+            }
+            $value[$index] = $item;
+        }
+
+        return $value;
     }
 
     /**
@@ -2027,7 +2159,7 @@ final class AiSitePlanJsonGenerationService
                 $imageIntent = $this->normalizeBlockImageIntentForPlanJson($rawBlock['image_intent'] ?? []);
                 $blockContract = $this->normalizeBlockContractForPlanJson($rawBlock['block_contract'] ?? []);
                 $assetRequirements = \is_array($rawBlock['asset_requirements'] ?? null)
-                    ? $this->stripPlanJsonExplanatoryFields($rawBlock['asset_requirements'])
+                    ? $this->normalizeAssetRequirementsForPlanJson($rawBlock['asset_requirements'])
                     : [];
                 $policySlices = ['layout.4_8_spacing', 'typography.refined_font_stack', 'image.integrated_not_pasted', 'responsive.no_horizontal_scroll'];
                 $acceptanceRuleIds = ['responsive.no_horizontal_scroll', 'a11y.alt_focus_semantic', 'color.readable_contrast'];
@@ -3435,12 +3567,16 @@ final class AiSitePlanJsonGenerationService
                 'Each block must include block_key, page_flow_role, content, design_tags, visual_signature, image_intent, field_plan, and execution_script.',
                 'Field plan hard rule: every block field_plan must be an array of exactly 3 rows. Row fields must be concrete machine keys such as headline, supporting_copy, cta_label, proof_detail, image_brief, or context_detail.',
                 'Field plan copy rule: field_plan.sample must be final visitor-facing copy or a concrete asset brief. Never write instruction text such as write, rewrite, describe, use this field, explain, include, highlight, or mention.',
+                'Generated image hard rule: when image_intent.needs_image=true or an asset_requirements row has required=true, image_intent.image_subject and asset_requirements[].subject must be a concrete image-generation brief: real scene/product/editorial/interface subject, supporting props, crop/composition, lighting/atmosphere, and how it supports this block. Do not describe CSS-only motifs, CSS icons, decorative shapes, gradients, placeholders, fake screenshots, or no-image fallbacks as generated images. Never output no-image text in any language for a required image slot, including examples such as "no generated image", "لا توجد صورة مولدة", "没有生成图片", "无需图片", "sin imagen", or "sans image".',
+                'CSS-only visual rule: if a block should use only CSS decoration, set image_intent.needs_image=false, image_role=css_motif, reuse_policy=no_generated_image, and do not create required=true asset_requirements for it.',
+                'Image-copy separation: image prompts may mention visual subjects and props, but must not contain visitor CTA/body copy, prompt instructions, planning reasons, schema keys, or text that should appear baked into the image.',
             ],
             'self_check' => [
                 'Output exactly ' . (string)\count($exactBlockKeys) . ' direct dynamic block keys under plan_json.pages.' . $pageType . ': ' . \implode(', ', $exactBlockKeys) . '.',
                 'Keep every generated field inside plan_json.pages.' . $pageType . '.{block_key}.',
                 'If the draft has top-level visual_signature, image_intent, field_plan, execution_script, or execution_core_copy, discard it and rebuild the full page object with direct block keys.',
                 'Before returning JSON, verify every field_plan.sample, content, title, CTA, SEO, alt/title/aria/placeholder candidate uses current_site_language_context.site_default_language/content_locale.',
+                'Before returning JSON, verify every required generated-image slot has a concrete non-CSS image subject and every CSS-only motif has needs_image=false with no required image slot.',
             ],
         ]);
     }

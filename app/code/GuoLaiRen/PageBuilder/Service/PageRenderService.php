@@ -191,6 +191,8 @@ class PageRenderService
         $this->assign('lang', $currentLocale);
         $this->assign('lang_local', $currentLocale);
         $this->assign('current_locale', $currentLocale);
+        $this->assign('document_direction', $this->resolveDocumentDirectionForLocale($currentLocale));
+        $this->assign('document_dir', $this->resolveDocumentDirectionForLocale($currentLocale));
         $this->assign('layout_config', $layoutConfig);
         $this->assign('render_mode', $mode);
         
@@ -2028,9 +2030,11 @@ HTML;
         $footerCustomCode = (string)($page->getData(Page::schema_fields_FOOTER_CUSTOM_CODE) ?? '');
         $headHtml = $this->buildSeoHeadHtml($page);
         $htmlLang = $this->resolveDocumentLanguage();
+        $documentDir = $this->resolveDocumentDirection();
+        $safeDocumentDir = \htmlspecialchars($documentDir, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
 
         return '<!DOCTYPE html>
-<html lang="' . \htmlspecialchars($htmlLang, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">
+<html lang="' . \htmlspecialchars($htmlLang, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '" dir="' . $safeDocumentDir . '">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2039,7 +2043,7 @@ HTML;
     ' . $this->buildAiSiteDesignTokenCss($page) . '
     ' . $headerCustomCode . '
 </head>
-<body>
+<body dir="' . $safeDocumentDir . '">
     ' . $previewBoot . '
     ' . $headerHtml . '
     ' . $contentHtml . '
@@ -2174,6 +2178,20 @@ body > *{max-width:100%;box-sizing:border-box;}
     private function resolveDocumentLanguage(): string
     {
         return \str_replace('_', '-', $this->resolveCurrentLocale());
+    }
+
+    private function resolveDocumentDirection(): string
+    {
+        return $this->resolveDocumentDirectionForLocale($this->resolveCurrentLocale());
+    }
+
+    private function resolveDocumentDirectionForLocale(string $locale): string
+    {
+        $language = \strtolower((string)\preg_replace('/[_-].*$/', '', \trim($locale)));
+
+        return \in_array($language, ['ar', 'arc', 'dv', 'fa', 'ha', 'he', 'khw', 'ks', 'ku', 'ps', 'sd', 'ug', 'ur', 'yi'], true)
+            ? 'rtl'
+            : 'ltr';
     }
 
     private function resolveCanonicalUrl(Page $page): string
@@ -2549,9 +2567,11 @@ JS;
             ? '<link rel="stylesheet" href="' . htmlspecialchars($baseCssUrl, ENT_QUOTES, 'UTF-8') . '">'
             : '';
         $htmlLang = $this->resolveDocumentLanguage();
+        $documentDir = $this->resolveDocumentDirection();
+        $safeDocumentDir = \htmlspecialchars($documentDir, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
         
         return '<!DOCTYPE html>
-<html lang="' . \htmlspecialchars($htmlLang, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '">
+<html lang="' . \htmlspecialchars($htmlLang, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '" dir="' . $safeDocumentDir . '">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2563,7 +2583,7 @@ JS;
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     </style>
 </head>
-<body>
+<body dir="' . $safeDocumentDir . '">
     ' . $debugInfo . '
     ' . $previewBoot . '
     <div class="pb-slot pb-slot-header" data-region="header" data-multiple="false" data-slot-name="Header">' . $headerHtml . '</div>
