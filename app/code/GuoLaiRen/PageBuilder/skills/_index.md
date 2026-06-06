@@ -22,11 +22,29 @@
   - `description`：能力说明（自动压缩并写入提示词的 summary）。
 - 其他 `references/`、`assets/`、`demos/` 等为可选辅助目录，仅供人查阅、不会自动注入。
 
+## 本地已安装技能
+
+| code | 来源 | 用途 |
+| --- | --- | --- |
+| `claude-design` | 本模块内置 | 设计纪律、反 AI-slop、内容真实性、craft 规则 |
+| `impeccable` | `pbakaus/impeccable` 本地适配版 | 组件生成阶段的高质量界面设计、布局、可读性、反模板化约束 |
+
 ## 默认加载技能（写死在 `AiSiteSkillRegistry::DEFAULT_SKILL_CODES`）
 
 | code | 用途 | 关键约束 |
 | --- | --- | --- |
 | `claude-design` | 设计纪律、反 AI-slop、内容真实性、craft 规则 | 系统先行、ground in real context、避免 gradient orb / 三栏特性网格 / SVG 假产品图 / Inter 默认字体；不得拼凑 filler 段；用户语气与一句话需求落地 |
+
+## 组件生成适配器默认挂载技能
+
+`pagebuilder_component_generation` 适配器通过
+`ComponentGenerationAdapter::getDefaultSkillCodes()` 锁定加载以下技能：
+
+| code | 用途 | 说明 |
+| --- | --- | --- |
+| `claude-design` | 基础设计纪律 | 保持既有 PageBuilder 设计约束 |
+| `impeccable` | 组件视觉质量 | 默认注入本地 `skills/impeccable/SKILL.md` 的 prompt-only 规则 |
+| `weline-pixel-events` | 转化事件埋点 | 由 `Weline_Visitor` 提供，约束 CTA 和表单事件标记 |
 
 ## 兼容技能（沿用 `prompt_guides/frontend-design`）
 
@@ -59,10 +77,11 @@ planJsonTaskPlanPromptBase（Stage2）
 ## 新增技能流程
 
 1. 在 `app/code/GuoLaiRen/PageBuilder/skills/<your-code>/SKILL.md` 写好 frontmatter（`name` + `description`）；
-2. 如需默认加载，编辑 `AiSiteSkillRegistry::DEFAULT_SKILL_CODES` 把 `<your-code>` 加入；
-3. 在本文件追加技能行；
-4. 跑 `php -l` 与相关单测；
-5. 在 `doc/建站中台/AI建站中台-计划.md` 的 §14 增加“技能新增/变更”记录。
+2. 如需 AI 建站全局默认加载，编辑 `AiSiteSkillRegistry::DEFAULT_SKILL_CODES` 把 `<your-code>` 加入；
+3. 如需仅在某个 Weline_Ai 场景适配器默认挂载，编辑对应适配器的 `getDefaultSkillCodes()`；
+4. 在本文件追加技能行；
+5. 跑 `php -l` 与相关验证；
+6. 如存在对应长期计划文档，在技能新增/变更章节补充记录。
 
 ## 不做的事
 

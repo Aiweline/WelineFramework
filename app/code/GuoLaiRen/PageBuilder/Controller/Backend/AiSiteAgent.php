@@ -28,7 +28,6 @@ use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePublishService;
 use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
-use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonTaskScheduler;
 use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonStateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQualityGateService;
@@ -2001,156 +2000,30 @@ class AiSiteAgent extends BaseController
         $requestedStage = $this->scopeCompatibilityService->normalizeStage(
             \trim((string)$this->getRequestBodyValue('stage', ''))
         );
-        $currentStage = $this->scopeCompatibilityService->normalizeStage((string)$session->getStage());
-        // Pass explicit artifact keys to bypass dehydrateScopePaths which strips plan_json.
-        $planArtifactKeys = [
-            'plan_json',
-            'content_manifest',
-        ];
+        $planArtifactKeys = ['plan_json'];
+        $planStage = $requestedStage !== '' ? $requestedStage : AiSiteAgentSession::STAGE_PLAN;
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, $planArtifactKeys)
+            $this->sessionService->loadScopeForStage($session, $planStage, $planArtifactKeys)
         );
-        if ($requestedStage !== '' && $requestedStage !== AiSiteAgentSession::STAGE_PLAN) {
-            $requestedStageScope = $this->scopeCompatibilityService->normalizeScope(
-                $this->sessionService->loadScopeForStage($session, $requestedStage, $planArtifactKeys)
+        if ($planStage !== AiSiteAgentSession::STAGE_PLAN && !\is_array($scope['plan_json'] ?? null)) {
+            $scope = $this->scopeCompatibilityService->normalizeScope(
+                $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_PLAN, $planArtifactKeys)
             );
-            $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($requestedStageScope, $scope));
         }
-        if ($currentStage !== '' && $currentStage !== AiSiteAgentSession::STAGE_PLAN && $currentStage !== $requestedStage) {
-            $currentStageScope = $this->scopeCompatibilityService->normalizeScope(
-                $this->sessionService->loadScopeForStage($session, $currentStage)
-            );
-            $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentStageScope, $scope));
-        }
-        $scope = $this->hydrateStageOnePlanPayloadFromPlanStageScope($session, $adminId, $scope);
-        $planConfirmationPrepared = $this->planJsonGenerationService->prepareStageOnePlanScopeForConfirmation($scope);
-        $scope = \is_array($planConfirmationPrepared['scope'] ?? null)
-            ? $planConfirmationPrepared['scope']
-            : (\is_array($planConfirmationPrepared) ? $planConfirmationPrepared : $scope);
-        $planConfirmationStage1Validation = \is_array($planConfirmationPrepared['stage1_validation'] ?? null)
-            ? $planConfirmationPrepared['stage1_validation']
-            : [];
-        $hasStageOnePayload = $this->scopeCompatibilityService->hasPersistedStageOnePlan($scope);
-        if (!$hasStageOnePayload) {
-            return $this->jsonError('INVALID_PARAMS', (string)__('Invalid request.'), self::PARAMS_PUBLIC_ID);
-        }
-
-        if ($this->planJsonTaskService->hasRetryableAiFailures($scope, 'plan')) {
-            $summary = $this->planJsonTaskService->summarizeRetryableAiFailures($scope, 'plan');
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $planJsonPages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        if ($planJson === [] || $planJsonPages === []) {
             return $this->jsonError(
-                'RETRYABLE_AI_FAILURES_PENDING',
-                'Retryable AI failures must be retried before continuing.',
-                ['public_id'],
-                ['retryable_ai_failure_count' => (int)($summary['count'] ?? 0), 'retryable_ai_failures' => $summary]
-            );
-        }
-        $missingPlanPageTypes = $this->planJsonTaskService->collectMissingSelectedPlanPageTypes($scope);
-        if ($missingPlanPageTypes !== []) {
-            return $this->jsonError(
-                'PLAN_PAGE_COVERAGE_INCOMPLETE',
-                (string)__('Plan JSON is missing selected page types: %{page_types}. Regenerate the plan until every selected page has an explicit plan JSON page and block plan.', [
-                    'page_types' => \implode(', ', \array_slice($missingPlanPageTypes, 0, 12)),
-                ]),
-                ['public_id'],
-                ['missing_page_types' => $missingPlanPageTypes]
-            );
-        }
-        $planStartDecision = $this->resolvePlanStartDecision($scope);
-        $planInputStaleForConfirmation = !empty($planStartDecision['rebuild_required'])
-            || !empty($planStartDecision['source_signature_changed']);
-        $forceConfirmStalePlan = (int)$this->getRequestBodyValue('force_confirm_stale_plan', 0) === 1;
-        if ($planInputStaleForConfirmation && !$forceConfirmStalePlan) {
-            $stalePlanConfirmMessage = (string)__('The plan input changed. Confirm regeneration before continuing.');
-            return $this->jsonError(
-                'PLAN_INPUT_STALE',
-                $stalePlanConfirmMessage,
-                ['public_id', 'force_confirm_stale_plan'],
-                [
-                    'requires_confirmation' => true,
-                    'confirmation_code' => 'PLAN_INPUT_STALE_CONFIRM',
-                    'confirm_message' => $stalePlanConfirmMessage,
-                    'plan_start_decision' => $planStartDecision,
-                ]
-            );
-        }
-
-        try {
-            $directionLockPatch = $this->designDirectionService()->resolveSelectionForScope($scope, $adminId, true);
-        } catch (\InvalidArgumentException $invalidArgumentException) {
-            return $this->jsonError(
-                'DESIGN_DIRECTION_INVALID',
-                $invalidArgumentException->getMessage(),
-                ['design_direction_code']
+                'PLAN_JSON_MISSING',
+                (string)__('Plan JSON is missing. Regenerate the site plan before confirming.'),
+                ['public_id', 'plan_json']
             );
         }
 
         $planJsonEditor = new AiSitePlanJsonStateService((int)$session->getId());
-        $scopePatch = \array_replace(
-            $directionLockPatch,
-            $planJsonEditor->setConfirmedScopePatch(
-                \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [],
-                true
-            )
-        );
-        $PlanJsonSourceScope = \array_replace($scope, $scopePatch);
-        $PlanJsonPatch = $this->PlanJsonJsonConfirmationScopePatch($PlanJsonSourceScope, (int)$session->getId());
-        unset($PlanJsonSourceScope);
-        $PlanJsonValidation = \is_array($PlanJsonPatch['plan_json_pages_validation'] ?? null)
-            ? $PlanJsonPatch['plan_json_pages_validation']
-            : [];
-        if (!($PlanJsonValidation['valid'] ?? false)) {
-            $PlanJsonValidation = \is_array($PlanJsonPatch['plan_json_pages_validation'] ?? null)
-                ? $PlanJsonPatch['plan_json_pages_validation']
-                : [];
-            $PlanJsonErrors = \is_array($PlanJsonValidation['errors'] ?? null)
-                ? \array_values(\array_filter(\array_map('strval', $PlanJsonValidation['errors']), static fn(string $error): bool => \trim($error) !== ''))
-                : [];
-            $detail = $PlanJsonErrors !== []
-                ? \implode('; ', \array_slice($PlanJsonErrors, 0, 6))
-                : '';
-            $message = $detail !== ''
-                ? (string)__('Plan JSON pages validation failed: %{detail}', ['detail' => $detail])
-                : (string)__('Plan JSON pages validation failed. Please regenerate the site plan.');
-
-            return $this->jsonError(
-                'PLAN_JSON_PAGES_INVALID',
-                $message,
-                ['public_id'],
-                [
-                    'plan_json_pages_validation' => $PlanJsonValidation,
-                    'stage1_validation' => $planConfirmationStage1Validation,
-                ]
-            );
-        }
-        $scopePatch = \array_replace($scopePatch, $PlanJsonPatch);
-
-        $confirmedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $scopePatch));
-        $confirmedScope = $this->planJsonTaskService->ensureTaskScope(
-            $confirmedScope,
-            \is_array($confirmedScope['website_profile'] ?? null) ? $confirmedScope['website_profile'] : [],
-            (string)($confirmedScope['workspace_track'] ?? '')
-        );
-        $scopePatch = \array_replace($scopePatch, $this->planJsonTaskService->extractPlanJsonDerivedScopePatch($confirmedScope));
-        $scopePatch['plan_json_task_summary'] = $this->planJsonTaskService->summarize($confirmedScope);
-        $confirmedPlanSignature = $this->resolveConfirmedPlanSignature(\array_replace($scope, $scopePatch));
-        $scopePatch['build_summary'] = [
-            'confirmed_plan_signature' => $confirmedPlanSignature,
-        ];
-
-        $confirmOnly = (int)$this->getRequestBodyValue('confirm_only', 0) === 1
-            || (int)$this->getRequestBodyValue('build_deferred', 0) === 1
-            || \strtolower(\trim((string)$this->getRequestBodyValue('start_build', '1'))) === '0'
-            || $this->hasBuildQueueForPlanConfirmation($session, $confirmedScope);
+        $scopePatch = $planJsonEditor->setConfirmedScopePatch($planJson, true);
 
         $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
-        if (!$confirmOnly) {
-            $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
-            $confirmedPlanJson = \is_array($scopePatch['plan_json'] ?? null) ? $scopePatch['plan_json'] : [];
-            if ($confirmedPlanJson !== []) {
-                $confirmedPlanJson['state'] = AiSiteAgentSession::STAGE_VISUAL_EDIT;
-                $this->sessionService->mergeScope($session->getId(), $adminId, ['plan_json' => $confirmedPlanJson]);
-            }
-        }
         $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $this->appendWorkspaceEvent(
             $session->getId(),
@@ -2161,40 +2034,58 @@ class AiSiteAgent extends BaseController
             [
                 'operation' => 'plan_confirm',
                 'details' => [
-                    'plan_signature' => $confirmedPlanSignature,
-                    'plan_json_task_count' => (int)($scopePatch['plan_json_task_summary']['total'] ?? 0),
+                    'plan_json_confirmed' => 1,
                 ],
             ]
         );
 
-        if ($confirmOnly) {
-            $confirmedState = [
-                'public_id' => (string)$fresh->getPublicId(),
-                'stage' => $this->scopeCompatibilityService->normalizeStage((string)$fresh->getStage()) ?: AiSiteAgentSession::STAGE_PLAN,
-                'workspace_status' => (string)($confirmedScope['workspace_status'] ?? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING),
-                'publish_status' => (string)$fresh->getPublishStatus(),
-                'can_publish' => !empty($confirmedScope['can_publish']),
-                'latest_build_failed' => !empty($confirmedScope['latest_build_failed']),
-                'latest_build_failure' => \is_array($confirmedScope['latest_build_failure'] ?? null) ? $confirmedScope['latest_build_failure'] : [],
-                'publish_blocked_by_latest_ai_failure' => !empty($confirmedScope['publish_blocked_by_latest_ai_failure']),
-                'publish_blocked_reason' => (string)($confirmedScope['publish_blocked_reason'] ?? ''),
-                'workspace_track' => (string)($confirmedScope['workspace_track'] ?? ''),
-                'website_id' => (int)$fresh->getWebsiteId(),
-                'virtual_theme_id' => (int)$fresh->getVirtualThemeId(),
-                'draft_website_id' => (int)($confirmedScope['draft_website_id'] ?? 0),
-                'active_operation' => \is_array($confirmedScope['active_operation'] ?? null) ? $confirmedScope['active_operation'] : [],
-                'confirmed_plan_signature' => $confirmedPlanSignature,
-                'has_stage_one_plan' => true,
-                'plan_json_task_summary' => \is_array($scopePatch['plan_json_task_summary'] ?? null) ? $scopePatch['plan_json_task_summary'] : [],
-                'build_summary' => \is_array($scopePatch['build_summary'] ?? null) ? $scopePatch['build_summary'] : [],
-                'pending_generation_page_types' => \is_array($confirmedScope['pending_generation_page_types'] ?? null) ? $confirmedScope['pending_generation_page_types'] : [],
-            ];
+        $existingBuildQueue = $this->findAiSiteOperationQueueRow($fresh, 'build', 0, true);
+        if (\is_array($existingBuildQueue) && $existingBuildQueue !== []) {
+            $queueId = $this->resolveAiSiteQueueRowId($existingBuildQueue);
+            $queueContent = $this->decodeAiSiteQueueRowContent($existingBuildQueue);
+            $executionToken = \trim((string)($queueContent['execution_token'] ?? $queueContent['token'] ?? ''));
+            $queueStatus = \strtolower(\trim((string)($existingBuildQueue['status'] ?? '')));
+            $operationStatus = \in_array($queueStatus, ['running', 'processing'], true)
+                ? 'running'
+                : (\in_array($queueStatus, ['pending', 'queued'], true) ? 'queued' : ($queueStatus !== '' ? $queueStatus : 'queued'));
+            $activeOperation = \array_replace(
+                $this->buildOperationQueueEnvelope($fresh, 'build', $executionToken, $operationStatus),
+                [
+                    'operation' => 'build',
+                    'execution_token' => $executionToken,
+                    'status' => $operationStatus,
+                    'queue_status' => $operationStatus,
+                    'queue_id' => $queueId,
+                    'message' => (string)__('Plan JSON confirmed; build queue already exists.'),
+                    'updated_at' => \date('Y-m-d H:i:s'),
+                ]
+            );
+            $state = $this->buildQueuedOperationState(
+                $fresh,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'build',
+                $activeOperation,
+                $existingBuildQueue
+            );
+            $streamUrl = $executionToken !== '' && $this->isAiSiteQueueRowLiveInProgress($existingBuildQueue)
+                ? $this->buildOperationStreamUrl($fresh->getPublicId(), $executionToken)
+                : '';
+
             return $this->fetchJson([
                 'success' => true,
-                'message' => (string)__('Plan JSON confirmed; you can generate a selected block first.'),
-                'start_sse' => false,
+                'message' => (string)__('Plan JSON confirmed; build queue already exists.'),
                 'operation' => 'plan_confirm',
-                'data' => $this->buildWorkspaceConfirmPayload($confirmedState, 'plan'),
+                'running_operation' => 'build',
+                'queue_id' => $queueId,
+                'execution_token' => $executionToken,
+                'stream_url' => $streamUrl,
+                'start_sse' => false,
+                'data' => $state,
+                'queue_wait' => $this->buildAiSiteQueueSchedulerWaitPayload('build', $queueId, 'existing_build_queue'),
+                'deferred_queue_progress' => $queueId > 0 && $this->isAiSiteQueueRowLiveInProgress($existingBuildQueue),
+                'queue_waiting_for_scheduler' => $queueStatus === 'pending',
+                'can_close_stream' => true,
+                'continue_other_operations' => true,
             ]);
         }
 
@@ -2206,55 +2097,13 @@ class AiSiteAgent extends BaseController
             [],
             '',
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING,
-            ['fresh_repair_failed_tasks' => 1]
+            []
         );
         if (!empty($buildStartResult['success'])) {
             $buildStartResult['start_sse'] = true;
         }
 
         return $this->fetchJson($buildStartResult);
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     */
-    private function hasBuildQueueForPlanConfirmation(AiSiteAgentSession $session, array $scope): bool
-    {
-        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
-        if ($this->isBuildOperationInProgress($activeOperation)) {
-            return true;
-        }
-
-        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
-        if ($this->isBuildOperationInProgress(\is_array($activeOperations['build'] ?? null) ? $activeOperations['build'] : [])) {
-            return true;
-        }
-
-        $buildQueueInfo = \is_array($scope['build_queue_info'] ?? null) ? $scope['build_queue_info'] : [];
-        if ($this->isBuildOperationInProgress($buildQueueInfo)) {
-            return true;
-        }
-
-        $buildQueueRow = $this->findAiSiteOperationQueueRow($session, 'build');
-        return \is_array($buildQueueRow) && $this->isAiSiteQueueRowLiveInProgress($buildQueueRow);
-    }
-
-    /**
-     * @param array<string, mixed> $operationState
-     */
-    private function isBuildOperationInProgress(array $operationState): bool
-    {
-        if ($operationState === []) {
-            return false;
-        }
-
-        $operation = \trim((string)($operationState['operation'] ?? 'build'));
-        if ($operation !== 'build') {
-            return false;
-        }
-
-        $status = \strtolower(\trim((string)($operationState['queue_status'] ?? $operationState['status'] ?? '')));
-        return \in_array($status, ['pending', 'queued', 'running', 'processing'], true);
     }
 
     private function handlePlanSse(): void
@@ -2665,30 +2514,12 @@ class AiSiteAgent extends BaseController
         }
         $scopePatch = $this->dropEmptyProfileIdentityPatchValues($scopePatch);
         $currentScope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForBuildOperation($session)
+            $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT, [])
         );
         $currentScope = $this->normalizePlanJsonConfirmationForBuild($currentScope);
         $scopePatch = $this->planJsonTaskService->stripPlanJsonMutationScopePatch($scopePatch, $currentScope);
         $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($currentScope, $scopePatch));
-        $mergedScope = $this->planJsonTaskService->restorePlanJsonContract($mergedScope, $currentScope);
         $mergedScope = $this->normalizePlanJsonConfirmationForBuild($mergedScope);
-        $websiteProfile = $this->profileGenerationService->generate($mergedScope, false);
-        if (\is_array($websiteProfile) && $websiteProfile !== []) {
-            $mergedScope['website_profile'] = $websiteProfile;
-            $scopePatch['website_profile'] = $websiteProfile;
-        }
-        if ($this->isPlanJsonReadyForBuild($mergedScope)) {
-            $mergedScope = $this->planJsonTaskService->ensureTaskScope(
-                $mergedScope,
-                \is_array($mergedScope['website_profile'] ?? null) ? $mergedScope['website_profile'] : [],
-                (string)($mergedScope['workspace_track'] ?? '')
-            );
-            $scopePatch = \array_replace($scopePatch, $this->planJsonTaskService->extractPlanJsonDerivedScopePatch($mergedScope));
-            $scopePatch['plan_json_task_summary'] = $this->planJsonTaskService->summarize($mergedScope);
-            if (\is_array($scopePatch['build_summary'] ?? null)) {
-                unset($scopePatch['build_summary']['task_summary']);
-            }
-        }
         if ($this->planJsonTaskService->hasRetryableAiFailures($mergedScope, 'plan')) {
             $summary = $this->planJsonTaskService->summarizeRetryableAiFailures($mergedScope, 'plan');
             return $this->jsonError(
@@ -2704,6 +2535,13 @@ class AiSiteAgent extends BaseController
                 'A confirmed stage-1 plan_json is required before build.',
                 ['public_id', 'plan_json']
             );
+        }
+        if ((int)($scopePatch['_force_rebuild'] ?? 0) === 1) {
+            $resetPatch = (new AiSitePlanJsonStateService((int)$session->getId()))
+                ->resetBlockExecutionStateScopePatch(\is_array($mergedScope['plan_json'] ?? null) ? $mergedScope['plan_json'] : []);
+            $scopePatch = \array_replace($scopePatch, $resetPatch);
+            $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($mergedScope, $resetPatch));
+            $scopePatch['plan_json_task_summary'] = $this->planJsonTaskService->summarize($mergedScope);
         }
         if ($isResume) {
             $resumeSummary = $this->planJsonTaskService->summarize($mergedScope);
@@ -3330,31 +3168,6 @@ class AiSiteAgent extends BaseController
         return [
             'plan_json_pages_validation' => $validation,
         ];
-    }
-
-    /**
-     * @param array<string, mixed> $scope
-     * @return array<string, mixed>
-     */
-    private function PlanJsonJsonConfirmationScopePatch(array $scope, int|string|null $sessionId = null): array
-    {
-        try {
-            /** @var AiSitePlanJsonTaskScheduler $scheduler */
-            $scheduler = ObjectManager::getInstance(AiSitePlanJsonTaskScheduler::class);
-            return $scheduler->buildConfirmationScopePatch(
-                $scope,
-                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-                (string)($scope['workspace_track'] ?? ''),
-                $sessionId
-            );
-        } catch (\Throwable $throwable) {
-            return [
-                'plan_json_pages_validation' => [
-                    'valid' => false,
-                    'errors' => [$throwable->getMessage()],
-                ],
-            ];
-        }
     }
 
     /**
@@ -14115,8 +13928,9 @@ class AiSiteAgent extends BaseController
         array $operationDetails = []
     ): array {
         $stage = $this->scopeCompatibilityService->normalizeStage($stage);
+        $isQueueBackedOperation = $this->isAiSiteQueueBackedOperation($operation);
         $scope = $this->scopeCompatibilityService->normalizeScope(
-            $this->sessionService->loadScopeForStage($session, $stage)
+            $this->sessionService->loadScopeForStage($session, $stage, $isQueueBackedOperation ? [] : null)
         );
         $scope = $this->discardForeignAiSiteQueueRuntimeState($scope, (int)$session->getId());
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
@@ -14223,14 +14037,56 @@ class AiSiteAgent extends BaseController
             $runningExecutionToken = \trim((string)($runningOperationState['execution_token'] ?? ''));
             if ($this->shouldReuseRunningQueuedOperation($operation, $runningOperation)) {
                 $reusedOperation = $runningOperation !== '' ? $runningOperation : $operation;
+                $runningQueueId = (int)($runningOperationState['queue_id'] ?? 0);
+                $runningQueueRow = null;
+                if ($runningQueueId > 0) {
+                    try {
+                        $runningQueueRow = $this->findAiSiteQueueRowById($runningQueueId);
+                    } catch (\Throwable) {
+                        $runningQueueRow = null;
+                    }
+                    if (\is_object($runningQueueRow) && \method_exists($runningQueueRow, 'getData')) {
+                        $runningQueueRow = $runningQueueRow->getData();
+                    }
+                }
+                $runningState = $this->buildQueuedOperationState(
+                    $session,
+                    $stage,
+                    $reusedOperation,
+                    $runningOperationState,
+                    \is_array($runningQueueRow) ? $runningQueueRow : null
+                );
+                $runningStatus = \strtolower(\trim((string)(
+                    $runningOperationState['queue_status']
+                    ?? $runningOperationState['status']
+                    ?? ''
+                )));
+                $streamUrl = $runningExecutionToken !== ''
+                    ? $this->buildOperationStreamUrl($session->getPublicId(), $runningExecutionToken)
+                    : '';
+
                 return [
-                    'success' => false,
+                    'success' => true,
+                    'http_status' => 200,
+                    'status_code' => 200,
+                    'code' => 'AI_SITE_QUEUE_ALREADY_ACTIVE',
                     'message' => $this->buildRunningOperationReuseMessage($reusedOperation),
                     'operation' => $reusedOperation,
+                    'running_operation' => $reusedOperation,
                     'execution_token' => $runningExecutionToken,
-                    'stream_url' => $runningExecutionToken !== ''
-                        ? $this->buildOperationStreamUrl($session->getPublicId(), $runningExecutionToken)
-                        : '',
+                    'stream_url' => $streamUrl,
+                    'queue_id' => $runningQueueId,
+                    'start_sse' => $streamUrl !== '',
+                    'data' => $runningState,
+                    'queue_wait' => $this->buildAiSiteQueueSchedulerWaitPayload(
+                        $reusedOperation,
+                        $runningQueueId,
+                        'existing_active_operation'
+                    ),
+                    'deferred_queue_progress' => $runningQueueId > 0,
+                    'queue_waiting_for_scheduler' => \in_array($runningStatus, ['pending', 'queued'], true),
+                    'can_close_stream' => true,
+                    'continue_other_operations' => true,
                 ];
             }
             if ($operation === 'plan' || $runningOperation === 'plan') {
@@ -14339,11 +14195,16 @@ class AiSiteAgent extends BaseController
         }
         $scope['page_types'] = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if ($operation === 'build') {
-            $scope = $this->planJsonTaskService->restorePlanJsonContract($scope, $baseScope);
             $scope = $this->normalizePlanJsonConfirmationForBuild($scope);
             $resetFailedOrInterruptedTasks = (int)($operationDetails['fresh_repair_failed_tasks'] ?? 0) === 1
                 || (int)($operationDetails['resume_failed_tasks'] ?? 0) === 1;
-            if ($resetFailedOrInterruptedTasks) {
+            if ((int)($scopePatch['_force_rebuild'] ?? 0) === 1) {
+                $resetPatch = (new AiSitePlanJsonStateService((int)$session->getId()))
+                    ->resetBlockExecutionStateScopePatch(\is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []);
+                $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($scope, $resetPatch));
+                $scopePatch = \array_replace($scopePatch, $resetPatch);
+                $scopePatch['plan_json_task_summary'] = $this->planJsonTaskService->summarize($scope);
+            } elseif ($resetFailedOrInterruptedTasks) {
                 $isResumeRepair = (int)($operationDetails['resume_failed_tasks'] ?? 0) === 1;
                 $scope = $this->planJsonTaskService->resetFailedTasksForFreshRepair(
                     $scope,
@@ -14357,15 +14218,10 @@ class AiSiteAgent extends BaseController
                         ? 'Resume build after interrupted task execution'
                         : 'Fresh build repair after interrupted task execution'
                 );
-            }
-            $scope = $this->planJsonTaskService->ensureTaskScope(
-                $scope,
-                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-                (string)($scope['workspace_track'] ?? '')
-            );
-            $scopePatch['plan_json_task_summary'] = $this->planJsonTaskService->summarize($scope);
-            if (\is_array($scopePatch['build_summary'] ?? null)) {
-                unset($scopePatch['build_summary']['task_summary']);
+                $scopePatch['plan_json_task_summary'] = $this->planJsonTaskService->summarize($scope);
+                if (\is_array($scopePatch['build_summary'] ?? null)) {
+                    unset($scopePatch['build_summary']['task_summary']);
+                }
             }
         }
         if ($this->isPublishBlockingAiBuildOperation($operation)) {
@@ -14442,7 +14298,7 @@ class AiSiteAgent extends BaseController
 
             $freshForQueue = $this->sessionService->loadById($session->getId(), $adminId) ?? $freshForQueue;
             $queueScope = $this->scopeCompatibilityService->normalizeScope(
-                $this->sessionService->loadScopeForStage($freshForQueue, $stage)
+                $this->sessionService->loadScopeForStage($freshForQueue, $stage, [])
             );
             $queueActiveOperation = \is_array($queueScope['active_operation'] ?? null) ? $queueScope['active_operation'] : [];
             if (
@@ -14510,7 +14366,7 @@ class AiSiteAgent extends BaseController
             return false;
         }
 
-        if (\in_array($operation, ['plan', 'build'], true)) {
+        if ($operation === 'plan') {
             return false;
         }
 
@@ -15967,8 +15823,12 @@ class AiSiteAgent extends BaseController
         );
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
         if ($queueForcedAiRebuild) {
-            $scope = $this->planJsonTaskService->clearBuildArtifactsForRegeneration($scope);
-            $scope = $this->planJsonTaskService->resetPlanJsonTasksToPendingForRebuild($scope, false);
+            $scope = \array_replace(
+                $scope,
+                (new AiSitePlanJsonStateService((int)$session->getId()))->resetBlockExecutionStateScopePatch(
+                    \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []
+                )
+            );
         } else {
             $scope = $this->planJsonTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
         }
@@ -17785,8 +17645,12 @@ class AiSiteAgent extends BaseController
         );
         $queueForcedAiRebuild = (int)($scope['_queue_force_build']['active'] ?? 0) === 1;
         if ($queueForcedAiRebuild) {
-            $scope = $this->planJsonTaskService->clearBuildArtifactsForRegeneration($scope);
-            $scope = $this->planJsonTaskService->resetPlanJsonTasksToPendingForRebuild($scope, false);
+            $scope = \array_replace(
+                $scope,
+                (new AiSitePlanJsonStateService((int)$session->getId()))->resetBlockExecutionStateScopePatch(
+                    \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []
+                )
+            );
         } else {
             $scope = $this->planJsonTaskService->reconcileGeneratedArtifactsWithTaskState($scope);
         }
@@ -17866,9 +17730,6 @@ class AiSiteAgent extends BaseController
         $this->assertBuildImageAssetsReady($autoAssetResult['failed_slots']);
         $themeShell = $this->virtualThemeService->ensureThemeShell($scope, $scope['website_profile'], $session->getId());
         $scope['virtual_theme_id'] = (int)$themeShell['virtual_theme_id'];
-        if ($queueForcedAiRebuild) {
-            $this->virtualThemeService->resetGeneratedPageLayoutsForRebuild((int)$scope['virtual_theme_id'], $pageTypes);
-        }
 
         /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
@@ -18868,8 +18729,26 @@ class AiSiteAgent extends BaseController
             $scope['site_title'] ?? null,
             $scope['website_profile']['site_title'] ?? null,
             $scope['plan_json']['site_name'] ?? null,
-            'Fake Site',
+            'New Studio',
         ]);
+        $displaySiteName = \trim(\preg_replace('/\s+\d{14}-[a-f0-9]{8}$/i', '', $siteName) ?? $siteName);
+        if ($displaySiteName === '') {
+            $displaySiteName = $siteName;
+        }
+        $tagline = $this->firstNonEmptyFakePlanJsonText([
+            $scope['site_tagline'] ?? null,
+            $scope['website_profile']['site_tagline'] ?? null,
+            $scope['tagline'] ?? null,
+            'Thoughtful spaces, composed with care.',
+        ]);
+        $brief = $this->firstNonEmptyFakePlanJsonText([
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+            $scope['website_profile']['description'] ?? null,
+            $scope['plan_json']['site_description'] ?? null,
+            $tagline,
+        ]);
+        $sectionType = \strtolower($blockKey . ' ' . $sectionCode . ' ' . (string)($block['component_code'] ?? ''));
         $headline = $this->firstNonEmptyFakePlanJsonText([
             $block['headline'] ?? null,
             $block['title'] ?? null,
@@ -18883,20 +18762,131 @@ class AiSiteAgent extends BaseController
             $block['description'] ?? null,
             $block['summary'] ?? null,
             $block['content'] ?? null,
-            'Fake mode rendered this block from plan_json without an AI call.',
+            $brief,
         ]);
         $cta = $this->firstNonEmptyFakePlanJsonText([
             $block['cta_text'] ?? null,
             $block['primary_cta'] ?? null,
-            'Review block',
+            'Book a consultation',
         ]);
         $escape = static fn(string $value): string => \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
-        $html = '<section class="pb-ai-fake-section" data-page-type="' . $escape($pageType) . '" data-block-key="' . $escape($blockKey) . '">'
-            . '<div class="pb-ai-fake-section__inner">'
-            . '<p class="pb-ai-fake-section__eyebrow">' . $escape($siteName) . ' / fake mode</p>'
-            . '<h2>' . $escape($headline) . '</h2>'
-            . '<p>' . $escape($body) . '</p>'
-            . '<button type="button">' . $escape($cta) . '</button>'
+        $clip = static function (string $value, int $max = 220): string {
+            $value = \trim(\preg_replace('/\s+/', ' ', $value) ?? $value);
+            if (\mb_strlen($value) <= $max) {
+                return $value;
+            }
+
+            return \rtrim(\mb_substr($value, 0, $max - 1)) . '.';
+        };
+        $sectionVariant = 'story';
+        if (\str_contains($sectionType, 'hero')) {
+            $sectionVariant = 'hero';
+            $headline = $headline !== '' && !\preg_match('/starts with a clear promise/i', $headline)
+                ? $headline
+                : $displaySiteName . ' brings calm, living design into everyday rooms';
+            $body = $clip($brief, 210);
+            $cta = $cta !== '' && !\preg_match('/review block/i', $cta) ? $cta : 'Plan my room';
+        } elseif (\str_contains($sectionType, 'offer') || \str_contains($sectionType, 'product') || \str_contains($sectionType, 'service')) {
+            $sectionVariant = 'offers';
+            $headline = $headline !== '' ? $headline : 'Curated services for every stage of the room';
+            $body = $clip($body !== '' ? $body : $brief, 200);
+            $cta = $cta !== '' && !\preg_match('/review block/i', $cta) ? $cta : 'Explore services';
+        } elseif (\str_contains($sectionType, 'trust') || \str_contains($sectionType, 'proof') || \str_contains($sectionType, 'testimonial')) {
+            $sectionVariant = 'proof';
+            $headline = $headline !== '' ? $headline : 'A process clients can feel at home with';
+            $body = $clip($body !== '' ? $body : $brief, 200);
+            $cta = $cta !== '' && !\preg_match('/review block/i', $cta) ? $cta : 'See the process';
+        } elseif (\str_contains($sectionType, 'cta') || \str_contains($sectionType, 'final')) {
+            $sectionVariant = 'cta';
+            $headline = $headline !== '' ? $headline : 'Start with one room and a clearer plan';
+            $body = $clip($body !== '' ? $body : $brief, 180);
+            $cta = $cta !== '' && !\preg_match('/review block/i', $cta) ? $cta : 'Book a design call';
+        } elseif (\str_contains($sectionType, 'resource') || \str_contains($sectionType, 'preview')) {
+            $sectionVariant = 'resource';
+            $headline = $headline !== '' ? $headline : 'Ideas that make the next choice easier';
+            $body = $clip($body !== '' ? $body : $brief, 200);
+            $cta = $cta !== '' && !\preg_match('/review block/i', $cta) ? $cta : 'View the guide';
+        }
+        $needsHeadlineRewrite = \preg_match('/\d{14}-[a-f0-9]{8}|starts with a clear promise|makes the offer easier to trust|final cta|brand promise|featured offers|resource preview/i', $headline) === 1;
+        if ($needsHeadlineRewrite) {
+            $headline = match ($sectionVariant) {
+                'hero' => $displaySiteName . ' brings calm, living design into everyday rooms',
+                'offers' => 'Curated services for every stage of the room',
+                'proof' => 'A calmer process, proven before installation',
+                'cta' => 'Start with one room and a clearer plan',
+                'resource' => 'Ideas that make the next choice easier',
+                default => 'Rooms shaped around light, texture, and daily life',
+            };
+        }
+        $needsBodyRewrite = \preg_match('/review block|fake mode rendered|connects .* visitor need|final cta|trust proof connects|brand promise connects|featured offers connects|resource preview connects|\d{14}-[a-f0-9]{8}/i', $body) === 1;
+        if ($needsBodyRewrite) {
+            $body = match ($sectionVariant) {
+                'hero' => $clip($brief, 210),
+                'offers' => 'Choose a focused service path, from a single-room refresh to a full concept with plant styling, material direction, and shopping guidance.',
+                'proof' => 'Each project moves through a measured brief, visual direction, and practical handoff so clients can make confident decisions before buying.',
+                'cta' => 'Share a few photos, room dimensions, and the mood you want. The first recommendation turns a vague idea into a focused next step.',
+                'resource' => 'Short design notes help visitors understand light, texture, plant care, and the details that make a room feel finished.',
+                default => $clip($brief, 200),
+            };
+        }
+        $eyebrow = match ($sectionVariant) {
+            'hero' => 'Plant-forward interior studio',
+            'offers' => 'Featured services',
+            'proof' => 'Client confidence',
+            'cta' => 'Begin your project',
+            'resource' => 'Design notes',
+            default => 'Studio approach',
+        };
+        $accent = match ($sectionVariant) {
+            'hero' => '#2f6f4e',
+            'offers' => '#6b7f3d',
+            'proof' => '#7a5c3e',
+            'cta' => '#17382c',
+            'resource' => '#3f6f73',
+            default => '#2f6f4e',
+        };
+        $visualHtml = match ($sectionVariant) {
+            'hero' => '<div class="pb-ai-demo-visual"><span>Sunlit planters</span><span>Custom layout</span><span>Warm material palette</span></div>',
+            'offers' => '<div class="pb-ai-demo-grid"><article><strong>Room refresh</strong><span>Palette, layout, and styling moves.</span></article><article><strong>Plant styling</strong><span>Low-maintenance greenery matched to light.</span></article><article><strong>Full concept</strong><span>A refined plan ready for execution.</span></article></div>',
+            'proof' => '<div class="pb-ai-demo-grid"><article><strong>01</strong><span>Measured brief and mood direction.</span></article><article><strong>02</strong><span>Clear recommendations before purchase.</span></article><article><strong>03</strong><span>Calm handoff with room-by-room notes.</span></article></div>',
+            'resource' => '<div class="pb-ai-demo-grid"><article><strong>Light first</strong><span>Choose plants and finishes around the room.</span></article><article><strong>Texture next</strong><span>Layer woods, linens, ceramics, and foliage.</span></article></div>',
+            'cta' => '<div class="pb-ai-demo-note"><strong>Next opening</strong><span>Share a few photos and receive a focused first direction.</span></div>',
+            default => '<div class="pb-ai-demo-note"><strong>Designed to feel lived-in</strong><span>Balanced composition, clear decisions, and durable details.</span></div>',
+        };
+        $html = '<section class="pb-ai-demo-section pb-ai-demo-section--' . $escape($sectionVariant) . '" data-page-type="' . $escape($pageType) . '" data-block-key="' . $escape($blockKey) . '">'
+            . '<style>'
+            . '.pb-ai-demo-section,.pb-ai-demo-section *{box-sizing:border-box;}'
+            . '.pb-ai-demo-section{--pb-demo-accent:' . $escape($accent) . ';width:100%;max-width:100vw;overflow:hidden;padding:clamp(48px,7vw,96px) 20px;background:#f6f4ed;color:#17231d;font-family:Inter,"Noto Sans SC",Arial,sans-serif;}'
+            . '.pb-ai-demo-section:nth-of-type(even){background:#fffaf0;}'
+            . '.pb-ai-demo-section__inner{width:100%;max-width:1120px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(280px,.95fr);gap:clamp(28px,5vw,72px);align-items:center;}'
+            . '.pb-ai-demo-section__inner>*{min-width:0;}'
+            . '.pb-ai-demo-section--cta{background:#17382c;color:#fff;}'
+            . '.pb-ai-demo-section--cta .pb-ai-demo-card,.pb-ai-demo-section--cta .pb-ai-demo-note{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22);}'
+            . '.pb-ai-demo-eyebrow{margin:0 0 14px;color:var(--pb-demo-accent);font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;}'
+            . '.pb-ai-demo-section--cta .pb-ai-demo-eyebrow{color:#bde3c6;}'
+            . '.pb-ai-demo-title{margin:0;max-width:100%;font-size:clamp(34px,5vw,68px);line-height:1.02;letter-spacing:0;font-weight:800;white-space:normal;overflow-wrap:break-word;}'
+            . '.pb-ai-demo-copy{margin:22px 0 0;max-width:680px;color:#526057;font-size:clamp(16px,1.6vw,19px);line-height:1.75;white-space:normal;overflow-wrap:break-word;}'
+            . '.pb-ai-demo-section--cta .pb-ai-demo-copy{color:#d8e5dc;}'
+            . '.pb-ai-demo-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px;align-items:center;}'
+            . '.pb-ai-demo-button{border:0;border-radius:999px;background:var(--pb-demo-accent);color:#fff;padding:14px 22px;font-weight:800;font-size:15px;box-shadow:0 14px 34px rgba(23,56,44,.2);}'
+            . '.pb-ai-demo-muted{font-size:14px;color:#6b766d;}'
+            . '.pb-ai-demo-section--cta .pb-ai-demo-muted{color:#c9d8ce;}'
+            . '.pb-ai-demo-card{min-width:0;max-width:100%;background:#fff;border:1px solid rgba(23,56,44,.12);border-radius:28px;padding:26px;box-shadow:0 24px 80px rgba(23,56,44,.12);}'
+            . '.pb-ai-demo-visual{min-width:0;max-width:100%;min-height:330px;border-radius:26px;background:linear-gradient(135deg,#d8ead7,#fff6dc 48%,#d8e5dc);padding:22px;display:grid;align-content:end;gap:12px;}'
+            . '.pb-ai-demo-visual span,.pb-ai-demo-note,.pb-ai-demo-grid article{border:1px solid rgba(23,56,44,.12);background:rgba(255,255,255,.78);border-radius:18px;padding:16px;}'
+            . '.pb-ai-demo-grid{display:grid;gap:14px;}'
+            . '.pb-ai-demo-grid article strong,.pb-ai-demo-note strong{display:block;margin-bottom:6px;color:#17231d;font-size:16px;}'
+            . '.pb-ai-demo-section--cta .pb-ai-demo-grid article strong,.pb-ai-demo-section--cta .pb-ai-demo-note strong{color:#fff;}'
+            . '.pb-ai-demo-grid article span,.pb-ai-demo-note span{display:block;color:#5e6a61;line-height:1.55;font-size:14px;white-space:normal;overflow-wrap:break-word;}'
+            . '.pb-ai-demo-section--cta .pb-ai-demo-note span{color:#d8e5dc;}'
+            . '@media(max-width:760px){.pb-ai-demo-section{padding:42px 20px}.pb-ai-demo-section__inner{width:100%;max-width:calc(100vw - 40px);grid-template-columns:minmax(0,1fr)}.pb-ai-demo-title{max-width:calc(100vw - 40px);font-size:clamp(27px,8vw,32px);line-height:1.08}.pb-ai-demo-copy{max-width:calc(100vw - 40px);font-size:16px;line-height:1.65}.pb-ai-demo-actions{max-width:calc(100vw - 40px);gap:10px}.pb-ai-demo-button{max-width:100%;white-space:normal}.pb-ai-demo-card{max-width:calc(100vw - 40px);padding:18px;border-radius:22px}.pb-ai-demo-visual{max-width:100%;min-height:240px;padding:18px}.pb-ai-demo-muted{max-width:100%;overflow-wrap:break-word}}'
+            . '</style>'
+            . '<div class="pb-ai-demo-section__inner">'
+            . '<div><p class="pb-ai-demo-eyebrow">' . $escape($eyebrow) . '</p>'
+            . '<h2 class="pb-ai-demo-title">' . $escape($headline) . '</h2>'
+            . '<p class="pb-ai-demo-copy">' . $escape($body) . '</p>'
+            . '<div class="pb-ai-demo-actions"><button class="pb-ai-demo-button" type="button">' . $escape($cta) . '</button><span class="pb-ai-demo-muted">' . $escape($displaySiteName) . '</span></div></div>'
+            . '<div class="pb-ai-demo-card">' . $visualHtml . '</div>'
             . '</div>'
             . '</section>';
         $config = [

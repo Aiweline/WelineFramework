@@ -11,7 +11,6 @@ use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonStateService;
 use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
-use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
 use GuoLaiRen\PageBuilder\Service\AiSiteWorkflowTrace;
 use Weline\Ai\Service\AiRuntimeContext;
 use Weline\Framework\Manager\ObjectManager;
@@ -341,24 +340,27 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
             if ($operation === 'build') {
                 $scopePatch = $planJsonTaskService->stripPlanJsonMutationScopePatch($scopePatch, $confirmedScope);
                 if ($scopePatch !== []) {
-            $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
+                    $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 }
-                $scope = $planJsonTaskService->restorePlanJsonContract($scope, $confirmedScope);
-                $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
-                $scope = $planJsonTaskService->ensureTaskScope(
-                    $scope,
-                    \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-                    $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
-                );
                 if ($forceFullBuildRegeneration) {
-                    $scope = $planJsonTaskService->clearBuildArtifactsForRegeneration($scope);
-                    $scope = $planJsonTaskService->resetPlanJsonTasksToPendingForRebuild($scope, false);
+                    $scope = $scopeService->normalizeScope(\array_replace(
+                        $scope,
+                        (new AiSitePlanJsonStateService((int)$session->getId()))->resetBlockExecutionStateScopePatch(
+                            \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []
+                        ),
+                        [
+                            '_queue_force_build' => [
+                                'active' => 1,
+                                'at' => \date('Y-m-d H:i:s'),
+                            ],
+                        ]
+                    ));
                 }
                 $normalizedScope = $planJsonTaskService->normalizePlanJsonConfirmedState($scope);
                 $scopeChanged = $normalizedScope !== $confirmedScope;
                 $scope = $normalizedScope;
             } elseif (\in_array($operation, ['block_regenerate', 'block_partial_patch'], true) && $scopePatch !== []) {
-            $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
+                $scope = $scopeService->normalizeScope(\array_replace($scope, $scopePatch));
                 $scopeChanged = $scope !== $confirmedScope;
             } else {
                 $scopeChanged = false;
@@ -418,12 +420,22 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
                     $this->loadBuildQueueScope($sessionService, $session)
                 );
                 if ($forceFullBuildRegeneration) {
-                    $resetScope = $planJsonTaskService->clearBuildArtifactsForRegeneration($resumeScope);
-                    $resetScope = $planJsonTaskService->resetPlanJsonTasksToPendingForRebuild($resetScope, false);
+                    $resetScope = $scopeService->normalizeScope(\array_replace(
+                        $resumeScope,
+                        (new AiSitePlanJsonStateService((int)$session->getId()))->resetBlockExecutionStateScopePatch(
+                            \is_array($resumeScope['plan_json'] ?? null) ? $resumeScope['plan_json'] : []
+                        ),
+                        [
+                            '_queue_force_build' => [
+                                'active' => 1,
+                                'at' => \date('Y-m-d H:i:s'),
+                            ],
+                        ]
+                    ));
                     if ($resetScope !== $resumeScope) {
                         $sessionService->replaceScope((int)$session->getId(), $adminId, $resetScope);
                         $session = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-                        $this->queueTrace($sse, 'force rebuild: cleared stale build artifacts and reset all plan_json block work.');
+                        $this->queueTrace($sse, 'force rebuild: reset all plan_json block statuses to pending.');
                     }
                 } elseif (isset($resumeScope['_build_regeneration']) || isset($resumeScope['_queue_force_build'])) {
                     unset($resumeScope['_build_regeneration'], $resumeScope['_queue_force_build']);
@@ -1029,57 +1041,24 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         int $adminId
     ): AiSiteAgentSession {
         $fresh = $sessionService->loadById((int)$session->getId(), $adminId) ?? $session;
-        /** @var AiSitePlanJsonTaskService $planJsonTaskService */
-        $planJsonTaskService = ObjectManager::getInstance(AiSitePlanJsonTaskService::class);
-            $scope = $scopeService->normalizeScope(
+        $scope = $scopeService->normalizeScope(
             $sessionService->loadScopeForStage(
                 $fresh,
-                AiSiteAgentSession::STAGE_PLAN,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
                 []
             )
         );
-        $workspaceTrack = $scopeService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
-        $scope = $planJsonTaskService->ensureTaskScope(
-            $scope,
-            \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
-            $workspaceTrack !== '' ? $workspaceTrack : AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME
-        );
-        $pageTypes = $scopeService->resolveScopedPageTypes($scope);
-        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
-        if ($virtualThemeId > 0 && $pageTypes !== []) {
-            /** @var AiSiteVirtualThemeService $virtualThemeService */
-            $virtualThemeService = ObjectManager::getInstance(AiSiteVirtualThemeService::class);
-            $virtualThemeService->resetGeneratedPageLayoutsForRebuild($virtualThemeId, $pageTypes);
-        }
-        $scope = $planJsonTaskService->clearBuildArtifactsForRegeneration($scope);
-        $scope = $planJsonTaskService->resetPlanJsonTasksToPendingForRebuild($scope, false);
-        $sessionService->mergeScope((int)$fresh->getId(), $adminId, \array_replace($planJsonTaskService->extractPlanJsonDerivedScopePatch($scope), [
-            'materialized_pages_by_type' => [],
-            'pending_generation_page_types' => [],
-            'build_summary' => [],
-            'build_contracts' => [],
-            'render_data_contract' => [],
-            'qa_report_contract' => [],
-            'publish_verification' => [],
-            'pre_publish_visual_urls' => [],
-            'preview_full_url' => '',
-            'visual_preview_url' => '',
-            'visual_edit_url' => '',
-            'can_publish' => 0,
-            'site_ready' => 0,
-            'latest_build_failed' => 0,
-            'latest_build_failure' => [],
-            'publish_blocked_by_latest_ai_failure' => 0,
-            'publish_blocked_reason' => '',
-            'retryable_ai_failures' => \is_array($scope['retryable_ai_failures'] ?? null) ? $scope['retryable_ai_failures'] : [],
-            'retryable_ai_failure_count' => (int)($scope['retryable_ai_failure_count'] ?? 0),
-            'next_stage_blocked_by_ai_failures' => (int)($scope['next_stage_blocked_by_ai_failures'] ?? 0),
-            '_build_regeneration' => \is_array($scope['_build_regeneration'] ?? null) ? $scope['_build_regeneration'] : [],
-            '_queue_force_build' => [
-                'active' => 1,
-                'at' => \date('Y-m-d H:i:s'),
-            ],
-        ]));
+        $sessionService->mergeScope((int)$fresh->getId(), $adminId, \array_replace(
+            (new AiSitePlanJsonStateService((int)$fresh->getId()))->resetBlockExecutionStateScopePatch(
+                \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : []
+            ),
+            [
+                '_queue_force_build' => [
+                    'active' => 1,
+                    'at' => \date('Y-m-d H:i:s'),
+                ],
+            ]
+        ));
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
     }

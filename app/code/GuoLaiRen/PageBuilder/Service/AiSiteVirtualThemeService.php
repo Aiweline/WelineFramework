@@ -240,36 +240,6 @@ class AiSiteVirtualThemeService
     }
 
     /**
-     * Force rebuild must start from an empty current-theme layout. Prior saved
-     * rows are not valid completion evidence for the next AI build run.
-     *
-     * @param list<string> $pageTypes
-     */
-    public function resetGeneratedPageLayoutsForRebuild(int $themeId, array $pageTypes): void
-    {
-        if ($themeId <= 0) {
-            return;
-        }
-
-        foreach ($pageTypes as $pageType) {
-            $pageType = \trim((string)$pageType);
-            if ($pageType === '') {
-                continue;
-            }
-
-            $this->saveGeneratedPageLayout($themeId, $pageType, [
-                'version' => '1.0',
-                'page_type' => $pageType,
-                'header' => [],
-                'footer' => [],
-                'content' => [],
-                'use_original_template' => false,
-                'page_id' => 0,
-            ]);
-        }
-    }
-
-    /**
      * Concurrent build batches may carry only the current in-memory page subset.
      * Before appending a newly generated block, merge the already persisted
      * virtual-theme content rows back in so later batches cannot overwrite earlier
