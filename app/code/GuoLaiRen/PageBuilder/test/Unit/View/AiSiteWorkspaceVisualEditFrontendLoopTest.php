@@ -241,7 +241,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("doc.addEventListener('click', handleEmbeddedPreviewActionCapture, true);", $bridgeBody);
         self::assertStringNotContainsString("if (button.dataset.pbWorkspaceActionBound === '1')", $bridgeBody);
         self::assertStringContainsString('var payload = buildEmbeddedPreviewPayload(wrapper, button);', $bridgeBody);
-        self::assertStringContainsString('dispatchEmbeddedPreviewActionPayload(action, payload);', $bridgeBody);
+        self::assertStringContainsString('dispatchEmbeddedPreviewActionPayload(action, withManualQueueButtonPayload(payload));', $bridgeBody);
 
         self::assertStringContainsString("if (payload.type === 'pb-component-select') {", $messageBody);
         self::assertStringContainsString('showEmbeddedPreviewActionDock(Object.assign({}, payload', $messageBody);
@@ -295,7 +295,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         // image_asset 闂傚倸鍊搁…顒勫磻閸曨個娲Χ婢跺﹦鐤囧┑顔姐仜閸嬫挸鈹戦敍鍕垫缂佺姵鐩獮姗€顢涘☉姘胺闂傚倷绶氬褔鈥﹂崼銉ョ？闂侇剙绉村Λ姗€鏌嶈閸撴氨鎹?queue-backed 闂?AI 闂傚倸鍊烽懗鍫曞箠閹剧粯鍊舵繝闈涚墢閻挾鈧娲栧ú銊х矆婵犲洦鐓涢柛鎰剁到娴滃墽绱撴担鍓插剰闁挎洩绠撻崺鈧い鎺戯功瀹€娑㈡煛閸涱喚绠炴い銏℃閺屽棗顓奸崱娆忓汲婵犵數鍋為崹鍫曗€﹂崶顒佸€堕梺顒€绉甸悡?AiSiteAssetQueue 闂傚倸鍊烽懗鍫曞箠閹剧粯鍊舵慨妯诲閸嬫挾绮☉妯诲櫤闁哄棙绮撻弻鐔虹磼閵忕姵鐏嶉梺鍝勬媼閸撶喖寮诲☉銏╂晝闁挎繂娲ㄩ悡鍌滅磽娴ｅ搫小缂侇喗鐟╅獮鍐亹閹烘垹鍊為梺鎸庢⒒閾忓骸危椤斿皷鏀介柣鎰皺閹界娀鏌ㄩ弴妯虹伈妤犵偛鍟抽ˇ鍦偓瑙勬礀閻栧ジ銆佸Δ鍛劦妞ゆ巻鍋撻柍璇茬Ч婵偓闁靛牆妫涢崢浠嬫⒑闂堟稓绠為柛銊ョ秺瀵悂骞嬮敂鐣屽幈闂侀潧顭梽鍕儍閹达附鐓欑紒澶婃濞层倗绮婚妷锔轰簻闁哄洦顨呮禍楣冩⒑缁嬭法绠版繛灞傚妿濡叉劙骞樼€涙ê顎撻梺鍛婄箓鐎氼參鎮橀崱娑欌拺婵懓娲ゆ俊鍧楁煕閻樺啿濮嶆鐐叉瀵噣宕奸悢鍛婄彆闂備礁鍚嬬粊鎾疾濠靛瑤?
         // 濠电姷鏁搁崑鐐哄垂閸洖绠伴柛婵勫劤閻捇鏌℃径瀣厐闁肩増瀵ч妵鍕疀閹炬惌妫￠柣搴㈢瀹€绋款潖濞差亜鍨傛い鏇炴噹閸撳啿鈹戦悩顐壕闂佸湱铏庨崰妤呮偂閻斿吋鐓忛煫鍥ь儏閻忊晠鏌＄€ｎ亪鍙勯柡宀€鍠撶划鐢稿捶椤撶姷妲囬柣搴ゎ潐濞插繘宕濋幋鐐扮箚闁归棿鐒﹂弲婊堟煢濡警妲洪柛鏃戝灠閳规垿鎮欓弶鎴犱桓闂佺懓鐨烽弲鐘茬暦閵忋倕绠氭い顑藉墲濡炶棄鐣风粙璇炬棃鍩€椤掑倻涓嶉柟鎯板Г閻撳繐顭块懜鐢点€掗柣锝変憾閺屽秹鏌ㄧ€ｎ偒妫冮梺璇″枦濞夋盯鍩ユ径濞㈢喖宕归鍛磾濠电姷鏁搁崑娑㈡偤閵娾晜鏅濋柕蹇嬪€曠粻鏍喐閺傝法鏆﹂柛顐ｆ礀閻撴盯鏌涚仦鍓р姇妞ゅ繒鍠栧缁樻媴閻戞ê娈岄梺瀹︽澘濮傜€规洘绻嗛ˇ瀛樹繆閸欏濮囨い顐ｇ箘閹瑰嫭鎷?
         self::assertStringContainsString("'image_asset' => \\GuoLaiRen\\PageBuilder\\Queue\\AiSiteAssetQueue::class,", $controller);
-        self::assertStringContainsString("'image_asset', 'publish'], true", $controller);
+        self::assertStringContainsString("'regenerate_page', 'image_asset'], true", $controller);
         self::assertStringContainsString('\'stream_url\' => $streamUrl', $controller);
     }
 
@@ -386,7 +386,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('width: min(390px, 100%);', $deviceStyles);
         self::assertStringContainsString('max-width: 100%;', $deviceStyles);
         self::assertStringContainsString('flex-wrap: nowrap;', $deviceStyles);
-        self::assertStringContainsString('overflow-x: auto;', $deviceStyles);
+        self::assertStringContainsString('overflow: auto;', $deviceStyles);
         self::assertStringContainsString('flex: 0 0 auto;', $deviceStyles);
         self::assertStringContainsString('flex: 1 1 100%;', $deviceStyles);
 
@@ -677,7 +677,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('parseInt(String(planJson.confirmed || 0), 10) === 1', $ensureBody);
         self::assertStringContainsString('startConfirmedBuild(triggerBtn || currentPlanTriggerButton, normalizedTypes, Object.assign({}, opts, {}));', $ensureBody);
         self::assertStringContainsString('var canStartBuildFlow = hasPlanJsonFlowEvidence(state);', $syncBody);
-        self::assertStringContainsString('ensurePlanJsonConfirmedBeforeBuild(startBuildSiteBtn, selectedTypes, {});', $bindBody);
+        self::assertStringContainsString('startBuildButtonAction(startBuildSiteBtn, selectedTypes, {});', $bindBody);
         self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('plan')", $bindBody);
         self::assertStringContainsString("guardRetryableAiFailuresBeforeProgress('build')", $bindBody);
         self::assertStringNotContainsString('ensureTaskPlanConfirmedBeforeBuild', $script);
@@ -1215,7 +1215,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
     {
         $script = $this->workspaceScript();
         $body = $this->extractFunctionBody($script, 'pbAiConfirmGenerateThemeContinue');
-        $postOffset = \strpos($body, 'postForm(runVirtualThemeUrl, requestPayload)');
+        $postOffset = \strpos($body, 'postForm(runVirtualThemeUrl, requestPayload, { timeoutMs: 120000 })');
         self::assertNotFalse($postOffset, 'build request postForm call missing');
 
         $beforePost = \substr($body, 0, $postOffset);

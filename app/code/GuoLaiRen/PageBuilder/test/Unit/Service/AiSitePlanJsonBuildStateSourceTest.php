@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
-use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonTaskScheduler;
 use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonTaskService;
 use GuoLaiRen\PageBuilder\Service\AiSitePlanJsonGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
@@ -71,20 +70,21 @@ final class AiSitePlanJsonBuildStateSourceTest extends TestCase
         ]));
     }
 
-    public function testBuildConfirmationDoesNotCreatePlanJson(): void
+    public function testPlanJsonConfirmationOnlyMarksExistingPlanJsonConfirmed(): void
     {
-        $taskService = new AiSitePlanJsonTaskService(new AiSitePageBlueprintService());
-        $scheduler = new AiSitePlanJsonTaskScheduler($taskService);
+        $editor = new AiSitePlanJsonStateService(123);
 
-        $patch = $scheduler->buildConfirmationScopePatch(
-            $this->PlanJsonJsonScope(['hero' => ['status' => 0]]),
-            [],
-            'html_blocks'
+        $patch = $editor->setConfirmedScopePatch(
+            $this->PlanJsonJsonScope(['hero' => ['status' => 0]])['plan_json'],
+            true,
+            '2026-06-06 12:00:00'
         );
 
         self::assertSame(1, (int)($patch['plan_json']['confirmed'] ?? 0));
+        self::assertSame('2026-06-06 12:00:00', (string)($patch['plan_json']['confirmed_at'] ?? ''));
         self::assertArrayHasKey('plan_json', $patch);
-        self::assertTrue((bool)($patch['plan_json_pages_validation']['valid'] ?? false));
+        self::assertArrayNotHasKey('plan_json_pages_validation', $patch);
+        self::assertArrayNotHasKey('plan_json_task_summary', $patch);
     }
 
     public function testStageOnePlanJsonPersistsDynamicBlocks(): void
