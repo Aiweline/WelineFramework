@@ -293,6 +293,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
         $messages = $this->buildMessages($prompt, $params);
         $timeout = ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
+        $streamLowSpeedTime = ProviderTimeoutPolicy::resolveStreamLowSpeedTime($params, $timeout);
         $this->applyExecutionTimeLimit($timeout);
 
         $requestData = [
@@ -341,7 +342,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $finishReason = '';
         $modelName = '';
 
-        $ch = $this->initCurl($apiUrl, $apiKey, $requestData, $proxyInfo, $timeout);
+        $ch = $this->initCurl($apiUrl, $apiKey, $requestData, $proxyInfo, $timeout, $streamLowSpeedTime);
 
         $rawResponseBuffer = '';
         $hasValidChunk = false;
@@ -566,6 +567,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
 
         $messages = $this->buildMessages($prompt, $params);
         $timeout = ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
+        $streamLowSpeedTime = ProviderTimeoutPolicy::resolveStreamLowSpeedTime($params, $timeout);
         $this->applyExecutionTimeLimit($timeout);
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
@@ -626,7 +628,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             $reasoningCallback ? function($chunk) use ($reasoningCallback, &$fullReasoning) {
                 $fullReasoning .= $chunk;
                 $reasoningCallback($chunk);
-            } : null
+            } : null,
+            $streamLowSpeedTime
         );
 
         // 如果流式调用没有返回任何内容，抛出明确错误
@@ -1114,7 +1117,16 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(self::RETRY_DELAY * ($retryCount + 1) * 1000);
     }
 
-    private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout, ?callable $reasoningCallback = null): void
+    private function callStreamApi(
+        string $url,
+        string $apiKey,
+        array $data,
+        callable $callback,
+        array $proxyInfo,
+        int $timeout,
+        ?callable $reasoningCallback = null,
+        ?int $lowSpeedTime = null
+    ): void
     {
         // SSE 模式下不做 PHP 层面的超时检测，由 SseWriter 和 curl 自身控制
         $isSseMode = SseContext::isSseEnabled();
@@ -1124,7 +1136,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
         $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
-        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
+        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime);
         
         // 在执行前检查剩余时间，如果时间不足，提前抛出错误
         if ($timeLimit !== null && $timeLimit > 0) {
@@ -1345,7 +1357,14 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      * @param array $proxyInfo
      * @return \CurlHandle|false
      */
-    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout): \CurlHandle|false
+    private function initCurl(
+        string $url,
+        string $apiKey,
+        array $data,
+        array $proxyInfo,
+        int $timeout,
+        ?int $lowSpeedTime = null
+    ): \CurlHandle|false
     {
         $payload = $this->encodeJsonRequestPayload($data);
         $ch = curl_init($url);
@@ -1361,18 +1380,19 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         ]);
         // 根据模型配置设置超时（秒）；0 表示不限制
         $timeout = max(0, (int)$timeout);
+        $lowSpeedTime = $lowSpeedTime === null
+            ? ProviderTimeoutPolicy::resolveLowSpeedTime($timeout)
+            : \max(0, $lowSpeedTime);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
         // 连接超时单独设置，防止长时间卡在连接阶段（不超过60秒）
         if ($timeout > 0) {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
-            curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, ProviderTimeoutPolicy::resolveLowSpeedTime($timeout));
         } else {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
-            // 当 timeout=0 时设置低速保护：如果 120 秒内传输速率低于 1 字节/秒，则中止
-            // 防止 AI API 完全停止响应导致连接永久挂起
+        }
+        if ($lowSpeedTime > 0) {
             curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, ProviderTimeoutPolicy::resolveLowSpeedTime($timeout));
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, $lowSpeedTime);
         }
         
         // SSL配置：在Windows本地开发环境中，可能需要跳过SSL验证

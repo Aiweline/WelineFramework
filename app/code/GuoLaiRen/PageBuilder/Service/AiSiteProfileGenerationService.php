@@ -1441,13 +1441,7 @@ class AiSiteProfileGenerationService
     private function buildFallbackLogoDataUri(string $siteTitle, string $siteTagline, string $briefDescription): string
     {
         [$primary, $secondary, $accent] = $this->deriveBrandPalette($siteTitle, $briefDescription);
-        $title = $this->pickString($siteTitle, $this->deriveSiteTitleFromBrief($briefDescription, ''));
-        $title = $this->clipText($title, 18);
-        $tagline = $this->clipText($this->pickString($siteTagline, $briefDescription), 28);
-        $mark = $this->resolveBrandMark($title, $briefDescription);
-        $safeTitle = \htmlspecialchars($title, \ENT_QUOTES, 'UTF-8');
-        $safeTagline = \htmlspecialchars($tagline, \ENT_QUOTES, 'UTF-8');
-        $safeMark = \htmlspecialchars($mark, \ENT_QUOTES, 'UTF-8');
+        $glyph = $this->buildFallbackIdentityGlyphMarkup($siteTitle . ' ' . $siteTagline . ' ' . $briefDescription, $primary, $secondary, $accent, 80, 24, 1.0);
 
         $svg = <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="160" height="48" viewBox="0 0 160 48">
@@ -1457,19 +1451,14 @@ class AiSiteProfileGenerationService
       <stop offset="100%" stop-color="{$secondary}"/>
     </linearGradient>
   </defs>
-  <rect x="6" y="6" width="36" height="36" rx="12" fill="url(#brandLogoGradient)"/>
-  <circle cx="24" cy="24" r="10" fill="rgba(255,255,255,0.18)"/>
-  <text x="24" y="26" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">{$safeMark}</text>
-  <text x="52" y="20" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#0f172a">{$safeTitle}</text>
-  <text x="52" y="34" font-family="Arial, sans-serif" font-size="9" fill="#64748b">{$safeTagline}</text>
-  <rect x="52" y="24" width="18" height="2" rx="1" fill="{$accent}"/>
+{$glyph}
 </svg>
 SVG;
 
         return 'data:image/svg+xml;base64,' . \base64_encode($svg);
     }
 
-    private function normalizeGeneratedSvgAsset(string $value): string
+    private function normalizeGeneratedSvgAsset(string $value, bool $allowText = false): string
     {
         $value = \trim($value);
         if ($value === '') {
@@ -1478,23 +1467,26 @@ SVG;
 
         if (\str_starts_with($value, 'data:image/svg+xml;base64,')) {
             $decoded = \base64_decode(\substr($value, 26), true);
-            return \is_string($decoded) && $this->isSafeGeneratedSvgMarkup($decoded) ? $value : '';
+            return \is_string($decoded) && $this->isSafeGeneratedSvgMarkup($decoded, $allowText) ? $value : '';
         }
 
-        if ($this->isSafeGeneratedSvgMarkup($value)) {
+        if ($this->isSafeGeneratedSvgMarkup($value, $allowText)) {
             return 'data:image/svg+xml;base64,' . \base64_encode($value);
         }
 
         return '';
     }
 
-    private function isSafeGeneratedSvgMarkup(string $value): bool
+    private function isSafeGeneratedSvgMarkup(string $value, bool $allowText = false): bool
     {
         if (!\str_contains($value, '<svg') || !\str_contains($value, '</svg>')) {
             return false;
         }
 
         $normalized = \strtolower($value);
+        if (!$allowText && (\str_contains($normalized, '<text') || \str_contains($normalized, '<tspan'))) {
+            return false;
+        }
         foreach ([
             '<script',
             '<foreignobject',
@@ -1566,7 +1558,7 @@ SVG;
             || \str_contains($value, '<svg')
             || \str_contains($value, '</svg>')
         ) {
-            return $this->normalizeGeneratedSvgAsset($value);
+            return $this->normalizeGeneratedSvgAsset($value, true);
         }
 
         return $value;
@@ -1575,8 +1567,7 @@ SVG;
     private function buildFallbackIconDataUri(string $siteTitle, string $siteTagline, string $briefDescription): string
     {
         [$primary, $secondary, $accent] = $this->deriveBrandPalette($siteTitle, $briefDescription);
-        $mark = $this->resolveBrandMark($siteTitle, $briefDescription);
-        $safeMark = \htmlspecialchars($mark, \ENT_QUOTES, 'UTF-8');
+        $glyph = $this->buildFallbackIdentityGlyphMarkup($siteTitle . ' ' . $siteTagline . ' ' . $briefDescription, $primary, $secondary, $accent, 32, 32, 1.05);
 
         $svg = <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
@@ -1586,14 +1577,69 @@ SVG;
       <stop offset="100%" stop-color="{$secondary}"/>
     </linearGradient>
   </defs>
-  <circle cx="32" cy="32" r="24" fill="url(#brandIconGradient)" opacity="0.18"/>
-  <path d="M18 46 L46 18" stroke="{$accent}" stroke-width="5" stroke-linecap="round" opacity="0.72"/>
-  <circle cx="32" cy="32" r="19" fill="none" stroke="url(#brandIconGradient)" stroke-width="4"/>
-  <text x="32" y="36" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="800" fill="{$primary}">{$safeMark}</text>
+{$glyph}
 </svg>
 SVG;
 
         return 'data:image/svg+xml;base64,' . \base64_encode($svg);
+    }
+
+    private function buildFallbackIdentityGlyphMarkup(
+        string $themeText,
+        string $primary,
+        string $secondary,
+        string $accent,
+        int $centerX,
+        int $centerY,
+        float $scale
+    ): string {
+        $themeText = \strtolower($themeText);
+        $scaleText = \rtrim(\rtrim(\sprintf('%.2F', $scale), '0'), '.');
+        if ($scaleText === '') {
+            $scaleText = '1';
+        }
+
+        if (\preg_match('/card|poker|rummy|teen|patti|casino|mahjong|chip|game|apk|棋牌|扑克|拉米|麻将|游戏/u', $themeText) === 1) {
+            return <<<SVG
+  <g transform="translate({$centerX} {$centerY}) scale({$scaleText})">
+    <circle cx="0" cy="0" r="21" fill="{$secondary}" opacity="0.16"/>
+    <circle cx="0" cy="0" r="17" fill="none" stroke="{$primary}" stroke-width="4"/>
+    <path d="M0 -13 L11 0 L0 13 L-11 0 Z" fill="{$accent}"/>
+    <path d="M-18 0 H18 M0 -18 V18" stroke="{$secondary}" stroke-width="2" stroke-linecap="round" opacity="0.48"/>
+  </g>
+SVG;
+        }
+
+        if (\preg_match('/eco|green|organic|nature|garden|plant|leaf|环保|绿色|自然|花园|植物/u', $themeText) === 1) {
+            return <<<SVG
+  <g transform="translate({$centerX} {$centerY}) scale({$scaleText})">
+    <circle cx="0" cy="0" r="22" fill="{$secondary}" opacity="0.14"/>
+    <path d="M-18 7 C-14 -15 8 -18 18 -3 C8 -1 2 7 -2 18 C-7 11 -12 8 -18 7 Z" fill="{$primary}"/>
+    <path d="M-11 8 C-2 4 7 -4 15 -12" stroke="{$accent}" stroke-width="3" stroke-linecap="round" fill="none"/>
+  </g>
+SVG;
+        }
+
+        if (\preg_match('/tech|software|data|ai|cloud|security|digital|科技|软件|数据|智能|云|安全/u', $themeText) === 1) {
+            return <<<SVG
+  <g transform="translate({$centerX} {$centerY}) scale({$scaleText})">
+    <circle cx="0" cy="0" r="21" fill="{$secondary}" opacity="0.13"/>
+    <path d="M-15 7 L0 -12 L15 7 L0 16 Z" fill="none" stroke="{$primary}" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="0" cy="-12" r="4" fill="{$accent}"/>
+    <circle cx="-15" cy="7" r="4" fill="{$secondary}"/>
+    <circle cx="15" cy="7" r="4" fill="{$secondary}"/>
+  </g>
+SVG;
+        }
+
+        return <<<SVG
+  <g transform="translate({$centerX} {$centerY}) scale({$scaleText})">
+    <circle cx="0" cy="0" r="22" fill="{$secondary}" opacity="0.12"/>
+    <path d="M0 -20 L18 -6 L11 17 L-11 17 L-18 -6 Z" fill="{$primary}" opacity="0.92"/>
+    <path d="M0 -10 L10 0 L0 10 L-10 0 Z" fill="{$accent}"/>
+    <path d="M-21 0 C-10 -14 10 -14 21 0 C10 14 -10 14 -21 0 Z" fill="none" stroke="{$secondary}" stroke-width="2" opacity="0.62"/>
+  </g>
+SVG;
     }
 
     private function svgContainsGeneratedIdentityBackground(string $value, int $expectedWidth, int $expectedHeight): bool

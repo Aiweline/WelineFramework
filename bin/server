@@ -55,6 +55,7 @@ shift 2 || true
 PGSQL_DIR="${PROJECT_ROOT}/extend/server/pgsql"
 PGSQL_BIN="${PGSQL_DIR}/bin"
 PGSQL_DATA_DEFAULT="${PGSQL_DIR}/data"
+PGSQL_ENV_DEFAULT="${PROJECT_ROOT}/weline.env"
 
 pgsql_resolve_data_dir() {
   local data_dir="${PGSQL_DATA_DEFAULT}"
@@ -106,6 +107,55 @@ pgsql_command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+pgsql_resolve_env_file() {
+  local env_file="${WELINE_ENV_FILE:-${PGSQL_ENV_DEFAULT}}"
+  if [[ "$env_file" =~ ^[A-Za-z]:[\\/].* ]] || [[ "$env_file" == /* ]] || [[ "$env_file" == \\\\* ]]; then
+    echo "$env_file"
+    return 0
+  fi
+  echo "${PROJECT_ROOT}/${env_file}"
+}
+
+pgsql_read_port_from_env() {
+  local env_file
+  env_file="$(pgsql_resolve_env_file)"
+  [[ -f "$env_file" ]] || return 1
+  local line
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*DB_PORT[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*$ ]]; then
+      local p="${BASH_REMATCH[1]}"
+      if [[ "$p" -gt 0 && "$p" -le 65535 ]]; then
+        echo "$p"
+        return 0
+      fi
+    fi
+  done < "$env_file"
+  return 1
+}
+
+pgsql_sync_env_port() {
+  local port="$1"
+  [[ -z "$port" ]] && return 0
+  local env_file
+  env_file="$(pgsql_resolve_env_file)"
+  local current
+  current="$(pgsql_read_port_from_env 2>/dev/null || true)"
+  [[ "$current" == "$port" ]] && return 0
+  mkdir -p "$(dirname "$env_file")" 2>/dev/null || true
+  if [[ -f "$env_file" ]]; then
+    if grep -qE '^[[:space:]]*DB_PORT[[:space:]]*=' "$env_file" 2>/dev/null; then
+      sed -i.bak -E "s/^[[:space:]]*DB_PORT[[:space:]]*=.*/DB_PORT=${port}/" "$env_file" 2>/dev/null || true
+    else
+      printf '\nDB_PORT=%s\n' "$port" >> "$env_file"
+    fi
+  else
+    printf 'DB_PORT=%s\n' "$port" > "$env_file"
+  fi
+  export DB_PORT="$port"
+  echo "已同步 PostgreSQL 端口到 $(basename "$env_file")：${port}" >&2
+}
+
 pgsql_is_port_in_use() {
   local port="$1"
   [[ -z "$port" ]] && return 1
@@ -123,10 +173,16 @@ pgsql_is_port_in_use() {
     fi
   fi
 
+  if pgsql_command_exists netstat; then
+    if netstat -an 2>/dev/null | grep -E "[:.]${port}[^0-9].*(LISTEN|LISTENING)" >/dev/null; then
+      return 0
+    fi
+  fi
+
   return 1
 }
 
-pgsql_resolve_port_from_conf() {
+pgsql_read_port_from_conf() {
   local data_dir="$1"
   local conf="${data_dir}/postgresql.conf"
   if [[ -f "$conf" ]]; then
@@ -142,7 +198,59 @@ pgsql_resolve_port_from_conf() {
       fi
     done < "$conf"
   fi
+  return 1
+}
+
+pgsql_resolve_port_from_conf() {
+  local data_dir="$1"
+  local p
+  p="$(pgsql_read_port_from_conf "$data_dir" 2>/dev/null || true)"
+  if [[ -n "$p" ]]; then
+    echo "$p"
+    return 0
+  fi
   echo "5432"
+}
+
+pgsql_write_port_conf() {
+  local data_dir="$1"
+  local port="$2"
+  local conf="${data_dir}/postgresql.conf"
+  [[ -f "$conf" ]] || return 0
+  if grep -qE '^[[:space:]]*#?[[:space:]]*port[[:space:]]*=' "$conf" 2>/dev/null; then
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*port[[:space:]]*=[[:space:]]*[0-9]+/port = ${port}/" "$conf" 2>/dev/null || true
+  else
+    printf '\nport = %s\n' "$port" >> "$conf"
+  fi
+}
+
+pgsql_find_available_port() {
+  local port="$1"
+  [[ -z "$port" || "$port" -le 0 || "$port" -gt 65535 ]] && port=5432
+  while pgsql_is_port_in_use "$port"; do
+    port=$((port + 1))
+    [[ "$port" -gt 65535 ]] && { echo "5432"; return 0; }
+  done
+  echo "$port"
+}
+
+pgsql_select_project_port() {
+  local data_dir="$1"
+  local configured
+  configured="$(pgsql_read_port_from_env 2>/dev/null || true)"
+  if [[ -z "$configured" ]]; then
+    configured="$(pgsql_read_port_from_conf "$data_dir" 2>/dev/null || true)"
+  fi
+  [[ -z "$configured" ]] && configured=5432
+
+  local port
+  port="$(pgsql_find_available_port "$configured")"
+  if [[ "$port" != "$configured" ]]; then
+    echo "端口 ${configured} 已被占用，当前项目 PostgreSQL 改用端口 ${port}。" >&2
+  fi
+  pgsql_write_port_conf "$data_dir" "$port"
+  pgsql_sync_env_port "$port"
+  echo "$port"
 }
 
 pgsql_try_system_start() {
@@ -204,24 +312,27 @@ pgsql_start() {
       chmod 700 "${data_dir}" 2>/dev/null || true
     fi
 
-    local port
-    port="$(pgsql_resolve_port_from_conf "${data_dir}")"
-    if pgsql_is_port_in_use "${port}"; then
-      echo "警告：检测到 PostgreSQL 端口 ${port} 已被占用，本次启动将被中止。"
-      echo "你可以："
-      echo "  1) 查看占用进程：sudo ss -lntp | grep :${port}  或  sudo lsof -i :${port}"
-      echo "  2) 释放端口后再执行：bash bin/server pgsql start -D \"${data_dir}\""
-      echo "  3) 或修改 ${data_dir}/postgresql.conf 里的 port，后再重启。"
-      return 1
+    if "${pgctl}" -D "${data_dir}" status >/dev/null 2>&1; then
+      local running_port
+      running_port="$(pgsql_read_port_from_conf "${data_dir}" 2>/dev/null || true)"
+      if [[ -n "$running_port" ]]; then
+        pgsql_sync_env_port "$running_port"
+      fi
+      echo "PostgreSQL 已在运行：${data_dir}"
+      "${pgctl}" -D "${data_dir}" status || true
+      return 0
     fi
 
+    local port
+    port="$(pgsql_select_project_port "${data_dir}")"
+
     local logfile="${data_dir}/logfile"
-    echo "启动 PostgreSQL（pg_ctl）：${data_dir}"
+    echo "启动 PostgreSQL（pg_ctl）：${data_dir}，端口：${port}"
     if [[ "$(uname -s)" == "Linux" ]]; then
       # 注意：-o 后面的参数必须作为一个整体传给 pg_ctl，否则会被当成多余参数报错
-      "${pgctl}" -D "${data_dir}" -l "${logfile}" -o "-k ${data_dir}" start
+      "${pgctl}" -D "${data_dir}" -l "${logfile}" -o "-k ${data_dir} -p ${port}" start
     else
-      "${pgctl}" -D "${data_dir}" -l "${logfile}" start
+      "${pgctl}" -D "${data_dir}" -l "${logfile}" -o "-p ${port}" start
     fi
     local rc=$?
     echo
@@ -341,7 +452,7 @@ case "$SERVICE" in
         echo "说明："
         echo "  1) 优先使用 extend/server/pgsql/bin 下的 pg_ctl + data 目录；"
         echo "  2) 若未找到 pg_ctl，会尝试系统 PostgreSQL（systemctl/service）；"
-        echo "  3) 端口被占用时会提前检查并给出排查建议。"
+        echo "  3) 端口被占用时会自动选择项目端口并同步 weline.env。"
         echo
         echo "示例："
         echo "  bash bin/server pgsql start"

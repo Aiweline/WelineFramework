@@ -50,8 +50,7 @@ GuoLaiRen/PageBuilder/
 │   │   └── menu.xml                      # 后台菜单配置
 │   └── env.php                           # 路由配置
 ├── doc/
-│   └── 开发/
-│       └── 页面构建器使用说明.md          # 详细使用文档
+│   └── README.md                       # 文档中心
 ├── register.php                          # 模块注册文件
 └── README.md                             # 本文件
 ```
@@ -281,9 +280,9 @@ $content = $pageHelper->getLocalizedContent($page);
 
 ## 详细文档
 
-- 📖 **完整使用说明**：`doc/开发/页面构建器使用说明.md`
-- 📖 **多语言Content处理**：`doc/开发/多语言Content处理说明.md`
-- 📖 **前端多语言访问**：`doc/开发/前端多语言访问说明.md`
+- 📖 **文档中心**：`doc/README.md`
+- 📖 **多语言翻译指南**：`doc/i18n-translation-guide.md`
+- 📖 **Local 标签使用**：`doc/local-tag-usage-guide.md`
 
 ## 技术栈
 

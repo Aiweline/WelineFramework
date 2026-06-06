@@ -38,7 +38,7 @@ class Page extends Model
     public const schema_fields_NAME = 'name';
     #[Col(type: 'varchar', length: 255, nullable: false, comment: '页面标题')]
     public const schema_fields_TITLE = 'title';
-    #[Col(type: 'text', nullable: true, comment: '页面内容')]
+    #[Col(type: 'longtext', nullable: true, comment: '页面内容')]
     public const schema_fields_CONTENT = 'content';
     #[Col(type: 'int', nullable: true, default: 0, comment: '父页面ID')]
     public const schema_fields_PARENT_ID = 'parent_id';
@@ -62,7 +62,7 @@ class Page extends Model
     public const schema_fields_DEFAULT_LOCALE = 'default_locale';
     #[Col(type: 'varchar', length: 100, nullable: true, comment: '页面样式模板名称')]
     public const schema_fields_STYLE = 'style';
-    #[Col(type: 'text', nullable: true, comment: '页面样式配置(JSON)')]
+    #[Col(type: 'longtext', nullable: true, comment: '页面样式配置(JSON)')]
     public const schema_fields_STYLE_SETTING = 'style_setting';
     #[Col(type: 'varchar', length: 255, nullable: true, comment: 'SEO标题')]
     public const schema_fields_META_TITLE = 'meta_title';
@@ -78,7 +78,7 @@ class Page extends Model
     public const schema_fields_HEADER_CUSTOM_CODE = 'header_custom_code';
     #[Col(type: 'text', nullable: true, comment: 'Footer自定义代码（GSC验证、统计代码等）')]
     public const schema_fields_FOOTER_CUSTOM_CODE = 'footer_custom_code';
-    #[Col(type: 'text', nullable: true, comment: '布局配置JSON（组件拖拽配置）')]
+    #[Col(type: 'longtext', nullable: true, comment: '布局配置JSON（组件拖拽配置）')]
     public const schema_fields_LAYOUT_CONFIG = 'layout_config';
     #[Col(type: 'int', nullable: true, comment: '布局页面ID（引用其他页面作为布局模板）')]
     public const schema_fields_LAYOUT_PAGE_ID = 'layout_page_id';
@@ -87,9 +87,9 @@ class Page extends Model
     /** 空字符串表示传统主题渲染；ai_html 为 HTML 区块拼接轨 */
     #[Col(type: 'varchar', length: 32, nullable: false, default: '', comment: '前台渲染模式：空=主题，ai_html=区块HTML')]
     public const schema_fields_RENDER_MODE = 'render_mode';
-    #[Col(type: 'text', nullable: true, comment: 'AI 页面区块编辑态 JSON：blocks[] 等')]
+    #[Col(type: 'longtext', nullable: true, comment: 'AI 页面区块编辑态 JSON：blocks[] 等')]
     public const schema_fields_AI_LAYOUT = 'ai_layout';
-    #[Col(type: 'text', nullable: true, comment: '历史发布布局缓存（既有字段，当前发布流程清空）')]
+    #[Col(type: 'longtext', nullable: true, comment: '历史发布布局缓存（既有字段，当前发布流程清空）')]
     public const schema_fields_AI_PUBLISH_SNAPSHOTS = 'ai_publish_snapshots';
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
     public const schema_fields_CREATE_TIME = 'create_time';
@@ -1003,4 +1003,3 @@ class Page extends Model
         }
     }
 }
-

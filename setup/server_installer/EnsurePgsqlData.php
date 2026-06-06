@@ -71,6 +71,158 @@ final class EnsurePgsqlData
         return null;
     }
 
+    private function resolveEnvFilePath(): string
+    {
+        $configured = getenv('WELINE_ENV_FILE');
+        $path = is_string($configured) && trim($configured) !== '' ? trim($configured) : 'weline.env';
+        if (str_starts_with($path, DIRECTORY_SEPARATOR)
+            || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1
+            || str_starts_with($path, '\\\\')
+        ) {
+            return $path;
+        }
+        return $this->projectRoot . DIRECTORY_SEPARATOR . $path;
+    }
+
+    private function readEnvPort(): ?int
+    {
+        $fromProcess = getenv('DB_PORT');
+        if (is_string($fromProcess) && preg_match('/^[0-9]+$/', trim($fromProcess)) === 1) {
+            $port = (int) trim($fromProcess);
+            if ($this->isValidPort($port)) {
+                return $port;
+            }
+        }
+
+        return $this->readEnvFilePort();
+    }
+
+    private function readEnvFilePort(): ?int
+    {
+        $envFile = $this->resolveEnvFilePath();
+        if (!is_file($envFile)) {
+            return null;
+        }
+        $lines = @file($envFile, FILE_IGNORE_NEW_LINES);
+        if ($lines === false) {
+            return null;
+        }
+        foreach ($lines as $line) {
+            if (preg_match('/^\s*DB_PORT\s*=\s*([0-9]+)\s*$/', $line, $m) === 1) {
+                $port = (int) $m[1];
+                return $this->isValidPort($port) ? $port : null;
+            }
+        }
+        return null;
+    }
+
+    private function readConfPort(): ?int
+    {
+        $conf = $this->dataDir . DIRECTORY_SEPARATOR . 'postgresql.conf';
+        if (!is_file($conf)) {
+            return null;
+        }
+        $lines = @file($conf, FILE_IGNORE_NEW_LINES);
+        if ($lines === false) {
+            return null;
+        }
+        foreach ($lines as $line) {
+            if (preg_match('/^\s*port\s*=\s*([0-9]+)\b/', $line, $m) === 1) {
+                $port = (int) $m[1];
+                return $this->isValidPort($port) ? $port : null;
+            }
+        }
+        return null;
+    }
+
+    private function isValidPort(int $port): bool
+    {
+        return $port > 0 && $port <= 65535;
+    }
+
+    private function isPortInUse(int $port): bool
+    {
+        foreach (['127.0.0.1', '::1'] as $host) {
+            $target = str_contains($host, ':') ? "tcp://[{$host}]:{$port}" : "tcp://{$host}:{$port}";
+            $errno = 0;
+            $errstr = '';
+            $conn = @stream_socket_client($target, $errno, $errstr, 0.2);
+            if (is_resource($conn)) {
+                fclose($conn);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function findAvailablePort(int $preferred): int
+    {
+        $port = $this->isValidPort($preferred) ? $preferred : 5432;
+        while ($this->isPortInUse($port)) {
+            $port++;
+            if ($port > 65535) {
+                return 5432;
+            }
+        }
+        return $port;
+    }
+
+    private function resolveDesiredPort(): int
+    {
+        return $this->readEnvPort() ?? $this->readConfPort() ?? 5432;
+    }
+
+    private function syncPortConfig(int $port): void
+    {
+        $this->writePgPortConf($port);
+        $this->writeEnvPort($port);
+        putenv('DB_PORT=' . $port);
+    }
+
+    private function writePgPortConf(int $port): void
+    {
+        $conf = $this->dataDir . DIRECTORY_SEPARATOR . 'postgresql.conf';
+        if (!is_file($conf)) {
+            return;
+        }
+        $content = @file_get_contents($conf);
+        if ($content === false) {
+            return;
+        }
+        $newLine = 'port = ' . $port;
+        if (preg_match('/^\s*#?\s*port\s*=\s*[0-9]+\b/m', $content) === 1) {
+            $content = preg_replace('/^\s*#?\s*port\s*=\s*[0-9]+\b/m', $newLine, $content, 1) ?? $content;
+        } else {
+            $content = rtrim($content) . PHP_EOL . $newLine . PHP_EOL;
+        }
+        @file_put_contents($conf, $content);
+    }
+
+    private function writeEnvPort(int $port): void
+    {
+        $envFile = $this->resolveEnvFilePath();
+        $existingPort = $this->readEnvFilePort();
+        if ($existingPort === $port) {
+            return;
+        }
+        $dir = dirname($envFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $content = is_file($envFile) ? @file_get_contents($envFile) : '';
+        if ($content === false) {
+            return;
+        }
+        $line = 'DB_PORT=' . $port;
+        if (preg_match('/^\s*DB_PORT\s*=.*$/m', $content) === 1) {
+            $content = preg_replace('/^\s*DB_PORT\s*=.*$/m', $line, $content, 1) ?? $content;
+        } else {
+            $content = rtrim($content) . ($content === '' ? '' : PHP_EOL) . $line . PHP_EOL;
+        }
+        @file_put_contents($envFile, $content);
+        echo "  PostgreSQL port synced to " . basename($envFile) . ": {$port}\n";
+    }
+
     /**
      * 若 extend/server/pgsql/data 已初始化，确保集群正在运行。
      * 以当前用户运行，无需 postgres 系统用户或 sudo。
@@ -82,6 +234,11 @@ final class EnsurePgsqlData
             $initdb = $this->findInitdb();
             if ($initdb === null) {
                 return true; // 未初始化且无 initdb，跳过（或由 install.sh 处理）
+            }
+            $desiredPort = $this->resolveDesiredPort();
+            $port = $this->findAvailablePort($desiredPort);
+            if ($port !== $desiredPort) {
+                echo "  PostgreSQL port {$desiredPort} is in use; using project port {$port}.\n";
             }
             echo "Step 5a: Initializing PostgreSQL data at {$this->dataDir}...\n";
             if (!is_dir($this->dataDir)) {
@@ -97,6 +254,7 @@ final class EnsurePgsqlData
                 echo "  initdb failed: " . implode("\n", $out) . "\n";
                 return false;
             }
+            $this->syncPortConfig($port);
         }
 
         $pgCtl = $this->findPgCtl();
@@ -113,11 +271,24 @@ final class EnsurePgsqlData
         exec($statusCmd, $statusOut);
         $statusStr = implode(' ', $statusOut);
         if (strpos($statusStr, 'running') !== false) {
+            $port = $this->readConfPort();
+            if ($port !== null) {
+                $this->writeEnvPort($port);
+                putenv('DB_PORT=' . $port);
+            }
             return true;
         }
 
+        $desiredPort = $this->resolveDesiredPort();
+        $port = $this->findAvailablePort($desiredPort);
+        if ($port !== $desiredPort) {
+            echo "  PostgreSQL port {$desiredPort} is in use; using project port {$port}.\n";
+        }
+        $this->syncPortConfig($port);
+
         echo "Step 5a: Starting PostgreSQL at {$this->dataDir}...\n";
-        $socketOpt = PHP_OS_FAMILY === 'Linux' ? ' -o ' . escapeshellarg('-k ' . $this->dataDir) : '';
+        $socketArgs = PHP_OS_FAMILY === 'Linux' ? '-k ' . $this->dataDir . ' -p ' . $port : '-p ' . $port;
+        $socketOpt = ' -o ' . escapeshellarg($socketArgs);
         $startCmd = 'env PATH=' . escapeshellarg($pathEnv) . ' ' . escapeshellarg($pgCtl)
             . ' -D ' . escapeshellarg($this->dataDir)
             . ' -l ' . escapeshellarg($logFile) . ' start' . $socketOpt;
@@ -137,7 +308,7 @@ final class EnsurePgsqlData
                 echo "  --- " . $logFile . " ---\n";
                 echo $log !== false ? $log : "(无法读取)\n";
             }
-            echo "  常见原因：端口 5432 已被占用，可执行 ss -tlnp | grep 5432 或 lsof -i :5432 检查。\n";
+            echo "  常见原因：端口 {$port} 已被占用，可执行 ss -tlnp | grep {$port} 或 lsof -i :{$port} 检查。\n";
             return false;
         }
         sleep(1); // 等待 postgres 就绪
