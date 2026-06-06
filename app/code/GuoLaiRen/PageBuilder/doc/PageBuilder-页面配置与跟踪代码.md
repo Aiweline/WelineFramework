@@ -296,7 +296,7 @@ $fbPixelId = $page ? $page->getData('fb_pixel_id') : '';
 ## 📚 相关文档
 
 - [可视化配置功能使用指南](./可视化配置功能使用指南.md)
-- [WelineFramework模型开发最佳实践](./WelineFramework模型开发最佳实践.md)
+- [WelineFramework模型开发最佳实践](../../../../../docs/WelineFramework模型开发最佳实践.md)
 
 ---
 

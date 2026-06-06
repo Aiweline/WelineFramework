@@ -24,6 +24,11 @@ Use these locations:
 plan_json.site_name
 plan_json.theme
 plan_json.content_locale
+plan_json.language_contract
+plan_json.locale_context
+plan_json.site_design_system
+plan_json.theme_context_snapshot
+plan_json.shared_prompt_context
 
 // Page-wide data
 plan_json.pages.home_page.name
@@ -39,6 +44,8 @@ plan_json.pages.home_page.hero.demo
 ```
 
 If a new concept belongs to a page, put it directly under `plan_json.pages.{page_type}`. If it belongs to a block, put it directly under `plan_json.pages.{page_type}.{block_key}`.
+
+Site-wide context is root-only. Do not put `language_contract`, `locale_context`, `content_locale`, `site_design_system`, `theme_context_snapshot`, `shared_prompt_context`, `site_context`, `website_profile`, `asset_manifest_ref`, or `contract_summary` under `plan_json.pages.{page_type}` or `plan_json.pages.{page_type}.{block_key}`. Runtime prompts may inject these root contracts in memory, but persisted page/block nodes must not duplicate them.
 
 ## Status Contract
 

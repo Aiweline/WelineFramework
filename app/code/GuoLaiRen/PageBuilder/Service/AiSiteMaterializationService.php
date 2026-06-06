@@ -622,6 +622,41 @@ class AiSiteMaterializationService
             Page::schema_fields_AI_LAYOUT => $aiLayoutJson,
         ]);
         $page->fetch();
+        $this->assertAiLayoutPersistence($page, $renderMode, $aiLayoutJson);
+    }
+
+    private function assertAiLayoutPersistence(Page $page, string $renderMode, ?string $expectedJson): void
+    {
+        if ($renderMode !== Page::RENDER_MODE_AI_HTML || $expectedJson === null || $expectedJson === '') {
+            return;
+        }
+
+        $pageId = (int)$page->getId();
+        $storedJson = (string)$page->getData(Page::schema_fields_AI_LAYOUT);
+        if ($storedJson === '' || \strlen($storedJson) < \strlen($expectedJson)) {
+            throw new \RuntimeException((string)__(
+                'PageBuilder AI HTML layout was truncated during storage for page_id=%{1}. Run setup:upgrade so ai_layout uses longtext before publishing again.',
+                [$pageId]
+            ));
+        }
+
+        $storedLayout = \json_decode($storedJson, true);
+        if (!\is_array($storedLayout) || \json_last_error() !== \JSON_ERROR_NONE) {
+            throw new \RuntimeException((string)__(
+                'PageBuilder AI HTML layout storage produced invalid JSON for page_id=%{1}: %{2}',
+                [$pageId, \json_last_error_msg()]
+            ));
+        }
+
+        $expectedLayout = \json_decode($expectedJson, true);
+        $expectedBlockCount = \is_array($expectedLayout['blocks'] ?? null) ? \count($expectedLayout['blocks']) : 0;
+        $storedBlocks = $storedLayout['blocks'] ?? null;
+        if (!\is_array($storedBlocks) || \count($storedBlocks) < $expectedBlockCount) {
+            throw new \RuntimeException((string)__(
+                'PageBuilder AI HTML layout storage lost blocks for page_id=%{1}. Expected %{2}, stored %{3}.',
+                [$pageId, $expectedBlockCount, \is_array($storedBlocks) ? \count($storedBlocks) : 0]
+            ));
+        }
     }
 
     /**

@@ -48,6 +48,7 @@ block status 使用数字：
 - 新 plan 全部 block `status=0` 时，构建进度逐个显示 pending/running/done。
 - 单个 block `status=1` 时，构建队列跳过该 block，前端不得显示为待生成。
 - 单个 block `status=-1` 时，前端展示失败并允许只重试该 block。
+- 构建失败时，集中失败列表必须合并 `retryable_ai_failures`、`plan_json.pages.{page_type}.{block_key}.{error|error_message|message}` 和 `plan_json_block_progress.rows[].message`，避免只显示 gate/block 泛化失败。
+- 每次重新生成 block 前，必须先清空该 block/shared component 上一轮失败字段，并移除 `retryable_ai_failures.build.items` 中对应 task 的旧错误，避免前端累计历史失败。
 - `plan_json.pages` 缺少选中的 `page_type` 时，阶段一 gate 明确失败。
 - 只有 移除旁路结构 或 移除派生计划 时，前端不得当作有效计划展示或解锁 build。
-

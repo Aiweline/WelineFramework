@@ -11,6 +11,7 @@ final class ProviderTimeoutPolicy
     public const EXECUTION_TIME_BUFFER = 10;
     public const DEFAULT_CONNECT_TIMEOUT = 60;
     public const DEFAULT_LOW_SPEED_TIME = 120;
+    public const DEFAULT_STREAM_LOW_SPEED_TIME = 900;
 
     public static function resolveRequestTimeout(array $params, array $config): int
     {
@@ -87,6 +88,20 @@ final class ProviderTimeoutPolicy
         }
 
         return \min(self::DEFAULT_LOW_SPEED_TIME, \max(30, (int)\ceil($timeout / 4)));
+    }
+
+    public static function resolveStreamLowSpeedTime(array $params, int $timeout): int
+    {
+        if (!empty($params['disable_ai_timeout']) || (PHP_SAPI === 'cli' && !empty($params['disable_cli_timeout']))) {
+            return 0;
+        }
+
+        $timeout = \max(0, $timeout);
+        if ($timeout > 0) {
+            return self::resolveLowSpeedTime($timeout);
+        }
+
+        return self::DEFAULT_STREAM_LOW_SPEED_TIME;
     }
 
     private function __construct()
