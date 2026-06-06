@@ -110,6 +110,15 @@ memory/
 /coverage-html/
 /coverage.txt
 /e2e-parallel-run.log
+
+# Local SQL debug/query logs
+/sql.sql
+/sql.log
+/dev_sql.log
+
+# PageBuilder local runtime/session artifacts
+/data/pagebuilder/session-artifacts/
+
 .codex/*
 !.codex/agents/
 !.codex/agents/**
