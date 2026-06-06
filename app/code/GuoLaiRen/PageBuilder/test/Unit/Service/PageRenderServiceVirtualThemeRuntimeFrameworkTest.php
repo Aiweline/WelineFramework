@@ -161,7 +161,35 @@ HTML;
 
         $html = (string)$render->invoke($service, '', '<main>Conteudo</main>', '', '', '', $page, 'default');
 
-        self::assertStringContainsString('<html lang="pt-BR">', $html);
+        self::assertStringContainsString('<html lang="pt-BR" dir="ltr">', $html);
         self::assertStringNotContainsString('<html lang="zh-CN">', $html);
+    }
+
+    public function testStandardDocumentDirectionUsesRenderLocale(): void
+    {
+        $service = new PageRenderService(
+            $this->createStub(LayoutAssembler::class),
+            $this->createStub(LayoutOwnerResolver::class),
+            $this->createStub(Page::class),
+            $this->createStub(Style::class),
+            $this->createStub(LocalDescription::class),
+        );
+
+        $assign = new \ReflectionMethod($service, 'assign');
+        $assign->setAccessible(true);
+        $assign->invoke($service, 'lang_local', 'ar_SA');
+        $assign->invoke($service, 'current_locale', 'ar_SA');
+        $assign->invoke($service, 'lang', 'ar_SA');
+
+        $page = $this->createStub(Page::class);
+        $page->method('getData')->willReturn(null);
+
+        $render = new \ReflectionMethod($service, 'renderStandardDocument');
+        $render->setAccessible(true);
+
+        $html = (string)$render->invoke($service, '', '<main>مرحبا</main>', '', '', $page);
+
+        self::assertStringContainsString('<html lang="ar-SA" dir="rtl">', $html);
+        self::assertStringContainsString('<body dir="rtl">', $html);
     }
 }

@@ -25,6 +25,14 @@ final class AiSiteBuildQueueCompletionGateContractTest extends TestCase
         self::assertStringContainsString("private const PLAN_JSON_BLOCK_STATUS_RUNNING = 2;", $source);
         self::assertStringContainsString("private const PLAN_JSON_BLOCK_STATUS_DONE = 1;", $source);
         self::assertStringContainsString("private const PLAN_JSON_BLOCK_STATUS_FAILED = -1;", $source);
+        self::assertStringContainsString("'language_contract' => true", $source);
+        self::assertStringContainsString("'locale_context' => true", $source);
+        self::assertStringContainsString("'asset_distribution_policy' => true", $source);
+        self::assertStringContainsString("'theme_context_snapshot' => true", $source);
+        self::assertStringContainsString("'site_design_system' => true", $source);
+        self::assertStringContainsString("'asset_manifest_ref' => true", $source);
+        self::assertStringContainsString("'contract_summary' => true", $source);
+        self::assertStringContainsString("'assets' => true", $source);
         self::assertStringContainsString("'invalid_plan_json_block_status'", $source);
         self::assertStringContainsString('createCompletionGateRetryQueue($queue, $content, $message)', $source);
         self::assertStringContainsString('queuedPayloadDisablesInlineImageGeneration($content, $scopePatch)', $source);
