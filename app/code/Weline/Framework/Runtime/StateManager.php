@@ -628,6 +628,7 @@ class StateManager
         // 重置 static 变量 + 清除实例，确保下个请求重新创建 State 并正确判断 backend/frontend。
         self::registerStaticReset(\Weline\Framework\App\State::class, 'is_backend', false);
         self::registerStaticReset(\Weline\Framework\App\State::class, 'langLocalCache', null);
+        self::registerStaticReset(\Weline\Framework\App\State::class, 'pathLocalizationCache', null);
         self::registerResetCallback('state_instance', function () {
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\State::class);
         });

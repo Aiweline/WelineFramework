@@ -173,10 +173,11 @@ class Url implements UrlInterface
 
     private static function traceLanguageValidation(string $stage, string $code, string $uri, array $extra = []): void
     {
+        $currentServer = self::currentServer();
         $requestUri = (string)(
             self::$parserServer['WELINE_FULL_REQUEST_URI']
             ?? self::$parserServer['REQUEST_URI']
-            ?? ($_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '')
+            ?? ($currentServer['WELINE_FULL_REQUEST_URI'] ?? $currentServer['REQUEST_URI'] ?? '')
         );
         if ($requestUri === '' || (!str_contains($requestUri, 'debug_sidebar=1') && !str_contains($requestUri, 'ai_url_debug=1'))) {
             return;
@@ -538,10 +539,11 @@ class Url implements UrlInterface
             return 'website_code:' . sha1(strtolower($websiteCode));
         }
 
+        $currentServer = self::currentServer();
         $host = (string)(
             $context?->get('input.host', '')
             ?: ($context?->server('HTTP_HOST', '') ?? '')
-            ?: ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '')
+            ?: ($currentServer['HTTP_HOST'] ?? $currentServer['SERVER_NAME'] ?? '')
         );
 
         return $host !== '' ? 'host:' . sha1(strtolower($host)) : 'global';
@@ -1141,6 +1143,7 @@ class Url implements UrlInterface
     {
         $perfStart = \microtime(true);
         $perfMarks = [];
+        $isCurrentRequestParse = $parse_url === '' || self::isCurrentRequestUrl($parse_url);
         $perfMark = static function (string $name) use (&$perfMarks, $perfStart): void {
             $perfMarks[$name] = \round((\microtime(true) - $perfStart) * 1000, 2);
         };
@@ -1785,7 +1788,9 @@ class Url implements UrlInterface
         if (!empty($data['currency'])) {
             self::$parserServer['WELINE_USER_CURRENCY'] = $data['currency'];
         }
-        self::syncParserServerToCurrentContext();
+        if ($isCurrentRequestParse) {
+            self::syncParserServerToCurrentContext();
+        }
         $perfMark('sync_context');
         $data['server'] = self::$parserServer;
         
@@ -2214,7 +2219,7 @@ class Url implements UrlInterface
                     return 'rc-' . $count;
                 }
             }
-            $count = $_SERVER['WLS_REQUEST_COUNT'] ?? null;
+            $count = \Weline\Framework\Env\WelineEnv::server('WLS_REQUEST_COUNT', null);
             if ($count !== null) {
                 return 'rc-' . $count;
             }
@@ -2286,28 +2291,18 @@ class Url implements UrlInterface
 
     private static function currentServer(): array
     {
-        // WLS 常驻模式下，若当前不在 Fiber 请求上下文，禁止回退 mainContext，
-        // 避免误读上一次请求残留的上下文 server 快照。
-        if (\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
-            && \Weline\Framework\Runtime\Runtime::isPersistent()
-            && \class_exists(\Fiber::class)
-            && \Fiber::getCurrent() === null
-        ) {
-            return \is_array($_SERVER ?? null) ? $_SERVER : [];
-        }
-
         $context = Context::getCurrent();
         $server = $context?->server();
         if (\is_array($server) && $server !== []) {
             return $server;
         }
 
-        return \is_array($_SERVER ?? null) ? $_SERVER : [];
+        return \Weline\Framework\Env\WelineEnv::serverAll();
     }
 
     private static function updateCurrentServerVar(string $key, mixed $value): void
     {
-        $_SERVER[$key] = $value;
+        \Weline\Framework\Env\WelineEnv::setServer($key, $value, 'Url::parser current request sync');
 
         $context = Context::getCurrent();
         if ($context === null) {
@@ -2336,6 +2331,10 @@ class Url implements UrlInterface
         $server = \array_merge($server, self::$parserServer);
         $context->set('input.server', $server);
         $context->set('input.uri', (string)(self::$parserServer['REQUEST_URI'] ?? $context->get('input.uri', '/')));
+        $context->set('input.host', (string)(self::$parserServer['HTTP_HOST'] ?? self::$parserServer['SERVER_NAME'] ?? $context->get('input.host', '')));
+        $context->set('input.scheme', (string)(self::$parserServer['REQUEST_SCHEME'] ?? $context->get('input.scheme', 'http')));
+        $context->set('input.origin_request_uri', (string)(self::$parserServer['WELINE_ORIGIN_REQUEST_URI'] ?? self::$parserServer['ORIGIN_REQUEST_URI'] ?? $context->get('input.origin_request_uri', '/')));
+        $context->set('input.full_request_uri', (string)(self::$parserServer['WELINE_FULL_REQUEST_URI'] ?? $context->get('input.full_request_uri', '')));
         $context->set('route.area', (string)(self::$parserServer['WELINE_AREA'] ?? $context->get('route.area', 'frontend')));
         $context->set('route.area_route', (string)(self::$parserServer['WELINE_AREA_ROUTE'] ?? $context->get('route.area_route', '')));
         $context->set('route.website_id', (int)(self::$parserServer['WELINE_WEBSITE_ID'] ?? $context->get('route.website_id', 0)));
@@ -2343,6 +2342,83 @@ class Url implements UrlInterface
         $context->set('route.website_url', (string)(self::$parserServer['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', '')));
         $context->set('route.language', (string)(self::$parserServer['WELINE_USER_LANG'] ?? $context->get('route.language', 'zh_Hans_CN')));
         $context->set('route.currency', (string)(self::$parserServer['WELINE_USER_CURRENCY'] ?? $context->get('route.currency', 'CNY')));
+
+        if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
+            foreach ([
+                         'HTTP_HOST',
+                         'SERVER_NAME',
+                         'SERVER_PORT',
+                         'REQUEST_SCHEME',
+                         'HTTPS',
+                         'REQUEST_URI',
+                         'WELINE_ORIGIN_REQUEST_URI',
+                         'WELINE_FULL_REQUEST_URI',
+                         'WELINE_USER_LANG',
+                         'WELINE_USER_CURRENCY',
+                         'WELINE_WEBSITE_URL',
+                         'WELINE_WEBSITE_ID',
+                         'WELINE_WEBSITE_CODE',
+                     ] as $serverKey) {
+                if (\array_key_exists($serverKey, self::$parserServer)) {
+                    \Weline\Framework\Env\WelineEnv::setServer(
+                        $serverKey,
+                        self::$parserServer[$serverKey],
+                        'Url::parser current request sync'
+                    );
+                }
+            }
+        }
+    }
+
+    private static function isCurrentRequestUrl(string $parseUrl): bool
+    {
+        if ($parseUrl === '' || !\str_contains($parseUrl, '://')) {
+            return false;
+        }
+
+        $server = self::currentServer();
+        $requestUri = (string)($server['WELINE_ORIGIN_REQUEST_URI'] ?? $server['REQUEST_URI'] ?? '/');
+        if ($requestUri === '') {
+            $requestUri = '/';
+        }
+        if (!\str_starts_with($requestUri, '/')) {
+            $requestUri = '/' . $requestUri;
+        }
+
+        $scheme = self::getCurrentScheme();
+        $host = (string)($server['HTTP_HOST'] ?? $server['SERVER_NAME'] ?? '');
+        if ($host === '') {
+            return false;
+        }
+
+        $port = (string)($server['SERVER_PORT'] ?? '');
+        $hostWithoutPort = $host;
+        if (\str_contains($host, ':')) {
+            [$hostWithoutPort] = \explode(':', $host, 2);
+        }
+
+        $candidates = [
+            $scheme . '://' . $host . $requestUri,
+        ];
+        if ($port !== ''
+            && $hostWithoutPort !== ''
+            && !\str_contains($host, ':')
+            && !(($scheme === 'https' && $port === '443') || ($scheme !== 'https' && $port === '80'))
+        ) {
+            $candidates[] = $scheme . '://' . $hostWithoutPort . ':' . $port . $requestUri;
+        }
+
+        $normalize = static function (string $url): string {
+            return \rtrim(self::removeExtraDoubleSlashes($url), '/');
+        };
+        $target = $normalize($parseUrl);
+        foreach ($candidates as $candidate) {
+            if ($target === $normalize($candidate)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

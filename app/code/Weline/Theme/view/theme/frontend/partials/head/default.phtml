@@ -22,6 +22,8 @@ $isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $currentCurrency = \w_env('user.currency', 'CNY');
+$defaultLang = \w_env('website.language', '') ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN';
+$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
 
 $modulesConfigUrl = $isDev
@@ -52,6 +54,8 @@ $themeConfigPayload = [
     ],
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
+    'defaultLang' => $defaultLang,
+    'defaultCurrency' => $defaultCurrency,
     'debug' => DEV,
     'site' => [
         'name' => $siteName,

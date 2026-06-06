@@ -58,10 +58,19 @@ $apiFallbackUrl = $isDev
     ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js?v=20260517-api-loader-2'
     : '/static/Weline/Frontend/js/weline-api-fallback.js';
 
+$currentLang = \w_env('user.lang', 'zh_Hans_CN');
+$currentCurrency = \w_env('user.currency', 'CNY');
+$defaultLang = \w_env('website.language', '') ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN';
+$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
+
 $themeConfigPayload = [
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
     'assetVersion' => '20260522-dev-cache',
+    'currentLang' => $currentLang,
+    'currentCurrency' => $currentCurrency,
+    'defaultLang' => $defaultLang,
+    'defaultCurrency' => $defaultCurrency,
 ];
 ?>
 <!-- Frontend閰嶇疆锛氫娇鐢╠ata-no-extract鏍囪锛屼笉浼氳鎻愬彇鍒板閮↗S鏂囦欢 -->

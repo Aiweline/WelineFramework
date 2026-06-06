@@ -2619,6 +2619,7 @@ class WlsRuntime implements RuntimeInterface
             // WLS：请求入口再清一次 URL/ACL 请求级缓存，避免上一 finally 未跑全、fiber 交错或 parser 前
             // 观察者调用 getUrlPath 导致 static $url_paths / Acl 路由判定沿用旧路径，误判无权限跳 admin。
             Request::clearStaticUrlPathCache();
+            \Weline\Framework\App\State::resetRequestPathLocalizationCache();
             if ($request !== null) {
                 $request->invalidateUriCache();
             }
