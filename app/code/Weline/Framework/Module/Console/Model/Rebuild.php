@@ -177,13 +177,6 @@ class Rebuild extends CommandAbstract
                 }
             }
         }
-        if (!empty($_SERVER['argv']) && is_array($_SERVER['argv'])) {
-            foreach ($_SERVER['argv'] as $v) {
-                if (is_string($v)) {
-                    $candidates[] = $v;
-                }
-            }
-        }
         foreach ($candidates as $v) {
             if (str_ends_with($v, '.php')) {
                 $candidate = $v;
