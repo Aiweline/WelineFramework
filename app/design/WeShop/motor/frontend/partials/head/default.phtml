@@ -71,7 +71,7 @@ $themeConfigPayload = [
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
-    'assetVersion' => '20260522-dev-cache',
+    'assetVersion' => '20260606-language-flag',
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'defaultLang' => $defaultLang,
@@ -135,6 +135,6 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
 }
 ?>
 <script src="<?= htmlspecialchars($isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js?v=20260522-dev-cache' : '/static/Weline/Frontend/js/weline-api-fallback.js') ?>"></script>
-<script src="<?= htmlspecialchars($isDev ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260522-dev-cache' : '/static/Weline/Theme/theme/frontend/assets/js/theme.js') ?>"></script>
+<script src="<?= htmlspecialchars($isDev ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260606-language-flag' : '/static/Weline/Theme/theme/frontend/assets/js/theme.js') ?>"></script>
 <!-- Hook: 允许其他模块在 head 中注入 JS 模块声明 -->
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

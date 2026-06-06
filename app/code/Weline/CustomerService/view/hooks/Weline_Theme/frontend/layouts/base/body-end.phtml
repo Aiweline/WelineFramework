@@ -6,6 +6,7 @@
  */
 
 use Weline\CustomerService\Service\WidgetTranslationService;
+use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\SessionFactory;
@@ -29,8 +30,60 @@ $customerId = $isLoggedIn ? $session->getUserId() : null;
 
 /** @var \Weline\Framework\Http\Url $urlBuilder */
 $urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
-$chatUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/chat');
-$bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
+$normalizeDefaultLocaleUrl = static function (string $url): string {
+    $defaultCurrency = strtoupper(trim((string)(\w_env('website.currency', '') ?: Env::get('currency', 'CNY') ?: 'CNY')));
+    $defaultLanguage = trim((string)(\w_env('website.language', '') ?: Env::get('locale', Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN'));
+    $languageEquals = static function (string $left, string $right): bool {
+        return strcasecmp(str_replace('-', '_', trim($left)), str_replace('-', '_', trim($right))) === 0;
+    };
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return $url;
+    }
+
+    $path = (string)($parts['path'] ?? '');
+    $segments = array_values(array_filter(explode('/', trim($path, '/')), static function ($segment) {
+        return $segment !== '';
+    }));
+
+    $localeSegments = [];
+    while ($segments !== []) {
+        $segment = (string)$segments[0];
+        $upperSegment = strtoupper($segment);
+        $isCurrencySegment = (bool)preg_match('/^[A-Z]{3}$/', $upperSegment);
+        $isLanguageSegment = (bool)preg_match('/^[a-z]{2}_[a-z0-9]+(?:_[a-z0-9]+)?$/i', $segment);
+        if (!$isCurrencySegment && !$isLanguageSegment) {
+            break;
+        }
+
+        array_shift($segments);
+        if ($isCurrencySegment && $upperSegment === $defaultCurrency) {
+            continue;
+        }
+        if ($isLanguageSegment && $languageEquals($segment, $defaultLanguage)) {
+            continue;
+        }
+        $localeSegments[] = $segment;
+    }
+
+    $normalizedPath = '/' . implode('/', array_merge($localeSegments, $segments));
+    if ($normalizedPath === '/') {
+        $normalizedPath = '/';
+    }
+
+    $scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '';
+    $authority = (string)($parts['host'] ?? '');
+    if ($authority !== '' && isset($parts['port'])) {
+        $authority .= ':' . $parts['port'];
+    }
+    $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
+    $fragment = isset($parts['fragment']) && $parts['fragment'] !== '' ? '#' . $parts['fragment'] : '';
+
+    return $scheme . $authority . $normalizedPath . $query . $fragment;
+};
+$chatUrl = $normalizeDefaultLocaleUrl($urlBuilder->getFrontendUrl('customerservice/frontend/chat'));
+$bindUrl = $normalizeDefaultLocaleUrl($urlBuilder->getFrontendUrl('customerservice/frontend/bind'));
 
 $showGuestBindPrompt = !$isLoggedIn;
 

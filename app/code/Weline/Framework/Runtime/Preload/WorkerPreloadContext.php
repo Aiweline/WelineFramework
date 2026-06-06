@@ -23,9 +23,9 @@ final class WorkerPreloadContext
 
     public static function fromGlobals(string $phase, string $runtimeMode): self
     {
-        $role = (string)($_SERVER['WLS_PROCESS_ROLE'] ?? $_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker');
-        $workerId = (int)($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
-        $instanceName = (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_ENV['WLS_INSTANCE_NAME'] ?? \getenv('WLS_INSTANCE_NAME') ?: '');
+        $role = (string)($_ENV['WLS_PROCESS_ROLE'] ?? \getenv('WLS_PROCESS_ROLE') ?: 'worker');
+        $workerId = (int)($_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: 0);
+        $instanceName = (string)($_ENV['WLS_INSTANCE_NAME'] ?? \getenv('WLS_INSTANCE_NAME') ?: '');
 
         return new self(
             $phase,
