@@ -231,7 +231,6 @@ php bin/w setup:upgrade -m GuoLaiRen_PageBuilder
 
 - **`__()` 函数详解**：[i18n-translation-guide.md](./i18n-translation-guide.md)
 - **`<local>` 标签详解**：[local-tag-translation-guide.md](./local-tag-translation-guide.md)
-- **Editor.js 集成**：[CHANGELOG-EDITORJS.md](./CHANGELOG-EDITORJS.md)
 
 ---
 

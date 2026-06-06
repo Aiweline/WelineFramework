@@ -50,7 +50,8 @@
 - 禁止使用 alert()，请使用 FrontendToast.warning / .error 或主题 toast
 
 【正确的 js_content 示例】
-```
+以下只表示 js_content 字符串内容，不要包含 markdown 代码围栏：
+
 const buttons = component.querySelectorAll('[class*="-btn"]');
 buttons.forEach(btn => {
     btn.addEventListener('click', () => btn.classList.toggle('active'));
@@ -58,10 +59,10 @@ buttons.forEach(btn => {
 
 // 如需使用配置值，通过 data-* 属性获取
 const config = JSON.parse(component.dataset.config || '{}');
-```
 
 【错误的 js_content 示例 - 绝对不要这样写】
-```
+以下均为反例，不要包含 markdown 代码围栏：
+
 // 错误1：不要使用 DOMContentLoaded 包装
 document.addEventListener('DOMContentLoaded', function() { });
 
@@ -73,4 +74,3 @@ const text = 'I'm broken';
 
 // 错误4：使用固定的 ai- 前缀（已废弃）
 component.querySelector('.ai-footer-brand');  // 错误！
-```

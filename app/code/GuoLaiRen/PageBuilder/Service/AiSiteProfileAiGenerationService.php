@@ -55,7 +55,7 @@ class AiSiteProfileAiGenerationService
         $locale = \trim((string)($context['default_locale'] ?? ''));
         $localeRule = '';
         if ($locale !== '') {
-            $localeRule = "\n- Primary locale is \"{$locale}\". All customer-facing strings (titles, taglines, descriptions, meta fields, and any visible SVG text) MUST be written in that language: zh_Hans_CN → Simplified Chinese; zh_Hant_TW → Traditional Chinese; en_US → English; ja_JP → Japanese; ko_KR → Korean; otherwise use the closest natural match for the locale code.";
+            $localeRule = "\n- Primary locale is \"{$locale}\". All customer-facing strings (titles, taglines, descriptions, and meta fields) MUST be written in that language: zh_Hans_CN → Simplified Chinese; zh_Hant_TW → Traditional Chinese; en_US → English; ja_JP → Japanese; ko_KR → Korean; otherwise use the closest natural match for the locale code. Logo/icon SVG must not contain visible text in any language.";
         }
 
         return <<<PROMPT
@@ -84,25 +84,25 @@ Example return shape (copy structure, not content; locked fields still win):
   "meta_title": "Neon Table Club - Neon Card Rooms and Player Support",
   "meta_description": "Explore neon card rooms with clear rules, rewards, player proof, strategy guides, and fast support.",
   "meta_keywords": "neon card games, poker rooms, mahjong tables, player support",
-  "logo_svg": "<svg width=\"160\" height=\"48\" viewBox=\"0 0 160 48\" xmlns=\"http://www.w3.org/2000/svg\"><text x=\"12\" y=\"30\">Neon Table</text></svg>",
-  "icon_svg": "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"32\" cy=\"32\" r=\"18\"/></svg>"
+  "logo_svg": "<svg width=\"160\" height=\"48\" viewBox=\"0 0 160 48\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M80 10 L102 24 L80 38 L58 24 Z\" fill=\"#f59e0b\"/><circle cx=\"80\" cy=\"24\" r=\"8\" fill=\"#0f172a\"/></svg>",
+  "icon_svg": "<svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M32 8 L54 32 L32 56 L10 32 Z\" fill=\"#f59e0b\"/><circle cx=\"32\" cy=\"32\" r=\"9\" fill=\"#0f172a\"/></svg>"
 }
 
 Rules:
 - Keep locked fields exactly if they are provided.
 - If the customer brief clearly names a brand/site title, site_title MUST be exactly that compact brand name. Do not append a sentence, product description, locale rule, or SEO phrase to site_title.
 - Create customer-facing content, not internal placeholders.
-- Skills, design-direction names/codes, style-template names, adapter names, and tool labels are internal generation guidance only. Never use them as site_title, logo text, meta_title, tagline, description, keywords, or visible SVG text.
-- If forbidden_visible_terms are provided in the input, those exact terms are banned from every customer-facing string and every SVG text node. Rewrite them into visitor-facing business language instead of copying them.
+- Skills, design-direction names/codes, style-template names, adapter names, and tool labels are internal generation guidance only. Never use them as site_title, meta_title, tagline, description, keywords, or SVG text.
+- If forbidden_visible_terms are provided in the input, those exact terms are banned from every customer-facing string. Rewrite them into visitor-facing business language instead of copying them.
 - Site title should feel like a real brand or website name.
 - Site tagline should be concise and marketable.
 - Brief description should be 1-2 polished sentences suitable for preview/meta/brand usage.
 - meta_title should be concise, meta_description should stay within roughly 160 characters.
-- logo_svg must be a clean inline SVG with width 160 height 48 and viewBox "0 0 160 48". The SVG canvas must stay transparent: do not draw a full-width/full-height white, solid, gradient, card, tile, or rounded-rectangle background.
-- icon_svg must be a clean inline SVG with width 64 height 64 and viewBox "0 0 64 64". The icon must be an isolated symbol or monogram on transparent canvas: do not draw a white box, colored square, rounded tile, gradient backdrop, badge card, screenshot frame, or background plate.
-- Visible SVG text may contain the compact site_title or a short brand mark only. Do not place long descriptions, prompt/contract words, JSON field names, or truncated requirement sentences inside SVG text.
+- logo_svg must be a clean inline SVG with width 160 height 48 and viewBox "0 0 160 48". The SVG canvas must stay transparent and symbol-only: do not draw a full-width/full-height white, solid, gradient, card, tile, or rounded-rectangle background.
+- icon_svg must be a clean inline SVG with width 64 height 64 and viewBox "0 0 64 64". The icon must be an isolated symbol on transparent canvas: do not draw a white box, colored square, rounded tile, gradient backdrop, badge card, screenshot frame, or background plate.
+- SVG text ban (HARD): logo_svg and icon_svg must not contain <text>, <tspan>, readable letters, initials, monograms, site_title, brand names, slogans, prompt/contract words, JSON field names, or truncated requirement sentences.
 - SVG must not contain script, foreignObject, animation, external URLs, or embedded raster images.
-- Prefer simple geometric shapes, gradients, paths, circles, rectangles, and optional text.{$localeRule}
+- Prefer simple geometric shapes, gradients, paths, circles, rectangles, and subject-derived pictorial symbols.{$localeRule}
 PROMPT;
     }
 
@@ -250,6 +250,8 @@ PROMPT;
             'onload=',
             'onclick=',
             '<image',
+            '<text',
+            '<tspan',
             'xlink:href=',
             'href="http',
             'href=\'http',
