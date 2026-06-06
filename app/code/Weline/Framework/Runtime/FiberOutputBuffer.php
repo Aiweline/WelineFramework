@@ -400,7 +400,7 @@ final class FiberOutputBuffer
         return [
             'reason' => $reason,
             'request_id' => (string)(RequestContext::getId() ?? ''),
-            'uri' => (string)($_SERVER['REQUEST_URI'] ?? '(none)'),
+            'uri' => (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '(none)'),
             'fiber_id' => $fiber instanceof \Fiber ? \spl_object_id($fiber) : null,
             'current_bytes' => $currentBytes,
             'chunk_bytes' => $chunkBytes,
@@ -533,7 +533,7 @@ final class FiberOutputBuffer
         try {
             \Weline\Server\Log\WlsLogger::warning_(
                 '[FiberOutputBufferRecovered] reason=' . ($reason !== '' ? $reason : 'unknown')
-                . ' uri=' . (string)($_SERVER['REQUEST_URI'] ?? '(none)')
+                . ' uri=' . (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '(none)')
                 . ' previous_level=' . $previousLevel
                 . ' current_ob_level=' . \ob_get_level()
                 . ' new_level=' . self::$installedLevel
@@ -552,7 +552,7 @@ final class FiberOutputBuffer
 
         $message = '[FiberOutputBufferMissingFrame] reason=' . $reason
             . ' request_id=' . (string)(RequestContext::getId() ?? '')
-            . ' uri=' . (string)($_SERVER['REQUEST_URI'] ?? '(none)')
+            . ' uri=' . (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '(none)')
             . ' state=' . (\json_encode(self::debugState(), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}');
 
         if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {

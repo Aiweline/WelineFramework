@@ -2771,11 +2771,13 @@
             const languageSwitchers = document.querySelectorAll('[data-i18n-switcher]');
             languageSwitchers.forEach(languageSwitcher => {
                 let displayName = langDisplay;
+                let activeOption = null;
 
                 const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
                 languageOptions.forEach(option => {
                     const langCode = option.getAttribute('data-lang') || option.dataset.lang;
-                    if (langCode === currentLang) {
+                    if (sameLang(langCode, currentLang)) {
+                        activeOption = option;
                         option.classList.add('active');
                         const nameEl = option.querySelector('.weline-choice-name');
                         displayName = nameEl
@@ -2790,6 +2792,14 @@
                 currentLangElements.forEach(el => {
                     el.textContent = displayName;
                 });
+
+                if (activeOption) {
+                    const optionFlag = activeOption.querySelector('.weline-choice-flag');
+                    const currentFlag = languageSwitcher.querySelector('.weline-choice-current-flag');
+                    if (optionFlag && currentFlag) {
+                        currentFlag.innerHTML = optionFlag.innerHTML;
+                    }
+                }
             });
         }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Runtime;
 
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -119,8 +120,8 @@ class TelemetryBroadcaster
     {
         if (!$request) {
             return [
-                'uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
-                'method' => (string)($_SERVER['REQUEST_METHOD'] ?? ''),
+                'uri' => (string)WelineEnv::server('REQUEST_URI', ''),
+                'method' => (string)WelineEnv::server('REQUEST_METHOD', ''),
                 'is_backend' => false,
                 'is_api_backend' => false,
                 'is_api_frontend' => false,

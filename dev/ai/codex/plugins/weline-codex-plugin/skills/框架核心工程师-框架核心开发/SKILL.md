@@ -50,6 +50,7 @@ This skill implements framework-level changes in WelineFramework core areas. It 
 - Keep module boundaries intact.
 - Prefer small, isolated, testable changes.
 - Update architecture docs if the design changes.
+- Do not introduce global variables or process-wide mutable global state in framework code; `$_SERVER` is only allowed in Fiber/WLS request context assembly, and all other code must use `WelineEnv`, `w_env*`, request objects, or explicit `Context`; context assembly may temporarily bridge entry context into explicit Context, request, session, or service objects.
 - Treat framework-level consideration as a standing Codex rule, even when the user only reports one page, one module, or one error.
 - When a systemic command, importer, or shared controller path fails, start from the framework owner implementation rather than patching one symptom path inside a downstream module.
 

@@ -159,12 +159,14 @@
         const languageSwitchers = document.querySelectorAll('[data-i18n-switcher]');
         languageSwitchers.forEach(languageSwitcher => {
             let displayName = langDisplay;
+            let activeOption = null;
 
             // 通过属性标记查找语言选项（优先使用 data-language-option）
             const languageOptions = languageSwitcher.querySelectorAll('[data-language-option], .language-option, a[data-lang]');
             languageOptions.forEach(option => {
                 const langCode = option.getAttribute('data-lang') || option.dataset.lang;
-                if (langCode === currentLang) {
+                if (sameLang(langCode, currentLang)) {
+                    activeOption = option;
                     option.classList.add('active');
                     const nameEl = option.querySelector('.weline-choice-name');
                     displayName = nameEl
@@ -179,6 +181,14 @@
             currentLangElements.forEach(el => {
                 el.textContent = displayName;
             });
+
+            if (activeOption) {
+                const optionFlag = activeOption.querySelector('.weline-choice-flag');
+                const currentFlag = languageSwitcher.querySelector('.weline-choice-current-flag');
+                if (optionFlag && currentFlag) {
+                    currentFlag.innerHTML = optionFlag.innerHTML;
+                }
+            }
         });
     }
 

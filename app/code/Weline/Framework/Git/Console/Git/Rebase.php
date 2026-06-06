@@ -56,7 +56,7 @@ class Rebase extends CommandAbstract
                 $this->runCleanup($args, $cwd);
                 return;
             default:
-                $this->runPassthroughRebase($cwd);
+                $this->runPassthroughRebase($args, $cwd);
                 return;
         }
     }
@@ -537,9 +537,9 @@ class Rebase extends CommandAbstract
         return (int)trim($r['stdout']);
     }
 
-    private function runPassthroughRebase(string $cwd): void
+    private function runPassthroughRebase(array $args, string $cwd): void
     {
-        $passthrough = $this->extractPassthroughArgs();
+        $passthrough = $this->extractPassthroughArgs($args);
         $cmd = array_merge(['git', 'rebase'], $passthrough);
 
         $this->printer->note(__('执行：%{1}', [$this->formatCmd($cmd)]));
@@ -550,29 +550,15 @@ class Rebase extends CommandAbstract
     }
 
     /**
-     * 从原始 $_SERVER['argv'] 中提取本命令名之后的全部参数，并剔除本命令自有开关，
+     * 从已解析命令参数中提取透传参数，并剔除本命令自有开关，
      * 其它参数原样透传给 git rebase。
      */
-    private function extractPassthroughArgs(): array
+    private function extractPassthroughArgs(array $args): array
     {
-        $argv = $_SERVER['argv'] ?? [];
-        $markers = array_map('strtolower', array_merge(['git:rebase'], self::ALIASES));
-
-        $start = -1;
-        foreach ($argv as $i => $tok) {
-            if (!is_string($tok)) {
-                continue;
-            }
-            if (in_array(strtolower($tok), $markers, true)) {
-                $start = $i + 1;
-                break;
-            }
+        $rest = [];
+        for ($i = 1; \array_key_exists($i, $args); $i++) {
+            $rest[] = $args[$i];
         }
-        if ($start < 0) {
-            return [];
-        }
-
-        $rest = array_slice($argv, $start);
         $out = [];
         $skipNext = false;
         foreach ($rest as $tok) {

@@ -123,7 +123,7 @@ class App
             return true;
         }
 
-        if ((string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') === '1') {
+        if ((string)WelineEnv::server('WLS_INTERNAL_DYNAMIC_WARMUP', '') === '1') {
             return false;
         }
 
