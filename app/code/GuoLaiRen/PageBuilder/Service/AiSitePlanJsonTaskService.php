@@ -104,6 +104,27 @@ class AiSitePlanJsonTaskService
     ];
 
     /** @var array<string, true> */
+    private const PLAN_JSON_ROOT_CONTEXT_KEYS = [
+        'content_locale' => true,
+        'language_contract' => true,
+        'locale_context' => true,
+        'visible_copy_contract' => true,
+        'shared_prompt_context' => true,
+        'theme_context_snapshot' => true,
+        'site_context' => true,
+        'root_context' => true,
+        'website_profile' => true,
+        'source_truth_contract' => true,
+        'site_design_system' => true,
+        'asset_manifest_ref' => true,
+        'contract_summary' => true,
+        'shared_context_hash' => true,
+        'theme_context_hash' => true,
+        'assembly_version' => true,
+        'generation_method' => true,
+    ];
+
+    /** @var array<string, true> */
     private const PLAN_JSON_PAGE_META_KEYS = [
         'page_key' => true,
         'page_type' => true,
@@ -126,6 +147,7 @@ class AiSitePlanJsonTaskService
         'content_locale' => true,
         'language_contract' => true,
         'locale_context' => true,
+        'visible_copy_contract' => true,
         'shared_context_hash' => true,
         'theme_context_hash' => true,
         'assembly_version' => true,
@@ -133,6 +155,11 @@ class AiSitePlanJsonTaskService
         'page_design_plan' => true,
         'asset_distribution_policy' => true,
         'theme_context_snapshot' => true,
+        'shared_prompt_context' => true,
+        'site_context' => true,
+        'root_context' => true,
+        'website_profile' => true,
+        'source_truth_contract' => true,
         'site_design_system' => true,
         'asset_manifest_ref' => true,
         'contract_summary' => true,
@@ -209,8 +236,9 @@ class AiSitePlanJsonTaskService
     }
 
     /**
-     * Persist the selected content locale contract into the same plan_json nodes
-     * that drive block execution, so prompts do not depend on broad scope fallbacks.
+     * Persist the selected content locale contract at the plan_json root. Block
+     * execution receives the global language contract through runtime context;
+     * page/block nodes must not own a separate language configuration.
      *
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -246,17 +274,11 @@ class AiSitePlanJsonTaskService
             if (!\is_array($page)) {
                 continue;
             }
-            $page['content_locale'] = $contentLocale;
-            $page['language_contract'] = $languageContract;
-            $page['locale_context'] = $localeContext;
+            $page = $this->stripPlanJsonRootContextFields($page);
             foreach ($this->extractPlanJsonPageBlocks($page) as $blockKey => $block) {
-                $block['content_locale'] = $contentLocale;
-                $block['language_contract'] = $languageContract;
-                $block['locale_context'] = $localeContext;
-                $block['visible_copy_contract'] = $this->buildPlanJsonBlockVisibleCopyContract($contentLocale);
+                $block = $this->stripPlanJsonRootContextFields($block);
                 if (\is_array($block['block_contract'] ?? null)) {
-                    $block['block_contract']['language_contract'] = $languageContract;
-                    $block['block_contract']['visible_copy_contract'] = $block['visible_copy_contract'];
+                    unset($block['block_contract']['language_contract'], $block['block_contract']['visible_copy_contract']);
                 }
                 $page[$blockKey] = $block;
             }
@@ -273,6 +295,19 @@ class AiSitePlanJsonTaskService
         }
 
         return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @return array<string, mixed>
+     */
+    private function stripPlanJsonRootContextFields(array $node): array
+    {
+        foreach (self::PLAN_JSON_ROOT_CONTEXT_KEYS as $key => $_) {
+            unset($node[$key]);
+        }
+
+        return $node;
     }
 
     /**
@@ -2900,16 +2935,32 @@ class AiSitePlanJsonTaskService
     }
 
     /**
-     * @param array<string, mixed> $gate inspectBuildCompletionGate() 闂傚倸鍊搁崐鎼佸磹閹间礁纾瑰瀣捣閻棗銆掑锝呬壕濡ょ姷鍋為悧鐘汇€侀弴姘辩Т闂佹悶鍎洪崜锕傚极閸愵喗鐓ラ柡鍥殔娴滈箖姊哄Ч鍥р偓妤呭磻閹捐埖宕叉繝闈涙川缁♀偓闂佺鏈划宀勩€傚ú顏呪拺闁芥ê顦弳鐔兼煕閻樺磭澧电€殿喖顭峰鎾偄閾忚鍟庨梻浣稿閻撳牓宕伴弽銊х彾闁告洦鍋€閺€浠嬫煟閹邦剙绾ч柍缁樻礀闇夋繝濠傚閻帞鈧娲橀敃銏ゅ春閳ь剚銇勯幒鍡椾壕濡炪値浜滈崯瀛樹繆閸洖骞㈡俊顖滃劋濞堫偊姊绘担渚劸妞ゆ垵娲畷浼村冀椤撶偞鐎?
+     * @param array<string, mixed> $gate inspectBuildCompletionGate() result.
      */
     public function formatBuildCompletionGateFailureDetail(array $gate): string
     {
         $reason = \trim((string)($gate['reason'] ?? ''));
-        if ($reason === '') {
-            return 'Plan JSON build completion gate failed.';
+        $base = $reason === ''
+            ? (string)__('plan_json 构建完成门禁失败。')
+            : (string)__('plan_json 构建完成门禁失败：%{reason}。', ['reason' => $reason]);
+        $summary = \is_array($gate['summary'] ?? null) ? $gate['summary'] : [];
+        $details = \array_values(\array_filter([
+            $this->formatFailedPlanJsonTaskLines($summary),
+            $this->formatPlanJsonGateRowLines(
+                \is_array($gate['missing_html_rows'] ?? null) ? $gate['missing_html_rows'] : [],
+                (string)__('缺少 HTML 的 block：%{items}')
+            ),
+            $this->formatPlanJsonGateRowLines(
+                \is_array($gate['invalid_status_rows'] ?? null) ? $gate['invalid_status_rows'] : [],
+                (string)__('状态无效的 block：%{items}')
+            ),
+        ], static fn($line) => \is_string($line) && \trim($line) !== ''));
+
+        if ($details === []) {
+            return $base;
         }
 
-        return 'Plan JSON build completion gate failed: ' . $reason . '.';
+        return $base . ' ' . \implode(' ', $details);
     }
 
     private function formatFailedPlanJsonTaskLines(array $summary): string
@@ -2926,19 +2977,19 @@ class AiSitePlanJsonTaskService
                 if ($this->normalizeTaskStatus((string)($task['status'] ?? self::TASK_STATUS_PENDING)) !== self::TASK_STATUS_FAILED) {
                     continue;
                 }
-                $taskKey = \trim((string)($task['task_key'] ?? ''));
-                if ($taskKey === '') {
-                    continue;
-                }
-                $label = \trim((string)($task['label'] ?? ''));
                 $pageType = \trim((string)($task['page_type'] ?? ''));
-                $message = \trim((string)($task['message'] ?? ''));
-                $parts = [$taskKey];
-                if ($pageType !== '') {
-                    $parts[] = $pageType;
-                }
-                if ($label !== '') {
-                    $parts[] = $label;
+                $blockKey = \trim((string)($task['block_key'] ?? $task['section_key'] ?? ''));
+                $label = \trim((string)($task['label'] ?? ''));
+                $taskKey = \trim((string)($task['task_key'] ?? ''));
+                $message = \trim((string)($task['message'] ?? $task['error_message'] ?? $task['error'] ?? ''));
+                $parts = \array_values(\array_filter([
+                    $pageType,
+                    $blockKey,
+                    $label,
+                    $taskKey,
+                ], static fn($part) => \is_string($part) && \trim($part) !== ''));
+                if ($parts === []) {
+                    continue;
                 }
                 $line = \implode(' / ', $parts);
                 if ($message !== '') {
@@ -2952,9 +3003,68 @@ class AiSitePlanJsonTaskService
             return '';
         }
 
-        return (string)__('濠电姷鏁告慨鐑藉极閸涘﹥鍙忛柣鎴ｆ閺嬩線鏌涘☉姗堟敾闁告瑥绻愰湁闁稿繐鍚嬬紞鎴︽煕閵娿儱鈧湱鎹㈠☉姗嗗晠妞ゆ棁宕甸惄搴ｇ磼閻愵剙鍔ゆ繛纭风節瀵濡堕崥銈呮贡閳ь剨缍嗛崑鍛存偟閺冨牊鈷戦柟鑲╁仜婵＄晫绱掔拠鑼ⅵ鐎殿喛顕ч埥澶愬閻樻鍟嬫繝寰锋澘鈧劙宕戦幘缁樺€垫慨妯煎帶婢у鈧鍠楅幃鍌氱暦閹烘鍊风紒顔款潐鐎氬ジ姊绘担鍛婅础妞ゎ厼鐗忛埀顒佺▓閺呯娀宕哄☉銏犵婵°倓鑳堕崢鎼佹⒑閸涘﹦鐭嗙紒鈧担鍦洸濞寸厧鐡ㄩ悡蹇涙煕閳╁喚娈曢柛銈呮喘閺岀喖顢欓悾宀€鐓夐梺鐟扮－閸嬨倖淇婇悜钘壩ㄩ柕鍫濇噹椤曆囨⒒閸屾艾鈧兘鎮為敃鍌氱畺闁割偅娲栫壕鎸庛亜閺嶎偄浠滅紒鈧径灞稿亾閸忓浜鹃梺閫炲苯澧い鏇樺劜缁绘繈宕熼鐙呯床婵犵妲呴崹鍫曞疾閼碱剝濮抽悹鍥ф▕濞撳鏌曢崼婵囶棞濠殿喖顦埞鎴︻敊閼恒儱鍞夐梺绯曟杹閸嬫挸顪冮妶鍡楃瑐闁煎啿澧庣划濠氭倷绾版ê浜?{tasks}', [
-            'tasks' => \implode('; ', \array_slice($failedTasks, 0, 5)),
+        $items = \implode('; ', \array_slice($failedTasks, 0, 5));
+        if (\count($failedTasks) > 5) {
+            $items .= '; ' . (string)__('另有 %{count} 项失败 block 未展开', [
+                'count' => (string)(\count($failedTasks) - 5),
+            ]);
+        }
+
+        return (string)__('失败 block 明细：%{items}', [
+            'items' => $items,
         ]);
+    }
+
+    /**
+     * @param array<int, mixed> $rows
+     */
+    private function formatPlanJsonGateRowLines(array $rows, string $messageTemplate): string
+    {
+        $labels = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $label = $this->formatPlanJsonGateRowLabel($row);
+            if ($label !== '') {
+                $labels[] = $label;
+            }
+        }
+        if ($labels === []) {
+            return '';
+        }
+
+        $items = \implode('; ', \array_slice($labels, 0, 5));
+        if (\count($labels) > 5) {
+            $items .= '; ' . (string)__('另有 %{count} 项未展开', [
+                'count' => (string)(\count($labels) - 5),
+            ]);
+        }
+
+        return (string)__($messageTemplate, [
+            'items' => $items,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function formatPlanJsonGateRowLabel(array $row): string
+    {
+        $pageType = \trim((string)($row['page_type'] ?? ''));
+        $blockKey = \trim((string)($row['block_key'] ?? $row['section_key'] ?? $row['block_id'] ?? ''));
+        $status = \trim((string)($row['status'] ?? ''));
+        $message = \trim((string)($row['message'] ?? $row['error_message'] ?? $row['error'] ?? ''));
+        $parts = \array_values(\array_filter([$pageType, $blockKey], static fn($part) => \is_string($part) && \trim($part) !== ''));
+        $label = $parts === [] ? 'unknown' : \implode('/', $parts);
+        if ($status !== '') {
+            $label .= ' status=' . $status;
+        }
+        if ($message !== '') {
+            $label .= ': ' . $message;
+        }
+
+        return $label;
     }
 
     /**
@@ -3196,6 +3306,127 @@ class AiSitePlanJsonTaskService
     public function clearRetryableAiFailures(array $scope, string $operation): array
     {
         return $this->replaceRetryableAiFailures($scope, $operation, []);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $taskDefinition
+     * @return array<string, mixed>
+     */
+    private function clearRetryableAiFailuresForTask(array $scope, string $operation, string $taskKey, array $taskDefinition = []): array
+    {
+        $operation = \trim($operation);
+        $taskKey = \trim($taskKey);
+        if ($operation === '' || $taskKey === '') {
+            return $scope;
+        }
+
+        $ledger = $this->getRetryableAiFailures($scope, $operation);
+        $items = \is_array($ledger[$operation]['items'] ?? null) ? $ledger[$operation]['items'] : [];
+        $changed = false;
+        foreach ($items as $itemKey => $item) {
+            if (!\is_array($item)) {
+                unset($items[$itemKey]);
+                $changed = true;
+                continue;
+            }
+            if ($this->retryableAiFailureItemMatchesTask($item, (string)$itemKey, $taskKey, $taskDefinition)) {
+                unset($items[$itemKey]);
+                $changed = true;
+            }
+        }
+        if ($changed) {
+            $scope = $this->replaceRetryableAiFailures($scope, $operation, $items);
+        }
+
+        if ($operation === 'build') {
+            $latestBuildFailure = \is_array($scope['latest_build_failure'] ?? null) ? $scope['latest_build_failure'] : [];
+            $latestFailureKey = \trim((string)($latestBuildFailure['item_key'] ?? $latestBuildFailure['task_key'] ?? ''));
+            if ($latestBuildFailure !== []
+                && $this->retryableAiFailureItemMatchesTask($latestBuildFailure, $latestFailureKey, $taskKey, $taskDefinition)
+                && !$this->hasRetryableAiFailures($scope, 'build')
+            ) {
+                $scope = $this->clearLatestBuildFailureState($scope);
+            }
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @param array<string, mixed> $taskDefinition
+     */
+    private function retryableAiFailureItemMatchesTask(array $item, string $itemKey, string $taskKey, array $taskDefinition): bool
+    {
+        $candidates = [];
+        foreach ([$itemKey, $item['item_key'] ?? '', $item['task_key'] ?? '', $item['block_key'] ?? '', $item['section_key'] ?? ''] as $candidate) {
+            $candidate = \trim((string)$candidate);
+            if ($candidate !== '') {
+                $candidates[] = $candidate;
+            }
+        }
+        if (\is_array($item['task_keys'] ?? null)) {
+            foreach ($item['task_keys'] as $candidate) {
+                $candidate = \trim((string)$candidate);
+                if ($candidate !== '') {
+                    $candidates[] = $candidate;
+                }
+            }
+        }
+        if (\in_array($taskKey, \array_unique($candidates), true)) {
+            return true;
+        }
+
+        $taskPageType = \trim((string)($taskDefinition['page_type'] ?? ''));
+        $taskBlockKey = \trim((string)($taskDefinition['block_key'] ?? $taskDefinition['section_key'] ?? ''));
+        $taskSectionCode = \trim((string)($taskDefinition['section_code'] ?? ''));
+        $itemPageType = \trim((string)($item['page_type'] ?? ''));
+        $itemBlockKey = \trim((string)($item['block_key'] ?? $item['section_key'] ?? ''));
+        $itemSectionCode = \trim((string)($item['section_code'] ?? ''));
+        if ($taskPageType !== ''
+            && $itemPageType === $taskPageType
+            && (
+                ($taskBlockKey !== '' && \in_array($taskBlockKey, [$itemBlockKey, $itemSectionCode], true))
+                || ($taskSectionCode !== '' && \in_array($taskSectionCode, [$itemBlockKey, $itemSectionCode], true))
+            )
+        ) {
+            return true;
+        }
+
+        $taskRegion = \trim((string)($taskDefinition['region'] ?? ''));
+        if ($taskRegion === '') {
+            return false;
+        }
+
+        return \in_array($taskRegion, [
+            $itemBlockKey,
+            $itemSectionCode,
+            \trim((string)($item['region'] ?? '')),
+        ], true);
+    }
+
+    /**
+     * @param array<string, mixed> $node
+     * @return array<string, mixed>
+     */
+    private function clearPlanJsonTaskFailureFields(array $node): array
+    {
+        foreach ([
+            'error',
+            'error_message',
+            'failure_reason',
+            'failure_class',
+            'failure_source',
+            'failure_stage',
+            'validation_summary',
+            'validation_issues',
+            'failed_at',
+        ] as $key) {
+            unset($node[$key]);
+        }
+
+        return $node;
     }
 
     /**
@@ -3728,21 +3959,19 @@ class AiSitePlanJsonTaskService
                 ]);
                 $visualSignature = \is_array($block['visual_signature'] ?? null) ? $block['visual_signature'] : [];
                 $imageIntent = \is_array($block['image_intent'] ?? null) ? $block['image_intent'] : [];
-                $blockLanguageContract = \is_array($block['language_contract'] ?? null) ? $block['language_contract'] : $languageContract;
-                $blockLocaleContext = \is_array($block['locale_context'] ?? null)
-                    ? $block['locale_context']
-                    : (\is_array($blockLanguageContract['locale_profile'] ?? null) ? $blockLanguageContract['locale_profile'] : []);
-                $visibleCopyContract = \is_array($block['visible_copy_contract'] ?? null)
-                    ? $block['visible_copy_contract']
-                    : $this->buildPlanJsonBlockVisibleCopyContract($contentLocale);
+                $globalLanguageContract = $languageContract;
+                $globalLocaleContext = \is_array($globalLanguageContract['locale_profile'] ?? null)
+                    ? $globalLanguageContract['locale_profile']
+                    : $this->buildLocalePromptProfile($contentLocale);
+                $visibleCopyContract = $this->buildPlanJsonBlockVisibleCopyContract($contentLocale);
                 $outputContract = $this->planJsonExecutionOutputContract($blockType, $contentKeys);
                 $acceptance = $this->planJsonExecutionAcceptanceContract($blockType);
                 $runtimeContext = \array_replace_recursive($runtimeRoot, [
                     'content_locale' => $contentLocale,
                     'site_default_language' => $siteDefaultLanguage,
                     'default_language' => $siteDefaultLanguage,
-                    'language_contract' => $blockLanguageContract,
-                    'locale_context' => $blockLocaleContext,
+                    'language_contract' => $globalLanguageContract,
+                    'locale_context' => $globalLocaleContext,
                     'visible_copy_contract' => $visibleCopyContract,
                     'context_refs' => [
                         'site_context_ref' => 'plan_json',
@@ -3761,8 +3990,8 @@ class AiSitePlanJsonTaskService
                     'block_key' => $blockKey,
                     'section_key' => $sectionKey,
                     'section_code' => $sectionCode,
-                    'language_contract' => $blockLanguageContract,
-                    'locale_context' => $blockLocaleContext,
+                    'language_contract' => $globalLanguageContract,
+                    'locale_context' => $globalLocaleContext,
                     'visible_copy_contract' => $visibleCopyContract,
                     'block_type' => $blockType,
                     'page_flow_role' => $pageFlowRole,
@@ -3825,8 +4054,8 @@ class AiSitePlanJsonTaskService
                         'page_flow_role' => $pageFlowRole,
                         'task_goal' => $blockGoal,
                         'content_locale' => $contentLocale,
-                        'language_contract' => $blockLanguageContract,
-                        'locale_context' => $blockLocaleContext,
+                        'language_contract' => $globalLanguageContract,
+                        'locale_context' => $globalLocaleContext,
                         'visible_copy_contract' => $visibleCopyContract,
                         'content_plan' => $contentPlan,
                         'style_plan' => $stylePlan,
@@ -4105,7 +4334,7 @@ class AiSitePlanJsonTaskService
         if ($taskStatus === self::TASK_STATUS_FAILED) {
             $block['error'] = $block['message'] !== '' ? $block['message'] : 'AI generation failed.';
         } else {
-            unset($block['error'], $block['error_message']);
+            $block = $this->clearPlanJsonTaskFailureFields($block);
         }
         if ($taskStatus === self::TASK_STATUS_DONE) {
             $block = $this->syncPlanJsonBlockGeneratedPayload($block, $resultRef, $definition, $scope);
@@ -4116,6 +4345,9 @@ class AiSitePlanJsonTaskService
             $blockKey,
             $block
         );
+        if ($taskStatus !== self::TASK_STATUS_FAILED) {
+            $scope = $this->clearRetryableAiFailuresForTask($scope, 'build', $taskKey, $definition);
+        }
 
         return $this->attachPlanJsonExecutionSummary($scope);
     }
@@ -4188,11 +4420,11 @@ class AiSitePlanJsonTaskService
 
         if ($taskStatus === self::TASK_STATUS_DONE) {
             $component = $this->syncPlanJsonSharedComponentGeneratedPayload($component, $resultRef, $definition);
-            unset($component['error'], $component['error_message']);
+            $component = $this->clearPlanJsonTaskFailureFields($component);
         } elseif ($taskStatus === self::TASK_STATUS_FAILED) {
             $component['error'] = $component['message'] !== '' ? $component['message'] : 'AI generation failed.';
         } else {
-            unset($component['error'], $component['error_message']);
+            $component = $this->clearPlanJsonTaskFailureFields($component);
         }
 
         $sharedComponents[$region] = $component;
@@ -4203,6 +4435,10 @@ class AiSitePlanJsonTaskService
             if ($scope['shared_components'] === []) {
                 unset($scope['shared_components']);
             }
+        }
+        if ($taskStatus !== self::TASK_STATUS_FAILED) {
+            $taskKey = \trim((string)($row['task_key'] ?? $definition['task_key'] ?? ''));
+            $scope = $this->clearRetryableAiFailuresForTask($scope, 'build', $taskKey, $definition);
         }
 
         return $this->attachPlanJsonExecutionSummary($scope);

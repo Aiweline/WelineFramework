@@ -1037,6 +1037,13 @@ Running,Running
 确认后会发布到同一个草稿站点，不会额外创建第二个网站实体。,确认后会发布到同一个草稿站点，不会额外创建第二个网站实体。
 失败项明细,失败项明细
 失败项,失败项
+"plan_json 构建完成门禁失败。","plan_json 构建完成门禁失败。"
+"plan_json 构建完成门禁失败：%{reason}。","plan_json 构建完成门禁失败：%{reason}。"
+"失败 block 明细：%{items}","失败 block 明细：%{items}"
+"缺少 HTML 的 block：%{items}","缺少 HTML 的 block：%{items}"
+"状态无效的 block：%{items}","状态无效的 block：%{items}"
+"另有 %{count} 项失败 block 未展开","另有 %{count} 项失败 block 未展开"
+"另有 %{count} 项未展开","另有 %{count} 项未展开"
 运行发布检查,运行发布检查
 "仅重试当前失败的plan_json block 工作，已成功的页面与区块将保留。","仅重试当前失败的plan_json block 工作，已成功的页面与区块将保留。"
 可视化编辑,可视化编辑

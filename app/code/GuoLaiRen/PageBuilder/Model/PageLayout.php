@@ -29,17 +29,17 @@ class PageLayout extends Model
     public const schema_fields_ID = 'layout_id';
     #[Col(type: 'int', nullable: false, comment: '关联的页面ID')]
     public const schema_fields_PAGE_ID = 'page_id';
-    #[Col(type: 'text', nullable: true, comment: '布局配置JSON')]
+    #[Col(type: 'longtext', nullable: true, comment: '布局配置JSON')]
     public const schema_fields_LAYOUT_CONFIG = 'layout_config';
     #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Header组件代码')]
     public const schema_fields_HEADER_COMPONENT = 'header_component';
-    #[Col(type: 'text', nullable: true, comment: 'Header组件配置JSON')]
+    #[Col(type: 'longtext', nullable: true, comment: 'Header组件配置JSON')]
     public const schema_fields_HEADER_CONFIG = 'header_config';
     #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Footer组件代码')]
     public const schema_fields_FOOTER_COMPONENT = 'footer_component';
-    #[Col(type: 'text', nullable: true, comment: 'Footer组件配置JSON')]
+    #[Col(type: 'longtext', nullable: true, comment: 'Footer组件配置JSON')]
     public const schema_fields_FOOTER_CONFIG = 'footer_config';
-    #[Col(type: 'text', nullable: true, comment: '内容组件列表JSON')]
+    #[Col(type: 'longtext', nullable: true, comment: '内容组件列表JSON')]
     public const schema_fields_CONTENT_COMPONENTS = 'content_components';
     #[Col(type: 'smallint', length: 1, nullable: false, default: 1, comment: '是否使用原始模板')]
     public const schema_fields_USE_ORIGINAL_TEMPLATE = 'use_original_template';
