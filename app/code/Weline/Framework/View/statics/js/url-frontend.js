@@ -145,7 +145,54 @@
             apiArea: site.api_area || config.url?.apiArea || 'api',
             currentLang: site.lang || config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN',
             currentCurrency: site.currency || config.currentCurrency || 'CNY',
+            defaultLang: site.default_lang || site.defaultLanguage || config.defaultLang || config.defaultLanguage || config.i18n?.defaultLang || config.i18n?.defaultLanguage || 'zh_Hans_CN',
+            defaultCurrency: site.default_currency || site.defaultCurrency || config.defaultCurrency || 'CNY',
         };
+    }
+
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function sameLang(a, b) {
+        const left = normalizeLangCode(a).toLowerCase();
+        const right = normalizeLangCode(b).toLowerCase();
+        return left !== '' && right !== '' && left === right;
+    }
+
+    function isCurrencySegment(value) {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function isLangSegment(value) {
+        return /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i.test(normalizeLangCode(value));
+    }
+
+    function shouldOutputCurrency(currency, config) {
+        currency = normalizeCurrencyCode(currency);
+        const defaultCurrency = normalizeCurrencyCode(config.defaultCurrency || 'CNY');
+        return currency !== '' && currency !== defaultCurrency;
+    }
+
+    function shouldOutputLang(lang, config) {
+        lang = normalizeLangCode(lang);
+        const defaultLang = normalizeLangCode(config.defaultLang || 'zh_Hans_CN');
+        return lang !== '' && !sameLang(lang, defaultLang);
+    }
+
+    function stripLocaleSegments(path) {
+        const parts = String(path || '/').split('/').filter(Boolean);
+        if (parts.length > 0 && isCurrencySegment(parts[0])) {
+            parts.shift();
+        }
+        if (parts.length > 0 && isLangSegment(parts[0])) {
+            parts.shift();
+        }
+        return parts.length ? '/' + parts.join('/') : '/';
     }
 
     /**
@@ -286,8 +333,8 @@
 
         const config = getConfig();
         let prePath = normalizeWebsiteBaseUrl(getCookie('WELINE_WEBSITE_URL') || '', config);
-        const currentLang = getCookie('WELINE_USER_LANG') || config.currentLang || '';
-        const currentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
+        const currentLang = normalizeLangCode(getCookie('WELINE_USER_LANG') || config.currentLang || '');
+        const currentCurrency = normalizeCurrencyCode(getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '');
 
         // 网站
         if (prePath && WelineString.startsWith(path, prePath)) {
@@ -326,38 +373,16 @@
             }
         }
 
-        // 币种
-        if (currentCurrency && WelineString.startsWith(path, '/' + currentCurrency)) {
-            if ('currency' === type && code) {
-                path = WelineString.replaceStartsWith(path, '/' + currentCurrency, '');
-                prePath += '/' + code;
-            } else {
-                path = WelineString.replaceStartsWith(path, '/' + currentCurrency, '');
-                prePath += '/' + currentCurrency;
-            }
-        } else {
-            if ('currency' === type && code) {
-                prePath += '/' + code;
-            } else if (currentCurrency) {
-                prePath += '/' + currentCurrency;
-            }
+        path = stripLocaleSegments(path);
+        const targetCurrency = normalizeCurrencyCode('currency' === type && code ? code : currentCurrency);
+        const targetLang = normalizeLangCode('lang' === type && code ? code : currentLang);
+
+        if (shouldOutputCurrency(targetCurrency, config)) {
+            prePath += '/' + targetCurrency;
         }
 
-        // 语言
-        if (currentLang && WelineString.startsWith(path, '/' + currentLang)) {
-            if ('lang' === type && code) {
-                path = WelineString.replaceStartsWith(path, '/' + currentLang, '');
-                prePath += '/' + code;
-            } else {
-                path = WelineString.replaceStartsWith(path, '/' + currentLang, '');
-                prePath += '/' + currentLang;
-            }
-        } else {
-            if ('lang' === type && code) {
-                prePath += '/' + code;
-            } else if (currentLang) {
-                prePath += '/' + currentLang;
-            }
+        if (shouldOutputLang(targetLang, config)) {
+            prePath += '/' + targetLang;
         }
 
         return prePath + path;

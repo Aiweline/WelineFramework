@@ -433,12 +433,12 @@ class PageSeoContextResolver
 
     private function requestPath($template): string
     {
-        $fullUri = (string) ($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        $fullUri = (string) \Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
         if ($fullUri !== '' && preg_match('/^https?:\/\//i', $fullUri)) {
             return (string) (parse_url($fullUri, PHP_URL_PATH) ?: '');
         }
 
-        $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+        $uri = (string) \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
         if ($uri !== '') {
             return (string) (parse_url($uri, PHP_URL_PATH) ?: $uri);
         }
@@ -499,7 +499,7 @@ class PageSeoContextResolver
         } catch (\Throwable) {
         }
 
-        $fullUrl = (string) ($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        $fullUrl = (string) \Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
         if ($fullUrl !== '' && preg_match('/^https?:\/\//i', $fullUrl)) {
             return $fullUrl;
         }
@@ -509,7 +509,7 @@ class PageSeoContextResolver
             return '';
         }
 
-        $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+        $uri = (string) \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '/');
         if ($uri === '') {
             $uri = '/';
         }
@@ -535,8 +535,57 @@ class PageSeoContextResolver
             return $url;
         }
         $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-        $path = $parts['path'] ?? '/';
+        $path = $this->canonicalPath((string)($parts['path'] ?? '/'));
         return $scheme . '://' . $host . $port . $path;
+    }
+
+    private function canonicalPath(string $path): string
+    {
+        $path = '/' . ltrim($path, '/');
+        $segments = array_values(array_filter(explode('/', trim($path, '/')), static fn (string $segment): bool => $segment !== ''));
+        if ($segments === []) {
+            return '/';
+        }
+
+        $currentCurrency = strtoupper(trim((string) \w_env('user.currency', '')));
+        $defaultCurrency = strtoupper(trim((string) (
+            \w_env('website.currency', '')
+            ?: \Weline\Framework\App\Env::get('currency', 'CNY')
+            ?: 'CNY'
+        )));
+        if ($currentCurrency === '') {
+            $currentCurrency = $defaultCurrency;
+        }
+
+        $currentLanguage = trim((string) \w_env('user.lang', ''));
+        $defaultLanguage = trim((string) (
+            \w_env('website.language', '')
+            ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN'))
+            ?: 'zh_Hans_CN'
+        ));
+        if ($currentLanguage === '') {
+            $currentLanguage = $defaultLanguage;
+        }
+
+        $languageIndex = 0;
+        $firstSegment = strtoupper((string)($segments[0] ?? ''));
+        if ($firstSegment !== '' && $firstSegment === $currentCurrency) {
+            if ($currentCurrency === $defaultCurrency) {
+                array_splice($segments, 0, 1);
+            } else {
+                $languageIndex = 1;
+            }
+        }
+
+        if (isset($segments[$languageIndex])
+            && $currentLanguage !== ''
+            && $currentLanguage === $defaultLanguage
+            && (string)$segments[$languageIndex] === $currentLanguage
+        ) {
+            array_splice($segments, $languageIndex, 1);
+        }
+
+        return $segments === [] ? '/' : '/' . implode('/', $segments);
     }
 
     private function absoluteUrl($template, mixed $url): string
@@ -561,7 +610,7 @@ class PageSeoContextResolver
 
     private function currentRequestBaseUrl(): string
     {
-        $fullUrl = (string) ($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+        $fullUrl = (string) \Weline\Framework\Env\WelineEnv::server('WELINE_FULL_REQUEST_URI', '');
         if ($fullUrl !== '' && preg_match('/^https?:\/\//i', $fullUrl)) {
             $parts = parse_url($fullUrl);
             if (is_array($parts) && !empty($parts['host'])) {
@@ -570,15 +619,22 @@ class PageSeoContextResolver
             }
         }
 
-        $scheme = (string) ($_SERVER['REQUEST_SCHEME'] ?? '');
+        $scheme = (string) \Weline\Framework\Env\WelineEnv::server('REQUEST_SCHEME', '');
         if ($scheme === '') {
-            $https = (string) ($_SERVER['HTTPS'] ?? '');
+            $https = (string) \Weline\Framework\Env\WelineEnv::server('HTTPS', '');
             $scheme = $https !== '' && strtolower($https) !== 'off' ? 'https' : 'http';
         }
 
-        $host = (string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
+        $host = (string) \Weline\Framework\Env\WelineEnv::server(
+            'HTTP_HOST',
+            \Weline\Framework\Env\WelineEnv::server('SERVER_NAME', '')
+        );
         if ($host === '') {
-            $configured = rtrim((string) ($_SERVER['WELINE_WEBSITE_URL'] ?? w_env('website_url', '') ?: w_env('website.url', '')), '/');
+            $configured = rtrim((string) (
+                \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_URL', '')
+                ?: w_env('website_url', '')
+                ?: w_env('website.url', '')
+            ), '/');
             return $configured;
         }
 
