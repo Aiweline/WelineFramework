@@ -426,7 +426,7 @@
                 if (opts.forceBuildRebuild === true) {
                     requestPayload._force_rebuild = '1';
                 }
-                postForm(runVirtualThemeUrl, requestPayload).then(function (data) {
+                postForm(runVirtualThemeUrl, requestPayload, { timeoutMs: 120000 }).then(function (data) {
                 if (!data || !data.success) {
                     var canResumeRunning = !!(
                         data

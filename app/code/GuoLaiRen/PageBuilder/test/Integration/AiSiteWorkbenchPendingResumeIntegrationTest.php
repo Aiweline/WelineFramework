@@ -20,23 +20,28 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         self::assertStringNotContainsString('autoResumeActiveOperation', $script);
     }
 
-    public function testStalePlanConfirmationPromptsAndUsesExplicitOverride(): void
+    public function testConfirmPlanDoesNotUseStalePlanOverrideFlow(): void
     {
         $script = \GuoLaiRen\PageBuilder\Test\Unit\View\Support\AiSiteWorkspaceScriptReader::loadBundledJavaScript();
         $controller = (string)\file_get_contents(
             BP . 'app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php'
         );
+        $confirmStart = \strpos($controller, 'function handleConfirmPlan(');
+        $confirmEnd = \strpos($controller, 'function handlePlanSse(');
+        self::assertIsInt($confirmStart);
+        self::assertIsInt($confirmEnd);
+        $confirmSource = \substr($controller, $confirmStart, $confirmEnd - $confirmStart);
 
-        self::assertStringContainsString('function promptPlanInputStaleConfirmation(data)', $script);
-        self::assertStringContainsString("String(data.code || '') === 'PLAN_INPUT_STALE'", $script);
-        self::assertStringContainsString('window.BackendConfirm.show(confirmMessage, {', $script);
-        self::assertStringContainsString("fields.force_confirm_stale_plan = '1';", $script);
-        self::assertStringContainsString('confirmCurrentPlanAndMaybeBuild({ forceConfirmStalePlan: true });', $script);
-        self::assertStringNotContainsString("return String(messages.planInputStaleRegenerateRequired || messages.planSchemeRebuildConfirmMessage || '');", $script);
+        self::assertStringNotContainsString('function promptPlanInputStaleConfirmation(data)', $script);
+        self::assertStringNotContainsString("String(data.code || '') === 'PLAN_INPUT_STALE'", $script);
+        self::assertStringNotContainsString("fields.force_confirm_stale_plan = '1';", $script);
+        self::assertStringNotContainsString('confirmCurrentPlanAndMaybeBuild({ forceConfirmStalePlan: true });', $script);
+        self::assertStringNotContainsString("confirm_only: '1'", $script);
+        self::assertStringNotContainsString("start_build: '0'", $script);
 
-        self::assertStringContainsString("getRequestBodyValue('force_confirm_stale_plan', 0)", $controller);
-        self::assertStringContainsString("'requires_confirmation' => true", $controller);
-        self::assertStringContainsString("'confirmation_code' => 'PLAN_INPUT_STALE_CONFIRM'", $controller);
+        self::assertStringNotContainsString("getRequestBodyValue('force_confirm_stale_plan', 0)", $confirmSource);
+        self::assertStringNotContainsString("'requires_confirmation' => true", $confirmSource);
+        self::assertStringNotContainsString("'confirmation_code' => 'PLAN_INPUT_STALE_CONFIRM'", $confirmSource);
     }
 
     public function testResumePromptSuppressesTerminalOrCompleteGeneratedWorkspace(): void

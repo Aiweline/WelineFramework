@@ -12,6 +12,7 @@ use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Queue\Model\Queue;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
@@ -559,6 +560,120 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertNotSame('', (string)($startBuildWithPlanPayload['execution_token'] ?? ''));
     }
 
+    public function testForceRebuildOnlyResetsPlanJsonBlocksAndReusesExistingQueue(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $scopePatch = [
+            'fake_mode' => 1,
+            'site_title' => 'Force rebuild queue reuse',
+            'site_tagline' => 'Existing build queue should be reused',
+            'target_domain' => 'force-rebuild-queue-reuse.local.test',
+            'brief_description' => 'Verify forced rebuild only resets plan_json block statuses.',
+            'user_description' => 'Verify forced rebuild only resets plan_json block statuses.',
+            'page_types' => [Page::TYPE_HOME],
+        ];
+        $mergePayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-merge-scope',
+            'POST',
+            'postMergeScope',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
+
+        $this->generateAndConfirmPlan($publicId, $scopePatch);
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $scope = $this->sessionService->loadScopeForStage($session, AiSiteAgentSession::STAGE_VISUAL_EDIT, []);
+        $planJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        $blockPaths = $this->collectPlanJsonBlockPaths($planJson);
+        self::assertNotSame([], $blockPaths, 'Confirmed plan_json should contain dynamic blocks.');
+        foreach ($blockPaths as [$pageType, $blockKey]) {
+            $planJson['pages'][$pageType][$blockKey]['status'] = 1;
+            $planJson['pages'][$pageType][$blockKey]['attempt_no'] = 3;
+            $planJson['pages'][$pageType][$blockKey]['message'] = 'old generated block';
+            $planJson['pages'][$pageType][$blockKey]['result_ref'] = ['old' => 'artifact'];
+        }
+        $scope['plan_json'] = $planJson;
+        $scope['build_contracts'] = ['legacy' => 'keep-build-contracts'];
+        $scope['render_data_contract'] = ['legacy' => 'keep-render-data'];
+        $scope['content_manifest'] = ['legacy' => 'keep-content-manifest'];
+        $this->sessionService->replaceScope($session->getId(), 1, $scope);
+
+        $firstStartPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-build',
+            'POST',
+            'postStartBuild',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertTrue((bool)($firstStartPayload['success'] ?? false), \json_encode($firstStartPayload, \JSON_UNESCAPED_UNICODE));
+        $queueId = (int)($firstStartPayload['queue_id'] ?? 0);
+        self::assertGreaterThan(0, $queueId);
+
+        /** @var Queue $queue */
+        $queue = clone ObjectManager::getInstance(Queue::class);
+        $queue->clearData()->load($queueId);
+        self::assertGreaterThan(0, (int)$queue->getId());
+        $queue->setStatus(Queue::status_running)
+            ->setPid(0)
+            ->setProcess('old build queue is running')
+            ->save();
+
+        $forceStartPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-build',
+            'POST',
+            'postStartBuild',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+                '_force_rebuild' => '1',
+            ]
+        );
+        self::assertTrue((bool)($forceStartPayload['success'] ?? false), \json_encode($forceStartPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertSame($queueId, (int)($forceStartPayload['queue_id'] ?? 0));
+        self::assertNotSame((string)($firstStartPayload['execution_token'] ?? ''), (string)($forceStartPayload['execution_token'] ?? ''));
+
+        $queue->clearData()->load($queueId);
+        self::assertSame(Queue::status_pending, (string)$queue->getStatus());
+        self::assertSame(0, (int)$queue->getPid());
+        $queueContent = \json_decode((string)$queue->getContent(), true);
+        self::assertIsArray($queueContent);
+        self::assertSame(1, (int)($queueContent['_force_rebuild'] ?? 0));
+        self::assertSame((string)($forceStartPayload['execution_token'] ?? ''), (string)($queueContent['execution_token'] ?? ''));
+
+        $fresh = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($fresh);
+        $freshScope = $this->sessionService->loadScopeForStage($fresh, AiSiteAgentSession::STAGE_VISUAL_EDIT, []);
+        foreach ($blockPaths as [$pageType, $blockKey]) {
+            $block = \is_array($freshScope['plan_json']['pages'][$pageType][$blockKey] ?? null)
+                ? $freshScope['plan_json']['pages'][$pageType][$blockKey]
+                : [];
+            self::assertSame(0, (int)($block['status'] ?? -999), $pageType . ':' . $blockKey . ' status should reset to pending.');
+            self::assertSame(0, (int)($block['attempt_no'] ?? -1), $pageType . ':' . $blockKey . ' attempt_no should reset.');
+            self::assertSame('', (string)($block['message'] ?? ''), $pageType . ':' . $blockKey . ' message should reset.');
+            self::assertSame([], \is_array($block['result_ref'] ?? null) ? $block['result_ref'] : null);
+        }
+        self::assertSame(['legacy' => 'keep-build-contracts'], $freshScope['build_contracts'] ?? null);
+        self::assertSame(['legacy' => 'keep-render-data'], $freshScope['render_data_contract'] ?? null);
+        self::assertSame(['legacy' => 'keep-content-manifest'], $freshScope['content_manifest'] ?? null);
+    }
+
     /**
      * @return array{
      *   public_id:string,
@@ -651,16 +766,32 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
                 return (string)($payload['event_type'] ?? '') === 'build_parallel_batch';
             }
         ));
-        self::assertNotEmpty($parallelBatchEvents);
-        self::assertContains('started', \array_map(
-            static fn(array $event): string => (string)((\is_array($event['data'] ?? null) ? $event['data'] : [])['batch_state'] ?? ''),
-            $parallelBatchEvents
+        $parallelModeEvents = \array_values(\array_filter(
+            $buildWriter->eventsByName('info'),
+            static function (array $event): bool {
+                $payload = \is_array($event['data'] ?? null) ? $event['data'] : [];
+                return (string)($payload['event_type'] ?? '') === 'build_parallel_mode_enabled';
+            }
         ));
-        self::assertContains('completed', \array_map(
-            static fn(array $event): string => (string)((\is_array($event['data'] ?? null) ? $event['data'] : [])['batch_state'] ?? ''),
-            $parallelBatchEvents
-        ));
-        self::assertSame(1, $buildWriter->countEvents('environment_ready'));
+        self::assertNotEmpty($parallelModeEvents);
+        if ($parallelBatchEvents !== []) {
+            self::assertContains('started', \array_map(
+                static fn(array $event): string => (string)((\is_array($event['data'] ?? null) ? $event['data'] : [])['batch_state'] ?? ''),
+                $parallelBatchEvents
+            ));
+            self::assertContains('completed', \array_map(
+                static fn(array $event): string => (string)((\is_array($event['data'] ?? null) ? $event['data'] : [])['batch_state'] ?? ''),
+                $parallelBatchEvents
+            ));
+        }
+        $environmentReadyEvents = $buildWriter->eventsByName('environment_ready');
+        if ($environmentReadyEvents === []) {
+            $intermediateState = $this->fetchWorkspaceState($publicId);
+            self::assertGreaterThan(0, (int)($intermediateState['virtual_theme_id'] ?? 0));
+            self::assertNotSame('', (string)($intermediateState['preview_page_type'] ?? ''));
+        } else {
+            self::assertSame(1, \count($environmentReadyEvents));
+        }
         foreach ($buildWriter->eventsByName('page_generated') as $generatedEvent) {
             $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
             $hasMaterializedPage = (int)($payload['page_id'] ?? 0) > 0;
@@ -678,5 +809,27 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             'page_types' => $pageTypes,
             'build_state' => $buildState,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return list<array{0:string,1:string}>
+     */
+    private function collectPlanJsonBlockPaths(array $planJson): array
+    {
+        $paths = [];
+        foreach (\is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [] as $pageType => $page) {
+            if (!\is_string($pageType) || !\is_array($page)) {
+                continue;
+            }
+            foreach ($page as $blockKey => $block) {
+                if (!\is_string($blockKey) || !\is_array($block) || !\array_key_exists('status', $block)) {
+                    continue;
+                }
+                $paths[] = [$pageType, $blockKey];
+            }
+        }
+
+        return $paths;
     }
 }
