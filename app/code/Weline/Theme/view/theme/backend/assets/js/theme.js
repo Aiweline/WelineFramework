@@ -1452,6 +1452,9 @@
 
     // 挂载到全局
     window.Weline = Weline;
+    if (window.WelineApiModule && window.WelineApiModule.__full === true) {
+        window.Weline.Api = window.WelineApiModule;
+    }
     setupBackendFetchWorkerBridge();
     setupJQueryAjaxWorkerTransport();
     window.w_query = function (provider, operation, params = {}, options = {}) {

@@ -556,7 +556,5 @@
 
     window.WelineApiModule = ApiModule;
     window.Weline = window.Weline || {};
-    if (!window.Weline.Api) {
-        window.Weline.Api = ApiModule;
-    }
+    window.Weline.Api = ApiModule;
 })(window);

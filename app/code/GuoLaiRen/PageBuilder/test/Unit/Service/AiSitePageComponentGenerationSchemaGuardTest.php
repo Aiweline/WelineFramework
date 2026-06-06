@@ -31,7 +31,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
         })->call($service);
 
         self::assertSame(1, $defaultAttempts);
-        self::assertStringContainsString('private const IMAGE_GENERATION_TIMEOUT_SECONDS = 20;', $assetSource);
+        self::assertStringContainsString('private const IMAGE_GENERATION_TIMEOUT_SECONDS = 120;', $assetSource);
         self::assertStringContainsString('private const IMAGE_GENERATION_MAX_ATTEMPTS = 1;', $assetSource);
         self::assertStringContainsString("'image_generation_max_attempts' => 1", $controllerSource);
         self::assertStringContainsString("'image_timeout' => $imageTimeout", $assetSource);
