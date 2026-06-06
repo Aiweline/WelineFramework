@@ -37,7 +37,7 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface, AdapterSki
 
     public function getDefaultSkillCodes(): array
     {
-        return ['claude-design', 'weline-pixel-events'];
+        return ['claude-design', 'impeccable', 'weline-pixel-events'];
     }
 
     public function getDefaultStyleCodes(): array
