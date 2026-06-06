@@ -646,11 +646,9 @@ class State extends DataObject
         $uris = [
             (string)\w_env('origin_request_uri', ''),
             (string)\Weline\Framework\Env\WelineEnv::server('WELINE_ORIGIN_REQUEST_URI', ''),
-            (string)($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? ''),
             (string)\w_env('full_request_uri', ''),
             (string)\w_env('request.uri', ''),
             (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', ''),
-            (string)($_SERVER['REQUEST_URI'] ?? ''),
         ];
 
         foreach ($uris as $uri) {

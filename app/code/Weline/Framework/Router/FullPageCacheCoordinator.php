@@ -432,11 +432,11 @@ final class FullPageCacheCoordinator
     public function shouldBypassForDynamicFirstRender(): bool
     {
         foreach ([
-            $_SERVER['WLS_FPC_BYPASS'] ?? null,
-            $_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? null,
-            $_SERVER['HTTP_X_WLS_FPC_BYPASS'] ?? null,
-            $_SERVER['HTTP_X_WLS_DYNAMIC_WARMUP'] ?? null,
-            $_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? null,
+            WelineEnv::server('WLS_FPC_BYPASS', null),
+            WelineEnv::server('WLS_INTERNAL_DYNAMIC_WARMUP', null),
+            WelineEnv::server('HTTP_X_WLS_FPC_BYPASS', null),
+            WelineEnv::server('HTTP_X_WLS_DYNAMIC_WARMUP', null),
+            WelineEnv::server('HTTP_X_WLS_DYNAMIC_BENCHMARK', null),
         ] as $flag) {
             if (\is_scalar($flag)
                 && \in_array(\strtolower(\trim((string)$flag)), ['1', 'true', 'yes', 'on'], true)) {
@@ -883,7 +883,7 @@ final class FullPageCacheCoordinator
 
         $query = (string)(\parse_url($fullUri, \PHP_URL_QUERY) ?: '');
         if ($query === '') {
-            $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+            $query = (string)WelineEnv::server('QUERY_STRING', '');
         }
         if ($query !== '') {
             \parse_str($query, $params);
@@ -894,8 +894,8 @@ final class FullPageCacheCoordinator
             }
         }
 
-        // WLS 部分请求在到达 FPC 时 $_GET 尚未填充，但 QUERY_STRING 已含 nocache 等参数
-        $rawQuery = (string)($_SERVER['QUERY_STRING'] ?? '');
+        // WLS 部分请求在到达 FPC 时请求参数尚未填充，但 QUERY_STRING 已含 nocache 等参数
+        $rawQuery = (string)WelineEnv::server('QUERY_STRING', '');
         if ($rawQuery !== '') {
             foreach ($bypassKeys as $key) {
                 if (\preg_match('/(?:^|[&;])' . \preg_quote($key, '/') . '(?:=|&|;|$)/i', $rawQuery) === 1) {
@@ -2309,12 +2309,6 @@ final class FullPageCacheCoordinator
         $requestUri = $path . ($query !== '' ? '?' . $query : '');
         $originalGet = (array)WelineEnv::getGet(null, []);
         $filteredGet = $this->filterGetParamsForCacheKey($originalGet);
-
-        $_SERVER['REQUEST_URI'] = $requestUri;
-        $_SERVER['QUERY_STRING'] = $query;
-        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $requestUri;
-        $_SERVER['WELINE_FULL_REQUEST_URI'] = $cacheKeyFullUri;
-        $_GET = $filteredGet;
 
         WelineEnv::setServer('REQUEST_URI', $requestUri, 'FPC canonical cache build');
         WelineEnv::setServer('QUERY_STRING', $query, 'FPC canonical cache build');
