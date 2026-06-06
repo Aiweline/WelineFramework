@@ -38,6 +38,8 @@
         baseUrl: window.location.origin,
         currentLang: 'zh_Hans_CN',
         currentCurrency: 'CNY',
+        defaultLang: 'zh_Hans_CN',
+        defaultCurrency: 'CNY',
         debug: false,
         modulesBaseUrl: '',
         modulesConfigUrl: '',
@@ -214,6 +216,61 @@
             return '';
         }
         return value.replace(/^\/+|\/+$/g, '');
+    }
+
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function sameLang(a, b) {
+        const left = normalizeLangCode(a).toLowerCase();
+        const right = normalizeLangCode(b).toLowerCase();
+        return left !== '' && right !== '' && left === right;
+    }
+
+    function resolveDefaultCurrency(config = runtimeConfig) {
+        return normalizeCurrencyCode(config.defaultCurrency || config.site?.defaultCurrency || config.site?.default_currency || 'CNY');
+    }
+
+    function resolveDefaultLang(config = runtimeConfig) {
+        return normalizeLangCode(config.defaultLang || config.defaultLanguage || config.i18n?.defaultLang || config.i18n?.defaultLanguage || 'zh_Hans_CN');
+    }
+
+    function shouldOutputCurrency(currency, config = runtimeConfig) {
+        currency = normalizeCurrencyCode(currency);
+        return currency !== '' && currency !== resolveDefaultCurrency(config);
+    }
+
+    function shouldOutputLang(lang, config = runtimeConfig) {
+        lang = normalizeLangCode(lang);
+        return lang !== '' && !sameLang(lang, resolveDefaultLang(config));
+    }
+
+    function buildLocalizedFrontendPath(pathOnly, currency, lang) {
+        const currencyPattern = /^[A-Z]{3}$/;
+        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const pathParts = String(pathOnly || '/').split('/').filter(Boolean);
+        const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
+        const outputParts = [];
+        const config = window.__WelineThemeConfig || runtimeConfig || {};
+        const targetCurrency = normalizeCurrencyCode(currency);
+        const targetLang = normalizeLangCode(lang);
+
+        if (shouldOutputCurrency(targetCurrency, config)) {
+            outputParts.push(targetCurrency);
+        }
+        if (shouldOutputLang(targetLang, config)) {
+            outputParts.push(targetLang);
+        }
+        if (filteredParts.length > 0) {
+            outputParts.push(...filteredParts);
+        }
+
+        return '/' + outputParts.join('/');
     }
 
     function getUrlConfig() {
@@ -2809,12 +2866,8 @@
                         langUrl = window.inject_path(pathOnly, langCode, 'lang') + (search ? '?' + search : '');
                     } else {
                         // 降级方案：手动构建路径格式的 URL（需要手动保持货币）
-                        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-                        const currencyPattern = /^[A-Z]{3}$/;
-                        const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
-                        const cleanPath = '/' + filteredParts.join('/');
                         const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
-                        langUrl = '/' + currentCurrency + '/' + langCode + cleanPath + (search ? '?' + search : '');
+                        langUrl = buildLocalizedFrontendPath(currentPath.split('?')[0], currentCurrency, langCode) + (search ? '?' + search : '');
                     }
 
                     if (langUrl) {
@@ -2872,11 +2925,7 @@
                 currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
             }
 
-            const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-            const currencyPattern = /^[A-Z]{3}$/;
-            const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
-            const cleanPath = '/' + filteredParts.join('/');
-            const langUrl = '/' + currentCurrency + '/' + lang + cleanPath + sanitizeLanguageSearch(window.location.search || '');
+            const langUrl = buildLocalizedFrontendPath(currentPath, currentCurrency, lang) + sanitizeLanguageSearch(window.location.search || '');
 
             writeLanguagePreference(lang);
             window.location.href = langUrl;
@@ -3067,12 +3116,8 @@
                         currencyUrl = window.inject_path(pathOnly, currencyCode, 'currency') + (search ? '?' + search : '');
                     } else {
                         // 降级方案：手动构建路径格式的 URL（需要手动保持语言）
-                        const currencyPattern = /^[A-Z]{3}$/;
-                        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-                        const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-                        const cleanPath = '/' + filteredParts.join('/');
                         const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
-                        currencyUrl = '/' + currencyCode + '/' + currentLang + cleanPath + (search ? '?' + search : '');
+                        currencyUrl = buildLocalizedFrontendPath(currentPath.split('?')[0], currencyCode, currentLang) + (search ? '?' + search : '');
                     }
 
                     if (currencyUrl) {
@@ -3132,11 +3177,7 @@
                 currentLang = config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN';
             }
 
-            const currencyPattern = /^[A-Z]{3}$/;
-            const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-            const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-            const cleanPath = '/' + filteredParts.join('/');
-            const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + sanitizeLanguageSearch(window.location.search || '');
+            const currencyUrl = buildLocalizedFrontendPath(currentPath, currency, currentLang) + sanitizeLanguageSearch(window.location.search || '');
 
             writeCurrencyPreference(currency);
             window.location.href = currencyUrl;

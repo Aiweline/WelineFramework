@@ -651,6 +651,25 @@ abstract class RequestAbstract extends RequestFilter
             return '';
         }
 
+        $segments = array_values(array_filter(explode('/', trim($normalizedPath, '/')), static function ($segment) {
+            return $segment !== '';
+        }));
+        while ($segments !== []) {
+            $segment = (string)$segments[0];
+            $isCurrencySegment = (bool)preg_match('/^[A-Z]{3}$/', strtoupper($segment));
+            $isLanguageSegment = (bool)preg_match('/^[a-z]{2}_[a-z0-9]+(?:_[a-z0-9]+)?$/i', $segment);
+            if (!$isCurrencySegment && !$isLanguageSegment) {
+                break;
+            }
+            array_shift($segments);
+        }
+
+        if ($segments === []) {
+            return '';
+        }
+
+        $normalizedPath = '/' . implode('/', $segments);
+
         if (str_contains($normalizedPath, '/')) {
             $currentUri = rtrim((string)($this->getUri() ?? '/'), '/') ?: '/';
             if (!str_starts_with($currentUri, $normalizedPath)) {
@@ -663,7 +682,7 @@ abstract class RequestAbstract extends RequestFilter
             return '';
         }
 
-        return $pathPart;
+        return $normalizedPath;
     }
 
     public function getBaseHost(): string
