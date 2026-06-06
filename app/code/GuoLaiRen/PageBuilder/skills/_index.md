@@ -35,7 +35,16 @@
 | --- | --- | --- |
 | `claude-design` | 设计纪律、反 AI-slop、内容真实性、craft 规则 | 系统先行、ground in real context、避免 gradient orb / 三栏特性网格 / SVG 假产品图 / Inter 默认字体；不得拼凑 filler 段；用户语气与一句话需求落地 |
 
-## 组件生成适配器默认挂载技能
+## PageBuilder 适配器默认挂载技能
+
+`pagebuilder_plan_generation` 适配器通过
+`PlanGenerationAdapter::getDefaultSkillCodes()` 锁定加载以下技能：
+
+| code | 用途 | 说明 |
+| --- | --- | --- |
+| `claude-design` | 基础设计纪律 | 保持既有 PageBuilder 设计约束 |
+| `impeccable` | 计划阶段视觉质量 | 默认注入本地 `skills/impeccable/SKILL.md` 的 prompt-only 规则 |
+| `weline-pixel-events` | 转化事件埋点 | 由 `Weline_Visitor` 提供，约束 CTA 和表单事件标记 |
 
 `pagebuilder_component_generation` 适配器通过
 `ComponentGenerationAdapter::getDefaultSkillCodes()` 锁定加载以下技能：
