@@ -13,7 +13,7 @@ class AiSiteAutoAssetGenerationService
     private const DEFAULT_LIMIT = 4;
     private const FAILURE_TRAIL_MAX_ITEMS = 80;
     private const FAILURE_TRAIL_MESSAGE_MAX_LEN = 800;
-    private const IMAGE_GENERATION_TIMEOUT_SECONDS = 20;
+    private const IMAGE_GENERATION_TIMEOUT_SECONDS = 120;
     private const IMAGE_GENERATION_MAX_ATTEMPTS = 1;
     private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';
     private const INLINE_IMAGE_GENERATION_DISABLED_REASON = 'disabled_by_test_switch';
