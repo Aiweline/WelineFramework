@@ -143,7 +143,7 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 1. 本地完成修改与验证。
 2. 同步修改到 `E:\公司\远程\src\weline`。
 3. 在发布工作区提交并推送 `master`。
-4. 用浏览器或 Chrome MCP 打开 SaaS 控制台：`http://13.126.81.141/ui/#/console/dashboard`。
+4. 用浏览器或 Chrome MCP 打开 JumpServer 资产控制台：`http://172.31.39.197/ui/#/console/assets/assets`。
 5. 在线上项目目录执行 `git pull origin master` 或按 remote 配置更新。
 6. 按改动类型执行 `php bin/w setup:upgrade [--route]`、`php bin/w server:reload` 或 `php bin/w server:restart -r`。
 7. 用 `php bin/w http:request /` 或目标页面/API 验证。
