@@ -198,6 +198,32 @@
             && pathParts.length > 0;
     }
 
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function sameLang(a, b) {
+        const left = normalizeLangCode(a).toLowerCase();
+        const right = normalizeLangCode(b).toLowerCase();
+        return left !== '' && right !== '' && left === right;
+    }
+
+    function shouldOutputCurrency(currency, config) {
+        currency = normalizeCurrencyCode(currency);
+        const defaultCurrency = normalizeCurrencyCode(config.defaultCurrency || 'CNY');
+        return currency !== '' && currency !== defaultCurrency;
+    }
+
+    function shouldOutputLang(lang, config) {
+        lang = normalizeLangCode(lang);
+        const defaultLang = normalizeLangCode(config.defaultLang || config.defaultLanguage || config.i18n?.defaultLang || config.i18n?.defaultLanguage || 'zh_Hans_CN');
+        return lang !== '' && !sameLang(lang, defaultLang);
+    }
+
     function buildLanguageUrl(targetLang, pathname, search, fallbackCurrency) {
         if (!targetLang) {
             return '';
@@ -206,13 +232,9 @@
         const safePathname = (pathname || window.location.pathname || '/').split('?')[0];
         const safeSearch = sanitizeLanguageSearch(typeof search === 'string' ? search : (window.location.search || ''));
         const pathParts = safePathname.split('/').filter(Boolean);
-        if (pathParts.length === 0) {
-            const currency = (fallbackCurrency || 'CNY').toUpperCase();
-            return '/' + currency + '/' + targetLang + (safeSearch || '');
-        }
-
         const langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
         const currencyPattern = /^[A-Z]{3}$/;
+        const config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
         const backendKey = String(
             (window.site && window.site.area)
             || (window.Weline && window.Weline.config && window.Weline.config.url && window.Weline.config.url.adminArea)
@@ -226,7 +248,7 @@
             }
         }
         if (!currency) {
-            currency = (fallbackCurrency || 'CNY').toUpperCase();
+            currency = normalizeCurrencyCode(fallbackCurrency || config.currentCurrency || 'CNY');
         }
 
         // 仅保留非货币/语言段，原有大小写保持不变
@@ -251,21 +273,27 @@
             filteredParts.push(part);
         });
 
+        const outputParts = [];
         if (prefixSegment) {
-            return '/' + prefixSegment + '/' + currency + '/' + targetLang +
-                (filteredParts.length ? '/' + filteredParts.join('/') : '') +
-                (safeSearch || '');
+            outputParts.push(prefixSegment);
         }
 
         if (isBackendLocalizedPath(pathParts, backendKey) && filteredParts.length > 0) {
             const inferredPrefix = filteredParts.shift();
-            return '/' + inferredPrefix + '/' + currency + '/' + targetLang +
-                (filteredParts.length ? '/' + filteredParts.join('/') : '') +
-                (safeSearch || '');
+            outputParts.push(inferredPrefix);
         }
 
-        const cleanPath = filteredParts.length ? '/' + filteredParts.join('/') : '';
-        return '/' + currency + '/' + targetLang + cleanPath + (safeSearch || '');
+        if (shouldOutputCurrency(currency, config)) {
+            outputParts.push(normalizeCurrencyCode(currency));
+        }
+        if (shouldOutputLang(targetLang, config)) {
+            outputParts.push(normalizeLangCode(targetLang));
+        }
+        if (filteredParts.length > 0) {
+            outputParts.push(...filteredParts);
+        }
+
+        return '/' + outputParts.join('/') + (safeSearch || '');
     }
 
     /**

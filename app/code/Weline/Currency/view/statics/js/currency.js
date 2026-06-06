@@ -105,22 +105,63 @@
             && pathParts.length > 0;
     }
 
+    function getThemeConfig() {
+        return (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+    }
+
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function sameLang(a, b) {
+        const left = normalizeLangCode(a).toLowerCase();
+        const right = normalizeLangCode(b).toLowerCase();
+        return left !== '' && right !== '' && left === right;
+    }
+
+    function shouldOutputCurrency(currency, config) {
+        currency = normalizeCurrencyCode(currency);
+        const defaultCurrency = normalizeCurrencyCode(config.defaultCurrency || 'CNY');
+        return currency !== '' && currency !== defaultCurrency;
+    }
+
+    function shouldOutputLang(lang, config) {
+        lang = normalizeLangCode(lang);
+        const defaultLang = normalizeLangCode(config.defaultLang || config.defaultLanguage || config.i18n?.defaultLang || config.i18n?.defaultLanguage || 'zh_Hans_CN');
+        return lang !== '' && !sameLang(lang, defaultLang);
+    }
+
     function buildCurrencyUrlFromPath(pathOnly, search, currency, lang) {
         const currencyPattern = /^[A-Z]{3}$/;
         const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
         const pathParts = String(pathOnly || '/').split('/').filter(Boolean);
         const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
         const safeSearch = sanitizeSwitchSearch(search || '');
+        const config = getThemeConfig();
+        const targetCurrency = normalizeCurrencyCode(currency);
+        const targetLang = normalizeLangCode(lang);
+        const outputParts = [];
 
         if (isBackendLocalizedPath(pathParts) && filteredParts.length > 0) {
             const prefix = filteredParts.shift();
-            return '/' + prefix + '/' + currency + '/' + lang +
-                (filteredParts.length ? '/' + filteredParts.join('/') : '') +
-                safeSearch;
+            outputParts.push(prefix);
         }
 
-        const cleanPath = filteredParts.length ? '/' + filteredParts.join('/') : '';
-        return '/' + currency + '/' + lang + cleanPath + safeSearch;
+        if (shouldOutputCurrency(targetCurrency, config)) {
+            outputParts.push(targetCurrency);
+        }
+        if (shouldOutputLang(targetLang, config)) {
+            outputParts.push(targetLang);
+        }
+        if (filteredParts.length > 0) {
+            outputParts.push(...filteredParts);
+        }
+
+        return '/' + outputParts.join('/') + safeSearch;
     }
 
     function getCurrentCurrency() {
