@@ -1,7 +1,7 @@
 ---
 name: CI发布工程师-CI与发布门禁
 description: CI release engineer skill for validation gating, release-readiness checks, and automation-safe delivery criteria.
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Role
@@ -42,6 +42,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 # Weline Rules
 
 - Provide HTTP, Browser, WLS, existing-command, or documentation validation evidence where relevant; unit/E2E evidence is only expected when explicitly requested by the user or required by an existing external CI gate.
+- A deployment request authorizes delivery flow only. Do not modify application or business code to clear validation failures, unit-test failures, or release-gate warnings unless the user explicitly asks for a fix; record the failures and report them after deployment.
 - Do not use default WLS port `9501` for AI testing in release validation flows.
 - Always stop dedicated WLS instances after validation.
 - Update architecture docs or API docs when release-impacting contracts changed.

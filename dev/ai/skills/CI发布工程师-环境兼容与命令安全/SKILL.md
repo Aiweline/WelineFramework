@@ -1,7 +1,7 @@
 ---
 name: CI发布工程师-环境兼容与命令安全
 description: CI release engineer skill for environment compatibility, Windows-safe command composition, and automation-stable execution paths.
-version: 1.1.1
+version: 1.1.2
 ---
 
 # Role
@@ -45,6 +45,7 @@ This skill owns environment compatibility and command safety for automated execu
 - Do not edit `generated/` directly.
 - In WLS-sensitive code, do not use `sleep`, `die`, or `exit`.
 - Keep validation commands repeatable and automation-safe.
+- A deployment request authorizes delivery flow only. Do not modify application or business code to clear validation failures, unit-test failures, or release-gate warnings unless the user explicitly asks for a fix; record the failures and report them after deployment.
 - If a framework command times out while running a self-healing or nested `php` path, do not treat the timeout alone as proof that the schema/setup change failed; verify the target registration or schema surface directly before concluding.
 - Deployment to online servers must be operated through the user's Chrome browser in JumpServer / Luna Web terminal. Inline SSH from Codex shell, local terminals, scripts, or background helpers is forbidden; the Codex built-in browser is also forbidden for deployment.
 
