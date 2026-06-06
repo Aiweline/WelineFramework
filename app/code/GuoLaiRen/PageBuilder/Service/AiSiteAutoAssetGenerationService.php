@@ -1317,9 +1317,39 @@ class AiSiteAutoAssetGenerationService
         $logoGeneration['options'] = $options;
         $logoGeneration['option_count'] = 4;
         $logoGeneration['updated_at'] = \date('Y-m-d H:i:s');
-        if (\trim((string)($logoGeneration['selected_option_id'] ?? '')) === $optionId) {
+        $selectedOptionId = \trim((string)($logoGeneration['selected_option_id'] ?? ''));
+        if ($selectedOptionId === '') {
+            foreach ($options as $option) {
+                if (!\is_array($option)) {
+                    continue;
+                }
+                $firstOptionId = \trim((string)($option['option_id'] ?? ''));
+                if ($firstOptionId !== 'logo_option_1') {
+                    continue;
+                }
+                $firstOptionUrl = '';
+                foreach (['final_url', 'url', 'asset_url'] as $urlKey) {
+                    $firstOptionUrl = \trim((string)($option[$urlKey] ?? ''));
+                    if ($firstOptionUrl !== '') {
+                        break;
+                    }
+                }
+                if ($firstOptionUrl === '') {
+                    continue;
+                }
+                $logoGeneration['selected_option_id'] = 'logo_option_1';
+                $logoGeneration['selected_asset_slot_id'] = \trim((string)($option['asset_slot_id'] ?? '')) ?: 'plan:theme:logo_generation:option_1';
+                $logoGeneration['selected_url'] = $firstOptionUrl;
+                $logoGeneration['status'] = 'selected';
+                $selectedOptionId = 'logo_option_1';
+                break;
+            }
+        }
+        if ($selectedOptionId === $optionId) {
             $logoGeneration['selected_asset_slot_id'] = $slotId !== '' ? $slotId : 'plan:theme:logo_generation:' . \str_replace('logo_', '', $optionId);
             $logoGeneration['selected_url'] = $finalUrl;
+            $logoGeneration['status'] = 'selected';
+        } elseif ($selectedOptionId !== '') {
             $logoGeneration['status'] = 'selected';
         } elseif ($generatedCount >= 4) {
             $logoGeneration['status'] = 'generated';
