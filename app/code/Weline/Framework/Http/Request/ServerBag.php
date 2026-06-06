@@ -19,7 +19,7 @@ use Weline\Framework\Runtime\RequestContext;
 /**
  * ServerBag - 服务器变量管理类
  * 
- * 封装 $_SERVER 访问，遵循单一职责原则。
+ * 封装服务器变量访问，遵循单一职责原则。
  * 提供统一的服务器变量访问接口，支持 WLS 模式下的隔离。
  * 
  * @since PHP 8.4
@@ -82,7 +82,7 @@ class ServerBag
     /**
      * 构造函数
      * 
-     * @param array $server 服务器变量（可选，默认从 $_SERVER 获取）
+     * @param array $server 服务器变量
      */
     public function __construct(array $server = [])
     {
@@ -90,9 +90,9 @@ class ServerBag
     }
     
     /**
-     * 从超全局变量初始化
+     * 从当前请求上下文初始化
      * 
-     * WLS 模式下，每个新请求都必须重新初始化，以获取正确的 $_SERVER 值。
+     * WLS 模式下，每个新请求都必须重新初始化，以获取正确的 Env 快照。
      * 通过检查当前请求 ID 是否与上次初始化时相同来判断是否需要重新初始化。
      * 
      * @param bool $force 是否强制重新初始化（WLS 模式下每个请求都应该调用）
@@ -216,12 +216,12 @@ class ServerBag
     }
 
     /**
-     * 以当前 Fiber 内存态为准构建请求快照；globals 仅作为兼容基线。
+     * 以当前 Fiber 内存态为准构建请求快照；Env 的 server 快照仅作为兼容基线。
      */
     private function buildCurrentRequestServerSnapshot(): array
     {
         $context = Context::getCurrent();
-        $baseServer = \is_array($_SERVER ?? null) ? $_SERVER : [];
+        $baseServer = WelineEnv::serverAll();
         $contextServer = $context?->server() ?? [];
         $server = \is_array($contextServer) && $contextServer !== []
             ? \array_merge($baseServer, $contextServer)

@@ -57,6 +57,7 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - 禁止在 `<w:*>` 或自定义 Taglib 属性中写 `<?= ?>` 或 `<?php ?>`。
 - 禁止在 `.phtml` 中写 `declare(strict_types=1)`。
 - 禁止在 WLS 运行时敏感路径使用 `sleep()`、`usleep()`、`die()`、`exit()`。
+- 禁止在框架代码中新增或依赖全局变量、`$GLOBALS`、`global $var` 或进程级可变全局状态；`$_SERVER` 只允许 Fiber/WLS 请求上下文装配层临时承接入口上下文，其他框架、模块、模板和服务代码必须通过 `WelineEnv`、`w_env*`、请求对象或显式 `Context` 获取，装配完成后必须收敛为显式 `Context`、请求、会话或服务对象，避免 WLS 长生命周期 worker 跨请求串状态。
 - 禁止在 Codex shell 中直接运行阻塞式前台服务或 watcher。
 - 禁止在默认 WLS 端口 `9501` 测试 AI 改动；测试实例使用 `9502+` 和唯一实例名。
 

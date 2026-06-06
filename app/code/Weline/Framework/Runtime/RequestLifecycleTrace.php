@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Runtime;
 
 use Weline\Framework\Context;
+use Weline\Framework\Env\WelineEnv;
 
 class RequestLifecycleTrace
 {
@@ -139,14 +140,14 @@ class RequestLifecycleTrace
 
     private static function isExplicitPersistentTraceRequested(): bool
     {
-        $header = (string)($_SERVER['HTTP_X_WELINE_TRACE'] ?? '');
+        $header = (string)WelineEnv::server('HTTP_X_WELINE_TRACE', '');
         if ($header === '1' || \strtolower($header) === 'true') {
             return true;
         }
 
-        $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+        $query = (string)WelineEnv::server('QUERY_STRING', '');
         if ($query === '') {
-            $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+            $requestUri = (string)WelineEnv::server('REQUEST_URI', '');
             if ($requestUri === '' && \function_exists('w_env_request_uri')) {
                 $requestUri = (string)\w_env_request_uri();
             }
@@ -323,7 +324,7 @@ class RequestLifecycleTrace
 
     private static function resolveIncomingRequestId(): string
     {
-        $incoming = (string)($_SERVER['HTTP_X_WELINE_REQUEST_ID'] ?? $_SERVER['HTTP_X_REQUEST_ID'] ?? '');
+        $incoming = (string)(WelineEnv::server('HTTP_X_WELINE_REQUEST_ID', '') ?: WelineEnv::server('HTTP_X_REQUEST_ID', ''));
         if ($incoming !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $incoming)) {
             return $incoming;
         }
@@ -683,6 +684,6 @@ class RequestLifecycleTrace
             }
         }
 
-        return (string)($_SERVER['REQUEST_URI'] ?? '');
+        return (string)WelineEnv::server('REQUEST_URI', '');
     }
 }

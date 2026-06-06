@@ -47,6 +47,7 @@ This skill owns session runtime behavior, session isolation, Session Server inte
 - Always use a unique AI test instance name.
 - Always stop the AI test instance after testing.
 - Do not pollute global state.
+- Do not use global variables for request, user, session, stream, or login state; `$_SERVER` is only allowed in Fiber/WLS request context assembly, and all other code must use `WelineEnv`, `w_env*`, request objects, or explicit `Context`; context assembly must pass explicit Context, request, session, or service abstractions onward.
 - Do not use `sleep`, `die`, or `exit` in WLS runtime-sensitive code.
 - Do not access raw `$_SESSION` directly when framework session abstractions exist.
 

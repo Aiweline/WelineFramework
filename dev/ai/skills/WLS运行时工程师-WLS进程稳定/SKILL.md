@@ -50,6 +50,7 @@ This skill owns WLS process lifecycle, worker stability, reload and restart beha
 - Do not reuse test instance names.
 - Do not leave test instances running.
 - Do not use `sleep`, `die`, or `exit` inside WLS runtime-sensitive code.
+- Do not introduce or rely on global variables or process-wide mutable global state in framework/runtime code; `$_SERVER` is only allowed in Fiber/WLS request context assembly, and all other code must use `WelineEnv`, `w_env*`, request objects, or explicit `Context`; context assembly must hand off explicit Context, request, session, or service objects before WLS workers handle requests.
 - Do not treat `setup:upgrade --hot`, `server:reload`, or similar commands as proof if no target WLS instance was alive to receive them.
 - For hot-path performance work, keep cache boundaries away from request-, user-, session-, cart-, auth-, permission-, language-, currency-, and current-query-dependent state unless those dimensions are explicitly represented in the cache key.
 - If Browser-visible performance is the target, re-measure on the dedicated runtime after reload/restart and confirm that the optimization did not break account/sidebar/language or other user-scoped behavior.
