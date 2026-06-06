@@ -42,7 +42,7 @@ $themeConfigPayload = [
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
-    'assetVersion' => '20260604-theme-defaults',
+    'assetVersion' => '20260606-language-flag',
     'api' => [
         'workerUrl' => $isDev
             ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
@@ -469,6 +469,6 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
     })();
 </script>
 
-<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260604-theme-defaults"></script>
+<script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260606-language-flag"></script>
 <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>
 <w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
