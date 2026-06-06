@@ -236,6 +236,31 @@
         });
     }
 
+    function buildCompatibleResponseData(data) {
+        if (!isObjectPayload(data)) {
+            return data;
+        }
+        var compatible = Object.assign({}, data);
+        if (isObjectPayload(data.data)) {
+            Object.keys(data.data).forEach(function (key) {
+                if (!hasOwn(compatible, key)) {
+                    compatible[key] = data.data[key];
+                }
+            });
+        }
+        return compatible;
+    }
+
+    function buildResponseEnvelope(transportResponse) {
+        var body = transportResponse.data;
+        var response = isObjectPayload(body) ? Object.assign({}, body) : {};
+        Object.assign(response, transportResponse, {
+            data: buildCompatibleResponseData(body),
+            body: body
+        });
+        return response;
+    }
+
     function isBusinessFailure(data) {
         if (!isObjectPayload(data)) {
             return false;
@@ -452,12 +477,12 @@
         }
 
         var businessFailed = isBusinessFailure(body);
-        var response = Object.assign({}, transportResponse, {
+        var response = buildResponseEnvelope(Object.assign({}, transportResponse, {
             ok: !!message.ok && !businessFailed
-        });
+        }));
 
         if (response.ok) {
-            pending.resolve(body);
+            pending.resolve(response);
             return;
         }
 
