@@ -47,7 +47,8 @@ This skill owns environment compatibility and command safety for automated execu
 - Keep validation commands repeatable and automation-safe.
 - A deployment request authorizes delivery flow only. Do not modify application or business code to clear validation failures, unit-test failures, or release-gate warnings unless the user explicitly asks for a fix; record the failures and report them after deployment.
 - If a framework command times out while running a self-healing or nested `php` path, do not treat the timeout alone as proof that the schema/setup change failed; verify the target registration or schema surface directly before concluding.
-- Deployment to online servers must be operated through the user's Chrome browser in JumpServer / Luna Web terminal. Inline SSH from Codex shell, local terminals, scripts, or background helpers is forbidden; the Codex built-in browser is also forbidden for deployment.
+- Deployment to online servers must be operated through the user's Chrome browser in JumpServer / Luna Web terminal, BaoTa Web terminal, or other user-authorized web terminal. Inline SSH from Codex shell, local terminals, scripts, or background helpers is forbidden; the Codex built-in browser is also forbidden for deployment.
+- Browser control for online deployment must use Chrome extension tab control: locate tabs with `browser.user.openTabs()`, attach with `browser.user.claimTab(tabInfo)`, and operate the claimed tab with `tab.cua`, `tab.playwright`, and `tab.clipboard`. Use `claimTab + cua` for terminal interactions instead of OS input automation.
 
 # Inputs Required
 
@@ -77,6 +78,7 @@ This skill owns environment compatibility and command safety for automated execu
 - Do not ignore PHP null-safety or version-compatibility risks in command code.
 - Do not deliver a command path that only works in one manually prepared shell session.
 - Do not provide or execute direct `ssh` deployment commands for online servers. Keep server-side deployment commands inside the Chrome-operated JumpServer / Luna terminal.
+- Do not use Windows or OS-level focus/input automation for deployment, including `SetForegroundWindow`, system mouse movement/clicks, `mouse_event`, `SendKeys`, forced foreground windows, or system clipboard paths that can take focus from the user. Recover stuck terminals by opening or claiming a dedicated Chrome tab through the extension.
 
 # Shared Collaboration Contract
 
