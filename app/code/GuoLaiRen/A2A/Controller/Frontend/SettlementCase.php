@@ -42,7 +42,11 @@ class SettlementCase extends FrontendController
                 $orderPublicId,
                 $this->resolveAllowedRoles($caseType),
                 $this->formatOperationLabel($caseType, $isSubmit),
-                ['require_runtime_proof_roles' => ['platform']]
+                [
+                    'require_runtime_proof_roles' => ['platform'],
+                    'runtime_proof_action' => 'freeze_funds',
+                    'runtime_proof_token' => (string)($this->request->getParam('a2a_runtime_proof') ?? ''),
+                ]
             );
             $settlementCase = $this->settlementCaseService->open($orderPublicId, $caseType, $isSubmit, $applicationInput);
             $settlementCase = \array_merge($settlementCase, $guard);

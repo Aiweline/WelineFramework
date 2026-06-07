@@ -14,7 +14,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/AiSitePageComponentGenerationService.php');
 
         self::assertStringContainsString('private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;', $source);
-        self::assertStringContainsString('private const AI_REQUEST_TIMEOUT_SECONDS = 180;', $source);
+        self::assertStringContainsString('private const AI_REQUEST_TIMEOUT_SECONDS = 1800;', $source);
         self::assertStringNotContainsString('private const COMPONENT_GENERATION_MAX_ATTEMPTS = 5;', $source);
         self::assertStringNotContainsString('private const AI_REQUEST_TIMEOUT_SECONDS = 600;', $source);
     }

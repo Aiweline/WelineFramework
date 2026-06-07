@@ -28,6 +28,11 @@ class Core extends CommandAbstract
     /** 默认仓库（公用官网），未配置时使用 */
     private const DEFAULT_REPO = 'https://gitee.com/aiweline/WelineFramework.git';
 
+    private const CORE_UPDATE_EXCLUDED_PATHS = [
+        'app/code/Aiweline',
+        'app/code/WeShop',
+    ];
+
     private System $system;
     private bool $isWindows;
     private string $envFilePath;
@@ -68,7 +73,7 @@ class Core extends CommandAbstract
     public function help(): array|string
     {
         return \Weline\Framework\Console\CommandHelper::formatHelp(
-            'deploy:update:core',
+            'update:core',
             __('从 Git 仓库增量更新框架核心代码'),
             [
                 '-b, --branch=<分支名>' => __('指定分支（未配置默认分支时必填，如：main, master, dev）'),
@@ -83,6 +88,7 @@ class Core extends CommandAbstract
                 '强制更新' => '使用 -f 参数强制删除缓存并重新克隆，完全覆盖目标目录',
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
+                '排除目录' => __('核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理'),
             ],
             [
                 '增量更新到最新' => 'php bin/w update:core -b main  （或 core:update -b main）',
@@ -157,7 +163,7 @@ class Core extends CommandAbstract
         $this->printer->note(__('  - 新增文件：%{1} 个', [$this->newFiles]));
         $this->printer->note(__('  - 更新文件：%{1} 个', [$this->updatedFiles]));
         $this->printer->note(__('  - 删除文件：%{1} 个', [$this->deletedFiles]));
-        $this->printer->note(__('  - 跳过文件：%{1} 个（受保护的配置文件）', [$this->skippedFiles]));
+        $this->printer->note(__('  - 跳过文件：%{1} 个（受保护或排除的文件）', [$this->skippedFiles]));
         $this->printer->note('');
     }
 
@@ -597,6 +603,11 @@ class Core extends CommandAbstract
             if (!$isInAllowedPath) {
                 continue;
             }
+
+            if ($this->isExcludedCoreUpdatePath($relativePath)) {
+                $this->skippedFiles++;
+                continue;
+            }
             
             // 检查是否是受保护的文件
             $normalizedPath = str_replace('\\', '/', $relativePath);
@@ -672,7 +683,7 @@ class Core extends CommandAbstract
             $this->printer->note(__('拷贝 %{1}...', [$path]));
             
             // 完全覆盖：拷贝所有文件
-            if ($this->copyDirectoryFull($source, $target)) {
+            if ($this->copyDirectoryFull($source, $target, $path)) {
                 $this->printer->success(__('✓ %{1}', [$path]));
                 $processedPaths++;
             } else {
@@ -694,7 +705,7 @@ class Core extends CommandAbstract
      * 2. 已存在的文件 → 覆盖（除了受保护的配置文件）
      * 3. 目标目录中的额外文件 → 保留不动
      */
-    private function copyDirectoryFull(string $source, string $target): bool
+    private function copyDirectoryFull(string $source, string $target, string $rootPath): bool
     {
         if (!is_dir($source)) {
             return false;
@@ -714,7 +725,15 @@ class Core extends CommandAbstract
         
         foreach ($iterator as $item) {
             $relativePath = $iterator->getSubPathname();
+            $logicalPath = str_replace('\\', '/', $rootPath . '/' . $relativePath);
             $targetPath = $target . DS . $relativePath;
+
+            if ($this->isExcludedCoreUpdatePath($logicalPath)) {
+                if ($item->isFile()) {
+                    $this->skippedFiles++;
+                }
+                continue;
+            }
             
             if ($item->isDir()) {
                 // 目录：不存在就创建
@@ -757,6 +776,18 @@ class Core extends CommandAbstract
         }
         
         return true;
+    }
+
+    private function isExcludedCoreUpdatePath(string $relativePath): bool
+    {
+        $normalizedPath = trim(str_replace('\\', '/', $relativePath), '/');
+        foreach (self::CORE_UPDATE_EXCLUDED_PATHS as $excludedPath) {
+            if ($normalizedPath === $excludedPath || str_starts_with($normalizedPath, $excludedPath . '/')) {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     /**

@@ -36,7 +36,7 @@ CLOUDFLARE_ENABLED='0'
 - `WEBHOOK_BRANCH`：Webhook payload 的分支过滤。留空时使用 `GIT_BRANCH`。
 - `CLOUDFLARE_ENABLED`：当前默认关闭，设为 `0` 时不会请求 Cloudflare API。
 - 后台 `项目仓库地址` 会用于 Webhook 部署时设置 Git remote，也会用于 `deploy:build`。
-- 后台 `核心仓库地址` 会用于 `deploy:update:core`。
+- 后台 `核心仓库地址` 会用于 `update:core`。
 
 ## 2. 触发方式
 
