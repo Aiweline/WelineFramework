@@ -42,6 +42,8 @@ use Weline\Theme\Service\PreviewThemeScopeService;
  */
 class ThemeEditor extends BackendController
 {
+    private const EVENT_THEME_EDITOR_RESULT_AFTER = 'Weline_Theme::theme_editor::result_after';
+
     private WelineTheme $welineTheme;
     private ThemeLayoutService $layoutService;
     private ThemeLayoutVersionService $versionService;
@@ -91,6 +93,20 @@ class ThemeEditor extends BackendController
         $this->meta = $meta;
         $this->previewTokenService = $previewTokenService;
         $this->editorLockService = $editorLockService;
+    }
+
+    private function dispatchThemeEditorResultAfter(string $result, string $action): string
+    {
+        $eventData = new \Weline\Framework\DataObject\DataObject([
+            'action' => $action,
+            'result' => $result,
+            'controller' => $this,
+            'request' => $this->request,
+        ]);
+
+        $this->getEventManager()->dispatch(self::EVENT_THEME_EDITOR_RESULT_AFTER, $eventData);
+
+        return (string)$eventData->getData('result');
     }
 
     /**
@@ -1020,24 +1036,24 @@ class ThemeEditor extends BackendController
         $layoutData = $this->request->getParam('layout_data', []);
 
         if (!$themeId) {
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => __('请选择主题'),
-            ]);
+            ]), 'save_layout');
         }
 
         try {
             $result = $this->layoutService->saveLayout($themeId, $pageType, $layoutData);
 
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => $result,
                 'message' => $result ? __('布局已保存') : __('保存失败'),
-            ]);
+            ]), 'save_layout');
         } catch (\Exception $e) {
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
-            ]);
+            ]), 'save_layout');
         }
     }
 
@@ -1081,10 +1097,10 @@ class ThemeEditor extends BackendController
         $pageType = $this->request->getParam('page_type'); // 可选，null表示发布所有页面类型
 
         if (!$themeId) {
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => __('请选择主题'),
-            ]);
+            ]), 'publish_layout');
         }
 
         try {
@@ -1094,10 +1110,10 @@ class ThemeEditor extends BackendController
             // 2. 将草稿发布为正式版（复制 draft -> published，含去重）
             $publishResult = $this->layoutService->publishLayout($themeId, $pageType);
             if (!$publishResult) {
-                return $this->fetchJson([
+                return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                     'success' => false,
                     'message' => __('发布布局失败'),
-                ]);
+                ]), 'publish_layout');
             }
 
             // 3. 清除旧缓存（主题生成缓存）
@@ -1114,15 +1130,15 @@ class ThemeEditor extends BackendController
                 $message .= ' ' . __('（已清理 %{count} 个无效部件）', ['count' => $orphansCleaned]);
             }
 
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => $cacheResult,
                 'message' => $message,
-            ]);
+            ]), 'publish_layout');
         } catch (\Exception $e) {
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
-            ]);
+            ]), 'publish_layout');
         }
     }
 
@@ -2473,10 +2489,10 @@ class ThemeEditor extends BackendController
         $slotContents = $data['slot_contents'] ?? []; // 各插槽的部件内容
 
         if (!$themeId) {
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => __('缺少主题ID'),
-            ]);
+            ]), 'save_compiled_layout');
         }
 
         // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
@@ -2517,16 +2533,16 @@ class ThemeEditor extends BackendController
                 $html
             );
 
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => true,
                 'message' => __('布局已保存'),
                 'path' => $savePath,
-            ]);
+            ]), 'save_compiled_layout');
         } catch (\Exception $e) {
-            return $this->fetchJson([
+            return $this->dispatchThemeEditorResultAfter($this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
-            ]);
+            ]), 'save_compiled_layout');
         }
     }
 
@@ -2592,14 +2608,20 @@ class ThemeEditor extends BackendController
             $context
         );
         if ($html === '') {
-            return $this->renderLayoutNotFoundError($layoutType, $layoutOption);
+            return $this->dispatchThemeEditorResultAfter(
+                $this->renderLayoutNotFoundError($layoutType, $layoutOption),
+                'layout_preview'
+            );
         }
 
         if ($editorArea === PreviewContextService::AREA_BACKEND) {
             $html = $this->injectBackendStructuralSlots($html);
         }
 
-        return $this->injectEditorModeAssets($html);
+        return $this->dispatchThemeEditorResultAfter(
+            $this->injectEditorModeAssets($html),
+            'layout_preview'
+        );
     }
 
     public function legacyGetLayoutPreview()

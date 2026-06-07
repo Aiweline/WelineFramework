@@ -338,6 +338,24 @@ final class AiSitePlanJsonGenerationService
             'body' => '#111827',
             'button' => '#1D4ED8',
         ];
+        $themeDesign = [
+            'theme_purpose' => 'Turn the supplied brief into a readable site plan that can be built locally without AI calls.',
+            'style_signature' => 'Clean editorial product layout with compact proof panels and calm surfaces.',
+            'art_direction' => 'Crisp sections, high contrast text, practical imagery guidance, and minimal decoration.',
+            'color_scheme' => $palette,
+            'typography_spacing_radius' => [
+                'font_family' => 'Inter, system-ui, sans-serif',
+                'heading_scale' => 'Compact display headings with clear section hierarchy.',
+                'body_scale' => 'Readable body text with short paragraphs.',
+                'spacing_scale' => '8px base spacing with larger section rhythm.',
+                'radius_scale' => '6px content cards and 4px controls.',
+            ],
+            'visual_keywords' => ['clear structure', 'measured contrast', 'conversion proof'],
+            'tone_of_voice' => 'Confident, direct, and practical.',
+            'cta_tone' => 'Low-friction and specific.',
+            'forbidden_styles' => ['generic placeholder copy', 'invented routes', 'oversized decoration'],
+            'selection_reason' => 'Fake mode needs deterministic content that passes the same Stage-1 contract as generated plans.',
+        ];
         $planJson = [
             'confirmed' => 0,
             'content_locale' => $locale,
@@ -357,26 +375,9 @@ final class AiSitePlanJsonGenerationService
                 'layout_direction' => 'Dense but readable sections with strong hierarchy.',
             ],
             'palette' => $palette,
+            'theme_design' => $themeDesign,
             'theme' => [
-                'logo_generation' => $this->buildStageOneLogoGenerationPlan($siteName, $brief, $palette, $locale),
-            ],
-            'theme_design' => [
-                'theme_purpose' => 'Turn the supplied brief into a readable site plan that can be built locally without AI calls.',
-                'style_signature' => 'Clean editorial product layout with compact proof panels and calm surfaces.',
-                'art_direction' => 'Crisp sections, high contrast text, practical imagery guidance, and minimal decoration.',
-                'color_scheme' => $palette,
-                'typography_spacing_radius' => [
-                    'font_family' => 'Inter, system-ui, sans-serif',
-                    'heading_scale' => 'Compact display headings with clear section hierarchy.',
-                    'body_scale' => 'Readable body text with short paragraphs.',
-                    'spacing_scale' => '8px base spacing with larger section rhythm.',
-                    'radius_scale' => '6px content cards and 4px controls.',
-                ],
-                'visual_keywords' => ['clear structure', 'measured contrast', 'conversion proof'],
-                'tone_of_voice' => 'Confident, direct, and practical.',
-                'cta_tone' => 'Low-friction and specific.',
-                'forbidden_styles' => ['generic placeholder copy', 'invented routes', 'oversized decoration'],
-                'selection_reason' => 'Fake mode needs deterministic content that passes the same Stage-1 contract as generated plans.',
+                'logo_generation' => $this->buildStageOneLogoGenerationPlan($siteName, $brief, $palette, $locale, $themeDesign),
             ],
             'navigation_plan' => [
                 'header_items' => $this->normalizeStageOneLinks([], $contract, 'navigation_plan.header_items'),
@@ -3496,17 +3497,19 @@ final class AiSitePlanJsonGenerationService
                 'theme_required_fields' => $contract['theme_required_fields'] ?? [],
             ],
             'output_schema' => [
-                'Return keys: i18n, site_strategy, theme_style, palette, theme, theme_design, navigation_plan, footer_plan, shared_components, seo_strategy.',
+                'Return keys in this order: i18n, site_strategy, theme_style, palette, theme_design, theme, navigation_plan, footer_plan, shared_components, seo_strategy.',
                 'Do not return only theme_design, only palette, or only navigation/footer. The top-level JSON object must include every root key listed above.',
                 'Complete root theme artifact skeleton: ' . $this->json($this->stageOneThemeRootSkeleton()),
-                'theme.logo_generation is mandatory. It must describe the website logo generation plan at plan_json.theme.logo_generation and include exactly four options keyed logo_option_1 through logo_option_4, each with asset_slot_id plan:theme:logo_generation:option_N.',
+                'Generate theme_design first. Only after completing theme_design, create theme.logo_generation from that completed style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, tone_of_voice, cta_tone, and forbidden_styles.',
+                'theme.logo_generation is mandatory and must appear after theme_design in the returned JSON. It must describe the website logo generation plan at plan_json.theme.logo_generation and include exactly four options keyed logo_option_1 through logo_option_4, each with asset_slot_id plan:theme:logo_generation:option_N.',
                 'Do not output legacy logo generation locations outside plan_json.theme.logo_generation.',
                 'theme_design must include every required field from theme_required_fields.theme_design, especially theme_purpose, style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, tone_of_voice, cta_tone, forbidden_styles, and selection_reason.',
                 'theme_design.typography_spacing_radius must include font_family, heading_scale, body_scale, spacing_scale, and radius_scale.',
                 'Complete theme_design skeleton: ' . $this->json($this->stageOneThemeDesignSkeleton()),
             ],
             'self_check' => [
-                'Before returning JSON, verify the root object has i18n, site_strategy, theme_style, palette, theme, theme_design, navigation_plan, footer_plan, shared_components, and seo_strategy.',
+                'Before returning JSON, verify the root object has i18n, site_strategy, theme_style, palette, theme_design, theme, navigation_plan, footer_plan, shared_components, and seo_strategy.',
+                'Before returning JSON, verify theme_design appears before theme.logo_generation and that every logo option prompt_brief explicitly uses theme_design style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, tone_of_voice, cta_tone, and forbidden_styles.',
                 'Before returning JSON, verify theme.logo_generation.stage is logo_generation, output_path is plan_json.theme.logo_generation, and options contains exactly four selectable logo option records.',
                 'Header/footer href values must be exact internal route paths from page_route_contract, no anchors and no query strings.',
                 'Before returning JSON, verify theme_design.typography_spacing_radius and theme_design.forbidden_styles are present and non-empty.',
@@ -3732,6 +3735,24 @@ final class AiSitePlanJsonGenerationService
             'body' => '#111827',
             'button' => '#1D4ED8',
         ];
+        $themeDesign = [
+            'theme_purpose' => $primaryGoal,
+            'style_signature' => 'Purposeful editorial landing layout with practical proof and direct action.',
+            'art_direction' => 'Clean sections, strong content hierarchy, and restrained visual emphasis.',
+            'color_scheme' => $palette,
+            'typography_spacing_radius' => [
+                'font_family' => 'Inter, system-ui, sans-serif',
+                'heading_scale' => 'Clear page headings with compact hierarchy.',
+                'body_scale' => 'Readable body text with concise paragraphs.',
+                'spacing_scale' => '8px base rhythm with generous section spacing.',
+                'radius_scale' => '6px cards and 4px controls.',
+            ],
+            'visual_keywords' => ['clear hierarchy', 'trust proof', 'direct CTA'],
+            'tone_of_voice' => 'Specific, useful, and confident.',
+            'cta_tone' => 'Direct and low-friction.',
+            'forbidden_styles' => ['generic placeholder copy', 'invented routes', 'oversized decoration'],
+            'selection_reason' => 'Base theme context generated from the requirement expansion.',
+        ];
 
         return [
             'confirmed' => 0,
@@ -3753,26 +3774,9 @@ final class AiSitePlanJsonGenerationService
                 'layout_direction' => 'Responsive sections with strong hierarchy and concise content.',
             ],
             'palette' => $palette,
+            'theme_design' => $themeDesign,
             'theme' => [
-                'logo_generation' => $this->buildStageOneLogoGenerationPlan($siteName, $primaryGoal, $palette, $locale),
-            ],
-            'theme_design' => [
-                'theme_purpose' => $primaryGoal,
-                'style_signature' => 'Purposeful editorial landing layout with practical proof and direct action.',
-                'art_direction' => 'Clean sections, strong content hierarchy, and restrained visual emphasis.',
-                'color_scheme' => $palette,
-                'typography_spacing_radius' => [
-                    'font_family' => 'Inter, system-ui, sans-serif',
-                    'heading_scale' => 'Clear page headings with compact hierarchy.',
-                    'body_scale' => 'Readable body text with concise paragraphs.',
-                    'spacing_scale' => '8px base rhythm with generous section spacing.',
-                    'radius_scale' => '6px cards and 4px controls.',
-                ],
-                'visual_keywords' => ['clear hierarchy', 'trust proof', 'direct CTA'],
-                'tone_of_voice' => 'Specific, useful, and confident.',
-                'cta_tone' => 'Direct and low-friction.',
-                'forbidden_styles' => ['generic placeholder copy', 'invented routes', 'oversized decoration'],
-                'selection_reason' => 'Base theme context generated from the requirement expansion.',
+                'logo_generation' => $this->buildStageOneLogoGenerationPlan($siteName, $primaryGoal, $palette, $locale, $themeDesign),
             ],
             'navigation_plan' => [
                 'header_items' => [],
@@ -3793,7 +3797,13 @@ final class AiSitePlanJsonGenerationService
      * @param array<string, mixed> $palette
      * @return array<string, mixed>
      */
-    private function buildStageOneLogoGenerationPlan(string $siteName, string $primaryGoal, array $palette = [], string $locale = ''): array
+    private function buildStageOneLogoGenerationPlan(
+        string $siteName,
+        string $primaryGoal,
+        array $palette = [],
+        string $locale = '',
+        array $themeDesign = []
+    ): array
     {
         $primaryColor = \trim((string)($palette['primary'] ?? ''));
         $accentColor = \trim((string)($palette['accent'] ?? ''));
@@ -3802,8 +3812,10 @@ final class AiSitePlanJsonGenerationService
             $paletteText = 'the generated theme palette';
         }
         $languageText = $this->buildLogoTextLanguagePrompt($locale);
+        $themeStyleText = $this->buildLogoThemeStylePrompt($themeDesign);
         $promptBrief = 'Generate four transparent PNG symbol-only website logo icons from the approved business requirement.'
             . ' Do not render the site name, brand name, initials, monograms, user requirement text, slogans, labels, or any readable/pseudo text.'
+            . ' First follow the completed theme_design style context: ' . $themeStyleText
             . ' Match ' . $paletteText . ' and support: ' . $primaryGoal
             . '. ' . $languageText
             . ' Each option must use a different symbol-only composition, glyph concept, and mark silhouette.';
@@ -3821,16 +3833,22 @@ final class AiSitePlanJsonGenerationService
             'selected_asset_slot_id' => '',
             'selected_url' => '',
             'prompt_brief' => $promptBrief,
-            'style_direction' => 'Prepare four distinct symbol-only logo icon directions; each option must stay simple, recognizable, transparent, and legible at header size. Do not reuse the same icon, pictorial motif, layout, or silhouette across options. Do not plan wordmarks, initials, monograms, or text treatments.',
+            'style_direction' => 'Prepare four distinct symbol-only logo icon directions after the theme_design is complete; each option must inherit the completed style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, tone_of_voice, cta_tone, and forbidden_styles while staying simple, recognizable, transparent, and legible at header size. Do not reuse the same icon, pictorial motif, layout, or silhouette across options. Do not plan wordmarks, initials, monograms, or text treatments.',
             'reuse_policy' => 'Generate four logo options from this theme plan; selected option and generated image URLs must live only in plan_json.theme.logo_generation.options.',
-            'options' => $this->buildStageOneLogoGenerationOptions($siteName, $primaryGoal, $paletteText, $languageText),
+            'options' => $this->buildStageOneLogoGenerationOptions($siteName, $primaryGoal, $paletteText, $languageText, $themeStyleText),
         ];
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    private function buildStageOneLogoGenerationOptions(string $siteName, string $primaryGoal, string $paletteText, string $languageText): array
+    private function buildStageOneLogoGenerationOptions(
+        string $siteName,
+        string $primaryGoal,
+        string $paletteText,
+        string $languageText,
+        string $themeStyleText
+    ): array
     {
         $directions = [
             'Clean abstract glyph based on the business subject; no letters, initials, words, or typography.',
@@ -3852,6 +3870,7 @@ final class AiSitePlanJsonGenerationService
                 'final_url' => '',
                 'prompt_brief' => 'Generate logo option ' . $number
                     . ' as a transparent PNG symbol-only icon. Derive the glyph from the approved business requirement, not from the site name.'
+                    . ' Use the completed theme_design style context: ' . $themeStyleText
                     . ' Match ' . $paletteText . '; support: ' . $primaryGoal
                     . '. ' . $languageText
                     . ' Direction: ' . $direction
@@ -3861,6 +3880,76 @@ final class AiSitePlanJsonGenerationService
         }
 
         return $options;
+    }
+
+    /**
+     * @param array<string, mixed> $themeDesign
+     */
+    private function buildLogoThemeStylePrompt(array $themeDesign): string
+    {
+        $parts = [];
+        foreach ([
+            'style_signature' => 'style_signature',
+            'art_direction' => 'art_direction',
+            'tone_of_voice' => 'tone_of_voice',
+            'cta_tone' => 'cta_tone',
+        ] as $field => $label) {
+            $text = $this->firstNonEmpty([$themeDesign[$field] ?? null]);
+            if ($text !== '') {
+                $parts[] = $label . ': ' . $text;
+            }
+        }
+
+        if (\is_array($themeDesign['color_scheme'] ?? null)) {
+            $colors = [];
+            foreach ($themeDesign['color_scheme'] as $key => $value) {
+                $key = \trim((string)$key);
+                $valueText = $this->firstNonEmpty([$value]);
+                if ($key !== '' && $valueText !== '') {
+                    $colors[] = $key . '=' . $valueText;
+                }
+            }
+            if ($colors !== []) {
+                $parts[] = 'color_scheme: ' . \implode(', ', \array_slice($colors, 0, 8));
+            }
+        }
+
+        if (\is_array($themeDesign['typography_spacing_radius'] ?? null)) {
+            $tokens = [];
+            foreach ($themeDesign['typography_spacing_radius'] as $key => $value) {
+                $key = \trim((string)$key);
+                $value = $this->firstNonEmpty([$value]);
+                if ($key !== '' && $value !== '') {
+                    $tokens[] = $key . ': ' . $value;
+                }
+            }
+            if ($tokens !== []) {
+                $parts[] = 'typography_spacing_radius: ' . \implode(', ', \array_slice($tokens, 0, 6));
+            }
+        }
+
+        foreach ([
+            'visual_keywords' => 'visual_keywords',
+            'forbidden_styles' => 'avoid',
+        ] as $field => $label) {
+            $values = [];
+            foreach (\is_array($themeDesign[$field] ?? null) ? $themeDesign[$field] : [] as $value) {
+                $text = $this->firstNonEmpty([$value]);
+                if ($text !== '') {
+                    $values[] = $text;
+                }
+            }
+            $values = \array_values(\array_unique($values));
+            if ($values !== []) {
+                $parts[] = $label . ': ' . \implode(', ', \array_slice($values, 0, 8));
+            }
+        }
+
+        if ($parts === []) {
+            return 'the completed theme_design fields, especially style_signature, art_direction, color_scheme, typography_spacing_radius, visual_keywords, tone_of_voice, cta_tone, and forbidden_styles.';
+        }
+
+        return \implode('; ', $parts) . '.';
     }
 
     /**
@@ -3892,20 +3981,34 @@ final class AiSitePlanJsonGenerationService
             $siteName,
             $primaryGoal,
             \is_array($planRoot['palette'] ?? null) ? $planRoot['palette'] : [],
-            $locale
+            $locale,
+            \is_array($planRoot['theme_design'] ?? null) ? $planRoot['theme_design'] : []
         );
         $incoming = \is_array($candidate) ? $candidate : [];
         $normalized = $base;
+        $themeStyleText = $this->buildLogoThemeStylePrompt(
+            \is_array($planRoot['theme_design'] ?? null) ? $planRoot['theme_design'] : []
+        );
         foreach (['status', 'scope', 'prompt_brief', 'style_direction', 'reuse_policy'] as $field) {
             $text = \trim((string)($incoming[$field] ?? ''));
             if ($text !== '') {
                 $normalized[$field] = $text;
             }
         }
+        $normalized['prompt_brief'] = $this->mergeLogoThemeStyleIntoPrompt((string)($normalized['prompt_brief'] ?? ''), $themeStyleText);
+        $normalized['style_direction'] = $this->mergeLogoThemeStyleIntoPrompt((string)($normalized['style_direction'] ?? ''), $themeStyleText);
         $normalized['options'] = $this->normalizeStageOneLogoGenerationOptions(
             $incoming['options'] ?? [],
             \is_array($base['options'] ?? null) ? $base['options'] : []
         );
+        foreach ($normalized['options'] as $index => $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+            $option['prompt_brief'] = $this->mergeLogoThemeStyleIntoPrompt((string)($option['prompt_brief'] ?? ''), $themeStyleText);
+            $option['style_direction'] = $this->mergeLogoThemeStyleIntoPrompt((string)($option['style_direction'] ?? ''), $themeStyleText);
+            $normalized['options'][$index] = $option;
+        }
         $optionIds = [];
         foreach ($normalized['options'] as $option) {
             $optionId = \trim((string)($option['option_id'] ?? ''));
@@ -3950,6 +4053,23 @@ final class AiSitePlanJsonGenerationService
         $normalized['selected_url'] = $selectedOptionId !== '' ? $selectedUrl : '';
 
         return $normalized;
+    }
+
+    private function mergeLogoThemeStyleIntoPrompt(string $prompt, string $themeStyleText): string
+    {
+        $prompt = \trim($prompt);
+        if ($prompt === '') {
+            return 'Use the completed theme_design style context before generating the logo: ' . $themeStyleText;
+        }
+        if (
+            \stripos($prompt, 'theme_design') !== false
+            && \stripos($prompt, 'style_signature') !== false
+            && \stripos($prompt, 'art_direction') !== false
+        ) {
+            return $prompt;
+        }
+
+        return \rtrim($prompt, " \t\n\r\0\x0B.") . '. Use the completed theme_design style context before generating the logo: ' . $themeStyleText;
     }
 
     /**
@@ -4277,6 +4397,8 @@ final class AiSitePlanJsonGenerationService
      */
     private function stageOneThemeRootSkeleton(): array
     {
+        $themeDesign = $this->stageOneThemeDesignSkeleton();
+
         return [
             'i18n' => [
                 'content_locale' => 'en_US',
@@ -4299,6 +4421,7 @@ final class AiSitePlanJsonGenerationService
                 'body' => '#111827',
                 'button' => '#1D4ED8',
             ],
+            'theme_design' => $themeDesign,
             'theme' => [
                 'logo_generation' => $this->buildStageOneLogoGenerationPlan(
                     'Current site name',
@@ -4311,10 +4434,10 @@ final class AiSitePlanJsonGenerationService
                         'body' => '#111827',
                         'button' => '#1D4ED8',
                     ],
-                    'en_US'
+                    'en_US',
+                    $themeDesign
                 ),
             ],
-            'theme_design' => $this->stageOneThemeDesignSkeleton(),
             'navigation_plan' => [
                 'header_items' => [],
             ],

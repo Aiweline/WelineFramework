@@ -8,6 +8,9 @@ use WeShop\Base\Service\ThemeCompatibilityService;
 use Weline\Framework\Http\Request;
 use Weline\Theme\Controller\Backend\ThemeEditor;
 
+/**
+ * @deprecated Kept only so stale generated plugin metadata cannot block setup commands.
+ */
 class ThemeEditorCompatibilityPlugin
 {
     public function __construct(
@@ -57,9 +60,9 @@ class ThemeEditorCompatibilityPlugin
 
         $this->themeCompatibilityService->emitWarning($compatibility, $action);
 
-        $warningMessage = trim((string) ($compatibility['warning_message'] ?? ''));
+        $warningMessage = trim((string)($compatibility['warning_message'] ?? ''));
         if ($warningMessage !== '') {
-            $decoded['message'] = trim((string) ($decoded['message'] ?? ''));
+            $decoded['message'] = trim((string)($decoded['message'] ?? ''));
             $decoded['message'] = trim($decoded['message'] . ' ' . $warningMessage);
         }
 
