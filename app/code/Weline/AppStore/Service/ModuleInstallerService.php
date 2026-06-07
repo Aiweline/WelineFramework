@@ -183,6 +183,7 @@ class ModuleInstallerService
                 'license_key' => $licenseKey,
                 'module_id' => $moduleId,
                 'version' => $version,
+                'target_version' => $version,
                 'domain' => $domain,
             ],
         ]);

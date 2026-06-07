@@ -1,0 +1,41 @@
+{
+  "checked_at": "2026-06-07T01:12:10.785Z",
+  "target_url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=provider&bind_actor=1&order=A2A-ORDER-Q-48E8DB",
+  "desktop": {
+    "actionHref": "/a2a/frontend/role-console?order=A2A-ORDER-Q-48E8DB&action=respond_dispute",
+    "actionText": "验证此动作",
+    "clientWidth": 1169,
+    "hasBackendUserSubject": true,
+    "hasOperatorBackendUser": true,
+    "hasOperatorBound": true,
+    "hasRoleConsole": true,
+    "hasRuntimeGap": true,
+    "overflowX": false,
+    "scrollWidth": 1169,
+    "title": "A2A 角色权限控制台",
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=provider&bind_actor=1&order=A2A-ORDER-Q-48E8DB"
+  },
+  "click": {
+    "attempted": true,
+    "count": 1,
+    "clicked": true,
+    "urlAfterClick": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-Q-48E8DB&action=respond_dispute",
+    "hasAllowedMessage": true,
+    "hasOperatorBound": true
+  },
+  "mobile": {
+    "clientWidth": 375,
+    "hasBackendUserSubject": true,
+    "hasOperatorBackendUser": true,
+    "hasOperatorBound": true,
+    "overflowX": false,
+    "scrollWidth": 375,
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=provider&bind_actor=1&order=A2A-ORDER-Q-48E8DB"
+  },
+  "console_error_count": 0,
+  "console_errors": [],
+  "screenshots": {
+    "desktop": "E:/WelineFramework/DEV-workspace/artifacts/a2a-provider-operator-binding-desktop-2026-06-07-0103.png",
+    "mobile": "E:/WelineFramework/DEV-workspace/artifacts/a2a-provider-operator-binding-mobile-2026-06-07-0103.png"
+  }
+}
