@@ -1,0 +1,51 @@
+{
+  "loginSubmitted": true,
+  "loginState": {
+    "hasPassword": true,
+    "hasUsername": true,
+    "text": "后台安全入口\nWeline\n把 Weline 的配置、权限与发布流程收拢到一个后台工作台里\n\n这里用于处理内容发布、配置调整、权限分配与模块维护。登录后可继续你上次的后台操作上下文。\n\n登录保护\n\n连续异常登录会自动提高验证强度，减少后台入口暴露面。\n\n统一工作台\n\n内容、配置、权限和模块操作都在同一后台闭环处理。\n\n可信发布\n\n后台入口、品牌标识和基础样式都保持统一的可回退策略。\n\n权限边界清晰\n\n角色、菜单与访问入口统一受控。\n\n发布动作集中\n\n配置调整、内容发布和模块维护在同一工作流里完成。\n\n受信任环境\n\n仅在可信设备和网络环境中保存登录状态。\n\n保持后台环境可信\n\n建议仅在受信任设备上保存登录状态；如果检测到异常锁定、账号状态变化或权限缺失，请联系超级管理员处理。\n\n欢迎回来\n登录 Weline 管理面板\n\n输入管理员账号后即可继续处理后台任务、配置变更与权限操作。\n\n管理员\n密",
+    "title": "登录 Weline 管理面板",
+    "url": "https://127.0.0.1:16895/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin/login"
+  },
+  "desktopRole": {
+    "aclRegisteredVisible": true,
+    "backendProofEntryVisible": true,
+    "hasHorizontalOverflow": false,
+    "openBackendAclProofVisible": true,
+    "platformHref": "https://127.0.0.1:16895/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/a2a/backend/acl-proof/platform-risk",
+    "platformLinkCount": 1,
+    "platformSourceVisible": true,
+    "title": "A2A 角色权限控制台",
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=platform&order=A2A-ORDER-B0CC7F"
+  },
+  "proofPage": {
+    "url": "https://127.0.0.1:16895/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/a2a/backend/acl-proof/platform-risk",
+    "title": "",
+    "isJson": true,
+    "containsPlatformSource": true,
+    "containsBackendAclRouteVerified": true,
+    "containsTransactionFalse": true,
+    "proofPassed": true,
+    "proofStatus": "backend_acl_route_verified",
+    "backendActorAuthenticated": true,
+    "transactionAuthorizationPassed": false,
+    "sourceId": "GuoLaiRen_A2A::platform_risk",
+    "rawHead": "{\"surface\":\"a2a_acl_proof\",\"role\":\"platform\",\"source\":{\"source_id\":\"GuoLaiRen_A2A::platform_risk\",\"role_label\":\"平台风控\",\"proof_label\":\"平台风控 ACL 实证\"},\"proof\":{\"status\":\"backend_acl_route_verified\",\"passed\":true,\"proof_level\":\"backend_session_acl_route\",\"evidence\":\"当前后台会话已通过 ACL 路由守卫进入 Source：GuoLaiRen_A2A::platform_risk\",\"checked_at\":\"2026-06-07T00:43:37+00:00\"},\"backend_actor\":{\"authenticated\":true,\"backend_user_id\":1,\"backend_role_id\":1,\"backend_acl_enabled\":true},\"capability_scope\":[\"risk_review\",\"escrow_hold_review\",\"refund_review\",\"wallet_monitor\"],\"marketplace_trust_mapping\":{\"verified_prac"
+  },
+  "mobileRole": {
+    "backendProofEntryVisible": true,
+    "hasHorizontalOverflow": false,
+    "openBackendAclProofVisible": true,
+    "platformLinkCount": 1,
+    "platformSourceVisible": true,
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=platform&order=A2A-ORDER-B0CC7F"
+  },
+  "consoleErrorCount": 0,
+  "consoleErrors": [],
+  "screenshots": {
+    "desktopRoot": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-authenticated-acl-proof-browser-desktop-2026-06-07-0033.png",
+    "desktopTask": "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-06\\2026-06-06-1108-a2a-agent-trading-platform-product-iteration\\artifacts\\a2a-authenticated-acl-proof-browser-desktop-2026-06-07-0033.png",
+    "mobileRoot": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-authenticated-acl-proof-browser-mobile-2026-06-07-0033.png",
+    "mobileTask": "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-06\\2026-06-06-1108-a2a-agent-trading-platform-product-iteration\\artifacts\\a2a-authenticated-acl-proof-browser-mobile-2026-06-07-0033.png"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "roleSwitchClick": {
+    "attempted": true,
+    "count": 1,
+    "ok": true,
+    "urlAfter": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=platform&order=A2A-ORDER-Q-48E8DB",
+    "hasPlatformRiskTeam": true,
+    "error": null
+  },
+  "consoleErrors": []
+}
