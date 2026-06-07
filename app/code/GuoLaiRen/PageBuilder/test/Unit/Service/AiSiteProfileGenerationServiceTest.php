@@ -41,6 +41,33 @@ class AiSiteProfileGenerationServiceTest extends TestCase
         self::assertSame('canonical-flow.local.test', $profile['target_domain']);
     }
 
+    public function testGenerateKeepsScopeTitleWhenExistingManagedProfileIsStale(): void
+    {
+        $service = new AiSiteProfileGenerationService();
+
+        $profile = $service->generate([
+            'site_title' => 'AI Workbench Success 20260607104630-40decafc',
+            'brief_description' => 'Build a homepage, about page, and contact page through the AI site workbench integration flow.',
+            'target_domain' => 'ai-workbench-success.local.test',
+            'site_profile_manual' => [],
+            'website_profile' => [
+                'site_title' => 'Build a homepage',
+                'brief_description' => 'Build a homepage, about page, and contact page through the AI site workbench integration flow.',
+                'target_domain' => 'ai-workbench-success.local.test',
+                '_ai_profile' => [
+                    'version' => 7,
+                    'signature' => 'stale-managed-profile',
+                    'managed_fields' => [
+                        'site_title' => true,
+                    ],
+                ],
+            ],
+        ], false);
+
+        self::assertSame('AI Workbench Success 20260607104630-40decafc', $profile['site_title']);
+        self::assertFalse($profile['_ai_profile']['managed_fields']['site_title']);
+    }
+
     public function testGenerateFallsBackToExistingWebsiteProfileWhenScopeOmitsValues(): void
     {
         $service = new AiSiteProfileGenerationService();
