@@ -46,10 +46,10 @@ class AiSiteProfileGenerationService
         $planJsonTitle = $this->resolvePlanJsonSiteTitle($scope, $internalVisibleCopyTerms);
         $planJsonTagline = $this->resolvePlanJsonSiteTagline($scope, $internalVisibleCopyTerms);
 
-        $scopeTitle = $this->normalizeMeaningfulTitle($scope['site_title'] ?? null, $internalVisibleCopyTerms);
-        $scopeTitleCanLock = !$hasManualMap && !$this->hasManagedProfileMeta($existing);
+        $scopeTitle = $this->normalizeMeaningfulTitle($scope['site_title'] ?? null, $internalVisibleCopyTerms, false);
+        $scopeTitleCanLock = !\array_key_exists('site_title', $manualFlags);
         $lockedTitle = $titleLocked
-            ? $this->normalizeMeaningfulTitle($scope['site_title'] ?? null, $internalVisibleCopyTerms)
+            ? $this->normalizeMeaningfulTitle($scope['site_title'] ?? null, $internalVisibleCopyTerms, false)
             : ($scopeTitleCanLock && $scopeTitle !== ''
                 ? $scopeTitle
                 : $this->resolveStoredLockedTitle($existing, $hasManualMap, $internalVisibleCopyTerms));
@@ -104,7 +104,11 @@ class AiSiteProfileGenerationService
                 $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain, $internalVisibleCopyTerms)
             );
 
-        $siteTitle = $this->normalizeMeaningfulTitle($siteTitle, $internalVisibleCopyTerms)
+        $siteTitle = $this->normalizeMeaningfulTitle(
+            $siteTitle,
+            $internalVisibleCopyTerms,
+            !($titleLocked || $lockedTitle !== '')
+        )
             ?: $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain, $internalVisibleCopyTerms);
 
         $siteTagline = ($taglineLocked || $lockedTagline !== '')
@@ -1020,7 +1024,7 @@ class AiSiteProfileGenerationService
     /**
      * @param list<string> $internalVisibleCopyTerms
      */
-    private function normalizeMeaningfulTitle(mixed $value, array $internalVisibleCopyTerms = []): string
+    private function normalizeMeaningfulTitle(mixed $value, array $internalVisibleCopyTerms = [], bool $clip = true): string
     {
         if (!\is_scalar($value)) {
             return '';
@@ -1039,7 +1043,7 @@ class AiSiteProfileGenerationService
             return '';
         }
 
-        return $this->clipSiteTitle($title);
+        return $clip ? $this->clipSiteTitle($title) : $title;
     }
 
     /**
@@ -1133,6 +1137,12 @@ class AiSiteProfileGenerationService
         $explicit = $this->extractLabeledProfileSegment($briefDescription, $this->profileTitleLabelPatterns());
         if ($explicit !== '' && !$this->looksLikeSentenceTitle($explicit)) {
             return $explicit;
+        }
+        if (\preg_match('/^\s*([A-Z][A-Za-z0-9 .&\'-]{1,42})\s*(?:,|\|)/u', $briefDescription, $matches) === 1) {
+            $title = \trim((string)($matches[1] ?? ''), " \t\n\r\0\x0B-_:");
+            if ($title !== '' && !$this->looksLikeSentenceTitle($title)) {
+                return $title;
+            }
         }
         if (\preg_match('/\b(?:website|site|homepage|landing\s+page)\s+(?:for|about)\s+([A-Za-z][A-Za-z0-9 .&\'-]{2,80}?)(?:\.|,|;|$)/iu', $briefDescription, $matches) === 1) {
             $title = $this->stripDescriptiveTitleTail((string)($matches[1] ?? ''));
