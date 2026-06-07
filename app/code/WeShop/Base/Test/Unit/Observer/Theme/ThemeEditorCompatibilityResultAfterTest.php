@@ -2,17 +2,18 @@
 
 declare(strict_types=1);
 
-namespace WeShop\Base\Test\Unit\Plugin\Theme;
+namespace WeShop\Base\Test\Unit\Observer\Theme;
 
 use PHPUnit\Framework\TestCase;
-use WeShop\Base\Plugin\Theme\ThemeEditorCompatibilityPlugin;
+use WeShop\Base\Observer\Theme\ThemeEditorCompatibilityResultAfter;
 use WeShop\Base\Service\ThemeCompatibilityService;
+use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
-use Weline\Theme\Controller\Backend\ThemeEditor;
 
-class ThemeEditorCompatibilityPluginTest extends TestCase
+class ThemeEditorCompatibilityResultAfterTest extends TestCase
 {
-    public function testAfterPostPublishAppendsCompatibilityPayloadToJsonResponse(): void
+    public function testExecuteAppendsCompatibilityPayloadToJsonResponse(): void
     {
         $request = $this->getMockBuilder(Request::class)
             ->disableOriginalConstructor()
@@ -43,23 +44,25 @@ class ThemeEditorCompatibilityPluginTest extends TestCase
                 'missing_count' => 1,
             ]);
 
-        $plugin = new ThemeEditorCompatibilityPlugin($service, $request);
-        $subject = $this->getMockBuilder(ThemeEditor::class)
-            ->disableOriginalConstructor()
-            ->getMock();
+        $observer = new ThemeEditorCompatibilityResultAfter($service, $request);
+        $event = new Event(['data' => new DataObject([
+            'action' => 'publish_layout',
+            'request' => $request,
+            'result' => json_encode([
+                'success' => true,
+                'message' => 'Published.',
+            ], JSON_UNESCAPED_UNICODE),
+        ])]);
 
-        $result = $plugin->afterPostPublish($subject, json_encode([
-            'success' => true,
-            'message' => 'Published.',
-        ], JSON_UNESCAPED_UNICODE));
+        $observer->execute($event);
 
-        $decoded = json_decode($result, true);
+        $decoded = json_decode((string)$event->getData('result'), true);
 
         $this->assertSame('Published. Compatibility warning.', $decoded['message']);
         $this->assertSame('publish_layout', $decoded['compatibility']['action']);
     }
 
-    public function testAfterGetLayoutPreviewInjectsBannerWhenHostsAreMissing(): void
+    public function testExecuteInjectsBannerIntoLayoutPreviewWhenHostsAreMissing(): void
     {
         $request = $this->getMockBuilder(Request::class)
             ->disableOriginalConstructor()
@@ -87,13 +90,15 @@ class ThemeEditorCompatibilityPluginTest extends TestCase
             )
             ->willReturn('<html><body><div class="banner">Compatibility</div>Preview</body></html>');
 
-        $plugin = new ThemeEditorCompatibilityPlugin($service, $request);
-        $subject = $this->getMockBuilder(ThemeEditor::class)
-            ->disableOriginalConstructor()
-            ->getMock();
+        $observer = new ThemeEditorCompatibilityResultAfter($service, $request);
+        $event = new Event(['data' => new DataObject([
+            'action' => 'layout_preview',
+            'request' => $request,
+            'result' => '<html><body>Preview</body></html>',
+        ])]);
 
-        $result = $plugin->afterGetLayoutPreview($subject, '<html><body>Preview</body></html>');
+        $observer->execute($event);
 
-        $this->assertStringContainsString('Compatibility', $result);
+        $this->assertStringContainsString('Compatibility', (string)$event->getData('result'));
     }
 }

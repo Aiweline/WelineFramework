@@ -456,6 +456,9 @@ $isForbidden = (bool)($this->getData('is_forbidden') ?? false);
                                 <p class="a2a-muted"><?= htmlspecialchars((string)$action['rule']) ?></p>
                                 <div class="a2a-action-links">
                                     <a class="a2a-button" href="/a2a/frontend/role-console?order=<?= rawurlencode($orderId) ?>&amp;action=<?= rawurlencode((string)$action['code']) ?>"><?= __('验证此动作') ?></a>
+                                    <?php if (!empty($action['runtime_proof_url'])): ?>
+                                        <a class="a2a-button" href="<?= htmlspecialchars((string)$action['runtime_proof_url']) ?>"><?= __('生成运行时实证票据') ?></a>
+                                    <?php endif; ?>
                                     <?php if (($action['state'] ?? '') === 'allowed' && (string)($action['href'] ?? '') !== ''): ?>
                                         <a class="a2a-button a2a-button-primary" href="<?= htmlspecialchars((string)$action['href']) ?>"><?= __('打开业务入口') ?></a>
                                     <?php endif; ?>

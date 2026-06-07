@@ -6,6 +6,7 @@ namespace GuoLaiRen\A2A\Controller\Frontend;
 
 use GuoLaiRen\A2A\Service\RoleActionPolicyService;
 use GuoLaiRen\A2A\Service\RoleSessionService;
+use GuoLaiRen\A2A\Service\RuntimeProofActionLinkService;
 use GuoLaiRen\A2A\Service\TradeActorAssignmentService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -15,6 +16,7 @@ class RoleConsole extends FrontendController
     private readonly RoleActionPolicyService $roleActionPolicyService;
     private readonly RoleSessionService $roleSessionService;
     private readonly TradeActorAssignmentService $tradeActorAssignmentService;
+    private ?RuntimeProofActionLinkService $runtimeProofActionLinkService = null;
 
     public function __construct(
         RoleActionPolicyService $roleActionPolicyService,
@@ -43,6 +45,11 @@ class RoleConsole extends FrontendController
             $console['actor_acl'] = $bindActorRequested
                 ? $this->tradeActorAssignmentService->bindCurrentActor($orderPublicId, $actor, 'role_console_claim')
                 : $this->tradeActorAssignmentService->inspect($orderPublicId, $actor);
+            $console['actions'] = $this->runtimeProofActionLinkService()->decorateActions(
+                \is_array($console['actions'] ?? null) ? $console['actions'] : [],
+                $console['actor_acl'],
+                $orderPublicId
+            );
             $console['actor'] = $actor;
             foreach ($console as $key => $value) {
                 $this->assign($key, $value);
@@ -68,5 +75,12 @@ class RoleConsole extends FrontendController
         $response->setHeader('Pragma', 'no-cache');
         $response->setHeader('Expires', '0');
         $response->setHeader('X-Accel-Expires', '0');
+    }
+
+    private function runtimeProofActionLinkService(): RuntimeProofActionLinkService
+    {
+        $this->runtimeProofActionLinkService ??= ObjectManager::getInstance(RuntimeProofActionLinkService::class);
+
+        return $this->runtimeProofActionLinkService;
     }
 }

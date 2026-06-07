@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\A2A\Service;
 
 use Weline\Backend\Model\BackendUser;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 
 class BackendAclProofPayloadService
@@ -27,6 +28,8 @@ class BackendAclProofPayloadService
             'ruling_audit',
         ],
     ];
+
+    private ?RuntimeProofTokenService $runtimeProofTokenService = null;
 
     public function buildIndex(array $sources, AuthenticatedSessionInterface $session): array
     {
@@ -54,11 +57,12 @@ class BackendAclProofPayloadService
         ];
     }
 
-    public function buildRoleProof(string $role, array $source, AuthenticatedSessionInterface $session): array
+    public function buildRoleProof(string $role, array $source, AuthenticatedSessionInterface $session, array $context = []): array
     {
         $actor = $this->backendActor($session);
         $sourceId = (string)($source['source_id'] ?? '');
         $passed = $actor['authenticated'] === true && $sourceId !== '';
+        $runtimeHandoff = $this->runtimeProofTokenService()->issue($role, $sourceId, $actor, $context);
 
         return [
             'surface' => 'a2a_acl_proof',
@@ -84,7 +88,9 @@ class BackendAclProofPayloadService
             ],
             'transaction_authorization' => [
                 'passed' => false,
-                'reason' => (string) __('尚未绑定具体订单角色和交易动作；不能仅凭 ACL 实证执行付款、退款、交付或仲裁。'),
+                'reason' => $runtimeHandoff['issued']
+                    ? (string) __('已生成订单动作实证票据；仍需前台动作守卫校验订单状态、角色绑定和动作范围。')
+                    : (string) __('尚未绑定具体订单角色和交易动作；不能仅凭 ACL 实证执行付款、退款、交付或仲裁。'),
                 'next_required_evidence' => [
                     'order_actor_binding',
                     'runtime_session_matches_actor',
@@ -92,6 +98,7 @@ class BackendAclProofPayloadService
                     'escrow_or_case_state_allows_action',
                 ],
             ],
+            'runtime_handoff' => $runtimeHandoff,
         ];
     }
 
@@ -139,5 +146,12 @@ class BackendAclProofPayloadService
             'backend_role_id' => $roleId > 0 ? $roleId : null,
             'backend_acl_enabled' => $isEnabled,
         ];
+    }
+
+    private function runtimeProofTokenService(): RuntimeProofTokenService
+    {
+        $this->runtimeProofTokenService ??= ObjectManager::getInstance(RuntimeProofTokenService::class);
+
+        return $this->runtimeProofTokenService;
     }
 }

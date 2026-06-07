@@ -35,7 +35,11 @@ class WalletMonitor extends FrontendController
                 $orderPublicId,
                 $this->resolveAllowedRoles($mode),
                 $this->formatOperationLabel($mode),
-                ['require_runtime_proof' => true]
+                [
+                    'require_runtime_proof' => true,
+                    'runtime_proof_action' => $this->runtimeProofAction($mode),
+                    'runtime_proof_token' => (string)($this->request->getParam('a2a_runtime_proof') ?? ''),
+                ]
             );
             $walletMonitor = $this->walletInstructionAdapterService->inspect($orderPublicId, $mode);
             $walletMonitor = \array_merge($walletMonitor, $guard);
@@ -75,6 +79,14 @@ class WalletMonitor extends FrontendController
             'simulate_failure' => (string) __('模拟钱包失败'),
             'retry_failed' => (string) __('重试失败钱包指令'),
             default => (string) __('查看钱包监控'),
+        };
+    }
+
+    private function runtimeProofAction(string $mode): string
+    {
+        return match (\strtolower(\trim($mode))) {
+            'dry_run_execute' => 'execute_wallet_dry_run',
+            default => 'monitor_wallet',
         };
     }
 

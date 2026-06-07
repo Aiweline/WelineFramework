@@ -46,7 +46,8 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 - Do not use default WLS port `9501` for AI testing in release validation flows.
 - Always stop dedicated WLS instances after validation.
 - Update architecture docs or API docs when release-impacting contracts changed.
-- For online deployment, use only the user's Chrome browser with the JumpServer / Luna Web terminal. Do not run inline SSH from Codex shell, local terminals, scripts, or background helpers; do not use the Codex built-in browser for deployment.
+- For online deployment, use only the user's Chrome browser with the JumpServer / Luna Web terminal, BaoTa Web terminal, or other user-authorized web terminal. Do not run inline SSH from Codex shell, local terminals, scripts, or background helpers; do not use the Codex built-in browser for deployment.
+- Online deployment browser control must use the Chrome extension tab path: `browser.user.openTabs()` to locate the target tab, `browser.user.claimTab(tabInfo)` to attach, then `tab.cua`, `tab.playwright`, and `tab.clipboard` to operate the claimed tab. The `claimTab + cua` channel is the required control path for terminal interaction.
 
 # Inputs Required
 
@@ -75,6 +76,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 - Do not bypass missing evidence because a change appears low risk.
 - Do not collapse QA and CI gate responsibilities into one vague signoff.
 - Do not treat direct SSH access as an acceptable deployment shortcut; Chrome-operated JumpServer / Luna is the required deployment path.
+- Do not use Windows or OS-level focus control for deployment: no `SetForegroundWindow`, system mouse movement/clicks, `mouse_event`, `SendKeys`, visible-window forcing, or system-level clipboard workflows that can steal focus from the user's current page. If a terminal tab is stale or unresponsive, open or claim a dedicated Chrome deployment tab through the extension instead.
 
 # Shared Collaboration Contract
 

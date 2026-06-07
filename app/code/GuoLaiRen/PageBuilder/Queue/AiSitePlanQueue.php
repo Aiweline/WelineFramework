@@ -147,9 +147,21 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
 
     public function deadWorkerRecoveryMessage(Queue $queue, int $deadPid, string $workerOutput): string
     {
-        unset($queue, $deadPid, $workerOutput);
+        unset($deadPid);
 
-        return 'PageBuilder plan worker exited before terminal state; queue reset to pending for scheduler resume.';
+        $message = 'PageBuilder plan worker exited before terminal state; queue reset to pending for scheduler resume.';
+        $detail = $this->extractWorkerOutputFailureDetail($workerOutput);
+        if ($detail === '') {
+            $detail = $this->extractWorkerOutputFailureDetail((string)$queue->getProcess());
+        }
+        if ($detail === '') {
+            $detail = $this->extractWorkerOutputFailureDetail((string)$queue->getResult());
+        }
+        if ($detail !== '') {
+            return $message . ' | ' . $detail;
+        }
+
+        return $message;
     }
 
     public function execute(Queue &$queue): string
@@ -411,6 +423,160 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         $normalized = (string)(\preg_replace('/^(?:AI plan generation failed:\s*)+/i', '', $normalized) ?? $normalized);
 
         return '第一阶段方案生成失败：' . $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function appendPlanFailureDetailToMessage(array $scope, string $message): string
+    {
+        $base = $this->normalizeOperatorFailureDetail($message);
+        foreach ($this->extractPlanFailureDetailsFromScope($scope) as $detail) {
+            if ($detail === '' || $detail === $base || \str_contains($base, $detail)) {
+                continue;
+            }
+
+            return $base . ' | ' . $detail;
+        }
+
+        return $base !== '' ? $base : $message;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<string>
+     */
+    private function extractPlanFailureDetailsFromScope(array $scope): array
+    {
+        $details = [];
+        foreach ($this->extractPlanRetryableFailureMessages($scope) as $message) {
+            $this->pushFailureDetail($details, $message);
+        }
+
+        $lastError = \is_array($scope['plan_generation_last_error'] ?? null)
+            ? $scope['plan_generation_last_error']
+            : [];
+        $this->pushFailureDetail($details, (string)($lastError['message'] ?? ''));
+
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $this->pushFailureDetail($details, (string)($active['message'] ?? ''));
+
+        $activeOperations = \is_array($scope['active_operations'] ?? null) ? $scope['active_operations'] : [];
+        $planOperation = \is_array($activeOperations['plan'] ?? null) ? $activeOperations['plan'] : [];
+        $this->pushFailureDetail($details, (string)($planOperation['message'] ?? ''));
+
+        return $details;
+    }
+
+    /**
+     * @param list<string> $details
+     */
+    private function pushFailureDetail(array &$details, string $message): void
+    {
+        $detail = $this->normalizeOperatorFailureDetail($message);
+        if ($detail === '' || \in_array($detail, $details, true)) {
+            return;
+        }
+
+        $lower = \mb_strtolower($detail);
+        foreach ([
+            'queue reset to pending for scheduler resume',
+            'will continue the same queue data',
+            'was marked retryable',
+            'waiting for scheduler',
+            '不再自动重试',
+        ] as $generic) {
+            if (\str_contains($lower, $generic)) {
+                return;
+            }
+        }
+
+        $details[] = $detail;
+    }
+
+    private function extractWorkerOutputFailureDetail(string $workerOutput): string
+    {
+        $workerOutput = \trim($workerOutput);
+        if ($workerOutput === '') {
+            return '';
+        }
+
+        $lines = \preg_split('/\R/u', $workerOutput) ?: [];
+        $tail = [];
+        for ($i = \count($lines) - 1; $i >= 0; $i--) {
+            $detail = $this->normalizeOperatorFailureDetail((string)$lines[$i]);
+            if ($detail === '') {
+                continue;
+            }
+            $tail[] = $detail;
+            if ($this->isUsefulWorkerFailureLine($detail)) {
+                return $detail;
+            }
+            if (\count($tail) >= 3) {
+                break;
+            }
+        }
+
+        return $tail !== [] ? $this->normalizeOperatorFailureDetail(\implode(' | ', \array_reverse($tail))) : '';
+    }
+
+    private function isUsefulWorkerFailureLine(string $line): bool
+    {
+        $lower = \mb_strtolower($line);
+        foreach ([
+            'fatal error',
+            'parse error',
+            'uncaught',
+            'exception',
+            'undefined constant',
+            'undefined method',
+            'call to a member function',
+            'typeerror',
+            'ai api',
+            'ai流式',
+            'http 400',
+            'http 401',
+            'http 402',
+            'http 403',
+            'maximum context length',
+            'requested ',
+            '第一阶段方案生成失败',
+        ] as $needle) {
+            if (\str_contains($lower, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeOperatorFailureDetail(string $message): string
+    {
+        $message = (string)(\preg_replace('/\e\[[0-9;]*[A-Za-z]/', '', $message) ?? $message);
+        $message = $this->redactOperatorFailureDetail($message);
+        $message = \trim((string)(\preg_replace('/\s+/u', ' ', $message) ?? $message));
+        if ($message === '') {
+            return '';
+        }
+
+        if (\mb_strlen($message) > 420) {
+            return \mb_substr($message, 0, 420) . '...';
+        }
+
+        return $message;
+    }
+
+    private function redactOperatorFailureDetail(string $message): string
+    {
+        $message = (string)(\preg_replace('/\b((?:sk|rk|pk)-)[A-Za-z0-9_\-]{8,}\b/i', '$1***', $message) ?? $message);
+        $message = (string)(\preg_replace('/\b(Bearer\s+)[A-Za-z0-9._\-]{12,}/i', '$1***', $message) ?? $message);
+        $message = (string)(\preg_replace(
+            '/\b(api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password)\b(\s*(?:=>|=|:)\s*)[\'"]?[^\'",\s)]+/i',
+            '$1$2***',
+            $message
+        ) ?? $message);
+
+        return $message;
     }
 
     private function applyForcePlanRebuildPreset(
@@ -1174,7 +1340,10 @@ class AiSitePlanQueue implements QueueInterface, DeadWorkerRecoverableQueueInter
         $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $attemptNo = \max(0, (int)($active['attempt_no'] ?? 0));
         if (!$forceRebuild && !$allowExistingPlan && $attemptNo >= self::MAX_PLAN_QUEUE_ATTEMPTS) {
-            $message = (string)__('第一阶段方案生成已失败 %{1} 次，队列不再自动重试；如需继续，请手动强制重建。', [self::MAX_PLAN_QUEUE_ATTEMPTS]);
+            $message = $this->appendPlanFailureDetailToMessage(
+                $scope,
+                (string)__('第一阶段方案生成已失败 %{1} 次，队列不再自动重试；如需继续，请手动强制重建。', [self::MAX_PLAN_QUEUE_ATTEMPTS])
+            );
             $this->persistPlanQueueStopState($sessionService, (int)$fresh->getId(), $adminId, $scope, $message);
             return ['ok' => false, 'message' => $message];
         }

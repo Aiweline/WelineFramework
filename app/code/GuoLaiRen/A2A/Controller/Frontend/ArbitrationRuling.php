@@ -35,7 +35,11 @@ class ArbitrationRuling extends FrontendController
                 $orderPublicId,
                 'arbitrator',
                 __('签发仲裁裁决与钱包指令'),
-                ['require_runtime_proof' => true]
+                [
+                    'require_runtime_proof' => true,
+                    'runtime_proof_action' => $this->runtimeProofAction($rulingType),
+                    'runtime_proof_token' => (string)($this->request->getParam('a2a_runtime_proof') ?? ''),
+                ]
             );
             $ruling = $this->arbitrationRulingService->issue($orderPublicId, $rulingType);
             $ruling = \array_merge($ruling, $guard);
@@ -65,5 +69,15 @@ class ArbitrationRuling extends FrontendController
         $response->setHeader('Pragma', 'no-cache');
         $response->setHeader('Expires', '0');
         $response->setHeader('X-Accel-Expires', '0');
+    }
+
+    private function runtimeProofAction(string $rulingType): string
+    {
+        return match (\strtolower(\trim($rulingType))) {
+            'full_release' => 'issue_full_release',
+            'refund' => 'issue_refund',
+            'rework' => 'request_rework',
+            default => 'issue_partial_release',
+        };
     }
 }

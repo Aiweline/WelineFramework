@@ -45,11 +45,14 @@ class AclProof extends BackendController
     {
         $source = $this->sources()[$role] ?? [];
 
-        return $this->fetchJson($this->proofPayloadService()->buildRoleProof($role, $source, $this->session) + [
+        return $this->fetchJson($this->proofPayloadService()->buildRoleProof($role, $source, $this->session, [
+            'order' => (string)($this->request->getParam('order') ?? ''),
+            'action' => (string)($this->request->getParam('action') ?? ''),
+        ]) + [
             'surface' => 'a2a_acl_proof',
             'role' => $role,
             'source' => $source,
-            'message' => (string) __('此后台入口只证明 ACL Source 已注册；是否允许交易动作仍由角色绑定和运行时会话共同判断。'),
+            'message' => (string) __('此后台入口证明 ACL Source 与后台会话，并可为具体订单动作生成短期实证票据；最终是否允许交易动作仍由前台动作守卫判断。'),
         ]);
     }
 
