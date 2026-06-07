@@ -4,12 +4,13 @@
     "activeRunId":  "run-20260607-095638-8f40c082",
     "activeTaskPath":  "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0156-app-marketplace-update-iteration",
     "startedAt":  "2026-06-07T09:56:38.9816415+08:00",
-    "updatedAt":  "2026-06-07T09:56:38.9816415+08:00",
+    "updatedAt":  "2026-06-07T10:04:55.7280659+08:00",
     "lastCompletedAt":  "2026-06-07T08:17:26.8884318+08:00",
-    "lastSkippedAt":  "2026-06-07T07:54:06.3863745+08:00",
+    "lastSkippedAt":  "2026-06-07T10:04:55.7280659+08:00",
     "lastResult":  "running: recovering current source, services, and app marketplace update loop evidence.",
     "nextPriority":  "复核官网详情页 500、客户端 /sample-module 404 与 mini-cart 横向溢出，选择对更新闭环影响最大的一个切片。",
     "evidence":  [
                      "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0156-app-marketplace-update-iteration"
-                 ]
+                 ],
+    "skipReason":  "skipped by run-20260607-095511-aa15497d: state file is already running under activeRunId run-20260607-095638-8f40c082; cleaned up local 9503 instance and did not continue."
 }
