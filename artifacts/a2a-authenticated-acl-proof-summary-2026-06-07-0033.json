@@ -1,0 +1,35 @@
+{
+    "login_post":  "status=302 redirects=0 final=https://127.0.0.1:16895/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin/login/post",
+    "results":  [
+                    {
+                        "role":  "provider",
+                        "request":  "status=200 redirects=0 final=https://127.0.0.1:16895/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/a2a/backend/acl-proof/agent-operator",
+                        "proof_passed":  true,
+                        "proof_status":  "backend_acl_route_verified",
+                        "actor_authenticated":  true,
+                        "source_id":  "GuoLaiRen_A2A::agent_operator",
+                        "transaction_authorization_passed":  false,
+                        "evidence_path":  "artifacts\\a2a-authenticated-acl-proof-provider-2026-06-07-0033.json"
+                    },
+                    {
+                        "role":  "platform",
+                        "request":  "status=200 redirects=0 final=https://127.0.0.1:16895/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/a2a/backend/acl-proof/platform-risk",
+                        "proof_passed":  true,
+                        "proof_status":  "backend_acl_route_verified",
+                        "actor_authenticated":  true,
+                        "source_id":  "GuoLaiRen_A2A::platform_risk",
+                        "transaction_authorization_passed":  false,
+                        "evidence_path":  "artifacts\\a2a-authenticated-acl-proof-platform-2026-06-07-0033.json"
+                    },
+                    {
+                        "role":  "arbitrator",
+                        "request":  "status=200 redirects=0 final=https://127.0.0.1:16895/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/a2a/backend/acl-proof/arbitration-panel",
+                        "proof_passed":  true,
+                        "proof_status":  "backend_acl_route_verified",
+                        "actor_authenticated":  true,
+                        "source_id":  "GuoLaiRen_A2A::arbitration_panel",
+                        "transaction_authorization_passed":  false,
+                        "evidence_path":  "artifacts\\a2a-authenticated-acl-proof-arbitrator-2026-06-07-0033.json"
+                    }
+                ]
+}

@@ -1,0 +1,272 @@
+{
+  "generated_at": "2026-06-06T20:43:18.659Z",
+  "browser": "Codex in-app Browser iab",
+  "base": "https://127.0.0.1:16895",
+  "note": "Browser runtime does not expose navigation response status in this environment; status codes were checked by Weline http:request in the same validation round.",
+  "denied": {
+    "bodyChecks": {
+      "arbitrationTitle": false,
+      "bindingResult": false,
+      "deniedText": true,
+      "dryRunText": false,
+      "forbiddenRoleText": true,
+      "unboundText": false,
+      "walletBoundary": false,
+      "walletTitle": false
+    },
+    "excerpt": "返回仲裁员控制台\n无法生成仲裁裁决\n仲裁裁决不可执行\n\n当前会话角色不能执行“签发仲裁裁决与钱包指令”，需要 仲裁员。\n\n返回角色权限",
+    "h1": "仲裁裁决不可执行",
+    "label": "desktop-denied-arbitration-buyer",
+    "noHorizontalOverflow": true,
+    "responseStatus": null,
+    "title": "A2A 仲裁裁决与钱包指令",
+    "url": "https://127.0.0.1:16895/a2a/frontend/arbitration-ruling?order=A2A-ORDER-Q-48E8DB&ruling=partial_release",
+    "viewport": {
+      "height": 900,
+      "scrollHeight": 900,
+      "scrollWidth": 1280,
+      "width": 1280
+    },
+    "ctaCount": 1,
+    "ctaClickUrl": "https://127.0.0.1:16895/a2a/frontend#roles"
+  },
+  "allowedFlow": [
+    {
+      "bodyChecks": {
+        "arbitrationTitle": false,
+        "bindingResult": true,
+        "deniedText": false,
+        "dryRunText": false,
+        "forbiddenRoleText": false,
+        "unboundText": false,
+        "walletBoundary": false,
+        "walletTitle": false
+      },
+      "excerpt": "返回角色权限\n查看 Agent 信誉\nA2A 角色权限控制台\nAgent\n\n每个交易动作都要同时满足角色、订单状态、验收证据、退款/争议状态和账本约束。\n\n买方\nAgent\n平台风控\n仲裁员\n\n当前角色由 A2A 会话保存，普通 role 参数不会直接授权动作。\n\n已切换为 Agent 会话角色。\n订单角色归属已持久化，后续可绑定真实买方、Agent、平台风控和仲裁账号。\n当前访问未登录，仅完成订单归属与会话原型校验。\n生产级 ACL 仍需把所有订单角色绑定到登录账号或后台权限组。\nA2A-ORDER-Q-48E8DB\n会话角色: Agent\n会话角色已保存\n订单归属: DataClean Pro Agent\n已绑定账号/权限组\n仲裁已裁决，钱包指令待执行\n仲裁已裁决\n$520.00\n清洗 10 万行客户 CSV，输出质量报告\n$41.60\n平台服务费\n$478.40\nAgent 收入\n请选择一个动作查看是否允许执行。\n当前订单角色已绑定到账号/组织/权限组原型主体。 · DataClean Pro Agent 运营账号\n已按会话角色计算动作边界\n策略状态\n2\n订单主键\nprovide",
+      "h1": "Agent",
+      "label": "bind-provider",
+      "noHorizontalOverflow": true,
+      "responseStatus": null,
+      "title": "A2A 角色权限控制台",
+      "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=provider&bind_actor=1&order=A2A-ORDER-Q-48E8DB",
+      "viewport": {
+        "height": 900,
+        "scrollHeight": 2680,
+        "scrollWidth": 1265,
+        "width": 1280
+      }
+    },
+    {
+      "bodyChecks": {
+        "arbitrationTitle": false,
+        "bindingResult": false,
+        "deniedText": false,
+        "dryRunText": false,
+        "forbiddenRoleText": false,
+        "unboundText": false,
+        "walletBoundary": false,
+        "walletTitle": false
+      },
+      "excerpt": "返回订单工作台\n查看正式订单状态\nProvider 范围已提交\n清洗 10 万行客户 CSV，输出质量报告\n\nDataClean Pro Agent · 工具权限已声明 · 证据清单已锁定\n\nA2A-ORDER-Q-48E8DB\nA2A-SCOPE-BC2079\n范围已提交，等待受控执行\n$520.00\n托管金额\n$478.40\nAgent 待验收收入\n有限范围已通过\n风控门禁\n已写入 Provider 范围并推进订单到受控执行准备\n持久化状态\n1\n范围主键\n2\n正式订单主键\n提交交付证据并进入买方验收\n执行范围\n\nAgent 只能在本页声明的边界内进入受控执行。\n\n处理订单约定输入：清洗 10 万行客户 CSV，输出质量报告\n输出验收所需的结果文件、质量摘要和异常清单。\n保留执行参数、运行日志和关键中间结果哈希。\n工具权限\n只读买方授权输入文件。\n允许使用本地沙箱数据处理工具。\n允许写入交付物和审计日志到订单证据包。\n禁止未审批外部 API 调用、数据外发和生产系统写入。\n交付证据清单\n输入文件哈希与版本号。\n执行参数和工具版本。\n完整执行日志。\n输出文件校验摘要。\n异常行、失败项或",
+      "h1": "清洗 10 万行客户 CSV，输出质量报告",
+      "label": "provider-scope-allowed",
+      "noHorizontalOverflow": true,
+      "responseStatus": null,
+      "title": "A2A Provider 执行范围",
+      "url": "https://127.0.0.1:16895/a2a/frontend/provider-scope?order=A2A-ORDER-Q-48E8DB",
+      "viewport": {
+        "height": 900,
+        "scrollHeight": 1562,
+        "scrollWidth": 1265,
+        "width": 1280
+      }
+    },
+    {
+      "bodyChecks": {
+        "arbitrationTitle": false,
+        "bindingResult": true,
+        "deniedText": false,
+        "dryRunText": false,
+        "forbiddenRoleText": false,
+        "unboundText": false,
+        "walletBoundary": false,
+        "walletTitle": false
+      },
+      "excerpt": "返回角色权限\n查看 Agent 信誉\nA2A 角色权限控制台\n买方\n\n每个交易动作都要同时满足角色、订单状态、验收证据、退款/争议状态和账本约束。\n\n买方\nAgent\n平台风控\n仲裁员\n\n当前角色由 A2A 会话保存，普通 role 参数不会直接授权动作。\n\n已切换为 买方 会话角色。\n订单角色归属已持久化，后续可绑定真实买方、Agent、平台风控和仲裁账号。\n当前访问未登录，仅完成订单归属与会话原型校验。\n生产级 ACL 仍需把所有订单角色绑定到登录账号或后台权限组。\nA2A-ORDER-Q-48E8DB\n会话角色: 买方\n会话角色已保存\n订单归属: 订单买方\n已绑定账号/权限组\n仲裁已裁决，钱包指令待执行\n仲裁已裁决\n$520.00\n清洗 10 万行客户 CSV，输出质量报告\n$41.60\n平台服务费\n$478.40\nAgent 收入\n请选择一个动作查看是否允许执行。\n当前订单角色已绑定到账号/组织/权限组原型主体。 · 演示买方账号\n已按会话角色计算动作边界\n策略状态\n2\n订单主键\nbuyer\n角色代码\n2\n结算案例\n4/4\n订单角色归属\n可执行动作矩阵\n\n同一个订单在不同角色下",
+      "h1": "买方",
+      "label": "bind-buyer",
+      "noHorizontalOverflow": true,
+      "responseStatus": null,
+      "title": "A2A 角色权限控制台",
+      "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=buyer&bind_actor=1&order=A2A-ORDER-Q-48E8DB",
+      "viewport": {
+        "height": 900,
+        "scrollHeight": 2704,
+        "scrollWidth": 1265,
+        "width": 1280
+      }
+    },
+    {
+      "bodyChecks": {
+        "arbitrationTitle": false,
+        "bindingResult": false,
+        "deniedText": false,
+        "dryRunText": false,
+        "forbiddenRoleText": false,
+        "unboundText": false,
+        "walletBoundary": false,
+        "walletTitle": false
+      },
+      "excerpt": "返回订单工作台\n查看正式订单状态\n买方验收已通过\n清洗 10 万行客户 CSV，输出质量报告\n\nDataClean Pro Agent · 交付证据已锁定 · 托管结算已流转\n\nA2A-ORDER-Q-48E8DB\nA2A-SCOPE-BC2079\nA2A-ACCEPT-BC2079\n订单已进入退款或争议分支\n$520.00\n托管金额\n$41.60\n平台服务费入账\n$478.40\nAgent 待结算收入\n已写入交付验收并完成放款账本流转\n持久化状态\n1\n验收主键\n3\n账本行\n交付证据包\n\n验收依据必须来自范围、日志、哈希、质量摘要和审核标签，不接受纯口头完成声明。\n\n输入文件哈希已匹配范围 A2A-SCOPE-BC2079\n执行日志包：runlog-A2A-ORDER-Q-48E8DB.jsonl\n输出质量摘要：通过 10 万行清洗规则，异常项已列入清单。\n交付物校验摘要：sha256:53b95c17b08677d0\n专家审核标签：实战验证、数据驱动、专家审核。\n买方验收清单\n交付结果覆盖订单约定范围。\n输入哈希、执行参数和工具版本均已留痕。\n输出文件校验摘要与质量报告一致。\n异常项",
+      "h1": "清洗 10 万行客户 CSV，输出质量报告",
+      "label": "acceptance-allowed",
+      "noHorizontalOverflow": true,
+      "responseStatus": null,
+      "title": "A2A 交付验收与放款",
+      "url": "https://127.0.0.1:16895/a2a/frontend/acceptance?order=A2A-ORDER-Q-48E8DB",
+      "viewport": {
+        "height": 900,
+        "scrollHeight": 1622,
+        "scrollWidth": 1265,
+        "width": 1280
+      }
+    },
+    {
+      "bodyChecks": {
+        "arbitrationTitle": false,
+        "bindingResult": false,
+        "deniedText": false,
+        "dryRunText": false,
+        "forbiddenRoleText": false,
+        "unboundText": false,
+        "walletBoundary": false,
+        "walletTitle": false
+      },
+      "excerpt": "返回订单工作台\n查看验收页\n生成仲裁裁决\n争议仲裁分支\n清洗 10 万行客户 CSV，输出质量报告\n\nDataClean Pro Agent · 证据快照已锁定 · 账本状态已更新\n\nA2A-ORDER-Q-48E8DB\nA2A-ACCEPT-BC2079\nA2A-DISPUTE-D83C3F\n仲裁已裁决，钱包指令已生成\n$520.00\n订单金额\n$41.60\n平台服务费\n$478.40\nAgent 收入\n已写入结算分支并更新托管账本状态\n持久化状态\n1\n案件主键\n3\n账本行\n仲裁证据包\n\n结算分支必须保留验收快照、交付证据和账本影响，供后续仲裁与信誉重算使用。\n\n争议原因：买方质疑交付范围和异常项处理充分性。\n引用验收记录：A2A-ACCEPT-BC2079\n平台建议：冻结三方账本，仲裁员复核范围、日志、哈希和质量摘要。\n账本影响\n买方资金、平台服务费和 Agent 收入全部进入争议冻结。\n仲裁员必须基于范围、执行日志、哈希和质量摘要做出裁决。\n争议结果将写入 Agent 信誉重算输入。\n当前托管账本\n$520.00\n买方部分退款待钱包执行 · 待退款\n$41.60\n平台服务费部分确",
+      "h1": "清洗 10 万行客户 CSV，输出质量报告",
+      "label": "dispute-allowed",
+      "noHorizontalOverflow": true,
+      "responseStatus": null,
+      "title": "A2A 结算分支与仲裁",
+      "url": "https://127.0.0.1:16895/a2a/frontend/settlement-case?case=dispute&order=A2A-ORDER-Q-48E8DB",
+      "viewport": {
+        "height": 900,
+        "scrollHeight": 1387,
+        "scrollWidth": 1265,
+        "width": 1280
+      }
+    },
+    {
+      "bodyChecks": {
+        "arbitrationTitle": false,
+        "bindingResult": true,
+        "deniedText": false,
+        "dryRunText": false,
+        "forbiddenRoleText": false,
+        "unboundText": false,
+        "walletBoundary": false,
+        "walletTitle": false
+      },
+      "excerpt": "返回角色权限\n查看 Agent 信誉\nA2A 角色权限控制台\n仲裁员\n\n每个交易动作都要同时满足角色、订单状态、验收证据、退款/争议状态和账本约束。\n\n买方\nAgent\n平台风控\n仲裁员\n\n当前角色由 A2A 会话保存，普通 role 参数不会直接授权动作。\n\n已切换为 仲裁员 会话角色。\n订单角色归属已持久化，后续可绑定真实买方、Agent、平台风控和仲裁账号。\n当前访问未登录，仅完成订单归属与会话原型校验。\n所有订单角色均已有绑定主体，下一步需要在敏感写路由强制校验这些绑定。\nA2A-ORDER-Q-48E8DB\n会话角色: 仲裁员\n会话角色已保存\n订单归属: A2A 仲裁席位\n已绑定账号/权限组\n仲裁已裁决，钱包指令待执行\n仲裁已裁决\n$520.00\n清洗 10 万行客户 CSV，输出质量报告\n$41.60\n平台服务费\n$478.40\nAgent 收入\n请选择一个动作查看是否允许执行。\n当前订单角色已绑定到账号/组织/权限组原型主体。 · A2A 仲裁权限组\n已按会话角色计算动作边界\n策略状态\n2\n订单主键\narbitrator\n角色代码\n2\n结算案例\n4/4\n订单角色归属\n可执",
+      "h1": "仲裁员",
+      "label": "bind-arbitrator",
+      "noHorizontalOverflow": true,
+      "responseStatus": null,
+      "title": "A2A 角色权限控制台",
+      "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=arbitrator&bind_actor=1&order=A2A-ORDER-Q-48E8DB",
+      "viewport": {
+        "height": 900,
+        "scrollHeight": 2728,
+        "scrollWidth": 1265,
+        "width": 1280
+      }
+    }
+  ],
+  "arbitrationAllowed": {
+    "bodyChecks": {
+      "arbitrationTitle": true,
+      "bindingResult": false,
+      "deniedText": false,
+      "dryRunText": false,
+      "forbiddenRoleText": false,
+      "unboundText": false,
+      "walletBoundary": true,
+      "walletTitle": false
+    },
+    "excerpt": "返回仲裁员控制台\n执行钱包 dry-run\n裁决后重算信誉\nA2A 仲裁裁决与钱包指令\n部分放款\n\n清洗 10 万行客户 CSV，输出质量报告 · DataClean Pro Agent\n\nA2A-ORDER-Q-48E8DB\nA2A-DISPUTE-D83C3F\nA2A-RULING-42220F\n裁决部分放款，等待钱包适配器执行\n全额放款\n部分放款\n全额退款\n返工补交\n$156.00\n买方退款\n$20.80\n平台服务费确认\n$343.20\nAgent 放款\n钱包指令仅进入原型 dry-run 队列，不执行真实资金动作。\n已写入仲裁裁决与钱包指令边界\n持久化状态\n1\n裁决主键\n3\n钱包指令\n原型 dry-run，未执行真实资金动作\n适配器模式\n裁决证据\n\n最终裁决必须引用争议单和订单证据，并把钱包动作拆成可审计指令。\n\n裁决引用争议单：A2A-DISPUTE-D83C3F\n裁决对象：A2A-ORDER-Q-48E8DB\n证据范围：执行范围、交付日志、输出哈希、验收快照和异常清单。\n裁决类型：部分放款\n钱包边界：仅生成 dry-run 指令，不执行真实资金动作。\n钱包适配器计划\n$15",
+    "h1": "部分放款",
+    "label": "arbitration-allowed",
+    "noHorizontalOverflow": true,
+    "responseStatus": null,
+    "title": "A2A 仲裁裁决与钱包指令",
+    "url": "https://127.0.0.1:16895/a2a/frontend/arbitration-ruling?order=A2A-ORDER-Q-48E8DB&ruling=partial_release",
+    "viewport": {
+      "height": 900,
+      "scrollHeight": 1669,
+      "scrollWidth": 1265,
+      "width": 1280
+    },
+    "walletLinkCount": 1
+  },
+  "walletAfterClick": {
+    "bodyChecks": {
+      "arbitrationTitle": false,
+      "bindingResult": false,
+      "deniedText": false,
+      "dryRunText": true,
+      "forbiddenRoleText": false,
+      "unboundText": false,
+      "walletBoundary": true,
+      "walletTitle": true
+    },
+    "excerpt": "返回仲裁裁决\n查看平台风控\n裁决后重算信誉\nA2A 钱包适配器执行监控\n执行 dry-run\n\n清洗 10 万行客户 CSV，输出质量报告 · DataClean Pro Agent\n\nA2A-ORDER-Q-48E8DB\nA2A-RULING-42220F\npartial_release_awarded\n不执行真实资金动作\n只查看\n执行 dry-run\n模拟失败\n重试失败\n3\n钱包指令\n3\ndry-run 已确认\n0\n待提交\n0\n执行失败\n0\n冻结保持\n0\n可重试\n每条钱包指令必须带幂等键、执行状态、失败原因和对账结果，避免重复放款或退款。\n已写入钱包适配器 dry-run 执行状态\n持久化状态\n执行 dry-run\n执行模式\n3\n已确认\n0\n可重试\n不执行真实资金动作\n资金边界\n钱包指令执行表\nA2A-WALLET-B1D5B346\n买方退款 · $156.00 · buyer_freeze\ndry-run 已确认\n\n按裁决比例退回买方部分托管资金。\n\nA2A-IDEMP-500448C9D7A75933\n幂等键\nSIM-51C7FBFA\n外部引用\n对账匹配\n对账结果\n1\n重试次数",
+    "h1": "执行 dry-run",
+    "label": "wallet-after-click-desktop",
+    "noHorizontalOverflow": true,
+    "responseStatus": null,
+    "title": "A2A 钱包适配器执行监控",
+    "url": "https://127.0.0.1:16895/a2a/frontend/wallet-monitor?order=A2A-ORDER-Q-48E8DB&mode=dry_run_execute",
+    "viewport": {
+      "height": 900,
+      "scrollHeight": 1735,
+      "scrollWidth": 1265,
+      "width": 1280
+    }
+  },
+  "mobileWallet": {
+    "bodyChecks": {
+      "arbitrationTitle": false,
+      "bindingResult": false,
+      "deniedText": false,
+      "dryRunText": true,
+      "forbiddenRoleText": false,
+      "unboundText": false,
+      "walletBoundary": true,
+      "walletTitle": true
+    },
+    "excerpt": "返回仲裁裁决\n查看平台风控\n裁决后重算信誉\nA2A 钱包适配器执行监控\n执行 dry-run\n\n清洗 10 万行客户 CSV，输出质量报告 · DataClean Pro Agent\n\nA2A-ORDER-Q-48E8DB\nA2A-RULING-42220F\npartial_release_awarded\n不执行真实资金动作\n只查看\n执行 dry-run\n模拟失败\n重试失败\n3\n钱包指令\n3\ndry-run 已确认\n0\n待提交\n0\n执行失败\n0\n冻结保持\n0\n可重试\n每条钱包指令必须带幂等键、执行状态、失败原因和对账结果，避免重复放款或退款。\n已写入钱包适配器 dry-run 执行状态\n持久化状态\n执行 dry-run\n执行模式\n3\n已确认\n0\n可重试\n不执行真实资金动作\n资金边界\n钱包指令执行表\nA2A-WALLET-B1D5B346\n买方退款 · $156.00 · buyer_freeze\ndry-run 已确认\n\n按裁决比例退回买方部分托管资金。\n\nA2A-IDEMP-500448C9D7A75933\n幂等键\nSIM-51C7FBFA\n外部引用\n对账匹配\n对账结果\n1\n重试次数",
+    "h1": "执行 dry-run",
+    "label": "wallet-mobile",
+    "noHorizontalOverflow": true,
+    "responseStatus": null,
+    "title": "A2A 钱包适配器执行监控",
+    "url": "https://127.0.0.1:16895/a2a/frontend/wallet-monitor?order=A2A-ORDER-Q-48E8DB&mode=dry_run_execute",
+    "viewport": {
+      "height": 844,
+      "scrollHeight": 4817,
+      "scrollWidth": 375,
+      "width": 390
+    }
+  },
+  "consoleErrors": [],
+  "screenshots": {
+    "desktopPath": "E:/WelineFramework/DEV-workspace/artifacts/a2a-actor-guard-browser-desktop-2026-06-06-2033.png",
+    "mobilePath": "E:/WelineFramework/DEV-workspace/artifacts/a2a-actor-guard-browser-mobile-2026-06-06-2033.png",
+    "taskDesktopPath": "E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-06/2026-06-06-1108-a2a-agent-trading-platform-product-iteration/artifacts/a2a-actor-guard-browser-desktop-2026-06-06-2033.png",
+    "taskMobilePath": "E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-06/2026-06-06-1108-a2a-agent-trading-platform-product-iteration/artifacts/a2a-actor-guard-browser-mobile-2026-06-06-2033.png",
+    "desktopViewportPath": "E:/WelineFramework/DEV-workspace/artifacts/a2a-actor-guard-browser-desktop-viewport-2026-06-06-2033.png",
+    "mobileViewportPath": "E:/WelineFramework/DEV-workspace/artifacts/a2a-actor-guard-browser-mobile-viewport-2026-06-06-2033.png",
+    "taskDesktopViewportPath": "E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-06/2026-06-06-1108-a2a-agent-trading-platform-product-iteration/artifacts/a2a-actor-guard-browser-desktop-viewport-2026-06-06-2033.png",
+    "taskMobileViewportPath": "E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-06/2026-06-06-1108-a2a-agent-trading-platform-product-iteration/artifacts/a2a-actor-guard-browser-mobile-viewport-2026-06-06-2033.png"
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "targetUrl": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=platform&order=A2A-ORDER-B0CC7F",
+  "finalDesktopUrl": "https://127.0.0.1:16895/a2a/frontend/role-console?bind_actor=1&order=A2A-ORDER-B0CC7F",
+  "title": "A2A 角色权限控制台",
+  "clickedBindCta": true,
+  "bindCtaCountBeforeClick": 1,
+  "desktop": {
+    "hasContractReady": true,
+    "hasEvidence": true,
+    "hasIdentityReadiness": true,
+    "hasIdentitySource": true,
+    "hasProductionIdentityStatus": false,
+    "hasPrototypeOnly": true,
+    "hasRiskCopy": true,
+    "overflowX": false,
+    "scrollWidth": 1169,
+    "viewportWidth": 1169,
+    "visibleLinkSample": [
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend#roles",
+        "text": "返回角色权限"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/reputation?agent=dataclean-pro-agent",
+        "text": "查看 Agent 信誉"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=buyer&order=A2A-ORDER-B0CC7F",
+        "text": "买方"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=provider&order=A2A-ORDER-B0CC7F",
+        "text": "Agent"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=platform&order=A2A-ORDER-B0CC7F",
+        "text": "平台风控"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=arbitrator&order=A2A-ORDER-B0CC7F",
+        "text": "仲裁员"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-B0CC7F&action=risk_review",
+        "text": "验证此动作"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-B0CC7F&action=freeze_funds",
+        "text": "验证此动作"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-B0CC7F&action=monitor_wallet",
+        "text": "验证此动作"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-B0CC7F&action=recalculate_reputation",
+        "text": "验证此动作"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/reputation?agent=a2a-expert-review-desk",
+        "text": "打开业务入口"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-B0CC7F&action=fee_adjustment",
+        "text": "验证此动作"
+      }
+    ]
+  },
+  "mobile": {
+    "hasContractReady": true,
+    "hasIdentityReadiness": true,
+    "hasProductionIdentityStatus": false,
+    "hasPrototypeOnly": true,
+    "overflowX": false,
+    "scrollWidth": 375,
+    "viewportWidth": 375
+  },
+  "consoleErrors": {
+    "desktopCount": 0,
+    "desktop": [],
+    "mobileCount": 0,
+    "mobile": []
+  },
+  "screenshots": {
+    "desktop": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-actor-identity-readiness-desktop-2026-06-06-2233.png",
+    "mobile": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-actor-identity-readiness-mobile-2026-06-06-2233.png",
+    "taskDesktop": "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-06\\2026-06-06-1108-a2a-agent-trading-platform-product-iteration\\artifacts\\a2a-actor-identity-readiness-desktop-2026-06-06-2233.png",
+    "taskMobile": "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-06\\2026-06-06-1108-a2a-agent-trading-platform-product-iteration\\artifacts\\a2a-actor-identity-readiness-mobile-2026-06-06-2233.png"
+  },
+  "initialSnapshotExcerpt": "- main:\n  - navigation \"A2A 角色权限导航\":\n    - link \"返回角色权限\":\n      - /url: /a2a/frontend#roles\n    - link \"查看 Agent 信誉\":\n      - /url: /a2a/frontend/reputation?agent=dataclean-pro-agent\n  - generic: A2A 角色权限控制台\n  - heading \"平台风控\" [level=1]\n  - paragraph: 每个交易动作都要同时满足角色、订单状态、验收证据、退款/争议状态和账本约束。\n  - generic \"切换会话角色\":\n    - link \"买方\":\n      - /url: /a2a/frontend/role-console?switch_role=1&role=buyer&order=A2A-ORDER-B0CC7F\n    - link \"Agent\":\n      - /url: /a2a/frontend/role-console?switch_role=1&role=provider&order=A2A-ORDER-B0CC7F\n    - link \"平台风控\":\n      - /url: /a2a/frontend/role-console?switch_role=1&role=platform&order=A2A-ORDER-B0CC7F\n    - link \"仲裁员\":\n      - /url: /a2a/frontend/role-console?switch_role=1&role=arbitrator&order=A2A-ORDER-B0CC7F\n  - paragraph: 当前角色由 A2A 会话保存，普通 role 参数不会直接授权动作。\n  - list \"会话角色提示\":\n    - listitem: 已切换为 平台风控 会话角色。\n    - listitem: 订单角色归属已持久化，后续可绑定真实买方、Agent、平台风控和仲裁账号。\n    - listitem: 当前访问未登录，仅完成订单归属与会话原型校验。\n    - listitem: 存在仅原型身份绑定，不能作为生产放款、退款或仲裁依据。\n    - listitem: 存在权限契约待实证角色，下一步需要接入真实 Weline ACL 或 Agent 运营账号校验。\n    - listitem: 生产级 ACL 仍需把所有订单角色绑定到登录账号或后台权限组。\n    - listitem: 生产级身份链尚未完成，敏感写动作当前只完成角色归属守卫与身份缺口提示。\n  - generic: A2A-ORDER-B0CC7F\n  - generic: \"会话角色: 平台风控\"\n  - generic: 会话角色已保存\n  - generic: \"订单归属: 平台风控组\"\n  - generic: 待绑定登录账号\n  - generic: \"身份就绪: 待绑定身份\"\n  - generic: 已验收放款\n  - generic: 已验收，等待结算出款\n  - strong: $180.00\n  - text: 交付验收人工复核\n  - strong: $14.40\n  - text: 平台服务费\n  - strong: $165.60"
+}

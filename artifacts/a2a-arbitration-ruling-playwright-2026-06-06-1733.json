@@ -1,0 +1,142 @@
+{
+  "base": "https://127.0.0.1:16895",
+  "checks": [
+    {
+      "name": "desktop role console status ok",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "desktop role visible A2A 角色权限控制台",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop role visible 仲裁员",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop role visible 动作允许",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop role visible 裁决部分放款",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop role visible 打开业务入口",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop ruling url",
+      "ok": true,
+      "detail": "https://127.0.0.1:16895/a2a/frontend/arbitration-ruling?order=A2A-ORDER-Q-48E8DB&ruling=partial_release"
+    },
+    {
+      "name": "desktop ruling visible A2A 仲裁裁决与钱包指令",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop ruling visible 部分放款",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop ruling visible 钱包适配器计划",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop ruling visible A2A-WALLET",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop ruling visible dry-run",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop ruling visible 已生成钱包指令",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop ruling visible 裁决后托管账本",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop ruling visible 买方部分退款待钱包执行",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop no horizontal overflow",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "mobile ruling status ok",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "mobile visible A2A 仲裁裁决与钱包指令",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile visible 部分放款",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile visible 钱包适配器计划",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile visible 已生成钱包指令",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile visible 裁决后托管账本",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile no horizontal overflow",
+      "ok": true,
+      "detail": "overflow=0"
+    },
+    {
+      "name": "no console errors",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "no failed requests",
+      "ok": true,
+      "detail": "[]"
+    }
+  ],
+  "screenshots": {
+    "desktop": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-arbitration-ruling-desktop-2026-06-06-1733.png",
+    "mobile": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-arbitration-ruling-mobile-2026-06-06-1733.png"
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failedRequests": []
+}

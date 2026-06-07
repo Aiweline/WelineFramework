@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <menu source="GuoLaiRen_A2A::acl_proof"
+          name="guolairen_a2a_acl_proof"
+          title="A2A 运行时实证"
+          action="a2a/backend/acl-proof/index"
+          parent="Weline_Backend::order_group"
+          icon="mdi mdi-shield-check-outline"
+          order="85"/>
+
+</menus>

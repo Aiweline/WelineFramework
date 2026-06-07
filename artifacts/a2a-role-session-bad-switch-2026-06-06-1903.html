@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A2A 角色权限控制台</title>
+    <style>
+        :root {
+            --a2a-bg: #f6f8fb;
+            --a2a-surface: #ffffff;
+            --a2a-border: #d8e0ea;
+            --a2a-text: #172033;
+            --a2a-muted: #64748b;
+            --a2a-primary: #0369a1;
+            --a2a-primary-strong: #075985;
+            --a2a-warning: #a16207;
+            --a2a-success: #15803d;
+            --a2a-danger: #b91c1c;
+            --a2a-radius: 8px;
+            --a2a-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--a2a-bg);
+            color: var(--a2a-text);
+            font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+            letter-spacing: 0;
+        }
+
+        .a2a-role-shell {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 28px 0 44px;
+        }
+
+        .a2a-role-nav,
+        .a2a-role-tabs,
+        .a2a-action-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .a2a-role-nav {
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+
+        .a2a-role-nav a,
+        .a2a-role-tab,
+        .a2a-button {
+            min-height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 8px 12px;
+            background: var(--a2a-surface);
+            color: var(--a2a-text);
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .a2a-role-tab-active,
+        .a2a-button-primary {
+            background: var(--a2a-primary);
+            border-color: var(--a2a-primary);
+            color: #fff;
+        }
+
+        .a2a-button-primary:hover {
+            background: var(--a2a-primary-strong);
+            color: #fff;
+        }
+
+        .a2a-role-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .a2a-panel {
+            min-width: 0;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            background: var(--a2a-surface);
+            box-shadow: var(--a2a-shadow);
+            padding: 18px;
+        }
+
+        .a2a-panel + .a2a-panel {
+            margin-top: 16px;
+        }
+
+        .a2a-kicker,
+        .a2a-state-pill {
+            display: inline-flex;
+            min-height: 28px;
+            align-items: center;
+            border-radius: var(--a2a-radius);
+            padding: 4px 9px;
+            background: #e0f2fe;
+            color: var(--a2a-primary);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .a2a-state-allowed {
+            background: #dcfce7;
+            color: var(--a2a-success);
+        }
+
+        .a2a-state-blocked,
+        .a2a-forbidden {
+            background: #fee2e2;
+            color: var(--a2a-danger);
+        }
+
+        h1,
+        h2,
+        p {
+            margin-top: 0;
+        }
+
+        h1 {
+            margin: 14px 0 10px;
+            font-size: clamp(28px, 4vw, 42px);
+            line-height: 1.08;
+        }
+
+        .a2a-muted {
+            color: var(--a2a-muted);
+            line-height: 1.65;
+        }
+
+        .a2a-id-stack,
+        .a2a-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .a2a-role-session-note {
+            margin: 10px 0 0;
+        }
+
+        .a2a-public-id,
+        .a2a-summary-item,
+        .a2a-action-row,
+        .a2a-list li,
+        .a2a-ledger-row {
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            background: #f8fafc;
+        }
+
+        .a2a-public-id {
+            display: inline-flex;
+            min-height: 32px;
+            align-items: center;
+            padding: 5px 9px;
+            font-weight: 800;
+        }
+
+        .a2a-summary-item {
+            flex: 1 1 180px;
+            padding: 10px;
+        }
+
+        .a2a-summary-item strong,
+        .a2a-ledger-row strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 18px;
+        }
+
+        .a2a-summary-item span,
+        .a2a-ledger-row span {
+            color: var(--a2a-muted);
+            font-size: 13px;
+        }
+
+        .a2a-action-list,
+        .a2a-list,
+        .a2a-ledger-list {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .a2a-action-row {
+            padding: 12px;
+        }
+
+        .a2a-action-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .a2a-action-head h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .a2a-list li,
+        .a2a-ledger-row {
+            padding: 10px;
+            line-height: 1.5;
+        }
+
+        .a2a-result {
+            border: 1px solid #bfdbfe;
+            border-radius: var(--a2a-radius);
+            margin-top: 14px;
+            padding: 12px;
+            background: #eff6ff;
+            color: var(--a2a-primary);
+            font-weight: 700;
+        }
+
+        .a2a-result-forbidden {
+            border-color: #fecaca;
+            background: #fff1f2;
+            color: var(--a2a-danger);
+        }
+
+        .a2a-persisted-strip {
+            display: grid;
+            grid-template-columns: 1.2fr repeat(4, minmax(0, .55fr));
+            gap: 8px;
+            margin-top: 14px;
+            padding: 10px;
+            border: 1px solid #fed7aa;
+            border-radius: var(--a2a-radius);
+            background: #fff7ed;
+        }
+
+        .a2a-persisted-strip strong {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--a2a-warning);
+            font-size: 14px;
+        }
+
+        .a2a-persisted-strip span {
+            color: var(--a2a-muted);
+            font-size: 12px;
+        }
+
+        .a2a-error {
+            border-color: #fecaca;
+            background: #fff1f2;
+            color: var(--a2a-danger);
+        }
+
+        @media (max-width: 880px) {
+            .a2a-role-grid,
+            .a2a-persisted-strip {
+                grid-template-columns: 1fr;
+            }
+
+            .a2a-role-nav {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .a2a-action-head {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="a2a-role-shell">
+        <nav class="a2a-role-nav" aria-label="A2A 角色权限导航">
+            <a href="/a2a/frontend#roles">返回角色权限</a>
+                    </nav>
+
+                    <section class="a2a-panel a2a-error">
+                <span class="a2a-kicker">A2A 角色权限控制台</span>
+                <h1>角色权限不可用</h1>
+                <p>角色不存在或尚未接入 A2A 权限策略。</p>
+                <a class="a2a-button" href="/a2a/frontend#roles">返回角色权限</a>
+            </section>
+            </main>
+</body>
+</html>
