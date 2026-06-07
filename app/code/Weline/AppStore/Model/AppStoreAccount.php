@@ -119,6 +119,7 @@ class AppStoreAccount extends Model
 
     public function setBoundDomain(?string $domain): static
     {
+        $this->setData(self::schema_fields_bound_domain, $domain);
         return $this;
     }
 

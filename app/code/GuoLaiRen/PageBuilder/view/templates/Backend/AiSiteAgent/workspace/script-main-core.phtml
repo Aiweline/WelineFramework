@@ -1915,6 +1915,7 @@
         networkError: <?= $pbAiScriptJson((string)__('网络错误，请稍后重试')) ?>,
         planErrorNoDetail: <?= $pbAiScriptJson((string)__('建站方案生成失败，但后端未返回具体错误详情。请查看队列日志，或刷新工作区后重试失败项。')) ?>,
         planStreamStartFailed: <?= $pbAiScriptJson((string)__('建站方案进度流创建失败，请检查当前登录态、路由和本地服务状态。')) ?>,
+        planStartTimeout: <?= $pbAiScriptJson((string)__('建站方案启动请求超时，请检查 WLS 服务和队列调度后重试。')) ?>,
         saveSuccess: <?= $pbAiScriptJson((string)__('')) ?>,
         saveFailed: <?= $pbAiScriptJson((string)__('自动保存失败')) ?>,
         orchestrated: <?= $pbAiScriptJson((string)__('')) ?>,
@@ -2103,6 +2104,7 @@
         networkError: <?= $pbAiScriptJson((string)__('网络错误，请稍后重试')) ?>,
         planErrorNoDetail: <?= $pbAiScriptJson((string)__('建站方案生成失败，但后端未返回具体错误详情。请查看队列日志，或刷新工作区后重试失败项。')) ?>,
         planStreamStartFailed: <?= $pbAiScriptJson((string)__('建站方案进度流创建失败，请检查当前登录状态、路由和本地服务状态。')) ?>,
+        planStartTimeout: <?= $pbAiScriptJson((string)__('建站方案启动请求超时，请检查 WLS 服务和队列调度后重试。')) ?>,
         saveFailed: <?= $pbAiScriptJson((string)__('自动保存失败')) ?>,
         switched: <?= $pbAiScriptJson((string)__('预览页面已切换')) ?>,
         targetDomainRequiredLabel: <?= $pbAiScriptJson((string)__('目标域名（必填）')) ?>,
@@ -3657,6 +3659,9 @@
             });
         }).catch(function (error) {
             clearPostTimeout();
+            if (error && String(error.name || '') === 'AbortError') {
+                throw new Error(String(opts.timeoutMessage || opts.timeout_message || messages.networkError || 'Request timeout.'));
+            }
             throw error;
         });
     }
@@ -4448,11 +4453,27 @@
         });
     }
 
-    function postUrlEncoded(url, fields) {
+    function postUrlEncoded(url, fields, options) {
+        var opts = options && typeof options === 'object' ? options : {};
         var body = new URLSearchParams();
         Object.keys(fields || {}).forEach(function (key) {
             body.append(key, fields[key]);
         });
+        var timeoutMs = Math.max(0, parseInt(String(opts.timeoutMs || opts.timeout_ms || 0), 10) || 0);
+        var abortController = null;
+        var timeoutHandle = 0;
+        if (timeoutMs > 0 && typeof AbortController !== 'undefined') {
+            abortController = new AbortController();
+            timeoutHandle = window.setTimeout(function () {
+                abortController.abort();
+            }, timeoutMs);
+        }
+        function clearPostTimeout() {
+            if (timeoutHandle) {
+                window.clearTimeout(timeoutHandle);
+                timeoutHandle = 0;
+            }
+        }
         return fetch(url, {
             method: 'POST',
             headers: {
@@ -4460,8 +4481,10 @@
                 'X-Requested-With': 'XMLHttpRequest'
             },
             credentials: 'same-origin',
-            body: body.toString()
+            body: body.toString(),
+            signal: abortController ? abortController.signal : undefined
         }).then(function (response) {
+            clearPostTimeout();
             if (!response.ok) {
                 return response.text().then(function (text) {
                     var errMsg = (<?= $pbAiScriptJson((string)__('请求失败：%{status} %{text}'), $pbAiScriptJsonHexFlags) ?>)
@@ -4490,6 +4513,10 @@
                 }
             });
         }).catch(function (error) {
+            clearPostTimeout();
+            if (error && String(error.name || '') === 'AbortError') {
+                throw new Error(String(opts.timeoutMessage || opts.timeout_message || messages.networkError || 'Request timeout.'));
+            }
             throw error;
         });
     }
@@ -14911,6 +14938,9 @@
             return postUrlEncoded(confirmPlanUrl, {
                 public_id: publicId,
                 stage: 'plan'
+            }, {
+                timeoutMs: 30000,
+                timeoutMessage: resolveFrontendRetryStopMessage('confirm_transport_error', null)
             }).then(function (data) {
                 if (!data || !data.success) {
                     toast('error', (data && data.message) ? String(data.message) : messages.networkError);
@@ -17189,8 +17219,9 @@
                 confirm_regenerate: confirmRegenerate ? '1' : '0',
                 fake_mode: isGuidedFakeModeSession() ? '1' : '0'
             }, {
-                // 方案启动会 hydrate scope、注册队列并组装 workspace payload，本地 WLS 上常超过 20s。
-                timeoutMs: 120000
+                // post-start-plan should only register or resume the queue; fail fast when WLS stops responding.
+                timeoutMs: 30000,
+                timeoutMessage: messages.planStartTimeout
             });
         }
 
@@ -17442,7 +17473,7 @@
         confirmPlanReloadTimer = window.setTimeout(function () {
             confirmPlanReloadTimer = null;
             window.location.reload();
-        }, 5000);
+        }, 35000);
         persistStageOneInlineEdits(true).then(function (patched) {
             if (!patched) {
                 clearConfirmPlanReloadTimer();
@@ -17460,6 +17491,9 @@
             postUrlEncoded(confirmPlanUrl, {
                 public_id: fields.public_id,
                 stage: fields.stage
+            }, {
+                timeoutMs: 30000,
+                timeoutMessage: resolveFrontendRetryStopMessage('confirm_transport_error', null)
             }).then(function (data) {
                 if (!data || !data.success) {
                     clearConfirmPlanReloadTimer();
