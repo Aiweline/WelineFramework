@@ -56,7 +56,7 @@ php bin/w setup:upgrade --route
 
 ## 4. 核心仓库
 
-核心仓库用于 `php bin/w deploy:update:core`。
+核心仓库用于 `php bin/w update:core`。
 
 建议填写：
 
@@ -66,6 +66,11 @@ php bin/w setup:upgrade --route
 - `核心仓库 Token`：私有核心仓库 token，留空保存时不修改已有后台 token
 
 后台核心仓库配置会覆盖 `app/etc/env.php` 的 `core_update` 和 `.env` 的 `CORE_UPDATE_*`。
+
+核心更新只维护框架核心目录。以下项目级模块目录不会被 `php bin/w update:core` 拷贝到目标项目，目标项目如需使用应自行维护：
+
+- `app/code/Aiweline`
+- `app/code/WeShop`
 
 ## 5. Webhook
 

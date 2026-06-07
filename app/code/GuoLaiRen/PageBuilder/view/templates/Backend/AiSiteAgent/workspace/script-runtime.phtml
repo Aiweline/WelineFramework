@@ -2781,6 +2781,37 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
         }, parseInt(String(delayMs || 0), 10) || 0);
     }
 
+    function refreshPreviewForCompletedPlanJsonBlock(payload) {
+        payload = payload && typeof payload === 'object' ? payload : {};
+        var state = payload.state && typeof payload.state === 'object' ? payload.state : null;
+        var bridge = resolveLivePreviewBridge();
+        if (state && typeof bridge.syncPreviewMetaFromState === 'function') {
+            bridge.syncPreviewMetaFromState(state);
+        }
+
+        var pageType = String(
+            payload.page_type
+            || payload.preview_page_type
+            || (state ? state.preview_page_type : '')
+            || ''
+        ).trim();
+        var currentPageType = getCurrentPreviewPageType();
+        if (pageType && !currentPageType && typeof bridge.switchPreviewByType === 'function') {
+            bridge.switchPreviewByType(pageType);
+            currentPageType = pageType;
+        }
+        if (pageType && currentPageType && pageType !== currentPageType) {
+            return;
+        }
+
+        refreshEmbeddedPreviewFrame(120);
+        if (typeof bridge.bindEmbeddedPreviewFrameBridge === 'function') {
+            window.setTimeout(function () {
+                bridge.bindEmbeddedPreviewFrameBridge();
+            }, 520);
+        }
+    }
+
     var TASK_PROGRESS_STATUSES = ['todo', 'queued', 'running', 'done', 'failed', 'stale', 'cancelled'];
 
     function normalizeTaskProgressStatus(status) {
@@ -4206,6 +4237,7 @@ $pageTypeLabels = \is_array($pageTypeLabels ?? null) ? $pageTypeLabels : [];
             syncPreviewTabsFromTaskProgressPayload(payload, payload.state && typeof payload.state === 'object' ? payload.state : null);
             var taskMessage = String(payload.message || 'Task completed');
             logOperationToWorkspaceTerminal('plan_json_block_completed', payload, 'done', taskMessage);
+            refreshPreviewForCompletedPlanJsonBlock(payload);
         });
 
         // plan_json_block_failed锛氬崟涓柟妗堝潡鏋勫缓澶辫触鐨勭‖淇″彿銆?
