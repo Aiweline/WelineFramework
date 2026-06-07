@@ -16680,6 +16680,39 @@ class AiSiteAgent extends BaseController
     }
 
     /**
+     * @param array<string, mixed> $scope
+     * @param list<string> $pageTypes
+     * @return array<string, mixed>
+     */
+    private function withVirtualThemePreviewUrls(AiSiteAgentSession $session, array $scope, array $pageTypes): array
+    {
+        $virtualThemeId = (int)($scope['virtual_theme_id'] ?? 0);
+        $virtualPages = $this->planJsonPages($scope);
+        $previewPageType = $this->scopeCompatibilityService->resolvePreviewPageType(
+            $virtualPages,
+            (string)($scope['preview_page_type'] ?? '')
+        );
+        if ($previewPageType === '' && $pageTypes !== []) {
+            $previewPageType = (string)$pageTypes[0];
+        }
+
+        $scope['preview_page_type'] = $previewPageType;
+        $scope['preview_page_id'] = 0;
+
+        $prePublishVisualUrls = $previewPageType !== ''
+            ? $this->visualUrlService->resolveVirtualUrls($session->getPublicId(), $previewPageType, $virtualThemeId)
+            : ['preview_full_url' => '', 'visual_preview_url' => '', 'visual_edit_url' => ''];
+        $prePublishVisualUrls = $this->normalizeAiSiteVisualUrlsToLocalBase($prePublishVisualUrls, [
+            'scope' => $scope,
+            'plan_json_pages' => $virtualPages,
+            'preview_page_type' => $previewPageType,
+        ]);
+        $scope['pre_publish_visual_urls'] = $prePublishVisualUrls;
+
+        return \array_replace($scope, $prePublishVisualUrls);
+    }
+
+    /**
      * plan_json.pages writes generated content into the virtual theme first. Entity
      * Page ids are publish artifacts only, so stale pre-publish materialization
      * must not leak back into the editing workspace.
@@ -18320,6 +18353,7 @@ class AiSiteAgent extends BaseController
                 'queue_waiting_for_scheduler' => false,
             ]
         );
+        $scope = $this->withVirtualThemePreviewUrls($session, $scope, $pageTypes);
 
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $this->sessionService->bindWebsite($session->getId(), $adminId, (int)$draftWebsite['website_id']);
@@ -18353,6 +18387,7 @@ class AiSiteAgent extends BaseController
                         'queue_waiting_for_scheduler' => false,
                     ]
                 );
+                $scope = $this->withVirtualThemePreviewUrls($session, $scope, $pageTypes);
                 $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
             }
         }

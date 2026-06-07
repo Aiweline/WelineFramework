@@ -1,39 +1,20 @@
 ﻿{
     "marker":  "APP_MARKETPLACE_PM_AUTOMATION",
     "status":  "blocked",
-    "activeRunId":  "run-20260607-120249-21192167",
-    "activeTaskPath":  "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration",
-    "startedAt":  "2026-06-07T12:02:49.9594421+08:00",
-    "updatedAt":  "2026-06-07T12:32:51.7318383+08:00",
-    "lastCompletedAt":  "2026-06-07T08:17:26.8884318+08:00",
-    "lastSkippedAt":  "2026-06-07T10:04:55.7280659+08:00",
-    "lastBlockedAt":  "2026-06-07T12:32:51.7318383+08:00",
-    "lastResult":  {
-                       "status":  "blocked",
-                       "summary":  "官网发布源已暴露 Weline_SampleModule 1.0.11；客户端真实更新检测仍阻塞在后台/OAuth 授权与本地 HTTPS 可信访问边界。",
-                       "productIssue":  "客户端无法通过真实官网源完成可更新检测，因此不能进入下载、覆盖和模块生效验证。",
-                       "officeSource":  "9502 详情页 200，显示 Weline_SampleModule 1.0.11、无模块依赖和摘要；check-update API 无 token 返回 401。",
-                       "clientState":  "9503 backend prefix AppStore 页面从 404 收敛为后台登录跳转；未登录状态看不到更新按钮；后续 9503 Browser 访问发生 ERR_CONNECTION_REFUSED，实例已停止。",
-                       "updateExecution":  "未执行；没有可信 check-update JSON 前不进入下载/覆盖。"
-                   },
-    "nextPriority":  "修复客户端真实 check-update 对官网 9502 官方源的可信访问问题，拿到 Weline_SampleModule 1.0.10 -\u003e 1.0.11 可更新 JSON。",
+    "activeRunId":  "run-20260607-180601-4b177cea",
+    "activeTaskPath":  "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-1006-app-marketplace-update-iteration",
+    "startedAt":  "2026-06-07T18:06:01+08:00",
+    "updatedAt":  "2026-06-07T18:38:04.8371387+08:00",
+    "lastCompletedAt":  null,
+    "lastSkippedAt":  null,
+    "lastResult":  "blocked: client update detection reaches https://127.0.0.1:9502/api/v1/platform/module/check-update but PHP cURL rejects the local WLS self-signed certificate chain; update/download/effectiveness not executed.",
+    "nextPriority":  "Fix local PHP/WLS trust for office 9502 HTTPS source without disabling certificate verification, then rerun Weline_SampleModule 1.0.10 -\u003e 1.0.11 detection/update/effectiveness.",
     "evidence":  [
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\curl-office-detail-after-route.html",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\curl-office-detail-after-route.headers.txt",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\curl-office-check-update-unauth-after-route.json",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\curl-client-account-prefixed.headers.txt",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\curl-client-installed-prefixed.headers.txt",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\browser-after-route-results.json",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\office-detail-after-route-desktop.png",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\office-detail-after-route-mobile.png",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\client-server-stop-final.txt",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-0402-app-marketplace-update-iteration\\artifacts\\client-server-list-after-final-stop.txt"
+                     "taskPath=E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-1006-app-marketplace-update-iteration officeStatus=9502 default HTTPS running, pre-existing user instance clientRun=started 9505 ai-test-app-marketplace-run-20260607-180601-4b177cea; stopped at end targetModule=Weline_SampleModule office register.php/manifest version 1.0.11; client installed version 1.0.10 clientConfig=appstore.platform_url changed by php bin/w system:config:set from http://127.0.0.1:9502 to https://127.0.0.1:9502 clientDetection=check-update POST still blocked by cURL error 60 self-signed certificate chain browserEvidence=E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-1006-app-marketplace-update-iteration\\artifacts\\browser-validation-cdp.json screenshots=browser-office-9502-*.png, browser-client-installed-9505-*.png, browser-client-sample-module-9505-*.png gitnexusDetect=dev-workspace changed_count=3 affected_count=2 risk=medium from pre-existing PageBuilder changes; no symbol edits in this run"
                  ],
-    "residualRisks":  [
-                          "官网详情页移动 390px Browser fallback 记录 scrollWidth=416，存在横向溢出。",
-                          "官网详情页 Browser console 有两个 500 资源错误，需要下一轮与主链路分开确认。",
-                          "客户端 9503 在后续 Browser 访问时 ERR_CONNECTION_REFUSED；server:list/stop 证据显示本轮实例已停止。",
-                          "Office 项目 AI-ENTRY 引用的 dev/ai/global-constraints.md 和 dev/ai/skills/_index.md 缺失。"
+    "remainingRisk":  [
+                          "Office API authorization token was not available for direct API success proof; invalid bearer correctly returned 401.",
+                          "Headless browser used CDP fallback because in-app Browser had zero claimable tabs and DevTools profile was locked.",
+                          "GitNexus detect_changes reports unrelated pre-existing PageBuilder changes in client repo."
                       ]
 }
