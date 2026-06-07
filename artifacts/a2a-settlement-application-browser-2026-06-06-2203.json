@@ -1,0 +1,101 @@
+{
+  "base": "https://127.0.0.1:16895",
+  "refundOrder": "A2A-ORDER-Q-96F7AA",
+  "disputeOrder": "A2A-ORDER-Q-73641E",
+  "steps": [
+    {
+      "name": "refund desktop preview submit",
+      "preview": {
+        "bodyTextSample": "返回订单工作台\n查看验收页\n退款复核分支\n清洗 10 万行客户 CSV，输出质量报告\n\nOps Workflow Agent · 申请预览 · 提交前账本不变\n\nA2A-ORDER-Q-96F7AA\nA2A-ACCEPT-421999\nA2A-REFUND-F96031\n退款复核申请待提交\n$740.00\n订单金额\n$59.20\n平台服务费\n$680.80\nAgent 收入\n仅预览申请，尚未创建结算分支或改写托管账本\n持久化状态\n未创建\n案件主键\n3\n账本行\n退款复核申请\n\n买方需要先提交结构化申请，系统才会创建案件、冻结或改写托管账本。\n\n退款复核原因\n期望处理结果\n证据说明\n提交前只生成申请预览，不创建案件、不冻结资金、不改写账本。\n提交后平台进入退款复核，Agent 收入暂停结算。\n提交退款复核申请\n提交后证据包预览\n\n结算分支必须保留验收快照、交付证据和账本影响，供后续仲裁与信誉重算使用。\n\n买方申请原因：交付证据未达到验收标准，买方请求暂停结算并复核退款。\n买方期望结果：退款、补证后再验收，或按裁决调整平台服务费。\n补充证据说明：引用验收记录、交付哈希、执行日志和缺失证据清单",
+        "hasDisputePreview": false,
+        "hasDisputeSubmitted": false,
+        "hasFormReason": true,
+        "hasNoLedgerMutationText": true,
+        "hasPreviewNotice": true,
+        "hasRefundPreview": true,
+        "hasRefundSubmitted": false,
+        "horizontalOverflow": false,
+        "scrollWidth": 1169,
+        "submitButtons": 1,
+        "title": "A2A 结算分支与仲裁",
+        "url": "https://127.0.0.1:16895/a2a/frontend/settlement-case?case=refund&order=A2A-ORDER-Q-96F7AA",
+        "viewportWidth": 1169
+      },
+      "submitted": {
+        "bodyTextSample": "返回订单工作台\n查看验收页\n退款复核分支\n清洗 10 万行客户 CSV，输出质量报告\n\nOps Workflow Agent · 证据快照已锁定 · 账本状态已更新\n\nA2A-ORDER-Q-96F7AA\nA2A-ACCEPT-421999\nA2A-REFUND-F96031\n退款复核已开启，等待补证或裁决\n$740.00\n订单金额\n$59.20\n平台服务费\n$680.80\nAgent 收入\n已写入结算分支并更新托管账本状态\n持久化状态\n3\n案件主键\n3\n账本行\n退款证据包\n\n结算分支必须保留验收快照、交付证据和账本影响，供后续仲裁与信誉重算使用。\n\n退款证据包\n\n结算分支必须保留验收快照、交付证据和账本影响，供后续仲裁与信誉重算使用。\n\n买方申请原因：验收后发现关键 API 返回字段缺失，需要退款复核。\n买方期望结果：优先退款；如 Agent 能在限定时间补齐证据，则回到买方验收。\n补充证据说明：引用交付哈希、执行日志和买方缺失字段清单。\n引用验收记录：A2A-ACCEPT-421999\n平台建议：保留审计日志，要求 Agent 补交输出校验摘要。\n账本影响\n买方资金进入待退款复核。",
+        "hasDisputePreview": false,
+        "hasDisputeSubmitted": false,
+        "hasFormReason": false,
+        "hasNoLedgerMutationText": false,
+        "hasPreviewNotice": false,
+        "hasRefundPreview": false,
+        "hasRefundSubmitted": true,
+        "horizontalOverflow": false,
+        "scrollWidth": 1169,
+        "submitButtons": 0,
+        "title": "A2A 结算分支与仲裁",
+        "url": "https://127.0.0.1:16895/a2a/frontend/settlement-case?case=refund&order=A2A-ORDER-Q-96F7AA&submit=1&reason=%E9%AA%8C%E6%94%B6%E5%90%8E%E5%8F%91%E7%8E%B0%E5%85%B3%E9%94%AE+API+%E8%BF%94%E5%9B%9E%E5%AD%97%E6%AE%B5%E7%BC%BA%E5%A4%B1%EF%BC%8C%E9%9C%80%E8%A6%81%E9%80%80%E6%AC%BE%E5%A4%8D%E6%A0%B8%E3%80%82&desired_outcome=%E4%BC%98%E5%85%88%E9%80%80%E6%AC%BE%EF%BC%9B%E5%A6%82+Agent+%E8%83%BD%E5%9C%A8%E9%99%90%E5%AE%9A%E6%97%B6%E9%97%B4%E8%A1%A5%E9%BD%90%E8%AF%81%E6%8D%AE%EF%BC%8C%E5%88%99%E5%9B%9E%E5%88%B0%E4%B9%B0%E6%96%B9%E9%AA%8C%E6%94%B6%E3%80%82&evidence_note=%E5%BC%95%E7%94%A8%E4%BA%A4%E4%BB%98%E5%93%88%E5%B8%8C%E3%80%81%E6%89%A7%E8%A1%8C%E6%97%A5%E5%BF%97%E5%92%8C%E4%B9%B0%E6%96%B9%E7%BC%BA%E5%A4%B1%E5%AD%97%E6%AE%B5%E6%B8%85%E5%8D%95%E3%80%82",
+        "viewportWidth": 1169
+      },
+      "fillCounts": {
+        "reason": 1,
+        "outcome": 1,
+        "evidence": 1
+      },
+      "submitButtonCount": 1
+    },
+    {
+      "name": "dispute mobile preview submit",
+      "preview": {
+        "bodyTextSample": "返回订单工作台\n查看验收页\n争议仲裁分支\n清洗 10 万行客户 CSV，输出质量报告\n\nResearch Scout Agent · 申请预览 · 提交前账本不变\n\nA2A-ORDER-Q-73641E\nA2A-ACCEPT-F1D8D4\nA2A-DISPUTE-6E5B47\n争议仲裁申请待提交\n$610.00\n订单金额\n$48.80\n平台服务费\n$561.20\nAgent 收入\n仅预览申请，尚未创建结算分支或改写托管账本\n持久化状态\n未创建\n案件主键\n3\n账本行\n争议仲裁申请\n\n买方需要先提交结构化申请，系统才会创建案件、冻结或改写托管账本。\n\n争议仲裁原因\n期望处理结果\n证据说明\n提交前只生成申请预览，不创建案件、不冻结资金、不改写账本。\n提交后资金进入争议冻结，仲裁员才能签发最终裁决。\n提交争议仲裁申请\n提交后证据包预览\n\n结算分支必须保留验收快照、交付证据和账本影响，供后续仲裁与信誉重算使用。\n\n买方申请原因：买方质疑交付范围、权限或异常处理，需要仲裁员复核。\n买方期望结果：由仲裁员裁定放款、退款、部分放款或返工。\n补充证据说明：引用验收记录、范围说明、权限日志、输出哈希和异常",
+        "hasDisputePreview": true,
+        "hasDisputeSubmitted": false,
+        "hasFormReason": true,
+        "hasNoLedgerMutationText": true,
+        "hasPreviewNotice": true,
+        "hasRefundPreview": false,
+        "hasRefundSubmitted": false,
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "submitButtons": 1,
+        "title": "A2A 结算分支与仲裁",
+        "url": "https://127.0.0.1:16895/a2a/frontend/settlement-case?case=dispute&order=A2A-ORDER-Q-73641E",
+        "viewportWidth": 375
+      },
+      "submitted": {
+        "bodyTextSample": "返回订单工作台\n查看验收页\n生成仲裁裁决\n争议仲裁分支\n清洗 10 万行客户 CSV，输出质量报告\n\nResearch Scout Agent · 证据快照已锁定 · 账本状态已更新\n\nA2A-ORDER-Q-73641E\nA2A-ACCEPT-F1D8D4\nA2A-DISPUTE-6E5B47\n争议仲裁已开启，资金已冻结\n$610.00\n订单金额\n$48.80\n平台服务费\n$561.20\nAgent 收入\n已写入结算分支并更新托管账本状态\n持久化状态\n4\n案件主键\n3\n账本行\n仲裁证据包\n\n结算分支必须保留验收快照、交付证据和账本影响，供后续仲裁与信誉重算使用。\n\n仲裁证据包\n\n结算分支必须保留验收快照、交付证据和账本影响，供后续仲裁与信誉重算使用。\n\n买方申请原因：买方认为范围、权限和异常处理仍存在重大分歧，需要仲裁冻结复核。\n买方期望结果：请求仲裁员裁定部分放款、退款或返工。\n补充证据说明：引用范围说明、权限日志、输出哈希、异常项清单和返工快照。\n引用验收记录：A2A-ACCEPT-F1D8D4\n平台建议：冻结三方账本，仲裁员复核范围、日志、哈希和质量摘要。\n账本影响\n买方资金、",
+        "hasDisputePreview": false,
+        "hasDisputeSubmitted": true,
+        "hasFormReason": false,
+        "hasNoLedgerMutationText": false,
+        "hasPreviewNotice": false,
+        "hasRefundPreview": false,
+        "hasRefundSubmitted": false,
+        "horizontalOverflow": false,
+        "scrollWidth": 375,
+        "submitButtons": 0,
+        "title": "A2A 结算分支与仲裁",
+        "url": "https://127.0.0.1:16895/a2a/frontend/settlement-case?case=dispute&order=A2A-ORDER-Q-73641E&submit=1&reason=%E4%B9%B0%E6%96%B9%E8%AE%A4%E4%B8%BA%E8%8C%83%E5%9B%B4%E3%80%81%E6%9D%83%E9%99%90%E5%92%8C%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86%E4%BB%8D%E5%AD%98%E5%9C%A8%E9%87%8D%E5%A4%A7%E5%88%86%E6%AD%A7%EF%BC%8C%E9%9C%80%E8%A6%81%E4%BB%B2%E8%A3%81%E5%86%BB%E7%BB%93%E5%A4%8D%E6%A0%B8%E3%80%82&desired_outcome=%E8%AF%B7%E6%B1%82%E4%BB%B2%E8%A3%81%E5%91%98%E8%A3%81%E5%AE%9A%E9%83%A8%E5%88%86%E6%94%BE%E6%AC%BE%E3%80%81%E9%80%80%E6%AC%BE%E6%88%96%E8%BF%94%E5%B7%A5%E3%80%82&evidence_note=%E5%BC%95%E7%94%A8%E8%8C%83%E5%9B%B4%E8%AF%B4%E6%98%8E%E3%80%81%E6%9D%83%E9%99%90%E6%97%A5%E5%BF%97%E3%80%81%E8%BE%93%E5%87%BA%E5%93%88%E5%B8%8C%E3%80%81%E5%BC%82%E5%B8%B8%E9%A1%B9%E6%B8%85%E5%8D%95%E5%92%8C%E8%BF%94%E5%B7%A5%E5%BF%AB%E7%85%A7%E3%80%82",
+        "viewportWidth": 375
+      },
+      "fillCounts": {
+        "reason": 1,
+        "outcome": 1,
+        "evidence": 1
+      },
+      "submitButtonCount": 1
+    }
+  ],
+  "consoleErrors": [],
+  "consoleErrorCount": 0,
+  "artifacts": {
+    "refundPreview": "E:/WelineFramework/DEV-workspace/artifacts/a2a-settlement-refund-preview-desktop-2026-06-06-2203.png",
+    "refundSubmitted": "E:/WelineFramework/DEV-workspace/artifacts/a2a-settlement-refund-submitted-desktop-2026-06-06-2203.png",
+    "disputeSubmitted": "E:/WelineFramework/DEV-workspace/artifacts/a2a-settlement-dispute-submitted-mobile-2026-06-06-2203.png",
+    "evidence": "E:/WelineFramework/DEV-workspace/artifacts/a2a-settlement-application-browser-2026-06-06-2203.json",
+    "taskRefundPreview": "E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-06/2026-06-06-1108-a2a-agent-trading-platform-product-iteration/artifacts/a2a-settlement-refund-preview-desktop-2026-06-06-2203.png",
+    "taskRefundSubmitted": "E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-06/2026-06-06-1108-a2a-agent-trading-platform-product-iteration/artifacts/a2a-settlement-refund-submitted-desktop-2026-06-06-2203.png",
+    "taskDisputeSubmitted": "E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-06/2026-06-06-1108-a2a-agent-trading-platform-product-iteration/artifacts/a2a-settlement-dispute-submitted-mobile-2026-06-06-2203.png",
+    "taskEvidence": "E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-06/2026-06-06-1108-a2a-agent-trading-platform-product-iteration/artifacts/a2a-settlement-application-browser-2026-06-06-2203.json"
+  }
+}

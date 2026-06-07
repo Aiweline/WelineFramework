@@ -146,9 +146,9 @@ window.__WelineMiniCartConfig = <?= json_encode([
 <style>
 .mini-cart-overlay { position: fixed; inset: 0; z-index: 9998; background: rgba(15, 23, 42, 0.46); opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility .2s ease; }
 .mini-cart-overlay.is-visible { opacity: 1; visibility: visible; }
-.mini-cart-drawer { position: fixed; top: 0; right: 0; z-index: 9999; width: var(--mini-cart-width, 400px); max-width: 92vw; height: 100dvh; display: flex; flex-direction: column; background: var(--color-bg-primary, #fff); box-shadow: -24px 0 60px rgba(15, 23, 42, .18); transform: translateX(100%); transition: transform .24s ease; }
-.mini-cart-drawer--left { left: 0; right: auto; transform: translateX(-100%); }
-.mini-cart-drawer.is-open { transform: translateX(0); }
+.mini-cart-drawer { position: fixed; top: 0; right: 0; z-index: 9999; width: var(--mini-cart-width, 400px); max-width: 92vw; height: 100dvh; display: flex; flex-direction: column; background: var(--color-bg-primary, #fff); box-shadow: -24px 0 60px rgba(15, 23, 42, .18); opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(0); transition: opacity .2s ease, visibility .2s ease; }
+.mini-cart-drawer--left { left: 0; right: auto; }
+.mini-cart-drawer.is-open { opacity: 1; visibility: visible; pointer-events: auto; transform: translateX(0); }
 #customer-service-widget .cs-status-dot { bottom: 7px !important; right: 7px !important; width: 10px !important; height: 10px !important; box-sizing: border-box !important; pointer-events: none !important; }
 body:has(#mini-cart-drawer.is-open) #customer-service-widget { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
 .mini-cart-drawer__header, .mini-cart-drawer__footer { flex-shrink: 0; border-color: var(--color-border-light, #e5e7eb); }

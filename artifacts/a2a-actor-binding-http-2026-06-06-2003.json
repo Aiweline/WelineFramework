@@ -1,0 +1,14 @@
+﻿{
+    "providerStatus":  "200",
+    "bindStatus":  "200",
+    "afterStatus":  "200",
+    "providerHasBindCta":  true,
+    "bindHasSuccess":  true,
+    "bindHasBoundLabel":  true,
+    "bindHasSubject":  true,
+    "afterPreservesBoundLabel":  true,
+    "afterPreservesSubject":  true,
+    "providerHtml":  "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-actor-binding-provider-2026-06-06-2003.html",
+    "bindHtml":  "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-actor-binding-bound-provider-2026-06-06-2003.html",
+    "afterHtml":  "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-actor-binding-after-provider-2026-06-06-2003.html"
+}
