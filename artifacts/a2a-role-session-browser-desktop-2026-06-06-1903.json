@@ -1,0 +1,93 @@
+{
+  "desktopEval": {
+    "actionLinkCount": 4,
+    "hasNoRoleActionLinks": true,
+    "hasProvider": true,
+    "hasSessionNotice": true,
+    "hasSessionSaved": true,
+    "hasShell": true,
+    "horizontalOverflow": false,
+    "links": [
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend#roles",
+        "text": "返回角色权限"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/reputation?agent=dataclean-pro-agent",
+        "text": "查看 Agent 信誉"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=buyer&order=A2A-ORDER-Q-48E8DB",
+        "text": "买方"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=provider&order=A2A-ORDER-Q-48E8DB",
+        "text": "Agent"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=platform&order=A2A-ORDER-Q-48E8DB",
+        "text": "平台风控"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=arbitrator&order=A2A-ORDER-Q-48E8DB",
+        "text": "仲裁员"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-Q-48E8DB&action=submit_scope",
+        "text": "验证此动作"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-Q-48E8DB&action=submit_delivery",
+        "text": "验证此动作"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-Q-48E8DB&action=respond_dispute",
+        "text": "验证此动作"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/settlement-case?case=dispute&order=A2A-ORDER-Q-48E8DB",
+        "text": "打开业务入口"
+      },
+      {
+        "href": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-Q-48E8DB&action=withdraw_payout",
+        "text": "验证此动作"
+      }
+    ],
+    "title": "A2A 角色权限控制台",
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=provider&order=A2A-ORDER-Q-48E8DB",
+    "viewport": {
+      "clientWidth": 1169,
+      "height": 698,
+      "scrollWidth": 1169,
+      "width": 1184
+    }
+  },
+  "afterSwitchEval": {
+    "hasArbitrator": true,
+    "hasPartialRelease": true,
+    "hasSessionSaved": true,
+    "horizontalOverflow": false,
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=arbitrator&order=A2A-ORDER-Q-48E8DB",
+    "viewport": {
+      "clientWidth": 1169,
+      "height": 698,
+      "scrollWidth": 1169,
+      "width": 1184
+    }
+  },
+  "afterVerifyEval": {
+    "hasAllowed": true,
+    "hasPartialRelease": true,
+    "hasSessionRole": true,
+    "horizontalOverflow": false,
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?order=A2A-ORDER-Q-48E8DB&action=issue_partial_release",
+    "viewport": {
+      "clientWidth": 1169,
+      "height": 698,
+      "scrollWidth": 1169,
+      "width": 1184
+    }
+  },
+  "consoleErrors": [],
+  "screenshot": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-role-session-browser-desktop-2026-06-06-1903.png"
+}

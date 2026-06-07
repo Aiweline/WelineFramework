@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A2A 仲裁裁决与钱包指令</title>
+    <style>
+        :root {
+            --a2a-bg: #f6f8fb;
+            --a2a-surface: #ffffff;
+            --a2a-border: #d8e0ea;
+            --a2a-text: #172033;
+            --a2a-muted: #64748b;
+            --a2a-primary: #0369a1;
+            --a2a-primary-strong: #075985;
+            --a2a-warning: #a16207;
+            --a2a-success: #15803d;
+            --a2a-danger: #b91c1c;
+            --a2a-radius: 8px;
+            --a2a-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--a2a-bg);
+            color: var(--a2a-text);
+            font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+            letter-spacing: 0;
+        }
+
+        .a2a-ruling-shell {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 28px 0 44px;
+        }
+
+        .a2a-ruling-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .a2a-button,
+        .a2a-ruling-nav a,
+        .a2a-option-tab {
+            min-height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 8px 12px;
+            background: var(--a2a-surface);
+            color: var(--a2a-text);
+            font-size: 14px;
+            font-weight: 800;
+            text-decoration: none;
+        }
+
+        .a2a-button-primary,
+        .a2a-option-active {
+            background: var(--a2a-primary);
+            border-color: var(--a2a-primary);
+            color: #fff;
+        }
+
+        .a2a-button-primary:hover,
+        .a2a-option-active:hover {
+            background: var(--a2a-primary-strong);
+            color: #fff;
+        }
+
+        .a2a-panel {
+            min-width: 0;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            background: var(--a2a-surface);
+            box-shadow: var(--a2a-shadow);
+            padding: 18px;
+        }
+
+        .a2a-panel + .a2a-panel {
+            margin-top: 16px;
+        }
+
+        .a2a-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(320px, .85fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .a2a-kicker,
+        .a2a-state-pill {
+            display: inline-flex;
+            min-height: 28px;
+            align-items: center;
+            border-radius: var(--a2a-radius);
+            padding: 4px 9px;
+            background: #e0f2fe;
+            color: var(--a2a-primary);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        h1,
+        h2,
+        h3,
+        p {
+            margin-top: 0;
+        }
+
+        h1 {
+            margin: 14px 0 10px;
+            font-size: clamp(30px, 4vw, 46px);
+            line-height: 1.08;
+        }
+
+        h2 {
+            font-size: 22px;
+        }
+
+        .a2a-muted {
+            color: var(--a2a-muted);
+            line-height: 1.65;
+        }
+
+        .a2a-id-stack,
+        .a2a-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .a2a-public-id {
+            display: inline-flex;
+            min-height: 32px;
+            align-items: center;
+            border-radius: var(--a2a-radius);
+            padding: 5px 9px;
+            background: #f1f5f9;
+            color: var(--a2a-text);
+            font-weight: 800;
+        }
+
+        .a2a-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .a2a-card,
+        .a2a-list li,
+        .a2a-ledger-row,
+        .a2a-instruction-row {
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 10px;
+            background: #f8fafc;
+            line-height: 1.5;
+        }
+
+        .a2a-card strong,
+        .a2a-ledger-row strong,
+        .a2a-instruction-row strong {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--a2a-text);
+            font-size: 18px;
+        }
+
+        .a2a-card span,
+        .a2a-ledger-row span,
+        .a2a-instruction-row span {
+            color: var(--a2a-muted);
+            font-size: 13px;
+        }
+
+        .a2a-list,
+        .a2a-stack {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .a2a-persisted-strip {
+            display: grid;
+            grid-template-columns: 1.2fr repeat(3, minmax(0, .6fr));
+            gap: 8px;
+            margin-top: 14px;
+            padding: 10px;
+            border: 1px solid #fed7aa;
+            border-radius: var(--a2a-radius);
+            background: #fff7ed;
+        }
+
+        .a2a-persisted-strip strong {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--a2a-warning);
+            font-size: 14px;
+        }
+
+        .a2a-persisted-strip span {
+            color: var(--a2a-muted);
+            font-size: 12px;
+        }
+
+        .a2a-error {
+            border-color: #fecaca;
+            background: #fff1f2;
+            color: var(--a2a-danger);
+        }
+
+        .a2a-alert {
+            margin-top: 14px;
+            border: 1px solid #bae6fd;
+            border-radius: var(--a2a-radius);
+            padding: 12px;
+            background: #f0f9ff;
+            color: var(--a2a-primary-strong);
+            font-weight: 800;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 860px) {
+            .a2a-grid,
+            .a2a-summary,
+            .a2a-persisted-strip {
+                grid-template-columns: 1fr;
+            }
+
+            .a2a-ruling-nav {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="a2a-ruling-shell">
+        <nav class="a2a-ruling-nav" aria-label="A2A 仲裁裁决导航">
+            <a href="/a2a/frontend/role-console?role=arbitrator&amp;order=A2A-ORDER-Q-48E8DB">返回仲裁员控制台</a>
+                            <div class="a2a-options" style="margin-top: 0;">
+                    <a class="a2a-button" href="/a2a/frontend/wallet-monitor?order=A2A-ORDER-Q-48E8DB&amp;mode=dry_run_execute">执行钱包 dry-run</a>
+                    <a class="a2a-button a2a-button-primary" href="/a2a/frontend/reputation?agent=dataclean-pro-agent">裁决后重算信誉</a>
+                </div>
+                    </nav>
+
+                    <section class="a2a-panel">
+                <span class="a2a-kicker">A2A 仲裁裁决与钱包指令</span>
+                <h1>部分放款</h1>
+                <p class="a2a-muted">
+                    清洗 10 万行客户 CSV，输出质量报告 · DataClean Pro Agent                </p>
+                <div class="a2a-id-stack">
+                    <span class="a2a-public-id">A2A-ORDER-Q-48E8DB</span>
+                    <span class="a2a-public-id">A2A-DISPUTE-D83C3F</span>
+                    <span class="a2a-public-id">A2A-RULING-42220F</span>
+                    <span class="a2a-state-pill">裁决部分放款，等待钱包适配器执行</span>
+                </div>
+                <div class="a2a-options" aria-label="裁决类型切换">
+                                            <a class="a2a-option-tab " href="/a2a/frontend/arbitration-ruling?order=A2A-ORDER-Q-48E8DB&amp;ruling=full_release">
+                            全额放款                        </a>
+                                            <a class="a2a-option-tab a2a-option-active" href="/a2a/frontend/arbitration-ruling?order=A2A-ORDER-Q-48E8DB&amp;ruling=partial_release">
+                            部分放款                        </a>
+                                            <a class="a2a-option-tab " href="/a2a/frontend/arbitration-ruling?order=A2A-ORDER-Q-48E8DB&amp;ruling=refund">
+                            全额退款                        </a>
+                                            <a class="a2a-option-tab " href="/a2a/frontend/arbitration-ruling?order=A2A-ORDER-Q-48E8DB&amp;ruling=rework">
+                            返工补交                        </a>
+                                    </div>
+                <div class="a2a-summary">
+                                            <div class="a2a-card">
+                            <strong>$156.00</strong>
+                            <span>买方退款</span>
+                        </div>
+                                            <div class="a2a-card">
+                            <strong>$20.80</strong>
+                            <span>平台服务费确认</span>
+                        </div>
+                                            <div class="a2a-card">
+                            <strong>$343.20</strong>
+                            <span>Agent 放款</span>
+                        </div>
+                                    </div>
+                <div class="a2a-alert">钱包指令仅进入原型 dry-run 队列，不执行真实资金动作。</div>
+                                    <div class="a2a-persisted-strip" aria-label="持久化状态">
+                        <div><strong>已写入仲裁裁决与钱包指令边界</strong><span>持久化状态</span></div>
+                        <div><strong>1</strong><span>裁决主键</span></div>
+                        <div><strong>3</strong><span>钱包指令</span></div>
+                        <div><strong>原型 dry-run，未执行真实资金动作</strong><span>适配器模式</span></div>
+                    </div>
+                            </section>
+
+            <div class="a2a-grid">
+                <section class="a2a-panel">
+                    <h2>裁决证据</h2>
+                    <p class="a2a-muted">最终裁决必须引用争议单和订单证据，并把钱包动作拆成可审计指令。</p>
+                    <ul class="a2a-list">
+                                                    <li>裁决引用争议单：A2A-DISPUTE-D83C3F</li>
+                                                    <li>裁决对象：A2A-ORDER-Q-48E8DB</li>
+                                                    <li>证据范围：执行范围、交付日志、输出哈希、验收快照和异常清单。</li>
+                                                    <li>裁决类型：部分放款</li>
+                                                    <li>钱包边界：仅生成 dry-run 指令，不执行真实资金动作。</li>
+                                            </ul>
+                </section>
+
+                <aside>
+                    <section class="a2a-panel">
+                        <h2>钱包适配器计划</h2>
+                        <div class="a2a-stack">
+                                                            <div class="a2a-instruction-row">
+                                    <strong>$156.00 · 买方退款</strong>
+                                    <span>buyer_freeze · dry-run 已排队 · 待退款</span>
+                                    <p class="a2a-muted">按裁决比例退回买方部分托管资金。</p>
+                                </div>
+                                                            <div class="a2a-instruction-row">
+                                    <strong>$20.80 · 确认平台服务费</strong>
+                                    <span>platform_fee · dry-run 已排队 · 钱包指令待执行</span>
+                                    <p class="a2a-muted">平台只确认裁决后的服务费。</p>
+                                </div>
+                                                            <div class="a2a-instruction-row">
+                                    <strong>$343.20 · Agent 出款</strong>
+                                    <span>provider_payout · dry-run 已排队 · 钱包指令待执行</span>
+                                    <p class="a2a-muted">向 Agent 钱包发起部分出款指令。</p>
+                                </div>
+                                                    </div>
+                    </section>
+                </aside>
+            </div>
+
+            <div class="a2a-grid" style="margin-top: 16px;">
+                <section class="a2a-panel">
+                    <h2>已生成钱包指令</h2>
+                    <div class="a2a-stack">
+                                                    <div class="a2a-instruction-row">
+                                <strong>A2A-WALLET-B1D5B346</strong>
+                                <span>买方退款 · $156.00 · dry-run 已确认</span>
+                                                                    <span>幂等键：A2A-IDEMP-500448C9D7A75933</span>
+                                                                                                    <span>外部引用：SIM-51C7FBFA</span>
+                                                                <p class="a2a-muted">按裁决比例退回买方部分托管资金。</p>
+                            </div>
+                                                    <div class="a2a-instruction-row">
+                                <strong>A2A-WALLET-A659E9B6</strong>
+                                <span>确认平台服务费 · $20.80 · dry-run 已确认</span>
+                                                                    <span>幂等键：A2A-IDEMP-7FBF61A0C8F82773</span>
+                                                                                                    <span>外部引用：SIM-96DA64B4</span>
+                                                                <p class="a2a-muted">平台只确认裁决后的服务费。</p>
+                            </div>
+                                                    <div class="a2a-instruction-row">
+                                <strong>A2A-WALLET-77302435</strong>
+                                <span>Agent 出款 · $343.20 · dry-run 已确认</span>
+                                                                    <span>幂等键：A2A-IDEMP-C45686BFDE01EB54</span>
+                                                                                                    <span>外部引用：SIM-70A9A1F9</span>
+                                                                <p class="a2a-muted">向 Agent 钱包发起部分出款指令。</p>
+                            </div>
+                                            </div>
+                </section>
+                <aside>
+                    <section class="a2a-panel">
+                        <h2>裁决后托管账本</h2>
+                        <div class="a2a-stack">
+                                                            <div class="a2a-ledger-row">
+                                    <strong>$520.00</strong>
+                                    <span>买方部分退款待钱包执行 · 待退款</span>
+                                </div>
+                                                            <div class="a2a-ledger-row">
+                                    <strong>$41.60</strong>
+                                    <span>平台服务费部分确认待钱包执行 · 钱包指令待执行</span>
+                                </div>
+                                                            <div class="a2a-ledger-row">
+                                    <strong>$478.40</strong>
+                                    <span>Agent 部分放款待钱包执行 · 钱包指令待执行</span>
+                                </div>
+                                                    </div>
+                    </section>
+                </aside>
+            </div>
+            </main>
+</body>
+</html>

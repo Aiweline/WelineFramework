@@ -1,0 +1,57 @@
+{
+  "desktop": {
+    "bodyTextExcerpt": "返回角色权限\n查看 Agent 信誉\nA2A 角色权限控制台\nAgent\n\n每个交易动作都要同时满足角色、订单状态、验收证据、退款/争议状态和账本约束。\n\n买方\nAgent\n平台风控\n仲裁员\n\n当前角色由 A2A 会话保存，普通 role 参数不会直接授权动作。\n\n已切换为 Agent 会话角色。\n订单角色归属已持久化，后续可绑定真实买方、Agent、平台风控和仲裁账号。\n当前访问未登录，仅完成订单归属与会话原型校验。\n生产级 ACL 仍需把所有订单角色绑定到登录账号或后台权限组。\nA2A-ORDER-Q-48E8DB\n会话角色: Agent\n会话角色已保存\n订单归属: DataClean Pro Agent\n待绑定登录账号\n仲裁已裁决，钱包指令待执行\n仲裁已裁决\n$520.00\n清洗 10 万行客户 CSV，输出质量报告\n$41.60\n平台服务费\n$478.40\nAgent 收入\n请选择一个动作查看是否允许执行。\n已按会话角色计算动作边界\n策略状态\n2\n订单主键\nprovider\n角色代码\n2\n结算案例\n4/4\n订单角色归属\n可执行动作矩阵\n\n同一个订单在不同角色下会暴露不同动作。被阻断的动作不会进入资金或仲裁写入。\n\n提交执行范围\n已阻断\n\n只有托管已锁定且尚未提交范围时，Agent 才能补充执行边界。\n\n验证此动作\n提交交付证据\n已阻断\n\n必须先完成执行范围、权限和证据清单。\n\n验证此动作\n响应争议\n可执行\n\n存在争议仲裁记录时，Agent 可以补充说明和证据。\n\n验证此动作\n打开业务入口\n申请收入出款\n已阻断\n\n出款依赖钱包适配器和最终结算状态，本阶段禁止直接出款。\n\n验证此动作\n订单角色归属\n\n每个敏感动作必须对应正式订单里的角色归属；登录账号绑定完成前仍属于原型授权。\n\n买方 · 订单买方\n待绑定登录账号 · 买方引用快照\n订单证据、验收、退款和争议发起\nAgent · DataClean Pro Agent\n待绑定登录账号 · Agent 供给快照\n执行范围、交付证据和争议响应\n平台风控 · 平台风控组\n待绑定登录账号 · 平台权限组快照\n风控复核、资金冻结、钱包监控和信誉治理\n仲裁员 · A2A 仲裁席位\n待绑定登录账号 · 仲裁席位快照\n仲裁证据复核、最终裁决和钱包指令确认\n硬性守卫规则\n未托管的订单不能进入 Agent 执行。\nAgent 只能在声明的执行范围和工具权限内交付。\n买方不能绕过验收或仲裁直接释放资金。\nA2A 会话角色必须先切换并保存，不能只靠 URL role 参数执行敏感动作。\n退款复核存在时，Agent 收入和平台服务费必须等待复核结果。\n争议仲裁存在时，买方资金、平台服务费和 Agent 收入全部冻结。\n结算案例\nA2A-REFUND-FB8CFD\n退款复核 · 退款复核中\nA2A-DISPUTE-D83C3F\n争议",
+    "hasActorAclTitle": true,
+    "hasAnonymousNotice": true,
+    "hasMetric4of4": true,
+    "hasNeedsBinding": true,
+    "hasProductionAclNotice": true,
+    "hasProvider": true,
+    "horizontalOverflowPx": 0,
+    "platformLinks": [],
+    "title": "A2A 角色权限控制台",
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=provider&order=A2A-ORDER-Q-48E8DB"
+  },
+  "roleSwitchClick": {
+    "attempted": false,
+    "count": 0,
+    "ok": false,
+    "urlAfter": null,
+    "hasPlatformRiskTeam": false,
+    "error": "platform role link did not resolve to one element"
+  },
+  "mobile": {
+    "hasActorAclTitle": true,
+    "hasArbitrator": true,
+    "hasAssignmentMetric": true,
+    "hasNeedsBinding": true,
+    "horizontalOverflowPx": 0,
+    "title": "A2A 角色权限控制台",
+    "url": "https://127.0.0.1:16895/a2a/frontend/role-console?switch_role=1&role=arbitrator&order=A2A-ORDER-Q-48E8DB",
+    "visibleButtons": [
+      "返回角色权限",
+      "查看 Agent 信誉",
+      "买方",
+      "Agent",
+      "平台风控",
+      "仲裁员",
+      "验证此动作",
+      "打开业务入口",
+      "验证此动作",
+      "打开业务入口",
+      "验证此动作",
+      "打开业务入口"
+    ]
+  },
+  "consoleErrors": {
+    "desktop": [],
+    "mobile": []
+  },
+  "screenshots": {
+    "desktop": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-actor-assignment-browser-desktop-2026-06-06-1933.png",
+    "mobile": "E:\\WelineFramework\\DEV-workspace\\artifacts\\a2a-actor-assignment-browser-mobile-2026-06-06-1933.png"
+  },
+  "notes": {
+    "desktopSnapshotHadActorAcl": true
+  }
+}

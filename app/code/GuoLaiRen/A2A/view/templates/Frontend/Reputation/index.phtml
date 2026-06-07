@@ -1,0 +1,420 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$pageTitle = (string)($this->getData('page_title') ?? __('A2A Agent 信誉重算'));
+$hasError = (bool)($this->getData('has_error') ?? false);
+$errorMessage = (string)($this->getData('error_message') ?? '');
+$metrics = $this->getData('metrics') ?? [];
+$trustSignals = $this->getData('trust_signals') ?? [];
+$riskSignals = $this->getData('risk_signals') ?? [];
+$evidenceRows = $this->getData('evidence_rows') ?? [];
+$scoreRules = $this->getData('score_rules') ?? [];
+$nextActions = $this->getData('next_actions') ?? [];
+$persisted = $this->getData('persisted') ?? [];
+$tierState = (string)($this->getData('tier_state') ?? 'silver');
+$tierClass = 'a2a-tier a2a-tier-' . preg_replace('/[^a-z0-9_-]/', '', $tierState);
+$latestDisputeOrderId = (string)($this->getData('latest_dispute_order_id') ?? '');
+$latestWalletOrderId = (string)($this->getData('latest_wallet_order_id') ?? '');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <style>
+        :root {
+            --a2a-bg: #f6f8fb;
+            --a2a-surface: #ffffff;
+            --a2a-border: #d8e0ea;
+            --a2a-text: #172033;
+            --a2a-muted: #64748b;
+            --a2a-primary: #0369a1;
+            --a2a-primary-strong: #075985;
+            --a2a-warning: #a16207;
+            --a2a-danger: #b91c1c;
+            --a2a-success: #15803d;
+            --a2a-radius: 8px;
+            --a2a-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--a2a-bg);
+            color: var(--a2a-text);
+            font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+            letter-spacing: 0;
+        }
+
+        .a2a-reputation-shell {
+            width: min(1120px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 28px 0 44px;
+        }
+
+        .a2a-reputation-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .a2a-reputation-nav a,
+        .a2a-button {
+            min-height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 8px 12px;
+            background: var(--a2a-surface);
+            color: var(--a2a-text);
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .a2a-button-primary {
+            background: var(--a2a-primary);
+            border-color: var(--a2a-primary);
+            color: #fff;
+        }
+
+        .a2a-button-primary:hover {
+            background: var(--a2a-primary-strong);
+            color: #fff;
+        }
+
+        .a2a-panel {
+            min-width: 0;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            background: var(--a2a-surface);
+            box-shadow: var(--a2a-shadow);
+            padding: 18px;
+        }
+
+        .a2a-panel + .a2a-panel {
+            margin-top: 16px;
+        }
+
+        .a2a-grid {
+            display: grid;
+            grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .a2a-kicker,
+        .a2a-state-pill,
+        .a2a-tier {
+            display: inline-flex;
+            min-height: 28px;
+            align-items: center;
+            border-radius: var(--a2a-radius);
+            padding: 4px 9px;
+            background: #e0f2fe;
+            color: var(--a2a-primary);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .a2a-tier-black {
+            background: #111827;
+            color: #fff;
+        }
+
+        .a2a-tier-platinum {
+            background: #e0f2fe;
+            color: #075985;
+        }
+
+        .a2a-tier-gold {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .a2a-tier-silver,
+        .a2a-tier-risk {
+            background: #f1f5f9;
+            color: #334155;
+        }
+
+        h1,
+        h2,
+        p {
+            margin-top: 0;
+        }
+
+        h1 {
+            margin: 14px 0 10px;
+            font-size: clamp(30px, 4vw, 44px);
+            line-height: 1.08;
+        }
+
+        .a2a-muted {
+            color: var(--a2a-muted);
+            line-height: 1.65;
+        }
+
+        .a2a-id-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .a2a-public-id {
+            display: inline-flex;
+            min-height: 32px;
+            align-items: center;
+            border-radius: var(--a2a-radius);
+            padding: 5px 9px;
+            background: #f1f5f9;
+            color: var(--a2a-text);
+            font-weight: 800;
+        }
+
+        .a2a-score-layout {
+            display: grid;
+            grid-template-columns: minmax(180px, .55fr) minmax(0, 1.45fr);
+            gap: 14px;
+            margin-top: 16px;
+        }
+
+        .a2a-score-card {
+            display: grid;
+            place-items: center;
+            min-height: 186px;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            background: #f8fafc;
+            text-align: center;
+        }
+
+        .a2a-score-card strong {
+            display: block;
+            font-size: 52px;
+            line-height: 1;
+        }
+
+        .a2a-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .a2a-metric,
+        .a2a-list li,
+        .a2a-evidence-row {
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 10px;
+            background: #f8fafc;
+            line-height: 1.5;
+        }
+
+        .a2a-metric strong {
+            display: block;
+            color: var(--a2a-text);
+            font-size: 22px;
+        }
+
+        .a2a-metric span,
+        .a2a-evidence-row span {
+            color: var(--a2a-muted);
+            font-size: 13px;
+        }
+
+        .a2a-list,
+        .a2a-evidence-list {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .a2a-signal-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .a2a-evidence-row {
+            display: grid;
+            grid-template-columns: minmax(120px, .45fr) minmax(140px, .65fr) minmax(120px, .45fr) minmax(0, .7fr);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .a2a-evidence-row strong {
+            color: var(--a2a-text);
+        }
+
+        .a2a-persisted-strip {
+            display: grid;
+            grid-template-columns: 1.2fr repeat(2, minmax(0, .6fr));
+            gap: 8px;
+            margin-top: 14px;
+            padding: 10px;
+            border: 1px solid #fed7aa;
+            border-radius: var(--a2a-radius);
+            background: #fff7ed;
+        }
+
+        .a2a-persisted-strip strong {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--a2a-warning);
+            font-size: 14px;
+        }
+
+        .a2a-persisted-strip span {
+            color: var(--a2a-muted);
+            font-size: 12px;
+        }
+
+        .a2a-error {
+            border-color: #fecaca;
+            background: #fff1f2;
+            color: var(--a2a-danger);
+        }
+
+        @media (max-width: 860px) {
+            .a2a-grid,
+            .a2a-score-layout,
+            .a2a-metrics,
+            .a2a-signal-grid,
+            .a2a-persisted-strip,
+            .a2a-evidence-row {
+                grid-template-columns: 1fr;
+            }
+
+            .a2a-reputation-nav {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="a2a-reputation-shell">
+        <nav class="a2a-reputation-nav" aria-label="<?= __('A2A 信誉导航') ?>">
+            <a href="/a2a/frontend#ability-store"><?= __('返回能力商店') ?></a>
+            <?php if (!$hasError && $latestDisputeOrderId !== ''): ?>
+                <a class="a2a-button a2a-button-primary" href="/a2a/frontend/settlement-case?case=dispute&amp;order=<?= rawurlencode($latestDisputeOrderId) ?>"><?= __('查看最近争议') ?></a>
+            <?php endif; ?>
+            <?php if (!$hasError && $latestWalletOrderId !== ''): ?>
+                <a class="a2a-button" href="/a2a/frontend/wallet-monitor?mode=inspect&amp;order=<?= rawurlencode($latestWalletOrderId) ?>"><?= __('查看钱包执行') ?></a>
+            <?php endif; ?>
+        </nav>
+
+        <?php if ($hasError): ?>
+            <section class="a2a-panel a2a-error">
+                <span class="a2a-kicker"><?= __('无法重算信誉') ?></span>
+                <h1><?= __('Agent 信誉不可用') ?></h1>
+                <p><?= htmlspecialchars($errorMessage) ?></p>
+                <a class="a2a-button" href="/a2a/frontend#ability-store"><?= __('返回能力商店') ?></a>
+            </section>
+        <?php else: ?>
+            <section class="a2a-panel">
+                <span class="a2a-kicker"><?= __('订单结果驱动') ?></span>
+                <h1><?= htmlspecialchars((string)$this->getData('provider')) ?></h1>
+                <p class="a2a-muted"><?= __('信誉不再只来自静态认证标签，而是由托管订单、验收证据、退款复核、最终裁决和钱包执行共同重算。') ?></p>
+                <div class="a2a-id-stack">
+                    <span class="a2a-public-id"><?= htmlspecialchars((string)$this->getData('provider_key')) ?></span>
+                    <span class="<?= $tierClass ?>"><?= htmlspecialchars((string)$this->getData('tier')) ?></span>
+                    <span class="a2a-state-pill"><?= htmlspecialchars((string)$this->getData('status')) ?></span>
+                </div>
+                <div class="a2a-score-layout">
+                    <div class="a2a-score-card">
+                        <div>
+                            <strong><?= htmlspecialchars((string)$this->getData('score')) ?></strong>
+                            <span><?= __('信誉分') ?></span>
+                        </div>
+                    </div>
+                    <div class="a2a-metrics">
+                        <?php foreach ($metrics as $metric): ?>
+                            <div class="a2a-metric">
+                                <span><?= htmlspecialchars((string)$metric['label']) ?></span>
+                                <strong><?= htmlspecialchars((string)$metric['value']) ?></strong>
+                                <span><?= htmlspecialchars((string)$metric['caption']) ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php if (is_array($persisted) && $persisted): ?>
+                    <div class="a2a-persisted-strip" aria-label="<?= __('持久化状态') ?>">
+                        <div><strong><?= htmlspecialchars((string)$persisted['status']) ?></strong><span><?= __('持久化状态') ?></span></div>
+                        <div><strong><?= htmlspecialchars((string)$persisted['agent_reputation_id']) ?></strong><span><?= __('信誉主键') ?></span></div>
+                        <div><strong><?= htmlspecialchars((string)$persisted['source_rows']) ?></strong><span><?= __('来源行') ?></span></div>
+                    </div>
+                <?php endif; ?>
+            </section>
+
+            <div class="a2a-grid">
+                <div>
+                    <section class="a2a-panel">
+                        <h2><?= __('信誉证据链') ?></h2>
+                        <p class="a2a-muted"><?= __('每个加分或扣分都必须能追溯到订单、验收、裁决或钱包执行。') ?></p>
+                        <div class="a2a-evidence-list">
+                            <?php foreach ($evidenceRows as $row): ?>
+                                <div class="a2a-evidence-row">
+                                    <strong><?= htmlspecialchars((string)$row['source']) ?></strong>
+                                    <span><?= htmlspecialchars((string)$row['id']) ?></span>
+                                    <span><?= htmlspecialchars((string)$row['status']) ?></span>
+                                    <span><?= htmlspecialchars((string)$row['impact']) ?></span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <section class="a2a-panel">
+                        <h2><?= __('计分规则') ?></h2>
+                        <ul class="a2a-list">
+                            <?php foreach ($scoreRules as $rule): ?>
+                                <li><?= htmlspecialchars((string)$rule) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </section>
+                </div>
+                <aside>
+                    <section class="a2a-panel">
+                        <div class="a2a-signal-grid">
+                            <div>
+                                <h2><?= __('信任信号') ?></h2>
+                                <ul class="a2a-list">
+                                    <?php foreach ($trustSignals as $signal): ?>
+                                        <li><?= htmlspecialchars((string)$signal) ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                            <div>
+                                <h2><?= __('风险信号') ?></h2>
+                                <ul class="a2a-list">
+                                    <?php foreach ($riskSignals as $signal): ?>
+                                        <li><?= htmlspecialchars((string)$signal) ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="a2a-panel">
+                        <h2><?= __('下一步治理动作') ?></h2>
+                        <ul class="a2a-list">
+                            <?php foreach ($nextActions as $action): ?>
+                                <li><?= htmlspecialchars((string)$action) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </section>
+                </aside>
+            </div>
+        <?php endif; ?>
+    </main>
+</body>
+</html>
