@@ -89,6 +89,15 @@ class SslCertificateService
      * ACME 提供商
      */
     protected string $acmeProvider = self::PROVIDER_LETS_ENCRYPT;
+
+    /**
+     * Cache local CA trust results by certificate fingerprint for the current
+     * process. Importing a root CA can trigger OS credential prompts, so one CA
+     * must never attempt trust import once per generated leaf certificate.
+     *
+     * @var array<string,array{success:bool,trusted:bool,message:string}>
+     */
+    protected array $localCaTrustResultCache = [];
     
     /**
      * ACME 目录缓存
@@ -1295,9 +1304,10 @@ CNF;
         }
 
         $storeOutput = $this->runTrustCommand(
-            'certutil -user -store Root ' . \escapeshellarg($thumb) . ' 2>&1'
+            'certutil -user -store Root ' . \escapeshellarg($thumb) . ' 2>&1',
+            $exitCode
         );
-        if ($storeOutput === '') {
+        if ($exitCode !== 0 || $storeOutput === '') {
             return false;
         }
 
@@ -1305,8 +1315,11 @@ CNF;
             return false;
         }
 
-        return \str_contains($storeOutput, '================ Certificate')
-            || \str_contains($storeOutput, 'Certificate:');
+        // certutil output is localized on non-English Windows builds. A zero
+        // exit code without explicit NOT_FOUND/FAILED markers is the stable
+        // signal here; matching English "Certificate:" caused false negatives
+        // and repeated Root-store import prompts.
+        return true;
     }
 
     protected function isLocalCertificateAuthorityTrustedOnMacos(string $caCertPath): bool
@@ -1534,44 +1547,62 @@ CNF;
             return ['success' => false, 'trusted' => false, 'message' => __('Local CA certificate file is missing: %{1}', [$caCertPath])];
         }
 
+        $cacheKey = $this->getCertificateSha1Fingerprint($caCertPath);
+        if ($cacheKey !== '' && isset($this->localCaTrustResultCache[$cacheKey])) {
+            return $this->localCaTrustResultCache[$cacheKey];
+        }
+
+        $remember = function (array $result) use ($cacheKey): array {
+            $normalized = [
+                'success' => (bool)($result['success'] ?? false),
+                'trusted' => (bool)($result['trusted'] ?? false),
+                'message' => (string)($result['message'] ?? ''),
+            ];
+            if ($cacheKey !== '') {
+                $this->localCaTrustResultCache[$cacheKey] = $normalized;
+            }
+
+            return $normalized;
+        };
+
         if ($this->getOsFamily() === 'Windows') {
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
-                return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')];
+                return $remember(['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')]);
             }
 
             if (!$this->commandExists('certutil.exe')) {
-                return [
+                return $remember([
                     'success' => false,
                     'trusted' => false,
                     'message' => __('Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually', [$caCertPath]),
-                ];
+                ]);
             }
 
             $this->runTrustCommand('certutil -user -addstore Root ' . \escapeshellarg($caCertPath) . ' 2>&1');
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
-                return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into Current User Root store')];
+                return $remember(['success' => true, 'trusted' => true, 'message' => __('Local CA imported into Current User Root store')]);
             }
 
-            return [
+            return $remember([
                 'success' => false,
                 'trusted' => false,
                 'message' => __('Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually', [$caCertPath]),
-            ];
+            ]);
         }
 
         if ($this->getOsFamily() === 'Darwin') {
-            return $this->trustLocalCertificateAuthorityOnMacos($caCertPath);
+            return $remember($this->trustLocalCertificateAuthorityOnMacos($caCertPath));
         }
 
         if ($this->getOsFamily() === 'Linux') {
-            return $this->trustLocalCertificateAuthorityOnLinux($caCertPath);
+            return $remember($this->trustLocalCertificateAuthorityOnLinux($caCertPath));
         }
 
-        return [
+        return $remember([
             'success' => true,
             'trusted' => false,
             'message' => __('Local CA was generated. Trust it manually in your OS/browser with %{1}', [$caCertPath]),
-        ];
+        ]);
     }
 
     protected function nextLocalCaSerial(): int
@@ -3210,6 +3241,11 @@ CNF;
         }
 
         $caCertPath = $this->getLocalCaCertPath();
+        $existingPem = \is_file($caCertPath) ? (string) @\file_get_contents($caCertPath) : '';
+        if (\trim($existingPem) === \trim($localCaPem)) {
+            return;
+        }
+
         if (@\file_put_contents($caCertPath, $localCaPem) === false) {
             w_log_warning(__('[SslCertificateService] Failed to recover local CA certificate to %{1}', [$caCertPath]), [], 'ssl_cert');
             return;
