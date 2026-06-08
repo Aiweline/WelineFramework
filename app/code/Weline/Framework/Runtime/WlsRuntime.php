@@ -3431,8 +3431,8 @@ class WlsRuntime implements RuntimeInterface
                 continue;
             }
             
-            // 货币识别：3 位大写字母
-            if ($currency === null && \strlen($segment) === 3 && \ctype_upper($segment)) {
+            // 货币识别：必须是当前请求允许的货币码，不能把 ACL 这类后台路由段误当货币。
+            if ($currency === null && State::isAllowedCurrencyCode($segment)) {
                 $currency = $segment;
                 continue;
             }
