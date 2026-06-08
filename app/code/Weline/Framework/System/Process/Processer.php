@@ -2701,7 +2701,6 @@ class Processer
                 $argumentList = self::tokenizeCommandLineArguments($arguments);
             }
             $processName = self::extractCommandLineArg($processCommand, 'name');
-            $logFile = $enableLog ? self::getLogFile($processCommand) : '';
             $item = [
                 'key' => (string) $key,
                 'command' => $processCommand,
@@ -2709,8 +2708,6 @@ class Processer
                 'arguments' => $arguments,
                 'argument_list' => $argumentList,
                 'process_name' => $processName,
-                'stdout_log' => $logFile,
-                'stderr_log' => $logFile !== '' ? $logFile . '.stderr.log' : '',
                 'cwd' => BP,
                 'enable_log' => $enableLog,
                 'block' => $block,
@@ -3727,8 +3724,6 @@ POWERSHELL;
             $argumentList = $item['argument_list'] ?? self::tokenizeCommandLineArguments((string) ($item['arguments'] ?? ''));
             $arguments = \array_map(static fn (mixed $argument): string => (string) $argument, $argumentList);
             $foreground = !empty($item['foreground']);
-            $stdoutLog = (string) ($item['stdout_log'] ?? '');
-            $stderrLog = (string) ($item['stderr_log'] ?? '');
 
             if ($key === '' || $php === '') {
                 return null;
@@ -3744,12 +3739,6 @@ POWERSHELL;
             $lines[] = '    }';
             $lines[] = '    $argList = ' . self::buildPowerShellArrayLiteral($arguments);
             $lines[] = '    if ($argList.Count -gt 0) { $startArgs.ArgumentList = $argList }';
-            if ($stdoutLog !== '') {
-                $lines[] = '    $startArgs.RedirectStandardOutput = ' . self::toPowerShellSingleQuoted($stdoutLog);
-            }
-            if ($stderrLog !== '') {
-                $lines[] = '    $startArgs.RedirectStandardError = ' . self::toPowerShellSingleQuoted($stderrLog);
-            }
             $lines[] = '    $p = Start-Process @startArgs';
             $lines[] = '    Add-WelineResult ' . self::toPowerShellSingleQuoted($key) . ' ([int]$p.Id)';
             $lines[] = '} catch {';
@@ -6328,7 +6317,10 @@ POWERSHELL;
                     if ($pid <= 0 || $pid === $currentPid) {
                         continue;
                     }
-                    $targetPids[$pid] = true;
+                    $targetPids[$pid] = [
+                        'pname' => (string) $pname,
+                        'taskName' => (string) $taskName,
+                    ];
                 }
 
                 break;
@@ -6344,6 +6336,15 @@ POWERSHELL;
             $pid = (int)$pid;
             $info = \is_array($processInfo[$pid] ?? null) ? $processInfo[$pid] : [];
             if ((bool)($info['exists'] ?? false) && !(bool)($info['is_zombie'] ?? false)) {
+                $commandLine = (string) ($info['command'] ?? '');
+                if ($commandLine === '') {
+                    $commandLine = self::getProcessCommandLine($pid);
+                }
+                $expected = \is_array($targetPids[$pid] ?? null) ? $targetPids[$pid] : [];
+                $expectedTaskName = (string) ($expected['taskName'] ?? '');
+                if (!self::commandLineMatchesManagedProcessName($commandLine, $expectedTaskName)) {
+                    continue;
+                }
                 $livePids[] = $pid;
             }
         }
@@ -6355,6 +6356,26 @@ POWERSHELL;
         $result = self::batchKillProcessTrees($livePids, true);
         
         return (int) ($result['killed'] ?? 0);
+    }
+
+    /**
+     * Prefix-based cleanup must validate the live command line, not only stale pid/name indexes.
+     */
+    private static function commandLineMatchesManagedProcessName(string $commandLine, string $expectedTaskName): bool
+    {
+        if ($commandLine === '' || $expectedTaskName === '') {
+            return false;
+        }
+
+        $actualProcessName = self::extractCommandLineArg($commandLine, 'name');
+        if ($actualProcessName === '') {
+            $actualProcessName = self::extractCommandLineArg($commandLine, 'process');
+        }
+        if ($actualProcessName === '') {
+            return false;
+        }
+
+        return self::normalizeName($actualProcessName) === self::normalizeName($expectedTaskName);
     }
 
     /**

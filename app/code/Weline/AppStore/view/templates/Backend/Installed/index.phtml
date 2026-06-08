@@ -17,6 +17,11 @@ $rows = [];
 foreach ($modules as $module) {
     $data = is_object($module) && method_exists($module, 'getData') ? $module->getData() : (array)$module;
     $moduleName = (string)($data['module_name'] ?? '');
+    $modulePath = '';
+    if ($moduleName !== '' && str_contains($moduleName, '_')) {
+        [$vendor, $moduleDir] = explode('_', $moduleName, 2);
+        $modulePath = rtrim(APP_CODE_PATH, DS) . DS . $vendor . DS . $moduleDir;
+    }
     $update = is_array($updateIndex[$moduleName] ?? null) ? $updateIndex[$moduleName] : [];
     $latestVersion = (string)($update['latest_version'] ?? '');
     $rows[] = [
@@ -32,7 +37,7 @@ foreach ($modules as $module) {
         'updated_at' => (string)($data['updated_at'] ?? ''),
         'registered' => $moduleName !== '' && isset($systemModules[$moduleName]),
         'enabled' => $moduleName !== '' && !empty($systemModules[$moduleName]['status']),
-        'readme_path' => $moduleName !== '' ? APP_CODE_PATH . str_replace('_', DS, $moduleName) . DS . '商城应用.md' : '',
+        'readme_path' => $modulePath !== '' ? $modulePath . DS . '商城应用.md' : '',
     ];
 }
 

@@ -39,6 +39,8 @@ class ModuleInstallerService
 
     private const MARKETPLACE_README = '商城应用.md';
 
+    private const PACKAGE_MANIFEST = 'weline-appstore-package.json';
+
     /**
      * 平台 API 基础 URL
      */
@@ -59,10 +61,11 @@ class ModuleInstallerService
         $platformUrl = self::normalizePlatformApiBaseUrl($this->resolvePlatformUrl());
         // Env::get 如果配置项存在但显式为 null，会直接返回 null（不会走 default），因此这里做非空兜底。
         $this->platformApiUrl = $platformUrl;
-        $this->httpClient = new Client([
+        /** @var AccountBindService $accountService */
+        $accountService = ObjectManager::getInstance(AccountBindService::class);
+        $this->httpClient = new Client($accountService->getHttpClientOptions([
             'timeout' => 300,
-            'verify' => true,
-        ]);
+        ]));
     }
 
     /**
@@ -246,11 +249,16 @@ class ModuleInstallerService
 
         // 解压到临时目录
         $tempDir = $this->extract($zipPath);
+        $packageManifest = [];
+        $bundledBackups = [];
+        $backupDir = null;
+        $targetDir = '';
 
         try {
             // 验证模块结构
             $this->normalizePhpFiles($tempDir);
             $moduleInfo = $this->validateStructure($tempDir);
+            $packageManifest = $this->readPackageManifest($tempDir);
 
             // 检查依赖
             $dependencyCheck = $this->checkDependencies($moduleInfo['dependencies'] ?? []);
@@ -263,13 +271,14 @@ class ModuleInstallerService
             $targetDir = $this->getModuleTargetDir($moduleName);
 
             // 备份旧版本（如果存在）
-            $backupDir = null;
             if (is_dir($targetDir)) {
                 $backupDir = $this->backupModule($targetDir);
             }
+            $bundledBackups = $this->backupPackageBundledPaths($packageManifest);
 
             // 移动模块到目标目录
             $this->moveModule($tempDir, $targetDir);
+            $this->installPackageBundledPaths($tempDir, $packageManifest);
 
             // 执行安装命令
             $wasMaintenanceMode = (bool)Env::get('system.maintenance', false);
@@ -317,6 +326,7 @@ class ModuleInstallerService
                 'license_key_masked' => $this->maskSecret((string)($options['license_key'] ?? '')),
                 'target_dir' => $targetDir,
                 'backup_dir' => $backupDir ?? '',
+                'bundled_paths' => array_column($this->packageBundledPaths($packageManifest), 'target_path'),
                 'frontend_path' => $this->getInstalledFrontendPath($targetDir),
                 'readme_path' => $readmePath,
                 'download_log_id' => (int)($options['download_log_id'] ?? 0),
@@ -344,6 +354,7 @@ class ModuleInstallerService
                 'previous_version' => (string)($options['previous_version'] ?? ''),
                 'target_dir' => $targetDir,
                 'backup_dir' => $backupDir ?? '',
+                'bundled_paths' => array_column($this->packageBundledPaths($packageManifest), 'target_path'),
                 'frontend_path' => $this->getInstalledFrontendPath($targetDir),
                 'marketplace_readme' => $readmePath,
                 'install_record_path' => $installRecordPath,
@@ -351,6 +362,16 @@ class ModuleInstallerService
             ];
         } catch (\Throwable $e) {
             // 清理临时文件
+            if ($targetDir !== '') {
+                if ($backupDir) {
+                    $this->restoreBackup($backupDir, $targetDir);
+                } elseif (is_dir($targetDir)) {
+                    $this->recursiveDelete($targetDir);
+                }
+            }
+            if ($bundledBackups) {
+                $this->restorePackageBundledPathBackups($bundledBackups);
+            }
             if (isset($tempDir) && is_dir($tempDir)) {
                 $this->cleanup($tempDir);
             }
@@ -426,7 +447,7 @@ class ModuleInstallerService
         // 必须是 Vendor_Module 格式
         // Vendor 和 Module 只能包含字母、数字
         // 防止路径遍历攻击
-        if (!preg_match('/^[A-Za-z][A-Za-z0-9]*_[A-Za-z][A-Za-z0-9]*$/', $moduleName)) {
+        if (!preg_match('/^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z][A-Za-z0-9]*)+$/', $moduleName)) {
             return false;
         }
 
@@ -583,7 +604,7 @@ class ModuleInstallerService
         $registers = glob(APP_CODE_PATH . '*' . DS . '*' . DS . 'register.php');
         foreach ($registers as $register) {
             $content = file_get_contents($register);
-            if (preg_match("/Register::register\s*\(\s*Register::MODULE\s*,\s*['\"]([^'\"]+)['\"]/", $content, $matches)) {
+            if (preg_match("/Register::register\s*\(\s*Register::MODULE\s*,\s*['\"]([A-Za-z][A-Za-z0-9]*(?:_[A-Za-z][A-Za-z0-9]*)+)['\"]/", $content, $matches)) {
                 $modules[$matches[1]] = true;
             }
         }
@@ -598,7 +619,165 @@ class ModuleInstallerService
      */
     private function getModuleTargetDir(string $moduleName): string
     {
-        return self::MODULE_DIR . str_replace('_', DS, $moduleName);
+        [$vendor, $moduleDir] = explode('_', $moduleName, 2);
+        return rtrim(self::MODULE_DIR, DS) . DS . $vendor . DS . $moduleDir;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readPackageManifest(string $tempDir): array
+    {
+        $path = $tempDir . DS . self::PACKAGE_MANIFEST;
+        if (!is_file($path)) {
+            return [];
+        }
+
+        $data = json_decode((string)file_get_contents($path), true);
+        if (!is_array($data)) {
+            throw new Exception(__('Invalid app store package manifest.'));
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @return array<int, array{zip_path:string, target_path:string}>
+     */
+    private function packageBundledPaths(array $manifest): array
+    {
+        $paths = [];
+        foreach ((array)($manifest['bundled_paths'] ?? []) as $bundle) {
+            if (!is_array($bundle)) {
+                continue;
+            }
+
+            $zipPath = $this->normalizePackageRelativePath((string)($bundle['zip_path'] ?? ''), 'zip_path');
+            $targetPath = $this->normalizePackageRelativePath((string)($bundle['target_path'] ?? $zipPath), 'target_path');
+            $paths[$targetPath] = [
+                'zip_path' => $zipPath,
+                'target_path' => $targetPath,
+            ];
+        }
+
+        return array_values($paths);
+    }
+
+    private function normalizePackageRelativePath(string $path, string $field): string
+    {
+        $path = trim(str_replace(['/', '\\'], DS, $path), DS);
+        if ($path === '' || str_contains($path, '..') || str_contains($path, "\0") || str_contains($path, ':')) {
+            throw new Exception(__('Invalid app store package path: ') . $field);
+        }
+
+        return $path;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @return array<int, array{target:string, backup:?string}>
+     */
+    private function backupPackageBundledPaths(array $manifest): array
+    {
+        $backups = [];
+        foreach ($this->packageBundledPaths($manifest) as $bundle) {
+            $targetDir = $this->resolvePackageTargetPath($bundle['target_path']);
+            $backups[] = [
+                'target' => $targetDir,
+                'backup' => is_dir($targetDir) ? $this->backupModule($targetDir) : null,
+            ];
+        }
+
+        return $backups;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     */
+    private function installPackageBundledPaths(string $tempDir, array $manifest): void
+    {
+        foreach ($this->packageBundledPaths($manifest) as $bundle) {
+            $sourceDir = $this->resolvePackageSourcePath($tempDir, $bundle['zip_path']);
+            $targetDir = $this->resolvePackageTargetPath($bundle['target_path']);
+
+            if (is_dir($targetDir)) {
+                $this->recursiveDelete($targetDir);
+            }
+
+            $parentDir = dirname($targetDir);
+            if (!is_dir($parentDir)) {
+                mkdir($parentDir, 0755, true);
+            }
+
+            $this->recursiveCopy($sourceDir, $targetDir);
+        }
+    }
+
+    /**
+     * @param array<int, array{target:string, backup:?string}> $backups
+     */
+    private function restorePackageBundledPathBackups(array $backups): void
+    {
+        foreach ($backups as $backup) {
+            $targetDir = (string)($backup['target'] ?? '');
+            $backupDir = $backup['backup'] ?? null;
+            if ($targetDir === '') {
+                continue;
+            }
+
+            if (is_dir($targetDir)) {
+                $this->recursiveDelete($targetDir);
+            }
+            if (is_string($backupDir) && $backupDir !== '' && is_dir($backupDir)) {
+                $this->recursiveCopy($backupDir, $targetDir);
+            }
+        }
+    }
+
+    private function resolvePackageSourcePath(string $tempDir, string $zipPath): string
+    {
+        $sourceDir = $tempDir . DS . $zipPath;
+        $realTemp = realpath($tempDir);
+        $realSource = realpath($sourceDir);
+        if (!$realTemp || !$realSource || !is_dir($realSource) || !$this->isPathWithin($realSource, $realTemp)) {
+            throw new Exception(__('Invalid bundled source path: ') . $zipPath);
+        }
+
+        return $realSource;
+    }
+
+    private function resolvePackageTargetPath(string $targetPath): string
+    {
+        $targetDir = rtrim(self::MODULE_DIR, DS) . DS . $targetPath;
+        $realRoot = realpath(self::MODULE_DIR);
+        if (!$realRoot) {
+            throw new Exception(__('App code path does not exist.'));
+        }
+
+        $nearest = dirname($targetDir);
+        while (!file_exists($nearest) && $nearest !== dirname($nearest)) {
+            $nearest = dirname($nearest);
+        }
+
+        $realNearest = realpath($nearest);
+        if (!$realNearest || !$this->isPathWithin($realNearest, $realRoot)) {
+            throw new Exception(__('Invalid bundled target path: ') . $targetPath);
+        }
+
+        return $targetDir;
+    }
+
+    private function isPathWithin(string $path, string $root): bool
+    {
+        $path = str_replace('\\', '/', rtrim($path, '\\/'));
+        $root = str_replace('\\', '/', rtrim($root, '\\/'));
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $path = strtolower($path);
+            $root = strtolower($root);
+        }
+
+        return $path === $root || str_starts_with($path, $root . '/');
     }
 
     /**

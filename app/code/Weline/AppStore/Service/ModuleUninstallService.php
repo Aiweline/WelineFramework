@@ -29,7 +29,7 @@ class ModuleUninstallService
         if ($moduleName === '') {
             throw new Exception(__('缺少模块名称'));
         }
-        if (!preg_match('/^[A-Za-z][A-Za-z0-9]*_[A-Za-z][A-Za-z0-9]*$/', $moduleName)) {
+        if (!preg_match('/^[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z][A-Za-z0-9]*)+$/', $moduleName)) {
             throw new Exception(__('模块名称不合法'));
         }
         if (in_array($moduleName, self::PROTECTED_MODULES, true)) {
