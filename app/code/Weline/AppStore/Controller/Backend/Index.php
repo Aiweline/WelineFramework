@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\AppStore\Controller\Backend;
 
-use GuzzleHttp\Client;
 use Weline\AppStore\Model\AppStoreInstalledModule;
 use Weline\AppStore\Service\AccountBindService;
 use Weline\AppStore\Service\ModuleInstallerService;
@@ -106,7 +105,7 @@ class Index extends BackendController
                 return $this->jsonResponse(false, __('获取授权令牌失败'));
             }
 
-            $client = new Client();
+            $client = new \GuzzleHttp\Client($accountService->getHttpClientOptions());
             $response = $client->post(
                 $accountService->getPlatformApiUrl('/api/v1/platform/module/list'),
                 [
@@ -280,7 +279,7 @@ class Index extends BackendController
                 $payload['pricing'] = (string)$filters['pricing'];
             }
 
-            $client = new Client(['timeout' => 30]);
+            $client = new \GuzzleHttp\Client($accountService->getHttpClientOptions(['timeout' => 30]));
             $response = $client->post(
                 $accountService->getPlatformApiUrl('/api/v1/platform/module/list'),
                 [
@@ -576,6 +575,7 @@ class Index extends BackendController
             return false;
         }
 
-        return is_dir(APP_CODE_PATH . str_replace('_', DS, $moduleName));
+        [$vendor, $moduleDir] = explode('_', $moduleName, 2);
+        return is_dir(rtrim(APP_CODE_PATH, DS) . DS . $vendor . DS . $moduleDir);
     }
 }
