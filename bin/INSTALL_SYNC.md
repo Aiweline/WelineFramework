@@ -21,7 +21,7 @@
 | pgsql 项目端口 | 每个项目的 `extend/server/pgsql/data` 必须使用独立端口；当配置端口被占用时，安装/启动流程自动选择 5433+ 并同步 `postgresql.conf` 与 `weline.env` |
 | weline.env 完整性 | **安装前**检查：若存在 weline.env，每行须为 `KEY=VALUE` 或 `#` 注释，否则红色警告并询问是否继续 |
 | 下载失败提示 | 下载 PHP 等失败时，提示「若下载失败请检查网络或 VPN 配置」 |
-| 安装后命令 | 安装结束后若 php 可用则执行：`php setup/server_installer/run.php`（内部完成 composer、env:check、env:install、setup:upgrade×2、server:stop、server:start） |
+| 安装后命令 | 先 `php -d opcache.enable=0 setup/server_installer/bootstrap_php_ini.php` 配置 php.ini（Windows 写入 `opcache.file_cache`），再 `php setup/server_installer/run.php`（composer、env:check、env:install、setup:upgrade×2、server:stop、server:start） |
 
 ## 修改时检查
 

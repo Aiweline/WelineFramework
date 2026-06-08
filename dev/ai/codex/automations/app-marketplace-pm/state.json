@@ -1,20 +1,28 @@
-﻿{
-    "marker":  "APP_MARKETPLACE_PM_AUTOMATION",
-    "status":  "blocked",
-    "activeRunId":  "run-20260607-180601-4b177cea",
-    "activeTaskPath":  "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-1006-app-marketplace-update-iteration",
-    "startedAt":  "2026-06-07T18:06:01+08:00",
-    "updatedAt":  "2026-06-07T18:38:04.8371387+08:00",
-    "lastCompletedAt":  null,
-    "lastSkippedAt":  null,
-    "lastResult":  "blocked: client update detection reaches https://127.0.0.1:9502/api/v1/platform/module/check-update but PHP cURL rejects the local WLS self-signed certificate chain; update/download/effectiveness not executed.",
-    "nextPriority":  "Fix local PHP/WLS trust for office 9502 HTTPS source without disabling certificate verification, then rerun Weline_SampleModule 1.0.10 -\u003e 1.0.11 detection/update/effectiveness.",
-    "evidence":  [
-                     "taskPath=E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-1006-app-marketplace-update-iteration officeStatus=9502 default HTTPS running, pre-existing user instance clientRun=started 9505 ai-test-app-marketplace-run-20260607-180601-4b177cea; stopped at end targetModule=Weline_SampleModule office register.php/manifest version 1.0.11; client installed version 1.0.10 clientConfig=appstore.platform_url changed by php bin/w system:config:set from http://127.0.0.1:9502 to https://127.0.0.1:9502 clientDetection=check-update POST still blocked by cURL error 60 self-signed certificate chain browserEvidence=E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-07\\2026-06-07-1006-app-marketplace-update-iteration\\artifacts\\browser-validation-cdp.json screenshots=browser-office-9502-*.png, browser-client-installed-9505-*.png, browser-client-sample-module-9505-*.png gitnexusDetect=dev-workspace changed_count=3 affected_count=2 risk=medium from pre-existing PageBuilder changes; no symbol edits in this run"
-                 ],
-    "remainingRisk":  [
-                          "Office API authorization token was not available for direct API success proof; invalid bearer correctly returned 401.",
-                          "Headless browser used CDP fallback because in-app Browser had zero claimable tabs and DevTools profile was locked.",
-                          "GitNexus detect_changes reports unrelated pre-existing PageBuilder changes in client repo."
-                      ]
+{
+  "marker": "APP_MARKETPLACE_PM_AUTOMATION",
+  "status": "completed",
+  "activeRunId": "run-20260608-081252-eb537e83",
+  "activeTaskPath": "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0012-app-marketplace-update-iteration-2",
+  "startedAt": "2026-06-08T08:13:26.0306587+08:00",
+  "updatedAt": "2026-06-08T08:41:20+08:00",
+  "lastCompletedAt": "2026-06-08T08:41:20+08:00",
+  "lastSkippedAt": null,
+  "lastResult": "Completed Weline_SampleModule update loop from official 1.0.18 source to client 1.0.18: Office detail/API/package metadata exposed 1.0.18, client detected 1.0.17 -> 1.0.18 as updatable, browser update submitted successfully, module register.php/install record/module list/front route verified after update.",
+  "nextPriority": "Investigate Office 9502 WLS stability during marketplace verification; two test instances stopped unexpectedly after successful requests.",
+  "evidence": [
+    "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0012-app-marketplace-update-iteration-2",
+    "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0012-app-marketplace-update-iteration-2\\artifacts\\office-api-1.0.18.json",
+    "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0012-app-marketplace-update-iteration-2\\artifacts\\office-detail-after-cache-clear-check-clean.json",
+    "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0012-app-marketplace-update-iteration-2\\artifacts\\office-manifest-package-1.0.18.json",
+    "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0012-app-marketplace-update-iteration-2\\artifacts\\browser-update-flow-1.0.18-summary.json",
+    "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0012-app-marketplace-update-iteration-2\\artifacts\\client-sample-module-after-check.json",
+    "E:\\WelineFramework\\DEV-workspace\\var\\appstore\\install-records\\2026-06.jsonl"
+  ],
+  "remainingRisk": [
+    "Codex in-app Browser could not attach; Playwright Chromium headless fallback was used for real browser verification.",
+    "Client browser run reported one existing 404 for /pub/media/configs.login_bg on the login page; it did not block login, update, or module verification.",
+    "Office 9502 test instances ai-test-app-marketplace-office-eb537e83 and ai-test-office-marketplace-run-20260608-081300 stopped unexpectedly after successful requests; a new ai-test-app-marketplace-office-eb537b instance was started for API evidence and stopped cleanly.",
+    "GitNexus detect_changes reported medium risk because DEV-workspace already has unrelated dirty PageBuilder/AppStore symbols; this run intentionally changed SampleModule register.php through the real update flow and task/state artifacts."
+  ],
+  "skipReason": null
 }

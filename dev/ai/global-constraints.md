@@ -143,14 +143,14 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 1. 本地完成修改与验证。
 2. 同步修改到 `E:\公司\远程\src\weline`。
 3. 在发布工作区提交并推送 `master`。
-4. 默认通过本机 OpenSSH 连接已配置的 SAAS 部署目标：使用发布工作区本地 SSH 配置与密钥（`E:\公司\远程\src\weline\.ssh\jumpserver_key`，Windows Generic Credential 目标名 `Weline-SaaS-43.205.103.113-SSH-Key`）进入服务器；推荐命令形态为 `ssh -F E:\公司\远程\src\weline\.ssh\config ecs-user@weline-saas`。若本机 SSH 凭据不可用，停止部署并报告阻塞；不回退到 Chrome / JumpServer / 宝塔。
+4. 默认通过本机 OpenSSH 连接已配置的 SAAS 部署目标：使用发布工作区本地 SSH 配置与密钥（`E:\公司\远程\src\weline\.ssh\jumpserver_key`，Windows Generic Credential 目标名 `Weline-SaaS-43.205.103.113-SSH-Key`）进入服务器；推荐命令形态为 `ssh -F E:\公司\远程\src\weline\.ssh\config ec2-user@weline-saas`。若本机 SSH 凭据不可用，停止部署并报告阻塞；不回退到 Chrome / JumpServer / 宝塔。
 5. SSH 登录后通过 `sudo su - weline` 切换到项目部署账户，并进入线上项目目录 `/home/weline-test` 执行 `git pull origin master` 或按 remote 配置更新。
 6. 在 `/home/weline-test` 下按改动类型执行 `php bin/w setup:upgrade [--route]`、`php bin/w server:reload` 或 `php bin/w server:restart -r`。
 7. 用 `php bin/w http:request /` 或目标页面/API 验证。
 
 部署请求只代表执行交付流程，不授权临时修改业务代码来清理验证失败、单元测试失败或发布门禁提示；除非用户明确要求修复，否则仅记录失败项，并在部署完成后的结果中提示。
 
-已配置 SAAS 部署目标允许从 Codex shell 或本机终端使用上述 SSH 配置执行交付流程；SSH 登录账户为 `ecs-user`，项目部署账户为 `weline`，部署命令必须切换到 `weline` 后在 `/home/weline-test` 执行。SSH 只授权用于进入服务器后按既有部署步骤更新代码、执行升级/重载和验证命令，不授权临时修改业务代码、探测其他服务器、批量删除数据或绕过发布门禁。部署线上环境只能使用上述已配置的本机 OpenSSH 路径；SSH 凭据、配置、网络或权限不可用时停止部署并报告阻塞。禁止回退或改用 Chrome 浏览器中的 JumpServer / Luna Web 终端、宝塔 Web 终端；禁止使用 Codex 内置浏览器执行部署。
+已配置 SAAS 部署目标允许从 Codex shell 或本机终端使用上述 SSH 配置执行交付流程；SSH 登录账户为 `ec2-user`，项目部署账户为 `weline`，部署命令必须切换到 `weline` 后在 `/home/weline-test` 执行。SSH 只授权用于进入服务器后按既有部署步骤更新代码、执行升级/重载和验证命令，不授权临时修改业务代码、探测其他服务器、批量删除数据或绕过发布门禁。部署线上环境只能使用上述已配置的本机 OpenSSH 路径；SSH 凭据、配置、网络或权限不可用时停止部署并报告阻塞。禁止回退或改用 Chrome 浏览器中的 JumpServer / Luna Web 终端、宝塔 Web 终端；禁止使用 Codex 内置浏览器执行部署。
 
 禁止回退到线上部署浏览器操作；Chrome / 浏览器只用于部署后的用户可见功能验证，不得接管 JumpServer / Luna / 宝塔 Web 终端执行部署。
 

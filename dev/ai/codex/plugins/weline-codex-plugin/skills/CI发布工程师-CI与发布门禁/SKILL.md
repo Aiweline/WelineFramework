@@ -46,8 +46,8 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 - Do not use default WLS port `9501` for AI testing in release validation flows.
 - Always stop dedicated WLS instances after validation.
 - Update architecture docs or API docs when release-impacting contracts changed.
-- For online deployment, use only the user's Chrome browser with the JumpServer / Luna Web terminal, BaoTa Web terminal, or other user-authorized web terminal. Do not run inline SSH from Codex shell, local terminals, scripts, or background helpers; do not use the Codex built-in browser for deployment.
-- Online deployment browser control must use the Chrome extension tab path: `browser.user.openTabs()` to locate the target tab, `browser.user.claimTab(tabInfo)` to attach, then `tab.cua`, `tab.playwright`, and `tab.clipboard` to operate the claimed tab. The `claimTab + cua` channel is the required control path for terminal interaction.
+- For the configured SAAS deployment target, use local OpenSSH with the deployment-workspace SSH config/key and Windows Generic Credential entry; keep SSH commands limited to the documented delivery flow. For online targets without explicit local SSH credentials, use the user's Chrome browser with the JumpServer / Luna Web terminal, BaoTa Web terminal, or other user-authorized web terminal; do not use the Codex built-in browser for deployment.
+- When deployment falls back to browser control, use the Chrome extension tab path: `browser.user.openTabs()` to locate the target tab, `browser.user.claimTab(tabInfo)` to attach, then `tab.cua`, `tab.playwright`, and `tab.clipboard` to operate the claimed tab. The `claimTab + cua` channel is the required control path for terminal interaction.
 
 # Inputs Required
 
@@ -75,7 +75,7 @@ This skill owns release gating and CI-oriented readiness checks. It verifies tha
 - Do not ignore flaky validation prerequisites.
 - Do not bypass missing evidence because a change appears low risk.
 - Do not collapse QA and CI gate responsibilities into one vague signoff.
-- Do not treat direct SSH access as an acceptable deployment shortcut; Chrome-operated JumpServer / Luna is the required deployment path.
+- Do not treat arbitrary direct SSH access as an acceptable deployment shortcut; only the configured SAAS SSH target may use local OpenSSH, and all other online targets require Chrome-operated JumpServer / Luna or another authorized web terminal.
 - Do not use Windows or OS-level focus control for deployment: no `SetForegroundWindow`, system mouse movement/clicks, `mouse_event`, `SendKeys`, visible-window forcing, or system-level clipboard workflows that can steal focus from the user's current page. If a terminal tab is stale or unresponsive, open or claim a dedicated Chrome deployment tab through the extension instead.
 
 # Shared Collaboration Contract

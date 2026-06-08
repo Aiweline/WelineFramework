@@ -37,6 +37,16 @@ require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsqlData.php';
 
+$phpDirEarly = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
+if (is_dir($phpDirEarly)) {
+    try {
+        $envEarly = (new EnvLoader($projectRoot))->load(true);
+        (new ConfigurePhpIni($projectRoot, $phpDirEarly))->apply($envEarly);
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'WARNING: early php.ini configure failed: ' . $e->getMessage() . "\n");
+    }
+}
+
 $argv = $GLOBALS['argv'] ?? [];
 $envFileArg = null;
 foreach ($argv as $idx => $arg) {

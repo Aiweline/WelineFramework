@@ -20,6 +20,7 @@ Use an `appstore/*.log` filename string as the first argument. The second argume
 ## Installed Module Updates
 
 - The installed-module page checks the platform `check-update` API with local module name, version, platform module ID, and current domain.
+- Local or private HTTPS marketplace sources must keep certificate verification enabled. Configure `appstore.ca_bundle` or `WELINE_APPSTORE_CA_BUNDLE` with a readable CA bundle path when the platform URL uses a local development CA.
 - Updating a module reuses `ModuleInstallerService::download()` and `install()` with `action=upgrade`; install records include the previous version and old-version backup directory.
 - Install and update completion refreshes the command index through a fresh `php bin/w command:upgrade` process, then targets WLS reload at the current `WLS_INSTANCE` when an instance record exists.
 - The installed-module page uninstalls directly through `ModuleUninstallService`, which delegates to the framework `php bin/w module:remove Vendor_Module` flow so database and file backups stay owned by system uninstall.
