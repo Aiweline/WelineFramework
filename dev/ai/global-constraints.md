@@ -143,7 +143,7 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 1. 本地完成修改与验证。
 2. 同步修改到 `E:\公司\远程\src\weline`。
 3. 在发布工作区提交并推送 `master`。
-4. 默认通过本机 OpenSSH 连接已配置的 SAAS 部署目标：使用发布工作区本地 SSH 配置与密钥（`E:\公司\远程\src\weline\.ssh\jumpserver_key`，Windows Generic Credential 目标名 `Weline-SaaS-43.205.103.113-SSH-Key`）进入服务器；推荐命令形态为 `ssh -F E:\公司\远程\src\weline\.ssh\config <部署用户>@weline-saas`。若本机 SSH 凭据不可用，停止部署并报告阻塞；不回退到 Chrome / JumpServer / 宝塔。
+4. 默认通过本机 OpenSSH 连接已配置的 SAAS 部署目标：使用发布工作区本地 SSH 配置与密钥（`E:\公司\远程\src\weline\.ssh\jumpserver_key`，Windows Generic Credential 目标名 `Weline-SaaS-43.205.103.113-SSH-Key`）进入服务器；推荐命令形态为 `ssh -F E:\公司\远程\src\weline\.ssh\config weline@weline-saas`。若本机 SSH 凭据不可用，停止部署并报告阻塞；不回退到 Chrome / JumpServer / 宝塔。
 5. 在线上项目目录执行 `git pull origin master` 或按 remote 配置更新。
 6. 按改动类型执行 `php bin/w setup:upgrade [--route]`、`php bin/w server:reload` 或 `php bin/w server:restart -r`。
 7. 用 `php bin/w http:request /` 或目标页面/API 验证。
