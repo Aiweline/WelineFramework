@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Observer;
 
+use Weline\Admin\Service\BackendLoginReturnUrlService;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\DataObject\DataObject;
@@ -27,10 +28,12 @@ class ResponseRedirectBefore implements ObserverInterface
      * @var Request
      */
     protected Request $request;
+    private ?BackendLoginReturnUrlService $returnUrlService;
 
-    public function __construct(Request $request)
+    public function __construct(Request $request, ?BackendLoginReturnUrlService $returnUrlService = null)
     {
         $this->request = $request;
+        $this->returnUrlService = $returnUrlService;
     }
 
     /**
@@ -99,10 +102,14 @@ class ResponseRedirectBefore implements ObserverInterface
             // 检查当前路径是否在白名单中
             $currentPath = trim($this->request->getRouteUrlPath(), '/');
             if (!in_array($currentPath, $whiteUrls)) {
+                $refererUrl = $this->getReturnUrlService()->normalizeCandidateUrl($this->getCurrentRequestUrl());
+                if ($refererUrl === null) {
+                    return;
+                }
                 // 记录登录来源页面
                 /** @var Session $session */
                 $session = ObjectManager::getInstance(Session::class);
-                $session->setData('backend_login_referer', $this->request->getUrlBuilder()->getCurrentUrl());
+                $session->setData('backend_login_referer', $refererUrl);
             }
             
         } catch (\Exception $e) {
@@ -335,11 +342,16 @@ class ResponseRedirectBefore implements ObserverInterface
             return $loginUrl;
         }
 
-        $query = [
-            'no_access_reason' => 'not_logged_in',
-            'return_url' => $currentRequestUrl,
-        ];
-        return $loginUrl . (str_contains($loginUrl, '?') ? '&' : '?') . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        return $this->getReturnUrlService()->buildLoginUrlWithReturn($loginUrl, $currentRequestUrl, 'not_logged_in');
+    }
+
+    private function getReturnUrlService(): BackendLoginReturnUrlService
+    {
+        if (!$this->returnUrlService instanceof BackendLoginReturnUrlService) {
+            $this->returnUrlService = ObjectManager::getInstance(BackendLoginReturnUrlService::class);
+        }
+
+        return $this->returnUrlService;
     }
 
     private function getCurrentRequestUrl(): string

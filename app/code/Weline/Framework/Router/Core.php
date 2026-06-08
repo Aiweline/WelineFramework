@@ -11,6 +11,7 @@ namespace Weline\Framework\Router;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
+use Weline\Framework\App\State;
 use Weline\Framework\Cache\CacheManager as FrameworkCacheManager;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
@@ -581,7 +582,7 @@ class Core
 
     private function isCurrencySegment(string $segment): bool
     {
-        return strlen($segment) === 3 && ctype_upper($segment);
+        return State::isAllowedCurrencyCode($segment);
     }
 
     private function isLocaleSegment(string $segment): bool
