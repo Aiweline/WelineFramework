@@ -32,7 +32,7 @@ class AiSitePageComponentGenerationService
     private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;
     // Hard completion checks only block malformed component structure.
     private const ENFORCE_COMPONENT_QUALITY_VALIDATION = false;
-    private const AI_REQUEST_TIMEOUT_SECONDS = 1800;
+    private const AI_REQUEST_TIMEOUT_SECONDS = 600;
     private const COMPONENT_CSS_CLASS_SCOPE_FALLBACK = 'pb-ai-site-component';
     private const COMPONENT_CSS_SCOPE_PLACEHOLDER = '#componentId';
     private const PLAN_JSON_PAGE_ASSET_META_KEYS = [
@@ -9594,11 +9594,11 @@ PROMPT;
             $params = $this->sanitizeStructuredJsonRequestParams($params);
         }
 
-        if (\PHP_SAPI === 'cli' && $isStream) {
-            $params['timeout'] = 0;
-            $params['disable_ai_timeout'] = true;
-            $params['disable_cli_timeout'] = true;
-            $params['enforce_timeout_in_stream'] = false;
+        $params['timeout'] = self::AI_REQUEST_TIMEOUT_SECONDS;
+        unset($params['disable_ai_timeout'], $params['disable_cli_timeout']);
+
+        if ($isStream) {
+            $params['enforce_timeout_in_stream'] = true;
         }
 
         return $params;

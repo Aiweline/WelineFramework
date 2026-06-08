@@ -14383,6 +14383,7 @@ class AiSiteAgent extends BaseController
             'reason' => 'not_queued',
             'message' => '',
         ];
+        $willEnqueueOperation = $this->shouldEnqueueOperation($operation);
         $operationEnvelope = $this->buildOperationQueueEnvelope($session, $operation, $executionToken, 'queued');
         $scope['active_operation'] = \array_replace([
             'operation' => $operation,
@@ -14396,7 +14397,12 @@ class AiSiteAgent extends BaseController
             'retry_allowed' => 0,
             'queue_terminal_recovered' => 0,
             'progress_percent' => 0,
-            'message' => (string)__('Operation completed.'),
+            'message' => $willEnqueueOperation
+                ? $this->buildAiSiteQueueSchedulerWaitMessage($operation, 0)
+                : (string)__('Operation completed.'),
+            'queue_waiting_for_scheduler' => $willEnqueueOperation,
+            'can_close_stream' => $willEnqueueOperation,
+            'continue_other_operations' => $willEnqueueOperation,
         ], $operationEnvelope);
         if ($operationDetails !== []) {
             $scope['active_operation'] = $this->applyOperationDetailsToPayload($scope['active_operation'], $operationDetails);
@@ -14418,7 +14424,7 @@ class AiSiteAgent extends BaseController
             $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_PUBLISHING);
         }
         $freshForQueue = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-        if ($this->shouldEnqueueOperation($operation)) {
+        if ($willEnqueueOperation) {
             try {
                 $queueId = $this->enqueueOperationQueueTask($freshForQueue, $adminId, $operation, $executionToken, $scopePatch, $operationDetails, $preserveRunningQueueRow);
             } catch (\Throwable $throwable) {
@@ -14447,6 +14453,10 @@ class AiSiteAgent extends BaseController
             ) {
                 $queueScope = $this->writeActiveOperationStateToScope($queueScope, \array_replace($queueActiveOperation, [
                     'queue_id' => $queueId,
+                    'message' => $this->buildAiSiteQueueSchedulerWaitMessage($operation, $queueId),
+                    'queue_waiting_for_scheduler' => true,
+                    'can_close_stream' => true,
+                    'continue_other_operations' => true,
                     'updated_at' => \date('Y-m-d H:i:s'),
                 ]));
                 $this->sessionService->replaceScope($freshForQueue->getId(), $adminId, $queueScope);
@@ -14480,9 +14490,12 @@ class AiSiteAgent extends BaseController
             $activeOperationForResponse,
             \is_array($queueRow) ? $queueRow : null
         );
+        $responseMessage = $queueId > 0 && \trim((string)($queueWait['message'] ?? '')) !== ''
+            ? (string)$queueWait['message']
+            : (string)__('Operation completed.');
         return [
             'success' => true,
-            'message' => (string)__('Operation completed.'),
+            'message' => $responseMessage,
             'execution_token' => $executionToken,
             'queue_id' => $queueId,
             'operation' => $operation,
