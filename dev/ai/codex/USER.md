@@ -56,19 +56,12 @@ For Weline Server / WLS work:
 - If `curl -k` succeeds but browser/plain curl fails, separate app reachability
   from Windows Schannel/certificate trust.
 
-## PageBuilder Preferences
+## PageBuilder Boundary
 
-For `app/code/GuoLaiRen/PageBuilder`:
-
-- The backend owns AI generation execution.
-- Queue state and SSE logs should model lifecycle and progress.
-- Do not create bespoke background runners when queue/query APIs already
-  represent the workflow.
-- Stage outputs should be customer-visible website implementation plans, not
-  prompt examples, blueprint-direction prose, or generic suggestions.
-- If OpenAI errors mention huge context sizes such as `requested 222515 tokens`,
-  inspect request-body bloat and conversation-history reattachment before
-  tuning output token limits.
+`app/code/GuoLaiRen/PageBuilder` is owned by
+`E:\公司\远程\src\weline`. Do not implement, restore, or deploy that
+module from this source repository. For PageBuilder work, switch to the target
+repository and follow its deployment skill.
 
 ## Safety Boundaries
 
