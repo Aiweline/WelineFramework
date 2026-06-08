@@ -90,6 +90,11 @@
 "模块结构无效：无法解析 register.php","模块结构无效：无法解析 register.php"
 模块结构无效：缺少模块名,模块结构无效：缺少模块名
 "模块名格式无效，必须是 Vendor_Module 格式","模块名格式无效，必须是 Vendor_Module 格式"
+"Invalid app store package manifest.","Invalid app store package manifest."
+"Invalid app store package path:","Invalid app store package path:"
+"Invalid bundled source path:","Invalid bundled source path:"
+"App code path does not exist.","App code path does not exist."
+"Invalid bundled target path:","Invalid bundled target path:"
 "模块 register.php 不存在","模块 register.php 不存在"
 无法创建模块安装脚本,无法创建模块安装脚本
 无法写入商城应用说明文件：,无法写入商城应用说明文件：

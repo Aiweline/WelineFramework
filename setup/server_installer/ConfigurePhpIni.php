@@ -155,8 +155,114 @@ final class ConfigurePhpIni
         }
 
         $content = $this->configureLogPaths($content);
+        $content = $this->configureOpcache($content, $isWindows);
         file_put_contents($iniPath, $content);
         file_put_contents($this->phpDir . '/php.installer.ini', $this->buildInstallerIni($extList, $extDirReal, $isWindows));
+    }
+
+    private function isOpcacheAvailable(bool $isWindows): bool
+    {
+        if ($isWindows) {
+            return is_file($this->phpDir . '/ext/php_opcache.dll');
+        }
+
+        return true;
+    }
+
+    private function getOpcacheFileCacheDir(): string
+    {
+        return $this->phpDir . '/opcache_file_cache';
+    }
+
+    private function ensureOpcacheFileCacheDir(): void
+    {
+        $cacheDir = $this->getOpcacheFileCacheDir();
+        if (!is_dir($cacheDir)) {
+            @mkdir($cacheDir, 0755, true);
+        }
+    }
+
+    private function configureOpcache(string $content, bool $isWindows): string
+    {
+        if (!$this->isOpcacheAvailable($isWindows)) {
+            return $content;
+        }
+
+        $this->ensureOpcacheFileCacheDir();
+
+        $directives = [
+            'opcache.enable' => '1',
+            'opcache.enable_cli' => '1',
+            'opcache.jit' => 'disable',
+            'opcache.memory_consumption' => '256',
+            'opcache.validate_timestamps' => '1',
+            'opcache.revalidate_freq' => '0',
+        ];
+
+        // Windows + ASLR：必须启用二级文件缓存，否则安装/CLI 可能 Fatal（Opcode handlers unusable）
+        if ($isWindows) {
+            $cacheDir = str_replace('\\', '/', $this->getOpcacheFileCacheDir());
+            $directives['opcache.file_cache'] = $cacheDir;
+            $directives['opcache.file_cache_fallback'] = '1';
+            $directives['opcache.file_cache_consistency_checks'] = '1';
+        }
+
+        foreach ($directives as $key => $value) {
+            $content = $this->upsertIniDirective($content, $key, (string) $value, '[opcache]');
+        }
+
+        return $content;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function getOpcacheInstallerIniLines(bool $isWindows): array
+    {
+        if (!$this->isOpcacheAvailable($isWindows)) {
+            return [];
+        }
+
+        $this->ensureOpcacheFileCacheDir();
+
+        $lines = [
+            'opcache.enable=1',
+            'opcache.enable_cli=1',
+            'opcache.jit=disable',
+        ];
+
+        if ($isWindows) {
+            $cacheDir = str_replace('\\', '/', $this->getOpcacheFileCacheDir());
+            $lines[] = 'opcache.file_cache=' . $cacheDir;
+            $lines[] = 'opcache.file_cache_fallback=1';
+            $lines[] = 'opcache.file_cache_consistency_checks=1';
+        }
+
+        return $lines;
+    }
+
+    private function upsertIniDirective(string $content, string $key, string $value, string $preferredSection = '[PHP]'): string
+    {
+        $needsQuotes = preg_match('/\s/', $value) === 1;
+        $formattedValue = $needsQuotes ? '"' . $value . '"' : $value;
+        $line = $key . ' = ' . $formattedValue;
+        $escapedKey = preg_quote($key, '/');
+
+        if (preg_match('/^\s*;?\s*' . $escapedKey . '\s*=.*$/mi', $content)) {
+            return preg_replace('/^\s*;?\s*' . $escapedKey . '\s*=.*$/mi', $line, $content, 1) ?? $content;
+        }
+
+        if (preg_match('/^\[' . preg_quote(trim($preferredSection, '[]'), '/') . '\]/mi', $content)) {
+            $section = trim($preferredSection, '[]');
+            return preg_replace(
+                '/(\[' . preg_quote($section, '/') . '\]\r?\n)/i',
+                '$1' . $line . "\n",
+                $content,
+                1
+            ) ?? $content;
+        }
+
+        return $content . "\n" . $preferredSection . "\n" . $line . "\n";
     }
 
     private function upsertManagedExtensionBlock(string $content, array $extList, string $extDirReal, bool $isWindows): string
@@ -249,6 +355,9 @@ final class ConfigurePhpIni
 
         if ($isWindows && is_file($extDirReal . '/php_opcache.dll')) {
             $lines[] = 'zend_extension=opcache';
+            foreach ($this->getOpcacheInstallerIniLines(true) as $opcacheLine) {
+                $lines[] = $opcacheLine;
+            }
         }
 
         return implode("\n", $lines) . "\n";

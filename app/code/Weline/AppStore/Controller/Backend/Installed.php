@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\AppStore\Controller\Backend;
 
-use GuzzleHttp\Client;
 use Weline\AppStore\Model\AppStoreInstalledModule;
 use Weline\AppStore\Service\AccountBindService;
 use Weline\AppStore\Service\ModuleUpdateService;
@@ -155,7 +154,7 @@ class Installed extends BackendController
                 throw new \Weline\Framework\App\Exception(__('获取授权令牌失败，请重新绑定官网账户'));
             }
 
-            $client = new Client(['timeout' => 30]);
+            $client = new \GuzzleHttp\Client($accountService->getHttpClientOptions(['timeout' => 30]));
             $response = $client->post(
                 $accountService->getPlatformApiUrl('/api/v1/platform/review/submit'),
                 [
@@ -436,7 +435,7 @@ class Installed extends BackendController
                 return ['updates' => [], 'error' => __('获取授权令牌失败，请重新绑定官网账户')];
             }
 
-            $client = new Client(['timeout' => 30]);
+            $client = new \GuzzleHttp\Client($accountService->getHttpClientOptions(['timeout' => 30]));
             $response = $client->post(
                 $accountService->getPlatformApiUrl('/api/v1/platform/module/check-update'),
                 [

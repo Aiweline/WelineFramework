@@ -1198,8 +1198,8 @@ class Core
         if (is_file($filename)) {
             // Handle caching
             $fileModificationTime = gmdate('D, d M Y H:i:s', filemtime($filename)) . ' GMT';
-            $headers = getallheaders();
-            if (isset($headers['If-Modified-Since']) && $headers['If-Modified-Since'] == $fileModificationTime) {
+            $ifModifiedSince = $this->getRequestHeaderValue($this->getRequestHeaders(), 'If-Modified-Since');
+            if ($ifModifiedSince === $fileModificationTime) {
                 $response304 = (new Response(true))
                     ->setHeaders($this->buildCacheHeaders($fileModificationTime, $filename))
                     ->setHttpResponseCode(304)
@@ -1252,6 +1252,69 @@ class Core
             throw new \Weline\Framework\Http\ResponseTerminateException($response404Js);
         }
         return false;
+    }
+
+    private function getRequestHeaders(): array
+    {
+        if (\function_exists('getallheaders')) {
+            $headers = \getallheaders();
+            if (\is_array($headers)) {
+                return $headers;
+            }
+        }
+
+        if (\method_exists($this->request, 'getHeaders')) {
+            $headers = $this->request->getHeaders();
+            if (\is_array($headers)) {
+                return $headers;
+            }
+        }
+
+        $server = $this->request->getServer();
+        if (!\is_array($server)) {
+            return [];
+        }
+
+        $headers = [];
+        foreach ($server as $key => $value) {
+            if (!\is_string($key) || !\is_scalar($value)) {
+                continue;
+            }
+
+            if (\str_starts_with($key, 'HTTP_')) {
+                $headerName = \str_replace(' ', '-', \ucwords(\strtolower(\str_replace('_', ' ', \substr($key, 5)))));
+                $headers[$headerName] = (string)$value;
+                continue;
+            }
+
+            if ($key === 'CONTENT_TYPE') {
+                $headers['Content-Type'] = (string)$value;
+                continue;
+            }
+
+            if ($key === 'CONTENT_LENGTH') {
+                $headers['Content-Length'] = (string)$value;
+            }
+        }
+
+        return $headers;
+    }
+
+    private function getRequestHeaderValue(array $headers, string $name): string
+    {
+        foreach ($headers as $headerName => $value) {
+            if (\strcasecmp((string)$headerName, $name) !== 0) {
+                continue;
+            }
+
+            if (\is_array($value)) {
+                return \implode(', ', \array_map('strval', $value));
+            }
+
+            return \is_scalar($value) ? (string)$value : '';
+        }
+
+        return '';
     }
     
     /**

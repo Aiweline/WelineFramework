@@ -1422,6 +1422,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString("window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-plan-sse-terminal'] : null", $notifyBody);
         self::assertStringContainsString('previewBridge.pauseWorkspaceStream()', $notifyBody);
         self::assertStringContainsString('backend_session_url: backendSessionUrl', $notifyBody);
+        self::assertStringNotContainsString('window.location.reload();', $notifyBody);
         self::assertStringContainsString('window.__pbWorkspaceNotifyFrontendRetryStopped = notifyFrontendRetryStopped;', $runtime);
         self::assertStringContainsString('window.__pbWorkspaceClearFrontendRetryStopGuard = clearFrontendRetryStopGuard;', $runtime);
 
@@ -1442,6 +1443,15 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         $responseBody = $this->extractFunctionBody($runtime, 'startFromResponse');
         self::assertStringContainsString('clearFrontendRetryStopGuard();', $responseBody);
 
+        $runtimeReloadBody = $this->extractFunctionBody($runtime, 'reloadWorkspacePageNow');
+        self::assertStringContainsString('refreshEmbeddedPreviewFrame(0);', $runtimeReloadBody);
+        self::assertStringContainsString('previewBridge.resumeWorkspaceStream()', $runtimeReloadBody);
+        self::assertStringNotContainsString('window.location.reload();', $runtimeReloadBody);
+
+        $finishOperationBody = $this->extractFunctionBody($runtime, 'finishOperation');
+        self::assertStringContainsString('reloadWorkspacePageNow();', $finishOperationBody);
+        self::assertStringNotContainsString('window.location.reload();', $finishOperationBody);
+
         $core = \file_get_contents(BP . '/app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace/script-main-core.phtml');
         self::assertIsString($core);
 
@@ -1450,16 +1460,20 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('window.w_msg(', $coreNotifyBody);
         self::assertStringContainsString('后台会话地址', $coreNotifyBody);
         self::assertStringContainsString('backend_session_url: backendSessionUrl', $coreNotifyBody);
+        self::assertStringNotContainsString('window.location.reload();', $coreNotifyBody);
 
         $reloadBody = $this->extractFunctionBody($core, 'schedulePlanWorkspaceReload');
         self::assertStringContainsString('isFrontendRetryStopReloadReason(reason)', $reloadBody);
         self::assertStringContainsString("notifyWorkspaceFrontendRetryStopped('plan', reason", $reloadBody);
         self::assertStringContainsString('window.__pbWorkspaceFrontendRetryStopped', $reloadBody);
-        self::assertStringContainsString('window.location.reload();', $reloadBody);
+        self::assertStringContainsString('runPlanReloadReconciliation();', $reloadBody);
+        self::assertStringContainsString('rerenderCurrentPlanPreview();', $reloadBody);
+        self::assertStringNotContainsString('window.location.reload();', $reloadBody);
 
         $transportRecoveryBody = $this->extractFunctionBody($core, 'scheduleWorkspaceTransportRecoveryReload');
         self::assertStringContainsString("notifyWorkspaceFrontendRetryStopped('build', reason", $transportRecoveryBody);
         self::assertStringNotContainsString('schedulePlanWorkspaceReload(reason, delayMs)', $transportRecoveryBody);
+        self::assertStringNotContainsString('window.location.reload();', $transportRecoveryBody);
 
         $planTerminalBody = $this->extractFunctionBody($core, 'bindPlanSseTerminalHandlers');
         self::assertStringContainsString("notifyWorkspaceFrontendRetryStopped('plan', 'plan_retryable_failure'", $planTerminalBody);
@@ -1481,6 +1495,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
         self::assertStringContainsString('clearWorkspaceFrontendRetryStopGuard();', $confirmBody);
         self::assertStringContainsString("notifyWorkspaceFrontendRetryStopped('plan', 'confirm_transport_error'", $confirmBody);
         self::assertStringNotContainsString("schedulePlanWorkspaceReload('confirm_transport_error'", $confirmBody);
+        self::assertStringNotContainsString('window.location.reload();', $confirmBody);
     }
 
     public function testWorkspaceToastUsesShortStructuralMessagesForOperationSuccess(): void

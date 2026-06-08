@@ -148,6 +148,11 @@ return [
     ],
     
     // ==================== Theme Frontend Partials - Head ====================
+    'Weline_Theme::frontend::partials::head::favicon' => [
+        'name' => __('Frontend head favicon'),
+        'description' => __('Allows modules to replace the frontend favicon links in the document head.'),
+        'doc' => 'frontend/partials/head/favicon.md',
+    ],
     'Weline_Theme::frontend::partials::head::module-declarations' => [
         'name' => __('Head 模块声明'),
         'description' => __('在 head 中 theme.js 加载之后触发，允许其他模块注入 JS 模块声明。使用 Weline.declare() 声明需要加载的模块。'),

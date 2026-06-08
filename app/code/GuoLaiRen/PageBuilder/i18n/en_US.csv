@@ -569,8 +569,8 @@ Component,Component
 "PHP 鍙橀噺鏈０鏄庯細%{1}","PHP 鍙橀噺鏈０鏄庯細%{1}"
 操作执行完成,操作执行完成
 "...(仅显示末尾约 %{n} 字节)","...(仅显示末尾约 %{n} 字节)"
-"队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。","队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。"
-"队列正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。","队列正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。"
+"队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。","Queue #%{queue_id} is waiting for the system scheduler and usually starts within about 1 minute. You can close this progress window and continue other work."
+"队列正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。","The queue is waiting for the system scheduler and usually starts within about 1 minute. You can close this progress window and continue other work."
 队列执行失败，请重试。,队列执行失败，请重试。
 生成主题队列已取消。,生成主题队列已取消。
 生成主题队列已完成。,生成主题队列已完成。
