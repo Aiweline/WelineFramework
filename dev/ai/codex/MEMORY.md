@@ -77,7 +77,6 @@ Observed top-level vendors under `app/code`:
 
 - `Agent`
 - `Aiweline`
-- `GuoLaiRen`
 - `Weline`
 - `WelineTools`
 - `WeShop`
@@ -99,6 +98,10 @@ Common module shape:
 
 Before working inside a module, check its `README.md` or `doc/README.md` if
 present.
+
+`app/code/GuoLaiRen` has moved to the release target repository
+`E:\公司\远程\src\weline`; this source repository no longer supports
+GuoLaiRen vendor modules.
 
 ## Core Areas
 
