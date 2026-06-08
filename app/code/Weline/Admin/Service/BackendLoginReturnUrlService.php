@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Service;
 
+use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Acl\Service\AclService;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Service\MenuServiceInterface;
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 
@@ -157,13 +159,47 @@ class BackendLoginReturnUrlService
             return false;
         }
 
-        return true;
+        return $this->isKnownBackendReturnRoute($normalized);
+    }
+
+    private function isKnownBackendReturnRoute(string $routePath): bool
+    {
+        if ($routePath === 'admin') {
+            return true;
+        }
+
+        if ($this->aclService->isRouteProtected($routePath)) {
+            return true;
+        }
+
+        try {
+            return MenuUrlValidator::isMenuUrl($routePath);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function extractRoutePath(string $url): string
     {
-        $parsed = Url::parser($url);
-        return trim((string)($parsed['uri'] ?? ''), '/');
+        $path = (string)(parse_url($url, PHP_URL_PATH) ?: '');
+        $segments = $path === ''
+            ? []
+            : array_values(array_filter(explode('/', trim($path, '/')), static fn(string $segment): bool => $segment !== ''));
+
+        $backendPrefix = trim((string)(Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        if ($backendPrefix !== '' && isset($segments[0]) && strcasecmp($segments[0], $backendPrefix) === 0) {
+            array_shift($segments);
+        }
+
+        for ($i = 0; $i < 2 && $segments !== []; $i++) {
+            $segment = (string)$segments[0];
+            if (!$this->isCurrencySegment($segment) && !$this->isLocaleSegment($segment)) {
+                break;
+            }
+            array_shift($segments);
+        }
+
+        return trim(implode('/', $segments), '/');
     }
 
     private function resolveRoleId(BackendUser $user): int
@@ -228,7 +264,7 @@ class BackendLoginReturnUrlService
 
     private function isCurrencySegment(string $segment): bool
     {
-        return strlen($segment) === 3 && ctype_upper($segment);
+        return State::isAllowedCurrencyCode($segment);
     }
 
     private function isLocaleSegment(string $segment): bool
