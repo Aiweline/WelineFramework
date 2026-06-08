@@ -39,6 +39,18 @@ class ModuleInstallerServiceTest extends TestCase
         $this->assertEquals($expectedDir, $actualDir);
     }
 
+    public function testGetModuleTargetDirKeepsModuleSegmentUnderscores(): void
+    {
+        $service = (new ReflectionClass(ModuleInstallerService::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(ModuleInstallerService::class, 'getModuleTargetDir');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            rtrim(APP_CODE_PATH, DS) . DS . 'Weline' . DS . 'Bt_Center',
+            $method->invoke($service, 'Weline_Bt_Center')
+        );
+    }
+
     /**
      * 测试版本比较
      */

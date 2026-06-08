@@ -5,8 +5,7 @@
 添加成功！,"Added successfully!"
 添加失败！,"Add failed!"
 用户ID不能为空,"User ID cannot be empty"
-超级管理员不能被删除,"Super administrator cannot be deleted"
-用户已删除，可在列表中重新激活,"User has been deleted and can be reactivated from the list"
+删除成功！,"Deleted successfully!"
 删除失败！,"Delete failed!"
 激活成功！,"Activated successfully!"
 激活失败！,"Activation failed!"
@@ -16,14 +15,12 @@
 邮箱不能为空,"Email cannot be empty"
 邮箱格式不正确,"Email format is incorrect"
 新增用户必须设置密码,"Password is required for new user"
-该用户名对应的管理员已删除，请先激活该用户,"The administrator for this username has been deleted. Please reactivate that user first"
-用户名已存在,"Username already exists"
-该邮箱对应的管理员已删除，请先激活该用户,"The administrator for this email has been deleted. Please reactivate that user first"
-邮箱已存在,"Email already exists"
-修改,Edit
 新增,Add
+修改,Edit
 %{1}管理员成功,"%{1} administrator successfully"
 保存失败,"Save failed"
+超级管理员不能被删除,"Super administrator cannot be deleted"
+删除成功,"Deletion successful"
 删除失败,"Deletion failed"
 超级管理员状态不能被修改,"Super administrator status cannot be modified"
 无效的操作类型,"Invalid operation type"
@@ -61,7 +58,6 @@ WelineFramework,WelineFramework
 关键参数ID不存在！,"Key parameter ID does not exist!"
 菜单不存在！,"Menu does not exist!"
 该菜单下有子菜单，请先删除子菜单！,"This menu has submenus. Please delete the submenus first!"
-删除成功！,"Deleted successfully!"
 参数错误：缺少排序数据,"Parameter error: missing sort data"
 排序更新成功,"Sort updated successfully"
 参数错误：缺少菜单ID,"Parameter error: missing menu ID"
@@ -113,8 +109,8 @@ content,content
 取消,Cancel
 确定,Confirm
 删除!,Delete!
-删除成功,"Deletion successful"
 知道了,"Got it"
+value,value
 "Weline Admin 绠＄悊闈㈡澘","Weline Admin 绠＄悊汱㈡澘"
 角色归配,"Role Assignment"
 系统,System
@@ -158,8 +154,8 @@ content,content
 留空则不修改密码,"Leave empty to keep current password"
 保存,Save
 保存中...,Saving...
-激活,Activate
 禁用,Disable
+激活,Activate
 删除,Delete
 编辑管理员,"Edit Administrator"
 保存成功,"Saved successfully"
@@ -232,12 +228,19 @@ RTL模式,"RTL Mode"
 "登录 %{name} 管理面板","Login to %{name} Admin Panel"
 安全后台入口,安全后台入口
 内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。,内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。
+连续异常登录会自动提高验证强度。,连续异常登录会自动提高验证强度。
+配置、权限与模块维护在同一工作台闭环处理。,配置、权限与模块维护在同一工作台闭环处理。
+仅在可信环境保存登录状态。,仅在可信环境保存登录状态。
 管理员登录,管理员登录
 访问后台前需要验证身份,访问后台前需要验证身份
+请输入管理员账号,"Please enter the admin account"
 验证码,"Verification code"
+点击刷新验证码,"Click to refresh the verification code."
+请输入验证码,"Please enter the verification code"
 记住我,"Remember Me"
+仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
 登录,"Log in"
-登录中,"Logging in"
+登录中…,登录中…
 登录保护,"Login protection"
 连续异常登录会自动提高验证强度，减少后台入口暴露面。,"Consecutive abnormal logins will automatically increase verification strength, reducing the exposure of the backend entry point."
 统一工作台,"Unified Workbench"
@@ -261,10 +264,7 @@ RTL模式,"RTL Mode"
 欢迎回来,"Welcome back"
 输入管理员账号后即可继续处理后台任务、配置变更与权限操作。,"Enter the admin account to proceed with backend tasks, configuration changes, and permission operations."
 安全验证已启用,"Security verification enabled"
-请输入管理员账号,"Please enter the admin account"
-点击刷新验证码,"Click to refresh the verification code."
-请输入验证码,"Please enter the verification code"
-仅在你确认可信的设备和网络环境中保存登录状态。,"Only save login state on trusted devices and network environments."
+登录中,"Logging in"
 管理员账号由超级管理员统一开通与维护,"Admin accounts are created and maintained uniformly by the super admin"
 如需重置密码、解除锁定或补充后台权限，请联系已有超级管理员处理。,"To reset your password, unlock your account, or supplement backend permissions, please contact an existing super administrator."
 "若未配置自定义后台 Logo，登录页会自动回退到内置 Weline 标识。","If no custom admin logo is configured, the login page will automatically fall back to the built-in Weline logo."

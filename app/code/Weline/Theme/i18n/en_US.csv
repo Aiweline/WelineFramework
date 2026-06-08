@@ -468,34 +468,10 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 缺少部件模块或代码,"Missing widget module or code"
 缺少部件参数,"Missing widget parameter"
 该部件没有配置项,"This component has no configuration items"
-"Selected layout option is unavailable.","Selected layout option is unavailable."
-"Layout option saved.","Layout option saved."
-"No configurable layout fields.","No configurable layout fields."
-"Save layout config","Save layout config"
-"Layout config saved.","Layout config saved."
-缺少源文案。,"Missing source text."
-缺少目标语言。,"Missing target language."
-"AI 查询入口不可用。","AI query entry is unavailable."
-AI翻译已回填,"AI translations filled"
-"主题配置 AI 翻译失败：%{1}","Theme configuration AI translation failed: %{1}"
 配置数据格式错误,"Configuration data format error"
 "已保存 %{locale} 语言的配置","Saved configuration for %{locale} languages"
 保存失败：%{error},"Save failed: %{error}"
 "Missing theme ID","Missing theme ID"
-Default,Default
-"AI 翻译未返回有效 JSON。","AI translation did not return valid JSON."
-"AI 翻译未返回目标语言结果。","AI translation did not return target-language results."
-"Version saved: %{name}","Version saved: %{name}"
-"Switch version failed","Switch version failed"
-"Restored selected version","Restored selected version"
-"Restored original layout","Restored original layout"
-"Publish failed","Publish failed"
-"Version published","Version published"
-"Missing version ID","Missing version ID"
-"Version deleted","Version deleted"
-"Cannot delete current or published version","Cannot delete current or published version"
-"Version renamed","Version renamed"
-"Rename failed","Rename failed"
 "已保存为 %{name}","Saved as %{name}"
 已切换到选定版本,"Switched to selected version"
 切换版本失败,"Switch Version Failed"
@@ -527,18 +503,19 @@ Default,Default
 已释放编辑锁定,"Edit lock released"
 释放锁定失败,"Failed to release lock"
 缺少必要参数,"Missing required parameter"
+CSS/JS提取功能测试,"CSS/JS extraction function test"
+首页,"Home Page"
+上一页,"Previous page"
+下一页,"Next page"
+末页,"Last page"
 主题通知事件,"Theme Notification Events"
 "构建预览 URL 事件","Build preview URL event"
-"主题 AI 适配器","Theme AI Adapter"
-用于主题可视化编辑器的配置翻译、文案生成和主题图片生成。,"Used by the visual theme editor for configuration translation, copy generation, and theme image generation."
-缺少源语言。,"Missing source language."
 "Theme 虚拟部件智能体","Theme virtual component agent"
 "用于生成、微调和验证 Weline Theme 的虚拟部件 JSON 与模板内容。","Used to generate, fine-tune, and validate the virtual component JSON and template content of the Weline Theme"
 "AI 调用失败：%{1}","AI call failed: %{1}"
 准备进入下一轮智能体调用,"Preparing to enter the next round of agent calls"
 "智能体未能生成最终 JSON 输出","Agent failed to generate final JSON output"
 "Theme 查询器不支持的操作：%{1}","Operations not supported by Theme queryer: %{1}"
-"Invalid backend theme mode: %{1}","Invalid backend theme mode: %{1}"
 主题查询,"Topic query"
 提供当前主题、配置值、模板路径等查询能力,"Provides current theme, configuration values, template path, and other query capabilities"
 获取当前激活的主题信息,"Get currently active theme info"
@@ -547,12 +524,8 @@ Default,Default
 获取主题配置的模板路径,"Get template path for theme configuration"
 扫描当前主题中指定类型的布局选项,"Scan layout options of the specified type in the current theme"
 "默认 frontend","Default frontend"
-"Theme editor signed backend request bridge","Theme editor signed backend request bridge"
-同步后台亮色/暗色模式,同步后台亮色/暗色模式
-"light 或 dark","light 或 dark"
 "Weline 主题库","Weline Theme Library"
 "从 Weline 主题库中选择主题方案，支持多种布局风格。","Select a theme from the Weline Theme Library, supporting multiple layout styles."
-首页,"Home Page"
 关于我们,"About Us"
 联系我们,"Contact Us"
 隐私政策,"Privacy Policy"
@@ -633,6 +606,8 @@ Default,Default
 在渲染页头操作按钮（如购物车、用户菜单等）之后触发，允许其他模块在操作按钮区域结束处注入内容。,"Triggered after rendering the header action buttons (e.g., cart, user menu), allowing other modules to inject content at the end of the action button area."
 页头之后,"After Header"
 在渲染页头组件之后触发，允许其他模块在页头结束处注入内容。,"Triggered after rendering the header component, allowing other modules to inject content at the end of the header."
+"Frontend head favicon","Frontend head favicon"
+"Allows modules to replace the frontend favicon links in the document head.","Allows modules to replace the frontend favicon links in the document head."
 "Head 模块声明","Head module declaration"
 "在 head 中 theme.js 加载之后触发，允许其他模块注入 JS 模块声明。使用 Weline.declare() 声明需要加载的模块。","Triggered after theme.js loads in the head, allowing other modules to inject JS module declarations. Use Weline.declare() to declare modules that need to be loaded."
 面包屑自定义内容（items）,"Breadcrumb Custom Content (Items)"
@@ -1009,7 +984,6 @@ CMS页面,"CMS Page"
 已切换到:,"Switched to:"
 搜索配置项,"Search configuration"
 组件预览,"Component Preview"
-"Search config","Search config"
 暂无可用布局,"No available layouts"
 配置参数,"Configuration Parameters"
 暂无可用色系,"No available color schemes"
@@ -1183,6 +1157,7 @@ Collapse,Collapse
 Loading...,Loading...
 "Saved successfully","Saved successfully"
 "Save failed","Save failed"
+"Publish failed","Publish failed"
 Publishing...,Publishing...
 "Discard failed","Discard failed"
 Discarding...,Discarding...
@@ -1242,19 +1217,14 @@ Copied,Copied
 批量生成失败,"Batch generation failed"
 "主题已设置为 %{1} 主题","Theme has been set to %{1} theme"
 该部件暂无可配置参数,"No configurable parameters for this widget"
-显示,显示
-隐藏,隐藏
+启用,Enable
 "-- 请选择 --","-- Please Select --"
 图片URL或点击选择,"Image URL or click to select"
 JSON格式数组,"JSON format array"
 请使用JSON格式输入,"Please use JSON format"
 主题编辑器,"Theme Editor"
 "-- 选择主题 --","-- Select Theme --"
-布局类型,布局类型
-选择布局类型,选择布局类型
-布局选项,布局选项
-选择布局选项,选择布局选项
-编辑区域,编辑区域
+选择页面布局类型,"Select page layout type"
 前端/后端主题,"Frontend/Backend Theme"
 版本历史,"Version History"
 保存新版本,"Save new version"
@@ -1307,6 +1277,7 @@ Banner,Banner
 无模板,"No template"
 确认操作,"Confirm Action"
 输入,Input
+查询失败,"Query Failed"
 发送通知失败,"Failed to send notification"
 立即重试,"Retry now"
 "将在 %{seconds} 秒后自动重试...","Will automatically retry in %{seconds} seconds..."
@@ -1329,9 +1300,6 @@ Banner,Banner
 数据列表,"Data List"
 "共 %{1} 条","Total %{1} Entries"
 Close,Close
-上一页,"Previous page"
-下一页,"Next page"
-末页,"Last page"
 登录页工具,"Login page tools"
 切换为暗色主题,"Switch to dark theme"
 切换为亮色主题,"Switch to light theme"
@@ -1368,96 +1336,6 @@ Next,Next
 订单提交成功！,"Order submitted successfully!"
 订单号：,"Order number:"
 查看订单,"View Orders"
-告诉我们你需要什么，支持团队会将请求分派给合适的处理人。,告诉我们你需要什么，支持团队会将请求分派给合适的处理人。
-"周一至周五，9:00 - 18:00","周一至周五，9:00 - 18:00"
-客户支持,客户支持
-打开在线客服,打开在线客服
-查看我的账户,查看我的账户
-需要订单支持？,需要订单支持？
-请附上订单号、邮箱和简短问题描述，方便团队快速分派处理。,请附上订单号、邮箱和简短问题描述，方便团队快速分派处理。
-进入支持中心,进入支持中心
-联系方式,联系方式
-邮箱,邮箱
-电话,电话
-服务时间,服务时间
-提交前请确认,提交前请确认
-订单问题,订单问题
-请提供订单号和下单时使用的邮箱。,请提供订单号和下单时使用的邮箱。
-退换货,退换货
-商品照片和物流信息可以帮助团队更快处理退换货请求。,商品照片和物流信息可以帮助团队更快处理退换货请求。
-发送消息,发送消息
-请尽量提供完整背景，减少客服再次确认基础信息的等待时间。,请尽量提供完整背景，减少客服再次确认基础信息的等待时间。
-姓名,姓名
-消息内容,消息内容
-提交请求,提交请求
-"Weline default page","Weline default page"
-"This default Theme page is ready for module hooks, visual slots, and direct controller content.","This default Theme page is ready for module hooks, visual slots, and direct controller content."
-"Go home","Go home"
-Contact,Contact
-"Weline Default Theme","Weline Default Theme"
-"Build a clean storefront","Build a clean storefront"
-"A ready homepage with graceful defaults, module hooks, and visual slots for real content.","A ready homepage with graceful defaults, module hooks, and visual slots for real content."
-"Browse products","Browse products"
-"Talk to us","Talk to us"
-"Ready layout regions","Ready layout regions"
-"Footer extension slots","Footer extension slots"
-"Required commerce modules","Required commerce modules"
-"Featured picks","Featured picks"
-"Use product, banner, or content widgets here when real data is available.","Use product, banner, or content widgets here when real data is available."
-"View all","View all"
-"Starter Kit","Starter Kit"
-"Modern Pack","Modern Pack"
-"Growth Bundle","Growth Bundle"
-"Studio Set","Studio Set"
-"Default product placeholder. Replace with module data or widgets.","Default product placeholder. Replace with module data or widgets."
-"Explore sections","Explore sections"
-"Default cards keep the page useful before a category module is installed.","Default cards keep the page useful before a category module is installed."
-Collections,Collections
-"Curated groups for product or content modules.","Curated groups for product or content modules."
-Promotions,Promotions
-"Seasonal banners, offers, or announcement widgets.","Seasonal banners, offers, or announcement widgets."
-Services,Services
-"Support blocks, guides, and contact entry points.","Support blocks, guides, and contact entry points."
-"Launch-ready by default","Launch-ready by default"
-"Publish a clean page first, then let modules replace each region with live data.","Publish a clean page first, then let modules replace each region with live data."
-"Get started","Get started"
-"Latest updates","Latest updates"
-"Use this slot for new products, posts, releases, or campaigns.","Use this slot for new products, posts, releases, or campaigns."
-"New content","New content"
-"Fresh module output can replace this fallback.","Fresh module output can replace this fallback."
-"Featured story","Featured story"
-"Ideal for CMS, blog, or landing content.","Ideal for CMS, blog, or landing content."
-"Active campaign","Active campaign"
-"Drop in a banner or promotion widget.","Drop in a banner or promotion widget."
-"Popular now","Popular now"
-"A neutral region for ranked items, recommended content, or highlights.","A neutral region for ranked items, recommended content, or highlights."
-"Top item","Top item"
-"Ready for ranking widgets.","Ready for ranking widgets."
-"Customer choice","Customer choice"
-"Ready for review or recommendation modules.","Ready for review or recommendation modules."
-"Editor pick","Editor pick"
-"Ready for curated content.","Ready for curated content."
-"Trusted ecosystem","Trusted ecosystem"
-"Brand, partner, certification, or channel widgets can live here.","Brand, partner, certification, or channel widgets can live here."
-Reliable,Reliable
-"Defaults render without optional commerce dependencies.","Defaults render without optional commerce dependencies."
-Composable,Composable
-"Each important region has a named slot and hook.","Each important region has a named slot and hook."
-Replaceable,Replaceable
-"Real module output can replace fallback content cleanly.","Real module output can replace fallback content cleanly."
-"Default Theme","Default Theme"
-"A clean Weline homepage","A clean Weline homepage"
-"Use slots for visual composition, hooks for real module data, and this fallback for a complete default page.","Use slots for visual composition, hooks for real module data, and this fallback for a complete default page."
-Explore,Explore
-"Logo, navigation, search, account, and cart slots.","Logo, navigation, search, account, and cart slots."
-"Hero, products, categories, banners, and module content.","Hero, products, categories, banners, and module content."
-"Links, social, newsletter, payment, and copyright slots.","Links, social, newsletter, payment, and copyright slots."
-"Real data first","Real data first"
-"Modules can replace this card through hooks without changing Theme code.","Modules can replace this card through hooks without changing Theme code."
-"Visual slots","Visual slots"
-"The editor can place widgets into clearly named homepage regions.","The editor can place widgets into clearly named homepage regions."
-"Safe defaults","Safe defaults"
-"The page remains readable when optional modules are not installed.","The page remains readable when optional modules are not installed."
 "本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。","This page explains how we use cookies and related technologies on this website, as well as your choices for managing cookies."
 "一、什么是 Cookie？","1. What are Cookies?"
 "Cookie 是当您访问网站时，由网站服务器存储在您设备上的小型文本文件。Cookie 有助于网站识别您的设备，记住您的偏好设置，并改进服务体验。","Cookies are small text files that are stored on your device by the website server when you visit a website. Cookies help websites recognize your device, remember your preferences, and improve your experience."
@@ -1707,6 +1585,7 @@ Explore,Explore
 "产品主内容区域 - 控制器渲染产品信息","Product main content area - Controller renders product information"
 "侧边栏区域 - 拖拽推荐部件到此处","Sidebar Area - Drag recommended widgets here"
 "产品详情标签区域 - 拖拽详情/评价/问答部件到此处","Product Details Tab Area - Drag Details/Reviews/Q&A widgets here"
+"相关产品推荐区域 - 拖拽推荐部件到此处","Related product recommendation area - Drag recommendation widgets here"
 "筛选器区域 - 拖拽筛选部件到此处","Filter Area - Drag filter widgets here"
 "工具栏区域 - 拖拽排序/视图部件到此处","Toolbar area - Drag and drop/view widgets here"
 "产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
@@ -1714,29 +1593,37 @@ Explore,Explore
 "推荐产品区域 - 拖拽推荐部件到此处","Recommended product area - Drag recommended widgets here"
 示例分类,"Example Category"
 当前页面,"Current page"
-Theme,Theme
-Home,Home
-Products,Products
-Solutions,Solutions
-Support,Support
-"Help Center","Help Center"
-Orders,Orders
-Returns,Returns
-FAQ,FAQ
-Policies,Policies
-Privacy,Privacy
-Terms,Terms
-Cookie,Cookie
-Disclaimer,Disclaimer
-WeChat,WeChat
-Douyin,Douyin
-YouTube,YouTube
-Instagram,Instagram
-"A clean default theme surface for modules, real data hooks, and visual composition.","A clean default theme surface for modules, real data hooks, and visual composition."
-"Get updates","Get updates"
-"Email address","Email address"
-Subscribe,Subscribe
-"Back to top","Back to top"
+了解我们,"About Us"
+职业机会,"Career opportunities"
+新闻中心,"News Center"
+投资者关系,"Investor Relations"
+设备与服务,"Devices & Services"
+赚钱,"Earn money"
+在网站上销售,"Sell on the website"
+销售您的应用,"Sell Your App"
+成为合作伙伴,"Become a partner"
+广告,Advertisement
+自助出版,Self-publishing
+付款产品,"Payment product"
+商店卡,"Store Card"
+购物积分,"Shopping points"
+货币转换器,"Currency Converter"
+礼品卡,"Gift Card"
+需要帮助？,"Need assistance?"
+COVID-19和网站,"COVID-19 and website"
+您的账户,"Your account"
+配送率和政策,"Shipping rates and policies"
+退货和换货,"Returns and Exchanges"
+管理您的内容和设备,"Manage Your Content and Devices"
+帮助,Help
+法律与政策,"Legal & Policy"
+微信公众号,"WeChat official account"
+微博,Weibo
+抖音,TikTok
+B站,"Station B"
+小红书,Xiaohongshu
+关注我们,"Follow Us"
+返回顶部,"Back to Top"
 "Weline Framework","Weline Framework"
 Weline,Weline
 网站Logo,"Site Logo"
@@ -1744,13 +1631,168 @@ Weline,Weline
 切换语言,"Change language"
 语言,Language
 切换货币,"Change currency"
-Docs,Docs
-"Free theme-ready header. Replace this area from any module hook or slot.","Free theme-ready header. Replace this area from any module hook or slot."
-Search...,Search...
-Search,Search
-Account,Account
-Cart,Cart
-"Toggle navigation","Toggle navigation"
+跳转到主要内容,"Skip to main content"
+选择配送地址,"Choose delivery address"
+配送至,"Deliver to"
+中国大陆,"China Mainland"
+选择分类,"Choose category"
+全部分类,"All categories"
+电子产品,Electronics
+服装服饰,"Clothing & Accessories"
+家居用品,"Home & Living"
+运动户外,"Sports & Outdoors"
+图书音像,"Books & Media"
+食品饮料,"Food & Drinks"
+搜索建议,"Search suggestions"
+我的,My
+我的菜单,"My menu"
+账户及心愿单,"Account & Wishlist"
+我的订单,"My orders"
+账户设置,"Account settings"
+简体中文,"Simplified Chinese"
+繁體中文,"Traditional Chinese"
+货币,Currency
+ZH,ZH
+语言选项,"Language options"
+English,English
+CNY,CNY
+货币选项,"Currency options"
+账户菜单,"Account menu"
+"您好, 登录","Hello, sign in"
+退货,Return
+与我的订单,"with my order"
+打开购物车,"Open shopping cart"
+关闭购物车,"Close shopping cart"
+总计,Total
+查看购物车,"View Shopping Cart"
+去结算,"Proceed to Checkout"
+打开所有类别菜单,"Open all categories menu"
+展开子菜单,"Expand submenu"
+更多分类,"More categories"
+更多,More
+今日特价,"Today's Deals"
+会员视频,"Prime Video"
+礼品心愿单,"Gift List"
+客户服务,"Customer Service"
+关闭菜单,"Close menu"
+分类导航,"Category Navigation"
+手机通讯,"Mobile Phones & Communication"
+智能手机,Smartphones
+功能手机,"Feature phones"
+5G手机,"5G phones"
+折叠手机,"Foldable phones"
+手机壳,"Phone cases"
+屏幕保护膜,"Screen protectors"
+充电器,Chargers
+数据线,Cables
+移动电源,"Power banks"
+手机耳机,"Phone headsets"
+电脑办公,"Computers & Office"
+笔记本,Laptops
+游戏本,"Gaming laptops"
+超极本,Ultrabooks
+台式机,Desktops
+一体机,"All-in-one PCs"
+平板电脑,Tablets
+显示器,Monitors
+键盘,Keyboards
+鼠标,Mice
+摄像头,Webcams
+存储设备,"Storage devices"
+智能设备,"Smart devices"
+智能手表,Smartwatches
+运动手环,"Fitness trackers"
+智能音箱,"Smart speakers"
+智能照明,"Smart lighting"
+智能门锁,"Smart locks"
+智能摄像头,"Smart cameras"
+智能家居套装,"Smart home kits"
+可穿戴设备,Wearables
+影音娱乐,"Audio & Video"
+无线耳机,"Wireless headphones"
+有线耳机,"Wired headphones"
+入耳式耳机,Earbuds
+蓝牙音响,Speakers
+Soundbar,Soundbar
+单反相机,"DSLR Camera"
+微单相机,"Mirrorless camera"
+运动相机,"Action camera"
+游戏主机,"Game console"
+游戏配件,"Gaming accessories"
+男装,"Men's clothing"
+衬衫,Shirt
+T恤,T-shirt
+Polo衫,"Polo shirt"
+长裤,Pants
+短裤,Shorts
+外套,Coat
+毛衣,Sweater
+皮鞋,"Leather shoes"
+运动鞋,"Sports shoes"
+皮带,Belt
+手表,Watch
+包袋,Bag
+女装,"Women's Clothing"
+连衣裙,Dress
+上装,Tops
+下装,Bottoms
+半身裙,Skirt
+大衣,Coat
+高跟鞋,"High heels"
+平底鞋,"Flat shoes"
+靴子,Boots
+手提包,Handbag
+斜挎包,"Crossbody Bag"
+首饰,Jewelry
+童装,"Children's Clothing"
+男童装,"Boys' clothing"
+女童装,"Girls' Clothing"
+婴儿装,"Baby Clothing"
+童鞋,"Children's Shoes"
+童装配饰,"Children's Accessories"
+校服,"School uniform"
+泳装,Swimsuit
+运动服饰,Sportswear
+运动装,"Sports attire"
+跑步装备,"Running gear"
+健身服,"Fitness Wear"
+跑鞋,"Running shoes"
+篮球鞋,"Basketball shoes"
+户外装备,"Outdoor Gear"
+露营装备,"Camping Gear"
+家具,Furniture
+沙发,Sofa
+沙发床,"Sofa bed"
+餐桌,"Dining Table"
+茶几,"Coffee table"
+椅子,Chair.
+办公椅,"Office Chair"
+床具,"Bed Frames"
+衣柜,Wardrobe
+书柜,Bookshelf
+家纺,"Home Textiles"
+床上用品,Bedding
+床单被套,"Bed Sheets and Pillowcases"
+枕头,Pillow
+被子,Quilt
+窗帘,Curtains
+毛巾,Towel
+地毯,Carpet
+靠垫,Cushion
+厨房用品,"Kitchen Supplies"
+锅具,Cookware
+刀具,Tool
+餐具,Tableware
+杯具,Tragic
+收纳,Organize
+厨房工具,"Kitchen Tools"
+小家电,"Small Appliances"
+装饰用品,"Decorative Items"
+墙饰,"Wall Decor"
+花瓶,Vase
+灯具,"Lighting fixtures"
+镜子,Mirror
+绿植,"Green plants"
 分页导航,"Pagination navigation"
 NEW,NEW
 SALE,SALE
@@ -1759,7 +1801,6 @@ SALE,SALE
 加入购物车,"Add to Cart"
 暂时缺货,"Temporarily out of stock"
 已添加,Added
-广告,Advertisement
 2026春季新品上市,"2026 spring new product launch"
 探索最新时尚潮流,"Explore the latest fashion trends"
 立即选购,"Buy Now"
@@ -1778,7 +1819,6 @@ SALE,SALE
 时,Hour
 分,Minute
 秒,second
-电子产品,Electronics
 面包屑导航,"Breadcrumb Navigation"
 "轮播产品 %d","Carousel product %d"
 热门分类,"Popular Categories"
@@ -1788,16 +1828,9 @@ SALE,SALE
 美妆个护,"Beauty & Personal Care"
 食品生鲜,"Food & Fresh Produce"
 母婴用品,"Baby & Maternity Products"
-运动户外,"Sports & Outdoors"
 图书文具,"Books and stationery"
 件商品,"items of goods"
 商品分类,"Product Category"
-男装,"Men's clothing"
-女装,"Women's Clothing"
-童装,"Children's Clothing"
-家具,Furniture
-家纺,"Home Textiles"
-收纳,Organize
 清除全部,"Clear all"
 "100 - 299 元","100 - 299 yuan"
 价格区间,"Price range"
@@ -1843,8 +1876,6 @@ SSL安全,"SSL security"
 搜索问题...,"Search issues..."
 公司简介,"Company Profile"
 加入我们,"Join Us"
-新闻中心,"News Center"
-客户服务,"Customer Service"
 帮助中心,"Help center"
 配送说明,"Shipping instructions"
 退换政策,"Return and Exchange Policy"
@@ -1855,7 +1886,6 @@ SSL安全,"SSL security"
 法律条款,"Terms of Service"
 使用条款,"Terms of use"
 Cookie政策,"Cookie Policy"
-我的订单,"My orders"
 我的收藏,"My Favorites"
 地址管理,"Address Management"
 欢迎回来,"Welcome back"
@@ -1874,14 +1904,17 @@ Cookie政策,"Cookie Policy"
 促销活动,"Promotional Campaign"
 示例商品名称,"Example Product Name"
 小计,Subtotal
-查看购物车,"View Shopping Cart"
-去结算,"Proceed to Checkout"
-全部分类,"All categories"
 配件,Accessories
 商品,Product
 新品上架,"New Product Listing"
 热销商品,"Hot Selling Items"
 特价促销,"Special Promotion"
+订阅我们的邮件,"Subscribe to Our Newsletter"
+获取最新的优惠信息和新品资讯,"Get the latest offers and new product information"
+请输入您的邮箱地址,"Enter your email address"
+订阅获取优惠,"Subscribe for Offers"
+订阅我们的邮件，立即获得10%折扣码！,"Subscribe to our newsletter and get a 10% discount code instantly!"
+立即订阅,"Subscribe Now"
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
 第一页,"First Page"
@@ -1893,7 +1926,6 @@ Cookie政策,"Cookie Policy"
 总价,"Total Price"
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
-今日特价,"Today's Deals"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
 "特价产品 %d","Sale product %d"
 距离结束,"Ends in"
@@ -1933,21 +1965,14 @@ Cookie政策,"Cookie Policy"
 订阅获取最新优惠信息,"Subscribe for the Latest Deals"
 请输入邮箱地址,"Please enter the email address"
 我们不会分享您的邮箱地址,"We will not share your email address"
-关注我们,"Follow Us"
 微信扫码关注,"Scan WeChat to follow"
 微信二维码,"WeChat QR code"
 热门标签,"Popular Tags"
 耳机,Headphones
 相机,Camera
-智能手表,Smartwatches
-充电器,Chargers
-数据线,Cables
 保护壳,"Protective Case"
 蓝牙,Bluetooth
 音箱,Speaker
-键盘,Keyboards
-鼠标,Mice
-显示器,Monitors
 路由器,Router
 分享到,"Share to"
 邮件,Mail

@@ -5952,8 +5952,7 @@ class AiSiteAgent extends BaseController
             : (\is_array($scope['plan_json_task_summary'] ?? null) ? $scope['plan_json_task_summary'] : []);
         $taskReady = $this->taskSummaryIndicatesCompleted($planJsonTaskSummary);
         $completionGate = $this->planJsonTaskService->inspectBuildCompletionGate($scope);
-        $completionGatePassed = !empty($completionGate['passed'])
-            || !empty($scope['build_summary']['completion_gate']['passed']);
+        $completionGatePassed = !empty($completionGate['passed']);
         $titleOk = \trim((string)($scope['website_profile']['site_title'] ?? $scope['site_title'] ?? '')) !== '';
         $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
             || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
@@ -6200,18 +6199,12 @@ class AiSiteAgent extends BaseController
         }
         $hasStageOnePlan = $this->workspaceFastViewHasStageOnePlan($scope);
         $taskReady = $this->taskSummaryIndicatesCompleted($planJsonTaskSummary);
-        $completionGatePassed = !empty($scope['build_summary']['completion_gate']['passed'])
-            || !empty($queuePatch['build_summary']['completion_gate']['passed'] ?? null)
-            || !empty($queuePatch['scope']['build_summary']['completion_gate']['passed'] ?? null);
+        $completionGate = $this->planJsonTaskService->inspectBuildCompletionGate($scope);
+        $completionGatePassed = !empty($completionGate['passed']);
         $titleOk = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? '')) !== '';
         $published = $session->getPublishStatus() === AiSiteAgentSession::PUBLISH_STATUS_PUBLISHED
             || (string)($scope['workspace_status'] ?? '') === AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED;
         $canPublish = $published
-            || (
-                !empty($scope['can_publish'])
-                && $taskReady
-                && $titleOk
-            )
             || (
                 $completionGatePassed
                 && $taskReady
@@ -15653,7 +15646,7 @@ class AiSiteAgent extends BaseController
                 : \in_array($queueStatus, ['pending', 'queued'], true)
         );
         $queuedMessage = $waitingForScheduler
-                ? (string)__('Operation completed.')
+                ? $this->buildAiSiteQueueSchedulerWaitMessage($operation, \is_array($queueRow) ? (int)($queueRow['queue_id'] ?? 0) : (int)($activeOperation['queue_id'] ?? 0))
             : ($queueStatus === 'running'
                 ? $queueProcessLine
                 : (string)($activeOperation['message'] ?? ''));
@@ -15701,7 +15694,14 @@ class AiSiteAgent extends BaseController
 
     private function buildAiSiteQueueSchedulerWaitMessage(string $operation, int $queueId): string
     {
-        return (string)__('Operation completed.');
+        unset($operation);
+        if ($queueId > 0) {
+            return (string)__('队列 #%{queue_id} 正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。', [
+                'queue_id' => (string)$queueId,
+            ]);
+        }
+
+        return (string)__('队列正在等待系统定时任务调度，通常约 1 分钟内开始执行；你可以关闭当前进度窗口，继续操作其他内容。');
     }
     private function buildAiSiteQueueBizKey(int $sessionId, string $operation): string
     {

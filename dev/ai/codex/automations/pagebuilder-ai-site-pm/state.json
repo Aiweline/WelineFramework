@@ -1,0 +1,24 @@
+﻿{
+    "lastBlockedAt":  "2026-06-08T01:23:36.7059506Z",
+    "marker":  "PB_AI_SITE_PM_AUTOMATION",
+    "status":  "running",
+    "activeRunId":  "pbai-20260608-100528-32db918d",
+    "activeTaskPath":  "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0205-pagebuilder-ai-site-pm-iteration",
+    "activeThreadHint":  "automation-pagebuilder-ai-site-pm",
+    "startedAt":  "2026-06-08T02:05:28.2808918Z",
+    "updatedAt":  "2026-06-08T02:11:44.5070163Z",
+    "lastCompletedAt":  null,
+    "lastSkippedAt":  null,
+    "skipReason":  null,
+    "blockReason":  null,
+    "lastResult":  "已修复 queued 等待调度 payload 误报 Operation completed 的产品状态问题，并补齐 en_US 翻译。",
+    "nextPriority":  "确认并修复 PageBuilder AiSitePlanQueue 正常调度不接走的问题。",
+    "evidence":  [
+                     "task record: E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0205-pagebuilder-ai-site-pm-iteration",
+                     "automation memory and state loaded",
+                     "repo entry rules and PageBuilder/queue/WLS skills loaded",
+                     "queue #3292 is now done/pid=0/finished=1; current blocker shifted to fresh-session validation",
+                     "patched AiSiteAgent queued scheduler-wait message to use explicit system scheduler wait copy",
+                     "patched PageBuilder en_US i18n for scheduler wait messages"
+                 ]
+}

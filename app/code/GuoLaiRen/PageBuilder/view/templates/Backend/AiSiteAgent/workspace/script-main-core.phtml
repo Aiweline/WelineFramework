@@ -1279,28 +1279,6 @@
         return <?= $pbAiScriptJson((string)__('前端检测到建站进度异常，已停止自动重试和重连，请等待后台消息通知后人工处理。')) ?>;
     }
 
-    function reloadWorkspaceAfterFrontendException(operation, reason) {
-        var key = 'pb_ai_workspace_frontend_exception_reload';
-        var now = Date.now();
-        try {
-            var previous = JSON.parse(window.sessionStorage.getItem(key) || '{}');
-            var previousAt = parseInt(String(previous.at || 0), 10) || 0;
-            if (previousAt > 0 && (now - previousAt) < 10000) {
-                return false;
-            }
-            window.sessionStorage.setItem(key, JSON.stringify({
-                at: now,
-                operation: String(operation || ''),
-                reason: String(reason || '')
-            }));
-        } catch (error) {
-        }
-        window.setTimeout(function () {
-            window.location.reload();
-        }, 800);
-        return true;
-    }
-
     function notifyWorkspaceFrontendRetryStopped(operation, reason, payload) {
         if (typeof window.__pbWorkspaceNotifyFrontendRetryStopped === 'function') {
             return window.__pbWorkspaceNotifyFrontendRetryStopped(operation, reason, payload || {});
@@ -1340,7 +1318,6 @@
             }
         }
         toast('warning', message);
-        reloadWorkspaceAfterFrontendException(normalizedOperation, normalizedReason);
         return false;
     }
 
@@ -1368,7 +1345,14 @@
         }
         rememberPlanReloadReason(reason);
         planWorkspaceReloadTimer = window.setTimeout(function () {
-            window.location.reload();
+            planWorkspaceReloadTimer = null;
+            runPlanReloadReconciliation();
+            if (typeof rerenderCurrentPlanPreview === 'function') {
+                rerenderCurrentPlanPreview();
+            }
+            if (typeof syncConfirmPlanButtonEnabled === 'function') {
+                syncConfirmPlanButtonEnabled();
+            }
         }, Math.max(100, parseInt(String(delayMs || 900), 10) || 900));
     }
 
@@ -17472,7 +17456,16 @@
         }
         confirmPlanReloadTimer = window.setTimeout(function () {
             confirmPlanReloadTimer = null;
-            window.location.reload();
+            if (typeof hideLoading === 'function') {
+                hideLoading();
+            }
+            var confirmTimeoutMessage = resolveFrontendRetryStopMessage('confirm_transport_error', null);
+            notifyWorkspaceFrontendRetryStopped('plan', 'confirm_transport_error', {
+                operation: 'plan',
+                message: confirmTimeoutMessage
+            });
+            syncConfirmPlanButtonEnabled();
+            syncPlanRebuildButtonVisibility();
         }, 35000);
         persistStageOneInlineEdits(true).then(function (patched) {
             if (!patched) {

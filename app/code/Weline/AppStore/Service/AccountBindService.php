@@ -56,10 +56,9 @@ class AccountBindService
         }
         $this->encryptionKey = $encryptionKey;
         
-        $this->httpClient = new Client([
+        $this->httpClient = new Client($this->getHttpClientOptions([
             'timeout' => 30,
-            'verify' => true,
-        ]);
+        ]));
     }
 
     public function getPlatformUrl(): string
@@ -74,6 +73,12 @@ class AccountBindService
         }
 
         return rtrim($this->platformApiUrl, '/') . '/' . ltrim($path, '/');
+    }
+
+    public function getHttpClientOptions(array $options = []): array
+    {
+        $options['verify'] = $this->resolveHttpVerifyOption($options['verify'] ?? true);
+        return $options;
     }
 
     public function getAuthorizationUrl(string $redirectUri, ?string $state = null): string
@@ -716,6 +721,40 @@ class AccountBindService
         $platformUrl = Env::get('appstore.platform_url');
         // Env::get 濡傛灉閰嶇疆椤瑰瓨鍦ㄤ絾鏄惧紡涓?null锛屼細鐩存帴杩斿洖 null锛堜笉浼氳蛋 default锛夛紝鍥犳杩欓噷鍋氶潪绌哄厹搴曘€?
         return (is_string($platformUrl) && $platformUrl !== '') ? rtrim($platformUrl, '/') : self::DEFAULT_PLATFORM_URL;
+    }
+
+    private function resolveHttpVerifyOption(mixed $default): mixed
+    {
+        $caBundle = getenv('WELINE_APPSTORE_CA_BUNDLE');
+        if (!is_string($caBundle) || trim($caBundle) === '') {
+            $caBundle = Env::get('appstore.ca_bundle');
+        }
+
+        if (!is_string($caBundle) || trim($caBundle) === '') {
+            return $default;
+        }
+
+        $path = $this->normalizeCaBundlePath($caBundle);
+        if (is_file($path) && is_readable($path)) {
+            return $path;
+        }
+
+        Env::log_warning('appstore', 'AppStore: configured CA bundle is not readable: ' . $path);
+        return $default;
+    }
+
+    private function normalizeCaBundlePath(string $path): string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return '';
+        }
+
+        if (preg_match('#^[A-Za-z]:[\\\\/]#', $path) || str_starts_with($path, '/') || str_starts_with($path, '\\\\')) {
+            return $path;
+        }
+
+        return BP . ltrim(str_replace(['/', '\\'], DS, $path), DS);
     }
 
     private static function normalizePlatformApiBaseUrl(string $platformUrl): string

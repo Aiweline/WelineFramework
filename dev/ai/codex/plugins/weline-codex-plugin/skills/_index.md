@@ -21,7 +21,7 @@
 - WLS、Worker、reload/restart、Session Server、SSE：加载 `WLS运行时工程师-*`。
 - ACL、后台安全、会话、数据保护：加载 `安全权限工程师-*`。
 - README、API、架构、索引、规则沉淀、复盘：加载 `文档知识库工程师-*`。
-- CI、发布、部署、环境兼容、Windows 命令安全：加载 `CI发布工程师-*`。涉及线上部署时，必须使用 Chrome 扩展接管用户 Chrome 中的 JumpServer / Luna / 宝塔 Web 终端标签页，走 `openTabs -> claimTab -> tab.cua/tab.playwright/tab.clipboard`；禁止内联 SSH、禁止 Codex 内置浏览器部署、禁止 OS 层抢占用户鼠标或窗口焦点。
+- CI、发布、部署、环境兼容、Windows 命令安全：加载 `CI发布工程师-*`。涉及已配置 SAAS 部署目标时，默认使用本机 OpenSSH 与 Windows 凭据中的部署 key；无本机 SSH 凭据或非 SAAS 线上目标时，使用 Chrome 扩展接管用户 Chrome 中的 JumpServer / Luna / 宝塔 Web 终端标签页，走 `openTabs -> claimTab -> tab.cua/tab.playwright/tab.clipboard`；禁止内联私钥、禁止 Codex 内置浏览器部署、禁止 OS 层抢占用户鼠标或窗口焦点。
 - 代码图谱、调用链、影响分析、重构、索引维护：加载 `.claude/skills/gitnexus/*/SKILL.md` 中命中的 GitNexus 技能。
 
 ## 角色路由
