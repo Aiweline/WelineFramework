@@ -50,6 +50,17 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
     private const PLAN_JSON_BLOCK_STATUS_RUNNING = 2;
     private const PLAN_JSON_BLOCK_STATUS_DONE = 1;
     private const PLAN_JSON_BLOCK_STATUS_FAILED = -1;
+    private const PLAN_JSON_BLOCK_FAILURE_KEYS = [
+        'error',
+        'error_message',
+        'failure_reason',
+        'failure_class',
+        'failure_source',
+        'failure_stage',
+        'validation_summary',
+        'validation_issues',
+        'failed_at',
+    ];
     private const PLAN_JSON_PAGE_META_KEYS = [
         'page_key' => true,
         'page_type' => true,
@@ -1124,6 +1135,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         if (!empty($gate['passed'])) {
             $now = \date('Y-m-d H:i:s');
             $scope = $planJsonTaskService->attachBuildRenderDataContract($scope);
+            $scope = $this->clearResolvedPlanJsonBlockFailureFields($scope);
             $scope = $planJsonTaskService->clearRetryableAiFailures($scope, 'build');
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
             $scope['can_publish'] = 1;
@@ -1262,6 +1274,7 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
 
         if ($fullBuildGatePassed) {
             $scope = $planJsonTaskService->attachBuildRenderDataContract($scope);
+            $scope = $this->clearResolvedPlanJsonBlockFailureFields($scope);
         }
         $now = \date('Y-m-d H:i:s');
         $message = $this->buildOperationDoneMessage($operation);
@@ -1974,6 +1987,40 @@ class AiSiteBuildQueue implements QueueInterface, DeadWorkerRecoverableQueueInte
         $sessionService->replaceScope((int)$fresh->getId(), $adminId, $scope);
 
         return $sessionService->loadById((int)$fresh->getId(), $adminId) ?? $fresh;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function clearResolvedPlanJsonBlockFailureFields(array $scope): array
+    {
+        if (!\is_array($scope['plan_json']['pages'] ?? null)) {
+            return $scope;
+        }
+
+        foreach ($scope['plan_json']['pages'] as $pageKey => $page) {
+            if (!\is_array($page)) {
+                continue;
+            }
+            foreach ($page as $blockKey => $block) {
+                if (!$this->isCanonicalPlanJsonBlockNode($blockKey, $block)) {
+                    continue;
+                }
+                if ($this->canonicalPlanJsonBlockStatus($block['status'] ?? null) !== self::PLAN_JSON_BLOCK_STATUS_DONE) {
+                    continue;
+                }
+                if (!$this->canonicalPlanJsonBlockHasHtml($block)) {
+                    continue;
+                }
+                foreach (self::PLAN_JSON_BLOCK_FAILURE_KEYS as $key) {
+                    unset($block[$key]);
+                }
+                $scope['plan_json']['pages'][$pageKey][$blockKey] = $block;
+            }
+        }
+
+        return $scope;
     }
 
     /**
