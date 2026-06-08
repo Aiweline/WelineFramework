@@ -14,7 +14,7 @@ This skill builds frontend components and page assembly units such as blocks, ta
 - Use for keywords such as component, widget, taglib, block, `w:widget`, `w:d-table`, website clone, and page section.
 - Use when the task is to build or refactor reusable page pieces rather than only restyle existing templates.
 - For browser-visible UI, layout, responsive, empty/loading/error states, usability, or visual polish work, automatically load `dev/ai/skills/ui-ux-pro-max/SKILL.md` and use it for design-system guidance before implementation, even when the user does not mention UI/UX or the skill by name.
-- PageBuilder module/component work is target-owned. Switch to `E:\公司\远程\src\weline` and use that repository's PageBuilder skills.
+- GuoLaiRen module/component work is target-owned. Switch to `E:\公司\远程\src\weline` and use that repository's GuoLaiRen/PageBuilder skills.
 
 # Source Material
 

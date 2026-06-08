@@ -13,7 +13,7 @@ This skill owns browser-visible API interaction patterns in WelineFramework them
 - Use for theme-visible API interactions, frontend business requests, provider calls, browser-side query access, SSE or stream subscriptions, and request error handling on browser surfaces.
 - Use for keywords such as `weline-api`, `Weline.Api`, `resource()`, `graph()`, `stream()`, `theme.js`, worker request chain, frontend API, browser API, query-bin, and frontend QueryProvider access.
 - Use when the task changes how browser code requests, submits, refreshes, streams, or handles API data in a theme, component, or widget surface.
-- PageBuilder browser/API work is target-owned. Switch to `E:\公司\远程\src\weline` and use that repository's PageBuilder skills.
+- GuoLaiRen browser/API work is target-owned. Switch to `E:\公司\远程\src\weline` and use that repository's GuoLaiRen/PageBuilder skills.
 
 # Source Material
 

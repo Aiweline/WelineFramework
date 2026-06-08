@@ -142,8 +142,8 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 
 1. 本地完成修改与验证。
 2. 先确认改动所属模块是否由发布目标仓库 `E:\公司\远程\src\weline` 持有；只同步目标仓库已有或用户明确要求迁入的模块，不把源仓库独有模块顺手带入发布仓库。
-3. `app/code/GuoLaiRen/PageBuilder` 已迁移到发布目标仓库，源仓库不再支持该模块；后续 PageBuilder 开发、验证、提交和上线必须在目标仓库完成。
-4. 同步时从源仓库检查目标仓库需要的同名模块是否有变更，并把需要的文件同步到目标仓库；目标仓库不存在的模块保持在源仓库，不参与部署。
+3. `app/code/GuoLaiRen` 已整体迁移到发布目标仓库，源仓库不再支持 `GuoLaiRen/*` 下任何模块；后续 GuoLaiRen 供应商模块的开发、验证、提交、上线、模块文档和技能维护必须在目标仓库完成。
+4. 同步时从源仓库检查目标仓库需要的同名非 GuoLaiRen 模块是否有变更，并把需要的文件同步到目标仓库；`GuoLaiRen/*` 本体不再从源仓库恢复或同步。
 5. 在发布工作区提交并推送 `master`。
 6. 默认通过本机 OpenSSH 连接已配置的 SAAS 部署目标：使用发布工作区本地 SSH 配置与密钥（`E:\公司\远程\src\weline\.ssh\jumpserver_key`，Windows Generic Credential 目标名 `Weline-SaaS-43.205.103.113-SSH-Key`）进入服务器；推荐命令形态为 `ssh -F E:\公司\远程\src\weline\.ssh\config ec2-user@weline-saas`。若本机 SSH 凭据不可用，停止部署并报告阻塞；不回退到 Chrome / JumpServer / 宝塔。
 7. SSH 登录后通过 `sudo -iu weline` 切换到项目部署账户，并进入线上项目目录 `/home/weline-test` 执行 `git pull origin master` 或按 remote 配置更新。
