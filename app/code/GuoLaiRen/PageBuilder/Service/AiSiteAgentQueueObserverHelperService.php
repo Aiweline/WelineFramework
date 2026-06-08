@@ -76,6 +76,11 @@ class AiSiteAgentQueueObserverHelperService
             if ($message !== '' && ($success || !$this->isQueueStreamOmittedMessage($message))) {
                 return $message;
             }
+            $result = $this->trimQueueResultCompatibilityTail((string)($queueRow['result'] ?? $queueRow['result_log'] ?? ''));
+            if (!$success && $result !== '') {
+                $lines = $this->extractNonEmptyTailLines($result);
+                return (string)($lines[\count($lines) - 1] ?? $result);
+            }
         }
 
         return $success ? (string)__('操作执行完成') : (string)__('操作执行失败');

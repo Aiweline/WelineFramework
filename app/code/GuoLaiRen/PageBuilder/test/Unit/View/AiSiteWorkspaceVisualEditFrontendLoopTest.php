@@ -1215,7 +1215,7 @@ final class AiSiteWorkspaceVisualEditFrontendLoopTest extends TestCase
     {
         $script = $this->workspaceScript();
         $body = $this->extractFunctionBody($script, 'pbAiConfirmGenerateThemeContinue');
-        $postOffset = \strpos($body, 'postForm(runVirtualThemeUrl, requestPayload, { timeoutMs: 120000 })');
+        $postOffset = \strpos($body, 'postForm(runVirtualThemeUrl, requestPayload, { timeoutMs: 600000 })');
         self::assertNotFalse($postOffset, 'build request postForm call missing');
 
         $beforePost = \substr($body, 0, $postOffset);
