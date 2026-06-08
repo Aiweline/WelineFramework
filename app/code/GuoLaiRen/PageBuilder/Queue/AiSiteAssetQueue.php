@@ -16,6 +16,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteQueueLogWriter;
 use GuoLaiRen\PageBuilder\Service\AiSiteIdentityAssetTransparencyValidator;
 use GuoLaiRen\PageBuilder\Service\AiSiteReferenceImageInsightService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Queue\Model\Queue;
@@ -621,13 +622,17 @@ class AiSiteAssetQueue implements QueueInterface
 
     private function downloadImageUrl(string $url): string
     {
+        $timeout = \max(1, (int)Env::get('pagebuilder.ai_site.image_download_timeout', 600));
+        $verifySsl = $this->resolveImageDownloadSslVerify();
         if (\function_exists('curl_init')) {
             $ch = \curl_init($url);
             \curl_setopt_array($ch, [
                 \CURLOPT_RETURNTRANSFER => true,
                 \CURLOPT_FOLLOWLOCATION => true,
                 \CURLOPT_CONNECTTIMEOUT => 30,
-                \CURLOPT_TIMEOUT => 120,
+                \CURLOPT_TIMEOUT => $timeout,
+                \CURLOPT_SSL_VERIFYPEER => $verifySsl,
+                \CURLOPT_SSL_VERIFYHOST => $verifySsl ? 2 : 0,
             ]);
             $bytes = \curl_exec($ch);
             $error = \curl_error($ch);
@@ -639,13 +644,38 @@ class AiSiteAssetQueue implements QueueInterface
             throw new \RuntimeException('Failed to download generated image: ' . ($error !== '' ? $error : ('HTTP ' . $status)));
         }
 
-        $context = \stream_context_create(['http' => ['timeout' => 120, 'follow_location' => 1]]);
+        $context = \stream_context_create([
+            'http' => [
+                'timeout' => $timeout,
+                'follow_location' => 1,
+            ],
+            'ssl' => [
+                'verify_peer' => $verifySsl,
+                'verify_peer_name' => $verifySsl,
+            ],
+        ]);
         $bytes = @\file_get_contents($url, false, $context);
         if ($bytes === false) {
             throw new \RuntimeException('Failed to download generated image.');
         }
 
         return $bytes;
+    }
+
+    private function resolveImageDownloadSslVerify(): bool
+    {
+        $configured = Env::get('pagebuilder.ai_site.image_download_ssl_verify', true);
+        if (\is_bool($configured)) {
+            return $configured;
+        }
+        $value = \strtolower(\trim((string)$configured));
+        if (\in_array($value, ['0', 'false', 'no', 'off'], true)) {
+            return false;
+        }
+        if (\in_array($value, ['1', 'true', 'yes', 'on'], true)) {
+            return true;
+        }
+        return true;
     }
 
     /**

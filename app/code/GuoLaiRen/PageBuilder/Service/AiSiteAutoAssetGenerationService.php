@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 
@@ -13,7 +14,7 @@ class AiSiteAutoAssetGenerationService
     private const DEFAULT_LIMIT = 4;
     private const FAILURE_TRAIL_MAX_ITEMS = 80;
     private const FAILURE_TRAIL_MESSAGE_MAX_LEN = 800;
-    private const IMAGE_GENERATION_TIMEOUT_SECONDS = 120;
+    private const IMAGE_GENERATION_TIMEOUT_SECONDS = 600;
     private const IMAGE_GENERATION_MAX_ATTEMPTS = 1;
     private const REQUEST_CTX_INLINE_IMAGE_GENERATION_DISABLED = 'pagebuilder.ai.inline_image_generation.disabled';
     private const INLINE_IMAGE_GENERATION_DISABLED_REASON = 'disabled_by_test_switch';
@@ -775,6 +776,10 @@ class AiSiteAutoAssetGenerationService
                 }
             }
         }
+        $configured = (int)Env::get('pagebuilder.ai_site.image_generation_max_attempts', 0);
+        if ($configured > 0) {
+            return \max(1, \min(3, $configured));
+        }
 
         return self::IMAGE_GENERATION_MAX_ATTEMPTS;
     }
@@ -791,6 +796,10 @@ class AiSiteAutoAssetGenerationService
                     return \max(1, $timeout);
                 }
             }
+        }
+        $configured = (int)Env::get('pagebuilder.ai_site.image_generation_timeout', 0);
+        if ($configured > 0) {
+            return \max(1, $configured);
         }
 
         return self::IMAGE_GENERATION_TIMEOUT_SECONDS;
@@ -1608,13 +1617,17 @@ class AiSiteAutoAssetGenerationService
 
     private function downloadImageUrl(string $url): string
     {
+        $timeout = \max(1, (int)Env::get('pagebuilder.ai_site.image_download_timeout', 600));
+        $verifySsl = $this->resolveImageDownloadSslVerify();
         if (\function_exists('curl_init')) {
             $ch = \curl_init($url);
             \curl_setopt_array($ch, [
                 \CURLOPT_RETURNTRANSFER => true,
                 \CURLOPT_FOLLOWLOCATION => true,
                 \CURLOPT_CONNECTTIMEOUT => 30,
-                \CURLOPT_TIMEOUT => 120,
+                \CURLOPT_TIMEOUT => $timeout,
+                \CURLOPT_SSL_VERIFYPEER => $verifySsl,
+                \CURLOPT_SSL_VERIFYHOST => $verifySsl ? 2 : 0,
             ]);
             $bytes = \curl_exec($ch);
             $error = \curl_error($ch);
@@ -1626,12 +1639,38 @@ class AiSiteAutoAssetGenerationService
             throw new \RuntimeException('Failed to download generated image URL: ' . ($error !== '' ? $error : ('HTTP ' . $status)));
         }
 
-        $bytes = @\file_get_contents($url);
+        $context = \stream_context_create([
+            'http' => [
+                'timeout' => $timeout,
+                'follow_location' => 1,
+            ],
+            'ssl' => [
+                'verify_peer' => $verifySsl,
+                'verify_peer_name' => $verifySsl,
+            ],
+        ]);
+        $bytes = @\file_get_contents($url, false, $context);
         if ($bytes === false) {
             throw new \RuntimeException('Failed to download generated image URL.');
         }
 
         return $bytes;
+    }
+
+    private function resolveImageDownloadSslVerify(): bool
+    {
+        $configured = Env::get('pagebuilder.ai_site.image_download_ssl_verify', true);
+        if (\is_bool($configured)) {
+            return $configured;
+        }
+        $value = \strtolower(\trim((string)$configured));
+        if (\in_array($value, ['0', 'false', 'no', 'off'], true)) {
+            return false;
+        }
+        if (\in_array($value, ['1', 'true', 'yes', 'on'], true)) {
+            return true;
+        }
+        return true;
     }
 
     /**

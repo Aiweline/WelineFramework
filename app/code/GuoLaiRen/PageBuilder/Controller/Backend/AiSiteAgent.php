@@ -7085,8 +7085,23 @@ class AiSiteAgent extends BaseController
             }
             if ($streamObservedActiveOperation && $this->isWorkspaceStreamOperationTerminal($terminalProbeState)) {
                 $session = $freshForTerminalCheck;
+                if ($this->shouldKeepWorkspaceStreamOpenForPlanJsonOperation($session, $adminId, $terminalProbeState)) {
+                    $this->logStreamSse('terminal_operation_waiting_for_plan_json', [
+                        'session_id' => $session->getId(),
+                        'loop_count' => $loopCount,
+                        'last_event_id' => $lastEventId,
+                    ]);
+                    $sse->maybeHeartbeat();
+                    SchedulerSystem::yieldDelay($pollInterval);
+                    continue;
+                }
                 $terminalStateSource = $this->buildWorkspaceState($session, $adminId, 40, self::WORKSPACE_STREAM_STATE_PERSIST);
                 $terminalCompletePayload = $this->buildWorkspaceStreamTerminalPayload($terminalStateSource, $lastEventId);
+                $terminalCompletePayload = $this->buildWorkspaceStreamPlanJsonTerminalPayload(
+                    $session,
+                    $terminalStateSource,
+                    $terminalCompletePayload
+                );
                 if ($streamStage !== '') {
                     $terminalCompletePayload = $this->filterWorkspaceStateByStage($terminalCompletePayload, $streamStage);
                 }
@@ -7107,7 +7122,14 @@ class AiSiteAgent extends BaseController
         if (\is_array($terminalCompletePayload)) {
             $sse->complete($terminalCompletePayload);
         } else {
-            $sse->complete(['success' => true, 'last_event_id' => $lastEventId]);
+            $sse->complete([
+                'success' => !$streamObservedActiveOperation,
+                'last_event_id' => $lastEventId,
+                'message' => $streamObservedActiveOperation
+                    ? (string)__('Operation did not reach a terminal state; please reconnect.')
+                    : (string)__('Operation completed.'),
+                'terminal_status' => $streamObservedActiveOperation ? 'incomplete' : '',
+            ]);
         }
         $this->releaseStreamLeaseState($session, $adminId, $leaseToken);
         $this->logStreamSse('stream_completed', [
@@ -7224,6 +7246,126 @@ class AiSiteAgent extends BaseController
         $payload['message'] = $message;
         $payload['terminal_status'] = $status;
         $payload['last_event_id'] = $lastEventId;
+
+        return $payload;
+    }
+
+    /**
+     * Plan/build workspace streams close only after plan_json work has reached
+     * a terminal state. active_operation can be stale while child work is still
+     * writing progress, so do not let a cached queue_status=done close the SSE.
+     *
+     * @param array<string, mixed> $operationState
+     */
+    private function shouldKeepWorkspaceStreamOpenForPlanJsonOperation(
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $operationState
+    ): bool {
+        $activeOperation = \is_array($operationState['active_operation'] ?? null) ? $operationState['active_operation'] : [];
+        $operation = \trim((string)($activeOperation['operation'] ?? ''));
+        if (!$this->isPlanJsonObservedProgressOperation($operation)) {
+            return false;
+        }
+
+        $queueRow = $this->findAiSiteOperationQueueRow(
+            $session,
+            $operation,
+            (int)($activeOperation['queue_id'] ?? 0),
+            $operation === 'plan'
+        );
+        if ($this->isObservedQueueFailure($queueRow)) {
+            return false;
+        }
+        if ($this->isObservedQueueInProgress($queueRow)) {
+            return true;
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $this->resolveAiSiteQueueStage($operation), [])
+        );
+        $planJsonTerminalState = $this->resolveObservedPlanJsonTerminalState($scope, $operation);
+
+        return empty($planJsonTerminalState['terminal']);
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function buildWorkspaceStreamPlanJsonTerminalPayload(
+        AiSiteAgentSession $session,
+        array $state,
+        array $payload
+    ): array {
+        $activeOperation = \is_array($state['active_operation'] ?? null)
+            ? $state['active_operation']
+            : (\is_array($payload['active_operation'] ?? null) ? $payload['active_operation'] : []);
+        $operation = \trim((string)($activeOperation['operation'] ?? ''));
+        if (!$this->isPlanJsonObservedProgressOperation($operation)) {
+            return $payload;
+        }
+
+        $queueRow = $this->findAiSiteOperationQueueRow(
+            $session,
+            $operation,
+            (int)($activeOperation['queue_id'] ?? 0),
+            $operation === 'plan'
+        );
+        $scope = $this->scopeCompatibilityService->normalizeScope(
+            $this->sessionService->loadScopeForStage($session, $this->resolveAiSiteQueueStage($operation), [])
+        );
+        $planJsonTerminalState = $this->resolveObservedPlanJsonTerminalState($scope, $operation);
+        $queueStatus = \trim((string)($queueRow['status'] ?? ''));
+        $queueFailure = $this->isObservedQueueFailure($queueRow);
+        $queueInProgress = $this->isObservedQueueInProgress($queueRow);
+        $queueFinalCheckAvailable = $this->hasObservedQueueFinalCheckRow($queueRow);
+        $planJsonComplete = !empty($planJsonTerminalState['complete']);
+        $planJsonFailed = !empty($planJsonTerminalState['failed']);
+        $success = $planJsonComplete && $queueFinalCheckAvailable && !$queueFailure && !$queueInProgress;
+        $message = \trim((string)($payload['message'] ?? ''));
+
+        if ($queueFailure) {
+            $message = $this->resolveObservedQueueMessage($queueRow, false);
+            if ($message === '') {
+                $message = (string)__('Queue final status check failed; please retry.');
+            }
+        } elseif ($queueInProgress || empty($planJsonTerminalState['terminal'])) {
+            $message = (string)__('Operation is still running.');
+        } elseif (!$queueFinalCheckAvailable) {
+            $message = (string)__('Queue final status could not be verified; please retry.');
+        } elseif (!empty($planJsonTerminalState['message'])) {
+            $message = (string)$planJsonTerminalState['message'];
+        } elseif ($message === '') {
+            $message = $success ? (string)__('Operation completed.') : (string)__('Operation failed.');
+        }
+
+        $payload['success'] = $success;
+        $payload['message'] = $message;
+        $payload['terminal_status'] = $success
+            ? 'done'
+            : (($queueFailure || $planJsonFailed || (!$queueFinalCheckAvailable && !empty($planJsonTerminalState['terminal']))) ? 'error' : 'running');
+        $payload['queue_status'] = $queueStatus;
+        $payload['progress_kind'] = 'queue_final_check';
+        $payload['queue_final_check'] = [
+            'available' => $queueFinalCheckAvailable,
+            'failed' => $queueFailure,
+            'in_progress' => $queueInProgress,
+            'queue_status' => $queueStatus,
+            'queue_id' => (int)($queueRow['queue_id'] ?? 0),
+        ];
+        $payload['plan_json_terminal'] = [
+            'terminal' => !empty($planJsonTerminalState['terminal']),
+            'complete' => $planJsonComplete,
+            'failed' => $planJsonFailed,
+            'reason' => (string)($planJsonTerminalState['reason'] ?? ''),
+            'pending' => (int)($planJsonTerminalState['pending'] ?? 0),
+            'running' => (int)($planJsonTerminalState['running'] ?? 0),
+            'summary' => $this->summarizeObservedPlanJsonSnapshotForPayload(
+                \is_array($planJsonTerminalState['snapshot'] ?? null) ? $planJsonTerminalState['snapshot'] : []
+            ),
+        ];
 
         return $payload;
     }
@@ -7753,7 +7895,7 @@ class AiSiteAgent extends BaseController
                     $adminId,
                     [
                         'queue_status' => 'error',
-                        'message' => (string)__('Operation completed.'),
+                        'message' => (string)__('Operation failed.'),
                         'retry_allowed' => 1,
                         'failure_mode' => 'plan_failed',
                         'retryable_ai_failure_count' => \count($retryablePlanFailures),
@@ -7838,7 +7980,7 @@ class AiSiteAgent extends BaseController
             $sse->sendEvent('log', [
                 'event_type' => 'operation_failed',
                 'stage_code' => 'plan',
-                'message' => 'Operation completed.',
+                'message' => $throwable->getMessage() !== '' ? $throwable->getMessage() : 'Operation failed.',
                 'payload' => ['operation' => 'plan'],
                 'level' => 'error',
                 'event_id' => 0,
@@ -7918,7 +8060,12 @@ class AiSiteAgent extends BaseController
             'queue_id' => $queueId,
         ]);
         if (\in_array($queueStatus, ['pending', 'queued', 'running'], true)) {
-            $nextOperation['status'] = $queueStatus === 'running' ? 'running' : 'queued';
+            $nextStatus = $queueStatus === 'running' ? 'running' : 'queued';
+            $nextOperation['queue_status'] = $nextStatus;
+            $nextOperation['status'] = $nextStatus;
+            $nextOperation['semantic_status'] = $nextStatus;
+            $nextOperation['retry_allowed'] = 0;
+            $nextOperation['queue_terminal_recovered'] = 0;
             $queueProcess = \trim((string)($queueRow['process'] ?? ''));
             if ($queueProcess !== '') {
                 $nextOperation['message'] = $queueProcess;

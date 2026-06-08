@@ -268,6 +268,47 @@ final class AiSitePlanJsonStateService
         }
         $planJson['pages'] = $pages;
 
+        $sharedComponents = \is_array($planJson['shared_components'] ?? null) ? $planJson['shared_components'] : [];
+        foreach (['header', 'footer'] as $region) {
+            if (!\is_array($sharedComponents[$region] ?? null)) {
+                continue;
+            }
+            $component = \array_replace($sharedComponents[$region], [
+                'region' => $region,
+                'status' => self::STATUS_PENDING,
+                'attempt_no' => 0,
+                'message' => '',
+                'result_ref' => [],
+                'updated_at' => $now,
+                'started_at' => '',
+                'finished_at' => '',
+            ]);
+            foreach ([
+                'error',
+                'error_message',
+                'html',
+                'html_content',
+                'phtml',
+                'css',
+                'css_extra',
+                'css_responsive',
+                'php_variables',
+                'extra_fields',
+                'default_config',
+                'render_data',
+                'artifact',
+            ] as $artifactKey) {
+                unset($component[$artifactKey]);
+            }
+            if (\trim((string)($component['code'] ?? $component['component_code'] ?? '')) === '') {
+                $component['code'] = $region === 'header' ? 'header/ai-site-header' : 'footer/ai-site-footer';
+            }
+            $sharedComponents[$region] = $this->normalizeNode($component, self::STATUS_PENDING);
+        }
+        if ($sharedComponents !== []) {
+            $planJson['shared_components'] = $sharedComponents;
+        }
+
         return $this->normalizePlanJson($planJson);
     }
 
