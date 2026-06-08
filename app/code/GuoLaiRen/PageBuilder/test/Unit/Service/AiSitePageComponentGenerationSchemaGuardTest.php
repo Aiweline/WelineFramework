@@ -14,9 +14,13 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/AiSitePageComponentGenerationService.php');
 
         self::assertStringContainsString('private const COMPONENT_GENERATION_MAX_ATTEMPTS = 2;', $source);
-        self::assertStringContainsString('private const AI_REQUEST_TIMEOUT_SECONDS = 1800;', $source);
+        self::assertStringContainsString('private const AI_REQUEST_TIMEOUT_SECONDS = 600;', $source);
+        self::assertStringContainsString('$params[\'enforce_timeout_in_stream\'] = true;', $source);
         self::assertStringNotContainsString('private const COMPONENT_GENERATION_MAX_ATTEMPTS = 5;', $source);
-        self::assertStringNotContainsString('private const AI_REQUEST_TIMEOUT_SECONDS = 600;', $source);
+        self::assertStringNotContainsString('private const AI_REQUEST_TIMEOUT_SECONDS = 1800;', $source);
+        self::assertStringNotContainsString('$params[\'disable_ai_timeout\'] = true;', $source);
+        self::assertStringNotContainsString('$params[\'disable_cli_timeout\'] = true;', $source);
+        self::assertStringNotContainsString('$params[\'enforce_timeout_in_stream\'] = false;', $source);
     }
 
     public function testInlineImageGenerationIsFastFailEnhancement(): void
@@ -31,7 +35,7 @@ final class AiSitePageComponentGenerationSchemaGuardTest extends TestCase
         })->call($service);
 
         self::assertSame(1, $defaultAttempts);
-        self::assertStringContainsString('private const IMAGE_GENERATION_TIMEOUT_SECONDS = 120;', $assetSource);
+        self::assertStringContainsString('private const IMAGE_GENERATION_TIMEOUT_SECONDS = 600;', $assetSource);
         self::assertStringContainsString('private const IMAGE_GENERATION_MAX_ATTEMPTS = 1;', $assetSource);
         self::assertStringContainsString("'image_generation_max_attempts' => 1", $controllerSource);
         self::assertStringContainsString("'image_timeout' => $imageTimeout", $assetSource);
