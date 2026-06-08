@@ -261,6 +261,13 @@ goto :do_run_installer
 set "CECHO_MSG=ERROR: PHP not found. Install to %PHP_DIR% or add php to PATH." & call :cecho Red ""
 exit /b 1
 :do_run_installer
+if exist "%PHP_DIR%\php.exe" if exist "%ROOT%\setup\server_installer\bootstrap_php_ini.php" (
+  call :cecho Gray "Pre-configuring php.ini (opcache file_cache for Windows ASLR)..."
+  "%PHP_EXE%" -d opcache.enable=0 -d opcache.enable_cli=0 "%ROOT%\setup\server_installer\bootstrap_php_ini.php"
+  if errorlevel 1 (
+    set "CECHO_MSG=WARNING: bootstrap_php_ini failed; run.php may hit Opcache ASLR fatal on Windows." & call :cecho Yellow ""
+  )
+)
 set "RUN_ARGS="
 if defined FORCE_INSTALL set "RUN_ARGS=-f"
 call :cecho Gray "Running: php setup\server_installer\run.php %RUN_ARGS%"
