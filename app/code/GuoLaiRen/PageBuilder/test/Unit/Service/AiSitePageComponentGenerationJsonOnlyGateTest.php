@@ -10,16 +10,16 @@ use PHPUnit\Framework\TestCase;
 
 final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
 {
-    public function testContentBlockGenerationOnlyRequiresJsonStringEnvelope(): void
+    public function testContentBlockGenerationAllowsJsonStringEnvelopeWithResponsiveCss(): void
     {
         $service = new AiSitePageComponentGenerationService();
 
         $payload = [
             'extra_fields' => '',
             'php_variables' => '',
-            'css_extra' => '#componentId .hero { color:#111; broken-css',
-            'css_responsive' => '',
-            'html_content' => '<section class="hero">< class="odd">Dynamic AI copy <img src="https://example.com/unverified.jpg"></section>',
+            'css_extra' => '#componentId .pb-c-root{color:#111;}#componentId .pb-c-text{display:block;}#componentId .pb-c-img{display:block;}',
+            'css_responsive' => '@media (max-width: 768px){#componentId .pb-c-root{display:block;}}@media (max-width: 420px){#componentId .pb-c-root{display:block;}}',
+            'html_content' => '<section class="pb-c-root"><p class="pb-c-text">Dynamic AI copy</p><img class="pb-c-img" src="https://example.com/unverified.jpg"></section>',
             'js_content' => '',
         ];
 
@@ -27,7 +27,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
 
         self::assertStringContainsString('Dynamic AI copy', (string)($validated['html_content'] ?? ''));
         self::assertStringContainsString('unverified.jpg', (string)($validated['html_content'] ?? ''));
-        self::assertStringContainsString('broken-css', (string)($validated['css_extra'] ?? ''));
+        self::assertStringContainsString('pb-c-img', (string)($validated['css_extra'] ?? ''));
     }
 
     public function testContentBlockGenerationStillRejectsMissingHtmlContentJsonString(): void
@@ -46,21 +46,84 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
         ]);
     }
 
-    public function testContentBlockArtifactBypassesHardcodedRenderedGatesAfterJsonEnvelopeValidation(): void
+    public function testContentBlockArtifactRunsRenderedHardGatesAfterJsonEnvelopeValidation(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('mismatched HTML closing tag');
+
+        $this->buildContentArtifactFromPayload($service, [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '#componentId .pb-c-root{display:block;}#componentId .pb-c-title{font-size:clamp(2rem,5vw,3rem);letter-spacing:-.02em;}',
+            'css_responsive' => '@media (max-width: 768px){#componentId .pb-c-title{font-size:32px;}}@media (max-width: 420px){#componentId .pb-c-title{font-size:28px;}}',
+            'html_content' => '<section class="pb-c-root"><h2 class="pb-c-title">濞戞搩鍘介弸鍐喆閸曨偄鐏婇柡鍌氭处椤?REQUIRED_IMAGE_STRUCTURE_CONTRACT</h2><p>閻庢稒顨嗛灞剧▔鎼淬垺鐎俊妤€鐗忛弫?AI 闁圭顦伴弻鐔奉浖閸繃鍋ラ柤濂変簽閺侀亶鎮介悢绋跨亣闁?/p></section>',
+            'js_content' => '',
+        ], [], ['content_locale' => 'zh_Hans_CN']);
+
+    }
+
+    public function testEmptyVisitorControlGateRejectsPlainEmptyControls(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+
+        $reason = (function (): ?string {
+            return $this->detectEmptyVisitorControlTextViolation(
+                '<section class="pb-c-root"><button type="button" class="pb-c-cta" data-pb-ai-action="primary_cta"></button></section>'
+            );
+        })->call($service);
+
+        self::assertIsString($reason);
+        self::assertStringContainsString('button/CTA must contain meaningful visible copy', $reason);
+    }
+
+    public function testContentBlockArtifactRepairsEmptyVisitorControlsBeforeFinalHtmlGate(): void
     {
         $service = new AiSitePageComponentGenerationService();
 
         $artifact = $this->buildContentArtifactFromPayload($service, [
             'extra_fields' => '',
             'php_variables' => '',
-            'css_extra' => '#componentId .pb-c-title{font-size:clamp(2rem,5vw,3rem);letter-spacing:-.02em;}',
-            'css_responsive' => '',
-            'html_content' => '<section class="pb-c-root"><h2 class="pb-c-title">濞戞搩鍘介弸鍐喆閸曨偄鐏婇柡鍌氭处椤?REQUIRED_IMAGE_STRUCTURE_CONTRACT</h2><p>閻庢稒顨嗛灞剧▔鎼淬垺鐎俊妤€鐗忛弫?AI 闁圭顦伴弻鐔奉浖閸繃鍋ラ柤濂変簽閺侀亶鎮介悢绋跨亣闁?/p></section>',
+            'css_extra' => '#componentId .pb-c-root{display:block;}#componentId .pb-c-title{font-size:52px;}#componentId .pb-c-cta{display:inline-flex;}',
+            'css_responsive' => '@media (max-width: 768px){#componentId .pb-c-root{display:block;}}@media (max-width: 420px){#componentId .pb-c-root{display:block;}}',
+            'html_content' => '<section class="pb-c-root"><h1 class="pb-c-title">Launch reliable AI workflows</h1><button type="button" class="pb-c-cta" data-pb-ai-action="primary_cta"></button></section>',
             'js_content' => '',
-        ]);
+        ], [], ['content_locale' => 'en_US']);
 
-        self::assertSame('content/home-page-hero', $artifact['code']);
-        self::assertStringContainsString('REQUIRED_IMAGE_STRUCTURE_CONTRACT', (string)($artifact['html'] ?? ''));
+        self::assertStringContainsString('Get Started', (string)($artifact['html'] ?? ''));
+    }
+
+    public function testEmptyVisitorControlGateAcceptsSafePhpEchoBindings(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+
+        $reason = (function (): ?string {
+            return $this->detectEmptyVisitorControlTextViolation(
+                '<section class="pb-c-root"><button type="button" class="pb-c-cta" data-pb-ai-action="primary_cta"><?= htmlspecialchars($ctaText ?? \'Start now\', ENT_QUOTES, \'UTF-8\') ?></button></section>'
+            );
+        })->call($service);
+
+        self::assertNull($reason);
+    }
+
+    public function testFailureSpecificRecoveryPromptHandlesEmptyVisitorControlCopy(): void
+    {
+        $service = new AiSitePageComponentGenerationService();
+
+        $prompt = (function (): string {
+            return $this->buildFailureSpecificRecoveryContract(
+                new \RuntimeException('Generated component structure hard policy failed: button/CTA must contain meaningful visible copy'),
+                'content/home-page-final-cta',
+                'pb-c',
+                false,
+                []
+            );
+        })->call($service);
+
+        self::assertStringContainsString('FAILURE_FIX_EMPTY_VISIBLE_CONTROL_COPY', $prompt);
+        self::assertStringContainsString('proof.value_1', $prompt);
+        self::assertStringContainsString('Never return empty tags', $prompt);
     }
 
     public function testContentHeroImageContractDoesNotBlockAfterJsonEnvelopeValidation(): void
@@ -72,9 +135,9 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
             [
                 'extra_fields' => '',
                 'php_variables' => '',
-                'css_extra' => '.pb-free-hero{display:grid;gap:24px;}',
-                'css_responsive' => '',
-                'html_content' => '<section class="pb-free-hero"><h2>OpsFlow operating layer</h2><p>Image binding can be retried later; content generation should continue.</p></section>',
+                'css_extra' => '#componentId .pb-c-root{display:grid;gap:24px;}#componentId .pb-c-title{font-size:52px;}#componentId .pb-c-text{display:block;}',
+                'css_responsive' => '@media (max-width: 768px){#componentId .pb-c-root{display:block;}}@media (max-width: 420px){#componentId .pb-c-root{display:block;}}',
+                'html_content' => '<section class="pb-c-root"><h1 class="pb-c-title">OpsFlow operating layer</h1><p class="pb-c-text">Image binding can be retried later; content generation should continue.</p></section>',
                 'js_content' => '',
             ],
             [
@@ -83,6 +146,7 @@ final class AiSitePageComponentGenerationJsonOnlyGateTest extends TestCase
                 'runtime.section_image_slot_id' => 'page:home_page:content-home-page-hero',
             ],
             [
+                'content_locale' => 'en_US',
                 '_required_image_assets' => [
                     'page:home_page:content-home-page-hero' => '/pub/media/page-build/site/ai-generated/hero.webp',
                 ],

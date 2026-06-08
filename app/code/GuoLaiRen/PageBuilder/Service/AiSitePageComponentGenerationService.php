@@ -2015,6 +2015,7 @@ class AiSitePageComponentGenerationService
             }
         }
         $aiData = $this->ensureAiPayloadValid($aiData, $region, $componentCode, $verifiedAssets, $semanticComponentCode, $renderContext, $defaultConfig);
+        $aiData = $this->repairEmptyVisitorControlCopyInAiPayload($aiData, $componentCode, $defaultConfig, $renderContext);
         $aiData = $this->normalizeRequiredPrimaryHeadingInAiPayload($aiData, $componentCode, $semanticComponentCode, $renderContext);
         $defaultConfig = $this->applyAiPayloadOwnershipToDefaultConfig($defaultConfig, $region, $aiData);
         $persistedConfig = $this->sanitizeGeneratedComponentDefaultConfig($defaultConfig, $region);
@@ -2023,7 +2024,7 @@ class AiSitePageComponentGenerationService
 
         $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
         $generatedStyleCss = \trim((string)($aiData['css_extra'] ?? '') . "\n" . (string)($aiData['css_responsive'] ?? ''));
-        $runRenderedHardGates = $region !== 'content';
+        $runRenderedHardGates = true;
         if ((bool)RequestContext::get(self::REQUEST_KEY_FAST_BLOCK_ARTIFACT, false)) {
             $html = (string)($aiData['html_content'] ?? $aiData['html_extra'] ?? '');
             if ($runRenderedHardGates) {
@@ -2558,6 +2559,13 @@ PROMPT
             || \str_contains($message, 'extra_fields/php_variables')
         ) {
             $lines[] = "- FAILURE_FIX_EDITABLE_FIELD_BINDING (HARD): every visitor-visible text node must be editable, including step numbers, card labels, stat values, badge text, short chips, form helper notes, privacy/security notes, image captions, and small microcopy. Add one extra_fields metadata row for each heading/body/card/stat/badge/step-number/FAQ/form-label/form-placeholder/form-note/CTA text, bind each row in php_variables with `\$getConfig('field.key', 'default')`, and render only `<?= htmlspecialchars(...) ?>` or `<?= nl2br(htmlspecialchars(...)) ?>` in html_content. Do not leave raw words or numbers between tags. Before returning, delete every `<?= ... ?>` fragment from html_content and strip tags; the leftover decoded text must be empty of visitor copy.";
+        }
+        if (\str_contains($message, 'meaningful visible copy')
+            || \str_contains($message, 'empty visible control')
+            || \str_contains($message, 'pb-c-proof-band')
+            || \str_contains($message, 'pb-c-cta')
+        ) {
+            $lines[] = "- FAILURE_FIX_EMPTY_VISIBLE_CONTROL_COPY (HARD): the previous html_content rendered an empty visitor control. Rewrite html_content so every `{$componentPrefix}-cta`, `{$componentPrefix}-badge`, `{$componentPrefix}-tag`, `{$componentPrefix}-chip`, `{$componentPrefix}-pill`, `{$componentPrefix}-label`, `{$componentPrefix}-value`, `{$componentPrefix}-metric`, `{$componentPrefix}-stat`, `{$componentPrefix}-proof`, `{$componentPrefix}-quote`, `{$componentPrefix}-step`, and visitor-facing `<a>`, `<button>`, or `<label>` contains target-locale visible copy. Declare matching extra_fields rows such as `content.title`, `content.description`, `cta.text`, `proof.value_1`, and `proof.label_1`; bind each in php_variables with a non-empty localized default; render each with safe PHP echo in html_content. Never return empty tags like `<button class='{$componentPrefix}-cta'></button>`, `<span class='{$componentPrefix}-value'></span>`, or a proof/card wrapper whose only children are empty spans.";
         }
         if (\str_contains($message, 'css completeness')
             || \str_contains($message, 'missing matching css selector')
@@ -5760,6 +5768,8 @@ PROMPT;
             . "- Positive class examples for this component: `{$prefix}-root`, `{$prefix}-inner`, `{$prefix}-copy`, `{$prefix}-title`, `{$prefix}-card`, `{$prefix}-cta`.\n"
             . "- Positive CSS selector examples for this component: `#componentId .{$prefix}-root{position:relative;overflow:hidden;}` and `#componentId .{$prefix}-inner{display:flex;gap:28px;}`.\n"
             . "- Role-outline snippets are structural teaching examples only. In final html_content, never copy placeholder words such as Finished heading/copy/CTA as raw text; every text node in those snippets must become a safe PHP echo backed by matching extra_fields and php_variables.\n"
+            . "- VISIBLE_CONTROL_COPY_CONTRACT: every visible `<a>`, `<button>`, form `<label>`, CTA, badge, tag, chip, pill, label/value row, metric/stat, proof item, quote item, step item, kicker, or eyebrow must have meaningful target-locale text. Do not output empty or whitespace-only text nodes, `&nbsp;`, zero-width characters, punctuation-only copy, placeholder words, or empty nested spans. If no text exists in CTX_FROZEN_TASK/current block config, remove that visual control or bind a localized fallback field; blank rounded rectangles fail the build. Final self-audit before JSON return: every control-looking tag must still show readable copy after scripts, comments, and tags are ignored.\n"
+            . "- ICON_BUTTON_ACCESSIBLE_EXCEPTION: a hamburger, menu toggle, theme toggle, search icon, close icon, or other icon-only control may omit visible text only when it has a non-empty target-locale `aria-label` or `title` and contains an actual visible icon child (`svg`, `img`, `i`, or span bars such as `<span class='{$prefix}-menu-bar' aria-hidden='true'></span>`). Never output a bare empty `<button>` or empty `<a>` for a toggle.\n"
             . "- THEME_ROLE_PALETTE: root_bg={$rootBg}; media_bg={$mediaBg}; surface_bg={$surfaceBg}; card_bg={$cardBg}; text={$textColor}; inverse_text={$inverseText}; primary={$primaryColor}; secondary={$secondaryColor}; accent={$accentColor}; shadow={$shadowColor}. Values that start with CTX_CONFIRMED_THEME are symbolic roles, not CSS literals; before output, replace each symbolic role with a real hex token from CTX_CONFIRMED_THEME.palette. Role baseline CSS below is a palette-bound reference; do not replace it with generic dark navy, purple, blue, casino, or app-download colors unless the approved stage-1 palette explicitly uses those colors.\n"
             . "- TEXT_CONTRAST_HARD_GATE: every visible text selector must be readable on its effective surface. Normal text contrast must be >= 4.5:1. Dark backgrounds require light text such as #FFFFFF/#F8FAFC; light backgrounds require dark text such as #0F172A. Do not put slate/gray/black text on dark surfaces, and do not put white/pale text on light surfaces. Keep root/title/text/copy/label/cta colors coherent with their background or panel.\n"
             . ($hasRequiredGeneratedImage ? "- REQUIRED IMAGE OVERRIDE: this block has a mandatory generated image slot. REQUIRED_IMAGE_STRUCTURE_CONTRACT and REQUIRED_CSS_ROLE_CONTRACT override generic role outlines, selector-count rules, and any broad layout recipe. Preserve the exact image binding and required roles, but choose the final composition from the current block intent instead of copying a fixed skeleton.\n" : '')
@@ -6467,6 +6477,11 @@ PROMPT;
             return $tagStructureReason;
         }
 
+        $emptyControlReason = $this->detectEmptyVisitorControlTextViolation($trimmed);
+        if ($emptyControlReason !== null) {
+            return $emptyControlReason;
+        }
+
         $visibleText = $this->extractVisibleHtmlText($trimmed);
         $copyReason = $this->detectVisibleCopyLocaleViolation($visibleText, $locale);
         if ($copyReason !== null) {
@@ -6480,6 +6495,510 @@ PROMPT;
         }
 
         return null;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     * @return array<string,mixed>
+     */
+    private function repairEmptyVisitorControlCopyInAiPayload(
+        array $aiData,
+        string $componentCode,
+        array $defaultConfig,
+        array $renderContext
+    ): array {
+        foreach (['html_content', 'html_extra'] as $htmlKey) {
+            if (!\is_string($aiData[$htmlKey] ?? null)) {
+                continue;
+            }
+            $html = (string)$aiData[$htmlKey];
+            if (\trim($html) === '' || $this->detectEmptyVisitorControlTextViolation($html) === null) {
+                continue;
+            }
+            $repaired = $this->repairEmptyVisitorControlCopyInHtml($html, $componentCode, $defaultConfig, $renderContext);
+            if ($repaired !== $html) {
+                $aiData[$htmlKey] = $repaired;
+            }
+        }
+
+        return $aiData;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function repairEmptyVisitorControlCopyInHtml(
+        string $html,
+        string $componentCode,
+        array $defaultConfig,
+        array $renderContext
+    ): string {
+        if (\trim($html) === '' || !\class_exists(\DOMDocument::class)) {
+            return $html;
+        }
+
+        $previous = \libxml_use_internal_errors(true);
+        $document = new \DOMDocument('1.0', 'UTF-8');
+        $options = 0;
+        if (\defined('LIBXML_HTML_NOIMPLIED')) {
+            $options |= \LIBXML_HTML_NOIMPLIED;
+        }
+        if (\defined('LIBXML_HTML_NODEFDTD')) {
+            $options |= \LIBXML_HTML_NODEFDTD;
+        }
+        $loaded = $document->loadHTML(
+            '<?xml encoding="UTF-8"><div id="pb-fragment-root">' . $html . '</div>',
+            $options
+        );
+        \libxml_clear_errors();
+        \libxml_use_internal_errors($previous);
+        if (!$loaded) {
+            return $html;
+        }
+
+        $root = null;
+        foreach ($document->getElementsByTagName('div') as $candidate) {
+            if ($candidate instanceof \DOMElement && $candidate->getAttribute('id') === 'pb-fragment-root') {
+                $root = $candidate;
+                break;
+            }
+        }
+        if (!$root instanceof \DOMElement) {
+            return $html;
+        }
+
+        $elements = [];
+        foreach ($root->getElementsByTagName('*') as $element) {
+            if ($element instanceof \DOMElement) {
+                $elements[] = $element;
+            }
+        }
+
+        $changed = false;
+        foreach ($elements as $element) {
+            $kind = $this->classifyVisibleCopyRequiredElement($element);
+            if ($kind === '' || $this->shouldIgnoreEmptyVisitorControlElement($element, $kind)) {
+                continue;
+            }
+            if ($this->elementHasMeaningfulVisitorControlText($element)) {
+                continue;
+            }
+
+            $fallback = $this->resolveEmptyVisitorControlFallbackText($element, $kind, $componentCode, $defaultConfig, $renderContext);
+            if ($fallback === '') {
+                continue;
+            }
+            while ($element->firstChild) {
+                $element->removeChild($element->firstChild);
+            }
+            $element->appendChild($document->createTextNode($fallback));
+            $changed = true;
+        }
+
+        if (!$changed) {
+            return $html;
+        }
+
+        $repaired = '';
+        foreach ($root->childNodes as $child) {
+            $chunk = $document->saveHTML($child);
+            if (\is_string($chunk)) {
+                $repaired .= $chunk;
+            }
+        }
+
+        return $repaired !== '' ? $repaired : $html;
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function resolveEmptyVisitorControlFallbackText(
+        \DOMElement $element,
+        string $kind,
+        string $componentCode,
+        array $defaultConfig,
+        array $renderContext
+    ): string {
+        $locale = $this->resolveEmptyVisitorControlFallbackLocale($defaultConfig, $renderContext);
+        $classTokens = $this->extractHtmlClassTokensFromValue($element->getAttribute('class'));
+        $identity = \mb_strtolower(\trim($componentCode . ' ' . $kind . ' ' . \implode(' ', $classTokens) . ' ' . $element->getAttribute('data-pb-ai-action')));
+        $needles = $this->resolveEmptyVisitorControlFallbackNeedles($identity, $kind);
+
+        $candidate = $this->findFirstEmptyVisitorControlConfiguredCopy($defaultConfig, $needles, $locale);
+        if ($candidate === '' && \is_array($renderContext['_plan_json_task'] ?? null)) {
+            $candidate = $this->findFirstEmptyVisitorControlConfiguredCopy($renderContext['_plan_json_task'], $needles, $locale);
+        }
+        if ($candidate !== '') {
+            return $candidate;
+        }
+
+        return $this->localizeEmptyVisitorControlFallbackText($identity, $kind, $locale);
+    }
+
+    /**
+     * @param array<string,mixed> $defaultConfig
+     * @param array<string,mixed> $renderContext
+     */
+    private function resolveEmptyVisitorControlFallbackLocale(array $defaultConfig, array $renderContext): string
+    {
+        foreach ([
+            $renderContext['_content_locale'] ?? null,
+            $renderContext['content_locale'] ?? null,
+            $renderContext['locale'] ?? null,
+            $renderContext['website_locale'] ?? null,
+            $defaultConfig['runtime.content_locale'] ?? null,
+        ] as $candidate) {
+            $locale = \trim((string)$candidate);
+            if ($locale !== '') {
+                return $locale;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveEmptyVisitorControlFallbackNeedles(string $identity, string $kind): array
+    {
+        if (\str_contains($identity, 'cta') || \str_contains($identity, 'button') || \str_contains($identity, 'action') || \str_contains($kind, 'CTA')) {
+            return ['primary_cta', 'cta', 'button', 'action', 'label', 'text'];
+        }
+        if (\preg_match('/(?:^|[-_\s])(?:value|metric|stat|score|number|amount)(?:$|[-_\s])/iu', $identity) === 1) {
+            return ['value', 'metric', 'stat', 'score', 'number', 'amount'];
+        }
+        if (\preg_match('/(?:^|[-_\s])(?:badge|tag|chip|pill|label|kicker|eyebrow)(?:$|[-_\s])/iu', $identity) === 1) {
+            return ['badge', 'tag', 'chip', 'pill', 'label', 'kicker', 'eyebrow'];
+        }
+        if (\preg_match('/(?:^|[-_\s])(?:proof|quote|step)(?:$|[-_\s])/iu', $identity) === 1) {
+            return ['proof', 'quote', 'step', 'title', 'text'];
+        }
+
+        return ['label', 'text', 'title', 'copy'];
+    }
+
+    /**
+     * @param array<string,mixed> $source
+     * @param list<string> $needles
+     */
+    private function findFirstEmptyVisitorControlConfiguredCopy(array $source, array $needles, string $locale): string
+    {
+        $stack = [[$source, '', 0]];
+        while ($stack !== []) {
+            [$node, $path, $depth] = \array_pop($stack);
+            if (!\is_array($node) || $depth > 5) {
+                continue;
+            }
+            foreach ($node as $key => $value) {
+                $nextPath = $path === '' ? (string)$key : $path . '.' . (string)$key;
+                if (\is_array($value)) {
+                    $stack[] = [$value, $nextPath, $depth + 1];
+                    continue;
+                }
+                if (!\is_scalar($value) || !$this->pathContainsAnyNeedle($nextPath, $needles)) {
+                    continue;
+                }
+                $candidate = $this->normalizeEmptyVisitorControlConfiguredCopy((string)$value, $locale);
+                if ($candidate !== '') {
+                    return $candidate;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param list<string> $needles
+     */
+    private function pathContainsAnyNeedle(string $path, array $needles): bool
+    {
+        $path = \mb_strtolower($path);
+        foreach ($needles as $needle) {
+            if ($needle !== '' && \str_contains($path, \mb_strtolower($needle))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeEmptyVisitorControlConfiguredCopy(string $value, string $locale): string
+    {
+        $value = $this->sanitizeVisibleCopy($value);
+        if ($value === '' || \mb_strlen($value) > 80) {
+            return '';
+        }
+        if (\preg_match('/(?:plan_json|home_page|page_type|task_key|section_code|runtime\.|content\/|app\/code\/|var\/|pb-c-|componentId|https?:\/\/|[{}<>]|\$getConfig)/iu', $value) === 1) {
+            return '';
+        }
+
+        if ($locale !== '') {
+            $localized = $this->filterVisibleCopyForLocale($value, $locale);
+            if ($localized !== '') {
+                return $localized;
+            }
+            if ($this->isNonCjkLocale($locale) && $this->hasAnyCjkContent($value)) {
+                return '';
+            }
+        }
+
+        return $value;
+    }
+
+    private function localizeEmptyVisitorControlFallbackText(string $identity, string $kind, string $locale): string
+    {
+        $family = $this->promptLocaleFamily($locale);
+        $isCta = \str_contains($identity, 'cta') || \str_contains($identity, 'button') || \str_contains($identity, 'action') || \str_contains($kind, 'CTA');
+        $isValue = \preg_match('/(?:^|[-_\s])(?:value|metric|stat|score|number|amount)(?:$|[-_\s])/iu', $identity) === 1;
+        $isStep = \preg_match('/(?:^|[-_\s])step(?:$|[-_\s])/iu', $identity) === 1;
+        $isProof = \preg_match('/(?:^|[-_\s])(?:proof|quote)(?:$|[-_\s])/iu', $identity) === 1;
+
+        if ($family === 'zh') {
+            if ($isCta && \preg_match('/(?:resource|guide|download|material)/iu', $identity) === 1) {
+                return "\u{9886}\u{53D6}\u{8D44}\u{6599}";
+            }
+            if ($isCta && \preg_match('/(?:proof|case|story)/iu', $identity) === 1) {
+                return "\u{67E5}\u{770B}\u{6848}\u{4F8B}";
+            }
+            if ($isCta && \preg_match('/(?:final|offer|pricing|price)/iu', $identity) === 1) {
+                return "\u{7ACB}\u{5373}\u{9886}\u{53D6}";
+            }
+            if ($isCta) {
+                return "\u{7ACB}\u{5373}\u{54A8}\u{8BE2}";
+            }
+            if ($isValue) {
+                return "\u{6838}\u{5FC3}\u{6210}\u{679C}";
+            }
+            if ($isStep) {
+                return "\u{4E0B}\u{4E00}\u{6B65}";
+            }
+            if ($isProof) {
+                return "\u{771F}\u{5B9E}\u{53CD}\u{9988}";
+            }
+
+            return "\u{91CD}\u{70B9}\u{4EAE}\u{70B9}";
+        }
+
+        if ($isCta && \preg_match('/(?:resource|guide|download|material)/iu', $identity) === 1) {
+            return 'Get Resources';
+        }
+        if ($isCta && \preg_match('/(?:proof|case|story)/iu', $identity) === 1) {
+            return 'View Cases';
+        }
+        if ($isCta) {
+            return 'Get Started';
+        }
+        if ($isValue) {
+            return 'Clear Results';
+        }
+        if ($isStep) {
+            return 'Next Step';
+        }
+        if ($isProof) {
+            return 'Trusted Feedback';
+        }
+
+        return 'Key Highlight';
+    }
+
+    private function detectEmptyVisitorControlTextViolation(string $html): ?string
+    {
+        if (\trim($html) === '' || !\class_exists(\DOMDocument::class)) {
+            return null;
+        }
+
+        $phpClosePattern = \preg_quote('?' . '>', '/');
+        $normalized = \html_entity_decode($html, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+        $normalized = \preg_replace('/<\?(?:php|=)?[\s\S]*?' . $phpClosePattern . '/iu', '__PB_SAFE_PHP_ECHO__', $normalized) ?? $normalized;
+        $normalized = \preg_replace('/<\?(?:php|=)?[\s\S]*?(?=>|$)/iu', '__PB_SAFE_PHP_ECHO__', $normalized) ?? $normalized;
+
+        $previous = \libxml_use_internal_errors(true);
+        $document = new \DOMDocument('1.0', 'UTF-8');
+        $options = 0;
+        if (\defined('LIBXML_HTML_NOIMPLIED')) {
+            $options |= \LIBXML_HTML_NOIMPLIED;
+        }
+        if (\defined('LIBXML_HTML_NODEFDTD')) {
+            $options |= \LIBXML_HTML_NODEFDTD;
+        }
+        $loaded = $document->loadHTML(
+            '<?xml encoding="UTF-8"><div id="pb-fragment-root">' . $normalized . '</div>',
+            $options
+        );
+        \libxml_clear_errors();
+        \libxml_use_internal_errors($previous);
+        if (!$loaded) {
+            return null;
+        }
+
+        foreach ($document->getElementsByTagName('*') as $element) {
+            if (!$element instanceof \DOMElement || $element->getAttribute('id') === 'pb-fragment-root') {
+                continue;
+            }
+            $kind = $this->classifyVisibleCopyRequiredElement($element);
+            if ($kind === '' || $this->shouldIgnoreEmptyVisitorControlElement($element, $kind)) {
+                continue;
+            }
+            if ($this->elementHasMeaningfulVisitorControlText($element)) {
+                continue;
+            }
+
+            return $kind . ' must contain meaningful visible copy: ' . $this->clipText($this->describeDomElementForPolicyError($element), 120);
+        }
+
+        return null;
+    }
+
+    private function classifyVisibleCopyRequiredElement(\DOMElement $element): string
+    {
+        $tagName = \mb_strtolower($element->tagName);
+        if ($tagName === 'a') {
+            return 'link/CTA';
+        }
+        if ($tagName === 'button') {
+            return 'button/CTA';
+        }
+        if ($tagName === 'label') {
+            return 'form label';
+        }
+
+        foreach ($this->extractHtmlClassTokensFromValue($element->getAttribute('class')) as $classToken) {
+            if ($this->isDecorativeClassTokenForEmptyControlCheck($classToken)) {
+                continue;
+            }
+            if (\preg_match('/(?:^|[-_])(?:cta|btn|button|badge|tag|chip|pill|label|value|kicker|eyebrow|metric|stat|proof|quote|step|item|option|tab)(?:$|[-_])/iu', $classToken) === 1) {
+                return 'visible ' . $classToken . ' element';
+            }
+        }
+
+        return '';
+    }
+
+    private function shouldIgnoreEmptyVisitorControlElement(\DOMElement $element, string $kind): bool
+    {
+        if ($element->hasAttribute('hidden')) {
+            return true;
+        }
+        $ariaHidden = \mb_strtolower(\trim($element->getAttribute('aria-hidden')));
+        if ($ariaHidden === 'true') {
+            return true;
+        }
+        $role = \mb_strtolower(\trim($element->getAttribute('role')));
+        if (\in_array($role, ['none', 'presentation'], true)) {
+            return true;
+        }
+        $style = \mb_strtolower($element->getAttribute('style'));
+        if (\preg_match('/(?:display\s*:\s*none|visibility\s*:\s*hidden)/iu', $style) === 1) {
+            return true;
+        }
+
+        $classTokens = $this->extractHtmlClassTokensFromValue($element->getAttribute('class'));
+        foreach ($classTokens as $classToken) {
+            if (\in_array($classToken, ['sr-only', 'visually-hidden'], true)) {
+                return true;
+            }
+        }
+
+        return \in_array($kind, ['link/CTA', 'button/CTA'], true)
+            && $this->elementHasAccessibleIconOnlyLabel($element);
+    }
+
+    private function elementHasMeaningfulVisitorControlText(\DOMElement $element): bool
+    {
+        $text = \html_entity_decode((string)$element->textContent, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+        $text = \str_replace(["\xc2\xa0", "\xE2\x80\x8B", "\xE2\x80\x8C", "\xE2\x80\x8D", "\xEF\xBB\xBF"], ' ', $text);
+        $text = \trim((string)\preg_replace('/\s+/u', ' ', $text));
+        if (\str_contains($text, '__PB_SAFE_PHP_ECHO__')) {
+            return true;
+        }
+
+        return $this->sanitizeVisibleCopy($text) !== '';
+    }
+
+    private function elementHasAccessibleIconOnlyLabel(\DOMElement $element): bool
+    {
+        $label = \trim($element->getAttribute('aria-label'));
+        if ($label === '') {
+            $label = \trim($element->getAttribute('title'));
+        }
+        if ($this->sanitizeVisibleCopy($label) === '') {
+            return false;
+        }
+
+        return $this->elementHasIconOnlyControlSignal($element);
+    }
+
+    private function elementHasIconOnlyControlSignal(\DOMElement $element): bool
+    {
+        foreach ($this->extractHtmlClassTokensFromValue($element->getAttribute('class')) as $classToken) {
+            if (\preg_match('/(?:^|[-_])(?:icon|bar|hamburger|menu|toggle|close|search|chevron|caret)(?:$|[-_])/iu', $classToken) === 1) {
+                return true;
+            }
+        }
+
+        foreach (['img', 'svg', 'i'] as $tagName) {
+            if ($element->getElementsByTagName($tagName)->length > 0) {
+                return true;
+            }
+        }
+
+        foreach ($element->getElementsByTagName('span') as $span) {
+            if (!$span instanceof \DOMElement) {
+                continue;
+            }
+            foreach ($this->extractHtmlClassTokensFromValue($span->getAttribute('class')) as $classToken) {
+                if (\preg_match('/(?:^|[-_])(?:icon|bar|hamburger|menu|toggle|close|search|chevron|caret)(?:$|[-_])/iu', $classToken) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractHtmlClassTokensFromValue(string $classValue): array
+    {
+        $classValue = \html_entity_decode($classValue, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+        $tokens = \preg_split('/\s+/u', \mb_strtolower(\trim($classValue))) ?: [];
+        $tokens = \array_filter($tokens, static fn(string $token): bool => $token !== '');
+
+        return \array_values(\array_unique($tokens));
+    }
+
+    private function isDecorativeClassTokenForEmptyControlCheck(string $classToken): bool
+    {
+        $decorative = [
+            'pb-c-root', 'pb-c-inner', 'pb-c-copy', 'pb-c-text', 'pb-c-text-panel',
+            'pb-c-panel', 'pb-c-cards', 'pb-c-card-grid', 'pb-c-grid', 'pb-c-list',
+            'pb-c-support', 'pb-c-action', 'pb-c-actions', 'pb-c-form', 'pb-c-field',
+            'pb-c-faq-list', 'pb-c-media', 'pb-c-media-stage', 'pb-c-media-subject',
+            'pb-c-media-detail', 'pb-c-motif', 'pb-c-orbit', 'pb-c-overlay',
+            'pb-c-img', 'pb-c-image', 'pb-c-visual', 'pb-c-decoration',
+            'pb-c-shape', 'pb-c-line', 'pb-c-divider',
+        ];
+
+        return \in_array(\mb_strtolower($classToken), $decorative, true);
+    }
+
+    private function describeDomElementForPolicyError(\DOMElement $element): string
+    {
+        $tagName = \mb_strtolower($element->tagName);
+        $classValue = \trim($element->getAttribute('class'));
+        if ($classValue !== '') {
+            return '<' . $tagName . ' class="' . $classValue . '">';
+        }
+
+        return '<' . $tagName . '>';
     }
 
     private function containsVisibleRawHtmlFragment(string $visibleText): bool
@@ -6823,6 +7342,11 @@ PROMPT;
             return $tagStructureReason;
         }
 
+        $emptyControlReason = $this->detectEmptyVisitorControlTextViolation($trimmed);
+        if ($emptyControlReason !== null) {
+            return $emptyControlReason;
+        }
+
         $nestedContainerReason = $this->detectNestedRepeatedContentContainerViolation($trimmed);
         if ($nestedContainerReason !== null) {
             return $nestedContainerReason;
@@ -7085,7 +7609,7 @@ PROMPT;
         if ($this->isContactOrSupportIntent($identity)) {
             return null;
         }
- if (\preg_match('/\b(?:home|about|blog|download|apk|app|install|reward|bonus|game|feature|showcase|trust|security|safe|cta|hero)\b| ?iu', $identity) === 1) {
+        if (\preg_match('/\b(?:home|about|blog|download|apk|app|install|reward|bonus|game|feature|showcase|trust|security|safe|cta|hero)\b/iu', $identity) === 1) {
             return 'generic consult CTA label does not match the block conversion intent';
         }
 
@@ -7167,7 +7691,7 @@ PROMPT;
         ]));
 
         return \preg_match(
- '/\b(?:download|apk|app|install|android|ios|game|play|casino|poker|rummy|ludo|bonus|reward)\b| ?iu',
+            '/\b(?:download|apk|app|install|android|ios|game|play|casino|poker|rummy|ludo|bonus|reward)\b/iu',
             $source
         ) === 1;
     }
@@ -7175,7 +7699,7 @@ PROMPT;
     private function containsOutOfScopeDownloadOrGameCopy(string $visibleText): bool
     {
         return \preg_match(
- '/\b(?:safe\s+download|secure\s+download|download\s+now|install\s+now|play\s+now|start\s+playing|claim\s+bonus|apk|android\s+build|game\s+bonus|free\s+coins?)\b| ?iu',
+            '/\b(?:safe\s+download|secure\s+download|download\s+now|install\s+now|play\s+now|start\s+playing|claim\s+bonus|apk|android\s+build|game\s+bonus|free\s+coins?)\b/iu',
             $visibleText
         ) === 1;
     }
@@ -8790,6 +9314,8 @@ PROMPT;
             '- Use single quotes for all HTML attributes inside JSON strings. For editable image templates, keep data-pb-ai-image-role and data-pb-ai-asset-slot exact, render src/alt from media fields, and use the concrete final_url only as the media.image_url default/fallback; never return symbolic URL or slot placeholders.',
             '- Every custom class in html_content must use the requested component prefix. For content blocks in this workflow the prefix is `pb-c`, so classes must look like `pb-c-root` or `pb-c-card`; `.pb`, `pb`, `pb-`, `-card`, and generic class names are invalid.',
             '- Keep the actual compact action button clearly identifiable, normally `pb-c-cta`. Prefer `pb-c-action` or `pb-c-actions` for wrappers so wrapper CSS is not mistaken for button CSS.',
+            '- Non-empty visible control contract: every `<a>`, `<button>`, form `<label>`, `.pb-c-cta`, `.pb-c-btn`, `.pb-c-button`, `.pb-c-badge`, `.pb-c-tag`, `.pb-c-chip`, `.pb-c-pill`, `.pb-c-label`, `.pb-c-value`, `.pb-c-kicker`, `.pb-c-eyebrow`, `.pb-c-metric`, `.pb-c-stat`, `.pb-c-proof`, `.pb-c-quote`, `.pb-c-step`, and `.pb-c-item` must contain meaningful target-locale visible copy through a safe PHP echo or localized literal. Whitespace, `&nbsp;`, zero-width characters, punctuation-only text, placeholder words, and empty child spans are invalid.',
+            '- If you cannot source copy for a visible chip/badge/tag/pill/label/metric/proof/CTA from the current plan_json block, omit that whole element or bind a concrete fallback field such as `cta.text`; never draw empty rounded rectangles or input-like outline pills as decoration.',
             '- Never place standalone punctuation/symbol-only decorations in visible HTML text. Build arrows, dividers, stars, suit marks, plus signs, and other ornaments with CSS borders, gradients, pseudo-elements, or background layers instead.',
         ];
         if ($retry) {
@@ -10714,6 +11240,7 @@ PROMPT;
         return "CTX_CTA_ACTION_CONTRACT:\n"
             . "- primary_cta_label: " . $this->clipText($labelForPrompt, 120) . "\n"
             . "- primary_cta_target: " . $targetForPrompt . "\n"
+            . "- primary_cta_label is mandatory visible copy. Never render an empty CTA anchor/button, empty outline pill, or whitespace-only label. If the planned label is unavailable, use a concrete target-locale fallback from the current block intent such as " . $this->clipText($this->resolvePrimaryCtaText($scope, $locale), 80) . ".\n"
             . "- Pixel event source: inspect CTX_FROZEN_TASK current_block_context.analytics_events first. When it contains a primary CTA/form/contact/download/signup/product event, use that event_name. If it is absent, choose the closest Weline Visitor default event name from block intent: hero_cta_click, pricing_cta_click, lead_submit, signup_click, contact_click, download_click, booking_click, demo_request_click, add_to_cart, buy_now, begin_checkout, or route_click. Never use vague names like click, button_click, section_click, or ai_event.\n"
             . "- If this block renders a primary CTA, it must be an actionable control, not an inert decorative div. When primary_cta_target is a real route/URL, declare `cta.text` and `cta.url`, bind them with `\$ctaText = \$getConfig('cta.text', '<primary_cta_label>');` and `\$ctaUrl = \$getConfig('cta.url', '<primary_cta_target>');`, then render an `<a class='pb-c-cta weline-pixel::<event_name>'>` whose href safely echoes `\$ctaUrl`, whose label safely echoes `\$ctaText`, and whose attributes include useful non-sensitive metadata such as data-name or data-pixel-value when available. Replace <event_name> with the concrete snake_case event before returning JSON; never output the placeholder literally.\n"
             . "- If no real route/URL is available but the block identity still requires an action, declare only `cta.text`, bind it with `\$ctaText = \$getConfig('cta.text', '<primary_cta_label>');`, render a `<button type='button' class='pb-c-cta weline-pixel::<event_name>' data-pb-ai-action='primary_cta'>` whose label safely echoes `\$ctaText`, and provide scoped js_content that binds click on `.pb-c-cta[data-pb-ai-action]`, toggles a local active class, and dispatches a bubbled `CustomEvent('pb:cta', {detail:{action,target,label}})` from component. Replace <event_name> with the concrete snake_case event before returning JSON. Do not add cta.url for button-only actions. Do not use window, document, fetch, inline onclick, or global selectors.\n"
@@ -10737,6 +11264,7 @@ PROMPT;
             . "- Base CSS framework: {$prefix}-root uses position:relative; overflow:hidden; box-sizing:border-box; min-width:0. {$prefix}-inner uses width:100%; max-width around 1180px; margin:0 auto; display:grid/flex; gap; min-width:0. All media/cards/forms/text columns use min-width:0; max-width:100%; box-sizing:border-box.\n"
             . "- Responsive framework: css_extra defines desktop/base selectors only; css_responsive contains complete `@media (max-width: 768px)` and `@media (max-width: 420px)` blocks. At <=768px, split layouts stack or simplify without horizontal overflow. At <=420px, use one readable column, reduce padding, and keep every text/media/form/card within max-width:100%.\n"
             . "- CTA framework: the actual CTA must remain a compact recognizable `<a class='{$prefix}-cta'>` with a real href or `<button type='button' class='{$prefix}-cta' data-pb-ai-action='primary_cta'>`. Full-width behavior belongs on wrappers/forms/mobile containers first; never make the desktop/default CTA a stretched page-width bar or an inert div/span.\n"
+            . "- Visible copy framework: compact controls, proof chips, badges, tags, pills, labels, values, metrics, steps, and CTA buttons must contain meaningful target-locale text through a safe PHP echo or localized literal. Empty rounded outlines are forbidden; omit the element instead of rendering a blank control.\n"
             . "- Event framework: for event-driven CTA buttons, include data-pb-ai-action and component-scoped js_content from CTX_CTA_ACTION_CONTRACT when custom interaction is needed; the PageBuilder action bridge click event name is `pb:cta`. Also add the Weline Visitor declarative class `weline-pixel::<event_name>` from CTX_FROZEN_TASK analytics_events or the closest default event name so the same CTA is measurable. For lead/contact/signup forms, add data-pb-lead-form and the scoped WelinePixel.track submit pattern from CTX_CTA_ACTION_CONTRACT. The virtual-theme framework scopes action events to this component, so do not use inline onclick, document selectors, fetch, global state, invented routes, or third-party pixel snippets.\n"
             . "- Layout safety bans: no fixed pixel columns that cannot shrink, no negative horizontal offsets, no translateX side panels, no absolutely positioned content outside {$prefix}-root, no `100vw` inner content inside normal sections, and no cards/sections nested inside links/buttons.\n"
             . $heroRule;
@@ -14963,18 +15491,18 @@ TEXT,
         ) {
             return $this->localizeBuildText('policy_info', $locale);
         }
- if (\preg_match('/\b(?:reward|bonus|coin|coupon|promotion|offer|gift|prize|cashback)\b| ?iu', $needle) === 1) {
+        if (\preg_match('/\b(?:reward|bonus|coin|coupon|promotion|offer|gift|prize|cashback)\b/iu', $needle) === 1) {
             return $this->localizeBuildText('claim_bonus', $locale);
         }
- if (\preg_match('/\b(?:download|apk|app|install)\b| ?iu', $needle) === 1) {
+        if (\preg_match('/\b(?:download|apk|app|install)\b/iu', $needle) === 1) {
             return $this->localizeBuildText('download_now', $locale);
         }
         if (\in_array($pageType, [Page::TYPE_BLOG_LIST, Page::TYPE_BLOG_CATEGORY, Page::TYPE_BLOG], true)
- || \preg_match('/\b(?:blog|article|guide|learn|resource|news|reading)\b| ?iu', $needle) === 1
+            || \preg_match('/\b(?:blog|article|guide|learn|resource|news|reading)\b/iu', $needle) === 1
         ) {
             return $this->localizeBuildText('explore_more', $locale);
         }
- if (\preg_match('/\b(?:game|play|table|poker|rummy|blackjack|ludo|casino)\b| ?iu', $needle) === 1) {
+        if (\preg_match('/\b(?:game|play|table|poker|rummy|blackjack|ludo|casino)\b/iu', $needle) === 1) {
             return $this->localizeBuildText('start_playing', $locale);
         }
 
@@ -15018,7 +15546,7 @@ TEXT,
     {
         $label = \trim((string)\preg_replace('/\s+/u', ' ', $label));
         if (\preg_match(
- '/\b(?:download|apk|app|install|play|bonus|reward|casino|rummy|ludo|teen\s*patti|claim|coins?)\b|(?: ?? ?iu',
+            '/\b(?:download|apk|app|install|play|bonus|reward|casino|rummy|ludo|teen\s*patti|claim|coins?)\b/iu',
             $label
         ) === 1) {
             return true;
@@ -15027,7 +15555,7 @@ TEXT,
             return false;
         }
 
- return \preg_match('/\b(?:download|apk|app|install|play|bonus|reward|casino|rummy|ludo|teen\s*patti)\b| ?iu', $label) === 1;
+        return \preg_match('/\b(?:download|apk|app|install|play|bonus|reward|casino|rummy|ludo|teen\s*patti)\b/iu', $label) === 1;
     }
 
     private function buildSectionCtaIntentNeedle(array $scope, string $pageType, array $section): string
@@ -15057,12 +15585,12 @@ TEXT,
 
     private function isContactOrSupportIntent(string $needle): bool
     {
- return \preg_match('/\b(?:contact|support|help|service|form|mail|phone|whatsapp|lead|inquiry|enquiry)\b| ?iu', $needle) === 1;
+        return \preg_match('/\b(?:contact|support|help|service|form|mail|phone|whatsapp|lead|inquiry|enquiry)\b/iu', $needle) === 1;
     }
 
     private function isGenericConsultCtaLabel(string $label): bool
     {
- return \preg_match('/\b(?:consult|contact us|enquire|inquire|talk to us|get in touch)\b| ?iu', $label) === 1;
+        return \preg_match('/\b(?:consult|contact us|enquire|inquire|talk to us|get in touch)\b/iu', $label) === 1;
     }
 
     /**
@@ -15090,7 +15618,7 @@ TEXT,
 
         $pageTypes = $this->resolveScopedPageTypes($scope);
         $primaryNeedle = $this->buildSectionCtaIntentNeedle($scope, \implode(' ', $pageTypes), []);
- if (\preg_match('/\b(?:download|apk|app|install)\b| ?iu', $primaryNeedle) === 1) {
+        if (\preg_match('/\b(?:download|apk|app|install)\b/iu', $primaryNeedle) === 1) {
             return $this->localizeBuildText('download_now', $locale);
         }
         if (\count($pageTypes) === 1 && \in_array(Page::TYPE_CONTACT, $pageTypes, true)) {
@@ -17796,7 +18324,7 @@ TEXT,
             $signals = 0;
             $signals += \preg_match_all('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu', $text) ?: 0;
             $signals += \preg_match_all('/\+?\d[\d\s().-]{6,}\d/u', $text) ?: 0;
- $signals += \preg_match_all('/\b(?:address|office|hours|support|sales|phone|email|whatsapp|faq)\b| ?iu', $text) ?: 0;
+            $signals += \preg_match_all('/\b(?:address|office|hours|support|sales|phone|email|whatsapp|faq)\b/iu', $text) ?: 0;
             if ($signals >= 2) {
                 return 'contact/support details are compressed into a long paragraph; split channels into cards or form rows';
             }

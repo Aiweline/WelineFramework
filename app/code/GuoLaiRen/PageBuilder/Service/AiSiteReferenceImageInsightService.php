@@ -363,7 +363,7 @@ class AiSiteReferenceImageInsightService
                 'max_tokens' => 1400,
                 'disable_conversation_history' => true,
                 'disable_conversation_persist' => true,
-                'timeout' => 120,
+                'timeout' => 600,
             ],
             'has_image_payload' => $hasImagePayload,
         ];
@@ -405,7 +405,7 @@ class AiSiteReferenceImageInsightService
                 'max_tokens' => 1400,
                 'disable_conversation_history' => true,
                 'disable_conversation_persist' => true,
-                'timeout' => 120,
+                'timeout' => 600,
             ],
             'has_image_payload' => $hasImagePayload,
         ];
@@ -451,7 +451,7 @@ class AiSiteReferenceImageInsightService
                 'max_tokens' => 1400,
                 'disable_conversation_history' => true,
                 'disable_conversation_persist' => true,
-                'timeout' => 120,
+                'timeout' => 600,
             ],
             'has_image_payload' => $hasImagePayload,
         ];
