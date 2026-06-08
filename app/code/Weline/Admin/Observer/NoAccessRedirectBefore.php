@@ -22,11 +22,11 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
      * @var \Weline\Framework\Http\Request
      */
     private Request $request;
-    private BackendLoginReturnUrlService $returnUrlService;
+    private ?BackendLoginReturnUrlService $returnUrlService;
 
     function __construct(
         Request $request,
-        BackendLoginReturnUrlService $returnUrlService
+        ?BackendLoginReturnUrlService $returnUrlService = null
     )
     {
         $this->request = $request;
@@ -52,7 +52,7 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
                 $data = $event->getData('data') ?? [];
                 $reason = $data['reason'] ?? '';
                 // 通过 URL 参数传递原因，登录页当次请求显示一次；不写 Session，避免刷新后仍重复显示
-                $loginUrl = $this->returnUrlService->buildLoginUrlWithReturn(
+                $loginUrl = $this->getReturnUrlService()->buildLoginUrlWithReturn(
                     $this->getBackendLoginUrlSameOrigin(),
                     $this->request->getUrlBuilder()->getCurrentUrl(),
                     (string)$reason
@@ -93,5 +93,14 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
             return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
         }
         return $this->request->getUrlBuilder()->getBackendUrlPath($path);
+    }
+
+    private function getReturnUrlService(): BackendLoginReturnUrlService
+    {
+        if (!$this->returnUrlService instanceof BackendLoginReturnUrlService) {
+            $this->returnUrlService = ObjectManager::getInstance(BackendLoginReturnUrlService::class);
+        }
+
+        return $this->returnUrlService;
     }
 }

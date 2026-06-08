@@ -12,6 +12,7 @@ namespace Weline\Framework;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Helper;
+use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
@@ -887,7 +888,7 @@ class App
                 continue;
             }
 
-            if ($currency === null && \strlen($segment) === 3 && \ctype_upper($segment)) {
+            if ($currency === null && State::isAllowedCurrencyCode($segment)) {
                 $currency = $segment;
                 continue;
             }
