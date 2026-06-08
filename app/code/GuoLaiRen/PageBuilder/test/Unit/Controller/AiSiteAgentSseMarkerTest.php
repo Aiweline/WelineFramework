@@ -640,7 +640,8 @@ final class AiSiteAgentSseMarkerTest extends TestCase
         self::assertStringContainsString('function mergeIncomingPlanQueueInfoWithRememberedProgress(info)', $phaseScript);
         self::assertStringContainsString('$includeQueuePayload = $operation === \'plan\';', $controllerSource);
         self::assertStringContainsString('findAiSiteOperationQueueRow($fresh, $operation, $queueId, $includeQueuePayload)', $controllerSource);
-        self::assertStringContainsString('findAiSiteOperationQueueRow($fresh, $operation, $effectiveQueueId, $operation === \'plan\')', $controllerSource);
+        self::assertStringContainsString('$queueId = $effectiveQueueId > 0 ? $effectiveQueueId : $queueId;', $controllerSource);
+        self::assertStringContainsString('findAiSiteOperationQueueRow($fresh, $operation, $queueId, $operation === \'plan\')', $controllerSource);
         self::assertStringContainsString('window.__pbWorkspaceApi.updateStageStatusSummary(state)', $phaseScript);
         self::assertStringContainsString('window.__pbWorkspaceApi.updateStageStatusSummary(safeState)', $phaseScript);
         self::assertStringContainsString("activeOp === 'plan' && isStageQueueInProgress(readStageQueueStatus(resolveRuntimeQueueInfoFromState(state, 'plan')))", $runtimeScript);
@@ -1031,7 +1032,9 @@ final class AiSiteAgentSseMarkerTest extends TestCase
             '$sse->complete($terminalCompletePayload);',
             $controllerSource
         );
-        self::assertStringContainsString(
+        self::assertStringContainsString("'success' => !\$streamObservedActiveOperation,", $controllerSource);
+        self::assertStringContainsString("'terminal_status' => \$streamObservedActiveOperation ? 'incomplete' : '',", $controllerSource);
+        self::assertStringNotContainsString(
             "\$sse->complete(['success' => true, 'last_event_id' => \$lastEventId]);",
             $controllerSource
         );

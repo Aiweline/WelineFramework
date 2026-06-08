@@ -769,8 +769,36 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             'target_url' => $redirectUrl,
             'session' => $this->getSessionDataForLog(),
         ]);
+        // Extension-authenticated logins bypass the normal postPost tail, so persist the Session before redirecting.
+        $this->persistBackendLoginSessionCookie();
         $this->redirect($redirectUrl);
         return true;
+    }
+
+    private function persistBackendLoginSessionCookie(): void
+    {
+        $rawSession = $this->session->getSession();
+        $rawSession->save();
+        if ($rawSession instanceof Session) {
+            $rawSession->getStrategy()->writeClose();
+        }
+        Session::flushRequestSessions();
+
+        $sid = $this->session->getId();
+        if ($sid === '') {
+            return;
+        }
+
+        HeaderCollector::getInstance()->setCookie(
+            WlsStrategy::SESSION_NAME,
+            $sid,
+            \time() + 86400 * 30,
+            '/',
+            '',
+            $this->request->isSecure(),
+            true,
+            'Lax'
+        );
     }
 
     private function clearBackendVerificationCodeState(): void
