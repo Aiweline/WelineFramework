@@ -337,8 +337,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 系统未安装任何主题！,"No theme installed in the system!"
 【已激活】,【Activated】
 查看主题列表,"View theme list"
-返回主题列表,"Back to theme list"
-当前主题暂无可用部件,"No widgets available for the current theme"
 正在卸载主题...,"Unloading theme..."
 正在压缩备份文件...,"Compressing backup file..."
 当前主题未安装：卸载失败！,"Current theme not installed: uninstall failed!"
@@ -538,7 +536,14 @@ Default,Default
 回滚虚拟主题布局版本,回滚虚拟主题布局版本
 未找到默认布局源码，无法创建虚拟主题草稿,未找到默认布局源码，无法创建虚拟主题草稿
 虚拟主题草稿已生成，发布前不会影响前台渲染,虚拟主题草稿已生成，发布前不会影响前台渲染
+缺少参照主题,缺少参照主题
+参照主题没有可生成的默认布局类型,参照主题没有可生成的默认布局类型
+"AI 虚拟主题全类型草稿","AI 虚拟主题全类型草稿"
+生成失败,"Generation failed"
+虚拟主题部分布局类型生成失败,虚拟主题部分布局类型生成失败
+虚拟主题全部布局草稿已生成，发布前不会影响前台渲染,"Virtual theme drafts for all layouts have been generated. They will not affect frontend rendering before publishing."
 "AI 虚拟主题布局草稿","AI 虚拟主题布局草稿"
+"AI 返回内容缺少 source_code 字段。","AI 返回内容缺少 source_code 字段。"
 "AI 未返回虚拟主题源码。","AI 未返回虚拟主题源码。"
 "AI 编辑 block 后生成虚拟主题草稿","AI 编辑 block 后生成虚拟主题草稿"
 "AI 重建 block 后生成虚拟主题草稿","AI 重建 block 后生成虚拟主题草稿"
@@ -972,13 +977,6 @@ CMS页面,"CMS Page"
 请选择,"Please select"
 暂无数据,"No data"
 加载中...,Loading...
-部件库加载中...,Loading widgets...
-该插槽暂无可用部件,No widgets available for this slot
-下滑加载更多...,Scroll down to load more...
-已全部加载,All loaded
-插槽,Slot
-移除插槽过滤,Remove slot filter
-在该插槽内搜索...,Search within this slot...
 清空,Clear
 搜索...,Searching...
 预设颜色,"Preset Colors"
@@ -1050,10 +1048,6 @@ CMS页面,"CMS Page"
 标签已存在,"Tag already exists"
 标签太短,"Tag too short"
 标签太长,"Tag too long"
-已切换到:,"Switched to:"
-搜索配置项,"Search configuration"
-组件预览,"Component Preview"
-"Search config","Search config"
 暂无可用布局,"No available layouts"
 配置参数,"Configuration Parameters"
 暂无可用色系,"No available color schemes"
@@ -1083,6 +1077,7 @@ CMS页面,"CMS Page"
 "点击""配置变量""按钮编辑变量文件中的变量值","Click the ""Configure Variables"" button to edit the variable values in the variable file"
 配置变量文件,"Configuration Variable File"
 正在加载变量数据...,"Loading variable data..."
+组件预览,"Component Preview"
 区域,Region
 组件,Component
 名称,Name
@@ -1262,15 +1257,11 @@ AI创建虚拟主题,AI创建虚拟主题
 预览主题,"Preview theme"
 可视化编辑,"Visual Editor"
 编辑,Edit
-"基于该主题创建 AI 虚拟主题","基于该主题创建 AI 虚拟主题"
 选择用于网站前台的主题，访客将看到该主题的样式。,"Select the theme for the storefront. Visitors will see this theme."
 选择用于管理后台的主题，仅影响后台界面样式。,"Select the theme for the admin panel. It only affects the backend UI."
 参照主题,参照主题
-页面类型,页面类型
-商品详情页,商品详情页
-生成方式,生成方式
-"调用 Theme AI 适配器","调用 Theme AI 适配器"
-关闭后只按默认主题源码创建可编辑草稿,关闭后只按默认主题源码创建可编辑草稿
+"固定调用 Theme AI 适配器","Always use the Theme AI adapter"
+自动对标参照主题全部默认布局类型生成虚拟主题草稿，不需要选择页面类型。,"Automatically generate virtual theme drafts for all default layout types from the reference theme. No page type selection is needed."
 生成方向,生成方向
 例如：保持默认主题全部结构和插槽，改成更适合节日活动的视觉方向。,例如：保持默认主题全部结构和插槽，改成更适合节日活动的视觉方向。
 技能,技能
@@ -1278,7 +1269,7 @@ AI创建虚拟主题,AI创建虚拟主题
 方向,方向
 自动匹配,自动匹配
 "由 Theme AI 根据当前指令选择方向","由 Theme AI 根据当前指令选择方向"
-"AI 会完全参照默认主题源码生成虚拟主题草稿，发布前不会影响前台渲染。","AI 会完全参照默认主题源码生成虚拟主题草稿，发布前不会影响前台渲染。"
+"AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。","AI 会完全参照默认主题全部默认布局源码生成虚拟主题草稿，发布前不会影响前台渲染。"
 创建虚拟主题,创建虚拟主题
 准备生成...,"Preparing to generate..."
 正在生成预览图，请稍候...,"Generating preview image, please wait..."
@@ -1288,7 +1279,6 @@ AI创建虚拟主题,AI创建虚拟主题
 激活失败,"Activation failed"
 正在生成,Generating
 预览图已更新,"Preview image updated"
-生成失败,"Generation failed"
 自动生成中,Generating
 自动生成完成,"Generation complete"
 自动生成失败,"Generation failed"
@@ -1301,10 +1291,11 @@ AI创建虚拟主题,AI创建虚拟主题
 正在创建,正在创建
 AI目录加载失败,AI目录加载失败
 请选择参照主题,请选择参照主题
-正在创建虚拟主题草稿...,正在创建虚拟主题草稿...
+正在按参照主题全部布局类型创建虚拟主题草稿...,"Creating virtual theme drafts for all layout types in the reference theme..."
 虚拟主题创建失败,虚拟主题创建失败
 虚拟主题草稿已创建,虚拟主题草稿已创建
 已创建虚拟主题草稿,已创建虚拟主题草稿
+已覆盖布局类型,已覆盖布局类型
 打开可视化编辑,打开可视化编辑
 正在批量生成预览图，请稍候...,"Batch generating preview images, please wait..."
 批量生成已完成，但存在失败项,"Batch generation completed, but there are failures"
@@ -1318,6 +1309,7 @@ AI目录加载失败,AI目录加载失败
 图片URL或点击选择,"Image URL or click to select"
 JSON格式数组,"JSON format array"
 请使用JSON格式输入,"Please use JSON format"
+返回主题列表,"Back to theme list"
 主题编辑器,"Theme Editor"
 "-- 选择主题 --","-- Select Theme --"
 布局类型,布局类型
@@ -1366,6 +1358,7 @@ Banner,Banner
 版权,Copyright
 部件库,"Widget Library"
 搜索部件...,"Search widgets..."
+部件库加载中...,"Loading widgets..."
 独占部件,"Exclusive Component"
 响应式,Responsive
 宽度,Width
@@ -2057,7 +2050,3 @@ Cookie政策,"Cookie Policy"
 VIP会员,"VIP Member"
 您的浏览器不支持视频标签。,"Your browser does not support the video tag."
 视频加载中...,"Video loading..."
-固定调用 Theme AI 适配器,"Always use the Theme AI adapter"
-自动对标参照主题全部默认布局类型生成虚拟主题草稿，不需要选择页面类型。,"Automatically generate virtual theme drafts for all default layout types from the reference theme. No page type selection is needed."
-正在按参照主题全部布局类型创建虚拟主题草稿...,"Creating virtual theme drafts for all layout types in the reference theme..."
-虚拟主题全部布局草稿已生成，发布前不会影响前台渲染,"Virtual theme drafts for all layouts have been generated. They will not affect frontend rendering before publishing."
