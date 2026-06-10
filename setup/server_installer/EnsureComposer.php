@@ -349,6 +349,12 @@ final class EnsureComposer
     /** @param array<string, mixed> $options */
     private function applyCurlSslOptions($ch, array $options = []): void
     {
+        if ($options['allow_insecure_fallback'] ?? false) {
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            return;
+        }
+
         $caPath = $this->resolveCaBundlePath();
         if ($caPath !== null) {
             curl_setopt($ch, CURLOPT_CAINFO, $caPath);
@@ -357,10 +363,8 @@ final class EnsureComposer
             return;
         }
 
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, (bool) ($options['allow_insecure_fallback'] ?? false) ? false : true);
-        if (!($options['allow_insecure_fallback'] ?? false)) {
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        }
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     }
 
     private function download(string $url, string $outPath): bool
@@ -375,6 +379,17 @@ final class EnsureComposer
         }
 
         $data = $this->httpGet($url);
+        if ($data !== null && strlen($data) >= self::MIN_PHAR_SIZE) {
+            return file_put_contents($outPath, $data) !== false;
+        }
+
+        echo "WARNING: HTTPS 下载失败（CA 证书包不可用或 SSL 校验失败），正在关闭证书校验后重试...\n";
+
+        if ($this->downloadWithCurl($url, $outPath, ['allow_insecure_fallback' => true])) {
+            return true;
+        }
+
+        $data = $this->httpGet($url, ['allow_insecure_fallback' => true]);
         if ($data === null || strlen($data) < self::MIN_PHAR_SIZE) {
             return false;
         }
@@ -382,7 +397,8 @@ final class EnsureComposer
         return file_put_contents($outPath, $data) !== false;
     }
 
-    private function downloadWithCurl(string $url, string $outPath): bool
+    /** @param array<string, mixed> $options */
+    private function downloadWithCurl(string $url, string $outPath, array $options = []): bool
     {
         if (!function_exists('curl_init')) {
             return false;
@@ -407,7 +423,7 @@ final class EnsureComposer
             ],
             CURLOPT_ENCODING => '',
         ]);
-        $this->applyCurlSslOptions($ch);
+        $this->applyCurlSslOptions($ch, $options);
         $ok = curl_exec($ch);
         $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
@@ -425,7 +441,8 @@ final class EnsureComposer
         return true;
     }
 
-    private function httpGet(string $url): ?string
+    /** @param array<string, mixed> $options */
+    private function httpGet(string $url, array $options = []): ?string
     {
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
@@ -441,7 +458,7 @@ final class EnsureComposer
                 ],
                 CURLOPT_ENCODING => '',
             ]);
-            $this->applyCurlSslOptions($ch);
+            $this->applyCurlSslOptions($ch, $options);
             $data = curl_exec($ch);
             $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
@@ -451,9 +468,12 @@ final class EnsureComposer
             return (string) $data;
         }
 
+        $insecure = (bool) ($options['allow_insecure_fallback'] ?? false);
         $caPath = $this->resolveCaBundlePath();
-        $sslOptions = ['verify_peer' => true];
-        if ($caPath !== null) {
+        $sslOptions = $insecure
+            ? ['verify_peer' => false, 'verify_peer_name' => false]
+            : ['verify_peer' => true];
+        if (!$insecure && $caPath !== null) {
             $sslOptions['cafile'] = $caPath;
         }
 
