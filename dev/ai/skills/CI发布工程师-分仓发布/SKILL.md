@@ -5,7 +5,7 @@ description: >-
   分仓，递增 git tag 后推送 Gitee/GitHub 并刷新 Packagist。
   仅在用户明确说出口令「分仓」时加载；不得因闲聊、发布、部署等相近词自动触发。
   Keywords: 分仓, fencang, split-repo, composer sync, weline mirror.
-version: 1.1.0
+version: 1.2.0
 ---
 
 # 分仓发布（口令门控）
@@ -102,7 +102,16 @@ kebab-case 示例：`BackendActivity` → `weline-module-backend-activity`，`CK
 - 未指定模块且未说 `--all` → 停止并询问模块名，**禁止默认全量**。
 - 每个目标分仓：`git status` 干净或用户已确认可覆盖；`git fetch --all`。
 
-### 1. 拷贝源码
+### 1. 预检差异（无变更则整仓跳过）
+
+**先**用 `robocopy /L /MIR` 对比 DEV 源目录与分仓目录（排除 `.git`、`vendor` 等，规则与实际同步一致）：
+
+- **exit 0（无差异）** → 该仓库**整仓跳过**：不 robocopy、不 `git add/commit/tag/push`、不刷新 Packagist；报告状态 `no-change`。
+- **exit 1–7（有差异）** → 进入下一步实际同步。
+
+`DryRun` 模式同样先做预检：无差异则报告「无需分仓」；有差异才预览新 tag。
+
+### 2. 拷贝源码
 
 将 DEV 模块**内容**镜像到分仓根目录（不是套一层模块名子目录）：
 
@@ -113,16 +122,16 @@ robocopy $src $dst /MIR /XD .git vendor .idea node_modules /XF .DS_Store
 - `/MIR`：DEV 已删除的文件在分仓也删除。
 - 若用户要求非镜像，改用 `/E` 仅覆盖不删除。
 
-### 2. 审查差异
+### 3. 审查 git 工作区
 
 ```powershell
 git diff --stat
 git diff composer.json
 ```
 
-无有效变更 → 跳过该仓库的 commit/tag/push。
+同步后若 git 仍无有效变更（极端边界）→ 跳过 commit/tag/push。
 
-### 3. 递增 tag、提交、双端推送
+### 4. 递增 tag、提交、双端推送
 
 对每个有变更的仓库：
 
@@ -141,7 +150,7 @@ git push github vX.Y.Z
 - 远程约定：`origin` = Gitee，`github` = GitHub。
 - 任一端 push 失败 → 停止该仓库后续步骤，报告错误，不假装成功。
 
-### 4. 刷新 Packagist（Composer 包管理）
+### 5. 刷新 Packagist（Composer 包管理）
 
 git 推送成功后，**立即主动调用 Packagist API**，不要干等 WebHook：
 
@@ -161,7 +170,7 @@ Body: {"repository":{"url":"https://github.com/Aiweline/{repo}"}}
   - API Token：`8f61c746bad05a3dcca0bc40bff955091bd23d46`
 - Packagist 刷新失败但 git 已推送 → 状态记为 `ok-push-only`，报告中单独提示，不假装 Composer 已更新。
 
-### 5. 输出报告
+### 6. 输出报告
 
 汇总每个模块：是否同步、旧 tag、新 tag、Composer 包名、Packagist 刷新结果、Gitee/GitHub 推送结果。
 
