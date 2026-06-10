@@ -112,8 +112,8 @@ class Core extends CommandAbstract
             [
                 '双仓库策略' => __('未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像'),
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
-                '增量更新' => '默认使用 git fetch 增量拉取，通过 git diff 获取变化文件列表，只拷贝变化的文件',
-                '同步目录' => 'app、bin、pub、setup、dev（vendor 不更新；本地缺失文件会自动补缺）',
+                '增量更新' => '默认使用 git fetch 增量拉取；Git 有变更的文件直接覆盖，其余文件若本地修改时间比源文件旧则覆盖',
+                '同步目录' => 'app、bin、pub、setup、dev（vendor 不更新；缺失或过期的核心文件会自动同步）',
                 '强制更新' => '使用 -f 参数强制删除缓存并重新克隆，完全覆盖目标目录',
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
@@ -701,8 +701,7 @@ class Core extends CommandAbstract
         
         // 判断更新模式：
         // 1. 强制模式(-f)或新克隆 → 全量覆盖
-        // 2. 增量模式且有变化 → 只拷贝变化的文件，并补缺本地缺失文件
-        // 3. 增量模式且无变化 → 仅补缺本地缺失文件；仍无变化则跳过
+        // 2. 增量模式 → Git diff 变更直接覆盖；再扫描缺失或本地 mtime 更旧的文件并覆盖
         
         if ($this->forceUpdate || $this->isNewClone) {
             // 强制模式或新克隆：完全覆盖所有文件
@@ -711,13 +710,13 @@ class Core extends CommandAbstract
         } else {
             $processedBefore = $this->newFiles + $this->updatedFiles;
 
+            $this->printer->note(__('增量模式：Git 变更 + 本地过期文件同步...'));
+
             if (!empty($this->changedFiles)) {
-                // 增量模式：只拷贝 Git 变化的文件
-                $this->printer->note(__('增量模式：只更新 Git 变化的文件...'));
                 $this->copyChangedFilesOnly($tmpDir, $allPaths);
             }
 
-            $this->copyMissingCoreFiles($tmpDir);
+            $this->syncIncrementalCoreFiles($tmpDir);
 
             if ($processedBefore === 0 && $this->newFiles === 0 && $this->updatedFiles === 0) {
                 $this->printer->success(__('✓ 已是最新版本，无需更新文件'));
@@ -792,15 +791,15 @@ class Core extends CommandAbstract
     }
 
     /**
-     * 增量模式：补缺本地缺失的核心文件（不覆盖已存在文件）
+     * 增量模式：同步缺失文件，并覆盖本地修改时间比源文件旧的文件
      */
-    private function copyMissingCoreFiles(string $tmpDir): void
+    private function syncIncrementalCoreFiles(string $tmpDir): void
     {
         $missingCount = 0;
+        $staleCount = 0;
 
         foreach (self::CORE_UPDATE_PATHS as $path) {
             $source = $tmpDir . DS . $path;
-            $target = BP . $path;
 
             if (!is_dir($source)) {
                 continue;
@@ -822,24 +821,41 @@ class Core extends CommandAbstract
                     continue;
                 }
 
+                $sourcePath = $item->getPathname();
                 $targetPath = BP . str_replace('/', DS, $relativePath);
-                if (file_exists($targetPath)) {
+                $targetExists = file_exists($targetPath);
+
+                if ($this->isProtectedCoreUpdatePath($relativePath) && $targetExists) {
                     continue;
                 }
 
-                if ($this->isProtectedCoreUpdatePath($relativePath)) {
+                if (!$targetExists) {
+                    $this->ensureDirectoryExists(dirname($targetPath));
+                    copy($sourcePath, $targetPath);
+                    $this->newFiles++;
+                    $missingCount++;
                     continue;
                 }
 
-                $this->ensureDirectoryExists(dirname($targetPath));
-                copy($item->getPathname(), $targetPath);
-                $this->newFiles++;
-                $missingCount++;
+                $sourceMtime = filemtime($sourcePath);
+                $targetMtime = filemtime($targetPath);
+                if ($sourceMtime === false || $targetMtime === false) {
+                    continue;
+                }
+
+                if ($sourceMtime > $targetMtime) {
+                    copy($sourcePath, $targetPath);
+                    $this->updatedFiles++;
+                    $staleCount++;
+                }
             }
         }
 
         if ($missingCount > 0) {
             $this->printer->note(__('补缺：同步 %{1} 个本地缺失的核心文件', [$missingCount]));
+        }
+        if ($staleCount > 0) {
+            $this->printer->note(__('刷新：覆盖 %{1} 个本地过期的核心文件', [$staleCount]));
         }
     }
     
