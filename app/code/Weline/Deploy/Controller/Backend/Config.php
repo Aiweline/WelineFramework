@@ -49,6 +49,10 @@ class Config extends BackendController
             $settings = [];
             foreach (array_keys($this->deployConfigService->getDefaults()) as $key) {
                 $value = $data[$key] ?? '';
+                if ($key === 'webhook_path') {
+                    $settings[$key] = (string)($existing[$key] ?? '');
+                    continue;
+                }
                 if (in_array($key, DeployConfigService::SECRET_KEYS, true) && trim((string)$value) === '') {
                     $settings[$key] = $existing[$key] ?? '';
                     continue;

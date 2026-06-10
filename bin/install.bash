@@ -186,11 +186,14 @@ add_to_path() {
 # 需 sudo，确保新终端、SSH、su - 等均使用项目安装的 php
 add_to_profile_d() {
   [[ "$PLATFORM" != "linux" ]] && return
+  local cmp="$SERVER_DIR"
   local ph="$SERVER_DIR/php/bin"
   local pg="$SERVER_DIR/pgsql/bin"
   local bn="$ROOT/bin"
-  local content="# WelineFramework - prepend project php/pgsql/w to PATH (written by install.bash)
+  local content="# WelineFramework - prepend project php/pgsql/composer/w to PATH (written by install.bash)
 # Ensures project PHP takes precedence over system PHP
+"
+  [[ -d "$cmp" ]] && content="${content}[ -d '$cmp' ] && export PATH='$cmp':\"\$PATH\"
 "
   [[ -d "$ph" ]] && content="${content}[ -d '$ph' ] && export PATH='$ph':\"\$PATH\"
 "
@@ -198,7 +201,7 @@ add_to_profile_d() {
 "
   [[ -d "$bn" ]] && content="${content}[ -d '$bn' ] && export PATH='$bn':\"\$PATH\"
 "
-  if [[ ! -d "$ph" ]] && [[ ! -d "$pg" ]] && [[ ! -d "$bn" ]]; then
+  if [[ ! -d "$cmp" ]] && [[ ! -d "$ph" ]] && [[ ! -d "$pg" ]] && [[ ! -d "$bn" ]]; then
     return
   fi
   if run_privileged tee /etc/profile.d/weline-path.sh >/dev/null <<< "$content"; then
@@ -1310,6 +1313,7 @@ done
 
 # 安装后：将 php、pgsql、项目 bin（w 命令）写入环境变量（置前，优先于系统 php）
 # Linux 同时写 /etc/profile.d/weline-path.sh，确保登录 shell 使用项目 php
+[[ -d "$SERVER_DIR" ]] && add_to_path "$SERVER_DIR"
 [[ -d "$SERVER_DIR/php/bin" ]] && add_to_path "$SERVER_DIR/php/bin"
 [[ -d "$SERVER_DIR/pgsql/bin" ]] && add_to_path "$SERVER_DIR/pgsql/bin"
 add_to_path "$ROOT/bin"
