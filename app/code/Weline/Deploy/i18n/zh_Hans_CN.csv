@@ -80,7 +80,6 @@
 "- 新增文件：%{1} 个","- 新增文件：%{1} 个"
 "- 更新文件：%{1} 个","- 更新文件：%{1} 个"
 "- 删除文件：%{1} 个","- 删除文件：%{1} 个"
-"- 跳过文件：%{1} 个（受保护的配置文件）","- 跳过文件：%{1} 个（受保护的配置文件）"
 "- 跳过文件：%{1} 个（受保护或排除的文件）","- 跳过文件：%{1} 个（受保护或排除的文件）"
 "错误：未检测到 Git","错误：未检测到 Git"
 "✓ Git 检查通过","✓ Git 检查通过"
@@ -178,3 +177,101 @@ Cloudflare,Cloudflare
 "Cloudflare Zone ID","Cloudflare Zone ID"
 "Cloudflare API Token","Cloudflare API Token"
 保存配置,保存配置
+允许 Tag 发布,允许 Tag 发布
+"Tag 前缀过滤","Tag 前缀过滤"
+"留空表示允许所有 tag；填写后仅匹配此前缀的 tag 触发部署","留空表示允许所有 tag；填写后仅匹配此前缀的 tag 触发部署"
+"发布探测 Token","发布探测 Token"
+"访问 GET /deploy/version?token=xxx 可查看详细版本信息","访问 GET /deploy/version?token=xxx 可查看详细版本信息"
+"Tag 发布与探测","Tag 发布与探测"
+发布历史,发布历史
+版本,版本
+类型,类型
+触发,触发
+状态,状态
+耗时,耗时
+当前,当前
+暂无发布记录,暂无发布记录
+当前版本,当前版本
+尚未发布过,尚未发布过
+"发布 ID：%{1}","发布 ID：%{1}"
+"版本：%{1}","版本：%{1}"
+探测：php bin/w deploy:release:status,探测：php bin/w deploy:release:status
+"发布失败：%{1}","发布失败：%{1}"
+"等待版本：%{1}（超时 %{2} 秒）","等待版本：%{1}（超时 %{2} 秒）"
+"版本已生效：%{1}（第 %{2} 次检测）","版本已生效：%{1}（第 %{2} 次检测）"
+"第 %{1} 次检测：当前 %{2}，期望 %{3}","第 %{1} 次检测：当前 %{2}，期望 %{3}"
+"超时：版本 %{1} 未在 %{2} 秒内生效","超时：版本 %{1} 未在 %{2} 秒内生效"
+缺少 --expect 参数,缺少 --expect 参数
+"完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
+"开始发布：%{1}","开始发布：%{1}"
+备份中...,备份中...
+Git 更新中...,Git 更新中...
+执行后置命令...,执行后置命令...
+"版本戳已写入：%{1}","版本戳已写入：%{1}"
+重载服务...,重载服务...
+"发布成功：%{1}","发布成功：%{1}"
+当前部署版本,当前部署版本
+"ref 类型：%{1}","ref 类型：%{1}"
+"commit：%{1}","commit：%{1}"
+"tag：%{1}","tag：%{1}"
+"Worker ID：%{1}","Worker ID：%{1}"
+"部署时间：%{1}","部署时间：%{1}"
+"部署模式：%{1}","部署模式：%{1}"
+最近发布历史,最近发布历史
+查看当前部署版本,查看当前部署版本
+查看发布历史与版本信息,查看发布历史与版本信息
+查看发布历史列表,查看发布历史列表
+"无法创建部署版本目录：%{1}","无法创建部署版本目录：%{1}"
+无法写入部署版本文件,无法写入部署版本文件
+"Git fetch 失败：%{1}","Git fetch 失败：%{1}"
+"Git checkout tag 失败：%{1}","Git checkout tag 失败：%{1}"
+"Git checkout 分支失败：%{1}","Git checkout 分支失败：%{1}"
+"Git reset 失败：%{1}","Git reset 失败：%{1}"
+"Git pull 失败：%{1}","Git pull 失败：%{1}"
+"Webhook 配置引导","Webhook 配置引导"
+"配置 Webhook 后，Git 平台推送代码时会自动触发部署。请先填写上方「Webhook 密钥」，然后在你的 Git 平台完成以下配置。","配置 Webhook 后，Git 平台推送代码时会自动触发部署。请先填写上方「Webhook 密钥」，然后在你的 Git 平台完成以下配置。"
+"第 1 步：进入 Gitee 仓库设置","第 1 步：进入 Gitee 仓库设置"
+"打开 Gitee 仓库页面，点击顶部「管理」","打开 Gitee 仓库页面，点击顶部「管理」"
+"左侧菜单找到「WebHooks」，点击「添加 WebHook」","左侧菜单找到「WebHooks」，点击「添加 WebHook」"
+"第 2 步：填写 Webhook 信息","第 2 步：填写 Webhook 信息"
+"密码","密码"
+"填写上方「Webhook 密钥」中保存的值","填写上方「Webhook 密钥」中保存的值"
+"触发事件","触发事件"
+"勾选「Push」","勾选「Push」"
+"第 3 步：验证","第 3 步：验证"
+"返回 {"ok":true} 即表示 Webhook 入口正常。","返回 {"ok":true} 即表示 Webhook 入口正常。"
+"第 1 步：进入 GitHub 仓库设置","第 1 步：进入 GitHub 仓库设置"
+"打开 GitHub 仓库页面，点击「Settings」","打开 GitHub 仓库页面，点击「Settings」"
+"左侧菜单找到「Webhooks」，点击「Add webhook」","左侧菜单找到「Webhooks」，点击「Add webhook」"
+"选择「Just the push event」","选择「Just the push event」"
+"支持的 Webhook 协议","支持的 Webhook 协议"
+"本系统兼容标准 Webhook 协议，支持以下鉴权方式：","本系统兼容标准 Webhook 协议，支持以下鉴权方式："
+"通用 HTTP Bearer Token","通用 HTTP Bearer Token"
+"URL 参数传递","URL 参数传递"
+"Gitee 专用（自动识别）","Gitee 专用（自动识别）"
+"GitHub 专用（HMAC-SHA256）","GitHub 专用（HMAC-SHA256）"
+"Payload 要求","Payload 要求"
+"Nginx 反代示例","Nginx 反代示例"
+"手动测试","手动测试"
+"返回 {"ok":true} 表示部署触发成功；{"skipped":true,"reason":"branch_mismatch"} 表示分支不匹配，不会部署。","返回 {"ok":true} 表示部署触发成功；{"skipped":true,"reason":"branch_mismatch"} 表示分支不匹配，不会部署。"
+"Tag 发布说明","Tag 发布说明"
+"勾选「允许 Tag 发布」后，Git 平台推送 tag 时也会触发部署。Tag 发布时版本号等于 tag 名（如 v2.4.1）。","勾选「允许 Tag 发布」后，Git 平台推送 tag 时也会触发部署。Tag 发布时版本号等于 tag 名（如 v2.4.1）。"
+"Git 平台额外配置：","Git 平台额外配置："
+"Webhook 触发事件勾选「Tag Push」；","Webhook 触发事件勾选「Tag Push」；"
+"Events 选择「Let me select individual events」，勾选「Pushes」（包含 tag push）。","Events 选择「Let me select individual events」，勾选「Pushes」（包含 tag push）。"
+"测试：","测试："
+"你的密钥","你的密钥"
+"其他平台","其他平台"
+"触发模式","触发模式"
+"部署触发方式","部署触发方式"
+"仅分支 Push","仅分支 Push"
+"仅 Tag Push","仅 Tag Push"
+"分支 + Tag 都生效","分支 + Tag 都生效"
+"选择 Webhook 触发部署的条件：仅分支推送、仅 Tag 推送、或两者都生效","选择 Webhook 触发部署的条件：仅分支推送、仅 Tag 推送、或两者都生效"
+"分支过滤","分支过滤"
+"留空匹配所有分支；填写后仅该分支的 push 触发部署","留空匹配所有分支；填写后仅该分支的 push 触发部署"
+"版本策略","版本策略"
+"分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。","分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。"
+"Git 平台配置提示","Git 平台配置提示"
+"「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。","「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。"
+"默认「Just the push event」已包含分支和 tag push，无需额外配置。","默认「Just the push event」已包含分支和 tag push，无需额外配置。"

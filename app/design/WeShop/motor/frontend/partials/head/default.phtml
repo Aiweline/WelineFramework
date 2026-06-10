@@ -55,9 +55,31 @@ if ($isDev) {
 }
 
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
+$htmlDir = (string)($this->getData('htmlDir') ?: 'ltr');
+$htmlDir = $htmlDir === 'rtl' ? 'rtl' : 'ltr';
 $currentCurrency = \w_env('user.currency', 'CNY');
 $defaultLang = \w_env('website.language', '') ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN';
 $defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
+$availableCurrencies = [];
+try {
+    if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+        foreach (\Weline\Websites\Data\WebsiteData::getCurrencyCodes() as $currencyCode) {
+            $currencyCode = strtoupper(trim((string)$currencyCode));
+            if ($currencyCode !== '') {
+                $availableCurrencies[] = $currencyCode;
+            }
+        }
+    }
+} catch (\Throwable) {
+    $availableCurrencies = [];
+}
+$defaultCurrency = strtoupper(trim((string)$defaultCurrency)) ?: 'CNY';
+$availableCurrencies[] = $defaultCurrency;
+$availableCurrencies = array_values(array_unique($availableCurrencies));
+$currentCurrency = strtoupper(trim((string)$currentCurrency));
+if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
+    $currentCurrency = $defaultCurrency;
+}
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
 
 $envConfig = [
@@ -76,7 +98,16 @@ $themeConfigPayload = [
     'currentCurrency' => $currentCurrency,
     'defaultLang' => $defaultLang,
     'defaultCurrency' => $defaultCurrency,
+    'availableCurrencies' => $availableCurrencies,
+    'htmlDir' => $htmlDir,
+    'textDirection' => $htmlDir,
+    'isRtl' => $htmlDir === 'rtl',
     'debug' => DEV,
+    'i18n' => [
+        'currentLang' => $currentLang,
+        'defaultLang' => $defaultLang,
+        'direction' => $htmlDir,
+    ],
     'site' => [
         'name' => $siteName,
     ],
@@ -99,6 +130,11 @@ $this->setData('envConfig', $envConfig);
         }
         const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
+        const textDirection = themeConfig.htmlDir === 'rtl' || themeConfig.textDirection === 'rtl' ? 'rtl' : 'ltr';
+        document.documentElement.setAttribute('dir', textDirection);
+        document.documentElement.setAttribute('data-dir', textDirection);
+        document.documentElement.classList.toggle('is-rtl', textDirection === 'rtl');
+        document.documentElement.classList.toggle('is-ltr', textDirection !== 'rtl');
 
         if (window.__WelineThemeConfig.modulesConfigUrl) {
             window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;

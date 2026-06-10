@@ -214,6 +214,21 @@ class Account extends BackendController
                 ]);
             }
 
+            $platformAdapter = $this->adapterRegistry->getAdapter($platform);
+            if (!$platformAdapter) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('平台未注册：%{1}', $platform),
+                ]);
+            }
+
+            $enableCronPushUrls = (int)($data['enable_cron_push_urls'] ?? 0);
+            $enableCronSitemap = (int)($data['enable_cron_sitemap'] ?? 0);
+            if (!$platformAdapter->supportsAutoSubmit()) {
+                $enableCronPushUrls = 0;
+                $enableCronSitemap = 0;
+            }
+
             $scope = trim((string)($data['scope'] ?? ''));
 
             $account->setData(SeoAccount::schema_fields_NAME, $name)
@@ -222,8 +237,8 @@ class Account extends BackendController
                 ->setData(SeoAccount::schema_fields_SCOPE, $scope)
                 ->setData(SeoAccount::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''))
                 ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? SeoAccount::STATUS_ACTIVE))
-                ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, (int)($data['enable_cron_push_urls'] ?? 1))
-                ->setData(SeoAccount::schema_fields_ENABLE_CRON_SITEMAP, (int)($data['enable_cron_sitemap'] ?? 0));
+                ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, $enableCronPushUrls)
+                ->setData(SeoAccount::schema_fields_ENABLE_CRON_SITEMAP, $enableCronSitemap);
 
             $configJson = (string)($data['config_json'] ?? '');
             if ($configJson !== '') {

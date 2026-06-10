@@ -1,0 +1,446 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$pageTitle = (string)($this->getData('page_title') ?? __('A2A 钱包适配器执行监控'));
+$hasError = (bool)($this->getData('has_error') ?? false);
+$errorMessage = (string)($this->getData('error_message') ?? '');
+$order = $this->getData('order') ?? [];
+$ruling = $this->getData('ruling') ?? [];
+$modeOptions = $this->getData('mode_options') ?? [];
+$metrics = $this->getData('metrics') ?? [];
+$instructions = $this->getData('instructions') ?? [];
+$adapterContract = $this->getData('adapter_contract') ?? [];
+$navigation = $this->getData('navigation') ?? [];
+$persisted = $this->getData('persisted') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <style>
+        :root {
+            --a2a-bg: #f5f7fb;
+            --a2a-surface: #ffffff;
+            --a2a-panel: #f8fafc;
+            --a2a-border: #d8e0ea;
+            --a2a-text: #172033;
+            --a2a-muted: #64748b;
+            --a2a-primary: #0369a1;
+            --a2a-primary-strong: #075985;
+            --a2a-success: #15803d;
+            --a2a-warning: #a16207;
+            --a2a-danger: #b91c1c;
+            --a2a-radius: 8px;
+            --a2a-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--a2a-bg);
+            color: var(--a2a-text);
+            font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+            letter-spacing: 0;
+        }
+
+        .a2a-wallet-shell {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 28px 0 44px;
+        }
+
+        .a2a-wallet-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .a2a-nav-links,
+        .a2a-mode-tabs,
+        .a2a-id-stack,
+        .a2a-status-line {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .a2a-button,
+        .a2a-mode-tab {
+            min-height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 8px 12px;
+            background: var(--a2a-surface);
+            color: var(--a2a-text);
+            font-size: 14px;
+            font-weight: 800;
+            text-decoration: none;
+        }
+
+        .a2a-button-primary,
+        .a2a-mode-active {
+            background: var(--a2a-primary);
+            border-color: var(--a2a-primary);
+            color: #fff;
+        }
+
+        .a2a-button-primary:hover,
+        .a2a-mode-active:hover {
+            background: var(--a2a-primary-strong);
+            color: #fff;
+        }
+
+        .a2a-panel {
+            min-width: 0;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            background: var(--a2a-surface);
+            box-shadow: var(--a2a-shadow);
+            padding: 18px;
+        }
+
+        .a2a-panel + .a2a-panel,
+        .a2a-wallet-grid + .a2a-panel {
+            margin-top: 16px;
+        }
+
+        .a2a-wallet-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(330px, .78fr);
+            gap: 16px;
+            align-items: start;
+            margin-top: 16px;
+        }
+
+        .a2a-kicker,
+        .a2a-public-id,
+        .a2a-state-pill {
+            display: inline-flex;
+            min-height: 28px;
+            align-items: center;
+            border-radius: var(--a2a-radius);
+            padding: 4px 9px;
+            background: #e0f2fe;
+            color: var(--a2a-primary);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .a2a-public-id {
+            min-height: 32px;
+            background: #f1f5f9;
+            color: var(--a2a-text);
+        }
+
+        .a2a-state-success {
+            background: #dcfce7;
+            color: var(--a2a-success);
+        }
+
+        .a2a-state-warning {
+            background: #fef3c7;
+            color: var(--a2a-warning);
+        }
+
+        .a2a-state-danger {
+            background: #fee2e2;
+            color: var(--a2a-danger);
+        }
+
+        h1,
+        h2,
+        h3,
+        p {
+            margin-top: 0;
+        }
+
+        h1 {
+            margin: 14px 0 10px;
+            font-size: clamp(30px, 4vw, 44px);
+            line-height: 1.08;
+        }
+
+        h2 {
+            font-size: 22px;
+        }
+
+        h3 {
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .a2a-muted {
+            color: var(--a2a-muted);
+            line-height: 1.65;
+        }
+
+        .a2a-mode-tabs {
+            margin-top: 14px;
+        }
+
+        .a2a-metrics {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .a2a-card,
+        .a2a-contract-row,
+        .a2a-instruction-row {
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 10px;
+            background: var(--a2a-panel);
+            line-height: 1.5;
+        }
+
+        .a2a-card strong,
+        .a2a-contract-row strong {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--a2a-text);
+            font-size: 18px;
+        }
+
+        .a2a-card span,
+        .a2a-contract-row span,
+        .a2a-instruction-row span,
+        .a2a-meta-grid span {
+            color: var(--a2a-muted);
+            font-size: 13px;
+        }
+
+        .a2a-stack {
+            display: grid;
+            gap: 10px;
+        }
+
+        .a2a-instruction-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .a2a-instruction-head strong {
+            display: block;
+            overflow-wrap: anywhere;
+            font-size: 16px;
+        }
+
+        .a2a-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .a2a-meta-grid div {
+            min-width: 0;
+            border-radius: var(--a2a-radius);
+            background: #fff;
+            padding: 8px;
+        }
+
+        .a2a-meta-grid strong {
+            display: block;
+            overflow-wrap: anywhere;
+            font-size: 13px;
+        }
+
+        .a2a-persisted-strip {
+            display: grid;
+            grid-template-columns: 1.3fr repeat(4, minmax(0, .7fr));
+            gap: 8px;
+            margin-top: 14px;
+            padding: 10px;
+            border: 1px solid #fed7aa;
+            border-radius: var(--a2a-radius);
+            background: #fff7ed;
+        }
+
+        .a2a-persisted-strip strong {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--a2a-warning);
+            font-size: 14px;
+            overflow-wrap: anywhere;
+        }
+
+        .a2a-persisted-strip span {
+            color: var(--a2a-muted);
+            font-size: 12px;
+        }
+
+        .a2a-error {
+            border-color: #fecaca;
+            background: #fff1f2;
+            color: var(--a2a-danger);
+        }
+
+        .a2a-alert {
+            margin-top: 14px;
+            border: 1px solid #bae6fd;
+            border-radius: var(--a2a-radius);
+            padding: 12px;
+            background: #f0f9ff;
+            color: var(--a2a-primary-strong);
+            font-weight: 800;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 960px) {
+            .a2a-wallet-grid,
+            .a2a-metrics,
+            .a2a-meta-grid,
+            .a2a-persisted-strip {
+                grid-template-columns: 1fr;
+            }
+
+            .a2a-wallet-nav,
+            .a2a-instruction-head {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
+    </style>
+    <?= $this->fetch('Aiweline_A2A::templates/Frontend/partials/console-style.phtml') ?>
+</head>
+<body>
+    <main class="a2a-wallet-shell">
+        <nav class="a2a-wallet-nav" aria-label="<?= __('A2A 钱包监控导航') ?>">
+            <div class="a2a-nav-links">
+                <a class="a2a-button" href="<?= htmlspecialchars((string)($navigation['arbitration_href'] ?? '/a2a/frontend/arbitration-ruling')) ?>"><?= __('返回仲裁裁决') ?></a>
+                <a class="a2a-button" href="<?= htmlspecialchars((string)($navigation['role_href'] ?? '/a2a/frontend/role-console')) ?>"><?= __('查看平台风控') ?></a>
+            </div>
+            <?php if (!$hasError): ?>
+                <a class="a2a-button a2a-button-primary" href="<?= htmlspecialchars((string)($navigation['reputation_href'] ?? '/a2a/frontend/reputation')) ?>"><?= __('裁决后重算信誉') ?></a>
+            <?php endif; ?>
+        </nav>
+
+        <?php if ($hasError): ?>
+            <section class="a2a-panel a2a-error">
+                <span class="a2a-kicker"><?= __('无法执行钱包监控') ?></span>
+                <h1><?= __('钱包监控不可执行') ?></h1>
+                <p><?= htmlspecialchars($errorMessage) ?></p>
+                <a class="a2a-button" href="/a2a/frontend#roles"><?= __('返回角色权限') ?></a>
+            </section>
+        <?php else: ?>
+            <section class="a2a-panel">
+                <span class="a2a-kicker"><?= __('A2A 钱包适配器执行监控') ?></span>
+                <h1><?= htmlspecialchars((string)$this->getData('mode_label')) ?></h1>
+                <p class="a2a-muted">
+                    <?= htmlspecialchars((string)$order['sku_title']) ?> · <?= htmlspecialchars((string)$order['provider']) ?>
+                </p>
+                <div class="a2a-id-stack">
+                    <span class="a2a-public-id"><?= htmlspecialchars((string)$this->getData('order_id')) ?></span>
+                    <span class="a2a-public-id"><?= htmlspecialchars((string)$this->getData('ruling_id')) ?></span>
+                    <span class="a2a-state-pill"><?= htmlspecialchars((string)$ruling['decision']) ?></span>
+                    <span class="a2a-state-pill a2a-state-success"><?= __('不执行真实资金动作') ?></span>
+                </div>
+                <div class="a2a-mode-tabs" aria-label="<?= __('钱包执行模式切换') ?>">
+                    <?php foreach ($modeOptions as $option): ?>
+                        <a class="a2a-mode-tab <?= ($option['active'] ?? false) ? 'a2a-mode-active' : '' ?>" href="<?= htmlspecialchars((string)$option['href']) ?>">
+                            <?= htmlspecialchars((string)$option['label']) ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <div class="a2a-metrics">
+                    <?php foreach ($metrics as $metric): ?>
+                        <div class="a2a-card">
+                            <strong><?= htmlspecialchars((string)$metric['value']) ?></strong>
+                            <span><?= htmlspecialchars((string)$metric['label']) ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="a2a-alert"><?= __('每条钱包指令必须带幂等键、执行状态、失败原因和对账结果，避免重复放款或退款。') ?></div>
+                <?php if (is_array($persisted) && $persisted): ?>
+                    <div class="a2a-persisted-strip" aria-label="<?= __('持久化状态') ?>">
+                        <div><strong><?= htmlspecialchars((string)$persisted['status']) ?></strong><span><?= __('持久化状态') ?></span></div>
+                        <div><strong><?= htmlspecialchars((string)$persisted['mode']) ?></strong><span><?= __('执行模式') ?></span></div>
+                        <div><strong><?= htmlspecialchars((string)$persisted['confirmed']) ?></strong><span><?= __('已确认') ?></span></div>
+                        <div><strong><?= htmlspecialchars((string)$persisted['retryable']) ?></strong><span><?= __('可重试') ?></span></div>
+                        <div><strong><?= htmlspecialchars((string)$persisted['adapter_boundary']) ?></strong><span><?= __('资金边界') ?></span></div>
+                    </div>
+                <?php endif; ?>
+            </section>
+
+            <div class="a2a-wallet-grid">
+                <section class="a2a-panel">
+                    <h2><?= __('钱包指令执行表') ?></h2>
+                    <div class="a2a-stack">
+                        <?php foreach ($instructions as $instruction): ?>
+                            <?php
+                            $statusClass = 'a2a-state-warning';
+                            if (($instruction['adapter_status'] ?? '') === \Aiweline\A2A\Model\WalletInstruction::STATUS_ADAPTER_CONFIRMED) {
+                                $statusClass = 'a2a-state-success';
+                            } elseif (($instruction['adapter_status'] ?? '') === \Aiweline\A2A\Model\WalletInstruction::STATUS_ADAPTER_FAILED) {
+                                $statusClass = 'a2a-state-danger';
+                            }
+                            ?>
+                            <article class="a2a-instruction-row">
+                                <div class="a2a-instruction-head">
+                                    <div>
+                                        <strong><?= htmlspecialchars((string)$instruction['id']) ?></strong>
+                                        <span><?= htmlspecialchars((string)$instruction['instruction_type']) ?> · <?= htmlspecialchars((string)$instruction['amount']) ?> · <?= htmlspecialchars((string)$instruction['entry_type']) ?></span>
+                                    </div>
+                                    <span class="a2a-state-pill <?= $statusClass ?>"><?= htmlspecialchars((string)$instruction['adapter_status_label']) ?></span>
+                                </div>
+                                <p class="a2a-muted"><?= htmlspecialchars((string)$instruction['note']) ?></p>
+                                <?php if ((string)$instruction['failure_reason'] !== ''): ?>
+                                    <p class="a2a-muted"><strong><?= __('失败原因') ?>：</strong><?= htmlspecialchars((string)$instruction['failure_reason']) ?></p>
+                                <?php endif; ?>
+                                <div class="a2a-meta-grid">
+                                    <div><strong><?= htmlspecialchars((string)($instruction['idempotency_key'] ?: __('未生成'))) ?></strong><span><?= __('幂等键') ?></span></div>
+                                    <div><strong><?= htmlspecialchars((string)($instruction['external_reference'] ?: __('未生成'))) ?></strong><span><?= __('外部引用') ?></span></div>
+                                    <div><strong><?= htmlspecialchars((string)$instruction['reconciliation_label']) ?></strong><span><?= __('对账结果') ?></span></div>
+                                    <div><strong><?= htmlspecialchars((string)$instruction['retry_count']) ?></strong><span><?= __('重试次数') ?></span></div>
+                                    <div><strong><?= htmlspecialchars((string)($instruction['executed_at'] ?: __('未执行'))) ?></strong><span><?= __('执行时间') ?></span></div>
+                                    <div><strong><?= htmlspecialchars((string)($instruction['reconciled_at'] ?: __('未对账'))) ?></strong><span><?= __('对账时间') ?></span></div>
+                                    <div><strong><?= htmlspecialchars((string)$instruction['adapter_code']) ?></strong><span><?= __('适配器') ?></span></div>
+                                    <div><strong><?= ($instruction['is_retryable'] ?? false) ? __('是') : __('否') ?></strong><span><?= __('可重试') ?></span></div>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+
+                <aside>
+                    <section class="a2a-panel">
+                        <h2><?= __('适配器执行契约') ?></h2>
+                        <div class="a2a-stack">
+                            <?php foreach ($adapterContract as $contract): ?>
+                                <div class="a2a-contract-row">
+                                    <strong><?= htmlspecialchars((string)$contract['value']) ?></strong>
+                                    <span><?= htmlspecialchars((string)$contract['label']) ?></span>
+                                    <p class="a2a-muted"><?= htmlspecialchars((string)$contract['note']) ?></p>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <section class="a2a-panel">
+                        <h2><?= __('裁决摘要') ?></h2>
+                        <div class="a2a-stack">
+                            <div class="a2a-card"><strong><?= htmlspecialchars((string)$order['amount']) ?></strong><span><?= __('订单金额') ?></span></div>
+                            <div class="a2a-card"><strong><?= htmlspecialchars((string)$order['platform_fee']) ?></strong><span><?= __('平台服务费') ?></span></div>
+                            <div class="a2a-card"><strong><?= htmlspecialchars((string)$order['provider_payout']) ?></strong><span><?= __('Agent 收入') ?></span></div>
+                            <div class="a2a-card"><strong><?= htmlspecialchars((string)$ruling['ruled_at']) ?></strong><span><?= __('裁决时间') ?></span></div>
+                        </div>
+                    </section>
+                </aside>
+            </div>
+        <?php endif; ?>
+    </main>
+</body>
+</html>

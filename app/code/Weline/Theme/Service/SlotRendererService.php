@@ -12,9 +12,12 @@ use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\View\Template;
 use Weline\Server\Service\MemoryStateFacade;
+use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Model\WelineTheme;
 use Weline\Widget\Service\WidgetRegistry;
+use Weline\Widget\Service\WidgetRuntimeTemplateRenderer;
 
 /**
  * 插槽渲染服务
@@ -61,6 +64,12 @@ class SlotRendererService
     /** 当前渲染周期内已填充的 slot_id，同一 slot_id 只填充文档中第一处出现，避免容器部件内层同名插槽被重复填充导致泄露 */
     private array $filledSlotIdsThisRun = [];
 
+    /** 当前渲染周期使用的主题（用于部件模板覆盖解析，确保预览显示所选主题而非全局激活主题） */
+    private ?WelineTheme $renderTheme = null;
+
+    /** 已加载主题缓存：theme_id => WelineTheme|null */
+    private array $renderThemeCache = [];
+
     public function __construct(
         ThemeLayoutService $layoutService,
         WidgetRegistry $widgetRegistry,
@@ -92,11 +101,11 @@ class SlotRendererService
         );
     }
 
-    public function processSlotsWithLayout(string $html, array $layoutData, bool $filterToHtmlSlots = false): string
+    public function processSlotsWithLayout(string $html, array $layoutData, bool $filterToHtmlSlots = false, int $themeId = 0): string
     {
         return $this->traceCall(
             'slot_renderer::processSlotsWithLayout',
-            function () use ($html, $layoutData, $filterToHtmlSlots): string {
+            function () use ($html, $layoutData, $filterToHtmlSlots, $themeId): string {
                 if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
                     return $html;
                 }
@@ -111,7 +120,10 @@ class SlotRendererService
                 }
 
                 $this->filledSlotIdsThisRun = [];
-                return $this->processSlotsWithDom($html, $slotWidgets, $filterToHtmlSlots);
+                return $this->withRenderTheme(
+                    $themeId,
+                    fn(): string => $this->processSlotsWithDom($html, $slotWidgets, $filterToHtmlSlots)
+                );
             }
         );
     }
@@ -169,10 +181,81 @@ class SlotRendererService
         $this->filledSlotIdsThisRun = [];
         $html = $this->traceCall(
             'slot_renderer::processSlotsWithDom',
-            fn() => $this->processSlotsWithDom($html, $slotWidgets, $status === ThemeLayout::STATUS_PUBLISHED)
+            fn() => $this->withRenderTheme(
+                $themeId,
+                fn(): string => $this->processSlotsWithDom($html, $slotWidgets, $status === ThemeLayout::STATUS_PUBLISHED)
+            )
         );
 
         return $html;
+    }
+
+    /**
+     * 在指定主题上下文中执行渲染回调。
+     *
+     * 部件模板的覆盖解析依赖 ThemeData 的「当前主题」，预览编辑器渲染的主题
+     * 通常不是全局激活主题。此方法在渲染期间临时切换到目标主题，渲染结束后
+     * 恢复，确保「看的是哪个主题，渲染的就是哪个主题」。
+     *
+     * @template T
+     * @param callable():T $callback
+     * @return T
+     */
+    private function withRenderTheme(int $themeId, callable $callback)
+    {
+        $theme = $this->resolveRenderTheme($themeId);
+        if (!$theme) {
+            return $callback();
+        }
+
+        $previousRenderTheme = $this->renderTheme;
+        $previousThemeData = ThemeData::getCurrentTheme();
+        $previousArea = ThemeData::getCurrentArea();
+        $shouldSwitchThemeData = (int)($previousThemeData?->getId() ?? 0) !== (int)$theme->getId();
+
+        $this->renderTheme = $theme;
+        if ($shouldSwitchThemeData) {
+            ThemeData::setCurrentTheme($theme);
+            ThemeData::setCurrentArea('frontend');
+        }
+
+        try {
+            return $callback();
+        } finally {
+            $this->renderTheme = $previousRenderTheme;
+            if ($shouldSwitchThemeData) {
+                ThemeData::setCurrentTheme($previousThemeData);
+                ThemeData::setCurrentArea($previousArea);
+            }
+        }
+    }
+
+    /**
+     * 按 ID 加载渲染主题（带缓存）。0 或无效 ID 返回 null（沿用默认上下文）。
+     */
+    private function resolveRenderTheme(int $themeId): ?WelineTheme
+    {
+        if ($themeId <= 0) {
+            return null;
+        }
+
+        if (array_key_exists($themeId, $this->renderThemeCache)) {
+            return $this->renderThemeCache[$themeId];
+        }
+
+        $theme = null;
+        try {
+            $model = clone ObjectManager::getInstance(WelineTheme::class);
+            $model->clearData()->clearQuery()->load($themeId);
+            if ($model->getId()) {
+                $theme = $model;
+            }
+        } catch (\Throwable) {
+            $theme = null;
+        }
+
+        $this->renderThemeCache[$themeId] = $theme;
+        return $theme;
     }
 
     /**
@@ -671,12 +754,12 @@ class SlotRendererService
         }
 
         // 检查缓存
-        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, null, 'frontend');
+        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->renderTheme, 'frontend');
         if ($definition) {
             try {
                 $renderConfig = is_array($config) ? $config : [];
                 $renderConfig['_widget_instance_key'] = $this->widgetInstanceKey($widget, $renderConfig);
-                $html = $this->componentRenderer->render($definition, $renderConfig, null, [
+                $html = $this->componentRenderer->render($definition, $renderConfig, $this->renderTheme, [
                     'area' => 'frontend',
                     'preview_mode' => false,
                 ]);
@@ -718,18 +801,54 @@ class SlotRendererService
             return '';
         }
 
-        $templatePath = $widgetMeta['template'] ?? '';
-        if (!$templatePath) {
-            return '';
-        }
-
         // 合并默认配置
         $defaultConfig = [];
         foreach ($widgetMeta['params'] ?? [] as $key => $param) {
             $defaultConfig[$key] = $param['default'] ?? '';
         }
-        $finalConfig = array_merge($defaultConfig, $config);
+        $finalConfig = array_merge($defaultConfig, is_array($config) ? $config : []);
         $finalConfig['_widget_instance_key'] = $this->widgetInstanceKey($widget, $finalConfig);
+
+        $templateContent = (string)($widgetMeta['template_content'] ?? '');
+        if (trim($templateContent) !== '') {
+            try {
+                $renderer = ObjectManager::getInstance(WidgetRuntimeTemplateRenderer::class);
+                $html = $renderer->renderContent($templateContent, $finalConfig);
+                $html = is_string($html) ? $html : '';
+
+                if ($layoutId) {
+                    $wrapperAttrs = sprintf(
+                        'data-layout-id="%s" data-widget-code="%s" data-widget-module="%s" data-widget-type="%s"',
+                        htmlspecialchars((string)$layoutId),
+                        htmlspecialchars((string)$widgetCode),
+                        htmlspecialchars((string)$widgetModule),
+                        htmlspecialchars((string)$widgetType)
+                    );
+                    $widgetName = htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode));
+                    $html = sprintf(
+                        '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
+                        $wrapperAttrs,
+                        $widgetName,
+                        $html
+                    );
+                }
+
+                return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
+            } catch (\Throwable $throwable) {
+                if (defined('DEV') && DEV) {
+                    return sprintf(
+                        '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;">%s</div>',
+                        htmlspecialchars((string)$throwable->getMessage())
+                    );
+                }
+                return '';
+            }
+        }
+
+        $templatePath = $widgetMeta['template'] ?? '';
+        if (!$templatePath) {
+            return '';
+        }
 
         try {
             // 渲染部件模板 - 使用 fetch() 方法，它接受2个参数：fileName 和 data

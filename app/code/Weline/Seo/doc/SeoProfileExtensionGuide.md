@@ -1,5 +1,7 @@
 # SEO/GEO Profile Extension Guide
 
+> 中文说明见 [SEO结构化数据说明.md](SEO结构化数据说明.md)。模块文档索引见 [设计文档.md](设计文档.md)。
+
 This guide is the module contract for extending page-level SEO, structured data,
 sitemap metadata, and GEO feed facts through `Weline_Seo`.
 
@@ -38,14 +40,107 @@ Common keys:
     'product' => [],
     'item_list' => [],
     'faqs' => [],
+    'qa_list' => [],
     'schema_nodes' => [],
     'sitemap' => [],
     'geo' => [],
 ]
 ```
 
-List-style keys `schema_nodes`, `item_list`, and `faqs` are appended to existing
+List-style keys `schema_nodes`, `item_list`, `faqs`, and `qa_list` are appended to existing
 context. Other keys override or enrich existing context recursively.
+
+## Structure Layer
+
+`Weline_Seo` exposes a structure layer under `Weline\Seo\Structure` so modules can reuse
+normalized facts and let the framework render JSON-LD graph nodes.
+
+### Built-in types
+
+| Type | Context key | Normalizer base | NodeBuilder base | Built-in renderer |
+|------|-------------|-----------------|------------------|-------------------|
+| FAQ | `faqs` | `Faq\AbstractFaqStructureNormalizer` | `Faq\AbstractFaqStructureNodeBuilder` | `FaqStructureNodeBuilder` |
+| QA | `qa_list` | `Qa\AbstractQaStructureNormalizer` | `Qa\AbstractQaStructureNodeBuilder` | `QaStructureNodeBuilder` |
+| Product | `product` | `Product\AbstractProductStructureNormalizer` | `Product\AbstractProductStructureNodeBuilder` | `HeadRenderer` (for now) |
+| Article | `article` | `Article\AbstractArticleStructureNormalizer` | `Article\AbstractArticleStructureNodeBuilder` | `HeadRenderer` (for now) |
+| ItemList | `item_list` | `ItemList\AbstractItemListStructureNormalizer` | `ItemList\AbstractItemListStructureNodeBuilder` | `HeadRenderer` (for now) |
+| Review | `reviews` | `Review\AbstractReviewStructureNormalizer` | `Review\AbstractReviewStructureNodeBuilder` | module `schema_nodes` |
+| Breadcrumb | `breadcrumbs` | `Breadcrumb\AbstractBreadcrumbStructureNormalizer` | `Breadcrumb\AbstractBreadcrumbStructureNodeBuilder` | `HeadRenderer` (for now) |
+| Organization | `organization` | `Organization\AbstractOrganizationStructureNormalizer` | `Organization\AbstractOrganizationStructureNodeBuilder` | `HeadRenderer` (for now) |
+
+Shared contracts:
+
+- `SeoStructureNodeBuilderInterface`
+- `AbstractSeoStructureNodeBuilder`
+- `AbstractSeoStructureNormalizer`
+- `SeoStructureContextKeys`
+- `SeoStructureType`
+
+### Register a custom structure builder
+
+Place a class under `extends/module/Weline_Seo/SeoStructureNodeBuilder` and implement
+`SeoStructureNodeBuilderInterface`, or extend the matching `Abstract*StructureNodeBuilder`.
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Vendor\Module\Extends\Module\Weline_Seo\SeoStructureNodeBuilder;
+
+use Weline\Seo\Structure\Review\AbstractReviewStructureNodeBuilder;
+
+class CustomReviewStructureNodeBuilder extends AbstractReviewStructureNodeBuilder
+{
+  protected function buildFactNodes(array $context, string $url): array
+  {
+      // return Review / AggregateRating nodes
+      return [];
+  }
+}
+```
+
+`SeoStructureRegistry` loads built-in FAQ/QA builders first, then all extended builders.
+
+### FAQ / QA rules
+
+Current built-in structure builders:
+
+- `FaqStructureNormalizer` + `FaqStructureNodeBuilder` for `FAQPage`
+- `QaStructureNodeBuilder` for `QAPage`
+
+Rules:
+
+1. Put FAQ facts in `faqs` using the normalized shape below. Do not hand-write `FAQPage`
+   JSON-LD in templates or providers.
+2. Put Q&A listing facts in `qa_list`. The framework renders `QAPage` from that list.
+3. Use `Weline_Seo::integration::head_context_resolve` when facts come from theme widgets or
+   other cross-cutting sources.
+
+FAQ normalized shape:
+
+```php
+[
+    ['question' => '问题', 'answer' => '答案'],
+]
+```
+
+Accepted aliases before normalization:
+
+- question: `question`, `q`, `title`, `name`
+- answer: `answer`, `a`, `text`, `content`, nested `acceptedAnswer.text`
+
+Example controller integration:
+
+```php
+$this->setData('faqs', [
+    ['question' => __('如何下单？'), 'answer' => __('在商品页加入购物车后结账。')],
+]);
+$this->setData('seo', [
+    'page_type' => 'faq',
+    'title' => __('常见问题'),
+]);
+```
 
 ## Minimal Provider
 

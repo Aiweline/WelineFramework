@@ -1,0 +1,172 @@
+<?php
+/**
+ * 社媒账户部件
+ *
+ * @widget.code {social-accounts}
+ * @widget.name {社媒账户}
+ * @widget.description {展示 Weline_Social 中已启用展示的社媒账户链接}
+ * @widget.type {social}
+ * @widget.area {frontend}
+ * @widget.position {["footer","sidebar","content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {social}
+ * @widget.supports {["layout-footer-social","layout-global-footer-social","social"]}
+ * @widget.exclusive {false}
+ *
+ * @param title {default="",name="标题",description="部件标题，可选",type=string}
+ * @param layout {default="horizontal",name="布局",description="图标布局",type=select,options={horizontal:"横向",vertical:"纵向"}}
+ * @param icon_size {default="medium",name="图标尺寸",description="图标大小",type=select,options={small:"小号",medium:"中号",large:"大号"}}
+ * @param icon_style {default="color",name="图标样式",description="图标显示样式",type=select,options={color:"平台色",mono:"单色",outline:"线框"}}
+ * @param show_label {default="0",name="显示名称",description="是否显示账户名称",type=bool}
+ * @param platforms {default="",name="平台过滤",description="逗号分隔的平台 code，留空为全部",type=string}
+ * @param limit {default="24",name="数量限制",description="最多显示账户数",type=number}
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Social\Service\SocialAccountService;
+
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$title = trim((string)($this->getData('title') ?? ''));
+$layout = in_array((string)($this->getData('layout') ?? 'horizontal'), ['horizontal', 'vertical'], true)
+    ? (string)$this->getData('layout')
+    : 'horizontal';
+$iconSize = in_array((string)($this->getData('icon_size') ?? 'medium'), ['small', 'medium', 'large'], true)
+    ? (string)$this->getData('icon_size')
+    : 'medium';
+$iconStyle = in_array((string)($this->getData('icon_style') ?? 'color'), ['color', 'mono', 'outline'], true)
+    ? (string)$this->getData('icon_style')
+    : 'color';
+$showLabel = in_array(strtolower((string)($this->getData('show_label') ?? '0')), ['1', 'true', 'yes', 'on'], true);
+$platforms = array_values(array_filter(array_map(
+    static fn(string $value): string => strtolower(trim($value)),
+    explode(',', (string)($this->getData('platforms') ?? ''))
+)));
+$limit = max(1, min(100, (int)($this->getData('limit') ?? 24)));
+
+/** @var SocialAccountService $accountService */
+$accountService = ObjectManager::getInstance(SocialAccountService::class);
+$accounts = $accountService->listWidgetAccounts([
+    'platforms' => $platforms,
+    'limit' => $limit,
+]);
+
+if ($accounts === []) {
+    return;
+}
+
+$widgetId = 'weline-social-accounts-' . substr(sha1(uniqid('', true)), 0, 12);
+?>
+<nav id="<?= $h($widgetId) ?>"
+     class="weline-social-accounts-widget"
+     data-layout="<?= $h($layout) ?>"
+     data-size="<?= $h($iconSize) ?>"
+     data-style="<?= $h($iconStyle) ?>"
+     aria-label="<?= $h((string)__('社媒账户')) ?>">
+    <?php if ($title !== ''): ?>
+        <h4 class="weline-social-accounts-title"><?= $h(__($title)) ?></h4>
+    <?php endif; ?>
+    <div class="weline-social-accounts-list">
+        <?php foreach ($accounts as $account): ?>
+            <?php
+            if (!is_array($account)) {
+                continue;
+            }
+            $url = (string)($account['profile_url'] ?? '');
+            if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
+                continue;
+            }
+            $name = (string)($account['account_name'] ?? $account['platform_title'] ?? $account['platform_code'] ?? '');
+            $platformCode = (string)($account['platform_code'] ?? '');
+            $brandColor = (string)($account['brand_color'] ?? '#475569');
+            ?>
+            <a class="weline-social-account-link"
+               href="<?= $h($url) ?>"
+               target="_blank"
+               rel="noopener noreferrer"
+               title="<?= $h($name) ?>"
+               style="--weline-social-brand: <?= $h($brandColor) ?>;">
+                <span class="weline-social-account-icon" aria-hidden="true"><?= (string)($account['icon_svg'] ?? '') ?></span>
+                <?php if ($showLabel): ?>
+                    <span class="weline-social-account-label"><?= $h($name) ?></span>
+                <?php else: ?>
+                    <span class="visually-hidden"><?= $h($name !== '' ? $name : $platformCode) ?></span>
+                <?php endif; ?>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</nav>
+
+<style>
+#<?= $widgetId ?> {
+    --weline-social-size: 38px;
+    display: block;
+}
+#<?= $widgetId ?>[data-size="small"] { --weline-social-size: 30px; }
+#<?= $widgetId ?>[data-size="large"] { --weline-social-size: 48px; }
+#<?= $widgetId ?> .weline-social-accounts-title {
+    margin: 0 0 12px;
+    font-size: 16px;
+    line-height: 1.3;
+    font-weight: 600;
+}
+#<?= $widgetId ?> .weline-social-accounts-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+#<?= $widgetId ?>[data-layout="vertical"] .weline-social-accounts-list {
+    align-items: flex-start;
+    flex-direction: column;
+}
+#<?= $widgetId ?> .weline-social-account-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: inherit;
+    text-decoration: none;
+}
+#<?= $widgetId ?> .weline-social-account-icon {
+    width: var(--weline-social-size);
+    height: var(--weline-social-size);
+    display: inline-grid;
+    place-items: center;
+    border-radius: 8px;
+}
+#<?= $widgetId ?> .weline-social-account-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+#<?= $widgetId ?>[data-style="mono"] .weline-social-account-icon svg rect {
+    fill: #334155;
+}
+#<?= $widgetId ?>[data-style="outline"] .weline-social-account-icon {
+    border: 1px solid rgba(100, 116, 139, .45);
+    background: transparent;
+}
+#<?= $widgetId ?>[data-style="outline"] .weline-social-account-icon svg rect {
+    fill: transparent;
+}
+#<?= $widgetId ?>[data-style="outline"] .weline-social-account-icon svg text {
+    fill: var(--weline-social-brand, #334155);
+}
+#<?= $widgetId ?> .weline-social-account-label {
+    font-size: 14px;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+#<?= $widgetId ?> .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+</style>

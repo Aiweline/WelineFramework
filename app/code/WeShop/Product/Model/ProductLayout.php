@@ -16,19 +16,29 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Manager\ObjectManager;
 #[Table(comment: '产品布局表')]
-#[Index(name: 'idx_unique_product_layout', columns: ['product_id', 'layout_type'], type: 'UNIQUE', comment: '产品布局唯一索引')]
-#[Index(name: 'idx_product_id', columns: ['product_id'], type: 'KEY', comment: '产品ID索引')]
-#[Index(name: 'idx_layout_type', columns: ['layout_type'], type: 'KEY', comment: '布局类型索引')]
-#[Index(name: 'idx_is_active', columns: ['is_active'], type: 'KEY', comment: '启用状态索引')]
+#[Index(name: 'idx_unique_product_layout', columns: ['entity_type', 'product_id', 'layout_type'], type: 'UNIQUE', comment: '产品布局唯一索引')]
+#[Index(name: 'idx_weshop_product_layout_entity_type', columns: ['entity_type'], type: 'KEY', comment: '实体类型索引')]
+#[Index(name: 'idx_weshop_product_layout_product_id', columns: ['product_id'], type: 'KEY', comment: '产品ID索引')]
+#[Index(name: 'idx_weshop_product_layout_layout_type', columns: ['layout_type'], type: 'KEY', comment: '布局类型索引')]
+#[Index(name: 'idx_weshop_product_layout_is_active', columns: ['is_active'], type: 'KEY', comment: '启用状态索引')]
 class ProductLayout extends Model
 {
+    public const ENTITY_PRODUCT = 'product';
+    public const ENTITY_CATEGORY = 'category';
+    public const ENTITY_CATEGORY_PRODUCT_DEFAULT = 'category_product_default';
+    public const LAYOUT_TYPE_PRODUCT = 'product';
+    public const LAYOUT_TYPE_PRODUCT_DETAIL = 'product_detail';
+    public const LAYOUT_TYPE_CATEGORY = 'category';
+    public const LAYOUT_TYPE_CATEGORY_PRODUCT_DEFAULT = 'category_product_default';
     public const schema_table = 'weshop_product_layout';
     public const schema_primary_key = 'layout_id';
     public const indexer = 'weshop_product_layout';
     public array $_unit_primary_keys = ['layout_id'];
-    public array $_index_sort_keys = ['product_id', 'layout_type', 'is_active'];
+    public array $_index_sort_keys = ['entity_type', 'product_id', 'layout_type', 'is_active'];
     #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '布局ID')]
     public const schema_fields_ID = 'layout_id';
+    #[Col('varchar', 32, nullable: true, default: 'product', comment: 'Entity type')]
+    public const schema_fields_ENTITY_TYPE = 'entity_type';
     #[Col('int', 11, nullable: false, comment: '产品ID')]
     public const schema_fields_PRODUCT_ID = 'product_id';
     #[Col('varchar', 64, nullable: false, comment: '布局类型')]
@@ -45,6 +55,24 @@ class ProductLayout extends Model
     public const schema_fields_UPDATED_AT = 'updated_at';
 
     // ===== Getters and Setters =====
+    public function getEntityType(): string
+    {
+        $entityType = trim((string)$this->getData(self::schema_fields_ENTITY_TYPE));
+        return $entityType !== '' ? $entityType : self::ENTITY_PRODUCT;
+    }
+    public function setEntityType(string $entityType): static
+    {
+        $entityType = trim($entityType);
+        return $this->setData(self::schema_fields_ENTITY_TYPE, $entityType !== '' ? $entityType : self::ENTITY_PRODUCT);
+    }
+    public function getEntityId(): int
+    {
+        return $this->getProductId();
+    }
+    public function setEntityId(int $entityId): static
+    {
+        return $this->setProductId($entityId);
+    }
     public function getProductId(): int
     {
         return (int)$this->getData(self::schema_fields_PRODUCT_ID);
@@ -111,6 +139,7 @@ class ProductLayout extends Model
     public function save_before(): void
     {
         parent::save_before();
+        $this->setEntityType($this->getEntityType());
         $now = date('Y-m-d H:i:s');
         if (!$this->getId()) {
             $this->setCreatedAt($now);
@@ -122,8 +151,24 @@ class ProductLayout extends Model
      */
     public function getByProductAndType(int $productId, string $layoutType): ?static
     {
+        $layout = $this->getByEntityAndType(self::ENTITY_PRODUCT, $productId, $layoutType);
+        if ($layout) {
+            return $layout;
+        }
+
         $layout = $this->reset()
             ->where(self::schema_fields_PRODUCT_ID, $productId)
+            ->where(self::schema_fields_LAYOUT_TYPE, $layoutType)
+            ->where(self::schema_fields_IS_ACTIVE, 1)
+            ->find()
+            ->fetch();
+        return $layout->getId() ? $layout : null;
+    }
+    public function getByEntityAndType(string $entityType, int $entityId, string $layoutType): ?static
+    {
+        $layout = $this->reset()
+            ->where(self::schema_fields_ENTITY_TYPE, $entityType)
+            ->where(self::schema_fields_PRODUCT_ID, $entityId)
             ->where(self::schema_fields_LAYOUT_TYPE, $layoutType)
             ->where(self::schema_fields_IS_ACTIVE, 1)
             ->find()
@@ -135,8 +180,22 @@ class ProductLayout extends Model
      */
     public function getByProduct(int $productId): array
     {
+        $rows = $this->getByEntity(self::ENTITY_PRODUCT, $productId);
+        if ($rows !== []) {
+            return $rows;
+        }
+
         return $this->reset()
             ->where(self::schema_fields_PRODUCT_ID, $productId)
+            ->where(self::schema_fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetchArray();
+    }
+    public function getByEntity(string $entityType, int $entityId): array
+    {
+        return $this->reset()
+            ->where(self::schema_fields_ENTITY_TYPE, $entityType)
+            ->where(self::schema_fields_PRODUCT_ID, $entityId)
             ->where(self::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetchArray();

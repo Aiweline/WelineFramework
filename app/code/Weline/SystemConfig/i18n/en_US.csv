@@ -6,8 +6,19 @@
 "在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。","Triggered after configuration is successfully written to the database, notifying other modules that the configuration has changed. The Server module listens for this event to detect configuration changes."
 "SystemConfig query provider does not support: %{1}","SystemConfig query provider does not support: %{1}"
 "System config query","System config query"
-"Provides system config read and write operations.","Provides system config read and write operations."
-"Get a config value.","Get a config value."
+"Provides scope-aware system config read, write, version, and rollback operations.","Provides scope-aware system config read, write, version, and rollback operations."
+"Get a resolved config value.","Get a resolved config value."
+"Get a resolved config value with source and fallback metadata.","Get a resolved config value with source and fallback metadata."
+"Get resolved config values for a module.","Get resolved config values for a module."
+"Preview normalized scope and fallback scopes.","Preview normalized scope and fallback scopes."
+"Set a global compatibility config value.","Set a global compatibility config value."
+"Set one scoped config value and create a version batch.","Set one scoped config value and create a version batch."
+"Delete one scoped value so resolution inherits from fallback scopes.","Delete one scoped value so resolution inherits from fallback scopes."
+"Rollback a scoped config version batch.","Rollback a scoped config version batch."
+"List scoped config version batches.","List scoped config version batches."
+"Get one scoped config version detail with sensitive values masked.","Get one scoped config version detail with sensitive values masked."
 backend|frontend,backend|frontend
-"Get all config values for a module.","Get all config values for a module."
-"Set a config value.","Set a config value."
+保存配置失败，已回滚本次批次。%{1},保存配置失败，已回滚本次批次。%{1}
+"回滚配置版本 %{1}","回滚配置版本 %{1}"
+回滚配置失败，已恢复本次回滚前状态。%{1},回滚配置失败，已恢复本次回滚前状态。%{1}
+"当前 system_config 表尚未升级，不能保存非全局 scope 配置。","当前 system_config 表尚未升级，不能保存非全局 scope 配置。"

@@ -2,10 +2,10 @@
 /**
  * 联系我们页面布局。
  *
- * 布局负责页面框架，并向可视化编辑器暴露可替换插槽。插槽本体内容就是未替换时的默认内容。
+ * Theme 只提供页面骨架、slot 协议和默认兜底内容；真实客服、FAQ 或表单可以通过 hook/slot 接入。
  *
  * @meta.name {default="联系我们页面布局",name="联系我们页面布局",description="Theme 自有的联系我们页面布局样本"}
- * @meta.description {default="包含 header、面包屑、联系主视觉、联系方式、表单、常见问题和 footer",name="描述",description="带布局码插槽的灵活联系我们页面布局"}
+ * @meta.description {default="包含 header、面包屑、联系主视觉、联系方式、表单、FAQ 和 footer",name="描述",description="带布局级 slot 的联系我们默认页面"}
  * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="联系我们页面通常允许访客访问"}
  * @param.title {default="联系我们",name="页面标题",description="联系我们页面标题"}
  * @param.subtitle {default="告诉我们你需要什么，支持团队会将请求分派给合适的处理人。",name="页面副标题",description="联系我们页面引导文案"}
@@ -24,9 +24,11 @@ $contactEmail = (string)($meta['contactEmail'] ?? 'support@example.com');
 $contactPhone = (string)($meta['contactPhone'] ?? '+1 000 000 0000');
 $contactHours = (string)($meta['contactHours'] ?? __('周一至周五，9:00 - 18:00'));
 $accountUrl = $this->getUrl('customer/account');
+$contactUrl = $this->getUrl('contact');
+$mailHref = 'mailto:' . $contactEmail;
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
@@ -36,41 +38,39 @@ $accountUrl = $this->getUrl('customer/account');
             margin: 0;
             min-height: 100vh;
             color: var(--weline-layout-text-primary, #172033);
-            background: var(--weline-layout-surface-primary, #fff);
+            background: var(--weline-layout-surface-primary, #ffffff);
         }
 
         .contact-layout__page {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+            min-height: 0;
+            display: block;
         }
 
         .contact-layout__breadcrumb {
-            border-bottom: 1px solid var(--weline-layout-border-subtle, #e4e8f0);
+            border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color-subtle, #e4e8f0);
             background: var(--weline-layout-surface-secondary, #f8fafc);
         }
 
         .contact-layout__main {
-            flex: 1 0 auto;
             width: 100%;
         }
 
         .contact-layout__inner {
-            width: min(1120px, calc(100% - 40px));
+            width: min(var(--weline-layout-content-max-width, 1120px), calc(100% - (var(--weline-layout-content-padding-inline, 20px) * 2)));
             margin: 0 auto;
-            padding: 48px 0 72px;
+            padding: var(--weline-layout-spacing-2xl, 48px) 0 var(--weline-layout-spacing-3xl, 64px);
         }
 
         .contact-layout__hero-grid,
         .contact-layout__body-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
-            gap: 24px;
+            grid-template-columns: minmax(0, 1.25fr) minmax(var(--sidebar-width, 280px), .75fr);
+            gap: var(--weline-layout-spacing-lg, 24px);
             align-items: stretch;
         }
 
         .contact-layout__body-grid {
-            margin-top: 24px;
+            margin-top: var(--weline-layout-spacing-lg, 24px);
             align-items: start;
         }
 
@@ -78,25 +78,25 @@ $accountUrl = $this->getUrl('customer/account');
         .contact-layout__panel,
         .contact-layout__method,
         .contact-layout__faq-item {
-            border: 1px solid var(--weline-layout-border-subtle, #e4e8f0);
-            border-radius: 8px;
-            background: var(--weline-layout-surface-primary, #fff);
+            border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color-subtle, #e4e8f0);
+            border-radius: var(--weline-layout-radius-lg, 8px);
+            background: var(--weline-layout-surface-primary, #ffffff);
         }
 
         .contact-layout__section {
-            padding: 32px;
+            padding: var(--weline-layout-spacing-xl, 32px);
         }
 
         .contact-layout__panel {
-            padding: 28px;
+            padding: var(--weline-layout-spacing-xl, 32px);
             background: var(--weline-layout-surface-secondary, #f8fafc);
         }
 
         .contact-layout__eyebrow {
             display: inline-flex;
-            margin: 0 0 14px;
-            font-size: 13px;
-            font-weight: 700;
+            margin: 0 0 var(--weline-layout-spacing-sm, 8px);
+            font-size: var(--weline-layout-font-size-sm, 14px);
+            font-weight: var(--weline-layout-font-weight-bold, 700);
             color: var(--weline-layout-link-color, #0f766e);
         }
 
@@ -109,37 +109,37 @@ $accountUrl = $this->getUrl('customer/account');
         }
 
         .contact-layout h1 {
-            font-size: 44px;
-            line-height: 1.05;
+            font-size: clamp(var(--weline-layout-font-size-4xl, 32px), 5vw, 48px);
+            line-height: var(--weline-layout-line-height-tight, 1.15);
         }
 
         .contact-layout h2 {
-            font-size: 24px;
-            line-height: 1.2;
+            font-size: var(--weline-layout-font-size-2xl, 24px);
+            line-height: var(--weline-layout-line-height-tight, 1.2);
         }
 
         .contact-layout h3 {
-            font-size: 18px;
-            line-height: 1.25;
+            font-size: var(--weline-layout-font-size-lg, 18px);
+            line-height: var(--weline-layout-line-height-tight, 1.25);
         }
 
         .contact-layout p {
             margin: 0;
             color: var(--weline-layout-text-secondary, #687286);
-            line-height: 1.7;
+            line-height: var(--weline-layout-line-height-relaxed, 1.7);
         }
 
         .contact-layout__lead {
-            max-width: 680px;
-            margin-top: 18px;
-            font-size: 17px;
+            max-width: calc(var(--weline-layout-content-max-width, 1120px) / 2);
+            margin-top: var(--weline-layout-spacing-md, 16px);
+            font-size: var(--weline-layout-font-size-lg, 18px);
         }
 
         .contact-layout__actions {
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
-            margin-top: 28px;
+            gap: var(--weline-layout-spacing-sm, 12px);
+            margin-top: var(--weline-layout-spacing-xl, 28px);
         }
 
         .contact-layout__button {
@@ -147,13 +147,13 @@ $accountUrl = $this->getUrl('customer/account');
             align-items: center;
             justify-content: center;
             min-height: 44px;
-            padding: 0 18px;
-            border-radius: 6px;
-            border: 1px solid var(--weline-layout-border-strong, #cbd5e1);
+            padding: 0 var(--weline-layout-spacing-md, 16px);
+            border-radius: var(--weline-layout-radius-md, 6px);
+            border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color-strong, #cbd5e1);
             text-decoration: none;
-            font-weight: 700;
+            font-weight: var(--weline-layout-font-weight-bold, 700);
             color: var(--weline-layout-text-primary, #172033);
-            background: var(--weline-layout-surface-primary, #fff);
+            background: var(--weline-layout-surface-primary, #ffffff);
         }
 
         .contact-layout__button:hover {
@@ -164,37 +164,37 @@ $accountUrl = $this->getUrl('customer/account');
         .contact-layout__button--primary {
             border-color: var(--weline-layout-link-color, #0f766e);
             background: var(--weline-layout-link-color, #0f766e);
-            color: #fff;
+            color: var(--weline-theme-on-primary, #ffffff);
         }
 
         .contact-layout__method-list,
         .contact-layout__faq-list {
             display: grid;
-            gap: 14px;
+            gap: var(--weline-layout-spacing-sm, 14px);
         }
 
         .contact-layout__method {
-            padding: 20px;
+            padding: var(--weline-layout-spacing-lg, 20px);
         }
 
         .contact-layout__method p,
         .contact-layout__faq-item p {
-            margin-top: 8px;
+            margin-top: var(--weline-layout-spacing-xs, 8px);
         }
 
         .contact-layout__form {
             display: grid;
-            gap: 16px;
+            gap: var(--weline-layout-spacing-md, 16px);
         }
 
         .contact-layout__field {
             display: grid;
-            gap: 7px;
+            gap: var(--weline-layout-spacing-xs, 7px);
         }
 
         .contact-layout__field label {
-            font-size: 14px;
-            font-weight: 700;
+            font-size: var(--weline-layout-font-size-sm, 14px);
+            font-weight: var(--weline-layout-font-weight-bold, 700);
             color: var(--weline-layout-text-primary, #172033);
         }
 
@@ -202,11 +202,11 @@ $accountUrl = $this->getUrl('customer/account');
         .contact-layout__field textarea {
             width: 100%;
             min-height: 44px;
-            border: 1px solid var(--weline-layout-border-subtle, #d8dee9);
-            border-radius: 6px;
-            padding: 10px 12px;
+            border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--weline-theme-border-color-subtle, #d8dee9);
+            border-radius: var(--weline-layout-radius-md, 6px);
+            padding: var(--weline-layout-spacing-sm, 10px) var(--weline-layout-spacing-md, 12px);
             color: var(--weline-layout-text-primary, #172033);
-            background: #fff;
+            background: var(--weline-layout-surface-primary, #ffffff);
             box-sizing: border-box;
         }
 
@@ -216,18 +216,30 @@ $accountUrl = $this->getUrl('customer/account');
         }
 
         .contact-layout__faq-item {
-            padding: 20px;
+            padding: var(--weline-layout-spacing-lg, 20px);
         }
 
         .contact-layout__side-stack {
             display: grid;
-            gap: 24px;
+            gap: var(--weline-layout-spacing-lg, 24px);
+        }
+
+        .contact-layout__note {
+            margin-top: var(--weline-layout-spacing-sm, 10px);
+        }
+
+        .contact-layout__stack-list {
+            margin-top: var(--weline-layout-spacing-md, 16px);
+        }
+
+        .contact-layout__form--spaced {
+            margin-top: var(--weline-layout-spacing-lg, 24px);
         }
 
         @media (max-width: 860px) {
             .contact-layout__inner {
-                width: min(100% - 28px, 1120px);
-                padding: 32px 0 56px;
+                width: min(100% - (var(--weline-layout-content-padding-inline, 14px) * 2), var(--weline-layout-content-max-width, 1120px));
+                padding: var(--weline-layout-spacing-xl, 32px) 0 var(--weline-layout-spacing-2xl, 56px);
             }
 
             .contact-layout__hero-grid,
@@ -237,11 +249,7 @@ $accountUrl = $this->getUrl('customer/account');
 
             .contact-layout__section,
             .contact-layout__panel {
-                padding: 24px;
-            }
-
-            .contact-layout h1 {
-                font-size: 34px;
+                padding: var(--weline-layout-spacing-lg, 24px);
             }
         }
     </style>
@@ -277,21 +285,25 @@ $accountUrl = $this->getUrl('customer/account');
                             accept="layout-contact-hero,layout-contact-content,layout-default-content,banner,content,cta"
                             reject="header,footer,navigation,product,category,cart,checkout"
                             multiple="false"
-                            position="hero"
+                            position="content"
                             class="contact-layout__hero-slot">
-                        <section class="contact-layout__section" aria-labelledby="contact-layout-title">
-                            <span class="contact-layout__eyebrow"><?= __('客户支持') ?></span>
-                            <h1 id="contact-layout-title"><?= $escape($title) ?></h1>
-                            <p class="contact-layout__lead"><?= $escape($subtitle) ?></p>
-                            <div class="contact-layout__actions">
-                                <a class="contact-layout__button contact-layout__button--primary" href="javascript:void(0)" data-contact-chat>
-                                    <?= __('打开在线客服') ?>
-                                </a>
-                                <a class="contact-layout__button" href="<?= $escape($accountUrl) ?>">
-                                    <?= __('查看我的账户') ?>
-                                </a>
-                            </div>
-                        </section>
+                        <w:hook>
+                            Weline_Theme::frontend::layouts::contact::hero
+                            <else/>
+                            <section class="contact-layout__section" aria-labelledby="contact-layout-title">
+                                <span class="contact-layout__eyebrow"><?= __('客户支持') ?></span>
+                                <h1 id="contact-layout-title"><?= $escape($title) ?></h1>
+                                <p class="contact-layout__lead"><?= $escape($subtitle) ?></p>
+                                <div class="contact-layout__actions">
+                                    <a class="contact-layout__button contact-layout__button--primary" href="<?= $escape($mailHref) ?>">
+                                        <?= __('发送邮件') ?>
+                                    </a>
+                                    <a class="contact-layout__button" href="<?= $escape($accountUrl) ?>">
+                                        <?= __('查看我的账户') ?>
+                                    </a>
+                                </div>
+                            </section>
+                        </w:hook>
                     </w:slot>
 
                     <w:slot id="contact-help-panel"
@@ -301,15 +313,19 @@ $accountUrl = $this->getUrl('customer/account');
                             multiple="false"
                             position="sidebar"
                             class="contact-layout__help-slot">
-                        <aside class="contact-layout__panel">
-                            <h2><?= __('需要订单支持？') ?></h2>
-                            <p style="margin-top: 12px;"><?= __('请附上订单号、邮箱和简短问题描述，方便团队快速分派处理。') ?></p>
-                            <div class="contact-layout__actions">
-                                <a class="contact-layout__button contact-layout__button--primary" href="<?= $escape($accountUrl) ?>">
-                                    <?= __('进入支持中心') ?>
-                                </a>
-                            </div>
-                        </aside>
+                        <w:hook>
+                            Weline_Theme::frontend::layouts::contact::help
+                            <else/>
+                            <aside class="contact-layout__panel">
+                                <h2><?= __('需要订单支持？') ?></h2>
+                                <p class="contact-layout__note"><?= __('请附上订单号、邮箱和简短问题描述，方便团队快速分派处理。') ?></p>
+                                <div class="contact-layout__actions">
+                                    <a class="contact-layout__button contact-layout__button--primary" href="<?= $escape($accountUrl) ?>">
+                                        <?= __('进入支持中心') ?>
+                                    </a>
+                                </div>
+                            </aside>
+                        </w:hook>
                     </w:slot>
                 </div>
 
@@ -322,23 +338,27 @@ $accountUrl = $this->getUrl('customer/account');
                                 multiple="true"
                                 position="sidebar"
                                 class="contact-layout__methods-slot">
-                            <section class="contact-layout__panel" aria-labelledby="contact-methods-title">
-                                <h2 id="contact-methods-title"><?= __('联系方式') ?></h2>
-                                <div class="contact-layout__method-list" style="margin-top: 18px;">
-                                    <article class="contact-layout__method">
-                                        <h3><?= __('邮箱') ?></h3>
-                                        <p><?= $escape($contactEmail) ?></p>
-                                    </article>
-                                    <article class="contact-layout__method">
-                                        <h3><?= __('电话') ?></h3>
-                                        <p><?= $escape($contactPhone) ?></p>
-                                    </article>
-                                    <article class="contact-layout__method">
-                                        <h3><?= __('服务时间') ?></h3>
-                                        <p><?= $escape($contactHours) ?></p>
-                                    </article>
-                                </div>
-                            </section>
+                            <w:hook>
+                                Weline_Theme::frontend::layouts::contact::methods
+                                <else/>
+                                <section class="contact-layout__panel" aria-labelledby="contact-methods-title">
+                                    <h2 id="contact-methods-title"><?= __('联系方式') ?></h2>
+                                    <div class="contact-layout__method-list contact-layout__stack-list">
+                                        <article class="contact-layout__method">
+                                            <h3><?= __('邮箱') ?></h3>
+                                            <p><?= $escape($contactEmail) ?></p>
+                                        </article>
+                                        <article class="contact-layout__method">
+                                            <h3><?= __('电话') ?></h3>
+                                            <p><?= $escape($contactPhone) ?></p>
+                                        </article>
+                                        <article class="contact-layout__method">
+                                            <h3><?= __('服务时间') ?></h3>
+                                            <p><?= $escape($contactHours) ?></p>
+                                        </article>
+                                    </div>
+                                </section>
+                            </w:hook>
                         </w:slot>
 
                         <w:slot id="contact-faq"
@@ -348,19 +368,23 @@ $accountUrl = $this->getUrl('customer/account');
                                 multiple="true"
                                 position="sidebar"
                                 class="contact-layout__faq-slot">
-                            <section class="contact-layout__panel" aria-labelledby="contact-faq-title">
-                                <h2 id="contact-faq-title"><?= __('提交前请确认') ?></h2>
-                                <div class="contact-layout__faq-list" style="margin-top: 18px;">
-                                    <article class="contact-layout__faq-item">
-                                        <h3><?= __('订单问题') ?></h3>
-                                        <p><?= __('请提供订单号和下单时使用的邮箱。') ?></p>
-                                    </article>
-                                    <article class="contact-layout__faq-item">
-                                        <h3><?= __('退换货') ?></h3>
-                                        <p><?= __('商品照片和物流信息可以帮助团队更快处理退换货请求。') ?></p>
-                                    </article>
-                                </div>
-                            </section>
+                            <w:hook>
+                                Weline_Theme::frontend::layouts::contact::faq
+                                <else/>
+                                <section class="contact-layout__panel" aria-labelledby="contact-faq-title">
+                                    <h2 id="contact-faq-title"><?= __('提交前请确认') ?></h2>
+                                    <div class="contact-layout__faq-list contact-layout__stack-list">
+                                        <article class="contact-layout__faq-item">
+                                            <h3><?= __('订单问题') ?></h3>
+                                            <p><?= __('请提供订单号和下单时使用的邮箱。') ?></p>
+                                        </article>
+                                        <article class="contact-layout__faq-item">
+                                            <h3><?= __('退换货') ?></h3>
+                                            <p><?= __('商品照片和物流信息可以帮助团队更快处理退换货请求。') ?></p>
+                                        </article>
+                                    </div>
+                                </section>
+                            </w:hook>
                         </w:slot>
                     </div>
 
@@ -371,27 +395,31 @@ $accountUrl = $this->getUrl('customer/account');
                             multiple="false"
                             position="content"
                             class="contact-layout__form-slot">
-                        <section class="contact-layout__section" aria-labelledby="contact-form-title">
-                            <h2 id="contact-form-title"><?= __('发送消息') ?></h2>
-                            <p style="margin-top: 10px;"><?= __('请尽量提供完整背景，减少客服再次确认基础信息的等待时间。') ?></p>
-                            <form class="contact-layout__form" action="/contact" method="post" style="margin-top: 22px;">
-                                <div class="contact-layout__field">
-                                    <label for="contact-name"><?= __('姓名') ?></label>
-                                    <input id="contact-name" name="name" type="text" autocomplete="name">
-                                </div>
-                                <div class="contact-layout__field">
-                                    <label for="contact-email"><?= __('邮箱') ?></label>
-                                    <input id="contact-email" name="email" type="email" autocomplete="email">
-                                </div>
-                                <div class="contact-layout__field">
-                                    <label for="contact-message"><?= __('消息内容') ?></label>
-                                    <textarea id="contact-message" name="message"></textarea>
-                                </div>
-                                <button class="contact-layout__button contact-layout__button--primary" type="submit">
-                                    <?= __('提交请求') ?>
-                                </button>
-                            </form>
-                        </section>
+                        <w:hook>
+                            Weline_Theme::frontend::layouts::contact::form
+                            <else/>
+                            <section class="contact-layout__section" aria-labelledby="contact-form-title">
+                                <h2 id="contact-form-title"><?= __('发送消息') ?></h2>
+                                <p class="contact-layout__note"><?= __('请尽量提供完整背景，减少客服再次确认基础信息的等待时间。') ?></p>
+                                <form class="contact-layout__form contact-layout__form--spaced" action="<?= $escape($contactUrl) ?>" method="post">
+                                    <div class="contact-layout__field">
+                                        <label for="contact-name"><?= __('姓名') ?></label>
+                                        <input id="contact-name" name="name" type="text" autocomplete="name">
+                                    </div>
+                                    <div class="contact-layout__field">
+                                        <label for="contact-email"><?= __('邮箱') ?></label>
+                                        <input id="contact-email" name="email" type="email" autocomplete="email">
+                                    </div>
+                                    <div class="contact-layout__field">
+                                        <label for="contact-message"><?= __('消息内容') ?></label>
+                                        <textarea id="contact-message" name="message"></textarea>
+                                    </div>
+                                    <button class="contact-layout__button contact-layout__button--primary" type="submit">
+                                        <?= __('提交请求') ?>
+                                    </button>
+                                </form>
+                            </section>
+                        </w:hook>
                     </w:slot>
                 </div>
             </div>
@@ -404,26 +432,6 @@ $accountUrl = $this->getUrl('customer/account');
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
         </if>
     </div>
-
-    <script>
-    document.addEventListener('click', function (event) {
-        var trigger = event.target.closest('[data-contact-chat]');
-        if (!trigger) {
-            return;
-        }
-
-        event.preventDefault();
-        if (typeof CustomerServiceWidget !== 'undefined' && typeof CustomerServiceWidget.toggleChat === 'function') {
-            CustomerServiceWidget.toggleChat();
-            return;
-        }
-
-        var widgetButton = document.getElementById('cs-chat-button');
-        if (widgetButton) {
-            widgetButton.click();
-        }
-    });
-    </script>
 
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>

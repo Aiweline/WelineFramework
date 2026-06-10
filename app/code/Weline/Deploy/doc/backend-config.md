@@ -79,7 +79,6 @@ Webhook 配置用于 `dev/deploy/webhook.php` 和 `dev/deploy/webhook.sh listen`
 建议填写：
 
 - `Webhook 密钥`：Gitee/GitHub Webhook Secret
-- `Webhook 分支`：只允许该分支触发部署，例如 `master`
 - `请求路径`：通常是 `/deploy`
 - `Bash 命令`：通常是 `bash`，服务器路径特殊时可填 `/bin/bash`
 - `监听地址` / `监听端口`：仅常驻监听模式使用，PHP 入口方式一般不依赖它们
@@ -91,6 +90,105 @@ Git 平台 Webhook -> Nginx/Caddy -> dev/deploy/webhook.php -> webhook.sh deploy
 ```
 
 `webhook.php` 会先读取后台配置；如果后台或数据库不可用，再回退 `dev/deploy/.config`。
+
+### 5.1 服务器 Nginx 配置
+
+在服务器 Nginx 中添加以下配置，将 Webhook 请求转发到 PHP 入口：
+
+```nginx
+location = /deploy {
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME /www/wwwroot/weline/dev/deploy/webhook.php;
+    fastcgi_param DEPLOY_CONFIG_FILE /www/wwwroot/weline/dev/deploy/.config;
+    fastcgi_pass 127.0.0.1:9000;
+}
+```
+
+健康检查（验证 Webhook 入口是否可达）：
+
+```bash
+curl -s 'https://你的域名/deploy?health=1'
+# 返回 {"ok":true} 表示正常
+```
+
+### 5.2 Gitee 配置步骤
+
+1. 打开 Gitee 仓库页面，点击顶部「管理」。
+2. 左侧菜单找到「WebHooks」，点击「添加 WebHook」。
+3. 填写以下信息：
+   - **URL**：`https://你的域名/deploy`
+   - **密码/Token**：填写后台「Webhook 密钥」中保存的值
+   - **触发事件**：勾选「Push」
+   - **数据格式**：选择「JSON」
+4. 点击「保存并启用」。
+
+验证（在专用部署环境执行）：
+
+```bash
+curl -s -X POST 'https://你的域名/deploy' \
+  -H 'Content-Type: application/json' \
+  -H 'X-Gitee-Token: 你的密钥' \
+  --data '{"ref":"refs/heads/master"}'
+```
+
+返回 `{"ok":true}` 表示部署触发成功。
+
+Gitee 兼容两种鉴权形式：`X-Gitee-Token` 直接等于密钥，或 `X-Gitee-Timestamp` + `X-Gitee-Token` HMAC 签名。
+
+### 5.3 GitHub 配置步骤
+
+1. 打开 GitHub 仓库页面，点击「Settings」。
+2. 左侧菜单找到「Webhooks」，点击「Add webhook」。
+3. 填写以下信息：
+   - **Payload URL**：`https://你的域名/deploy`
+   - **Content type**：选择 `application/json`
+   - **Secret**：填写后台「Webhook 密钥」中保存的值
+   - **Events**：选择「Just the push event」
+4. 勾选「Active」，点击「Add webhook」。
+
+验证（在专用部署环境执行）：
+
+```bash
+curl -s -X POST 'https://你的域名/deploy' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer 你的密钥' \
+  --data '{"ref":"refs/heads/main"}'
+```
+
+GitHub 校验签名算法为 `HMAC-SHA256`（`X-Hub-Signature-256` 头），密钥就是后台填写的「Webhook 密钥」。
+
+### 5.4 其他平台（通用）
+
+本系统兼容标准 Webhook 协议，支持以下鉴权方式：
+
+| 方式 | 说明 |
+|------|------|
+| `Authorization: Bearer <密钥>` | 通用 HTTP Bearer Token |
+| `?token=<密钥>` | URL 参数传递 |
+| `X-Gitee-Token` | Gitee 专用（自动识别） |
+| `X-Hub-Signature-256` | GitHub 专用（HMAC-SHA256） |
+
+**Payload 要求**：请求体为 JSON 格式，必须包含 `ref` 字段：
+
+```json
+{"ref": "refs/heads/main"}
+```
+
+`ref` 值格式：
+
+- 分支推送：`refs/heads/<分支名>`（如 `refs/heads/main`）
+- Tag 推送：`refs/tags/<tag名>`（如 `refs/tags/v1.0.0`）
+
+**手动测试**：
+
+```bash
+curl -s -X POST 'https://你的域名/deploy' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer 你的密钥' \
+  --data '{"ref":"refs/heads/main"}'
+```
+
+返回 `{"ok":true}` 表示部署触发成功；`{"skipped":true,"reason":"branch_mismatch"}` 表示分支不匹配，不会部署。
 
 ## 6. 部署行为
 
@@ -110,7 +208,55 @@ Git 平台 Webhook -> Nginx/Caddy -> dev/deploy/webhook.php -> webhook.sh deploy
 - `部署后命令`
   - 可写 `php bin/w setup:upgrade --route && php bin/w server:reload -r` 这类后置动作。
 
-## 7. Cloudflare
+## 7. 触发模式
+
+触发模式决定 Webhook 何时触发部署。在后台配置页的「触发模式」区域，通过「部署触发方式」下拉框选择：
+
+| 模式 | 含义 | 版本来源 |
+|------|------|----------|
+| **仅分支 Push** | 只有分支推送触发部署，tag 推送被忽略 | commit 短 SHA（如 `a3f5c2d`） |
+| **仅 Tag Push** | 只有 tag 推送触发部署，分支推送被忽略 | tag 名（如 `v2.4.1`） |
+| **分支 + Tag 都生效** | 两者都触发（默认） | 分支 = SHA，tag = tag 名 |
+
+### 过滤规则
+
+- `分支过滤`（原 Webhook 分支）：留空匹配所有分支；填写后仅该分支的 push 触发部署。
+- `Tag 前缀过滤`：留空匹配所有 tag；填写（如 `v`）后仅匹配此前缀的 tag 才触发部署。
+
+### 向后兼容
+
+旧配置 `webhook_allow_tag_deploy`（0/1 开关）仍然生效：值为 `1` 时等价于「分支 + Tag 都生效」，值为 `0` 时等价于「仅分支 Push」。新配置 `deploy_trigger_mode` 优先。
+
+### Git 平台配置提示
+
+- **Gitee**：「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。
+- **GitHub**：默认「Just the push event」已包含分支和 tag push，无需额外配置。
+
+### 测试
+
+```bash
+# 测试分支触发
+curl -s -X POST 'https://你的域名/deploy' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer 你的密钥' \
+  --data '{"ref":"refs/heads/main"}'
+
+# 测试 Tag 触发
+curl -s -X POST 'https://你的域名/deploy' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer 你的密钥' \
+  --data '{"ref":"refs/tags/v1.0.0"}'
+```
+
+返回 `{"ok":true}` 表示部署触发成功；`{"skipped":true,"reason":"trigger_mode_tag_only"}` 表示当前触发模式不匹配，不会部署。
+
+### 发布探测 Token
+
+可选。填写后，访问 `GET /deploy/version?token=xxx` 可查看详细版本信息（含 commit、分支、Worker ID）。无 token 时，`GET /deploy/version` 仅返回最小信息（版本号、发布 ID、ref 类型）。
+
+发布历史页面：`系统管理 > 系统维护 > 发布历史`，可查看每次发布的版本、状态、耗时。
+
+## 8. Cloudflare
 
 Cloudflare 默认关闭。
 
@@ -122,8 +268,18 @@ Cloudflare 默认关闭。
 
 Token 至少需要对应 Zone 的 Cache Purge 权限。
 
-## 8. 关联指南
+## 9. 发布命令参考
 
-- `app/code/Weline/Deploy/doc/gitee-webhook.md`：Gitee Webhook 配置
-- `app/code/Weline/Deploy/doc/github-webhook.md`：GitHub Webhook 配置
+| 命令 | 说明 |
+|------|------|
+| `php bin/w deploy:build` | 仅 Git 拉取（轻量，不含版本戳） |
+| `php bin/w deploy:release` | 完整发布：Git + 后置命令 + 版本戳 + reload |
+| `php bin/w deploy:release -r refs/tags/v1.0.0` | Tag 发布 |
+| `php bin/w deploy:release:status` | 查看当前部署版本 |
+| `php bin/w deploy:release:wait --expect=v1.0.0` | CI 门禁：等待版本生效 |
+
+## 10. 关联指南
+
+- `app/code/Weline/Deploy/doc/gitee-webhook.md`：Gitee Webhook 完整配置
+- `app/code/Weline/Deploy/doc/github-webhook.md`：GitHub Webhook 完整配置
 - `dev/deploy/.config.exsample`：服务器文件配置示例

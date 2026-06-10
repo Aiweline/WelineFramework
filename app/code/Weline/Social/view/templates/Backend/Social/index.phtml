@@ -1,0 +1,1103 @@
+<?php
+$pageTitle = (string)($this->getData('page_title') ?? __('融媒体管理'));
+$platforms = (array)($this->getData('platforms') ?? []);
+$families = (array)($this->getData('families') ?? []);
+$accounts = (array)($this->getData('accounts') ?? []);
+$websites = (array)($this->getData('websites') ?? []);
+$socialScopes = (array)($this->getData('social_scopes') ?? []);
+$websiteRelations = (array)($this->getData('website_relations') ?? []);
+$scopeRelations = (array)($this->getData('scope_relations') ?? $websiteRelations);
+$drafts = (array)($this->getData('drafts') ?? []);
+$batches = (array)($this->getData('batches') ?? []);
+$warnings = (array)($this->getData('warnings') ?? []);
+$queryProvider = (string)($this->getData('query_provider') ?? 'welineSocial');
+$fakeSmokeUrl = (string)($this->getData('fake_smoke_url') ?? '/weline_social/frontend/social/smoke?fake=1');
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$json = static fn(mixed $value): string => str_replace('</', '<\/', json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}');
+$publishableAccounts = array_values(array_filter($accounts, static function (mixed $account): bool {
+    return is_array($account)
+        && (string)($account['status'] ?? '') === 'active'
+        && (int)($account['publish_enabled'] ?? 0) === 1
+        && (string)($account['test_status'] ?? '') === 'passed';
+}));
+?>
+<style>
+.weline-social-admin {
+    color: #162033;
+}
+.weline-social-admin .workband {
+    background: #fff;
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    padding: 18px;
+}
+.weline-social-admin .metric {
+    min-height: 86px;
+}
+.weline-social-admin .metric-value {
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 700;
+}
+.weline-social-admin .platform-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+.weline-social-admin .platform-item {
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    padding: 14px;
+    background: #fbfdff;
+}
+.weline-social-admin .platform-icon,
+.weline-social-admin .account-icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+}
+.weline-social-admin .platform-icon svg,
+.weline-social-admin .account-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.weline-social-admin .admin-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.weline-social-admin .admin-tab {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #334155;
+}
+.weline-social-admin .admin-tab.active {
+    border-color: #2563eb;
+    color: #1d4ed8;
+    background: #eff6ff;
+}
+.weline-social-admin .account-table td,
+.weline-social-admin .account-table th {
+    vertical-align: middle;
+}
+.weline-social-admin .credential-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+.weline-social-admin .site-account-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+}
+.weline-social-admin .site-account-item {
+    border: 1px solid #dbe3ef;
+    border-radius: 8px;
+    padding: 12px;
+    background: #fbfdff;
+}
+.weline-social-admin .scope-selector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+.weline-social-admin .scope-summary {
+    border-left: 3px solid #2563eb;
+    padding-left: 12px;
+}
+.weline-social-admin .social-status {
+    min-height: 24px;
+}
+</style>
+
+<div class="container-fluid weline-social-admin" data-provider="<?= $h($queryProvider) ?>">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0"><?= $h($pageTitle) ?></h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><?= __('营销管理') ?></li>
+                        <li class="breadcrumb-item active"><?= __('融媒体管理') ?></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('平台 Provider') ?></div><div class="metric-value"><?= count($platforms) ?></div></div></div>
+        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('已连接账户') ?></div><div class="metric-value text-success"><?= count($accounts) ?></div></div></div>
+        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('可发布账户') ?></div><div class="metric-value text-primary"><?= count($publishableAccounts) ?></div></div></div>
+        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('站点') ?></div><div class="metric-value text-info"><?= count($websites) ?></div></div></div>
+        <div class="col-md-2"><div class="workband metric"><div class="text-muted small"><?= __('发布批次') ?></div><div class="metric-value text-warning"><?= count($batches) ?></div></div></div>
+    </div>
+
+    <section class="workband mb-3">
+        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+            <div>
+                <h5 class="mb-1"><?= __('当前配置范围') ?></h5>
+                <div class="text-muted small"><?= __('先选择一级范围和二级范围，再添加平台账户或配置默认发布账户。当前版本一级范围为站点，二级范围预留店铺等子范围。') ?></div>
+            </div>
+            <span class="badge bg-primary-subtle text-primary"><?= __('Scope 优先') ?></span>
+        </div>
+        <div class="scope-selector-grid">
+            <div>
+                <label class="form-label" for="social-scope-type"><?= __('一级范围类型') ?></label>
+                <select class="form-select" id="social-scope-type" <?= $socialScopes === [] ? 'disabled' : '' ?>></select>
+            </div>
+            <div>
+                <label class="form-label" for="social-scope-id"><?= __('一级范围') ?></label>
+                <select class="form-select" id="social-scope-id" <?= $socialScopes === [] ? 'disabled' : '' ?>></select>
+            </div>
+            <div>
+                <label class="form-label" for="social-child-scope"><?= __('二级范围') ?></label>
+                <select class="form-select" id="social-child-scope" <?= $socialScopes === [] ? 'disabled' : '' ?>></select>
+            </div>
+            <div class="scope-summary">
+                <div class="text-muted small"><?= __('正在配置') ?></div>
+                <div class="fw-semibold" id="social-current-scope-label"><?= __('未选择范围') ?></div>
+                <div class="small text-muted" id="social-current-scope-key"></div>
+            </div>
+        </div>
+        <?php if ($socialScopes === []): ?>
+            <div class="form-text text-warning mt-2"><?= __('暂无可配置范围，无法按范围配置社媒账户。') ?></div>
+        <?php endif; ?>
+    </section>
+
+    <div class="admin-tabs mb-3" role="tablist">
+        <button class="admin-tab active" type="button" data-social-tab="platforms"><?= __('平台库') ?></button>
+        <button class="admin-tab" type="button" data-social-tab="accounts"><?= __('账户管理') ?></button>
+        <button class="admin-tab" type="button" data-social-tab="scopeAccounts"><?= __('范围社媒') ?></button>
+        <button class="admin-tab" type="button" data-social-tab="creative"><?= __('AI 创意') ?></button>
+        <button class="admin-tab" type="button" data-social-tab="publish"><?= __('一键发布') ?></button>
+        <button class="admin-tab" type="button" data-social-tab="records"><?= __('发布记录') ?></button>
+    </div>
+
+    <section class="workband mb-3" data-social-panel="platforms">
+        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+            <div>
+                <h5 class="mb-1"><?= __('平台库') ?></h5>
+                <div class="text-muted small"><?= __('内置平台与扩展平台统一进入 Provider 注册表，图标由平台 code 自动解析为 SVG。') ?></div>
+            </div>
+            <a class="btn btn-outline-primary btn-sm" href="<?= $h($fakeSmokeUrl) ?>" target="_blank" rel="noopener">
+                <i class="mdi mdi-play-circle-outline me-1"></i><?= __('运行 fake 浏览器验证') ?>
+            </a>
+        </div>
+        <div class="platform-grid">
+            <?php foreach ($platforms as $platform): ?>
+                <?php
+                if (!is_array($platform)) {
+                    continue;
+                }
+                $code = (string)($platform['code'] ?? '');
+                $docs = is_array($platform['docs'] ?? null) ? $platform['docs'] : [];
+                ?>
+                <article class="platform-item">
+                    <div class="d-flex gap-2 align-items-start">
+                        <div class="platform-icon" aria-hidden="true"><?= (string)($platform['icon_svg'] ?? '') ?></div>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold"><?= $h((string)($platform['title'] ?? $code)) ?></div>
+                            <div class="small text-muted"><?= $h($code) ?> · <?= $h((string)($platform['family'] ?? '')) ?></div>
+                        </div>
+                        <span class="badge <?= $code === 'fake_browser' ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' ?>">
+                            <?= $h((string)($platform['status'] ?? 'documented')) ?>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-1 mt-3">
+                        <?php foreach ((array)($platform['auth_modes'] ?? []) as $mode): ?>
+                            <span class="badge bg-light text-dark border"><?= $h($mode) ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php if ($docs !== []): ?>
+                        <div class="small mt-2 d-flex flex-wrap gap-2">
+                            <?php foreach (array_slice($docs, 0, 2, true) as $label => $url): ?>
+                                <?php if (filter_var((string)$url, FILTER_VALIDATE_URL)): ?>
+                                    <a href="<?= $h((string)$url) ?>" target="_blank" rel="noopener"><?= $h(is_string($label) ? $label : (string)$url) ?></a>
+                                <?php else: ?>
+                                    <span class="text-muted"><?= $h((string)$url) ?></span>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                    <button class="btn btn-primary btn-sm mt-3" type="button" data-social-platform-add="<?= $h($code) ?>">
+                        <i class="mdi mdi-plus-circle-outline me-1"></i><?= __('添加到当前范围') ?>
+                    </button>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
+
+    <section class="workband mb-3 d-none" data-social-panel="accounts">
+        <div class="row g-4">
+            <div class="col-xl-4">
+                <h5 class="mb-3"><?= __('新增或编辑账户') ?></h5>
+                <div class="alert alert-info py-2 small" id="social-account-scope-note">
+                    <?= __('从平台库添加时，保存后会自动绑定到当前配置范围。') ?>
+                </div>
+                <form id="weline-social-account-form" class="d-grid gap-3">
+                    <input type="hidden" name="account_id" value="">
+                    <div>
+                        <label class="form-label" for="social-platform-code"><?= __('平台') ?></label>
+                        <select id="social-platform-code" name="platform_code" class="form-select">
+                            <?php foreach ($platforms as $platform): ?>
+                                <?php if (!is_array($platform)) { continue; } ?>
+                                <option value="<?= $h((string)($platform['code'] ?? '')) ?>"><?= $h((string)($platform['title'] ?? $platform['code'] ?? '')) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="social-account-name"><?= __('账户名称') ?></label>
+                        <input id="social-account-name" class="form-control" name="account_name" maxlength="150" required>
+                    </div>
+                    <div>
+                        <label class="form-label" for="social-profile-url"><?= __('公开主页 URL') ?></label>
+                        <input id="social-profile-url" class="form-control" name="profile_url" placeholder="https://example.com/profile">
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label" for="social-auth-mode"><?= __('授权方式') ?></label>
+                            <select id="social-auth-mode" class="form-select" name="auth_mode"></select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="social-sort-order"><?= __('排序') ?></label>
+                            <input id="social-sort-order" class="form-control" type="number" name="sort_order" value="1000">
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-3">
+                        <label class="form-check">
+                            <input class="form-check-input" type="checkbox" name="widget_enabled" value="1" checked>
+                            <span class="form-check-label"><?= __('显示在社媒账户部件') ?></span>
+                        </label>
+                        <label class="form-check">
+                            <input class="form-check-input" type="checkbox" name="publish_enabled" value="1">
+                            <span class="form-check-label"><?= __('启用发布能力') ?></span>
+                        </label>
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <label class="form-label mb-0"><?= __('官方凭据') ?></label>
+                            <span class="text-muted small"><?= __('编辑时留空将保留已加密凭据') ?></span>
+                        </div>
+                        <div id="social-credential-fields" class="credential-grid"></div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary" type="submit"><i class="mdi mdi-content-save-outline me-1"></i><?= __('保存账户') ?></button>
+                        <button class="btn btn-outline-secondary" type="button" id="social-account-reset"><?= __('清空表单') ?></button>
+                    </div>
+                    <div class="small social-status" id="social-account-status"></div>
+                </form>
+            </div>
+            <div class="col-xl-8">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h5 class="mb-0"><?= __('账户列表') ?></h5>
+                    <code>Weline.Query.request('<?= $h($queryProvider) ?>', ...)</code>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle account-table">
+                        <thead>
+                        <tr>
+                            <th><?= __('账户') ?></th>
+                            <th><?= __('展示') ?></th>
+                            <th><?= __('发布') ?></th>
+                            <th><?= __('检测') ?></th>
+                            <th><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if ($accounts === []): ?>
+                            <tr><td colspan="5" class="text-muted"><?= __('暂无账户。可先新增仅展示账户，或运行 fake 浏览器验证创建本地账户。') ?></td></tr>
+                        <?php endif; ?>
+                        <?php foreach ($accounts as $account): ?>
+                            <?php if (!is_array($account)) { continue; } ?>
+                            <tr>
+                                <td>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <span class="account-icon" aria-hidden="true"><?= (string)($account['icon_svg'] ?? '') ?></span>
+                                        <span>
+                                            <span class="fw-semibold d-block"><?= $h((string)($account['account_name'] ?? '')) ?></span>
+                                            <span class="small text-muted"><?= $h((string)($account['platform_title'] ?? $account['platform_code'] ?? '')) ?></span>
+                                        </span>
+                                    </div>
+                                </td>
+                                <td><?= !empty($account['widget_enabled']) ? '<span class="badge bg-success-subtle text-success">' . __('已启用') . '</span>' : '<span class="badge bg-light text-muted">' . __('未启用') . '</span>' ?></td>
+                                <td><?= !empty($account['publish_enabled']) ? '<span class="badge bg-primary-subtle text-primary">' . __('已启用') . '</span>' : '<span class="badge bg-light text-muted">' . __('未启用') . '</span>' ?></td>
+                                <td><span class="badge bg-light text-dark border"><?= $h((string)($account['test_status'] ?? '')) ?></span></td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" type="button" data-social-edit="<?= (int)($account['account_id'] ?? 0) ?>"><?= __('编辑') ?></button>
+                                        <button class="btn btn-outline-secondary" type="button" data-social-test="<?= (int)($account['account_id'] ?? 0) ?>"><?= __('检测') ?></button>
+                                        <button class="btn btn-outline-danger" type="button" data-social-disable="<?= (int)($account['account_id'] ?? 0) ?>"><?= __('禁用') ?></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="workband mb-3 d-none" data-social-panel="scopeAccounts">
+        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+            <div>
+                <h5 class="mb-1"><?= __('范围社媒') ?></h5>
+                <div class="text-muted small"><?= __('为当前一级/二级范围配置默认社媒账户，发布时按当前范围自动勾选可发布账户。') ?></div>
+            </div>
+            <span class="badge bg-info-subtle text-info"><?= __('不在这里保存任何凭据') ?></span>
+        </div>
+        <form id="weline-social-scope-account-form" class="d-grid gap-3">
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <label class="form-label"><?= __('当前范围') ?></label>
+                    <div class="border rounded p-3 bg-light">
+                        <div class="fw-semibold" id="social-scope-account-label"><?= __('未选择范围') ?></div>
+                        <div class="small text-muted" id="social-scope-account-key"></div>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <label class="form-label"><?= __('默认社媒账户') ?></label>
+                    <div class="site-account-grid" id="social-scope-account-grid">
+                        <?php foreach ($accounts as $account): ?>
+                            <?php if (!is_array($account)) { continue; } ?>
+                            <label class="site-account-item form-check">
+                                <input class="form-check-input" type="checkbox" name="scope_account_ids[]" value="<?= (int)($account['account_id'] ?? 0) ?>">
+                                <span class="form-check-label">
+                                    <span class="fw-semibold d-block"><?= $h((string)($account['account_name'] ?? '')) ?></span>
+                                    <span class="small text-muted"><?= $h((string)($account['platform_title'] ?? $account['platform_code'] ?? '')) ?></span>
+                                    <?php if (!empty($account['publish_enabled']) && (string)($account['test_status'] ?? '') === 'passed'): ?>
+                                        <span class="badge bg-primary-subtle text-primary mt-1"><?= __('可发布') ?></span>
+                                    <?php else: ?>
+                                        <span class="badge bg-light text-muted mt-1"><?= __('仅关系配置') ?></span>
+                                    <?php endif; ?>
+                                </span>
+                            </label>
+                        <?php endforeach; ?>
+                        <?php if ($accounts === []): ?><span class="text-muted"><?= __('暂无账户。') ?></span><?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <button class="btn btn-primary" type="submit" <?= $socialScopes === [] || $accounts === [] ? 'disabled' : '' ?>>
+                    <i class="mdi mdi-content-save-outline me-1"></i><?= __('保存范围默认社媒') ?>
+                </button>
+                <span class="small social-status ms-2" id="social-scope-account-status"></span>
+            </div>
+        </form>
+    </section>
+
+    <section class="workband mb-3 d-none" data-social-panel="creative">
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <h5 class="mb-3"><?= __('生成融媒体创意') ?></h5>
+                <form id="weline-social-creative-form" class="d-grid gap-3">
+                    <input class="form-control" name="title" placeholder="<?= $h((string)__('创意标题')) ?>">
+                    <textarea class="form-control" name="prompt" rows="5" placeholder="<?= $h((string)__('输入产品、活动、受众和发布目标')) ?>"></textarea>
+                    <label class="form-check">
+                        <input class="form-check-input" type="checkbox" name="use_ai" value="1">
+                        <span class="form-check-label"><?= __('调用 Weline_Ai 生成') ?></span>
+                    </label>
+                    <button class="btn btn-primary" type="submit"><?= __('生成创意草稿') ?></button>
+                    <div class="small social-status" id="social-creative-status"></div>
+                </form>
+            </div>
+            <div class="col-lg-7">
+                <h5 class="mb-3"><?= __('最近草稿') ?></h5>
+                <?php if ($drafts === []): ?><div class="text-muted"><?= __('暂无创意草稿。') ?></div><?php endif; ?>
+                <?php foreach ($drafts as $draft): ?>
+                    <?php if (!is_array($draft)) { continue; } ?>
+                    <div class="border-bottom py-2">
+                        <div class="fw-semibold">#<?= (int)($draft['draft_id'] ?? 0) ?> <?= $h((string)($draft['title'] ?? '')) ?></div>
+                        <div class="small text-muted"><?= $h((string)($draft['status'] ?? '')) ?></div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+
+    <section class="workband mb-3 d-none" data-social-panel="publish">
+        <h5 class="mb-3"><?= __('一键发布') ?></h5>
+        <form id="weline-social-publish-form" class="row g-3">
+            <div class="col-lg-3">
+                <label class="form-label"><?= __('草稿 ID') ?></label>
+                <input class="form-control" type="number" name="draft_id" min="1" value="<?= (int)($drafts[0]['draft_id'] ?? 0) ?>">
+            </div>
+            <div class="col-lg-5">
+                <label class="form-label"><?= __('发布范围') ?></label>
+                <div class="border rounded p-2 bg-light">
+                    <div class="fw-semibold" id="social-publish-scope-label"><?= __('未选择范围') ?></div>
+                    <div class="small text-muted" id="social-publish-scope-key"></div>
+                </div>
+            </div>
+            <div class="col-lg-4 d-flex align-items-end">
+                <label class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="all_sites" value="1" id="social-publish-all-sites">
+                    <span class="form-check-label"><?= __('全部站发布') ?></span>
+                </label>
+            </div>
+            <div class="col-12">
+                <label class="form-label"><?= __('发布账户') ?></label>
+                <div class="d-flex flex-wrap gap-3">
+                    <?php foreach ($publishableAccounts as $account): ?>
+                        <label class="form-check">
+                            <input class="form-check-input" type="checkbox" name="account_ids[]" value="<?= (int)($account['account_id'] ?? 0) ?>">
+                            <span class="form-check-label"><?= $h((string)($account['account_name'] ?? '')) ?></span>
+                        </label>
+                    <?php endforeach; ?>
+                    <?php if ($publishableAccounts === []): ?><span class="text-muted"><?= __('暂无可发布账户。') ?></span><?php endif; ?>
+                </div>
+            </div>
+            <div class="col-12">
+                <button class="btn btn-primary" type="submit" <?= $publishableAccounts === [] ? 'disabled' : '' ?>><?= __('创建发布批次') ?></button>
+                <span class="small text-muted ms-2"><?= __('默认按当前范围配置的社媒账户发布内容。') ?></span>
+                <span class="small social-status ms-2" id="social-publish-status"></span>
+            </div>
+        </form>
+    </section>
+
+    <section class="workband mb-3 d-none" data-social-panel="records">
+        <h5 class="mb-3"><?= __('发布记录') ?></h5>
+        <?php if ($batches === []): ?><div class="text-muted"><?= __('暂无发布批次。') ?></div><?php endif; ?>
+        <?php foreach ($batches as $batch): ?>
+            <?php if (!is_array($batch)) { continue; } ?>
+            <div class="border-bottom py-2">
+                <div class="fw-semibold">#<?= (int)($batch['batch_id'] ?? 0) ?> <?= $h((string)($batch['title'] ?? '')) ?></div>
+                <div class="small text-muted">
+                    <?= $h((string)($batch['status'] ?? '')) ?> · <?= (int)($batch['success_count'] ?? 0) ?>/<?= (int)($batch['target_count'] ?? 0) ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </section>
+
+    <section class="workband">
+        <h5 class="mb-2"><?= __('扩展与平台族') ?></h5>
+        <div class="d-flex flex-wrap gap-2">
+            <?php foreach ($families as $family => $count): ?>
+                <span class="badge bg-primary-subtle text-primary"><?= $h((string)$family) ?> <?= (int)$count ?></span>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($warnings !== []): ?>
+            <div class="alert alert-warning mt-3 mb-0">
+                <?php foreach ($warnings as $warning): ?>
+                    <div><?= $h($warning) ?></div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+</div>
+
+<script type="application/json" id="weline-social-platform-json"><?= $json($platforms) ?></script>
+<script type="application/json" id="weline-social-account-json"><?= $json($accounts) ?></script>
+<script type="application/json" id="weline-social-website-json"><?= $json($websites) ?></script>
+<script type="application/json" id="weline-social-website-relation-json"><?= $json($websiteRelations) ?></script>
+<script type="application/json" id="weline-social-scope-json"><?= $json($socialScopes) ?></script>
+<script type="application/json" id="weline-social-scope-relation-json"><?= $json($scopeRelations) ?></script>
+<script>
+(function () {
+    var provider = '<?= $h($queryProvider) ?>';
+    var platforms = JSON.parse(document.getElementById('weline-social-platform-json').textContent || '[]');
+    var accounts = JSON.parse(document.getElementById('weline-social-account-json').textContent || '[]');
+    var socialScopes = JSON.parse(document.getElementById('weline-social-scope-json').textContent || '[]');
+    var scopeRelations = JSON.parse(document.getElementById('weline-social-scope-relation-json').textContent || '[]');
+    var platformMap = {};
+    var accountMap = {};
+    var relationsByScope = {};
+    var currentScope = null;
+    var pendingScopeAssign = false;
+    var messages = {
+        queryUnavailable: '<?= $h((string)__('后台查询接口尚未就绪。')) ?>',
+        saving: '<?= $h((string)__('正在保存账户...')) ?>',
+        saved: '<?= $h((string)__('账户保存完成。')) ?>',
+        scopeSaving: '<?= $h((string)__('正在保存范围默认社媒...')) ?>',
+        scopeSaved: '<?= $h((string)__('范围默认社媒已保存。')) ?>',
+        resolvingDefaults: '<?= $h((string)__('正在解析范围默认社媒...')) ?>',
+        testing: '<?= $h((string)__('正在检测账户...')) ?>',
+        disabled: '<?= $h((string)__('账户已禁用。')) ?>',
+        working: '<?= $h((string)__('正在处理...')) ?>',
+        bindingScope: '<?= $h((string)__('正在绑定到当前范围...')) ?>',
+        bindAfterSave: '<?= $h((string)__('保存后会自动绑定到当前范围：')) ?>',
+        currentScope: '<?= $h((string)__('当前范围：')) ?>',
+        addedFromPlatform: '<?= $h((string)__('已选择平台，保存账户后会加入当前范围。')) ?>',
+        generated: '<?= $h((string)__('创意草稿已生成。')) ?>',
+        batchCreated: '<?= $h((string)__('发布批次已创建。')) ?>',
+        needAccount: '<?= $h((string)__('请选择发布账户。')) ?>',
+        needScope: '<?= $h((string)__('请选择一级范围和二级范围。')) ?>',
+        needDraft: '<?= $h((string)__('请填写草稿 ID。')) ?>'
+    };
+
+    platforms.forEach(function (platform) {
+        if (platform && platform.code) {
+            platformMap[String(platform.code)] = platform;
+        }
+    });
+    accounts.forEach(function (account) {
+        if (account && account.account_id) {
+            accountMap[String(account.account_id)] = account;
+        }
+    });
+    scopeRelations.forEach(function (relation) {
+        if (!relation || !relation.account_id || relation.status !== 'active') {
+            return;
+        }
+        var key = relation.scope_key || buildScopeKey(relation);
+        if (!relationsByScope[key]) {
+            relationsByScope[key] = [];
+        }
+        relationsByScope[key].push(Number(relation.account_id || 0));
+    });
+
+    function setStatus(id, text, type) {
+        var node = document.getElementById(id);
+        if (!node) {
+            return;
+        }
+        node.textContent = text || '';
+        node.className = 'small social-status ' + (type === 'error' ? 'text-danger' : type === 'success' ? 'text-success' : 'text-muted');
+    }
+
+    function callSocial(operation, params) {
+        if (!window.Weline || !window.Weline.Query || typeof window.Weline.Query.request !== 'function') {
+            return Promise.reject(new Error(messages.queryUnavailable));
+        }
+        return window.Weline.Query.request(provider, operation, params || {}, {area: 'backend'});
+    }
+
+    function activateTab(name) {
+        document.querySelectorAll('[data-social-tab]').forEach(function (item) { item.classList.remove('active'); });
+        document.querySelectorAll('[data-social-panel]').forEach(function (panel) { panel.classList.add('d-none'); });
+        var tab = document.querySelector('[data-social-tab="' + name + '"]');
+        var panel = document.querySelector('[data-social-panel="' + name + '"]');
+        if (tab) {
+            tab.classList.add('active');
+        }
+        if (panel) {
+            panel.classList.remove('d-none');
+        }
+    }
+
+    function buildScopeKey(scope) {
+        return [
+            String(scope.scope_type || 'website'),
+            String(Number(scope.scope_id || scope.website_id || 0)),
+            String(scope.child_scope_type || 'website_default'),
+            String(Number(scope.child_scope_id || 0))
+        ].join(':');
+    }
+
+    function scopePayload(scope) {
+        if (!scope) {
+            return {};
+        }
+        return {
+            scope_type: String(scope.scope_type || 'website'),
+            scope_id: Number(scope.scope_id || 0),
+            child_scope_type: String(scope.child_scope_type || 'website_default'),
+            child_scope_id: Number(scope.child_scope_id || 0),
+            website_id: Number(scope.website_id || scope.scope_id || 0)
+        };
+    }
+
+    function scopeDisplay(scope) {
+        if (!scope) {
+            return '<?= $h((string)__('未选择范围')) ?>';
+        }
+        return String(scope.display_label || ((scope.scope_label || '') + ' / ' + (scope.child_scope_label || ''))).replace(/^\\s+|\\s+$/g, '');
+    }
+
+    function findScopeGroup(type) {
+        var groups = Array.isArray(socialScopes) ? socialScopes : [];
+        for (var i = 0; i < groups.length; i++) {
+            if (String(groups[i].scope_type || '') === String(type || '')) {
+                return groups[i];
+            }
+        }
+        return groups[0] || null;
+    }
+
+    function findScopeItem(group, scopeId) {
+        var items = group && Array.isArray(group.items) ? group.items : [];
+        for (var i = 0; i < items.length; i++) {
+            if (Number(items[i].scope_id || 0) === Number(scopeId || 0)) {
+                return items[i];
+            }
+        }
+        return items[0] || null;
+    }
+
+    function findChildScope(item, childValue) {
+        var children = item && Array.isArray(item.children) ? item.children : [];
+        for (var i = 0; i < children.length; i++) {
+            var value = String(children[i].child_scope_type || 'website_default') + ':' + String(Number(children[i].child_scope_id || 0));
+            if (value === String(childValue || '')) {
+                return children[i];
+            }
+        }
+        return children[0] || null;
+    }
+
+    function rebuildScopeItems() {
+        var typeSelect = document.getElementById('social-scope-type');
+        var scopeSelect = document.getElementById('social-scope-id');
+        if (!typeSelect || !scopeSelect) {
+            return;
+        }
+        var group = findScopeGroup(typeSelect.value);
+        scopeSelect.innerHTML = '';
+        (group && Array.isArray(group.items) ? group.items : []).forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = String(Number(item.scope_id || 0));
+            option.textContent = String(item.scope_label || item.scope_title || item.scope_code || item.scope_id || '');
+            scopeSelect.appendChild(option);
+        });
+        rebuildChildScopes();
+    }
+
+    function rebuildChildScopes() {
+        var typeSelect = document.getElementById('social-scope-type');
+        var scopeSelect = document.getElementById('social-scope-id');
+        var childSelect = document.getElementById('social-child-scope');
+        if (!typeSelect || !scopeSelect || !childSelect) {
+            return;
+        }
+        var group = findScopeGroup(typeSelect.value);
+        var item = findScopeItem(group, scopeSelect.value);
+        childSelect.innerHTML = '';
+        (item && Array.isArray(item.children) ? item.children : []).forEach(function (child) {
+            var option = document.createElement('option');
+            option.value = String(child.child_scope_type || 'website_default') + ':' + String(Number(child.child_scope_id || 0));
+            option.textContent = String(child.child_scope_label || child.child_scope_code || option.value);
+            childSelect.appendChild(option);
+        });
+        updateCurrentScope();
+    }
+
+    function initializeScopeSelectors() {
+        var typeSelect = document.getElementById('social-scope-type');
+        if (!typeSelect) {
+            return;
+        }
+        typeSelect.innerHTML = '';
+        (Array.isArray(socialScopes) ? socialScopes : []).forEach(function (group) {
+            var option = document.createElement('option');
+            option.value = String(group.scope_type || '');
+            option.textContent = String(group.scope_label || group.scope_type || '');
+            typeSelect.appendChild(option);
+        });
+        rebuildScopeItems();
+    }
+
+    function updateCurrentScope() {
+        var typeSelect = document.getElementById('social-scope-type');
+        var scopeSelect = document.getElementById('social-scope-id');
+        var childSelect = document.getElementById('social-child-scope');
+        var group = typeSelect ? findScopeGroup(typeSelect.value) : null;
+        var item = scopeSelect ? findScopeItem(group, scopeSelect.value) : null;
+        var child = childSelect ? findChildScope(item, childSelect.value) : null;
+        currentScope = item && child ? {
+            scope_type: String(item.scope_type || group.scope_type || 'website'),
+            scope_id: Number(item.scope_id || 0),
+            scope_label: String(item.scope_label || item.scope_title || item.scope_code || ''),
+            child_scope_type: String(child.child_scope_type || 'website_default'),
+            child_scope_id: Number(child.child_scope_id || 0),
+            child_scope_label: String(child.child_scope_label || child.child_scope_code || ''),
+            website_id: Number(item.website_id || item.scope_id || 0),
+            scope_key: String(child.scope_key || buildScopeKey({
+                scope_type: item.scope_type || group.scope_type || 'website',
+                scope_id: item.scope_id || 0,
+                child_scope_type: child.child_scope_type || 'website_default',
+                child_scope_id: child.child_scope_id || 0
+            }))
+        } : null;
+        if (currentScope) {
+            currentScope.display_label = scopeDisplay(currentScope);
+        }
+        renderScopeState();
+    }
+
+    function renderScopeText(labelId, keyId) {
+        var label = document.getElementById(labelId);
+        var key = document.getElementById(keyId);
+        if (label) {
+            label.textContent = scopeDisplay(currentScope);
+        }
+        if (key) {
+            key.textContent = currentScope ? currentScope.scope_key : '';
+        }
+    }
+
+    function renderScopeState() {
+        renderScopeText('social-current-scope-label', 'social-current-scope-key');
+        renderScopeText('social-scope-account-label', 'social-scope-account-key');
+        renderScopeText('social-publish-scope-label', 'social-publish-scope-key');
+        updateAccountScopeNote();
+        updateScopeAccountChecks();
+        resolvePublishDefaults();
+    }
+
+    function updateAccountScopeNote() {
+        var note = document.getElementById('social-account-scope-note');
+        if (!note) {
+            return;
+        }
+        var display = scopeDisplay(currentScope);
+        note.textContent = pendingScopeAssign
+            ? messages.bindAfterSave + display
+            : messages.currentScope + display;
+    }
+
+    function setCheckedAccountIds(container, ids) {
+        var selected = {};
+        (ids || []).forEach(function (id) {
+            selected[String(id)] = true;
+        });
+        container.querySelectorAll('input[name="account_ids[]"]').forEach(function (input) {
+            input.checked = !!selected[String(input.value)];
+        });
+    }
+
+    function getSelectedAccountIds(form, name) {
+        return Array.prototype.slice.call(form.querySelectorAll('input[name="' + name + '"]:checked')).map(function (item) {
+            return Number(item.value || 0);
+        }).filter(Boolean);
+    }
+
+    function updateScopeAccountChecks() {
+        var form = document.getElementById('weline-social-scope-account-form');
+        if (!currentScope || !form) {
+            return;
+        }
+        var ids = relationsByScope[currentScope.scope_key] || [];
+        form.querySelectorAll('input[name="scope_account_ids[]"]').forEach(function (input) {
+            input.checked = ids.indexOf(Number(input.value || 0)) !== -1;
+        });
+    }
+
+    function resolvePublishDefaults() {
+        var form = document.getElementById('weline-social-publish-form');
+        var allSites = document.getElementById('social-publish-all-sites');
+        if (!form || !allSites) {
+            return;
+        }
+        if (allSites.checked) {
+            setStatus('social-publish-status', messages.resolvingDefaults, '');
+            callSocial('resolvePublishAccounts', {all_sites: true})
+                .then(function (result) {
+                    setCheckedAccountIds(form, result.account_ids || []);
+                    setStatus('social-publish-status', '', '');
+                })
+                .catch(function (error) { setStatus('social-publish-status', error.message, 'error'); });
+            return;
+        }
+        if (!currentScope) {
+            return;
+        }
+        setStatus('social-publish-status', messages.resolvingDefaults, '');
+        var payload = scopePayload(currentScope);
+        payload.publish_only = true;
+        callSocial('getScopeDefaultAccounts', payload)
+            .then(function (result) {
+                var ids = (result.accounts || []).map(function (account) { return Number(account.account_id || 0); }).filter(Boolean);
+                setCheckedAccountIds(form, ids);
+                setStatus('social-publish-status', '', '');
+            })
+            .catch(function (error) { setStatus('social-publish-status', error.message, 'error'); });
+    }
+
+    function updateAuthAndCredentials() {
+        var platformSelect = document.getElementById('social-platform-code');
+        var authSelect = document.getElementById('social-auth-mode');
+        var credentialFields = document.getElementById('social-credential-fields');
+        var platform = platformMap[platformSelect.value] || {};
+        var modes = Array.isArray(platform.auth_modes) ? platform.auth_modes.slice() : [];
+        if (modes.indexOf('profile_only') === -1) {
+            modes.push('profile_only');
+        }
+        authSelect.innerHTML = '';
+        modes.forEach(function (mode) {
+            var option = document.createElement('option');
+            option.value = mode;
+            option.textContent = mode === 'profile_only' ? '<?= $h((string)__('仅展示')) ?>' : mode;
+            authSelect.appendChild(option);
+        });
+        credentialFields.innerHTML = '';
+        (Array.isArray(platform.config_fields) ? platform.config_fields : []).forEach(function (field) {
+            var wrap = document.createElement('div');
+            var label = document.createElement('label');
+            var input = document.createElement('input');
+            var key = String(field.key || '');
+            if (!key) {
+                return;
+            }
+            label.className = 'form-label';
+            label.textContent = String(field.label || key);
+            input.className = 'form-control';
+            input.type = String(field.type || 'text') === 'password' ? 'password' : 'text';
+            input.name = 'credential_' + key;
+            input.setAttribute('data-credential-key', key);
+            input.placeholder = field.required ? '<?= $h((string)__('必填')) ?>' : '<?= $h((string)__('可选')) ?>';
+            wrap.appendChild(label);
+            wrap.appendChild(input);
+            credentialFields.appendChild(wrap);
+        });
+    }
+
+    function resetAccountForm() {
+        var form = document.getElementById('weline-social-account-form');
+        pendingScopeAssign = false;
+        form.reset();
+        form.elements.account_id.value = '';
+        form.elements.sort_order.value = '1000';
+        form.elements.widget_enabled.checked = true;
+        form.elements.publish_enabled.checked = false;
+        updateAuthAndCredentials();
+        updateAccountScopeNote();
+        setStatus('social-account-status', '', '');
+    }
+
+    function fillAccountForm(account) {
+        pendingScopeAssign = false;
+        var form = document.getElementById('weline-social-account-form');
+        form.elements.account_id.value = account.account_id || '';
+        form.elements.platform_code.value = account.platform_code || '';
+        updateAuthAndCredentials();
+        form.elements.account_name.value = account.account_name || '';
+        form.elements.profile_url.value = account.profile_url || '';
+        form.elements.auth_mode.value = account.auth_mode || 'profile_only';
+        form.elements.sort_order.value = account.sort_order || 1000;
+        form.elements.widget_enabled.checked = Number(account.widget_enabled || 0) === 1;
+        form.elements.publish_enabled.checked = Number(account.publish_enabled || 0) === 1;
+        updateAccountScopeNote();
+        activateTab('accounts');
+    }
+
+    function startAddPlatform(platformCode) {
+        if (!currentScope) {
+            activateTab('scopeAccounts');
+            setStatus('social-scope-account-status', messages.needScope, 'error');
+            return;
+        }
+        var platform = platformMap[String(platformCode)] || {};
+        resetAccountForm();
+        pendingScopeAssign = true;
+        var form = document.getElementById('weline-social-account-form');
+        form.elements.platform_code.value = String(platformCode || '');
+        updateAuthAndCredentials();
+        form.elements.account_name.value = String(platform.title || platformCode || '') + ' - ' + scopeDisplay(currentScope);
+        updateAccountScopeNote();
+        activateTab('accounts');
+        setStatus('social-account-status', messages.addedFromPlatform, '');
+    }
+
+    function assignAccountToCurrentScope(accountId) {
+        if (!currentScope || !accountId) {
+            return Promise.resolve(null);
+        }
+        var key = currentScope.scope_key;
+        var ids = (relationsByScope[key] || []).slice();
+        if (ids.indexOf(Number(accountId)) === -1) {
+            ids.push(Number(accountId));
+        }
+        var payload = scopePayload(currentScope);
+        payload.account_ids = ids;
+        return callSocial('saveScopeAccountDefaults', payload).then(function (result) {
+            relationsByScope[key] = (result.relations || []).map(function (relation) {
+                return Number(relation.account_id || 0);
+            }).filter(Boolean);
+            return result;
+        });
+    }
+
+    document.querySelectorAll('[data-social-tab]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            activateTab(button.getAttribute('data-social-tab'));
+        });
+    });
+
+    var scopeTypeSelect = document.getElementById('social-scope-type');
+    if (scopeTypeSelect) {
+        scopeTypeSelect.addEventListener('change', rebuildScopeItems);
+    }
+    var scopeIdSelect = document.getElementById('social-scope-id');
+    if (scopeIdSelect) {
+        scopeIdSelect.addEventListener('change', rebuildChildScopes);
+    }
+    var childScopeSelect = document.getElementById('social-child-scope');
+    if (childScopeSelect) {
+        childScopeSelect.addEventListener('change', updateCurrentScope);
+    }
+    document.getElementById('social-platform-code').addEventListener('change', updateAuthAndCredentials);
+    document.getElementById('social-account-reset').addEventListener('click', resetAccountForm);
+    var publishAllSites = document.getElementById('social-publish-all-sites');
+    if (publishAllSites) {
+        publishAllSites.addEventListener('change', function () {
+            resolvePublishDefaults();
+        });
+    }
+    document.querySelectorAll('[data-social-platform-add]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            startAddPlatform(button.getAttribute('data-social-platform-add'));
+        });
+    });
+    document.querySelectorAll('[data-social-edit]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            fillAccountForm(accountMap[String(button.getAttribute('data-social-edit'))] || {});
+        });
+    });
+    document.querySelectorAll('[data-social-test]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            setStatus('social-account-status', messages.testing, '');
+            callSocial('testAccount', {account_id: Number(button.getAttribute('data-social-test') || 0)})
+                .then(function (result) {
+                    setStatus('social-account-status', result.message || messages.saved, 'success');
+                    window.setTimeout(function () { window.location.reload(); }, 800);
+                })
+                .catch(function (error) { setStatus('social-account-status', error.message, 'error'); });
+        });
+    });
+    document.querySelectorAll('[data-social-disable]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            setStatus('social-account-status', messages.working, '');
+            callSocial('disableAccount', {account_id: Number(button.getAttribute('data-social-disable') || 0)})
+                .then(function () {
+                    setStatus('social-account-status', messages.disabled, 'success');
+                    window.setTimeout(function () { window.location.reload(); }, 800);
+                })
+                .catch(function (error) { setStatus('social-account-status', error.message, 'error'); });
+        });
+    });
+
+    document.getElementById('weline-social-account-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = event.currentTarget;
+        var credentials = {};
+        form.querySelectorAll('[data-credential-key]').forEach(function (input) {
+            if (input.value) {
+                credentials[input.getAttribute('data-credential-key')] = input.value;
+            }
+        });
+        var payload = {
+            account_id: Number(form.elements.account_id.value || 0),
+            platform_code: form.elements.platform_code.value,
+            account_name: form.elements.account_name.value,
+            profile_url: form.elements.profile_url.value,
+            auth_mode: form.elements.auth_mode.value,
+            widget_enabled: form.elements.widget_enabled.checked,
+            publish_enabled: form.elements.publish_enabled.checked,
+            sort_order: Number(form.elements.sort_order.value || 1000),
+            credentials: credentials
+        };
+        setStatus('social-account-status', messages.saving, '');
+        callSocial('saveCredentialAccount', payload)
+            .then(function (result) {
+                setStatus('social-account-status', result.message || messages.saved, result.success === false ? 'error' : 'success');
+                var savedAccount = result && result.account ? result.account : {};
+                var accountId = Number(savedAccount.account_id || payload.account_id || 0);
+                if (pendingScopeAssign && accountId && currentScope) {
+                    setStatus('social-account-status', messages.bindingScope, '');
+                    return assignAccountToCurrentScope(accountId).then(function () {
+                        window.setTimeout(function () { window.location.reload(); }, 900);
+                    });
+                }
+                window.setTimeout(function () { window.location.reload(); }, 900);
+            })
+            .catch(function (error) { setStatus('social-account-status', error.message, 'error'); });
+    });
+
+    var scopeAccountForm = document.getElementById('weline-social-scope-account-form');
+    if (scopeAccountForm) {
+        scopeAccountForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var form = event.currentTarget;
+            if (!currentScope) {
+                setStatus('social-scope-account-status', messages.needScope, 'error');
+                return;
+            }
+            setStatus('social-scope-account-status', messages.scopeSaving, '');
+            var payload = scopePayload(currentScope);
+            payload.account_ids = getSelectedAccountIds(form, 'scope_account_ids[]');
+            callSocial('saveScopeAccountDefaults', payload).then(function (result) {
+                relationsByScope[currentScope.scope_key] = (result.relations || []).map(function (relation) {
+                    return Number(relation.account_id || 0);
+                }).filter(Boolean);
+                setStatus('social-scope-account-status', result.message || messages.scopeSaved, 'success');
+                resolvePublishDefaults();
+            }).catch(function (error) { setStatus('social-scope-account-status', error.message, 'error'); });
+        });
+    }
+
+    document.getElementById('weline-social-creative-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = event.currentTarget;
+        setStatus('social-creative-status', messages.working, '');
+        callSocial('generateCreative', {
+            title: form.elements.title.value,
+            prompt: form.elements.prompt.value,
+            platforms: platforms.map(function (platform) { return platform.code; }).filter(Boolean),
+            use_ai: form.elements.use_ai.checked
+        }).then(function () {
+            setStatus('social-creative-status', messages.generated, 'success');
+            window.setTimeout(function () { window.location.reload(); }, 900);
+        }).catch(function (error) { setStatus('social-creative-status', error.message, 'error'); });
+    });
+
+    document.getElementById('weline-social-publish-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = event.currentTarget;
+        var accountIds = Array.prototype.slice.call(form.querySelectorAll('input[name="account_ids[]"]:checked')).map(function (item) {
+            return Number(item.value || 0);
+        }).filter(Boolean);
+        var draftId = Number(form.elements.draft_id.value || 0);
+        if (!draftId) {
+            setStatus('social-publish-status', messages.needDraft, 'error');
+            return;
+        }
+        var allSites = !!(form.elements.all_sites && form.elements.all_sites.checked);
+        if (!currentScope && !allSites) {
+            setStatus('social-publish-status', messages.needScope, 'error');
+            return;
+        }
+        if (accountIds.length === 0 && !currentScope && !allSites) {
+            setStatus('social-publish-status', messages.needAccount, 'error');
+            return;
+        }
+        setStatus('social-publish-status', messages.working, '');
+        var payload = currentScope && !allSites ? scopePayload(currentScope) : {};
+        payload.draft_id = draftId;
+        payload.account_ids = accountIds;
+        payload.all_sites = allSites;
+        payload.content_kind = 'news';
+        callSocial('createPublishBatch', payload)
+            .then(function () {
+                setStatus('social-publish-status', messages.batchCreated, 'success');
+                window.setTimeout(function () { window.location.reload(); }, 900);
+            })
+            .catch(function (error) { setStatus('social-publish-status', error.message, 'error'); });
+    });
+
+    initializeScopeSelectors();
+    updateCurrentScope();
+    updateAuthAndCredentials();
+})();
+</script>
+            draft_id: draftId,
+            account_ids: accountIds,
+            website_id: websiteId,
+            all_sites: allSites,
+            content_kind: 'news'
+        })
+            .then(function () {
+                setStatus('social-publish-status', messages.batchCreated, 'success');
+                window.setTimeout(function () { window.location.reload(); }, 900);
+            })
+            .catch(function (error) { setStatus('social-publish-status', error.message, 'error'); });
+    });
+
+    updateSiteAccountChecks();
+    resolvePublishDefaults();
+    updateAuthAndCredentials();
+})();
+</script>

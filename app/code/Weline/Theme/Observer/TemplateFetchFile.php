@@ -14,9 +14,11 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\Interface\ThemePathResolverInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeVirtualLayoutService;
 
 /**
  * 模板文件获取观察者
@@ -68,6 +70,16 @@ class TemplateFetchFile implements ObserverInterface
         $module_file_path = $fileData->getData('filename');
         if (empty($module_file_path)) {
             return;
+        }
+
+        try {
+            $runtimePath = ObjectManager::getInstance(ThemeVirtualLayoutService::class)
+                ->mapRuntimeViewPath((string)$module_file_path);
+            if ($runtimePath !== null) {
+                $fileData->setData('filename', $runtimePath);
+                return;
+            }
+        } catch (\Throwable) {
         }
 
         // 如果是编译文件路径（包含 com_ 前缀或已经是绝对路径且不在 app/code 或 app/design 下），不处理

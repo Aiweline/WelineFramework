@@ -60,7 +60,7 @@ class PaymentServiceTest extends TestCase
     public function testRuntimeOverridesAreMergedIntoMethodMetadata(): void
     {
         $service = new class() extends PaymentService {
-            protected function getMethodOverrides(): array
+            protected function getScopedMethodOverrides(array $context): array
             {
                 return [
                     'paypal' => [

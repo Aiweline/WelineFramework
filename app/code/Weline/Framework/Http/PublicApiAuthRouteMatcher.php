@@ -84,6 +84,11 @@ class PublicApiAuthRouteMatcher
         'api/rest/v1/weshop/invoice/list',
     ];
 
+    private const WORKER_QUERY_BIN_PATH_PATTERNS = [
+        'api/framework/query-bin',
+        'framework/query-bin',
+    ];
+
     private const AUTH_CONTROLLERS = ['Auth', 'Challenge'];
 
     private const AUTH_ACTIONS = [
@@ -104,6 +109,10 @@ class PublicApiAuthRouteMatcher
 
     public function matches(Request $request): bool
     {
+        if ($this->matchesWorkerQueryBinRoute($request)) {
+            return true;
+        }
+
         $controller = (string) $request->getController();
         $action = (string) $request->getAction();
         $controllerClass = (string) ($request->getRouterData('controller') ?? '');
@@ -134,6 +143,35 @@ class PublicApiAuthRouteMatcher
 
         foreach ($paths as $path) {
             if ($this->matchesPath((string) $path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesWorkerQueryBinRoute(Request $request): bool
+    {
+        $controllerClass = (string) ($request->getRouterData('controller') ?? '');
+        if (
+            $controllerClass !== ''
+            && class_exists($controllerClass)
+            && (
+                $controllerClass === \Weline\Framework\Controller\Api\QueryBin::class
+                || is_subclass_of($controllerClass, \Weline\Framework\Controller\Api\QueryBin::class)
+            )
+        ) {
+            return true;
+        }
+
+        $paths = array_filter([
+            $request->getRouteUrlPath(),
+            $request->getPath(),
+            (string) ($request->getRouterData('module_path') ?? ''),
+        ]);
+
+        foreach ($paths as $path) {
+            if ($this->matchesPath((string) $path, self::WORKER_QUERY_BIN_PATH_PATTERNS)) {
                 return true;
             }
         }

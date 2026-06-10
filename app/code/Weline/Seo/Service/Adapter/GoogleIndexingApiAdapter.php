@@ -77,8 +77,13 @@ class GoogleIndexingApiAdapter implements SearchEngineAdapterInterface
             ];
         }
 
-        // 对于 Google Indexing API，可以直接把 sitemap 当作普通 URL 通知
-        return $this->notifyUrl($sitemapUrl, $options);
+        return [
+            'success' => false,
+            'message' => __('Google Indexing API 不用于提交 Sitemap，请使用 Google Search Console Sitemap API'),
+            'data' => [
+                'sitemap_url' => $sitemapUrl,
+            ],
+        ];
     }
 
     public function getRequirements(): array
