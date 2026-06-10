@@ -41,6 +41,7 @@ final class EnsureComposer
     public function ensure(string $phpBin): bool
     {
         self::registerSessionPath($this->projectRoot);
+        $this->bootstrapPublicCaBundle();
 
         $constraint = $this->readComposerConstraint();
         $phar = self::pharPath($this->projectRoot);
@@ -71,7 +72,11 @@ final class EnsureComposer
 
         if (!$this->download($url, $tmpPath) || !$this->isValidPhar($tmpPath)) {
             @unlink($tmpPath);
-            fwrite(STDERR, "WARNING: composer.phar download failed. Will try system composer if available.\n");
+            $caHint = $this->resolveCaBundlePath() ?? '(unavailable)';
+            fwrite(STDERR, "ERROR: composer.phar download failed.\n");
+            fwrite(STDERR, "  URL: {$url}\n");
+            fwrite(STDERR, "  CA bundle: {$caHint}\n");
+            fwrite(STDERR, "  请检查网络连接；若 php.ini 曾指向其他项目的 _local_ca，请重新运行安装脚本以修复 CA 配置。\n");
             return is_file($phar) && $this->isValidPhar($phar);
         }
 
@@ -199,8 +204,14 @@ final class EnsureComposer
         if (!is_file($path) || filesize($path) < self::MIN_PHAR_SIZE) {
             return false;
         }
-        $head = @file_get_contents($path, false, null, 0, 5);
-        return $head === '<?php';
+        $head = @file_get_contents($path, false, null, 0, 32);
+        if (!is_string($head) || $head === '') {
+            return false;
+        }
+
+        return str_starts_with($head, '<?php')
+            || str_starts_with($head, '#!/usr/bin/env php')
+            || str_starts_with($head, '#!/usr/bin/env');
     }
 
     private function pharSatisfiesConstraint(string $phpBin, string $phar, ?string $constraint): bool
@@ -262,36 +273,64 @@ final class EnsureComposer
         @chmod($wrapper, 0755);
     }
 
+    private function bootstrapPublicCaBundle(): void
+    {
+        $phpDir = self::serverDir($this->projectRoot) . DIRECTORY_SEPARATOR . 'php';
+        if (!is_dir($phpDir)) {
+            return;
+        }
+        if (!class_exists(ConfigurePhpIni::class, false)) {
+            require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
+        }
+        (new ConfigurePhpIni($this->projectRoot, $phpDir))->ensurePublicCaBundle();
+    }
+
+    private function resolveCaBundlePath(): ?string
+    {
+        $phpDir = self::serverDir($this->projectRoot) . DIRECTORY_SEPARATOR . 'php';
+        if (!is_dir($phpDir)) {
+            return null;
+        }
+        if (!class_exists(ConfigurePhpIni::class, false)) {
+            require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
+        }
+        $cfg = new ConfigurePhpIni($this->projectRoot, $phpDir);
+        $path = $cfg->getCaBundlePath();
+        if (is_file($path) && filesize($path) >= 100_000) {
+            return $path;
+        }
+        if ($cfg->ensurePublicCaBundle() && is_file($path)) {
+            return $path;
+        }
+
+        return null;
+    }
+
+    /** @param array<string, mixed> $options */
+    private function applyCurlSslOptions($ch, array $options = []): void
+    {
+        $caPath = $this->resolveCaBundlePath();
+        if ($caPath !== null) {
+            curl_setopt($ch, CURLOPT_CAINFO, $caPath);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+            return;
+        }
+
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, (bool) ($options['allow_insecure_fallback'] ?? false) ? false : true);
+        if (!($options['allow_insecure_fallback'] ?? false)) {
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        }
+    }
+
     private function download(string $url, string $outPath): bool
     {
-        if (function_exists('curl_init')) {
-            $fp = fopen($outPath, 'w');
-            if (!$fp) {
-                return false;
-            }
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => false,
-                CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_MAXREDIRS => 10,
-                CURLOPT_CONNECTTIMEOUT => 30,
-                CURLOPT_TIMEOUT => 300,
-                CURLOPT_FILE => $fp,
-                CURLOPT_HTTPHEADER => [
-                    'User-Agent: Mozilla/5.0 (compatible; WelineInstaller/1.0)',
-                    'Accept: application/octet-stream, */*',
-                ],
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_ENCODING => '',
-            ]);
-            $ok = curl_exec($ch);
-            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            fclose($fp);
-            if (!$ok || $httpCode !== 200 || !is_file($outPath) || filesize($outPath) < self::MIN_PHAR_SIZE) {
-                @unlink($outPath);
-                return false;
-            }
+        if ($this->downloadWithCurl($url, $outPath)) {
+            return true;
+        }
+
+        $this->bootstrapPublicCaBundle();
+        if ($this->downloadWithCurl($url, $outPath)) {
             return true;
         }
 
@@ -299,7 +338,51 @@ final class EnsureComposer
         if ($data === null || strlen($data) < self::MIN_PHAR_SIZE) {
             return false;
         }
+
         return file_put_contents($outPath, $data) !== false;
+    }
+
+    private function downloadWithCurl(string $url, string $outPath): bool
+    {
+        if (!function_exists('curl_init')) {
+            return false;
+        }
+
+        $fp = fopen($outPath, 'w');
+        if (!$fp) {
+            return false;
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => false,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_CONNECTTIMEOUT => 30,
+            CURLOPT_TIMEOUT => 300,
+            CURLOPT_FILE => $fp,
+            CURLOPT_HTTPHEADER => [
+                'User-Agent: Mozilla/5.0 (compatible; WelineInstaller/1.0)',
+                'Accept: application/octet-stream, */*',
+            ],
+            CURLOPT_ENCODING => '',
+        ]);
+        $this->applyCurlSslOptions($ch);
+        $ok = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+        fclose($fp);
+
+        if (!$ok || $httpCode !== 200 || !is_file($outPath) || filesize($outPath) < self::MIN_PHAR_SIZE) {
+            if ($curlError !== '') {
+                fwrite(STDERR, "  curl: {$curlError}\n");
+            }
+            @unlink($outPath);
+            return false;
+        }
+
+        return true;
     }
 
     private function httpGet(string $url): ?string
@@ -316,9 +399,9 @@ final class EnsureComposer
                     'User-Agent: Mozilla/5.0 (compatible; WelineInstaller/1.0)',
                     'Accept: */*',
                 ],
-                CURLOPT_SSL_VERIFYPEER => true,
                 CURLOPT_ENCODING => '',
             ]);
+            $this->applyCurlSslOptions($ch);
             $data = curl_exec($ch);
             $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
@@ -328,12 +411,18 @@ final class EnsureComposer
             return (string) $data;
         }
 
+        $caPath = $this->resolveCaBundlePath();
+        $sslOptions = ['verify_peer' => true];
+        if ($caPath !== null) {
+            $sslOptions['cafile'] = $caPath;
+        }
+
         $ctx = stream_context_create([
             'http' => [
                 'timeout' => 120,
                 'header' => "User-Agent: Mozilla/5.0 (compatible; WelineInstaller/1.0)\r\n",
             ],
-            'ssl' => ['verify_peer' => true],
+            'ssl' => $sslOptions,
         ]);
         $data = @file_get_contents($url, false, $ctx);
         return $data === false ? null : (string) $data;
