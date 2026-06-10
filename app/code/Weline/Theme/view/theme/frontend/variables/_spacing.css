@@ -27,5 +27,9 @@
     --spacing-container-padding: var(--spacing-md);
     --spacing-container-max-width: 1440px;
     --spacing-grid-gap: var(--spacing-md);
+    --layout-header-height: 70px;
+    --layout-sidebar-width: 280px;
+    --header-height: var(--layout-header-height);
+    --sidebar-width: var(--layout-sidebar-width);
 }
 

@@ -1,0 +1,77 @@
+<?php
+/**
+ * @meta.title {default="支付核心配置",description="Weline_Payment 模块配置中心标题"}
+ * @meta.description {default="配置共享支付运行规则，并暴露支付管理适配入口。"}
+ * @config.area {backend}
+ * @config.sort {40}
+ * @config.acl {Weline_Payment::payment_method}
+ */
+?>
+
+<w:config:group code="payment_runtime" label="支付运行规则" description="由 Weline_Payment 统一处理的共享支付规则。" sort="10">
+    <w:config:field
+        key="payment/general/checkout_enabled"
+        label="启用结账支付"
+        description="允许 Weline_Payment 支付方式在通过各自配置准入后参与结账。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/general/default_environment"
+        label="默认支付环境"
+        description="可支付对象未显式指定沙箱或正式环境时使用的默认环境。"
+        type="select"
+        value-type="string"
+        default="sandbox"
+        scope="global,website,store"
+        options="sandbox:沙箱,live:正式"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="payment/general/require_terms_agreement"
+        label="要求同意支付条款"
+        description="用户开始支付尝试前必须同意当前支付条款。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/general/auto_close_minutes"
+        label="自动关闭未支付意图"
+        description="未支付意图超过该分钟数后允许被自动关闭。"
+        type="number"
+        value-type="int"
+        default="30"
+        scope="global,website,store"
+        validation="required|min:1|max:10080" />
+
+    <w:config:field
+        key="payment/general/show_unavailable_on_more"
+        label="更多中显示不可用方式"
+        description="结账页默认只显示可用支付方式，开启后用户可展开查看不可用方式及原因。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+</w:config:group>
+
+<w:config:group code="payment_management" label="支付管理入口" description="支付复杂对象保留在 Weline_Payment 业务表中，通过适配入口进入配置中心。" sort="20">
+    <w:config:adapter
+        code="payment.methods"
+        label="支付方式"
+        description="管理支付方式启用状态、测试状态、Provider 凭据和能力记录。"
+        provider="payment"
+        summary-operation="getPaymentMethodSummary"
+        manage-url="payment/backend/method/index" />
+
+    <w:config:adapter
+        code="payment.dashboard"
+        label="支付驾驶舱"
+        description="查看支付健康度、支付方式使用情况、失败、退款和结账准入状态。"
+        provider="payment"
+        summary-operation="getPaymentDashboardSummary"
+        manage-url="payment/backend/dashboard/index" />
+</w:config:group>

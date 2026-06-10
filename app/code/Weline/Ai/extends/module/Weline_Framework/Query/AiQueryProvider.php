@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Extends\Module\Weline_Framework\Query;
 
+use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -54,15 +55,19 @@ class AiQueryProvider implements QueryProviderInterface
 
     private function generate(array $params): string
     {
-        return $this->aiService->generate(
-            $this->requireNonEmptyString($params, 'prompt'),
-            $this->optionalString($params, 'model_code'),
-            $this->optionalString($params, 'scenario_code'),
-            $this->optionalString($params, 'locale'),
-            $this->optionalArray($params, 'params'),
-            $this->optionalInt($params, 'user_id'),
-            (bool)($params['is_backend'] ?? false)
-        );
+        try {
+            return $this->aiService->generate(
+                $this->requireNonEmptyString($params, 'prompt'),
+                $this->optionalString($params, 'model_code'),
+                $this->optionalString($params, 'scenario_code'),
+                $this->optionalString($params, 'locale'),
+                $this->optionalArray($params, 'params'),
+                $this->optionalInt($params, 'user_id'),
+                (bool)($params['is_backend'] ?? false)
+            );
+        } catch (AiBillingException $billingException) {
+            throw $billingException;
+        }
     }
 
     private function chat(array $params): array
@@ -102,12 +107,31 @@ class AiQueryProvider implements QueryProviderInterface
 
     private function generateImage(array $params): array
     {
-        return $this->aiService->generateImage(
-            $this->requireNonEmptyString($params, 'prompt'),
-            $this->optionalString($params, 'model_code'),
-            $this->optionalString($params, 'scenario_code'),
-            $this->optionalArray($params, 'params')
-        );
+        try {
+            return $this->aiService->generateImage(
+                $this->requireNonEmptyString($params, 'prompt'),
+                $this->optionalString($params, 'model_code'),
+                $this->optionalString($params, 'scenario_code'),
+                $this->optionalArray($params, 'params')
+            );
+        } catch (AiBillingException $billingException) {
+            return [
+                'success' => false,
+                'code' => $billingException->getBillingCode(),
+                'message' => $billingException->getMessage(),
+            ];
+        } catch (\Throwable $throwable) {
+            $billingCode = AiBillingException::classifyMessageToCode($throwable->getMessage());
+            if ($billingCode !== '') {
+                return [
+                    'success' => false,
+                    'code' => $billingCode,
+                    'message' => $throwable->getMessage(),
+                ];
+            }
+
+            throw $throwable;
+        }
     }
 
     private function resolveModel(array $params): ?array

@@ -58,13 +58,19 @@
     });
 
     function normalizeConfig(config) {
-        return {
+        const normalized = {
             endpoint: config.endpoint || '/api/framework/query-bin',
             deployVersion: config.deployVersion || config.deploy_version || 'dev',
             workerBuildId: config.workerBuildId || config.worker_build_id || 'dev',
             locale: normalizeLocale(config.locale || config.currentLang || config.current_lang || ''),
-            currency: normalizeCurrency(config.currency || config.currentCurrency || config.current_currency || ''),
+            defaultCurrency: normalizeCurrencyCode(config.defaultCurrency || config.default_currency || 'CNY'),
+            availableCurrencies: normalizeCurrencyList(
+                config.availableCurrencies || config.supportedCurrencies || config.currencyCodes || config.currencies || []
+            ),
         };
+        normalized.currency = normalizeCurrency(config.currency || config.currentCurrency || config.current_currency || '', normalized);
+
+        return normalized;
     }
 
     function normalizeLocale(value) {
@@ -72,9 +78,52 @@
         return /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale) ? locale : '';
     }
 
-    function normalizeCurrency(value) {
-        const currency = String(value || '').trim().toUpperCase();
-        return /^[A-Z]{3}$/.test(currency) ? currency : '';
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function isCurrencyCodeShape(value) {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function normalizeCurrencyList(values) {
+        const codes = [];
+        const seen = {};
+        if (!Array.isArray(values)) {
+            values = [values];
+        }
+        values.forEach((value) => {
+            if (value && typeof value === 'object') {
+                value = value.code || value.currency || value.currency_code || value.value || '';
+            }
+            const code = normalizeCurrencyCode(value);
+            if (!isCurrencyCodeShape(code) || seen[code]) {
+                return;
+            }
+            seen[code] = true;
+            codes.push(code);
+        });
+        return codes;
+    }
+
+    function isSupportedCurrencyCode(value, config) {
+        const code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        const supported = {};
+        normalizeCurrencyList(config && config.availableCurrencies).forEach((entry) => {
+            supported[entry] = true;
+        });
+        if (config && config.defaultCurrency) {
+            supported[normalizeCurrencyCode(config.defaultCurrency)] = true;
+        }
+        return supported[code] === true;
+    }
+
+    function normalizeCurrency(value, config) {
+        const currency = normalizeCurrencyCode(value);
+        return isSupportedCurrencyCode(currency, config || {}) ? currency : '';
     }
 
     function withContext(payload, config) {
@@ -252,16 +301,37 @@
 
     function randomHex(length) {
         const bytes = new Uint8Array(length);
-        crypto.getRandomValues(bytes);
+        if (typeof crypto !== 'undefined' && crypto && typeof crypto.getRandomValues === 'function') {
+            crypto.getRandomValues(bytes);
+        } else {
+            for (let i = 0; i < bytes.length; i += 1) {
+                bytes[i] = Math.floor(Math.random() * 256) & 0xff;
+            }
+        }
         return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
     }
 
+    function hasSubtleCrypto() {
+        return typeof crypto !== 'undefined'
+            && crypto
+            && crypto.subtle
+            && typeof crypto.subtle.digest === 'function'
+            && typeof crypto.subtle.importKey === 'function'
+            && typeof crypto.subtle.sign === 'function';
+    }
+
     async function sha256Hex(bytes) {
+        if (!hasSubtleCrypto()) {
+            return bytesToHex(sha256Bytes(bytes));
+        }
         const digest = await crypto.subtle.digest('SHA-256', bytes);
         return bytesToHex(new Uint8Array(digest));
     }
 
     async function hmacSha256Hex(secret, message) {
+        if (!hasSubtleCrypto()) {
+            return bytesToHex(hmacSha256Bytes(encoder.encode(secret), encoder.encode(message)));
+        }
         const key = await crypto.subtle.importKey(
             'raw',
             encoder.encode(secret),
@@ -275,6 +345,148 @@
 
     function bytesToHex(bytes) {
         return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    const SHA256_K = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+        0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+        0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+        0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+        0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+        0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+        0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+        0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    ];
+
+    function rotr32(value, bits) {
+        return (value >>> bits) | (value << (32 - bits));
+    }
+
+    function add32() {
+        let result = 0;
+        for (let i = 0; i < arguments.length; i += 1) {
+            result = (result + arguments[i]) >>> 0;
+        }
+        return result;
+    }
+
+    function sha256Bytes(inputBytes) {
+        const source = inputBytes instanceof Uint8Array ? inputBytes : new Uint8Array(inputBytes);
+        const paddedLength = (((source.length + 9 + 63) >> 6) << 6);
+        const bytes = new Uint8Array(paddedLength);
+        bytes.set(source);
+        bytes[source.length] = 0x80;
+
+        const bitLength = source.length * 8;
+        const bitLengthHigh = Math.floor(bitLength / 0x100000000);
+        const bitLengthLow = bitLength >>> 0;
+        bytes[paddedLength - 8] = (bitLengthHigh >>> 24) & 0xff;
+        bytes[paddedLength - 7] = (bitLengthHigh >>> 16) & 0xff;
+        bytes[paddedLength - 6] = (bitLengthHigh >>> 8) & 0xff;
+        bytes[paddedLength - 5] = bitLengthHigh & 0xff;
+        bytes[paddedLength - 4] = (bitLengthLow >>> 24) & 0xff;
+        bytes[paddedLength - 3] = (bitLengthLow >>> 16) & 0xff;
+        bytes[paddedLength - 2] = (bitLengthLow >>> 8) & 0xff;
+        bytes[paddedLength - 1] = bitLengthLow & 0xff;
+
+        const hash = [
+            0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+            0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+        ];
+        const words = new Uint32Array(64);
+
+        for (let offset = 0; offset < bytes.length; offset += 64) {
+            for (let i = 0; i < 16; i += 1) {
+                const j = offset + (i * 4);
+                words[i] = (
+                    (bytes[j] << 24)
+                    | (bytes[j + 1] << 16)
+                    | (bytes[j + 2] << 8)
+                    | bytes[j + 3]
+                ) >>> 0;
+            }
+            for (let i = 16; i < 64; i += 1) {
+                const s0 = rotr32(words[i - 15], 7) ^ rotr32(words[i - 15], 18) ^ (words[i - 15] >>> 3);
+                const s1 = rotr32(words[i - 2], 17) ^ rotr32(words[i - 2], 19) ^ (words[i - 2] >>> 10);
+                words[i] = add32(words[i - 16], s0, words[i - 7], s1);
+            }
+
+            let a = hash[0];
+            let b = hash[1];
+            let c = hash[2];
+            let d = hash[3];
+            let e = hash[4];
+            let f = hash[5];
+            let g = hash[6];
+            let h = hash[7];
+
+            for (let i = 0; i < 64; i += 1) {
+                const s1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+                const ch = (e & f) ^ ((~e) & g);
+                const temp1 = add32(h, s1, ch, SHA256_K[i], words[i]);
+                const s0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+                const maj = (a & b) ^ (a & c) ^ (b & c);
+                const temp2 = add32(s0, maj);
+
+                h = g;
+                g = f;
+                f = e;
+                e = add32(d, temp1);
+                d = c;
+                c = b;
+                b = a;
+                a = add32(temp1, temp2);
+            }
+
+            hash[0] = add32(hash[0], a);
+            hash[1] = add32(hash[1], b);
+            hash[2] = add32(hash[2], c);
+            hash[3] = add32(hash[3], d);
+            hash[4] = add32(hash[4], e);
+            hash[5] = add32(hash[5], f);
+            hash[6] = add32(hash[6], g);
+            hash[7] = add32(hash[7], h);
+        }
+
+        const digest = new Uint8Array(32);
+        for (let i = 0; i < hash.length; i += 1) {
+            digest[i * 4] = (hash[i] >>> 24) & 0xff;
+            digest[i * 4 + 1] = (hash[i] >>> 16) & 0xff;
+            digest[i * 4 + 2] = (hash[i] >>> 8) & 0xff;
+            digest[i * 4 + 3] = hash[i] & 0xff;
+        }
+        return digest;
+    }
+
+    function concatBytes(first, second) {
+        const out = new Uint8Array(first.length + second.length);
+        out.set(first, 0);
+        out.set(second, first.length);
+        return out;
+    }
+
+    function hmacSha256Bytes(secretBytes, messageBytes) {
+        let key = secretBytes instanceof Uint8Array ? secretBytes : new Uint8Array(secretBytes);
+        if (key.length > 64) {
+            key = sha256Bytes(key);
+        }
+        const inner = new Uint8Array(64);
+        const outer = new Uint8Array(64);
+        inner.fill(0x36);
+        outer.fill(0x5c);
+        for (let i = 0; i < key.length; i += 1) {
+            inner[i] ^= key[i];
+            outer[i] ^= key[i];
+        }
+        return sha256Bytes(concatBytes(outer, sha256Bytes(concatBytes(inner, messageBytes))));
     }
 
     class Writer {

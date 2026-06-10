@@ -19,6 +19,7 @@
  * @param border_radius {default="8px",type="string",label="圆角大小"}
  */
 
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $image = $this->getData('image') ?? '';
 $link = $this->getData('link') ?? '';
 $altText = $this->getData('alt_text') ?? __('广告');
@@ -26,23 +27,32 @@ $openNewTab = (bool)($this->getData('open_new_tab') ?? false);
 $borderRadius = $this->getData('border_radius') ?? '8px';
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
 
-// 示例图片
-if (empty($image)) {
+// 示例图片（部件库预览使用渐变占位，避免灰色占位图在缩略图中不可见）
+if ($isPreviewMode && $image === '') {
+    $image = '';
+} elseif (empty($image)) {
     $image = $placeholder;
 }
+$previewStyle = ($isPreviewMode && $image === '')
+    ? 'background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); min-height: 56px;'
+    : '';
 ?>
 
-<div class="widget-ad-banner" style="border-radius: <?= htmlspecialchars($borderRadius ?? '') ?>;">
+<div class="widget-ad-banner<?= $isPreviewMode ? ' widget-ad-banner--preview' : '' ?>" style="border-radius: <?= htmlspecialchars($borderRadius ?? '') ?>; <?= $previewStyle ?>">
     <?php if ($link): ?>
         <a href="<?= htmlspecialchars($link ?? '') ?>" 
            class="ad-link"
            <?= $openNewTab ? 'target="_blank" rel="noopener noreferrer"' : '' ?>>
     <?php endif; ?>
     
+    <?php if ($image !== ''): ?>
     <img src="<?= htmlspecialchars($image ?? '') ?>" 
          alt="<?= htmlspecialchars($altText ?? '') ?>" 
          class="ad-image"
          loading="lazy">
+    <?php elseif ($isPreviewMode): ?>
+    <div class="ad-image ad-image--preview" aria-hidden="true"></div>
+    <?php endif; ?>
     
     <span class="ad-label"><?= __('广告') ?></span>
     
@@ -86,5 +96,29 @@ if (empty($image)) {
     border-radius: 3px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.widget-preview-canvas .widget-ad-banner,
+.widget-ad-banner--preview {
+    min-height: 56px;
+}
+
+.widget-preview-canvas .widget-ad-banner .ad-image,
+.widget-ad-banner--preview .ad-image {
+    min-height: 56px;
+}
+
+.widget-preview-canvas .widget-ad-banner .ad-image--preview,
+.widget-ad-banner--preview .ad-image--preview {
+    width: 100%;
+    min-height: 56px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%);
+}
+
+.widget-preview-canvas .widget-ad-banner .ad-label,
+.widget-ad-banner--preview .ad-label {
+    top: 6px;
+    right: 6px;
+    font-size: 9px;
 }
 </style>

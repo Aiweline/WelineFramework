@@ -262,7 +262,7 @@ class ThemePreviewContentRenderer
         }
 
         $processedHtml = $layoutData !== null
-            ? $this->slotRendererService->processSlotsWithLayout($html, $layoutData, false)
+            ? $this->slotRendererService->processSlotsWithLayout($html, $layoutData, false, $themeId)
             : $this->slotRendererService->processSlots($html, $themeId, $pageType, $status);
 
         return $this->extractSlotHtml($processedHtml, $orderedSlotIds);

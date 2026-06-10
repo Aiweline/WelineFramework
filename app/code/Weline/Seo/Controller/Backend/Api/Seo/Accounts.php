@@ -15,6 +15,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoAccount;
+use Weline\Seo\Service\PlatformVisual;
 
 /**
  * SEO 账户 API 控制器
@@ -37,6 +38,8 @@ class Accounts extends BackendController
             
             /** @var SeoAccount $accountModel */
             $accountModel = ObjectManager::getInstance(SeoAccount::class);
+            /** @var PlatformVisual $platformVisual */
+            $platformVisual = ObjectManager::getInstance(PlatformVisual::class);
             
             $query = $accountModel->reset()
                 ->where(SeoAccount::schema_fields_IS_ACTIVE, 1)
@@ -55,13 +58,17 @@ class Accounts extends BackendController
             // 格式化输出
             $data = [];
             foreach ($accounts as $account) {
+                $platform = (string)($account[SeoAccount::schema_fields_PLATFORM] ?? $account[SeoAccount::schema_fields_PROVIDER] ?? '');
+                $provider = (string)($account[SeoAccount::schema_fields_PROVIDER] ?? '');
                 $data[] = [
                     'account_id' => (int)$account[SeoAccount::schema_fields_ACCOUNT_ID],
                     'name' => $account[SeoAccount::schema_fields_NAME] ?? '',
-                    'provider' => $account[SeoAccount::schema_fields_PROVIDER] ?? '',
+                    'platform' => $platform,
+                    'provider' => $provider,
                     'scope' => $account[SeoAccount::schema_fields_SCOPE] ?? '',
                     'module' => $account[SeoAccount::schema_fields_MODULE] ?? '',
                     'is_active' => (int)($account[SeoAccount::schema_fields_IS_ACTIVE] ?? 0),
+                    'platform_icon_svg' => $platformVisual->renderIcon($platform ?: $provider, $platform ?: $provider, null, 26),
                 ];
             }
             

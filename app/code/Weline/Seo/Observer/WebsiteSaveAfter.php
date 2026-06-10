@@ -47,17 +47,7 @@ class WebsiteSaveAfter implements ObserverInterface
                 'robots_extra' => (string)($seo['robots_extra'] ?? ''),
             ]);
 
-            $hasAccountField = array_key_exists('account_id', $seo) || array_key_exists('seo_account_id', $postData);
-            if ($hasAccountField) {
-                $accountId = (int)($seo['account_id'] ?? $postData['seo_account_id'] ?? 0);
-                if ($accountId > 0) {
-                    $this->websiteAccount->bindWebsiteAccount($websiteId, $accountId, [
-                        'is_auto_submit' => $this->flag($seo, 'auto_submit', true),
-                    ]);
-                } else {
-                    $this->websiteAccount->unbindWebsite($websiteId);
-                }
-            }
+            $this->saveWebsiteAccounts($websiteId, $seo, $postData);
         } catch (\Throwable $e) {
             w_log_error(sprintf(
                 '[Weline_Seo] website_save_after failed: website_id=%d, error=%s',
@@ -65,6 +55,70 @@ class WebsiteSaveAfter implements ObserverInterface
                 $e->getMessage()
             ));
         }
+    }
+
+    /**
+     * @param array<string, mixed> $seo
+     * @param array<string, mixed> $postData
+     */
+    private function saveWebsiteAccounts(int $websiteId, array $seo, array $postData): void
+    {
+        if (array_key_exists('account_ids', $seo)) {
+            $accountIds = $this->normalizeAccountIds($seo['account_ids']);
+            $configs = is_array($seo['configs'] ?? null) ? $seo['configs'] : [];
+            $defaultAutoSubmit = $this->flag($seo, 'auto_submit', true);
+
+            $this->websiteAccount->unbindWebsite($websiteId);
+            foreach ($accountIds as $accountId) {
+                $config = $configs[$accountId] ?? $configs[(string)$accountId] ?? [];
+                if (!is_array($config)) {
+                    $config = [];
+                }
+
+                $this->websiteAccount->bindWebsiteAccount($websiteId, $accountId, [
+                    'is_auto_submit' => $this->flag($config, 'is_auto_submit', $defaultAutoSubmit),
+                    'sitemap_frequency' => (string)($config['sitemap_frequency'] ?? SeoWebsiteAccount::DEFAULT_SITEMAP_FREQUENCY),
+                    'crawl_frequency' => (string)($config['crawl_frequency'] ?? SeoWebsiteAccount::DEFAULT_CRAWL_FREQUENCY),
+                    'priority' => isset($config['priority']) ? (float)$config['priority'] : SeoWebsiteAccount::DEFAULT_PRIORITY,
+                ]);
+            }
+            return;
+        }
+
+        $hasAccountField = array_key_exists('account_id', $seo) || array_key_exists('seo_account_id', $postData);
+        if (!$hasAccountField) {
+            return;
+        }
+
+        $accountId = (int)($seo['account_id'] ?? $postData['seo_account_id'] ?? 0);
+        if ($accountId > 0) {
+            $this->websiteAccount->bindWebsiteAccount($websiteId, $accountId, [
+                'is_auto_submit' => $this->flag($seo, 'auto_submit', true),
+            ]);
+            return;
+        }
+
+        $this->websiteAccount->unbindWebsite($websiteId);
+    }
+
+    /**
+     * @return int[]
+     */
+    private function normalizeAccountIds(mixed $rawIds): array
+    {
+        if (!is_array($rawIds)) {
+            $rawIds = [$rawIds];
+        }
+
+        $ids = [];
+        foreach ($rawIds as $rawId) {
+            $accountId = (int)$rawId;
+            if ($accountId > 0) {
+                $ids[$accountId] = $accountId;
+            }
+        }
+
+        return array_values($ids);
     }
 
     /**

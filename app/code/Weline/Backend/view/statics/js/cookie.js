@@ -34,10 +34,81 @@ function removeCookie(key) {
         }
     }
 
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function isCurrencyCodeShape(value) {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function addSupportedCurrencyCode(codes, value) {
+        if (value && typeof value === 'object') {
+            value = value.code || value.currency || value.currency_code || value.value || '';
+        }
+        var code = normalizeCurrencyCode(value);
+        if (isCurrencyCodeShape(code)) {
+            codes[code] = true;
+        }
+    }
+
+    function collectSupportedCurrencyCodes(codes, source) {
+        if (!source) {
+            return;
+        }
+        if (Array.isArray(source)) {
+            source.forEach(function (item) {
+                addSupportedCurrencyCode(codes, item);
+            });
+            return;
+        }
+        if (typeof source === 'object') {
+            Object.keys(source).forEach(function (key) {
+                addSupportedCurrencyCode(codes, key);
+                addSupportedCurrencyCode(codes, source[key]);
+            });
+            return;
+        }
+        String(source).split(/[,\s|]+/).forEach(function (code) {
+            addSupportedCurrencyCode(codes, code);
+        });
+    }
+
+    function getSupportedCurrencyCodes() {
+        var config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+        var site = window.site || {};
+        var codes = Object.create(null);
+        [
+            config.availableCurrencies,
+            config.supportedCurrencies,
+            config.currencyCodes,
+            config.currencies,
+            config.site && config.site.availableCurrencies,
+            config.site && config.site.supportedCurrencies,
+            config.site && config.site.currencyCodes,
+            config.site && config.site.currencies,
+            site.availableCurrencies,
+            site.supportedCurrencies,
+            site.currencyCodes,
+            site.currencies
+        ].forEach(function (source) {
+            collectSupportedCurrencyCodes(codes, source);
+        });
+        addSupportedCurrencyCode(codes, config.defaultCurrency || (config.site && (config.site.defaultCurrency || config.site.default_currency)) || site.defaultCurrency || site.default_currency);
+        return codes;
+    }
+
+    function isSupportedCurrencyCode(value) {
+        var code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        return !!getSupportedCurrencyCodes()[code];
+    }
+
     function collectLangCookiePaths(link) {
         var paths = ['/'];
         var langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
-        var currencyPattern = /^[A-Z]{3}$/;
         var parts = String(window.location.pathname || '/').split('/').filter(Boolean);
         var backendKey = String((window.site && window.site.area) || '').replace(/^\/+|\/+$/g, '');
         var first = parts[0] || '';
@@ -45,14 +116,14 @@ function removeCookie(key) {
         if (backendKey) {
             addPath(paths, '/' + backendKey);
         }
-        if (first && !langPattern.test(first) && !currencyPattern.test(first)) {
+        if (first && !langPattern.test(first) && !isSupportedCurrencyCode(first)) {
             addPath(paths, '/' + first);
         }
 
         var currencyIndex = -1;
         var langIndex = -1;
         for (var i = 0; i < parts.length; i++) {
-            if (currencyIndex < 0 && currencyPattern.test(parts[i])) {
+            if (currencyIndex < 0 && isSupportedCurrencyCode(parts[i])) {
                 currencyIndex = i;
             }
             if (langIndex < 0 && langPattern.test(parts[i])) {
@@ -70,7 +141,7 @@ function removeCookie(key) {
             if (link && link.href) {
                 var targetParts = new URL(link.href, window.location.href).pathname.split('/').filter(Boolean);
                 for (var j = 0; j < targetParts.length; j++) {
-                    if (currencyPattern.test(targetParts[j]) || langPattern.test(targetParts[j])) {
+                    if (isSupportedCurrencyCode(targetParts[j]) || langPattern.test(targetParts[j])) {
                         addPath(paths, '/' + targetParts.slice(0, j + 1).join('/'));
                     }
                 }

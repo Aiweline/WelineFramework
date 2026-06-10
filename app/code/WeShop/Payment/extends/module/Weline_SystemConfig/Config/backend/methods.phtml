@@ -1,0 +1,47 @@
+<?php
+/**
+ * @meta.title {default="WeShop 支付配置",description="WeShop_Payment 模块配置中心标题"}
+ * @meta.description {default="通过统一 SystemConfig scope 配置中心管理 WeShop 结账支付行为。"}
+ * @config.area {backend}
+ * @config.sort {60}
+ * @config.acl {WeShop_Payment::payment}
+ */
+?>
+
+<w:config:group code="weshop_checkout_payment" label="WeShop 结账支付" description="WeShop_Payment 负责的商城结账支付规则。" sort="10">
+    <w:config:field
+        key="weshop/payment/checkout_enabled"
+        label="启用 WeShop 结账支付"
+        description="允许 WeShop 结账为符合条件的可支付对象加载 Weline_Payment 支付方式。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="weshop/payment/default_method_code"
+        label="默认支付方式代码"
+        description="多个支付方式可用时优先选择的支付方式代码。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:96" />
+
+    <w:config:field
+        key="weshop/payment/show_more_unavailable"
+        label="更多中显示不可用方式"
+        description="结账页初始只显示可用方式，不可用方式可展开用于诊断。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+
+    <w:config:adapter
+        code="weshop.payment.methods"
+        label="WeShop 支付方式"
+        description="打开 WeShop 支付管理页，处理方式覆盖范围、凭据、测试和结账准入。"
+        provider="payment"
+        summary-operation="getWeShopPaymentSummary"
+        manage-url="weshop_payment/backend/payment" />
+</w:config:group>

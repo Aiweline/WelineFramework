@@ -23,14 +23,11 @@
 ?>
 <?php
 $meta = $this->getData('meta') ?? [];
-// 兼容旧的 title/content/class 参数
 $title = $meta['title'] ?? $this->getData('title') ?? __('分类');
 $content = $meta['content'] ?? $this->getData('content') ?? '';
 $class = $meta['class'] ?? $this->getData('class') ?? '';
-// 兼容配置方式：支持通过 meta.filter_sidebar 或 filter_sidebar 变量传入筛选内容
 $filter_sidebar = $meta['filter_sidebar'] ?? $this->getData('filter_sidebar') ?? '';
 
-// 设置 showHeader 和 showFooter 的默认值
 $showHeader = $meta['showHeader'] ?? $this->getData('showHeader') ?? true;
 $showFooter = $meta['showFooter'] ?? $this->getData('showFooter') ?? true;
 $showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
@@ -41,7 +38,6 @@ $gridColumns = $meta['gridColumns'] ?? $this->getData('gridColumns') ?? 4;
 $pagination = $this->request->getData('pagination') ?? $this->getData('pagination') ?? '';
 $paginationData = $this->request->getData('pagination_data') ?? $this->getData('pagination_data') ?? [];
 
-// 将默认值赋值到 meta 数组，以便模板条件可以正确读取
 $meta['showHeader'] = $showHeader;
 $meta['showFooter'] = $showFooter;
 $meta['showFilters'] = $showFilters;
@@ -49,11 +45,10 @@ $meta['filterDrawerTitle'] = $filterDrawerTitle;
 $meta['gridColumns'] = $gridColumns;
 $this->assign('meta', $meta);
 
-// 设置页面标题
 $this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, shrink-to-fit=no">
@@ -149,7 +144,9 @@ $this->assign('title', $title);
                                 multiple="true"
                                 position="content"
                                 class="category-layout__products">
-                            <w:hook>WeShop_Catalog::frontend::layouts::category::products-content<else/>
+                            <w:hook>
+                                WeShop_Catalog::frontend::layouts::category::products-content
+                                <else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
                                 <elseif condition="content"/>
@@ -273,9 +270,9 @@ $this->assign('title', $title);
     /* ---- 筛选侧边栏 ---- */
     .category-layout__sidebar {
         background-color: var(--color-bg-primary);
-        border: 1px solid var(--color-border-light);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         border-radius: var(--radius-lg, 12px);
-        box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+        box-shadow: var(--weline-theme-shadow-sm);
         position: sticky;
         top: calc(var(--header-height, 70px) + var(--spacing-4, 1rem));
         max-height: calc(100vh - var(--header-height, 70px) - var(--spacing-8, 4rem));
@@ -288,7 +285,7 @@ $this->assign('title', $title);
         align-items: center;
         justify-content: space-between;
         padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
-        border-bottom: 1px solid var(--color-border-light);
+        border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         background-color: var(--color-bg-primary);
         position: sticky;
         top: 0;
@@ -333,19 +330,19 @@ $this->assign('title', $title);
         gap: var(--spacing-2, 0.5rem);
         padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
         background-color: var(--color-bg-primary);
-        border: 1px solid var(--color-border-light);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         border-radius: var(--radius-full, 9999px);
         cursor: pointer;
         color: var(--color-text-primary);
         font-size: var(--font-size-sm, 0.875rem);
         font-weight: var(--font-weight-medium, 500);
-        box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+        box-shadow: var(--weline-theme-shadow-md);
         transition: all 0.2s ease;
     }
 
     .category-layout__filter-toggle:hover {
         background-color: var(--color-bg-secondary);
-        box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+        box-shadow: var(--weline-theme-shadow-lg);
     }
 
     .category-layout__filter-toggle[aria-expanded="true"] {
@@ -367,7 +364,7 @@ $this->assign('title', $title);
         background-color: var(--color-error);
         color: var(--color-text-light);
         border-radius: var(--radius-full, 9999px);
-        font-size: 0.7rem;
+        font-size: var(--weline-layout-font-size-xs);
         font-weight: var(--font-weight-semibold, 600);
         display: inline-flex;
         align-items: center;
@@ -378,7 +375,7 @@ $this->assign('title', $title);
     .category-layout__overlay {
         position: fixed;
         inset: 0;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: color-mix(in srgb, var(--weline-theme-text) 50%, transparent);
         z-index: var(--z-index-overlay, 998);
         opacity: 0;
         visibility: hidden;
@@ -406,10 +403,10 @@ $this->assign('title', $title);
         align-items: center;
         gap: var(--spacing-4, 1rem);
         padding: 0.75rem 1rem;
-        border: 1px solid var(--color-border-light);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         border-radius: var(--radius-lg, 12px);
         background: var(--color-bg-primary);
-        box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+        box-shadow: var(--weline-theme-shadow-sm);
     }
 
     .category-pagination__link {
@@ -418,8 +415,8 @@ $this->assign('title', $title);
         justify-content: center;
         min-width: 5rem;
         padding: 0.5rem 0.9rem;
-        border: 1px solid var(--color-border-light);
-        border-radius: 999px;
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
+        border-radius: var(--weline-layout-radius-full);
         color: var(--color-text-primary);
         font-size: var(--font-size-sm, 0.875rem);
         font-weight: var(--font-weight-semibold, 600);
@@ -428,8 +425,8 @@ $this->assign('title', $title);
     }
 
     .category-pagination__link:hover {
-        border-color: var(--color-primary, #2563eb);
-        color: var(--color-primary, #2563eb);
+        border-color: var(--weline-theme-primary);
+        color: var(--weline-theme-primary);
     }
 
     .category-pagination__link.is-disabled {
@@ -520,7 +517,7 @@ $this->assign('title', $title);
         border-radius: var(--radius-full, 9999px);
         background-color: var(--color-accent-light);
         color: var(--color-accent);
-        border: 1px solid var(--color-accent-medium);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-accent-medium);
         font-size: var(--font-size-xs, 0.75rem);
         font-weight: var(--font-weight-medium, 500);
         transition: all 0.2s ease;
@@ -547,7 +544,7 @@ $this->assign('title', $title);
     .category-filter-group {
         padding-top: var(--spacing-3, 0.75rem);
         margin-top: var(--spacing-3, 0.75rem);
-        border-top: 1px solid var(--color-border-light);
+        border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
     }
 
     .category-filter-group-title {
@@ -618,9 +615,9 @@ $this->assign('title', $title);
             width: min(85%, 360px);
             height: 100vh;
             max-height: 100vh;
-            border-radius: 0;
+            border-radius: var(--border-radius-none);
             border: none;
-            border-right: 1px solid var(--color-border-light);
+            border-right: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
             z-index: var(--z-index-drawer, 999);
             transform: translateX(-100%);
             transition: transform 0.3s ease;
@@ -692,92 +689,7 @@ $this->assign('title', $title);
         }
     }
     </style>
-    <script>
-    (function() {
-        'use strict';
 
-        // 移动端筛选抽屉功能
-        const filterToggle = document.querySelector('[data-filter-toggle]');
-        const filterSidebar = document.querySelector('[data-sidebar]');
-        const filterOverlay = document.querySelector('[data-overlay]');
-        const filterClose = document.querySelector('[data-sidebar-close]');
-        const filterBadge = document.getElementById('filter-count-badge');
 
-        function updateFilterBadge() {
-            if (!filterBadge) return;
-            const activeFilters = document.querySelectorAll('.filter-chip.is-active');
-            const count = activeFilters.length;
-            if (count > 0) {
-                filterBadge.textContent = count;
-                filterBadge.removeAttribute('hidden');
-            } else {
-                filterBadge.setAttribute('hidden', '');
-            }
-        }
-
-        function openSidebar() {
-            if (!filterSidebar || !filterOverlay) return;
-            filterSidebar.classList.add('is-open');
-            filterOverlay.classList.add('is-visible');
-            filterToggle?.setAttribute('aria-expanded', 'true');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeSidebar() {
-            if (!filterSidebar || !filterOverlay) return;
-            filterSidebar.classList.remove('is-open');
-            filterOverlay.classList.remove('is-visible');
-            filterToggle?.setAttribute('aria-expanded', 'false');
-            document.body.style.overflow = '';
-        }
-
-        filterToggle?.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (filterSidebar?.classList.contains('is-open')) {
-                closeSidebar();
-            } else {
-                openSidebar();
-            }
-        });
-
-        filterClose?.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            closeSidebar();
-        });
-
-        filterOverlay?.addEventListener('click', function(e) {
-            e.preventDefault();
-            closeSidebar();
-        });
-
-        filterSidebar?.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && filterSidebar?.classList.contains('is-open')) {
-                closeSidebar();
-            }
-        });
-
-        document.addEventListener('DOMContentLoaded', function() {
-            updateFilterBadge();
-            const observer = new MutationObserver(updateFilterBadge);
-            const filterContainer = document.querySelector('.category-filter-applied');
-            if (filterContainer) {
-                observer.observe(filterContainer, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true,
-                    attributeFilter: ['class']
-                });
-            }
-        });
-
-        setTimeout(updateFilterBadge, 100);
-    })();
-    </script>
 </body>
 </html>

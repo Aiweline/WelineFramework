@@ -1,6 +1,5 @@
 <?php
 $pageTitle = (string) ($this->getData('page_title') ?? __('支付方式'));
-$saveUrl = (string) ($this->getData('save_url') ?? '');
 $filterUrl = (string) ($this->getData('filter_url') ?? '');
 $methods = $this->getData('methods') ?? [];
 $allMethods = $this->getData('all_methods') ?? $methods;
@@ -32,9 +31,14 @@ $checkoutReadyMethods = array_values(array_filter($methods, static fn(array $met
     && (bool) ($method['has_documentation'] ?? false)
     && (string) ($method['config_test_status'] ?? '') === 'passed'));
 $selectedCountry = strtoupper((string) ($filters['country'] ?? ''));
-$selectedScopeType = (string) ($scope['scope_type'] ?? $filters['scope_type'] ?? 'global');
-$selectedScopeCode = (string) ($scope['scope_code'] ?? $filters['scope_code'] ?? 'default');
+$selectedScope = (string) ($scope['scope'] ?? $filters['scope'] ?? 'default.default.default');
 $selectedEnvironment = (string) ($scope['environment'] ?? $filters['environment'] ?? 'sandbox');
+$systemConfigUrl = $this->getUrl('system_config/backend/index') . '?' . http_build_query([
+    'area' => 'backend',
+    'scope' => $selectedScope,
+    'module' => 'WeShop_Payment',
+    'q' => 'payment',
+]);
 $providerBrands = [
     'manual' => ['mark' => 'BK', 'bg' => '#0f766e', 'fg' => '#ffffff', 'icon' => 'mdi-bank-transfer'],
     'stripe' => ['mark' => 'S', 'bg' => '#635bff', 'fg' => '#ffffff', 'icon' => 'mdi-credit-card-check-outline'],
@@ -107,14 +111,14 @@ $renderConfigFields = static function (array $method) use ($h): void {
             <div class="col-md-6 col-xl-4">
                 <label class="form-label fw-semibold"><?= $h($fieldLabel) ?></label>
                 <?php if ($fieldType === 'textarea'): ?>
-                    <textarea class="form-control" rows="3" name="<?= $h($inputName) ?>"><?= $h($fieldValue) ?></textarea>
+                    <textarea class="form-control" rows="3" name="<?= $h($inputName) ?>" disabled><?= $h($fieldValue) ?></textarea>
                 <?php elseif ($fieldType === 'checkbox'): ?>
                     <input type="hidden" name="<?= $h($inputName) ?>" value="0">
                     <div class="form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" role="switch" name="<?= $h($inputName) ?>" value="1" <?= !empty($fieldValue) ? 'checked' : '' ?>>
+                        <input class="form-check-input" type="checkbox" role="switch" name="<?= $h($inputName) ?>" value="1" <?= !empty($fieldValue) ? 'checked' : '' ?> disabled>
                     </div>
                 <?php elseif ($fieldType === 'select'): ?>
-                    <select class="form-select" name="<?= $h($inputName) ?>">
+                    <select class="form-select" name="<?= $h($inputName) ?>" disabled>
                         <?php foreach ((array) ($field['options'] ?? []) as $optionValue => $optionLabel): ?>
                             <option value="<?= $h($optionValue) ?>" <?= (string) $fieldValue === (string) $optionValue ? 'selected' : '' ?>><?= $h($optionLabel) ?></option>
                         <?php endforeach; ?>
@@ -127,6 +131,7 @@ $renderConfigFields = static function (array $method) use ($h): void {
                         value="<?= $fieldType === 'password' ? '' : $h($fieldValue) ?>"
                         <?= $fieldType === 'password' ? 'autocomplete="off" placeholder="' . $h(__('留空表示不修改')) . '"' : '' ?>
                         <?php if (!empty($field['step'])): ?>step="<?= $h($field['step']) ?>"<?php endif; ?>
+                        disabled
                     >
                 <?php endif; ?>
                 <?php if ($fieldHelp !== ''): ?>
@@ -230,7 +235,7 @@ $renderMethod = static function (array $method, bool $showConfig = true) use ($h
                 >
                     <i class="mdi mdi-file-document-outline me-1"></i><?= __('查看配置指南') ?>
                 </button>
-                <button class="btn btn-outline-primary btn-sm" type="submit" name="test_method" value="<?= $h($code) ?>" formnovalidate>
+                <button class="btn btn-outline-primary btn-sm" type="button" disabled>
                     <i class="mdi mdi-shield-check-outline me-1"></i><?= __('测试当前 scope 配置') ?>
                 </button>
                 <div class="row g-2">
@@ -238,18 +243,18 @@ $renderMethod = static function (array $method, bool $showConfig = true) use ($h
                         <label class="form-label small fw-semibold"><?= __('启用') ?></label>
                         <input type="hidden" name="methods[<?= $h($code) ?>][enabled]" value="0">
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" role="switch" name="methods[<?= $h($code) ?>][enabled]" value="1" <?= !empty($method['enabled']) ? 'checked' : '' ?> <?= (empty($method['has_documentation']) || $testStatus !== 'passed') ? 'disabled' : '' ?>>
+                            <input class="form-check-input" type="checkbox" role="switch" name="methods[<?= $h($code) ?>][enabled]" value="1" <?= !empty($method['enabled']) ? 'checked' : '' ?> disabled>
                         </div>
                     </div>
                     <div class="col-4">
                         <label class="form-label small fw-semibold"><?= __('默认') ?></label>
                         <div class="form-check mt-1">
-                            <input class="form-check-input" type="radio" name="default_method" value="<?= $h($code) ?>" <?= !empty($method['is_default']) ? 'checked' : '' ?> <?= empty($method['enabled']) ? 'disabled' : '' ?>>
+                            <input class="form-check-input" type="radio" name="default_method" value="<?= $h($code) ?>" <?= !empty($method['is_default']) ? 'checked' : '' ?> disabled>
                         </div>
                     </div>
                     <div class="col-4">
                         <label class="form-label small fw-semibold"><?= __('排序') ?></label>
-                        <input class="form-control form-control-sm" type="number" name="methods[<?= $h($code) ?>][sort_order]" value="<?= (int) ($method['sort_order'] ?? 0) ?>">
+                        <input class="form-control form-control-sm" type="number" name="methods[<?= $h($code) ?>][sort_order]" value="<?= (int) ($method['sort_order'] ?? 0) ?>" disabled>
                     </div>
                 </div>
             </div>
@@ -501,17 +506,11 @@ body.payment-doc-open .payment-doc-panel {
             </div>
         </div>
         <div class="row g-2 align-items-end mt-2">
-            <div class="col-md-3">
+            <div class="col-md-6">
                 <label class="form-label fw-semibold"><?= __('配置 scope') ?></label>
-                <select class="form-select" name="scope_type">
-                    <?php foreach (['global' => 'Global', 'website' => 'Website', 'store' => 'Store', 'channel' => 'Channel', 'custom' => 'Custom'] as $value => $label): ?>
-                        <option value="<?= $h($value) ?>" <?= $selectedScopeType === $value ? 'selected' : '' ?>><?= $h($label) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label fw-semibold"><?= __('Scope code') ?></label>
-                <input class="form-control" name="scope_code" value="<?= $h($selectedScopeCode) ?>" placeholder="default / website_id / store_id">
+                <input type="hidden" name="scope" value="<?= $h($selectedScope) ?>">
+                <input class="form-control" value="<?= $h($selectedScope) ?>" readonly>
+                <div class="form-text"><?= __('scope 由系统配置中心选择并传入。') ?></div>
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-semibold"><?= __('环境') ?></label>
@@ -522,7 +521,7 @@ body.payment-doc-open .payment-doc-panel {
             </div>
             <div class="col-md-3">
                 <div class="small text-muted border rounded-2 p-2 bg-light">
-                    <?= __('当前配置隔离在') ?> <code><?= $h($selectedScopeType . ':' . $selectedScopeCode . ':' . $selectedEnvironment) ?></code>
+                    <?= __('当前配置隔离在') ?> <code><?= $h($selectedScope . ':' . $selectedEnvironment) ?></code>
                 </div>
             </div>
         </div>
@@ -537,11 +536,10 @@ body.payment-doc-open .payment-doc-panel {
         <li class="nav-item"><a class="nav-link <?= $activeTab === 'logs' ? 'active' : '' ?>" href="<?= $h($tabUrl('logs')) ?>"><i class="mdi mdi-webhook me-1"></i><?= __('交易/Webhook 日志') ?></a></li>
     </ul>
 
-    <form action="<?= $h($saveUrl) ?>" method="post" class="d-grid gap-3">
-        <input type="hidden" name="tab" value="<?= $h($activeTab) ?>">
-        <input type="hidden" name="scope_type" value="<?= $h($selectedScopeType) ?>">
-        <input type="hidden" name="scope_code" value="<?= $h($selectedScopeCode) ?>">
-        <input type="hidden" name="environment" value="<?= $h($selectedEnvironment) ?>">
+    <div class="d-grid gap-3">
+        <div class="alert alert-info mb-0">
+            <?= __('WeShop 支付普通配置由系统配置中心保存，本页只展示支付方式状态、覆盖范围和文档。') ?>
+        </div>
         <?php if ($activeTab === 'enabled'): ?>
             <?php foreach ($enabledMethods as $method): ?>
                 <?php $renderMethod($method, false); ?>
@@ -644,12 +642,12 @@ body.payment-doc-open .payment-doc-panel {
 
         <?php if (in_array($activeTab, ['enabled', 'all', 'credentials'], true)): ?>
             <div class="d-flex justify-content-end">
-                <button class="btn btn-primary btn-lg" type="submit">
-                    <i class="mdi mdi-content-save-outline me-1"></i><?= __('保存支付设置') ?>
-                </button>
+                <a class="btn btn-primary btn-lg" href="<?= $h($systemConfigUrl) ?>">
+                    <i class="mdi mdi-cog-outline me-1"></i><?= __('打开系统配置中心') ?>
+                </a>
             </div>
         <?php endif; ?>
-    </form>
+    </div>
 </div>
 
 <div class="payment-doc-backdrop" data-payment-doc-close></div>

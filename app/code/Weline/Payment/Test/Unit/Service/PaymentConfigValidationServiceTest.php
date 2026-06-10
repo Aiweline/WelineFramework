@@ -86,14 +86,12 @@ class PaymentConfigValidationServiceTest extends TestCase
     public function testScopeServiceNormalizesScopeKeys(): void
     {
         $scope = (new PaymentScopeConfigService())->resolveScope([
-            'scope_type' => 'website',
-            'scope_code' => 'site 01',
+            'scope' => 'site_01.demo',
             'environment' => 'live',
         ]);
 
-        self::assertSame('website', $scope['scope_type']);
-        self::assertSame('site_01', $scope['scope_code']);
+        self::assertSame('site_01.demo.default', $scope['scope']);
         self::assertSame('live', $scope['environment']);
-        self::assertSame('website:site_01', $scope['scope_key']);
+        self::assertSame('site_01.demo.default', $scope['scope_key']);
     }
 }

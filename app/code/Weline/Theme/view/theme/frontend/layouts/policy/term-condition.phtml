@@ -20,7 +20,7 @@
 $meta = $this->getData('meta') ?? [];
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
@@ -226,14 +226,14 @@ $meta = $this->getData('meta') ?? [];
     .policy-title {
         font-size: var(--weline-layout-font-size-3xl, 1.75rem);
         font-weight: var(--weline-layout-font-weight-semibold, 600);
-        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
 
     .policy-description {
         font-size: var(--weline-layout-font-size-base, 1rem);
         line-height: var(--weline-layout-line-height-relaxed, 1.75);
-        color: var(--weline-layout-text-secondary, var(--color-text-secondary, #565959));
+        color: var(--weline-layout-text-secondary);
         margin: 0;
     }
 
@@ -244,13 +244,13 @@ $meta = $this->getData('meta') ?? [];
     .policy-section .section-title {
         font-size: var(--weline-layout-font-size-xl, 1.25rem);
         font-weight: var(--weline-layout-font-weight-semibold, 600);
-        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
 
     .policy-section .section-text {
         font-size: var(--weline-layout-font-size-base, 1rem);
-        color: var(--weline-layout-text-secondary, var(--color-text-muted, #333));
+        color: var(--weline-layout-text-secondary);
         line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin: 0 0 0.75rem 0;
     }
@@ -263,7 +263,7 @@ $meta = $this->getData('meta') ?? [];
 
     .policy-list li {
         font-size: var(--weline-layout-font-size-base, 1rem);
-        color: var(--weline-layout-text-secondary, var(--color-text-muted, #333));
+        color: var(--weline-layout-text-secondary);
         line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin-bottom: 0.5rem;
     }

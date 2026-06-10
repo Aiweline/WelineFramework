@@ -29,14 +29,107 @@ $class = $this->getData('class') ?? '';
 $this->assign('title', $title);
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <style>
+        body.checkout-success-layout {
+            margin: 0;
+            background: var(--weline-layout-surface-secondary);
+            color: var(--weline-layout-text-primary);
+        }
+
+        .checkout-success-main {
+            width: min(960px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: var(--weline-layout-spacing-3xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
+        }
+
+        .checkout-success-content {
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            border-radius: var(--weline-layout-radius-lg);
+            background: var(--weline-layout-surface-primary);
+            padding: var(--weline-layout-spacing-3xl) var(--weline-layout-spacing-xl);
+            text-align: center;
+            box-shadow: var(--weline-theme-shadow-md);
+        }
+
+        .success-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto var(--weline-layout-spacing-lg);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--weline-layout-radius-full);
+            background: var(--weline-theme-success-subtle);
+            color: var(--weline-theme-success);
+            font-size: var(--weline-layout-font-size-4xl);
+        }
+
+        .success-title {
+            margin: 0;
+            font-size: var(--weline-layout-font-size-4xl);
+            line-height: var(--weline-layout-line-height-tight);
+        }
+
+        .order-number,
+        .success-message,
+        .order-details {
+            margin-top: var(--weline-layout-spacing-md);
+            color: var(--weline-layout-text-secondary);
+            line-height: var(--weline-layout-line-height-relaxed);
+        }
+
+        .success-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--weline-layout-spacing-sm);
+            justify-content: center;
+            margin-top: var(--weline-layout-spacing-lg);
+        }
+
+        .w-btn {
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 var(--weline-layout-spacing-lg);
+            border-radius: var(--weline-layout-radius-md);
+            text-decoration: none;
+            font-weight: var(--weline-layout-font-weight-bold);
+        }
+
+        .w-btn-primary {
+            color: var(--weline-theme-on-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-link-color);
+            background: var(--weline-layout-link-color);
+        }
+
+        .w-btn-secondary {
+            color: var(--weline-layout-text-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-strong);
+            background: var(--weline-layout-surface-primary);
+        }
+
+        .checkout-success-recommendations {
+            margin-top: var(--weline-layout-spacing-xl);
+        }
+
+        @media (max-width: 640px) {
+            .checkout-success-main {
+                width: min(100% - 28px, 960px);
+                padding: 40px 0 56px;
+            }
+        }
+    </style>
 </head>
-<body>
-    @template(Weline_Frontend::templates/public/header.phtml)
+<body class="checkout-success-layout">
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     
     <main class="checkout-success-main <?= htmlspecialchars($class ?? '') ?>" id="checkout-success-main" data-layout="checkout_success">
         <w:slot id="content"
@@ -55,7 +148,7 @@ $this->assign('title', $title);
                 class="checkout-success-container">
             <div class="checkout-success-content">
                 <div class="success-icon">
-                    <i class="fas fa-check-circle"></i>
+                    <i class="ri-check-line"></i>
                 </div>
                 <h1 class="success-title"><?= __('订单提交成功！') ?></h1>
                 
@@ -101,7 +194,9 @@ $this->assign('title', $title);
         </w:slot>
     </main>
     
-    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
 </body>
 </html>
 

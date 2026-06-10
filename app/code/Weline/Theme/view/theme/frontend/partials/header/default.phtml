@@ -89,6 +89,13 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
         font-weight: 800;
     }
 
+    .weline-header__brand > span:last-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .weline-header__mark {
         display: grid;
         place-items: center;
@@ -192,6 +199,7 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
         display: flex;
         align-items: center;
         gap: 8px;
+        min-width: 0;
     }
 
     .weline-header__action {
@@ -257,12 +265,71 @@ $esc = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES,
 
     @media (max-width: 720px) {
         .weline-header__bar {
+            grid-template-columns: minmax(0, 1fr);
             min-height: 64px;
             gap: 12px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+
+        .weline-header__brand-slot {
+            min-width: 0;
+        }
+
+        .weline-header__brand {
+            max-width: 100%;
         }
 
         .weline-header__action span {
             display: none;
+        }
+
+        .weline-header__tools {
+            width: 100%;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .weline-header__actions {
+            flex: 1 1 auto;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .weline-header__action-slot {
+            min-width: 0;
+        }
+
+        .weline-header__actions .weline-choice-switcher {
+            min-height: 36px;
+            max-width: 100%;
+            padding: 0.35rem 0.45rem;
+            flex-direction: row;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .weline-header__actions .weline-choice-switcher .action-line-1 {
+            display: none;
+        }
+
+        .weline-header__actions .weline-choice-switcher .action-line-2 {
+            min-width: 0;
+            font-size: 0.78rem;
+        }
+
+        .weline-header__actions .weline-choice-switcher .current-language {
+            max-width: 5.5rem;
+        }
+    }
+
+    @media (max-width: 420px) {
+        .weline-header__brand > span:last-child {
+            display: none;
+        }
+
+        .weline-header__actions .weline-choice-switcher .current-language {
+            max-width: 4.75rem;
         }
     }
 </style>

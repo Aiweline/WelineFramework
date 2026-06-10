@@ -3,7 +3,7 @@
 namespace WeShop\Product\Controller\Backend\Product;
 
 use Aiweline\PlayingInChina\Model\Message;
-use WeShop\Product\Model\Category;
+use WeShop\Catalog\Model\Category;
 use WeShop\Product\Model\Product;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Set;

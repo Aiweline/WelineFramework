@@ -79,6 +79,9 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                     }
                 }
 
+                $templateContent = !empty($widget['template_content']) ? (string)$widget['template_content'] : null;
+                $templatePath = !empty($widget['template']) ? (string)$widget['template'] : null;
+
                 $definitions[] = new ThemeComponentDefinition(
                     module: $module,
                     type: $widgetType,
@@ -88,7 +91,7 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                     area: $area,
                     sourceType: 'widget',
                     category: $widgetType,
-                    renderMode: ThemeRenderable::MODE_TEMPLATE_PATH,
+                    renderMode: $templateContent !== null ? ThemeRenderable::MODE_TEMPLATE_CONTENT : ThemeRenderable::MODE_TEMPLATE_PATH,
                     configSchema: $this->buildConfigSchema($widget['params'] ?? []),
                     defaultConfig: $this->buildDefaultConfig($widget['params'] ?? []),
                     meta: array_merge($widget['meta'] ?? [], [
@@ -104,9 +107,10 @@ class WidgetRegistryComponentSource implements ThemeComponentSourceInterface
                     exclusive: (bool)($widget['exclusive'] ?? false),
                     compatible: (bool)($widget['compatible'] ?? false),
                     isContainer: (bool)($widget['is_container'] ?? false),
-                    isAiGenerated: false,
+                    isAiGenerated: (bool)($widget['is_ai_generated'] ?? ($widget['meta']['is_ai_generated'] ?? false)),
                     icon: !empty($widget['icon']) ? (string)$widget['icon'] : null,
-                    templatePath: !empty($widget['template']) ? (string)$widget['template'] : null,
+                    templatePath: $templatePath,
+                    templateContent: $templateContent,
                     logicalKey: "{$module}/{$widgetType}/{$code}",
                     layerKey: 'widget_registry',
                 );

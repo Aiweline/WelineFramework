@@ -5,9 +5,15 @@ declare(strict_types=1);
 namespace WeShop\QA\Extends\Module\Weline_Seo\SeoProfileProvider;
 
 use Weline\Seo\Interface\SeoProfileProviderInterface;
+use Weline\Seo\Structure\Faq\FaqStructureNormalizer;
 
 class QASeoProfileProvider implements SeoProfileProviderInterface
 {
+    public function __construct(
+        private readonly ?FaqStructureNormalizer $faqStructureNormalizer = null
+    ) {
+    }
+
     /**
      * @param mixed $template
      * @param array<string, mixed> $context
@@ -15,31 +21,16 @@ class QASeoProfileProvider implements SeoProfileProviderInterface
      */
     public function provideSeoProfile($template, array $context): array
     {
-        $questions = $this->questions($this->readTemplate($template, 'qa_list') ?? $context['qa_list'] ?? []);
-        if ($questions === []) {
+        $qaList = $this->normalizeQaList($this->readTemplate($template, 'qa_list') ?? $context['qa_list'] ?? []);
+        if ($qaList === []) {
             return [];
         }
 
-        $url = (string)($context['canonical_url'] ?? $context['url'] ?? '');
+        $faqs = ($this->faqStructureNormalizer ?? new FaqStructureNormalizer())->normalize($qaList);
         $profile = [
             'page_type' => 'qa_page',
-            'schema_nodes' => [[
-                '@type' => 'QAPage',
-                '@id' => $url !== '' ? $url . '#qa' : '#qa',
-                'mainEntity' => $questions,
-            ]],
+            'qa_list' => $qaList,
         ];
-
-        $faqs = [];
-        foreach ($questions as $question) {
-            $answer = $question['acceptedAnswer']['text'] ?? '';
-            if ((string)$answer !== '') {
-                $faqs[] = [
-                    'question' => (string)$question['name'],
-                    'answer' => (string)$answer,
-                ];
-            }
-        }
         if ($faqs !== []) {
             $profile['faqs'] = $faqs;
         }
@@ -50,36 +41,20 @@ class QASeoProfileProvider implements SeoProfileProviderInterface
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function questions(mixed $items): array
+    private function normalizeQaList(mixed $items): array
     {
         if (!is_array($items)) {
             return [];
         }
 
-        $questions = [];
+        $list = [];
         foreach ($items as $item) {
-            if (!is_array($item)) {
-                continue;
+            if (is_array($item)) {
+                $list[] = $item;
             }
-            $question = trim((string)($item['question'] ?? $item['title'] ?? ''));
-            if ($question === '') {
-                continue;
-            }
-            $node = [
-                '@type' => 'Question',
-                'name' => $question,
-            ];
-            $answer = trim((string)($item['answer'] ?? ''));
-            if ($answer !== '') {
-                $node['acceptedAnswer'] = [
-                    '@type' => 'Answer',
-                    'text' => $answer,
-                ];
-            }
-            $questions[] = $node;
         }
 
-        return $questions;
+        return $list;
     }
 
     private function readTemplate($template, string $key): mixed

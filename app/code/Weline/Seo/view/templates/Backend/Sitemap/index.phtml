@@ -86,14 +86,14 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                 <div class="step-card" style="background: #fff; border-left: 4px solid #764ba2; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                                                     <div class="step-number" style="width: 32px; height: 32px; background: #764ba2; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">2</div>
                                                     <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>平台适配器生成</lang></h6>
-                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>根据站点绑定的 SEO 平台（Google/Bing/Baidu），由对应适配器生成符合规范的 sitemap.xml</lang></p>
+                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>根据站点绑定的 SEO 平台，由对应适配器生成符合规范的 sitemap.xml</lang></p>
                                                 </div>
                                                 
                                                 <!-- 步骤 3 -->
                                                 <div class="step-card" style="background: #fff; border-left: 4px solid #28a745; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08);">
                                                     <div class="step-number" style="width: 32px; height: 32px; background: #28a745; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; margin-bottom: 10px;">3</div>
                                                     <h6 style="font-weight: 600; margin-bottom: 8px;"><lang>自动提交</lang></h6>
-                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>定时任务自动将 sitemap 提交到各搜索引擎，支持 Ping、API 和 IndexNow 协议</lang></p>
+                                                    <p class="text-muted mb-0" style="font-size: 13px;"><lang>定时任务只向支持官方 API 或 IndexNow 的平台自动提交 sitemap</lang></p>
                                                 </div>
                                             </div>
                                         </div>
@@ -152,8 +152,10 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
 │   ├── bing/                            # Bing 平台目录
 │   │   ├── sitemap.xml                  # Bing 平台索引
 │   │   └── ...
-│   └── baidu/                           # Baidu 平台目录
-│       ├── sitemap.xml                  # Baidu 平台索引（10MB 限制）
+│   ├── baidu/                           # Baidu 平台目录
+│   │   ├── sitemap.xml                  # Baidu 平台索引（10MB 限制）
+│   │   └── ...
+│   └── yandex/                          # 其他已绑定平台目录
 │       └── ...
 └── shop_us/                             # 其他站点
     └── ...</code></pre>
@@ -181,19 +183,31 @@ $frontendBaseUrl = rtrim($frontendBaseUrl, '/');
                                                             <td style="padding: 10px;"><span class="badge" style="background: #4285f4;">Google</span></td>
                                                             <td style="padding: 10px;">50,000</td>
                                                             <td style="padding: 10px;">50 MB</td>
-                                                            <td style="padding: 10px;">Ping URL + IndexNow</td>
+                                                            <td style="padding: 10px;">Search Console API</td>
                                                         </tr>
                                                         <tr>
                                                             <td style="padding: 10px;"><span class="badge" style="background: #008373;">Bing</span></td>
                                                             <td style="padding: 10px;">50,000</td>
                                                             <td style="padding: 10px;">50 MB</td>
-                                                            <td style="padding: 10px;">IndexNow API</td>
+                                                            <td style="padding: 10px;">Webmaster API / IndexNow</td>
                                                         </tr>
                                                         <tr>
                                                             <td style="padding: 10px;"><span class="badge" style="background: #2932e1;">Baidu</span></td>
                                                             <td style="padding: 10px;">50,000</td>
                                                             <td style="padding: 10px;">10 MB ⚠️</td>
-                                                            <td style="padding: 10px;">Ping URL + API</td>
+                                                            <td style="padding: 10px;">Baidu LinkSubmit API</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="padding: 10px;"><span class="badge" style="background: #111827;">IndexNow</span></td>
+                                                            <td style="padding: 10px;">50,000</td>
+                                                            <td style="padding: 10px;">50 MB</td>
+                                                            <td style="padding: 10px;">IndexNow</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="padding: 10px;"><span class="badge" style="background: #6c757d;"><lang>长尾平台</lang></span></td>
+                                                            <td style="padding: 10px;">50,000</td>
+                                                            <td style="padding: 10px;">50 MB</td>
+                                                            <td style="padding: 10px;"><lang>Sitemap 生成 / 手动或自然发现</lang></td>
                                                         </tr>
                                                     </tbody>
                                                 </table>

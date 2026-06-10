@@ -110,6 +110,16 @@ $maxLevel = $maxLevel ?? 4;
                                                 title="<?= __('编辑') ?>">
                                             <i class="ri-edit-line"></i>
                                         </button>
+                                        <a class="btn btn-sm btn-outline-secondary"
+                                           href="<?= $this->getBackendUrl('*/backend/product/layout', ['category_id' => $categoryId, 'entity_type' => 'category']) ?>"
+                                           title="<?= __('分类展示布局') ?>">
+                                            <i class="ri-layout-2-line"></i>
+                                        </a>
+                                        <a class="btn btn-sm btn-outline-info"
+                                           href="<?= $this->getBackendUrl('*/backend/product/layout', ['category_id' => $categoryId, 'entity_type' => 'category_product_default']) ?>"
+                                           title="<?= __('分类下商品默认布局') ?>">
+                                            <i class="ri-layout-column-line"></i>
+                                        </a>
                                         <button type="button" class="btn btn-sm btn-outline-danger weshop-category-delete" 
                                                 data-id="<?= $categoryId ?>"
                                                 data-name="<?= $displayName ?>"

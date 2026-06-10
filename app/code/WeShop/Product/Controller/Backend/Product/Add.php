@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
-use WeShop\Product\Model\Category;
+use WeShop\Catalog\Model\Category;
 use WeShop\Product\Model\Product\OptionId;
 
 #[Acl('WeShop_Product::product_add', 'Product add actions', 'mdi mdi-package-variant-plus', 'Create products', 'WeShop_Product::product')]

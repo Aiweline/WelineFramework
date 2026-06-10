@@ -71,6 +71,52 @@
         }
         return '';
     }
+
+    function __isPixelSupportedCurrencySegment(segment) {
+        var code = String(segment || '').trim().toUpperCase();
+        if (!/^[A-Z]{3}$/.test(code)) {
+            return false;
+        }
+        var cfg = window.__WelineThemeConfig || {};
+        var site = window.site || {};
+        var welineConfig = (window.Weline && window.Weline.config) || {};
+        var supported = {};
+        [
+            cfg.availableCurrencies,
+            cfg.supportedCurrencies,
+            cfg.currencyCodes,
+            cfg.currencies,
+            site.availableCurrencies,
+            site.supportedCurrencies,
+            site.currencyCodes,
+            site.currencies,
+            welineConfig.availableCurrencies,
+            welineConfig.supportedCurrencies,
+            welineConfig.currencyCodes,
+            welineConfig.currencies,
+            cfg.defaultCurrency,
+            site.defaultCurrency,
+            site.default_currency
+        ].forEach(function(source) {
+            if (Array.isArray(source)) {
+                source.forEach(function(entry) {
+                    if (entry && typeof entry === 'object') {
+                        entry = entry.code || entry.currency || entry.currency_code || entry.value || '';
+                    }
+                    var item = String(entry || '').trim().toUpperCase();
+                    if (/^[A-Z]{3}$/.test(item)) {
+                        supported[item] = true;
+                    }
+                });
+                return;
+            }
+            var item = String(source || '').trim().toUpperCase();
+            if (/^[A-Z]{3}$/.test(item)) {
+                supported[item] = true;
+            }
+        });
+        return supported[code] === true;
+    }
     
     /**
      * 清理 URL 路径中的区域、货币、语言等前缀
@@ -86,7 +132,6 @@
             var urlObj = new URL(path);
             var parts = urlObj.pathname.split('/').filter(function(p) { return p !== ''; });
             
-            var currencyPattern = /^[A-Z]{3}$/;
             var langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
             var areaPattern = /^(frontend|backend|admin|api|api_admin)$/i;
             var websiteCode = __getPixelCookie('WELINE_WEBSITE_CODE');
@@ -96,7 +141,7 @@
                 var part = parts[i];
                 if (websiteCode && part === websiteCode) continue;
                 if (areaPattern.test(part)) continue;
-                if (currencyPattern.test(part)) continue;
+                if (__isPixelSupportedCurrencySegment(part)) continue;
                 if (langPattern.test(part)) continue;
                 filtered.push(part);
             }

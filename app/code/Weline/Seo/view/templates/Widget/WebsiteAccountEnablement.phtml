@@ -1,0 +1,524 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Seo\Model\SeoAccount;
+use Weline\Seo\Model\SeoWebsiteAccount;
+use Weline\Seo\Service\PlatformVisual;
+
+$widgetId = (string)($widget_id ?? ('seo_website_accounts_' . uniqid()));
+$websiteId = (int)($website_id ?? 0);
+$website = (array)($website ?? []);
+$accounts = is_array($accounts ?? null) ? $accounts : [];
+$bindingsMap = is_array($bindingsMap ?? null) ? $bindingsMap : [];
+$platforms = is_array($platforms ?? null) ? $platforms : [];
+$mode = (string)($mode ?? 'embedded');
+$fieldPrefix = trim((string)($field_prefix ?? 'extensions[seo]'));
+$showSubmit = (bool)($show_submit ?? false);
+$actionUrl = (string)($action_url ?? '');
+$manageUrl = (string)($manage_url ?? '');
+$scope = (string)($scope ?? '');
+$websiteName = (string)($website['name'] ?? ($website['code'] ?? __('当前网站')));
+
+/** @var PlatformVisual $visual */
+$visual = ObjectManager::getInstance(PlatformVisual::class);
+
+$fieldName = static function (string $path, bool $isArray = false) use ($fieldPrefix): string {
+    if ($fieldPrefix === '') {
+        return $path . ($isArray ? '[]' : '');
+    }
+
+    $name = $fieldPrefix;
+    foreach (explode('.', $path) as $part) {
+        if ($part === '') {
+            continue;
+        }
+        $name .= '[' . $part . ']';
+    }
+
+    return $name . ($isArray ? '[]' : '');
+};
+
+$sitemapOptions = [
+    SeoWebsiteAccount::FREQUENCY_REALTIME => __('实时'),
+    SeoWebsiteAccount::FREQUENCY_HOURLY => __('每小时'),
+    SeoWebsiteAccount::FREQUENCY_DAILY => __('每天'),
+    SeoWebsiteAccount::FREQUENCY_WEEKLY => __('每周'),
+    SeoWebsiteAccount::FREQUENCY_MONTHLY => __('每月'),
+    SeoWebsiteAccount::FREQUENCY_MANUAL => __('手动'),
+];
+$crawlOptions = [
+    SeoWebsiteAccount::CRAWL_ALWAYS => __('总是'),
+    SeoWebsiteAccount::CRAWL_HOURLY => __('每小时'),
+    SeoWebsiteAccount::CRAWL_DAILY => __('每天'),
+    SeoWebsiteAccount::CRAWL_WEEKLY => __('每周'),
+    SeoWebsiteAccount::CRAWL_MONTHLY => __('每月'),
+    SeoWebsiteAccount::CRAWL_YEARLY => __('每年'),
+    SeoWebsiteAccount::CRAWL_NEVER => __('从不'),
+];
+?>
+<div id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>" class="seo-website-account-widget seo-website-account-widget--<?= htmlspecialchars($mode, ENT_QUOTES, 'UTF-8') ?>">
+    <style>
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> {
+            --seo-widget-border: #d8dee8;
+            --seo-widget-muted: #64748b;
+            --seo-widget-text: #172033;
+            --seo-widget-bg: #fff;
+            --seo-widget-soft: #f6f8fb;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-shell {
+            background: var(--seo-widget-bg);
+            border: 1px solid var(--seo-widget-border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--seo-widget-border);
+            background: #f8fafc;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+            color: var(--seo-widget-text);
+            font-size: 16px;
+            font-weight: 650;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-subtitle {
+            color: var(--seo-widget-muted);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-body {
+            padding: 18px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-message {
+            display: none;
+            margin: 0 0 14px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-message.is-success {
+            display: block;
+            color: #166534;
+            background: #ecfdf3;
+            border: 1px solid #bbf7d0;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-message.is-error {
+            display: block;
+            color: #991b1b;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-account-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card {
+            border: 1px solid var(--seo-widget-border);
+            border-left: 4px solid var(--seo-platform-color, #64748b);
+            border-radius: 8px;
+            background: #fff;
+            transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card:hover {
+            border-color: var(--seo-platform-color, #64748b);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
+            transform: translateY(-1px);
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card.is-selected {
+            border-color: var(--seo-platform-color, #64748b);
+            background: #fbfdff;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card.is-inactive {
+            opacity: .72;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-main {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: start;
+            padding: 14px;
+            cursor: pointer;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-check {
+            margin-top: 7px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-title {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-width: 0;
+            color: var(--seo-widget-text);
+            font-weight: 650;
+            line-height: 1.25;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-title span {
+            overflow-wrap: anywhere;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+            color: var(--seo-widget-muted);
+            font-size: 12px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: var(--seo-widget-soft);
+            color: #475569;
+            white-space: nowrap;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-chip.is-on {
+            color: #166534;
+            background: #ecfdf3;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-chip.is-off {
+            color: #6b7280;
+            background: #f3f4f6;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-platform-icon {
+            flex: 0 0 auto;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-config {
+            display: none;
+            padding: 0 14px 14px 58px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card.is-selected .seo-engine-config {
+            display: block;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-config-panel {
+            border-top: 1px solid var(--seo-widget-border);
+            padding-top: 12px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-config-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-config-grid label {
+            display: block;
+            color: #334155;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-auto-submit {
+            margin-top: 12px;
+            padding: 10px 12px;
+            border: 1px solid #cfe3ff;
+            border-radius: 7px;
+            background: #f3f8ff;
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--seo-widget-border);
+        }
+        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-empty {
+            padding: 28px;
+            border: 1px dashed var(--seo-widget-border);
+            border-radius: 8px;
+            background: #f8fafc;
+            text-align: center;
+            color: var(--seo-widget-muted);
+        }
+        @media (max-width: 767px) {
+            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-header,
+            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-footer {
+                align-items: stretch;
+                flex-direction: column;
+            }
+            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-account-grid,
+            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-config-grid {
+                grid-template-columns: 1fr;
+            }
+            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-main {
+                grid-template-columns: auto 1fr;
+            }
+            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-config {
+                padding-left: 14px;
+            }
+        }
+    </style>
+
+    <?php if ($mode === 'standalone'): ?>
+    <form class="seo-widget-form" method="post" action="<?= htmlspecialchars($actionUrl, ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="website_id" value="<?= $websiteId ?>">
+    <?php endif; ?>
+
+    <div class="seo-widget-shell">
+        <div class="seo-widget-header">
+            <div>
+                <h5 class="seo-widget-title">
+                    <?= $visual->renderIcon('seo', 'SEO', '#2563EB', 30, 'seo-platform-icon') ?>
+                    <span><lang>搜索引擎账户启用</lang></span>
+                </h5>
+                <div class="seo-widget-subtitle">
+                    <?= htmlspecialchars($websiteName, ENT_QUOTES, 'UTF-8') ?>
+                    <?php if ($scope !== ''): ?>
+                        <span class="ms-2">scope: <?= htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php if ($manageUrl !== ''): ?>
+                <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($manageUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" aria-label="<?= htmlspecialchars(__('打开 SEO 账户管理'), ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="mdi mdi-account-cog-outline me-1"></i>
+                    <lang>账户管理</lang>
+                </a>
+            <?php endif; ?>
+        </div>
+        <div class="seo-widget-body">
+            <div class="seo-message" data-role="seo-message"></div>
+
+            <?php if ($accounts === []): ?>
+                <div class="seo-empty">
+                    <div class="mb-2">
+                        <?= $visual->renderIcon('seo', 'SEO', '#94A3B8', 40) ?>
+                    </div>
+                    <div class="fw-semibold"><lang>暂无可启用的搜索引擎账户</lang></div>
+                    <div class="small mt-1"><lang>先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。</lang></div>
+                </div>
+            <?php else: ?>
+                <input type="hidden" name="<?= htmlspecialchars($fieldName('account_ids', true), ENT_QUOTES, 'UTF-8') ?>" value="">
+                <div class="seo-account-grid">
+                    <?php foreach ($accounts as $account): ?>
+                        <?php
+                        $accountId = (int)($account[SeoAccount::schema_fields_ACCOUNT_ID] ?? $account['account_id'] ?? 0);
+                        if ($accountId <= 0) {
+                            continue;
+                        }
+                        $platform = (string)($account[SeoAccount::schema_fields_PLATFORM] ?? $account[SeoAccount::schema_fields_PROVIDER] ?? '');
+                        $normalizedPlatform = $visual->normalizeCode($platform);
+                        $platformInfo = $platforms[$platform] ?? $platforms[$normalizedPlatform] ?? [];
+                        $platformName = (string)($platformInfo['name'] ?? $platform ?: __('未知平台'));
+                        $platformColor = $visual->sanitizeColor((string)($platformInfo['color'] ?? ''));
+                        $supportsSubmit = (bool)($platformInfo['supports_submit'] ?? false);
+                        $supportsStats = (bool)($platformInfo['supports_stats'] ?? false);
+                        $binding = $bindingsMap[$accountId] ?? [];
+                        $isSelected = $binding !== [];
+                        $isActive = (int)($account[SeoAccount::schema_fields_IS_ACTIVE] ?? 0) === SeoAccount::STATUS_ACTIVE;
+                        $pushEnabled = (int)($account[SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS] ?? 0) === 1;
+                        $sitemapEnabled = (int)($account[SeoAccount::schema_fields_ENABLE_CRON_SITEMAP] ?? 0) === 1;
+                        $currentSitemapFrequency = (string)($binding[SeoWebsiteAccount::schema_fields_SITEMAP_FREQUENCY] ?? SeoWebsiteAccount::DEFAULT_SITEMAP_FREQUENCY);
+                        $currentCrawlFrequency = (string)($binding[SeoWebsiteAccount::schema_fields_CRAWL_FREQUENCY] ?? SeoWebsiteAccount::DEFAULT_CRAWL_FREQUENCY);
+                        $currentPriority = (string)($binding[SeoWebsiteAccount::schema_fields_PRIORITY] ?? number_format(SeoWebsiteAccount::DEFAULT_PRIORITY, 2));
+                        $currentAutoSubmit = !isset($binding[SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT]) || (int)$binding[SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] === 1;
+                        $checkboxId = $widgetId . '_account_' . $accountId;
+                        ?>
+                        <div class="seo-engine-card<?= $isSelected ? ' is-selected' : '' ?><?= !$isActive ? ' is-inactive' : '' ?>" data-account-card="<?= $accountId ?>" style="--seo-platform-color: <?= htmlspecialchars($platformColor, ENT_QUOTES, 'UTF-8') ?>;">
+                            <div class="seo-engine-main">
+                                <input
+                                    class="form-check-input seo-engine-check"
+                                    type="checkbox"
+                                    id="<?= htmlspecialchars($checkboxId, ENT_QUOTES, 'UTF-8') ?>"
+                                    name="<?= htmlspecialchars($fieldName('account_ids', true), ENT_QUOTES, 'UTF-8') ?>"
+                                    value="<?= $accountId ?>"
+                                    data-account-checkbox="<?= $accountId ?>"
+                                    <?= $isSelected ? 'checked' : '' ?>>
+                                <div>
+                                    <label class="seo-engine-title" for="<?= htmlspecialchars($checkboxId, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= $visual->renderIcon($platform, $platformName, $platformColor, 32, 'seo-platform-icon') ?>
+                                        <span><?= htmlspecialchars((string)($account[SeoAccount::schema_fields_NAME] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                    </label>
+                                    <div class="seo-engine-meta">
+                                        <span class="seo-chip"><?= htmlspecialchars($platformName, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <span class="seo-chip">ID <?= $accountId ?></span>
+                                        <span class="seo-chip<?= $isActive ? ' is-on' : ' is-off' ?>"><?= $isActive ? __('启用') : __('停用') ?></span>
+                                        <span class="seo-chip<?= $pushEnabled ? ' is-on' : ' is-off' ?>"><lang>URL</lang></span>
+                                        <span class="seo-chip<?= $sitemapEnabled ? ' is-on' : ' is-off' ?>"><lang>Sitemap</lang></span>
+                                        <?php if ($supportsSubmit): ?><span class="seo-chip is-on"><lang>自动提交</lang></span><?php endif; ?>
+                                        <?php if ($supportsStats): ?><span class="seo-chip is-on"><lang>数据同步</lang></span><?php endif; ?>
+                                    </div>
+                                </div>
+                                <i class="mdi mdi-chevron-down text-muted mt-1" aria-hidden="true"></i>
+                            </div>
+
+                            <div class="seo-engine-config">
+                                <div class="seo-config-panel">
+                                    <div class="seo-config-grid">
+                                        <div>
+                                            <label for="<?= htmlspecialchars($checkboxId . '_sitemap', ENT_QUOTES, 'UTF-8') ?>"><lang>Sitemap 频率</lang></label>
+                                            <select class="form-select form-select-sm" id="<?= htmlspecialchars($checkboxId . '_sitemap', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.sitemap_frequency'), ENT_QUOTES, 'UTF-8') ?>">
+                                                <?php foreach ($sitemapOptions as $value => $label): ?>
+                                                    <option value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" <?= $currentSitemapFrequency === $value ? 'selected' : '' ?>><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="<?= htmlspecialchars($checkboxId . '_crawl', ENT_QUOTES, 'UTF-8') ?>"><lang>抓取频率</lang></label>
+                                            <select class="form-select form-select-sm" id="<?= htmlspecialchars($checkboxId . '_crawl', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.crawl_frequency'), ENT_QUOTES, 'UTF-8') ?>">
+                                                <?php foreach ($crawlOptions as $value => $label): ?>
+                                                    <option value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" <?= $currentCrawlFrequency === $value ? 'selected' : '' ?>><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label for="<?= htmlspecialchars($checkboxId . '_priority', ENT_QUOTES, 'UTF-8') ?>"><lang>URL 优先级</lang></label>
+                                            <input class="form-control form-control-sm" id="<?= htmlspecialchars($checkboxId . '_priority', ENT_QUOTES, 'UTF-8') ?>" type="number" min="0" max="1" step="0.1" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.priority'), ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($currentPriority, ENT_QUOTES, 'UTF-8') ?>">
+                                        </div>
+                                    </div>
+                                    <div class="seo-auto-submit">
+                                        <input type="hidden" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.is_auto_submit'), ENT_QUOTES, 'UTF-8') ?>" value="0">
+                                        <div class="form-check form-switch mb-0">
+                                            <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($checkboxId . '_auto', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.is_auto_submit'), ENT_QUOTES, 'UTF-8') ?>" value="1" <?= $currentAutoSubmit ? 'checked' : '' ?>>
+                                            <label class="form-check-label" for="<?= htmlspecialchars($checkboxId . '_auto', ENT_QUOTES, 'UTF-8') ?>">
+                                                <lang>启用该账户的网站自动提交</lang>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($showSubmit): ?>
+                <div class="seo-widget-footer">
+                    <div class="text-muted small">
+                        <i class="mdi mdi-shield-check-outline me-1"></i>
+                        <lang>保存后立即更新该网站的搜索引擎账户启用状态。</lang>
+                    </div>
+                    <button type="submit" class="btn btn-primary" data-role="seo-submit" aria-label="<?= htmlspecialchars(__('保存搜索引擎账户启用状态'), ENT_QUOTES, 'UTF-8') ?>">
+                        <i class="mdi mdi-content-save-outline me-1"></i>
+                        <lang>保存启用状态</lang>
+                    </button>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if ($mode === 'standalone'): ?>
+    </form>
+    <?php endif; ?>
+
+    <script>
+    (function(){
+        const root = document.getElementById(<?= json_encode($widgetId) ?>);
+        if (!root) {
+            return;
+        }
+
+        function showMessage(type, text) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: type === 'success' ? 'success' : 'error',
+                    title: type === 'success' ? <?= json_encode((string)__('保存成功')) ?> : <?= json_encode((string)__('保存失败')) ?>,
+                    text: text || '',
+                    toast: true,
+                    position: 'top-end',
+                    timer: type === 'success' ? 2400 : 4200,
+                    showConfirmButton: false,
+                    timerProgressBar: true
+                });
+                return;
+            }
+
+            const message = root.querySelector('[data-role="seo-message"]');
+            if (!message) {
+                return;
+            }
+            message.className = 'seo-message ' + (type === 'success' ? 'is-success' : 'is-error');
+            message.textContent = text || '';
+        }
+
+        function syncCard(card) {
+            const checkbox = card.querySelector('[data-account-checkbox]');
+            if (!checkbox) {
+                return;
+            }
+            card.classList.toggle('is-selected', checkbox.checked);
+        }
+
+        root.querySelectorAll('[data-account-card]').forEach(function(card){
+            const checkbox = card.querySelector('[data-account-checkbox]');
+            if (checkbox) {
+                checkbox.addEventListener('change', function(){ syncCard(card); });
+                syncCard(card);
+            }
+            card.addEventListener('click', function(event){
+                if (event.target.closest('input, select, textarea, button, a, label')) {
+                    return;
+                }
+                if (!checkbox) {
+                    return;
+                }
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        const form = root.querySelector('.seo-widget-form');
+        if (!form) {
+            return;
+        }
+
+        form.addEventListener('submit', function(event){
+            event.preventDefault();
+            const submit = root.querySelector('[data-role="seo-submit"]');
+            const originalHtml = submit ? submit.innerHTML : '';
+            if (submit) {
+                submit.disabled = true;
+                submit.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>' + <?= json_encode((string)__('保存中')) ?>;
+            }
+
+            const request = window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function'
+                ? window.Weline.Api.request(form.action, { method: 'POST', body: new FormData(form) })
+                : fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin' }).then(function(response){ return response.json(); });
+
+            request.then(function(response){
+                const data = response && response.data !== undefined ? response.data : response;
+                if (data && data.success) {
+                    showMessage('success', data.message || <?= json_encode((string)__('启用状态已保存')) ?>);
+                    if (window.parent) {
+                        window.parent.document.dispatchEvent(new CustomEvent('websiteBindingSaved', {
+                            detail: { success: true, message: data.message || '' }
+                        }));
+                    }
+                    setTimeout(function(){
+                        if (window.opener && !window.opener.closed) {
+                            window.opener.location.reload();
+                            window.close();
+                        } else if (!window.parent || window.parent === window) {
+                            location.reload();
+                        }
+                    }, 900);
+                    return;
+                }
+
+                showMessage('error', (data && data.message) || <?= json_encode((string)__('请检查输入后重试')) ?>);
+                if (submit) {
+                    submit.disabled = false;
+                    submit.innerHTML = originalHtml;
+                }
+            }).catch(function(error){
+                showMessage('error', (error && error.message) ? error.message : <?= json_encode((string)__('请求失败')) ?>);
+                if (submit) {
+                    submit.disabled = false;
+                    submit.innerHTML = originalHtml;
+                }
+            });
+        });
+    })();
+    </script>
+</div>

@@ -9,42 +9,40 @@ use WeShop\Frontend\Controller\Router;
 
 class RouterTest extends TestCase
 {
-    public function testRootPathRewritesToWeshopForWeshopTheme(): void
+    public function testRootPathRemainsOwnedByFrameworkHomepage(): void
     {
-        $this->assertTrue($this->invokeShouldRewrite('', false, false, [
-            'name' => 'weshop-motor',
-            'path' => 'WeShop\\motor',
-        ]));
+        $path = '';
+        $rule = [];
+
+        Router::process($path, $rule);
+
+        self::assertSame('', $path);
+        self::assertSame([], $rule);
     }
 
-    public function testPreviewThemeRootStaysAvailableForThemePreviewGateway(): void
+    public function testExistingRouteRuleIsNotChanged(): void
     {
-        $this->assertFalse($this->invokeShouldRewrite('', false, true, [
-            'name' => 'weshop-motor',
-            'path' => 'WeShop\\motor',
-        ]));
+        $path = 'weshop';
+        $rule = [
+            'module' => 'WeShop_Frontend',
+            'class' => [
+                'name' => 'WeShop\\Frontend\\Controller\\Index',
+                'method' => 'index',
+            ],
+        ];
+
+        Router::process($path, $rule);
+
+        self::assertSame('weshop', $path);
+        self::assertSame('WeShop_Frontend', $rule['module']);
     }
 
-    public function testNonWeshopThemeDoesNotRewriteRootPath(): void
+    public function testRouterDoesNotQueryThemeState(): void
     {
-        $this->assertFalse($this->invokeShouldRewrite('', false, false, [
-            'name' => 'default',
-            'path' => 'Weline\\default',
-        ]));
-    }
+        $source = \file_get_contents(\dirname(__DIR__, 3) . '/Controller/Router.php');
 
-    /**
-     * @param array<string, mixed> $activeTheme
-     */
-    private function invokeShouldRewrite(
-        string $normalizedPath,
-        bool $isBackend,
-        bool $hasPreviewTheme,
-        array $activeTheme
-    ): bool {
-        $method = new \ReflectionMethod(Router::class, 'shouldRewriteRootToWeShop');
-        $method->setAccessible(true);
-
-        return (bool)$method->invoke(null, $normalizedPath, $isBackend, $hasPreviewTheme, $activeTheme);
+        self::assertIsString($source);
+        self::assertStringNotContainsString('getActiveTheme', $source);
+        self::assertStringNotContainsString("w_query('theme'", $source);
     }
 }

@@ -308,13 +308,13 @@ class Sitemap extends BackendController
         }
         
         // 平台显示名称和颜色
-        $platformInfo = [
-            'google' => ['name' => 'Google', 'color' => '#4285F4'],
-            'bing' => ['name' => 'Bing', 'color' => '#00809D'],
-            'baidu' => ['name' => '百度', 'color' => '#2932E1'],
-            'yandex' => ['name' => 'Yandex', 'color' => '#FF0000'],
-            'naver' => ['name' => 'Naver', 'color' => '#03C75A'],
-        ];
+        try {
+            /** @var \Weline\Seo\Service\SitemapAdapterRegistry $adapterRegistry */
+            $adapterRegistry = ObjectManager::getInstance(\Weline\Seo\Service\SitemapAdapterRegistry::class);
+            $platformInfo = $adapterRegistry->getPlatformInfo();
+        } catch (\Throwable $e) {
+            $platformInfo = [];
+        }
         
         // 获取 SEO 账户信息服务
         /** @var \Weline\Seo\Service\WebSitemapData $webSitemapData */

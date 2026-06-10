@@ -16,12 +16,34 @@ $hasDocumentShell = preg_match('/^\s*(?:<!doctype\s+html[^>]*>\s*)?<html\b/i', $
 <?php echo $contentHtml; ?>
 <?php else: ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::blank::head-after</w:hook>
+<style>
+html,
+body {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.blank-full-layout {
+    min-height: 100vh;
+    overflow: hidden;
+    background: transparent;
+}
+
+.blank-full-content {
+    width: 100vw;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+</style>
 </head>
 <body class="blank-full-layout <?= htmlspecialchars((string)($meta['class'] ?? '')) ?>">
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
@@ -48,27 +70,4 @@ $hasDocumentShell = preg_match('/^\s*(?:<!doctype\s+html[^>]*>\s*)?<html\b/i', $
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>
-
-<style>
-html,
-body {
-    width: 100%;
-    min-height: 100%;
-    margin: 0;
-    padding: 0;
-}
-
-.blank-full-layout {
-    min-height: 100vh;
-    overflow: hidden;
-    background: transparent;
-}
-
-.blank-full-content {
-    width: 100vw;
-    min-height: 100vh;
-    margin: 0;
-    padding: 0;
-}
-</style>
 <?php endif; ?>

@@ -152,6 +152,12 @@
                                                    save="1"
                                                    close-button-text='关闭' direction='right'
                                                    class-names='w-75' off-canvas-body-style=''/>
+                                            <?php $layoutProductId = (int)($product['product_id'] ?? ($product->getData('product_id') ?? 0)); ?>
+                                            <a class="btn btn-outline-primary"
+                                               href="<?= $this->getBackendUrl('*/backend/product/layout', ['product_id' => $layoutProductId, 'entity_type' => 'product']) ?>">
+                                                <i class="ri-layout-4-line"></i>
+                                                <lang>布局</lang>
+                                            </a>
                                             <if condition="product.parent_id == 0">
                                                 <?php $childrenCount = $product['children_count'] ?? ($product->getData('children_count') ?? 0); ?>
                                                 <?php if ($childrenCount > 0): ?>
