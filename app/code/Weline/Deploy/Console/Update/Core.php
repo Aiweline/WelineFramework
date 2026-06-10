@@ -25,8 +25,11 @@ class Core extends CommandAbstract
     /** 命令别名：支持旧用法 core:update */
     public const ALIASES = ['core:update'];
 
-    /** 默认仓库（公用官网），未配置时使用 */
-    private const DEFAULT_REPO = 'https://gitee.com/aiweline/WelineFramework.git';
+    /** 默认主仓库（GitHub），未配置且可达时使用 */
+    private const DEFAULT_REPO_GITHUB = 'https://github.com/Aiweline/WelineFramework.git';
+
+    /** 默认备用仓库（Gitee），GitHub 不可达时使用 */
+    private const DEFAULT_REPO_GITEE = 'https://gitee.com/aiweline/WelineFramework.git';
 
     private const CORE_UPDATE_EXCLUDED_PATHS = [
         'app/code/Aiweline',
@@ -54,6 +57,13 @@ class Core extends CommandAbstract
      * 是否是新克隆的仓库（第一次运行）
      */
     private bool $isNewClone = false;
+
+    /**
+     * 按优先级排列的仓库地址（主仓库在前，备用在后）
+     *
+     * @var string[]
+     */
+    private array $repoCandidates = [];
 
     public function __construct(
         Printing $printer,
@@ -83,7 +93,8 @@ class Core extends CommandAbstract
                 '-h, --help' => '显示帮助信息',
             ],
             [
-                '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；未配置时使用公用官网'),
+                '双仓库策略' => __('未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像'),
+                '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
                 '增量更新' => '默认使用 git fetch 增量拉取，通过 git diff 获取变化文件列表，只拷贝变化的文件',
                 '强制更新' => '使用 -f 参数强制删除缓存并重新克隆，完全覆盖目标目录',
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
@@ -124,10 +135,13 @@ class Core extends CommandAbstract
         $config = $this->getCoreUpdateConfig();
         $branch = $this->getBranch($args, $config);
         $tag = $args['tag'] ?? $args['t'] ?? null;
-        $repo = $args['repo'] ?? $config['repo_url'] ?? self::DEFAULT_REPO;
-        $repo = $this->buildRepoUrlWithAuth($repo, $config);
-        
+        $this->repoCandidates = $this->resolveRepoCandidates($args, $config);
+        $repo = $this->repoCandidates[0];
+
         $this->printer->note(__('仓库：%{1}', [$this->maskRepoUrl($repo)]));
+        if (count($this->repoCandidates) > 1) {
+            $this->printer->note(__('备用仓库：%{1}', [$this->maskRepoUrl($this->repoCandidates[1])]));
+        }
         $this->printer->note(__('分支：%{1}', [$branch]));
         if ($tag) {
             $this->printer->note(__('标签：%{1}', [$tag]));
@@ -141,7 +155,7 @@ class Core extends CommandAbstract
 
         // 4. 克隆/拉取仓库（增量模式会获取变化文件列表）
         $this->printer->setup(__('步骤 4/6：下载框架代码...'));
-        $this->downloadFramework($repo, $tmpDir, $branch, $tag);
+        $this->downloadFramework($tmpDir, $branch, $tag);
 
         // 5. 拷贝核心文件
         $this->printer->setup(__('步骤 5/6：更新核心文件...'));
@@ -260,6 +274,74 @@ class Core extends CommandAbstract
         return $repo;
     }
 
+    /**
+     * 解析仓库候选列表：显式配置时仅用指定仓库；否则 GitHub 优先，Gitee 备用。
+     *
+     * @return string[]
+     */
+    private function resolveRepoCandidates(array $args, array $config): array
+    {
+        $explicitRepo = trim((string)($args['repo'] ?? ''));
+        if ($explicitRepo !== '') {
+            return [$this->buildRepoUrlWithAuth($explicitRepo, $config)];
+        }
+
+        $configRepo = trim((string)($config['repo_url'] ?? ''));
+        if ($configRepo !== '') {
+            return [$this->buildRepoUrlWithAuth($configRepo, $config)];
+        }
+
+        $githubRepo = $this->buildRepoUrlWithAuth(self::DEFAULT_REPO_GITHUB, $config);
+        $giteeRepo = $this->buildRepoUrlWithAuth(self::DEFAULT_REPO_GITEE, $config);
+
+        $this->printer->note(__('检测 GitHub 连通性（ping github.com）...'));
+        if ($this->isGithubReachable()) {
+            $this->printer->success(__('✓ GitHub 可达，使用 GitHub 仓库'));
+            return [$githubRepo, $giteeRepo];
+        }
+
+        $this->printer->warning(__('GitHub 不可达，使用 Gitee 镜像仓库'));
+        return [$giteeRepo];
+    }
+
+    /**
+     * 检测 github.com 是否可达：先 ping，再探测 HTTPS 443。
+     */
+    private function isGithubReachable(int $timeoutSeconds = 3): bool
+    {
+        $host = 'github.com';
+
+        if ($this->isWindows) {
+            $timeoutMs = max(1000, $timeoutSeconds * 1000);
+            exec(
+                sprintf('ping -n 1 -w %d %s', $timeoutMs, escapeshellarg($host)),
+                $output,
+                $pingCode
+            );
+        } else {
+            exec(
+                sprintf('ping -c 1 -W %d %s 2>/dev/null', $timeoutSeconds, escapeshellarg($host)),
+                $output,
+                $pingCode
+            );
+        }
+
+        if ($pingCode === 0) {
+            return true;
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $socket = @fsockopen('ssl://' . $host, 443, $errno, $errstr, $timeoutSeconds);
+        if (is_resource($socket)) {
+            fclose($socket);
+            $this->printer->note(__('GitHub ping 未响应，但 HTTPS 端口可达'));
+            return true;
+        }
+
+        return false;
+    }
+
     private function getBranch(array $args, array $config): string
     {
         $branch = $args['branch'] ?? $args['b'] ?? $config['branch_default'] ?? null;
@@ -291,7 +373,7 @@ class Core extends CommandAbstract
         return $tmpDir;
     }
 
-    private function downloadFramework(string $repo, string $tmpDir, string $branch, ?string $tag): void
+    private function downloadFramework(string $tmpDir, string $branch, ?string $tag): void
     {
         // 检查是否已有 Git 仓库
         $gitDir = $tmpDir . DS . '.git';
@@ -313,10 +395,12 @@ class Core extends CommandAbstract
             exec($fetchCmd, $output, $fetchCode);
             
             if ($fetchCode !== 0) {
-                $this->printer->warning(__('fetch 失败，尝试重新克隆...'));
+                $this->printer->warning(__('fetch 失败，尝试切换仓库并重新克隆...'));
                 $this->removeDirectory($tmpDir);
                 mkdir($tmpDir, 0755, true);
-                $this->cloneRepository($repo, $tmpDir, $branch, $tag);
+                $this->cloneRepository($tmpDir, $branch, $tag);
+                $this->isNewClone = true;
+                $this->changedFiles = [];
                 return;
             }
             
@@ -374,10 +458,12 @@ class Core extends CommandAbstract
                 exec($resetCmd, $output, $resetCode);
                 
                 if ($resetCode !== 0) {
-                    $this->printer->warning(__('重置失败，尝试重新克隆...'));
+                    $this->printer->warning(__('重置失败，尝试切换仓库并重新克隆...'));
                     $this->removeDirectory($tmpDir);
                     mkdir($tmpDir, 0755, true);
-                    $this->cloneRepository($repo, $tmpDir, $branch, $tag);
+                    $this->cloneRepository($tmpDir, $branch, $tag);
+                    $this->isNewClone = true;
+                    $this->changedFiles = [];
                     return;
                 }
                 
@@ -389,7 +475,7 @@ class Core extends CommandAbstract
             
         } else {
             // 强制模式或新仓库：完整克隆
-            $this->cloneRepository($repo, $tmpDir, $branch, $tag);
+            $this->cloneRepository($tmpDir, $branch, $tag);
             // 标记为新克隆，需要全量拷贝
             $this->isNewClone = true;
             $this->changedFiles = [];
@@ -454,78 +540,122 @@ class Core extends CommandAbstract
     }
     
     /**
-     * 完整克隆仓库
+     * 完整克隆仓库（按候选列表依次尝试）
      */
-    private function cloneRepository(string $repo, string $tmpDir, string $branch, ?string $tag): void
+    private function cloneRepository(string $tmpDir, string $branch, ?string $tag): void
     {
         $this->printer->note(__('完整克隆仓库...'));
+        $lastOutput = [];
+
+        foreach ($this->repoCandidates as $index => $repo) {
+            if ($index > 0) {
+                $this->printer->warning(__('主仓库失败，尝试备用仓库：%{1}', [$this->maskRepoUrl($repo)]));
+                $this->removeDirectory($tmpDir);
+                mkdir($tmpDir, 0755, true);
+            }
+
+            if ($this->attemptCloneRepository($repo, $tmpDir, $branch, $tag, $lastOutput)) {
+                $this->showLatestCommit($tmpDir);
+                return;
+            }
+        }
+
+        $this->printer->error(__('所有仓库均无法克隆或初始化'));
+        $this->printer->printList($lastOutput);
+        exit(1);
+    }
+
+    /**
+     * 尝试从单个仓库克隆或初始化
+     *
+     * @param string[] $lastOutput
+     */
+    private function attemptCloneRepository(
+        string $repo,
+        string $tmpDir,
+        string $branch,
+        ?string $tag,
+        array &$lastOutput
+    ): bool {
+        $this->printer->note(__('克隆仓库：%{1}', [$this->maskRepoUrl($repo)]));
+
         $command = sprintf(
-            'cd %s && git clone -b %s --depth 1 %s .',
+            'cd %s && git clone -b %s --depth 1 %s . 2>&1',
             escapeshellarg($tmpDir),
             escapeshellarg($branch),
             escapeshellarg($repo)
         );
-        
+
         exec($command, $output, $returnCode);
-        
+        $lastOutput = $output;
+
         if ($returnCode !== 0) {
             $this->printer->warning(__('克隆失败，尝试初始化仓库...'));
-            
-            // 如果不是 git 仓库，先初始化
-            exec('cd ' . escapeshellarg($tmpDir) . ' && git init', $output, $initCode);
-            exec('cd ' . escapeshellarg($tmpDir) . ' && git remote add origin ' . escapeshellarg($repo), $output, $remoteCode);
-            exec('cd ' . escapeshellarg($tmpDir) . ' && git fetch origin', $output, $fetchCode);
-            
+            $this->removeDirectory($tmpDir);
+            mkdir($tmpDir, 0755, true);
+
+            exec('cd ' . escapeshellarg($tmpDir) . ' && git init 2>&1', $output, $initCode);
+            $lastOutput = array_merge($lastOutput, $output);
+            exec('cd ' . escapeshellarg($tmpDir) . ' && git remote add origin ' . escapeshellarg($repo) . ' 2>&1', $output, $remoteCode);
+            $lastOutput = array_merge($lastOutput, $output);
+            exec('cd ' . escapeshellarg($tmpDir) . ' && git fetch origin 2>&1', $output, $fetchCode);
+            $lastOutput = array_merge($lastOutput, $output);
+
             if ($fetchCode !== 0) {
-                $this->printer->error(__('初始化仓库失败'));
-                $this->printer->printList($output);
-                exit(1);
+                return false;
             }
-            
-            // 根据是否有标签来拉取代码
+
             if ($tag) {
                 $this->printer->note(__('拉取标签 %{1}...', [$tag]));
-                exec('cd ' . escapeshellarg($tmpDir) . ' && git checkout ' . escapeshellarg($tag), $output, $checkoutCode);
-                
+                exec('cd ' . escapeshellarg($tmpDir) . ' && git checkout ' . escapeshellarg($tag) . ' 2>&1', $output, $checkoutCode);
+                $lastOutput = array_merge($lastOutput, $output);
+
                 if ($checkoutCode !== 0) {
                     $this->printer->error(__('标签不存在: %{1}', [$tag]));
                     exit(1);
                 }
             } else {
                 $this->printer->note(__('拉取分支 %{1}...', [$branch]));
-                exec('cd ' . escapeshellarg($tmpDir) . ' && git checkout -b ' . escapeshellarg($branch) . ' origin/' . escapeshellarg($branch), $output, $checkoutCode);
-                
+                exec(
+                    'cd ' . escapeshellarg($tmpDir) . ' && git checkout -b '
+                    . escapeshellarg($branch) . ' origin/' . escapeshellarg($branch) . ' 2>&1',
+                    $output,
+                    $checkoutCode
+                );
+                $lastOutput = array_merge($lastOutput, $output);
+
                 if ($checkoutCode !== 0) {
                     $this->printer->error(__('分支不存在: %{1}', [$branch]));
                     exit(1);
                 }
             }
-            
+
             $this->printer->success(__('✓ 仓库初始化成功'));
-        } else {
-            $this->printer->success(__('✓ 仓库克隆成功'));
-            
-            if ($tag) {
-                $this->printer->note(__('切换到标签 %{1}...', [$tag]));
-                $command = sprintf(
-                    'cd %s && git fetch --tags && git checkout %s',
-                    escapeshellarg($tmpDir),
-                    escapeshellarg($tag)
-                );
-                
-                exec($command, $output, $returnCode);
-                
-                if ($returnCode !== 0) {
-                    $this->printer->error(__('标签不存在: %{1}', [$tag]));
-                    exit(1);
-                }
-                
-                $this->printer->success(__('✓ 已切换到标签 %{1}', [$tag]));
-            }
+            return true;
         }
-        
-        // 显示最新提交信息
-        $this->showLatestCommit($tmpDir);
+
+        $this->printer->success(__('✓ 仓库克隆成功'));
+
+        if ($tag) {
+            $this->printer->note(__('切换到标签 %{1}...', [$tag]));
+            $command = sprintf(
+                'cd %s && git fetch --tags && git checkout %s 2>&1',
+                escapeshellarg($tmpDir),
+                escapeshellarg($tag)
+            );
+
+            exec($command, $output, $returnCode);
+            $lastOutput = $output;
+
+            if ($returnCode !== 0) {
+                $this->printer->error(__('标签不存在: %{1}', [$tag]));
+                exit(1);
+            }
+
+            $this->printer->success(__('✓ 已切换到标签 %{1}', [$tag]));
+        }
+
+        return true;
     }
     
     /**

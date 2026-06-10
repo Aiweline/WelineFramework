@@ -26,7 +26,7 @@ try {
     if (is_file($autoloader)) {
         require $autoloader;
     } else {
-        exit('Composer自动加载异常!尝试执行：php composer.phar install');
+        exit('Composer自动加载异常!请运行 bin/install，或执行 php extend/server/composer.phar install');
     }
 } catch (Exception $exception) {
     exit('自动加载异常：' . $exception->getMessage());

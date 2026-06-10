@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fencang Release"
+  short_description: "Passphrase 分仓: DEV→weline Composer repo sync, tag bump, dual push, Packagist"
+  default_prompt: "User said 分仓. Load dev/ai/skills/CI发布工程师-分仓发布/SKILL.md and run only the modules they named (or ask if unspecified)."

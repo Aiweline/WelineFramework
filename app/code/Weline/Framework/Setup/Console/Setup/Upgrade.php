@@ -291,7 +291,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     
     /**
      * 查找 composer 命令路径
-     * 优先检查 composer.phar，然后检查全局 composer 命令
+     * 优先检查 extend/server/composer.phar，然后检查全局 composer 命令
      * 
      * @return string|null
      */
@@ -306,24 +306,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
 
-        // 1. 检查项目根目录下的 composer.phar
-        // 注意：在 Windows 上，is_executable() 对 .phar 文件可能返回 false
-        // 所以只要文件存在，就尝试使用 PHP 执行它
-        $composerPhar = BP . 'composer.phar';
-        if (file_exists($composerPhar)) {
+        // 1. 检查 extend/server/composer.phar（安装脚本按 composer.json 自动下载，与 php/pgsql 同目录）
+        $serverPhar = BP . 'extend' . DS . 'server' . DS . 'composer.phar';
+        if (file_exists($serverPhar)) {
             $installerIni = BP . 'extend' . DS . 'server' . DS . 'php' . DS . 'php.installer.ini';
             $phpBinary = PHP_BINARY;
             if (file_exists($installerIni)) {
                 $phpBinary .= ' -c ' . escapeshellarg($installerIni);
             }
-            // 验证文件是否真的是 composer.phar（尝试执行 --version）
-            $testCommand = $phpBinary . ' ' . escapeshellarg($composerPhar) . ' --version 2>&1';
-            exec($testCommand, $testOutput, $testReturnCode);
-            if ($testReturnCode === 0) {
-                return $phpBinary . ' ' . escapeshellarg($composerPhar);
+            $testCommand = $phpBinary . ' ' . escapeshellarg($serverPhar) . ' --version 2>&1';
+            exec($testCommand, $serverOutput, $serverReturnCode);
+            if ($serverReturnCode === 0) {
+                return $phpBinary . ' ' . escapeshellarg($serverPhar);
             }
         }
-        
+
         // 2. 检查全局 composer 命令（Windows 使用 where，Linux/Mac 使用 which）
         $checkCommand = IS_WIN ? 'where composer' : 'which composer';
         exec($checkCommand . ' 2>&1', $output, $returnCode);
