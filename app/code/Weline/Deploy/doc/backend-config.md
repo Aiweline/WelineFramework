@@ -67,10 +67,24 @@ php bin/w setup:upgrade --route
 
 后台核心仓库配置会覆盖 `app/etc/env.php` 的 `core_update` 和 `.env` 的 `CORE_UPDATE_*`。
 
-核心更新只维护框架核心目录。以下项目级模块目录不会被 `php bin/w update:core` 拷贝到目标项目，目标项目如需使用应自行维护：
+核心更新会增量同步以下根目录（基于 Git diff，并自动补缺本地缺失文件；`vendor` 不更新）：
+
+- `app`
+- `bin`
+- `pub`
+- `setup`
+- `dev`
+
+以下项目级模块目录不会被 `php bin/w update:core` 拷贝到目标项目，目标项目如需使用应自行维护：
 
 - `app/code/Aiweline`
 - `app/code/WeShop`
+
+以下文件若已存在于目标项目则不会被覆盖：
+
+- `app/etc/env.php`
+- 项目根目录 `.env`
+- `dev/deploy/.config`
 
 ## 5. Webhook
 
