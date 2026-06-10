@@ -1311,6 +1311,18 @@ for c in "${COMPONENTS[@]}"; do
   esac
 done
 
+echo "========== Composer =========="
+composer_phar="$SERVER_DIR/composer.phar"
+if [[ -f "$composer_phar" ]] && [[ "$(wc -c < "$composer_phar" 2>/dev/null || echo 0)" -ge 500000 ]]; then
+  echo "composer.phar already present at $composer_phar."
+else
+  if [[ -f "$composer_phar" ]]; then
+    echo "composer.phar at $composer_phar is invalid or too small; run.php will replace it."
+  else
+    echo "composer.phar not at $composer_phar; run.php will download it."
+  fi
+fi
+
 # 安装后：将 php、pgsql、项目 bin（w 命令）写入环境变量（置前，优先于系统 php）
 # Linux 同时写 /etc/profile.d/weline-path.sh，确保登录 shell 使用项目 php
 [[ -d "$SERVER_DIR" ]] && add_to_path "$SERVER_DIR"
