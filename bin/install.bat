@@ -288,18 +288,22 @@ exit /b 1
 :do_run_installer
 if exist "%PHP_DIR%\php.exe" if exist "%ROOT%\setup\server_installer\bootstrap_php_ini.php" (
   call :cecho Gray "Pre-configuring php.ini (opcache file_cache for Windows ASLR)..."
-  "%PHP_EXE%" -d opcache.enable=0 -d opcache.enable_cli=0 "%ROOT%\setup\server_installer\bootstrap_php_ini.php"
+  set "BOOTSTRAP_PHP=%PHP_EXE% -d opcache.enable=0 -d opcache.enable_cli=0"
+  if exist "%PHP_DIR%\php.installer.ini" set "BOOTSTRAP_PHP=%PHP_EXE% -c "%PHP_DIR%\php.installer.ini" -d opcache.enable=0 -d opcache.enable_cli=0"
+  !BOOTSTRAP_PHP! "%ROOT%\setup\server_installer\bootstrap_php_ini.php"
   if errorlevel 1 (
     set "CECHO_MSG=WARNING: bootstrap_php_ini failed; run.php may hit Opcache ASLR fatal on Windows." & call :cecho Yellow ""
   )
 )
 set "RUN_ARGS="
 if defined FORCE_INSTALL set "RUN_ARGS=-f"
-call :cecho Gray "Running: php setup\server_installer\run.php %RUN_ARGS%"
+set "RUN_PHP=!USE_PHP!"
+if exist "%PHP_DIR%\php.installer.ini" set "RUN_PHP=!USE_PHP! -c "%PHP_DIR%\php.installer.ini""
+call :cecho Gray "Running: !RUN_PHP! setup\server_installer\run.php %RUN_ARGS%"
 if defined ENV_FILE_ARG (
-  "!USE_PHP!" "%ROOT%\setup\server_installer\run.php" %RUN_ARGS% --env-file "%ENV_FILE_ARG%"
+  !RUN_PHP! "%ROOT%\setup\server_installer\run.php" %RUN_ARGS% --env-file "%ENV_FILE_ARG%"
 ) else (
-  "!USE_PHP!" "%ROOT%\setup\server_installer\run.php" %RUN_ARGS%
+  !RUN_PHP! "%ROOT%\setup\server_installer\run.php" %RUN_ARGS%
 )
 if errorlevel 1 exit /b 1
 echo.
