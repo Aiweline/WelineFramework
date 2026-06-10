@@ -38,6 +38,26 @@ require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsqlData.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsureComposer.php';
 
+/** 配置 php.ini 并确保 extend/server/composer.phar 存在（已安装环境重跑 install 时也会补全） */
+$ensureLocalComposer = static function (string $root) use ($resolveProjectPhpBin): bool {
+    $phpDir = $root . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
+    if (!is_dir($phpDir)) {
+        fwrite(STDERR, "ERROR: 未找到项目 PHP 目录：{$phpDir}\n");
+        return false;
+    }
+    try {
+        $env = (new EnvLoader($root))->load(true);
+        (new ConfigurePhpIni($root, $phpDir))->apply($env);
+        $phpBin = $resolveProjectPhpBin($root, $phpDir);
+        $ok = (new EnsureComposer($root))->ensure($phpBin);
+        EnsureComposer::applyEnvCommand($root, $phpBin);
+        return $ok;
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'ERROR: 确保 composer.phar 失败：' . $e->getMessage() . "\n");
+        return false;
+    }
+};
+
 $phpDirEarly = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 if (is_dir($phpDirEarly)) {
     try {
@@ -174,6 +194,16 @@ if ($isEnvPhpInstalled($envPhpFile)) {
             echo "setup:upgrade 已完成。\n";
             exit(0);
         } else {
+            // 系统已安装：仍补全 composer.phar（避免仅提示退出后 setup:upgrade 找不到 composer）
+            if (!is_file(EnsureComposer::pharPath($projectRoot))) {
+                echo "检测到 composer.phar 缺失，正在补全...\n";
+                if (!$ensureLocalComposer($projectRoot)) {
+                    fwrite(STDERR, "ERROR: 无法下载 composer.phar 到 extend/server/，请检查网络后重试。\n");
+                    exit(1);
+                }
+                echo "composer.phar 已补全。\n\n";
+            }
+
             // 系统已安装，提示用户
             echo "\n";
             echo "╔══════════════════════════════════════════════════════════════════════════════╗\n";
@@ -302,8 +332,11 @@ if (!$fromStep5b && is_dir($phpDir)) {
 
 // 0c. 按 composer.json 下载 composer.phar 到 extend/server/（不纳入 Git）
 if (!$fromStep5b) {
-    (new EnsureComposer($projectRoot))->ensure($phpBin);
-    EnsureComposer::applyEnvCommand($projectRoot, $phpBin);
+    if (!$ensureLocalComposer($projectRoot)) {
+        fwrite(STDERR, "ERROR: 无法确保 composer.phar，安装中止。\n");
+        exit(1);
+    }
+    $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
 }
 
 // 1. composer install（无论 vendor 是否存在都执行，确保依赖完整）
