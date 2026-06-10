@@ -31,9 +31,26 @@ class Core extends CommandAbstract
     /** 默认备用仓库（Gitee），GitHub 不可达时使用 */
     private const DEFAULT_REPO_GITEE = 'https://gitee.com/aiweline/WelineFramework.git';
 
+    /** 核心更新会同步的根目录（增量模式基于 git diff，并补缺本地缺失文件） */
+    private const CORE_UPDATE_PATHS = [
+        'app',
+        'bin',
+        'pub',
+        'setup',
+        'dev',
+    ];
+
     private const CORE_UPDATE_EXCLUDED_PATHS = [
         'app/code/Aiweline',
         'app/code/WeShop',
+    ];
+
+    /** 已存在时绝不覆盖的项目级配置文件 */
+    private const CORE_UPDATE_PROTECTED_PATHS = [
+        'app/etc/env.php',
+        'app/.env',
+        '.env',
+        'dev/deploy/.config',
     ];
 
     private System $system;
@@ -96,10 +113,12 @@ class Core extends CommandAbstract
                 '双仓库策略' => __('未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像'),
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
                 '增量更新' => '默认使用 git fetch 增量拉取，通过 git diff 获取变化文件列表，只拷贝变化的文件',
+                '同步目录' => 'app、bin、pub、setup、dev（vendor 不更新；本地缺失文件会自动补缺）',
                 '强制更新' => '使用 -f 参数强制删除缓存并重新克隆，完全覆盖目标目录',
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
                 '排除目录' => __('核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理'),
+                '保护文件' => 'app/etc/env.php、.env、dev/deploy/.config 等已存在时不覆盖',
             ],
             [
                 '增量更新到最新' => 'php bin/w update:core -b main  （或 core:update -b main）',
@@ -677,25 +696,32 @@ class Core extends CommandAbstract
         $this->newFiles = 0;
         $this->deletedFiles = 0;
         
-        // 需要更新的所有目录（但不包括 vendor）
-        $allPaths = ['app', 'bin', 'pub'];
+        $allPaths = self::CORE_UPDATE_PATHS;
+        $this->printer->note(__('同步目录：%{1}', [implode(', ', $allPaths)]));
         
         // 判断更新模式：
         // 1. 强制模式(-f)或新克隆 → 全量覆盖
-        // 2. 增量模式且有变化 → 只拷贝变化的文件
-        // 3. 增量模式且无变化 → 跳过（已是最新）
+        // 2. 增量模式且有变化 → 只拷贝变化的文件，并补缺本地缺失文件
+        // 3. 增量模式且无变化 → 仅补缺本地缺失文件；仍无变化则跳过
         
         if ($this->forceUpdate || $this->isNewClone) {
             // 强制模式或新克隆：完全覆盖所有文件
             $this->printer->note(__('完全覆盖模式：更新所有文件...'));
             $this->copyAllFiles($tmpDir, $allPaths);
-        } elseif (!empty($this->changedFiles)) {
-            // 增量模式：只拷贝 Git 变化的文件
-            $this->printer->note(__('增量模式：只更新 Git 变化的文件...'));
-            $this->copyChangedFilesOnly($tmpDir, $allPaths);
         } else {
-            // 增量模式但没有变化：跳过
-            $this->printer->success(__('✓ 已是最新版本，无需更新文件'));
+            $processedBefore = $this->newFiles + $this->updatedFiles;
+
+            if (!empty($this->changedFiles)) {
+                // 增量模式：只拷贝 Git 变化的文件
+                $this->printer->note(__('增量模式：只更新 Git 变化的文件...'));
+                $this->copyChangedFilesOnly($tmpDir, $allPaths);
+            }
+
+            $this->copyMissingCoreFiles($tmpDir);
+
+            if ($processedBefore === 0 && $this->newFiles === 0 && $this->updatedFiles === 0) {
+                $this->printer->success(__('✓ 已是最新版本，无需更新文件'));
+            }
         }
         
         // 注意：不更新 vendor 目录，保留现有的依赖包
@@ -708,55 +734,28 @@ class Core extends CommandAbstract
      */
     private function copyChangedFilesOnly(string $tmpDir, array $allowedPaths): void
     {
-        // 需要保护的完整文件路径（绝对不覆盖）
-        $protectedPaths = [
-            'app/etc/env.php',
-            'app/.env',
-            '.env',
-        ];
-        
         $processedCount = 0;
         
         foreach ($this->changedFiles as $relativePath => $status) {
-            // 标准化路径分隔符
-            $relativePath = str_replace(['/', '\\'], DS, $relativePath);
+            $normalizedPath = $this->normalizeCoreUpdateRelativePath($relativePath);
             
-            // 检查是否在允许的目录中
-            $isInAllowedPath = false;
-            foreach ($allowedPaths as $allowedPath) {
-                if (str_starts_with($relativePath, $allowedPath . DS) || $relativePath === $allowedPath) {
-                    $isInAllowedPath = true;
-                    break;
-                }
-            }
-            
-            if (!$isInAllowedPath) {
+            if (!$this->isInCoreUpdatePath($normalizedPath, $allowedPaths)) {
                 continue;
             }
 
-            if ($this->isExcludedCoreUpdatePath($relativePath)) {
+            if ($this->isExcludedCoreUpdatePath($normalizedPath)) {
                 $this->skippedFiles++;
                 continue;
             }
             
-            // 检查是否是受保护的文件
-            $normalizedPath = str_replace('\\', '/', $relativePath);
-            $isProtected = false;
-            foreach ($protectedPaths as $protectedPath) {
-                if ($normalizedPath === $protectedPath) {
-                    $isProtected = true;
-                    break;
-                }
-            }
+            $targetPath = BP . str_replace('/', DS, $normalizedPath);
             
-            $sourcePath = $tmpDir . DS . $relativePath;
-            $targetPath = BP . $relativePath;
-            
-            if ($isProtected && file_exists($targetPath)) {
-                // 受保护的文件，跳过
+            if ($this->isProtectedCoreUpdatePath($normalizedPath) && file_exists($targetPath)) {
                 $this->skippedFiles++;
                 continue;
             }
+
+            $sourcePath = $tmpDir . DS . str_replace('/', DS, $normalizedPath);
             
             switch ($status) {
                 case 'A': // 新增
@@ -790,6 +789,58 @@ class Core extends CommandAbstract
         }
         
         $this->printer->success(__('✓ 处理了 %{1} 个变化的文件', [$processedCount]));
+    }
+
+    /**
+     * 增量模式：补缺本地缺失的核心文件（不覆盖已存在文件）
+     */
+    private function copyMissingCoreFiles(string $tmpDir): void
+    {
+        $missingCount = 0;
+
+        foreach (self::CORE_UPDATE_PATHS as $path) {
+            $source = $tmpDir . DS . $path;
+            $target = BP . $path;
+
+            if (!is_dir($source)) {
+                continue;
+            }
+
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::SELF_FIRST
+            );
+
+            foreach ($iterator as $item) {
+                if (!$item->isFile()) {
+                    continue;
+                }
+
+                $relativePath = $this->normalizeCoreUpdateRelativePath($path . '/' . $iterator->getSubPathname());
+
+                if ($this->isExcludedCoreUpdatePath($relativePath)) {
+                    continue;
+                }
+
+                $targetPath = BP . str_replace('/', DS, $relativePath);
+                if (file_exists($targetPath)) {
+                    continue;
+                }
+
+                if ($this->isProtectedCoreUpdatePath($relativePath)) {
+                    continue;
+                }
+
+                $this->ensureDirectoryExists(dirname($targetPath));
+                copy($item->getPathname(), $targetPath);
+                $this->newFiles++;
+                $missingCount++;
+            }
+        }
+
+        if ($missingCount > 0) {
+            $this->printer->note(__('补缺：同步 %{1} 个本地缺失的核心文件', [$missingCount]));
+        }
     }
     
     /**
@@ -845,9 +896,6 @@ class Core extends CommandAbstract
             mkdir($target, 0755, true);
         }
         
-        // 需要保护的完整文件路径（绝对不覆盖）
-        $protectedPaths = ['etc' . DS . 'env.php', '.env'];
-        
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($source, \RecursiveDirectoryIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::SELF_FIRST
@@ -873,17 +921,7 @@ class Core extends CommandAbstract
             } elseif ($item->isFile()) {
                 $sourcePath = $item->getPathname();
                 
-                // 检查是否是受保护的文件路径
-                $shouldProtect = false;
-                foreach ($protectedPaths as $protectedPath) {
-                    if ($relativePath === $protectedPath) {
-                        $shouldProtect = true;
-                        break;
-                    }
-                }
-                
-                // 保护配置文件：绝对不覆盖 app/etc/env.php 和 .env
-                if ($shouldProtect && file_exists($targetPath)) {
+                if ($this->isProtectedCoreUpdatePath($logicalPath) && file_exists($targetPath)) {
                     $this->skippedFiles++;
                     continue;
                 }
@@ -908,9 +946,34 @@ class Core extends CommandAbstract
         return true;
     }
 
+    private function normalizeCoreUpdateRelativePath(string $relativePath): string
+    {
+        return trim(str_replace('\\', '/', $relativePath), '/');
+    }
+
+    private function isInCoreUpdatePath(string $relativePath, array $allowedPaths): bool
+    {
+        $normalizedPath = $this->normalizeCoreUpdateRelativePath($relativePath);
+
+        foreach ($allowedPaths as $allowedPath) {
+            if ($normalizedPath === $allowedPath || str_starts_with($normalizedPath, $allowedPath . '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isProtectedCoreUpdatePath(string $relativePath): bool
+    {
+        $normalizedPath = $this->normalizeCoreUpdateRelativePath($relativePath);
+
+        return in_array($normalizedPath, self::CORE_UPDATE_PROTECTED_PATHS, true);
+    }
+
     private function isExcludedCoreUpdatePath(string $relativePath): bool
     {
-        $normalizedPath = trim(str_replace('\\', '/', $relativePath), '/');
+        $normalizedPath = $this->normalizeCoreUpdateRelativePath($relativePath);
         foreach (self::CORE_UPDATE_EXCLUDED_PATHS as $excludedPath) {
             if ($normalizedPath === $excludedPath || str_starts_with($normalizedPath, $excludedPath . '/')) {
                 return true;

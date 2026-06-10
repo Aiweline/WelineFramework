@@ -42,10 +42,11 @@ $Fencang = 'dev\tools\fencang'
 
 ## Workflow summary
 
-1. Mirror `app/code/Weline/{Module}/` → `E:\WelineFramework\weline/{repo}/` via robocopy `/MIR`.
-2. Review `git diff`; skip if no meaningful change.
-3. Bump tag (patch +1, carry at 9), commit, push `origin` + `github` (branch + tag).
-4. Call Packagist `update-package` via `refresh-packagist.ps1`.
-5. Report per module: sync status, old/new tag, Packagist result, push result.
+1. **Pre-check** with `robocopy /L /MIR`; if exit 0 (no diff), skip the entire repo (no copy, commit, tag, push, or Packagist).
+2. Mirror `app/code/Weline/{Module}/` → `E:\WelineFramework\weline/{repo}/` via robocopy `/MIR`.
+3. Review `git diff`; skip commit/tag/push if still no meaningful change after sync.
+4. Bump tag (patch +1, carry at 9), commit, push `origin` + `github` (branch + tag).
+5. Call Packagist `update-package` via `refresh-packagist.ps1`.
+6. Report per module: sync status, old/new tag, Packagist result, push result.
 
 For mapping table, version rules, Packagist credentials, and guardrails, read the canonical skill file above.
