@@ -40,9 +40,7 @@ class ProductLayoutScanner
         // 扫描路径：app/code/WeShop/Product/view/theme/frontend/layouts/{layoutType}/
         $layoutsDir = $basePath . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'layouts' . DS . $layoutType;
         
-        if (!is_dir($layoutsDir)) {
-            return $layouts;
-        }
+        if (is_dir($layoutsDir)) {
 
         // 扫描布局文件
         $files = glob($layoutsDir . DS . '*.phtml');
@@ -64,6 +62,30 @@ class ProductLayoutScanner
         }
 
         // 通过 theme 查询器获取主题布局（避免跨模块直接调用）
+        }
+
+        if (isset($modules['Weline_Theme']['base_path'])) {
+            $themeLayoutsDir = rtrim($modules['Weline_Theme']['base_path'], DS)
+                . DS . 'view'
+                . DS . 'theme'
+                . DS . 'frontend'
+                . DS . 'layouts'
+                . DS . $layoutType;
+            if (is_dir($themeLayoutsDir)) {
+                foreach (glob($themeLayoutsDir . DS . '*.phtml') ?: [] as $file) {
+                    $fileName = basename($file, '.phtml');
+                    $meta = self::parseLayoutMeta($file);
+                    $layouts[$fileName] = [
+                        'name' => $meta['name'] ?? ucfirst($fileName),
+                        'description' => $meta['description'] ?? '',
+                        'template' => 'Weline_Theme::theme/frontend/layouts/' . $layoutType . '/' . $fileName,
+                        'preview_image' => $meta['preview_image'] ?? '',
+                        'config' => $meta['config'] ?? []
+                    ];
+                }
+            }
+        }
+
         if ($includeTheme) {
             try {
                 $themeLayouts = w_query('theme', 'scanThemeLayoutsByType', [

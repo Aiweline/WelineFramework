@@ -37,15 +37,14 @@ class Payment extends AbstractRestController
         
         $result = [];
         foreach ($methods as $method) {
-            $provider = $this->methodManager->getProviderInstance($method);
-            if ($provider) {
-                $result[] = [
-                    'code' => $method->getData('code'),
-                    'name' => $method->getData('name'),
-                    'icon_url' => $provider->getIconUrl(),
-                    'description' => $provider->getDescription(),
-                ];
-            }
+            $metadata = $this->methodManager->getProviderMetadata($method);
+            $display = \is_array($metadata['display_metadata'] ?? null) ? $metadata['display_metadata'] : [];
+            $result[] = [
+                'code' => $method->getData('code'),
+                'name' => $method->getData('name'),
+                'icon_url' => (string) ($display['icon_url'] ?? $display['icon'] ?? ''),
+                'description' => (string) ($display['description'] ?? ''),
+            ];
         }
         
         return $this->success(__('获取支付方式列表成功'), $result);
@@ -79,25 +78,14 @@ class Payment extends AbstractRestController
             ];
             
             $transaction = $this->paymentService->createPayment($methodCode, $orderData);
-            
-            // 获取支付提供商
-            $paymentMethod = $this->methodManager->getMethodByCode($methodCode);
-            $provider = $this->methodManager->getProviderInstance($paymentMethod);
-            
-            if ($provider) {
-                $result = $provider->createPayment($orderData);
-                
-                if ($result->isSuccess()) {
-                    return $this->success(__('支付订单创建成功'), [
-                        'transaction_no' => $transaction->getData('transaction_no'),
-                        'payment_url' => $result->getData('payment_url'),
-                        'payment_form' => $result->getData('payment_form'),
-                        'qr_code' => $result->getData('qr_code'),
-                    ]);
-                }
-            }
-            
-            return $this->error(__('创建支付订单失败'));
+            $response = $transaction->getResponseData();
+
+            return $this->success(__('支付订单创建成功'), [
+                'transaction_no' => $transaction->getData('transaction_no'),
+                'status' => $transaction->getData('status'),
+                'payload' => \is_array($response['payload'] ?? null) ? $response['payload'] : [],
+                'action_type' => (string) ($response['action_type'] ?? ''),
+            ]);
         } catch (\Exception $e) {
             return $this->error(__('创建支付订单失败: %{1}', [$e->getMessage()]));
         }

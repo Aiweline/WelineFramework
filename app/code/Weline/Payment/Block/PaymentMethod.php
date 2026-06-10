@@ -37,12 +37,20 @@ class PaymentMethod extends Block
 
     /**
      * 获取可用的支付方式列表
-     * 
+     *
+     * @param array<string, mixed> $context
      * @return array
      */
-    public function getAvailableMethods(): array
+    public function getAvailableMethods(array $context = []): array
     {
-        return $this->methodManager->getActiveMethods();
+        if (!empty($context['fake_mode'])) {
+            $this->methodManager->registerAllProviders();
+            $fakeMethod = $this->methodManager->getMethodByCode('fake_card');
+
+            return $fakeMethod ? [$fakeMethod] : [];
+        }
+
+        return $this->methodManager->getActiveMethods($context);
     }
 }
 

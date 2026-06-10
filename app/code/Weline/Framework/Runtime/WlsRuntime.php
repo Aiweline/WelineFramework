@@ -4119,7 +4119,7 @@ class WlsRuntime implements RuntimeInterface
 
     private function isBackendReturnCurrencySegment(string $segment): bool
     {
-        return strlen($segment) === 3 && ctype_upper($segment);
+        return State::isAllowedCurrencyCode($segment);
     }
 
     private function isBackendReturnLocaleSegment(string $segment): bool

@@ -120,9 +120,15 @@ class PaymentMethod extends AbstractModel
     public function supportsDiscountAction(string $actionCode): bool
     {
         $supported = $this->getSupportedDiscountActions();
-
-        // 如果为空数组，表示支持所有优惠方式（向后兼容）
         if (empty($supported)) {
+            $providerSupported = $this->getProviderSupportedActions();
+
+            return $providerSupported !== null
+                && $providerSupported !== []
+                && in_array($actionCode, $providerSupported, true);
+        }
+
+        if (false) {
             // 尝试从支付提供商获取默认支持
             $providerSupported = $this->getProviderSupportedActions();
             if ($providerSupported !== null) {
@@ -133,7 +139,6 @@ class PaymentMethod extends AbstractModel
                 // 如果提供商返回空数组，表示支持所有
                 return in_array($actionCode, $providerSupported, true);
             }
-            // 如果提供商也未实现，默认支持所有（向后兼容）
             return true;
         }
 
@@ -154,11 +159,12 @@ class PaymentMethod extends AbstractModel
             }
 
             $provider = \Weline\Framework\Manager\ObjectManager::getInstance($providerClass);
-            if ($provider instanceof \Weline\Payment\Interface\PaymentProviderInterface) {
+            if ($provider instanceof \Weline\Payment\Interface\ProviderInterface) {
                 // 检查是否实现了新方法
-                if (method_exists($provider, 'getSupportedDiscountActions')) {
-                    return $provider->getSupportedDiscountActions();
-                }
+                $capabilities = $provider->getCapabilities();
+                $actions = $capabilities['supported_discount_actions'] ?? $capabilities['discount_actions'] ?? null;
+
+                return \is_array($actions) ? $actions : null;
             }
         } catch (\Throwable $e) {
             // 忽略错误

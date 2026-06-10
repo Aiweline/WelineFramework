@@ -271,7 +271,7 @@ class MenuRenderService
 
         if (
             count($segments) > 2
-            && preg_match('/^[A-Z]{3}$/', $segments[0]) === 1
+            && State::isAllowedCurrencyCode((string)$segments[0])
             && preg_match('/^[a-z]{2}_[A-Za-z]+_[A-Z]{2}$/', $segments[1]) === 1
         ) {
             $url = implode('/', array_slice($segments, 2));

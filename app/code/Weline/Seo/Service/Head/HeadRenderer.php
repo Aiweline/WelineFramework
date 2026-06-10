@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service\Head;
 
+use Weline\Seo\Structure\SeoStructureRegistry;
+
 class HeadRenderer
 {
     public function __construct(
-        private readonly PageSeoContextResolver $resolver
+        private readonly PageSeoContextResolver $resolver,
+        private readonly ?SeoStructureRegistry $structureRegistry = null
     ) {
     }
 
@@ -245,6 +248,8 @@ class HeadRenderer
             $webPage['mainEntity'] = ['@id' => $url . '#article'];
         } elseif ($itemList !== []) {
             $webPage['mainEntity'] = ['@id' => $url . '#itemlist'];
+        } elseif ($this->isFaqMainEntityPage($context)) {
+            $webPage['mainEntity'] = ['@id' => $url . '#faq'];
         }
         $graph[] = $webPage;
 
@@ -260,8 +265,8 @@ class HeadRenderer
         if ($itemList !== []) {
             $graph[] = $itemList;
         }
-        if (!empty($context['faqs'])) {
-            $graph[] = $this->faqNode((array) $context['faqs'], $url);
+        foreach ($this->structureRegistry()->buildNodes($context, $url) as $node) {
+            $graph[] = $node;
         }
         foreach ((array) ($context['schema_nodes'] ?? []) as $node) {
             if (is_array($node) && $node !== []) {
@@ -477,9 +482,32 @@ class HeadRenderer
         return match ($this->normalizePageType($pageType)) {
             'about', 'about_page' => 'AboutPage',
             'contact', 'contact_page' => 'ContactPage',
+            'faq', 'faq_page' => 'FAQPage',
             'category', 'collection', 'collection_page', 'blog_list', 'blog_category', 'searchable_landing' => 'CollectionPage',
             default => 'WebPage',
         };
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function isFaqMainEntityPage(array $context): bool
+    {
+        if (empty($context['faqs']) || !is_array($context['faqs'])) {
+            return false;
+        }
+
+        $pageType = $this->normalizePageType((string) ($context['page_type'] ?? ''));
+        if (in_array($pageType, ['faq', 'faq_page', 'customer_service', 'contact', 'contact_page'], true)) {
+            return true;
+        }
+
+        return ($context['page_type'] ?? '') !== 'product';
+    }
+
+    private function structureRegistry(): SeoStructureRegistry
+    {
+        return $this->structureRegistry ?? new SeoStructureRegistry();
     }
 
     /**
@@ -937,26 +965,6 @@ class HeadRenderer
             $node['speakable'] = array_replace(['@type' => 'SpeakableSpecification'], $context['speakable']);
         }
         return $node;
-    }
-
-    /**
-     * @param array<int, array{question:string,answer:string}> $faqs
-     * @return array<string, mixed>
-     */
-    private function faqNode(array $faqs, string $url): array
-    {
-        return [
-            '@type' => 'FAQPage',
-            '@id' => $url . '#faq',
-            'mainEntity' => array_map(static fn (array $faq): array => [
-                '@type' => 'Question',
-                'name' => $faq['question'],
-                'acceptedAnswer' => [
-                    '@type' => 'Answer',
-                    'text' => $faq['answer'],
-                ],
-            ], $faqs),
-        ];
     }
 
     private function socialType(string $pageType): string

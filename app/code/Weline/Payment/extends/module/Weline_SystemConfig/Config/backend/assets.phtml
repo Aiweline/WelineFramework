@@ -1,0 +1,39 @@
+<?php
+/**
+ * @meta.title {default="支付资产配置",description="信用、积分和 W 币作为支付或折扣资产的统一配置模板"}
+ * @meta.description {default="三类资产默认不启用；启用兑换比例后才能按支付或折扣角色参与可支付对象。"}
+ * @config.area {backend}
+ * @config.sort {55}
+ * @config.acl {Weline_Payment::payment_method}
+ */
+?>
+
+<w:config:group code="payment_asset_credit" label="信用体系" description="信用额度作为支付或折扣资产的准入规则。" sort="10">
+    <w:config:field key="payment/asset/credit/enabled" label="启用信用体系" description="默认关闭；关闭时不能作为支付或折扣参与结账。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/credit/exchange_ratio" label="兑换比例" description="1 个信用单位可抵扣的目标货币金额；未配置或小于等于 0 时不能参与支付。" type="number" value-type="float" default="0" scope="global,website,store" validation="min:0" />
+    <w:config:field key="payment/asset/credit/allow_payment" label="允许作为支付方式" description="开启后可用于部分支付或全额支付。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/credit/allow_discount" label="允许作为折扣" description="开启后可作为折扣项抵扣；同一可支付对象上不能同时选择支付和折扣角色。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/credit/max_discount_ratio" label="最大抵扣比例" description="0 到 1 之间；1 表示允许全额抵扣。" type="number" value-type="float" default="1" scope="global,website,store" validation="min:0|max:1" />
+    <w:config:field key="payment/asset/credit/allowed_payable_types" label="允许的可支付对象" description="逗号分隔；为空表示允许所有可支付对象。" type="text" value-type="json" default="" scope="global,website,store" validation="max:500" />
+    <w:config:field key="payment/asset/credit/refund_strategy" label="退款策略" description="退款时按原资产分录退回，或由业务资产模块自行处理。" type="select" value-type="string" default="allocation" scope="global,website,store" options="allocation:按分录退回,module:资产模块处理" validation="required|in_options" />
+</w:config:group>
+
+<w:config:group code="payment_asset_points" label="积分体系" description="积分作为支付或折扣资产的准入规则。" sort="20">
+    <w:config:field key="payment/asset/points/enabled" label="启用积分体系" description="默认关闭；关闭时不能作为支付或折扣参与结账。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/points/exchange_ratio" label="兑换比例" description="1 个积分可抵扣的目标货币金额；未配置或小于等于 0 时不能参与支付。" type="number" value-type="float" default="0" scope="global,website,store" validation="min:0" />
+    <w:config:field key="payment/asset/points/allow_payment" label="允许作为支付方式" description="开启后可用于部分支付或全额支付。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/points/allow_discount" label="允许作为折扣" description="开启后可作为折扣项抵扣；同一可支付对象上不能同时选择支付和折扣角色。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/points/max_discount_ratio" label="最大抵扣比例" description="0 到 1 之间；1 表示允许全额抵扣。" type="number" value-type="float" default="1" scope="global,website,store" validation="min:0|max:1" />
+    <w:config:field key="payment/asset/points/allowed_payable_types" label="允许的可支付对象" description="逗号分隔；为空表示允许所有可支付对象。" type="text" value-type="json" default="" scope="global,website,store" validation="max:500" />
+    <w:config:field key="payment/asset/points/refund_strategy" label="退款策略" description="退款时按原资产分录退回，或由业务资产模块自行处理。" type="select" value-type="string" default="allocation" scope="global,website,store" options="allocation:按分录退回,module:资产模块处理" validation="required|in_options" />
+</w:config:group>
+
+<w:config:group code="payment_asset_wcoin" label="W 币" description="W 币作为支付或折扣资产的准入规则。" sort="30">
+    <w:config:field key="payment/asset/wcoin/enabled" label="启用 W 币" description="默认关闭；关闭时不能作为支付或折扣参与结账。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/wcoin/exchange_ratio" label="兑换比例" description="1 个 W 币可抵扣的目标货币金额；未配置或小于等于 0 时不能参与支付。" type="number" value-type="float" default="0" scope="global,website,store" validation="min:0" />
+    <w:config:field key="payment/asset/wcoin/allow_payment" label="允许作为支付方式" description="开启后可用于部分支付或全额支付。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/wcoin/allow_discount" label="允许作为折扣" description="开启后可作为折扣项抵扣；同一可支付对象上不能同时选择支付和折扣角色。" type="switch" value-type="bool" default="0" scope="global,website,store" />
+    <w:config:field key="payment/asset/wcoin/max_discount_ratio" label="最大抵扣比例" description="0 到 1 之间；1 表示允许全额抵扣。" type="number" value-type="float" default="1" scope="global,website,store" validation="min:0|max:1" />
+    <w:config:field key="payment/asset/wcoin/allowed_payable_types" label="允许的可支付对象" description="逗号分隔；为空表示允许所有可支付对象。" type="text" value-type="json" default="" scope="global,website,store" validation="max:500" />
+    <w:config:field key="payment/asset/wcoin/refund_strategy" label="退款策略" description="退款时按原资产分录退回，或由业务资产模块自行处理。" type="select" value-type="string" default="allocation" scope="global,website,store" options="allocation:按分录退回,module:资产模块处理" validation="required|in_options" />
+</w:config:group>

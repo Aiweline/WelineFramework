@@ -5,12 +5,29 @@ Generic frontend review layout. It keeps review pages in the full storefront
 shell even when the active theme does not provide a review-specific layout.
 -->
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::review::head-after</w:hook>
+<style>
+.review-layout {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--weline-layout-surface-primary);
+    color: var(--weline-layout-text-primary);
+    font-family: var(--weline-layout-font-family);
+}
+
+.review-layout__content {
+    width: 100%;
+}
+
+.review-layout__content > * {
+    width: 100%;
+}
+</style>
 </head>
 <body class="review-layout">
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
@@ -66,21 +83,3 @@ shell even when the active theme does not provide a review-specific layout.
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>
-
-<style>
-.review-layout {
-    margin: 0;
-    min-height: 100vh;
-    background: var(--weline-layout-surface-primary, var(--color-bg-primary, #fff));
-    color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
-    font-family: var(--weline-layout-font-family, var(--font-family-base, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif));
-}
-
-.review-layout__content {
-    width: 100%;
-}
-
-.review-layout__content > * {
-    width: 100%;
-}
-</style>

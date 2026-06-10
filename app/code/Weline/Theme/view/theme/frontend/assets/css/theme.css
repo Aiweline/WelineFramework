@@ -19,6 +19,16 @@
     min-height: 80vh;
 }
 
+html[dir="rtl"],
+html[data-dir="rtl"] {
+    direction: rtl;
+}
+
+html[dir="ltr"],
+html[data-dir="ltr"] {
+    direction: ltr;
+}
+
 /* ========== 布局主体主题变量桥接 ========== */
 :root {
     --weline-theme-primary: var(--color-primary, var(--weshop-primary, #0f766e));
@@ -760,7 +770,7 @@ table.table th,
 table.table td {
     padding: 0.8rem 1rem;
     border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-border-color);
-    text-align: left;
+    text-align: start;
     vertical-align: middle;
 }
 
@@ -816,14 +826,14 @@ table.table tbody tr:hover {
 .w-alert-dismissible,
 .alert-dismissible {
     position: relative;
-    padding-right: 3rem;
+    padding-inline-end: 3rem;
 }
 
 .w-btn-close,
 .btn-close {
     position: absolute;
     top: 0.75rem;
-    right: 0.75rem;
+    inset-inline-end: 0.75rem;
     width: 1.75rem;
     height: 1.75rem;
     padding: 0;
@@ -969,7 +979,7 @@ table.table tbody tr:hover {
 .dropdown-menu {
     position: absolute;
     top: calc(100% + 0.35rem);
-    left: 0;
+    inset-inline-start: 0;
     z-index: var(--weline-layout-z-index-dropdown);
     display: none;
     min-width: 12rem;
@@ -982,8 +992,8 @@ table.table tbody tr:hover {
 
 .w-dropdown-right .w-dropdown-menu,
 .dropdown-right .dropdown-menu {
-    right: 0;
-    left: auto;
+    inset-inline-end: 0;
+    inset-inline-start: auto;
 }
 
 .w-dropdown.w-open .w-dropdown-menu,
@@ -1383,7 +1393,8 @@ table.table tbody tr:hover {
     width: 100%;
     min-width: 0;
     height: 42px;
-    padding: 0 34px 0 14px;
+    padding-block: 0;
+    padding-inline: 14px 34px;
     border: 0;
     outline: 0;
     background: transparent;
@@ -1397,7 +1408,7 @@ table.table tbody tr:hover {
 
 .w-address__arrow {
     position: absolute;
-    right: 12px;
+    inset-inline-end: 12px;
     color: var(--weline-theme-text-muted);
     font-size: 12px;
     pointer-events: none;
@@ -1407,8 +1418,7 @@ table.table tbody tr:hover {
     position: absolute;
     z-index: 1080;
     top: calc(100% + 6px);
-    right: 0;
-    left: 0;
+    inset-inline: 0;
     display: none;
     max-height: 260px;
     overflow: auto;
@@ -1433,7 +1443,7 @@ table.table tbody tr:hover {
     color: var(--weline-theme-text);
     cursor: pointer;
     font: inherit;
-    text-align: left;
+    text-align: start;
 }
 
 .w-address__option:hover,

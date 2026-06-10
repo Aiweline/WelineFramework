@@ -32,17 +32,33 @@ BCP 47 语言标签由以下部分组成（使用连字符分隔）：
 
 ### 前端模板
 
-在前端布局模板中，使用 `{{lang}}` 变量，该变量会自动转换为 BCP 47 格式：
+在前端布局模板中，使用 `{{htmlLang}}` 变量输出 BCP 47 格式语言标签，并使用 `{{htmlDir}}` 输出文本方向：
 
 ```phtml
 <!DOCTYPE html>
-<html lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}">
 <head>
     <!-- ... -->
 </head>
 ```
 
-**注意**：`{{lang}}` 变量由框架自动提供，已经转换为 BCP 47 格式（连字符分隔）。
+**注意**：`{{htmlLang}}` 变量由框架自动提供，已经转换为 BCP 47 格式（连字符分隔）。`{{lang}}` 保留框架内部语言代码（下划线格式），适合放在 `data-lang` 或内部逻辑中。
+
+### RTL 方向属性
+
+框架会根据当前语言自动提供以下方向变量：
+
+- `{{htmlDir}}`：HTML 文档方向，值为 `ltr` 或 `rtl`
+- `{{textDirection}}`：与 `htmlDir` 相同，供模板或脚本读取
+- `{{isRtl}}`：当前语言是否 RTL
+
+主题布局的根元素必须同时输出 `lang` 和 `dir`：
+
+```phtml
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-dir="{{htmlDir}}">
+```
+
+主题 CSS 应优先使用逻辑属性，例如 `margin-inline-start`、`padding-inline-end`、`inset-inline-start`、`text-align: start`，避免新增只适用于 LTR 的 `left/right`、`margin-left/right`、`padding-left/right`。
 
 ### 后端模板
 
@@ -50,7 +66,7 @@ BCP 47 语言标签由以下部分组成（使用连字符分隔）：
 
 ```phtml
 <!DOCTYPE html>
-<html lang="{{htmlLang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}">
 <head>
     <!-- ... -->
 </head>
@@ -100,7 +116,7 @@ $htmlLang = str_replace('_', '-', $userLang);
    - 浏览器自动翻译功能
    - 内容语言检测
 
-4. **自动转换**：框架已经自动处理了转换，模板中直接使用 `{{lang}}` 或 `{{htmlLang}}` 变量即可，无需手动转换。
+4. **自动转换**：框架已经自动处理了转换，模板中直接使用 `{{htmlLang}}` 和 `{{htmlDir}}` 变量即可，无需手动转换。
 
 ## 相关规范文档
 
@@ -112,7 +128,8 @@ $htmlLang = str_replace('_', '-', $userLang);
 
 框架在 `Template.php` 的 `initLanguage()` 方法中自动处理 BCP 47 格式转换：
 
-- `lang` 变量：自动转换为 BCP 47 格式（连字符分隔），用于 HTML `lang` 属性
-- `htmlLang` 变量：与 `lang` 相同，保持向后兼容
+- `lang` 变量：保留框架内部语言代码（如下划线格式），用于内部逻辑和 `data-lang`
+- `htmlLang` 变量：自动转换为 BCP 47 格式（连字符分隔），用于 HTML `lang` 属性
+- `htmlDir` / `textDirection` 变量：根据语言或脚本代码输出 `ltr` / `rtl`
 
-开发者无需手动处理转换，直接使用 `{{lang}}` 或 `{{htmlLang}}` 变量即可。
+开发者无需手动处理转换，直接使用 `{{htmlLang}}` 和 `{{htmlDir}}` 变量即可。

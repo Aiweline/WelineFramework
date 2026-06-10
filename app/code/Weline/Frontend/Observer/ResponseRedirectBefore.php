@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Frontend\Observer;
 
+use Weline\Framework\App\State;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -302,7 +303,7 @@ class ResponseRedirectBefore implements ObserverInterface
         $segments = \array_values(\array_filter(\explode('/', \trim($path, '/')), static fn(string $segment): bool => $segment !== ''));
         while ($segments !== []) {
             $segment = (string)$segments[0];
-            if (\preg_match('/^[A-Z]{3}$/i', $segment) === 1
+            if (State::isAllowedCurrencyCode($segment)
                 || \preg_match('/^[a-z]{2}(?:[-_][a-z0-9]{2,5}){1,2}$/i', $segment) === 1
             ) {
                 \array_shift($segments);

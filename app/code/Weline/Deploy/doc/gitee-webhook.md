@@ -74,6 +74,15 @@ curl -s 'https://example.com/deploy?health=1'
 7. 数据格式选择 `JSON`。
 8. 保存并启用。
 
+### Tag 发布（可选）
+
+如果需要 tag 推送也触发部署：
+
+1. 在后台 `部署配置` 的「触发模式」区域，将「部署触发方式」选为「仅 Tag Push」或「分支 + Tag 都生效」。
+2. 可选填写「Tag 前缀过滤」（如 `v`），仅匹配此前缀的 tag 才会触发部署。
+3. Gitee Webhook 页面：「触发事件」勾选「Tag Push」。
+4. Tag 发布时，`deploy_version` 等于 tag 名（如 `v2.4.1`），而非 commit SHA。
+
 脚本兼容两种 Gitee 鉴权形式：
 
 - `X-Gitee-Token` 直接等于 `WEBHOOK_SECRET`。
@@ -95,6 +104,6 @@ curl -s -X POST 'https://example.com/deploy' \
 ## 5. 常见问题
 
 - `403 invalid webhook token`：Gitee 的密码/Token 与 `WEBHOOK_SECRET` 不一致，或反向代理没有传递请求头。
-- `branch mismatch`：Gitee 推送分支与 `WEBHOOK_BRANCH` 不一致。
+- `branch mismatch` / `trigger_mode_tag_only` / `trigger_mode_branch_only`：触发模式或分支不匹配。检查后台「部署触发方式」和「分支过滤」配置。
 - `Tracked files have local changes`：服务器部署目录存在本地改动。先人工确认并清理，不要随意开启 `DEPLOY_FORCE_RESET=1`。
 - `Cloudflare: disabled`：这是当前默认行为，不是错误。

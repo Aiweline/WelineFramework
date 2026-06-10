@@ -1157,13 +1157,14 @@
 .theme-editor-container .array-item-input {
     display: block;
     width: 100%;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.5;
+    padding: 2px 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    min-height: 24px;
     color: var(--te-text-primary, #1f2937);
     background-color: var(--te-bg-card, #fff);
     border: 1px solid var(--te-border, #d1d5db);
-    border-radius: 6px;
+    border-radius: 4px;
     box-sizing: border-box;
 }
 
@@ -1244,10 +1245,6 @@
 
 .theme-editor-container .array-editor-wrapper .array-item {
     align-items: flex-start;
-    padding: 0.75rem;
-    border: 1px solid var(--te-border-color, #e5e7eb);
-    border-radius: 8px;
-    background: #fff;
 }
 
 .theme-editor-container .array-item-title {
@@ -1296,4 +1293,539 @@
     width: 100%;
     max-height: 96px;
     object-fit: cover;
+}
+
+/* 主题编辑器内紧凑密度 - 与顶部工具栏控件对齐 */
+.theme-editor-container .widget-config-panel {
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+/* 边框简化：侧栏内减少嵌套描边，避免左右多条竖线挤在一起 */
+.theme-editor-container .widget-config-panel:hover {
+    box-shadow: none;
+}
+
+.theme-editor-container .config-group {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+    margin-bottom: 0.5rem;
+}
+
+.theme-editor-container .config-group:hover {
+    box-shadow: none;
+    border-color: transparent;
+}
+
+.theme-editor-container .config-group-title {
+    border-bottom: 1px solid var(--te-border, #e5e7eb);
+    background: transparent;
+}
+
+.theme-editor-container .config-group-title::before {
+    display: none;
+}
+
+.theme-editor-container .config-fields {
+    padding: 0.5rem 0.25rem;
+    background: transparent;
+}
+
+.theme-editor-container .config-field-input {
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+.theme-editor-container .config-field-input:hover,
+.theme-editor-container .config-field-input:focus-within {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+.theme-editor-container .translatable-field::before {
+    display: none;
+}
+
+.theme-editor-container .translatable-field {
+    padding-left: 0;
+}
+
+.theme-editor-container .config-field-description {
+    border-left: none;
+    background: transparent;
+    padding-left: 0;
+}
+
+.theme-editor-container .array-editor-wrapper {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.theme-editor-container .array-editor-wrapper .array-item {
+    border: none;
+    border-radius: 6px;
+    background: var(--te-bg-hover, #f8fafc);
+    margin-bottom: 0.5rem;
+}
+
+.theme-editor-container .array-editor-wrapper .array-item:last-child {
+    margin-bottom: 0;
+}
+
+.theme-editor-container .array-editor-wrapper .array-item:hover {
+    background: var(--te-bg-hover, #f1f5f9);
+}
+
+.theme-editor-container .array-actions {
+    border-top: none;
+    background: transparent;
+    padding: 0.5rem 0 0;
+}
+
+.theme-editor-container .array-image-preview {
+    border-style: solid;
+    border-color: var(--te-border, #e5e7eb);
+    background: #fff;
+}
+
+.theme-editor-container .config-actions {
+    border-top: 1px solid var(--te-border, #e5e7eb);
+}
+
+/* w-param 表单：同样去掉多层外框 */
+.theme-editor-container .w-param-form .w-param-group {
+    border: none;
+    background: transparent;
+}
+
+.theme-editor-container .w-param-form .w-param-group-title {
+    border-bottom: 1px solid var(--te-border, #e5e7eb);
+    background: transparent;
+}
+
+.theme-editor-container .w-param-form .w-param-group-title:hover {
+    background: var(--te-bg-hover, #f8fafc);
+}
+
+.theme-editor-container .w-param-form .w-param-fields {
+    padding: 0.5rem 0.25rem;
+    background: transparent;
+}
+
+.theme-editor-container .w-param-form .w-param-array {
+    border: none;
+    background: transparent;
+}
+
+.theme-editor-container .w-param-form .w-param-array-item {
+    border: none;
+    border-radius: 6px;
+    background: var(--te-bg-hover, #f8fafc);
+    margin-bottom: 0.5rem;
+}
+
+.theme-editor-container .w-param-form .w-param-array-item:last-child {
+    margin-bottom: 0;
+}
+
+.theme-editor-container .w-param-form .w-param-array-item:hover {
+    background: var(--te-bg-hover, #f1f5f9);
+}
+
+.theme-editor-container .w-param-form .w-param-array-actions {
+    border-top: none;
+    background: transparent;
+    padding: 0.5rem 0 0;
+}
+
+.theme-editor-container .w-param-form .w-param-image-preview {
+    border-style: solid;
+    border-color: var(--te-border, #e5e7eb);
+    background: #fff;
+}
+
+.theme-editor-container .w-param-form .w-param-actions {
+    border-top: 1px solid var(--te-border, #e5e7eb);
+    background: transparent;
+}
+
+.theme-editor-container .config-header {
+    padding: 8px 10px;
+    gap: 0.5rem;
+}
+
+.theme-editor-container .config-widget-info {
+    gap: 0.5rem;
+}
+
+.theme-editor-container .widget-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    border-radius: 6px;
+}
+
+.theme-editor-container .widget-meta h4 {
+    font-size: 12px;
+}
+
+.theme-editor-container .widget-meta p {
+    font-size: 10px;
+    margin-top: 0.125rem;
+}
+
+.theme-editor-container .config-lang-switcher {
+    min-width: 120px;
+}
+
+.theme-editor-container .config-lang-switcher select {
+    font-size: 10px;
+    padding: 2px 1.5rem 2px 0.5rem;
+    min-height: 24px;
+    border-radius: 4px;
+}
+
+.theme-editor-container .config-form {
+    padding: 0.5rem 0.625rem;
+}
+
+.theme-editor-container .config-group {
+    border-radius: 0;
+}
+
+.theme-editor-container .config-group-title {
+    gap: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 11px;
+}
+
+.theme-editor-container .config-group-title:hover {
+    padding-left: 0.5rem;
+}
+
+.theme-editor-container .config-group-title i {
+    font-size: 12px;
+}
+
+.theme-editor-container .config-group-title .toggle-icon {
+    font-size: 12px;
+}
+
+.theme-editor-container .config-fields {
+    padding: 0.5rem;
+}
+
+.theme-editor-container .config-field {
+    margin-bottom: 0.375rem;
+}
+
+.theme-editor-container .config-label {
+    font-size: 11px;
+    margin-bottom: 0.25rem;
+}
+
+.theme-editor-container .config-input,
+.theme-editor-container .config-select,
+.theme-editor-container .config-textarea {
+    font-size: 11px;
+    min-height: 24px;
+    padding: 2px 8px;
+}
+
+.theme-editor-container .config-textarea {
+    min-height: 48px;
+}
+
+.theme-editor-container .config-actions {
+    padding: 0.375rem 0.5rem;
+    gap: 0.375rem;
+}
+
+.theme-editor-container .config-actions .btn {
+    padding: 2px 8px;
+    min-height: 24px;
+    font-size: 11px;
+}
+
+/* 紧凑密度：回退表单控件（config-field / array） */
+.theme-editor-container .config-field .form-control,
+.theme-editor-container .config-field .form-select,
+.theme-editor-container .config-field textarea {
+    font-size: 11px;
+    min-height: 24px;
+    padding: 2px 8px;
+    border-width: 1px;
+    border-radius: 4px;
+    line-height: 1.4;
+}
+
+.theme-editor-container .config-field textarea {
+    min-height: 40px;
+    padding: 4px 8px;
+}
+
+.theme-editor-container .config-field-input {
+    border-radius: 0;
+}
+
+.theme-editor-container .config-field-description {
+    margin-top: 0.25rem;
+    padding: 0.25rem 0.375rem;
+    font-size: 10px;
+}
+
+.theme-editor-container .config-actions {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+}
+
+.theme-editor-container .w-param-search-wrap {
+    margin-bottom: 0.375rem !important;
+    padding: 0 0.5rem;
+}
+
+.theme-editor-container .w-param-search-wrap .w-param-search,
+.theme-editor-container .w-param-search-wrap .form-control-sm {
+    font-size: 11px;
+    min-height: 24px;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+/* 紧凑密度：数组项卡片与操作按钮 */
+.theme-editor-container .array-editor-wrapper .array-item {
+    padding: 0.375rem 0.5rem;
+    gap: 0.375rem;
+    margin-bottom: 0.375rem;
+    border-radius: 6px;
+}
+
+.theme-editor-container .array-item-title {
+    font-size: 10px;
+    margin-bottom: 0.25rem;
+    line-height: 1.3;
+}
+
+.theme-editor-container .array-item-fields {
+    gap: 0.375rem;
+}
+
+.theme-editor-container .array-item-field {
+    gap: 0.125rem;
+}
+
+.theme-editor-container .array-item-label {
+    font-size: 10px;
+}
+
+.theme-editor-container .array-item-handle {
+    width: 18px;
+    font-size: 12px;
+}
+
+.theme-editor-container .array-item-handle .te-icon {
+    width: 1em;
+    height: 1em;
+}
+
+.theme-editor-container .array-item-actions .btn,
+.theme-editor-container .array-actions .btn,
+.theme-editor-container .btn-sm {
+    min-height: 22px;
+    padding: 1px 6px;
+    font-size: 10px;
+    line-height: 1.3;
+    border-radius: 4px;
+}
+
+.theme-editor-container .array-item-actions .btn .te-icon,
+.theme-editor-container .array-item-actions .btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+.theme-editor-container .array-actions {
+    padding: 0.375rem 0.5rem;
+    gap: 0.375rem;
+}
+
+.theme-editor-container .array-image-preview {
+    min-height: 48px;
+    border-radius: 4px;
+}
+
+.theme-editor-container .array-image-preview img {
+    max-height: 72px;
+}
+
+.theme-editor-container .input-group-text {
+    padding: 2px 6px;
+    font-size: 11px;
+    min-height: 24px;
+}
+
+.theme-editor-container .color-picker-wrapper .form-control-color {
+    width: 28px;
+    height: 24px;
+    padding: 1px;
+}
+
+/* 紧凑密度：后端 w-param-form */
+.theme-editor-container .w-param-form {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.theme-editor-container .w-param-form .w-param-field {
+    margin-bottom: 0.5rem;
+}
+
+.theme-editor-container .w-param-form .w-param-field-header {
+    margin-bottom: 0.25rem;
+}
+
+.theme-editor-container .w-param-form .w-param-label {
+    font-size: 11px;
+}
+
+.theme-editor-container .w-param-form .w-param-group {
+    margin-bottom: 0.5rem;
+    border-radius: 6px;
+}
+
+.theme-editor-container .w-param-form .w-param-group-title {
+    padding: 0.375rem 0.5rem;
+    font-size: 11px;
+    gap: 0.375rem;
+}
+
+.theme-editor-container .w-param-form .w-param-fields {
+    padding: 0.5rem;
+}
+
+.theme-editor-container .w-param-form .w-param-input,
+.theme-editor-container .w-param-form input[type="text"],
+.theme-editor-container .w-param-form input[type="number"],
+.theme-editor-container .w-param-form input[type="url"],
+.theme-editor-container .w-param-form input[type="email"],
+.theme-editor-container .w-param-form textarea,
+.theme-editor-container .w-param-form select.w-param-select,
+.theme-editor-container .w-param-form .w-param-select {
+    font-size: 11px;
+    min-height: 24px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    line-height: 1.4;
+}
+
+.theme-editor-container .w-param-form textarea {
+    min-height: 40px;
+    padding: 4px 8px;
+}
+
+.theme-editor-container .w-param-form .w-param-btn {
+    min-height: 24px;
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    line-height: 1.4;
+}
+
+.theme-editor-container .w-param-form .w-param-btn-sm {
+    min-height: 22px;
+    padding: 1px 6px;
+    font-size: 10px;
+}
+
+.theme-editor-container .w-param-form .w-param-array-item {
+    padding: 0.375rem 0.5rem;
+    gap: 0.375rem;
+}
+
+.theme-editor-container .w-param-form .w-param-array-handle {
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+}
+
+.theme-editor-container .w-param-form .w-param-array-fields {
+    gap: 0.375rem;
+}
+
+.theme-editor-container .w-param-form .w-param-array-field {
+    gap: 0.125rem;
+}
+
+.theme-editor-container .w-param-form .w-param-array-label {
+    font-size: 10px;
+}
+
+.theme-editor-container .w-param-form .w-param-array-actions {
+    padding: 0.375rem 0.5rem;
+    gap: 0.375rem;
+}
+
+.theme-editor-container .w-param-form .w-param-array-item-actions {
+    flex-shrink: 0;
+    align-self: flex-start;
+}
+
+.theme-editor-container .w-param-form .w-param-image-preview {
+    min-height: 48px;
+    border-radius: 4px;
+    border-width: 1px;
+}
+
+.theme-editor-container .w-param-form .w-param-image-preview img {
+    max-height: 72px;
+}
+
+.theme-editor-container .w-param-image-preview {
+    position: relative;
+}
+
+.theme-editor-container .w-param-image-preview .w-param-image-actions {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.375rem;
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 2;
+}
+
+.theme-editor-container .w-param-image-preview:hover .w-param-image-actions {
+    opacity: 1;
+}
+
+.theme-editor-container .w-param-form .w-param-image {
+    gap: 0.375rem;
+}
+
+.theme-editor-container .w-param-form .w-param-actions {
+    padding: 0.375rem 0.5rem;
+    gap: 0.375rem;
+}
+
+.theme-editor-container .w-param-form .w-param-input-group-text {
+    padding: 2px 6px;
+    font-size: 11px;
+    min-height: 24px;
+}
+
+.theme-editor-container .w-param-form .w-param-field-desc {
+    margin-top: 0.25rem;
+    font-size: 10px;
+}
+
+.theme-editor-container .w-param-form .w-param-form-check input[type="checkbox"] {
+    width: 0.875rem;
+    height: 0.875rem;
 }

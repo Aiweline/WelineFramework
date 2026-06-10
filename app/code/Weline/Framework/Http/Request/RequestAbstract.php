@@ -656,7 +656,7 @@ abstract class RequestAbstract extends RequestFilter
         }));
         while ($segments !== []) {
             $segment = (string)$segments[0];
-            $isCurrencySegment = (bool)preg_match('/^[A-Z]{3}$/', strtoupper($segment));
+            $isCurrencySegment = State::isAllowedCurrencyCode(strtoupper($segment));
             $isLanguageSegment = (bool)preg_match('/^[a-z]{2}_[a-z0-9]+(?:_[a-z0-9]+)?$/i', $segment);
             if (!$isCurrencySegment && !$isLanguageSegment) {
                 break;

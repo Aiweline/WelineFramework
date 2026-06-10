@@ -67,6 +67,8 @@ $themeConfigPayload = [
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
     'assetVersion' => '20260522-dev-cache',
+    'deployVersion' => ($__dv = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true)) ? ($__dv['deploy_version'] ?? 'dev') : 'dev',
+    'workerBuildId' => ($__dv !== null && is_array($__dv)) ? ($__dv['worker_build_id'] ?? 'dev') : 'dev',
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'defaultLang' => $defaultLang,

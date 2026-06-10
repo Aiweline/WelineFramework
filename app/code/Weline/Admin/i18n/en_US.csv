@@ -5,7 +5,8 @@
 添加成功！,"Added successfully!"
 添加失败！,"Add failed!"
 用户ID不能为空,"User ID cannot be empty"
-删除成功！,"Deleted successfully!"
+超级管理员不能被删除,"Super administrator cannot be deleted"
+用户已删除，可在列表中重新激活,用户已删除，可在列表中重新激活
 删除失败！,"Delete failed!"
 激活成功！,"Activated successfully!"
 激活失败！,"Activation failed!"
@@ -15,12 +16,14 @@
 邮箱不能为空,"Email cannot be empty"
 邮箱格式不正确,"Email format is incorrect"
 新增用户必须设置密码,"Password is required for new user"
-新增,Add
+该用户名对应的管理员已删除，请先激活该用户,该用户名对应的管理员已删除，请先激活该用户
+用户名已存在,用户名已存在
+该邮箱对应的管理员已删除，请先激活该用户,该邮箱对应的管理员已删除，请先激活该用户
+邮箱已存在,邮箱已存在
 修改,Edit
+新增,Add
 %{1}管理员成功,"%{1} administrator successfully"
 保存失败,"Save failed"
-超级管理员不能被删除,"Super administrator cannot be deleted"
-删除成功,"Deletion successful"
 删除失败,"Deletion failed"
 超级管理员状态不能被修改,"Super administrator status cannot be modified"
 无效的操作类型,"Invalid operation type"
@@ -58,6 +61,7 @@ WelineFramework,WelineFramework
 关键参数ID不存在！,"Key parameter ID does not exist!"
 菜单不存在！,"Menu does not exist!"
 该菜单下有子菜单，请先删除子菜单！,"This menu has submenus. Please delete the submenus first!"
+删除成功！,"Deleted successfully!"
 参数错误：缺少排序数据,"Parameter error: missing sort data"
 排序更新成功,"Sort updated successfully"
 参数错误：缺少菜单ID,"Parameter error: missing menu ID"
@@ -109,8 +113,8 @@ content,content
 取消,Cancel
 确定,Confirm
 删除!,Delete!
+删除成功,"Deletion successful"
 知道了,"Got it"
-value,value
 "Weline Admin 绠＄悊闈㈡澘","Weline Admin 绠＄悊汱㈡澘"
 角色归配,"Role Assignment"
 系统,System
@@ -154,8 +158,8 @@ value,value
 留空则不修改密码,"Leave empty to keep current password"
 保存,Save
 保存中...,Saving...
-禁用,Disable
 激活,Activate
+禁用,Disable
 删除,Delete
 编辑管理员,"Edit Administrator"
 保存成功,"Saved successfully"

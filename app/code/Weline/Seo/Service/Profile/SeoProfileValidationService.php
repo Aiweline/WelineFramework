@@ -72,6 +72,32 @@ class SeoProfileValidationService
             }
         }
 
+        if (in_array($pageType, ['faq', 'faq_page'], true)) {
+            $faqs = $this->toList($profile['faqs'] ?? []);
+            if ($faqs === []) {
+                $warnings[] = 'faq pages should expose faqs facts for FAQPage schema.';
+            }
+            foreach ($faqs as $faq) {
+                if (!is_array($faq)) {
+                    continue;
+                }
+                if ($this->firstString($faq, ['question', 'q', 'title', 'name']) === ''
+                    || $this->firstString($faq, ['answer', 'a', 'text', 'content']) === '') {
+                    $errors[] = 'faq pages require non-empty question and answer for each faq item.';
+                    break;
+                }
+            }
+        }
+
+        if (in_array($pageType, ['qa', 'qa_page'], true)) {
+            $hasQaPageNode = $this->hasSchemaNodeType($profile['schema_nodes'] ?? [], 'QAPage');
+            $faqs = $this->toList($profile['faqs'] ?? []);
+            $qaList = $this->toList($profile['qa_list'] ?? []);
+            if (!$hasQaPageNode && $faqs === [] && $qaList === []) {
+                $warnings[] = 'qa pages should expose qa_list, faqs, or a QAPage schema node.';
+            }
+        }
+
         return [
             'valid' => $errors === [],
             'errors' => $errors,
@@ -154,5 +180,23 @@ class SeoProfileValidationService
             return [];
         }
         return array_is_list($value) ? $value : [$value];
+    }
+
+    /**
+     * @param mixed $nodes
+     */
+    private function hasSchemaNodeType(mixed $nodes, string $type): bool
+    {
+        foreach ($this->toList($nodes) as $node) {
+            if (!is_array($node)) {
+                continue;
+            }
+            $nodeType = strtolower((string) ($node['@type'] ?? $node['type'] ?? ''));
+            if ($nodeType === strtolower($type)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

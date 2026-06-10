@@ -284,6 +284,7 @@ class ControllerFetchFileAfter implements ObserverInterface
             $descriptionHtml = $description !== ''
                 ? '    <meta name="description" content="' . \htmlspecialchars($description, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . "\n"
                 : '';
+            $runtimeHeadHtml = $this->buildFastAccountAuthRuntimeHeadHtml($template);
 
             return <<<HTML
 <!DOCTYPE html>
@@ -292,14 +293,12 @@ class ControllerFetchFileAfter implements ObserverInterface
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{$titleEsc}</title>
-{$descriptionHtml}    <link rel="icon" type="image/svg+xml" href="/Weline/Theme/view/statics/theme/frontend/assets/img/favicon.svg">
-    <link href="/Weline/Theme/view/theme/frontend/assets/css/theme.css" rel="stylesheet" type="text/css">
-    <link href="/Weline/Theme/view/theme/frontend/assets/css/auth-form-wflash.css" rel="stylesheet" type="text/css">
+{$descriptionHtml}    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%235b4cf5'/%3E%3Cpath d='M18 20h28L36 44H22l6-14h8l-2 5h4l5-12H20z' fill='white'/%3E%3C/svg%3E">
     <style data-auth-theme-vars>
         :root {
-            --color-primary: #f0c14b;
-            --color-primary-dark: #d99a05;
-            --color-primary-border: #a88734;
+            --color-primary: #5b4cf5;
+            --color-primary-dark: #4436d9;
+            --color-primary-border: #493ee0;
             --color-text-primary: #111827;
             --color-text-secondary: #64748b;
             --color-text-tertiary: #94a3b8;
@@ -307,10 +306,10 @@ class ControllerFetchFileAfter implements ObserverInterface
             --color-bg-primary: #fff;
             --color-bg-secondary: #f8fafc;
             --color-border-default: #d1d5db;
-            --color-border-focus: #f59e0b;
+            --color-border-focus: #5b4cf5;
             --color-border-light: #e5e7eb;
             --color-link: #0f62ba;
-            --color-link-hover: #b45309;
+            --color-link-hover: #4436d9;
             --color-success: #22c55e;
             --color-accent-light: rgba(59, 130, 246, .12);
             --spacing-xs: .25rem;
@@ -353,6 +352,7 @@ class ControllerFetchFileAfter implements ObserverInterface
             width: 100%;
         }
     </style>
+{$runtimeHeadHtml}
 </head>
 <body class="account-auth-layout">
     <div class="weline-page-wrapper">
@@ -376,6 +376,169 @@ HTML;
                 );
             }
         }
+    }
+
+    private function buildFastAccountAuthRuntimeHeadHtml(Template $template): string
+    {
+        $isDev = defined('DEV') && DEV;
+        $themeAssetVersion = '20260609-auth-api-runtime';
+        $modulesConfigUrl = $isDev
+            ? '/Weline/Frontend/view/statics/base/weline.modules.js'
+            : '/static/Weline/Frontend/base/weline.modules.js';
+        $modulesBaseUrl = $isDev
+            ? '/Weline/Frontend/view/statics/js/weline-api'
+            : '/static/Weline/Frontend/js/weline-api';
+        $apiWorkerUrl = $isDev
+            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
+            : '/static/Weline/Frontend/js/weline-api-worker.js';
+        $welineScriptUrl = $isDev
+            ? '/Weline/Frontend/view/statics/js/weline.js?v=' . $themeAssetVersion
+            : '/static/Weline/Frontend/js/weline.js?v=' . $themeAssetVersion;
+        $themeScriptUrl = $isDev
+            ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=' . $themeAssetVersion
+            : '/static/Weline/Theme/theme/frontend/assets/js/theme.js?v=' . $themeAssetVersion;
+
+        $currentLang = $this->envString('user.lang', 'zh_Hans_CN');
+        $currentCurrency = $this->envString('user.currency', 'CNY');
+        $defaultLang = $this->envString('website.language', '');
+        if ($defaultLang === '') {
+            try {
+                $defaultLang = (string)(Env::get('locale', Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN');
+            } catch (\Throwable) {
+                $defaultLang = 'zh_Hans_CN';
+            }
+        }
+        $defaultCurrency = $this->envString('website.currency', '');
+        if ($defaultCurrency === '') {
+            try {
+                $defaultCurrency = (string)(Env::get('currency', 'CNY') ?: 'CNY');
+            } catch (\Throwable) {
+                $defaultCurrency = 'CNY';
+            }
+        }
+
+        $themeConfigPayload = [
+            'env' => [
+                'WELINE_ENV' => $isDev ? 'DEV' : 'PROD',
+                'DEV' => $isDev,
+                'PROD' => !$isDev,
+            ],
+            'baseUrl' => $this->resolveTemplateBaseUrl($template),
+            'modulesConfigUrl' => $modulesConfigUrl,
+            'modulesBaseUrl' => $modulesBaseUrl,
+            'assetVersion' => $themeAssetVersion,
+            'deployVersion' => $this->resolveDeployVersion(),
+            'workerBuildId' => $this->resolveWorkerBuildId(),
+            'api' => [
+                'workerUrl' => $apiWorkerUrl,
+                'endpoint' => '/api/framework/query-bin',
+                'queryBinUrl' => '/api/framework/query-bin',
+                'locale' => $currentLang,
+                'currency' => $currentCurrency,
+            ],
+            'currentLang' => $currentLang,
+            'currentCurrency' => $currentCurrency,
+            'defaultLang' => $defaultLang,
+            'defaultCurrency' => $defaultCurrency,
+            'debug' => $isDev,
+            'theme' => [
+                'area' => 'frontend',
+                'layoutType' => 'account.auth',
+                'layoutOption' => null,
+            ],
+        ];
+
+        $workerUrlJson = $this->jsonEncodeForScript($apiWorkerUrl);
+        $configJson = $this->jsonEncodeForScript($themeConfigPayload);
+        $welineScriptUrlEsc = \htmlspecialchars($welineScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $themeScriptUrlEsc = \htmlspecialchars($themeScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return <<<HTML
+    <script data-no-extract="true" data-auth-runtime-config>
+        (function() {
+            window.WelineApiConfig = window.WelineApiConfig || {};
+            window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || {$workerUrlJson};
+            window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
+            window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
+
+            if (!window.__WelineThemeConfig) {
+                window.__WelineThemeConfig = {};
+            }
+
+            Object.assign(window.__WelineThemeConfig, {$configJson});
+
+            if (window.__WelineThemeConfig.modulesConfigUrl) {
+                window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+            }
+        })();
+    </script>
+    <script src="{$welineScriptUrlEsc}"></script>
+    <script src="{$themeScriptUrlEsc}"></script>
+HTML;
+    }
+
+    private function resolveTemplateBaseUrl(Template $template): string
+    {
+        try {
+            return (string)$template->getRequest()->getBaseUrl();
+        } catch (\Throwable) {
+        }
+
+        try {
+            return (string)ObjectManager::getInstance(Request::class)->getBaseUrl();
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    private function resolveDeployVersion(): string
+    {
+        $file = BP . 'var' . DS . 'deploy' . DS . 'current.json';
+        if (!is_file($file)) {
+            return 'dev';
+        }
+        try {
+            $data = json_decode((string)file_get_contents($file), true);
+            return is_array($data) && !empty($data['deploy_version']) ? (string)$data['deploy_version'] : 'dev';
+        } catch (\Throwable) {
+            return 'dev';
+        }
+    }
+
+    private function resolveWorkerBuildId(): string
+    {
+        $file = BP . 'var' . DS . 'deploy' . DS . 'current.json';
+        if (!is_file($file)) {
+            return 'dev';
+        }
+        try {
+            $data = json_decode((string)file_get_contents($file), true);
+            return is_array($data) && !empty($data['worker_build_id']) ? (string)$data['worker_build_id'] : 'dev';
+        } catch (\Throwable) {
+            return 'dev';
+        }
+    }
+
+    private function envString(string $key, string $default = ''): string
+    {
+        try {
+            if (\function_exists('w_env')) {
+                return (string)(\w_env($key, $default) ?: $default);
+            }
+        } catch (\Throwable) {
+        }
+
+        return $default;
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function jsonEncodeForScript($value): string
+    {
+        $encoded = \json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+
+        return \is_string($encoded) ? $encoded : 'null';
     }
 
     /**

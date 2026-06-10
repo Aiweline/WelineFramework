@@ -13,7 +13,8 @@ use Weline\Framework\View\Template;
 class WidgetPreviewService
 {
     public function __construct(
-        private readonly WidgetRegistry $widgetRegistry
+        private readonly WidgetRegistry $widgetRegistry,
+        private readonly ?WidgetRuntimeTemplateRenderer $runtimeTemplateRenderer = null,
     ) {
     }
 
@@ -32,12 +33,22 @@ class WidgetPreviewService
         if ($widget === null) {
             return '<div class="widget-preview-placeholder">' . htmlspecialchars($widgetCode) . '</div>';
         }
+        $finalConfig = $this->mergeWithParamDefaults($widget, $config);
+        $finalConfig['preview_mode'] = true;
+        $templateContent = (string)($widget['template_content'] ?? '');
+        if ($templateContent !== '') {
+            try {
+                $renderer = $this->runtimeTemplateRenderer ?? ObjectManager::getInstance(WidgetRuntimeTemplateRenderer::class);
+                return $this->sanitizePreviewHtml($renderer->renderContent($templateContent, $finalConfig));
+            } catch (\Throwable $e) {
+                return '<div class="widget-preview-error">' . htmlspecialchars($e->getMessage()) . '</div>';
+            }
+        }
+
         $template = $widget['template'] ?? '';
         if ($template === '') {
             return '<div class="widget-preview-placeholder">' . htmlspecialchars((string)($widget['name'] ?? $widgetCode)) . '</div>';
         }
-        $finalConfig = $this->mergeWithParamDefaults($widget, $config);
-        $finalConfig['preview_mode'] = true;
         try {
             /** @var Template $templateObj */
             $templateObj = ObjectManager::getInstance(Template::class);
