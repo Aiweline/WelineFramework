@@ -1677,6 +1677,20 @@ class MasterProcess
             $email = Env::get('admin_email', 'admin@' . $domain);
         }
         $forceAcme = $this->shouldForceAcmeOnPostStartup($sslService);
+        if (!$forceAcme) {
+            $certPath = \trim($this->sslCert !== '' ? $this->sslCert : (string) ($this->config['ssl_cert'] ?? ''));
+            $keyPath = \trim($this->sslKey !== '' ? $this->sslKey : (string) ($this->config['ssl_key'] ?? ''));
+            if ($this->canReusePostStartupCertificate($sslService, $domain, $certPath, $keyPath)) {
+                $this->log(__('跳过 SSL 启动后申请：%{1} 已有未过期证书。', [$domain]));
+                return;
+            }
+
+            $certDir = $sslService->getCertificateDir($domain);
+            if ($this->canReusePostStartupCertificate($sslService, $domain, $certDir . 'fullchain.pem', $certDir . 'privkey.pem')) {
+                $this->log(__('跳过 SSL 启动后申请：%{1} 已有未过期证书。', [$domain]));
+                return;
+            }
+        }
 
         $phpBinary = \defined('PHP_BINARY') ? (string) PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
@@ -1699,6 +1713,22 @@ class MasterProcess
         }
 
         $this->log(__('已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）', [$domain]));
+    }
+
+    private function canReusePostStartupCertificate(
+        SslCertificateService $sslService,
+        string $domain,
+        string $certPath,
+        string $keyPath
+    ): bool {
+        $certPath = \trim($certPath);
+        $keyPath = \trim($keyPath);
+        if ($certPath === '' || $keyPath === '') {
+            return false;
+        }
+
+        return $sslService->canReuseConfiguredCertificate($certPath, $keyPath)
+            && $sslService->certificateMatchesHost($certPath, $domain);
     }
 
     private function shouldForceAcmeOnPostStartup(SslCertificateService $sslService): bool

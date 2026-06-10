@@ -147,6 +147,8 @@
             currentCurrency: site.currency || config.currentCurrency || 'CNY',
             defaultLang: site.default_lang || site.defaultLanguage || config.defaultLang || config.defaultLanguage || config.i18n?.defaultLang || config.i18n?.defaultLanguage || 'zh_Hans_CN',
             defaultCurrency: site.default_currency || site.defaultCurrency || config.defaultCurrency || 'CNY',
+            availableCurrencies: config.availableCurrencies || config.supportedCurrencies || config.currencyCodes || config.currencies
+                || site.availableCurrencies || site.supportedCurrencies || site.currencyCodes || site.currencies || [],
         };
     }
 
@@ -164,8 +166,72 @@
         return left !== '' && right !== '' && left === right;
     }
 
-    function isCurrencySegment(value) {
+    function isCurrencyCodeShape(value) {
         return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function addSupportedCurrencyCode(codes, value) {
+        if (value && typeof value === 'object') {
+            value = value.code || value.currency || value.currency_code || value.value || '';
+        }
+        const code = normalizeCurrencyCode(value);
+        if (isCurrencyCodeShape(code)) {
+            codes[code] = true;
+        }
+    }
+
+    function collectSupportedCurrencyCodes(codes, source) {
+        if (!source) {
+            return;
+        }
+        if (Array.isArray(source)) {
+            source.forEach(item => addSupportedCurrencyCode(codes, item));
+            return;
+        }
+        if (typeof source === 'object') {
+            Object.keys(source).forEach(key => {
+                addSupportedCurrencyCode(codes, key);
+                addSupportedCurrencyCode(codes, source[key]);
+            });
+            return;
+        }
+        String(source).split(/[,\s|]+/).forEach(code => addSupportedCurrencyCode(codes, code));
+    }
+
+    function getSupportedCurrencyCodes(config) {
+        const rawConfig = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+        const site = window.site || {};
+        const codes = Object.create(null);
+        [
+            config.availableCurrencies,
+            rawConfig.availableCurrencies,
+            rawConfig.supportedCurrencies,
+            rawConfig.currencyCodes,
+            rawConfig.currencies,
+            rawConfig.site && rawConfig.site.availableCurrencies,
+            rawConfig.site && rawConfig.site.supportedCurrencies,
+            rawConfig.site && rawConfig.site.currencyCodes,
+            rawConfig.site && rawConfig.site.currencies,
+            site.availableCurrencies,
+            site.supportedCurrencies,
+            site.currencyCodes,
+            site.currencies
+        ].forEach(source => collectSupportedCurrencyCodes(codes, source));
+
+        document.querySelectorAll('[data-currency-switcher] [data-currency], [data-currency-switcher] [data-currency-option], [data-currency-switcher] .currency-option').forEach(option => {
+            addSupportedCurrencyCode(codes, option.getAttribute('data-currency') || option.getAttribute('data-currency-option') || option.dataset.currency);
+        });
+
+        addSupportedCurrencyCode(codes, config.defaultCurrency || rawConfig.defaultCurrency || (rawConfig.site && (rawConfig.site.defaultCurrency || rawConfig.site.default_currency)) || site.defaultCurrency || site.default_currency);
+        return codes;
+    }
+
+    function isCurrencySegment(value, config = getConfig()) {
+        const code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        return !!getSupportedCurrencyCodes(config)[code];
     }
 
     function isLangSegment(value) {
@@ -175,7 +241,7 @@
     function shouldOutputCurrency(currency, config) {
         currency = normalizeCurrencyCode(currency);
         const defaultCurrency = normalizeCurrencyCode(config.defaultCurrency || 'CNY');
-        return currency !== '' && currency !== defaultCurrency;
+        return isCurrencySegment(currency, config) && currency !== defaultCurrency;
     }
 
     function shouldOutputLang(lang, config) {
@@ -184,9 +250,9 @@
         return lang !== '' && !sameLang(lang, defaultLang);
     }
 
-    function stripLocaleSegments(path) {
+    function stripLocaleSegments(path, config = getConfig()) {
         const parts = String(path || '/').split('/').filter(Boolean);
-        if (parts.length > 0 && isCurrencySegment(parts[0])) {
+        if (parts.length > 0 && isCurrencySegment(parts[0], config)) {
             parts.shift();
         }
         if (parts.length > 0 && isLangSegment(parts[0])) {
@@ -334,7 +400,8 @@
         const config = getConfig();
         let prePath = normalizeWebsiteBaseUrl(getCookie('WELINE_WEBSITE_URL') || '', config);
         const currentLang = normalizeLangCode(getCookie('WELINE_USER_LANG') || config.currentLang || '');
-        const currentCurrency = normalizeCurrencyCode(getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '');
+        const rawCurrentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
+        const currentCurrency = isCurrencySegment(rawCurrentCurrency, config) ? normalizeCurrencyCode(rawCurrentCurrency) : '';
 
         // 网站
         if (prePath && WelineString.startsWith(path, prePath)) {
@@ -373,7 +440,7 @@
             }
         }
 
-        path = stripLocaleSegments(path);
+        path = stripLocaleSegments(path, config);
         const targetCurrency = normalizeCurrencyCode('currency' === type && code ? code : currentCurrency);
         const targetLang = normalizeLangCode('lang' === type && code ? code : currentLang);
 

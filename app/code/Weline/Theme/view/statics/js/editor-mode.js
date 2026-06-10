@@ -376,16 +376,23 @@
      * @param {HTMLElement} slot - 插槽元素
      */
     function selectSlot(slot) {
+        const currentWidgets = getSlotWidgetElements(slot);
+        const maxWidgets = slot.dataset.wslotMax ? parseInt(slot.dataset.wslotMax, 10) : -1;
         // 构建插槽数据
         const slotData = {
             id: slot.dataset.wslot,
             name: slot.dataset.wslotName || slot.dataset.wslot,
             accept: slot.dataset.wslotAccept ? slot.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
-            multiple: slot.dataset.wslotMultiple === 'true',
+            reject: slot.dataset.wslotReject ? slot.dataset.wslotReject.split(',').map(s => s.trim()).filter(Boolean) : [],
+            multiple: slot.dataset.wslotMultiple !== 'false',
             exclusive: slot.dataset.wslotExclusive === 'true',
+            max: maxWidgets,
+            min: slot.dataset.wslotMin ? parseInt(slot.dataset.wslotMin, 10) : 0,
+            current_count: currentWidgets.length,
             append: slot.dataset.wslotAppend === 'true',
             prepend: slot.dataset.wslotPrepend === 'true',
-            area: slot.dataset.wslotPosition || ''
+            area: slot.dataset.wslotPosition || '',
+            position: slot.dataset.wslotPosition || ''
         };
         
         // 通知父窗口

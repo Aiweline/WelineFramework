@@ -1,9 +1,4 @@
-﻿"Invalid request method.","Invalid request method."
-"Payment configuration test passed: %{1}","Payment configuration test passed: %{1}"
-"Payment configuration test failed: %{1}","Payment configuration test failed: %{1}"
-"Payment settings saved successfully.",支付设置已保存。
-"Payment settings save failed: %{1}",支付设置保存失败：%{1}
-支付方式,支付方式
+﻿支付方式,支付方式
 "Payment method is required.",支付方式为必填项。
 "Payment callback handled.",支付回调已处理。
 "Order ID is required.","订单 ID 为必填项。"
@@ -20,8 +15,26 @@
 "Process a payment for an order.",为订单执行支付处理。
 "Query payment status by order number.",按订单号查询支付状态。
 "An order instance is required for payment processing.",支付处理需要订单实例。
-"Unable to sign the Alipay request with the configured private key.","Unable to sign the Alipay request with the configured private key."
+货到付款,货到付款
+"配送送达时现场收款，由 WeShop 旧货到付款 Provider 适配到 Weline_Payment。","配送送达时现场收款，由 WeShop 旧货到付款 Provider 适配到 Weline_Payment。"
+说明,说明
 配送送达时向客户收款。,配送送达时向客户收款。
+货到付款手续费,货到付款手续费
+支持国家,支持国家
+"支付金额必须大于 0。","支付金额必须大于 0。"
+"当前 scope 未启用货到付款。","当前 scope 未启用货到付款。"
+当前国家不支持货到付款。,当前国家不支持货到付款。
+当前币种不支持货到付款。,当前币种不支持货到付款。
+货到付款等待线下收款确认。,货到付款等待线下收款确认。
+货到付款不支持授权操作。,货到付款不支持授权操作。
+货到付款不支持捕获操作。,货到付款不支持捕获操作。
+"货到付款不支持 void 操作。","货到付款不支持 void 操作。"
+"货到付款不支持 Provider 侧退款。","货到付款不支持 Provider 侧退款。"
+货到付款回调已验证。,货到付款回调已验证。
+货到付款回调验证失败。,货到付款回调验证失败。
+货到付款静态配置校验完成。,货到付款静态配置校验完成。
+"货到付款 Provider 处理失败。","货到付款 Provider 处理失败。"
+"Unable to sign the Alipay request with the configured private key.","Unable to sign the Alipay request with the configured private key."
 "Cash on delivery configuration passed static validation.","Cash on delivery configuration passed static validation."
 "Credit line payment uses event dispatch only; listener-side credit policy is validated outside payment configuration.","Credit line payment uses event dispatch only; listener-side credit policy is validated outside payment configuration."
 请在订单创建后完成手动银行转账。,请在订单创建后完成手动银行转账。
@@ -29,9 +42,7 @@
 "%{1} is missing required configuration: %{2}","%{1} is missing required configuration: %{2}"
 "Order %{1}","Order %{1}"
 "Unable to initialize the WeChat Pay order.","Unable to initialize the WeChat Pay order."
-"Configuration changed after the last test.","Configuration changed after the last test."
-以下支付方式缺少完整配置文档，不能启用：%{1},以下支付方式缺少完整配置文档，不能启用：%{1}
-"以下支付方式还没有通过当前 scope 的配置测试，不能启用：%{1}","以下支付方式还没有通过当前 scope 的配置测试，不能启用：%{1}"
+"WeShop 支付普通配置请通过系统配置中心保存。","WeShop 支付普通配置请通过系统配置中心保存。"
 "Unsupported payment method: %{1}",不支持的支付方式：%{1}
 "Payment method %{1} is missing required configuration: %{2}","Payment method %{1} is missing required configuration: %{2}"
 "Payment method %{1} has not passed configuration testing for this scope.","Payment method %{1} has not passed configuration testing for this scope."
@@ -75,7 +86,7 @@
 已配置,已配置
 筛选,筛选
 "配置 scope","配置 scope"
-"Scope code","Scope code"
+"scope 由系统配置中心选择并传入。","scope 由系统配置中心选择并传入。"
 环境,环境
 当前配置隔离在,当前配置隔离在
 已启用支付方式,已启用支付方式
@@ -84,6 +95,7 @@
 凭据与环境,凭据与环境
 配置文档,配置文档
 "交易/Webhook 日志","交易/Webhook 日志"
+"WeShop 支付普通配置由系统配置中心保存，本页只展示支付方式状态、覆盖范围和文档。","WeShop 支付普通配置由系统配置中心保存，本页只展示支付方式状态、覆盖范围和文档。"
 当前筛选条件下没有已启用支付方式。,当前筛选条件下没有已启用支付方式。
 热门支付方式,热门支付方式
 全部支付方式热度倒序,全部支付方式热度倒序
@@ -91,6 +103,6 @@
 待补全,待补全
 缺少章节,缺少章节
 "交易流水和 Webhook 日志模型已建立；实际列表需要接入交易写入后按模型数据渲染。","交易流水和 Webhook 日志模型已建立；实际列表需要接入交易写入后按模型数据渲染。"
-保存支付设置,保存支付设置
+打开系统配置中心,打开系统配置中心
 配置指南,配置指南
 关闭,关闭

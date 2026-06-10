@@ -48,7 +48,7 @@ This skill owns environment compatibility and command safety for automated execu
 - A deployment request authorizes delivery flow only. Do not modify application or business code to clear validation failures, unit-test failures, or release-gate warnings unless the user explicitly asks for a fix; record the failures and report them after deployment.
 - If a framework command times out while running a self-healing or nested `php` path, do not treat the timeout alone as proof that the schema/setup change failed; verify the target registration or schema surface directly before concluding.
 - The configured SAAS deployment target may be operated through local OpenSSH using the deployment-workspace SSH config/key and Windows Generic Credential entry; keep commands bounded to the documented delivery flow. Online targets without explicit local SSH credentials must be operated through the user's Chrome browser in JumpServer / Luna Web terminal, BaoTa Web terminal, or other user-authorized web terminal; the Codex built-in browser remains forbidden for deployment.
-- Browser control fallback for online deployment must use Chrome extension tab control: locate tabs with `browser.user.openTabs()`, attach with `browser.user.claimTab(tabInfo)`, and operate the claimed tab with `tab.cua`, `tab.playwright`, and `tab.clipboard`. Use `claimTab + cua` for terminal interactions instead of OS input automation.
+- Browser control fallback for online deployment must use Chrome extension tab control: locate tabs with `browser.user.openTabs()`, attach with `browser.user.claimTab(tabInfo)`, and operate only the claimed or dedicated tab with `tab.cua`, `tab.playwright`, and `tab.clipboard`. Use `claimTab + cua` for terminal interactions instead of OS input automation; never bring Chrome to the foreground, switch the user's active tab, or rely on OS focus, global keyboard input, or mouse focus.
 
 # Inputs Required
 
@@ -78,7 +78,7 @@ This skill owns environment compatibility and command safety for automated execu
 - Do not ignore PHP null-safety or version-compatibility risks in command code.
 - Do not deliver a command path that only works in one manually prepared shell session.
 - Do not provide or execute direct `ssh` deployment commands for arbitrary online servers. Direct `ssh` is allowed only for the configured SAAS target with the local key/config; keep all other server-side deployment commands inside the Chrome-operated JumpServer / Luna terminal.
-- Do not use Windows or OS-level focus/input automation for deployment, including `SetForegroundWindow`, system mouse movement/clicks, `mouse_event`, `SendKeys`, forced foreground windows, or system clipboard paths that can take focus from the user. Recover stuck terminals by opening or claiming a dedicated Chrome tab through the extension.
+- Do not use Windows or OS-level focus/input automation for deployment, including `SetForegroundWindow`, system mouse movement/clicks, `mouse_event`, `SendKeys`, forced foreground windows, active-tab switching, or system clipboard paths that can take focus from the user. Recover stuck terminals by opening or claiming a dedicated Chrome tab through the extension.
 
 # Shared Collaboration Contract
 

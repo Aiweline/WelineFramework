@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace WeShop\Payment\Service;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Model\PaymentMethodConfig;
 use Weline\Payment\Service\PaymentScopeConfigService;
@@ -268,9 +267,8 @@ class PaymentService
             'environment' => 'sandbox',
             'has_documentation' => false,
             'documentation_valid' => false,
-            'scope_type' => 'global',
-            'scope_code' => 'default',
-            'scope_key' => 'global:default',
+            'scope' => PaymentScopeConfigService::DEFAULT_SCOPE,
+            'scope_key' => PaymentScopeConfigService::DEFAULT_SCOPE,
             'config_test_status' => (string) ($method['config_test_status'] ?? $defaultTestStatus),
             'config_test_message' => (string) ($method['config_test_message'] ?? ''),
             'config_tested_at' => (string) ($method['config_tested_at'] ?? ''),
@@ -288,7 +286,7 @@ class PaymentService
         $override = $code !== '' ? $this->resolveMethodOverride($code, $context) : null;
 
         if (\is_array($override)) {
-            foreach (['title', 'description', 'icon', 'checkout_note', 'provider_code', 'method_type', 'flow', 'documentation_path', 'scope_type', 'scope_code', 'config_test_status', 'config_test_message', 'config_tested_at'] as $key) {
+            foreach (['title', 'description', 'icon', 'checkout_note', 'provider_code', 'method_type', 'flow', 'documentation_path', 'scope', 'config_test_status', 'config_test_message', 'config_tested_at'] as $key) {
                 if (array_key_exists($key, $override)) {
                     $method[$key] = (string) $override[$key];
                 }
@@ -329,11 +327,10 @@ class PaymentService
         }
 
         $scope = $this->getScopeConfigService()->resolveScope($context);
-        if (empty($method['scope_type']) || empty($method['scope_code'])) {
-            $method['scope_type'] = $scope['scope_type'];
-            $method['scope_code'] = $scope['scope_code'];
+        if (empty($method['scope'])) {
+            $method['scope'] = $scope['scope'];
         }
-        $method['scope_key'] = $this->getScopeConfigService()->buildScopeKey((string) $method['scope_type'], (string) $method['scope_code']);
+        $method['scope_key'] = (string) $method['scope'];
 
         $providers = $this->getPaymentProviders();
         $providerCode = (string) ($method['provider_code'] ?? '');
@@ -398,52 +395,14 @@ class PaymentService
     /**
      * @return array<string, array<string, mixed>>
      */
-    protected function getMethodOverrides(): array
-    {
-        try {
-            $config = Env::getInstance()->getConfig('payment.methods', []);
-        } catch (\Throwable) {
-            return [];
-        }
-
-        return \is_array($config) ? $config : [];
-    }
-
-    /**
-     * @return array<string, array<string, mixed>>
-     */
     protected function getScopedMethodOverrides(array $context): array
     {
         $scope = $this->getScopeConfigService()->resolveScope($context);
 
-        try {
-            $dbOverrides = $this->getScopeConfigService()->getRuntimeOverridesForScope(
-                $scope['scope_type'],
-                $scope['scope_code'],
-                $scope['environment']
-            );
-            if ($dbOverrides !== []) {
-                return $dbOverrides;
-            }
-        } catch (\Throwable) {
-            // The scoped DB table may not exist until setup:upgrade has run; Env fallback keeps admin readable.
-        }
-
-        try {
-            $config = Env::getInstance()->getConfig('payment.method_scopes', []);
-        } catch (\Throwable) {
-            return [];
-        }
-
-        if (!\is_array($config)) {
-            return [];
-        }
-
-        $scopeKey = $scope['scope_key'];
-        $environment = $scope['environment'];
-        $scoped = $config[$scopeKey][$environment] ?? $config[$scopeKey] ?? [];
-
-        return \is_array($scoped) ? $scoped : [];
+        return $this->getScopeConfigService()->getRuntimeOverridesForScope(
+            $scope['scope'],
+            $scope['environment']
+        );
     }
 
     /**
@@ -451,14 +410,9 @@ class PaymentService
      */
     protected function resolveMethodOverride(string $code, array $context): ?array
     {
-        $legacy = $this->getMethodOverrides();
-        $override = \is_array($legacy[$code] ?? null) ? $legacy[$code] : [];
         $scoped = $this->getScopedMethodOverrides($context);
-        if (\is_array($scoped[$code] ?? null)) {
-            $override = array_replace_recursive($override, $scoped[$code]);
-        }
 
-        return $override !== [] ? $override : null;
+        return \is_array($scoped[$code] ?? null) ? $scoped[$code] : null;
     }
 
     /**
@@ -499,7 +453,9 @@ class PaymentService
      */
     protected function isConfigTestPassed(array $method): bool
     {
-        return (string) ($method['config_test_status'] ?? PaymentMethodConfig::TEST_STATUS_UNTESTED) === PaymentMethodConfig::TEST_STATUS_PASSED;
+        $status = trim((string) ($method['config_test_status'] ?? ''));
+
+        return $status === '' || $status === PaymentMethodConfig::TEST_STATUS_PASSED;
     }
 
     /**
@@ -519,9 +475,8 @@ class PaymentService
             'is_configured' => (bool) ($method['is_configured'] ?? true),
             'environment' => (string) ($method['environment'] ?? $config['environment'] ?? 'sandbox'),
             'sandbox' => (bool) ($config['sandbox'] ?? true),
-            'scope_type' => (string) ($method['scope_type'] ?? 'global'),
-            'scope_code' => (string) ($method['scope_code'] ?? 'default'),
-            'scope_key' => (string) ($method['scope_key'] ?? 'global:default'),
+            'scope' => (string) ($method['scope'] ?? PaymentScopeConfigService::DEFAULT_SCOPE),
+            'scope_key' => (string) ($method['scope_key'] ?? $method['scope'] ?? PaymentScopeConfigService::DEFAULT_SCOPE),
             'config_test_status' => (string) ($method['config_test_status'] ?? PaymentMethodConfig::TEST_STATUS_UNTESTED),
             'config_tested_at' => (string) ($method['config_tested_at'] ?? ''),
         ]);
@@ -586,7 +541,7 @@ class PaymentService
             'country' => $paymentData['country'] ?? $paymentData['country_id'] ?? null,
         ];
 
-        foreach (['scope_type', 'scope_code', 'environment', 'website_id', 'store_id'] as $key) {
+        foreach (['scope', 'config_scope', 'environment', 'website_code', 'store_code'] as $key) {
             if (array_key_exists($key, $paymentData)) {
                 $context[$key] = $paymentData[$key];
             }

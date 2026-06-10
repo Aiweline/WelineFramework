@@ -215,6 +215,7 @@ class Data extends AbstractHelper
                                 'module_name' => $name,
                                 'params' => $params
                             ];
+                            $this->collectFrontendQueryBinRouteAlias($name, $params);
 
                             // 原始路由与 baseRouter 路由不一致时，注册原始路由
                             $origin_route = str_replace('-', '', $route);
@@ -816,5 +817,37 @@ class Data extends AbstractHelper
         $text = '<?php return ' . var_export($routers, true) . ';';
         $this->file->write($text);
         $this->file->close();
+    }
+
+    /**
+     * The browser calls /api/framework/query-bin, while Router::Api() matches
+     * generated frontend REST rules after the outer /api segment is removed.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function collectFrontendQueryBinRouteAlias(string $moduleName, array $params): void
+    {
+        $route = (string)($params['router'] ?? '');
+        if (!str_starts_with($route, 'api/framework/query-bin')) {
+            return;
+        }
+
+        $class = (string)($params['class'] ?? '');
+        if (
+            $class === ''
+            || !is_a($class, \Weline\Framework\Controller\Api\QueryBin::class, true)
+        ) {
+            return;
+        }
+
+        $aliasParams = $params;
+        $aliasParams['base_router'] = 'framework';
+        $aliasParams['router'] = preg_replace('#^api/#', '', $route) ?: $route;
+
+        $this->collected_route_registrations[] = [
+            'type' => RegisterDataInterface::ROUTER,
+            'module_name' => $moduleName,
+            'params' => $aliasParams,
+        ];
     }
 }

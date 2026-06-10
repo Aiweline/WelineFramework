@@ -35,9 +35,29 @@ class SearchEngineAdapterRegistry
         $this->objectManager = $objectManager;
 
         // 内置适配器注册
+        $this->adapters['google'] = \Weline\Seo\Service\Adapter\GoogleIndexingApiAdapter::class;
         $this->adapters['google_indexing_api'] = \Weline\Seo\Service\Adapter\GoogleIndexingApiAdapter::class;
+        $this->adapters['google_search_console'] = \Weline\Seo\Service\Adapter\GoogleSearchConsoleAdapter::class;
+        $this->adapters['bing'] = \Weline\Seo\Service\Adapter\BingSearchEngineAdapter::class;
         $this->adapters['bing_webmaster'] = \Weline\Seo\Service\Adapter\BingSearchEngineAdapter::class;
+        $this->adapters['bing_indexnow'] = \Weline\Seo\Service\Adapter\BingSearchEngineAdapter::class;
+        $this->adapters['baidu'] = \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter::class;
         $this->adapters['baidu_push_api'] = \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter::class;
+        $this->adapters['baidu_zhanzhang'] = \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter::class;
+        $this->adapters['yandex'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['yandex_indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['naver'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['naver_indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['naver_searchadvisor'] = \Weline\Seo\Service\Adapter\NaverSearchAdvisorAdapter::class;
+        $this->adapters['naver_crawl_request'] = \Weline\Seo\Service\Adapter\NaverSearchAdvisorAdapter::class;
+        $this->adapters['seznam'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['seznam_indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['yep'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['yep_indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['internetarchive'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['internetarchive_indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['amazonbot'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
+        $this->adapters['amazonbot_indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
     }
 
     /**

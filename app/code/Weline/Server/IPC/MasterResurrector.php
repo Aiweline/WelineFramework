@@ -261,7 +261,7 @@ class MasterResurrector
 
             // 三次均无法复活：发送服务异常信号，派发事件向后台报错，停止策略等待人工干预（Worker 继续正常服务）
             $message = \sprintf(
-                __('WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。'),
+                \__('WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。'),
                 $this->instanceName,
                 $this->maxRetries
             );

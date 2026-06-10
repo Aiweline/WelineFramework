@@ -18,14 +18,95 @@
  */
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <style>
+        body.cart-empty-layout {
+            margin: 0;
+            background: var(--weline-layout-surface-secondary);
+            color: var(--weline-layout-text-primary);
+        }
+
+        .cart-empty-main {
+            width: min(1120px, calc(100% - 40px));
+            min-height: 54vh;
+            margin: 0 auto;
+            padding: var(--weline-layout-spacing-3xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
+        }
+
+        .cart-empty-content {
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            border-radius: var(--weline-layout-radius-lg);
+            background: var(--weline-layout-surface-primary);
+            padding: var(--weline-layout-spacing-2xl) var(--weline-layout-spacing-xl);
+            text-align: center;
+            box-shadow: var(--weline-theme-shadow-md);
+        }
+
+        .cart-empty-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto var(--weline-layout-spacing-lg);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--weline-layout-radius-full);
+            background: var(--weline-theme-primary-subtle);
+            color: var(--weline-layout-link-color);
+            font-size: var(--weline-layout-font-size-4xl);
+        }
+
+        .cart-empty-title {
+            margin: 0;
+            font-size: var(--weline-layout-font-size-4xl);
+            line-height: var(--weline-layout-line-height-tight);
+        }
+
+        .cart-empty-message {
+            margin: var(--weline-layout-spacing-sm) auto 0;
+            max-width: 520px;
+            color: var(--weline-layout-text-secondary);
+            line-height: var(--weline-layout-line-height-relaxed);
+        }
+
+        .continue-shopping-btn,
+        .w-btn {
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: var(--weline-layout-spacing-lg);
+            padding: 0 var(--weline-layout-spacing-lg);
+            border-radius: var(--weline-layout-radius-md);
+            text-decoration: none;
+            font-weight: var(--weline-layout-font-weight-bold);
+        }
+
+        .w-btn-primary {
+            color: var(--weline-theme-on-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-link-color);
+            background: var(--weline-layout-link-color);
+        }
+
+        .cart-empty-recommendations {
+            margin-top: var(--weline-layout-spacing-xl);
+        }
+
+        @media (max-width: 640px) {
+            .cart-empty-main {
+                width: min(100% - 28px, 1120px);
+                padding: 40px 0 56px;
+            }
+        }
+    </style>
 </head>
-<body>
-    @template(Weline_Frontend::templates/public/header.phtml)
+<body class="cart-empty-layout">
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     
     <main class="cart-empty-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="cart-empty-main" data-layout="cart_empty">
         <w:slot id="content"
@@ -44,7 +125,7 @@
                 class="cart-empty-container">
             <div class="cart-empty-content">
                 <div class="cart-empty-icon">
-                    <i class="fas fa-shopping-cart"></i>
+                    <i class="ri-shopping-cart-2-line"></i>
                 </div>
                 <h2 class="cart-empty-title"><?= __('购物车是空的') ?></h2>
                 <p class="cart-empty-message"><?= htmlspecialchars($meta['message'] ?? __('您的购物车是空的')) ?></p>
@@ -65,7 +146,9 @@
         </w:slot>
     </main>
     
-    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
 </body>
 </html>
 

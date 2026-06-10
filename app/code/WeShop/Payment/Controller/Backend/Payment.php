@@ -26,14 +26,12 @@ class Payment extends BaseController
             'provider' => (string) $this->request->getGet('provider', ''),
             'status' => (string) $this->request->getGet('status', ''),
             'tab' => (string) $this->request->getGet('tab', 'enabled'),
-            'scope_type' => (string) $this->request->getGet('scope_type', 'global'),
-            'scope_code' => (string) $this->request->getGet('scope_code', 'default'),
+            'scope' => (string) $this->request->getGet('scope', 'default.default.default'),
             'environment' => (string) $this->request->getGet('environment', 'sandbox'),
         ];
         $data = $this->paymentManagementService->getManagementData($filters);
 
         $this->assign('page_title', (string) __('支付方式'));
-        $this->assign('save_url', $this->_url->getBackendUrl('*/backend/payment/save'));
         $this->assign('filter_url', $this->_url->getBackendUrl('*/backend/payment'));
         $this->assign('methods', $data['methods'] ?? []);
         $this->assign('all_methods', $data['all_methods'] ?? []);

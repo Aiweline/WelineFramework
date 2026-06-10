@@ -328,9 +328,54 @@ class Template extends DataObject
         $this->setData('lang', $lang);
         // lang变量用于HTML lang属性，必须符合BCP 47规范（将下划线替换为连字符）
         $htmlLang = str_replace('_', '-', $lang);
+        $htmlDir = $this->resolveTextDirection($lang);
         $this->setData('lang_local', State::getLangLocal());
         // htmlLang变量与lang相同，保持向后兼容
         $this->setData('htmlLang', $htmlLang);
+        $this->setData('htmlDir', $htmlDir);
+        $this->setData('textDirection', $htmlDir);
+        $this->setData('isRtl', $htmlDir === 'rtl');
+    }
+
+    private function resolveTextDirection(string $lang): string
+    {
+        $parts = preg_split('/[-_]+/', trim($lang)) ?: [];
+        $language = strtolower((string)($parts[0] ?? ''));
+        $script = '';
+
+        foreach ($parts as $part) {
+            if (strlen($part) === 4 && ctype_alpha($part)) {
+                $script = strtolower($part);
+                break;
+            }
+        }
+
+        $rtlLanguages = [
+            'ar' => true,
+            'arc' => true,
+            'ckb' => true,
+            'dv' => true,
+            'fa' => true,
+            'he' => true,
+            'iw' => true,
+            'ks' => true,
+            'ps' => true,
+            'sd' => true,
+            'ug' => true,
+            'ur' => true,
+            'yi' => true,
+        ];
+        $rtlScripts = [
+            'adlm' => true,
+            'arab' => true,
+            'hebr' => true,
+            'nkoo' => true,
+            'rohg' => true,
+            'syrc' => true,
+            'thaa' => true,
+        ];
+
+        return isset($rtlScripts[$script]) || isset($rtlLanguages[$language]) ? 'rtl' : 'ltr';
     }
 
     public function __init()

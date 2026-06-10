@@ -121,10 +121,6 @@ $secretHint = static fn(string $key): string => ((string)($settings[$key . '_con
                     <label class="form-label"><?= __('请求路径') ?></label>
                     <input type="text" name="webhook_path" class="form-control" value="<?= $value('webhook_path', '/deploy') ?>">
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label"><?= __('Webhook 分支') ?></label>
-                    <input type="text" name="webhook_branch" class="form-control" value="<?= $value('webhook_branch') ?>" placeholder="master">
-                </div>
                 <div class="col-md-6">
                     <label class="form-label"><?= __('Webhook 密钥') ?></label>
                     <input type="password" name="webhook_secret" class="form-control" placeholder="<?= $secretHint('webhook_secret') ?>">
@@ -133,6 +129,211 @@ $secretHint = static fn(string $key): string => ((string)($settings[$key . '_con
                     <label class="form-label"><?= __('Bash 命令') ?></label>
                     <input type="text" name="webhook_bash" class="form-control" value="<?= $value('webhook_bash', 'bash') ?>">
                 </div>
+            </div>
+
+            <!-- Webhook 配置引导 -->
+            <div class="card border-0 bg-light mt-4 mb-3">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">
+                        <i class="mdi mdi-webhook me-1"></i> <?= __('Webhook 配置引导') ?>
+                    </h6>
+                    <p class="text-muted small mb-3"><?= __('配置 Webhook 后，Git 平台推送代码时会自动触发部署。请先填写上方「Webhook 密钥」，然后在你的 Git 平台完成以下配置。') ?></p>
+
+                    <!-- 平台 Tab -->
+                    <ul class="nav nav-tabs nav-tabs-sm" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#webhookGitee" type="button" role="tab">
+                                <i class="mdi mdi-source-branch me-1"></i> Gitee
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#webhookGithub" type="button" role="tab">
+                                <i class="mdi mdi-github me-1"></i> GitHub
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#webhookGeneric" type="button" role="tab">
+                                <i class="mdi mdi-web me-1"></i> <?= __('其他平台') ?>
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content pt-3">
+                        <!-- Gitee -->
+                        <div class="tab-pane fade show active" id="webhookGitee" role="tabpanel">
+                            <div class="small">
+                                <p class="fw-bold mb-2"><?= __('第 1 步：进入 Gitee 仓库设置') ?></p>
+                                <ol class="mb-3">
+                                    <li><?= __('打开 Gitee 仓库页面，点击顶部「管理」') ?></li>
+                                    <li><?= __('左侧菜单找到「WebHooks」，点击「添加 WebHook」') ?></li>
+                                </ol>
+
+                                <p class="fw-bold mb-2"><?= __('第 2 步：填写 Webhook 信息') ?></p>
+                                <div class="table-responsive mb-3">
+                                    <table class="table table-sm table-bordered mb-0">
+                                        <tbody>
+                                            <tr>
+                                                <td class="text-nowrap fw-semibold" style="width:120px">URL</td>
+                                                <td><code>https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8') ?>/deploy</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold"><?= __('密码') ?></td>
+                                                <td><?= __('填写上方「Webhook 密钥」中保存的值') ?></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold"><?= __('触发事件') ?></td>
+                                                <td><?= __('勾选「Push」') ?></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold"><?= __('数据格式') ?></td>
+                                                <td>JSON</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <p class="fw-bold mb-2"><?= __('第 3 步：验证') ?></p>
+                                <div class="bg-dark text-light p-2 rounded mb-2" style="font-family:monospace;font-size:12px">
+                                    curl -s 'https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8') ?>/deploy?health=1'
+                                </div>
+                                <p class="text-muted mb-0"><?= __('返回 {"ok":true} 即表示 Webhook 入口正常。') ?></p>
+                            </div>
+                        </div>
+
+                        <!-- GitHub -->
+                        <div class="tab-pane fade" id="webhookGithub" role="tabpanel">
+                            <div class="small">
+                                <p class="fw-bold mb-2"><?= __('第 1 步：进入 GitHub 仓库设置') ?></p>
+                                <ol class="mb-3">
+                                    <li><?= __('打开 GitHub 仓库页面，点击「Settings」') ?></li>
+                                    <li><?= __('左侧菜单找到「Webhooks」，点击「Add webhook」') ?></li>
+                                </ol>
+
+                                <p class="fw-bold mb-2"><?= __('第 2 步：填写 Webhook 信息') ?></p>
+                                <div class="table-responsive mb-3">
+                                    <table class="table table-sm table-bordered mb-0">
+                                        <tbody>
+                                            <tr>
+                                                <td class="text-nowrap fw-semibold" style="width:140px">Payload URL</td>
+                                                <td><code>https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8') ?>/deploy</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Content type</td>
+                                                <td><code>application/json</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Secret</td>
+                                                <td><?= __('填写上方「Webhook 密钥」中保存的值') ?></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Events</td>
+                                                <td><?= __('选择「Just the push event」') ?></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <p class="fw-bold mb-2"><?= __('第 3 步：验证') ?></p>
+                                <div class="bg-dark text-light p-2 rounded mb-2" style="font-family:monospace;font-size:12px">
+                                    curl -s 'https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8') ?>/deploy?health=1'
+                                </div>
+                                <p class="text-muted mb-0"><?= __('返回 {"ok":true} 即表示 Webhook 入口正常。') ?></p>
+                            </div>
+                        </div>
+
+                        <!-- 通用平台 -->
+                        <div class="tab-pane fade" id="webhookGeneric" role="tabpanel">
+                            <div class="small">
+                                <p class="fw-bold mb-2"><?= __('支持的 Webhook 协议') ?></p>
+                                <p class="mb-3"><?= __('本系统兼容标准 Webhook 协议，支持以下鉴权方式：') ?></p>
+                                <ul class="mb-3">
+                                    <li><code>Authorization: Bearer &lt;密钥&gt;</code> — <?= __('通用 HTTP Bearer Token') ?></li>
+                                    <li><code>?token=&lt;密钥&gt;</code> — <?= __('URL 参数传递') ?></li>
+                                    <li><code>X-Gitee-Token</code> — <?= __('Gitee 专用（自动识别）') ?></li>
+                                    <li><code>X-Hub-Signature-256</code> — <?= __('GitHub 专用（HMAC-SHA256）') ?></li>
+                                </ul>
+
+                                <p class="fw-bold mb-2"><?= __('Payload 要求') ?></p>
+                                <p class="mb-2"><?= __('请求体为 JSON 格式，必须包含 <code>ref</code> 字段：') ?></p>
+                                <div class="bg-dark text-light p-2 rounded mb-3" style="font-family:monospace;font-size:12px">
+                                    {"ref": "refs/heads/main"}
+                                </div>
+
+                                <p class="fw-bold mb-2"><?= __('Nginx 反代示例') ?></p>
+                                <div class="bg-dark text-light p-2 rounded mb-3" style="font-family:monospace;font-size:12px">
+<pre class="mb-0" style="background:transparent;color:inherit;padding:0">location = /deploy {
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME /path/to/project/dev/deploy/webhook.php;
+    fastcgi_param DEPLOY_CONFIG_FILE /path/to/project/dev/deploy/.config;
+    fastcgi_pass 127.0.0.1:9000;
+}</pre>
+                                </div>
+
+                                <p class="fw-bold mb-2"><?= __('手动测试') ?></p>
+                                <div class="bg-dark text-light p-2 rounded mb-3" style="font-family:monospace;font-size:12px">
+<pre class="mb-0" style="background:transparent;color:inherit;padding:0">curl -s -X POST 'https://你的域名/deploy' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer 你的密钥' \
+  --data '{"ref":"refs/heads/main"}'</pre>
+                                </div>
+
+                                <p class="text-muted mb-0"><?= __('返回 {"ok":true} 表示部署触发成功；{"skipped":true,"reason":"branch_mismatch"} 表示分支不匹配，不会部署。') ?></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h6 class="mt-4 mb-3"><?= __('触发模式') ?></h6>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label"><?= __('部署触发方式') ?></label>
+                    <?php
+                    $currentMode = (string)($settings['deploy_trigger_mode'] ?? '');
+                    // 兼容旧配置
+                    if ($currentMode === '' || !in_array($currentMode, ['branch', 'tag', 'both'], true)) {
+                        $currentMode = ((string)($settings['webhook_allow_tag_deploy'] ?? '') === '1') ? 'both' : 'branch';
+                    }
+                    ?>
+                    <select name="deploy_trigger_mode" class="form-select" id="deploy_trigger_mode">
+                        <option value="branch" <?= $currentMode === 'branch' ? 'selected' : '' ?>><?= __('仅分支 Push') ?></option>
+                        <option value="tag" <?= $currentMode === 'tag' ? 'selected' : '' ?>><?= __('仅 Tag Push') ?></option>
+                        <option value="both" <?= $currentMode === 'both' ? 'selected' : '' ?>><?= __('分支 + Tag 都生效') ?></option>
+                    </select>
+                    <div class="form-text"><?= __('选择 Webhook 触发部署的条件：仅分支推送、仅 Tag 推送、或两者都生效') ?></div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label"><?= __('分支过滤') ?></label>
+                    <input type="text" name="webhook_branch" class="form-control" value="<?= $value('webhook_branch') ?>" placeholder="master">
+                    <div class="form-text"><?= __('留空匹配所有分支；填写后仅该分支的 push 触发部署') ?></div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label"><?= __('Tag 前缀过滤') ?></label>
+                    <input type="text" name="webhook_tag_prefix" class="form-control" value="<?= $value('webhook_tag_prefix') ?>" placeholder="v">
+                    <div class="form-text"><?= __('留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署') ?></div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label"><?= __('发布探测 Token') ?></label>
+                    <input type="password" name="deploy_probe_token" class="form-control" placeholder="<?= $secretHint('deploy_probe_token') ?>">
+                    <div class="form-text"><?= __('访问 GET /deploy/version?token=xxx 可查看详细版本信息') ?></div>
+                </div>
+            </div>
+
+            <!-- 触发模式说明 -->
+            <?php
+            $domain = htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8');
+            ?>
+            <div class="alert alert-info small mt-3 mb-0">
+                <i class="mdi mdi-information-outline me-1"></i>
+                <strong><?= __('版本策略') ?>：</strong>
+                <?= __('分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。') ?>
+                <br><strong><?= __('Git 平台配置提示') ?>：</strong>
+                <br>• <strong>Gitee</strong> —
+                <?= __('「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。') ?>
+                <br>• <strong>GitHub</strong> —
+                <?= __('默认「Just the push event」已包含分支和 tag push，无需额外配置。') ?>
+                <br><?= __('测试：') ?>
+                <code>curl -s -X POST 'https://<?= $domain ?>/deploy' -H 'Content-Type: application/json' -H 'Authorization: Bearer <?= __('你的密钥') ?>' --data '{"ref":"refs/tags/v1.0.0"}'</code>
             </div>
 
             <h6 class="mt-4 mb-3"><?= __('Cloudflare') ?></h6>

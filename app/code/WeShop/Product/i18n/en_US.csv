@@ -17,26 +17,33 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 删除失败:,"Deletion failed:"
 您编辑的产品已不存在！,"The product you edited no longer exists!"
 修改成功！,"Modification successful!"
-请选择产品,"Please select a product"
-产品不存在,"Product does not exist"
-产品详情,"Product Detail"
-产品列表,"Product List"
+请选择产品或分类,请选择产品或分类
 参数不完整,"Incomplete parameters"
+布局选项无效,布局选项无效
 布局配置保存成功,"Layout configuration saved successfully"
 布局配置保存失败,"Layout configuration save failed"
 请选择要删除的布局,"Please select a layout to delete"
 布局配置已删除,"Layout configuration deleted"
+布局配置删除失败,布局配置删除失败
 布局配置不存在,"Layout configuration does not exist"
-请填写完整信息,"Please fill in complete information"
+布局模板保存成功,布局模板保存成功
+布局模板保存失败,布局模板保存失败
+布局版本已回滚,布局版本已回滚
+布局版本回滚失败,布局版本回滚失败
+预览需要产品或分类上下文,预览需要产品或分类上下文
+"分类下商品默认布局预览需要提供产品 ID","分类下商品默认布局预览需要提供产品 ID"
+请填写完整计划信息,请填写完整计划信息
 布局计划创建成功,"Layout schedule created successfully"
 布局计划创建失败,"Layout schedule creation failed"
-请选择要编辑的计划,"Please select a schedule to edit"
 计划不存在,"Schedule does not exist"
 布局计划更新成功,"Layout schedule updated successfully"
 布局计划更新失败,"Layout schedule update failed"
-请选择要删除的计划,"Please select a schedule to delete"
 布局计划已删除,"Layout schedule deleted"
 布局计划删除失败,"Layout schedule deletion failed"
+布局管理,布局管理
+产品专属布局,产品专属布局
+分类展示布局,分类展示布局
+分类下商品默认布局,分类下商品默认布局
 最新,Latest
 价格,Price
 名称,Name
@@ -124,6 +131,17 @@ EAV属性保存失败：%{1},"EAV attribute saving failed: %{1}"
 在后台产品编辑页步骤导航末尾追加模块自己的管理入口。,"Add module management entries after the backend product edit step navigation."
 产品编辑页内容后,"After product edit content"
 在后台产品编辑页内容区域末尾追加当前产品相关的模块管理面板。,"Add module management panels for the current product after the backend product edit content."
+布局代码无效,布局代码无效
+默认布局不能在产品布局编辑器中覆盖,默认布局不能在产品布局编辑器中覆盖
+布局源码不能为空,布局源码不能为空
+"布局模板只能保存页面骨架、slot、hook 和样式，不能包含前端业务交互脚本或直接请求","布局模板只能保存页面骨架、slot、hook 和样式，不能包含前端业务交互脚本或直接请求"
+保存产品/分类虚拟布局源码,保存产品/分类虚拟布局源码
+布局源码保存失败,布局源码保存失败
+"Invalid layout version parameters","Invalid layout version parameters"
+"Layout version does not belong to current object","Layout version does not belong to current object"
+"Rollback WeShop virtual layout version","Rollback WeShop virtual layout version"
+"Layout version rollback failed","Layout version rollback failed"
+产品不存在,"Product does not exist"
 "Product Description","Product Description"
 颜色,Color
 尺码,Size
@@ -318,6 +336,7 @@ SKU:,SKU:
 产品,Product
 产品管理,"Product Management"
 管理产品,"Manage Products"
+布局,布局
 关联,Associate
 产品关联详情,"Product Association Details"
 子产品,Sub-Product
@@ -337,6 +356,48 @@ ID,ID
 更新时间,"Update time"
 加载失败，请重试,"Failed to load, please retry"
 操作成功!,"Operation successful!"
+编辑自定义布局,编辑自定义布局
+返回布局管理,返回布局管理
+"Layout versions","Layout versions"
+Version,Version
+Status,Status
+"Asset ID","Asset ID"
+"Version ID","Version ID"
+Reason,Reason
+Action,Action
+Current,Current
+Rollback,Rollback
+"Save this layout to create rollbackable versions.","Save this layout to create rollbackable versions."
+布局代码,布局代码
+"只能使用小写字母、数字、中划线和下划线；default 不能覆盖。","只能使用小写字母、数字、中划线和下划线；default 不能覆盖。"
+布局源码,布局源码
+保存布局模板,保存布局模板
+返回产品管理,返回产品管理
+有效布局,有效布局
+保存布局选择,保存布局选择
+新建自定义布局,新建自定义布局
+可用布局模板,可用布局模板
+代码,代码
+"Visual edit","Visual edit"
+预览,预览
+暂无可用布局,暂无可用布局
+创建定时布局,创建定时布局
+计划布局,计划布局
+开始时间,开始时间
+结束时间,结束时间
+优先级,优先级
+时区,时区
+说明,说明
+创建计划,创建计划
+当前配置与计划,当前配置与计划
+实体类型,实体类型
+布局类型,布局类型
+恢复继承,恢复继承
+未设置专属布局，当前使用默认解析结果,未设置专属布局，当前使用默认解析结果
+开始,开始
+结束,结束
+暂无定时布局计划,暂无定时布局计划
+当前对象,当前对象
 产品不存在或已下架,"This product does not exist or has been taken down"
 节日特惠进行中！,"Festival Promotion in Progress!"
 限时特价,"Limited Time Offer"

@@ -27,6 +27,7 @@ use Weline\Theme\Helper\ThemeModeResolver;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemePageTypeResolver;
+use Weline\Theme\Service\ThemeVirtualLayoutService;
 
 final class ControllerFetchFileBeforeRequestCacheState
 {
@@ -331,24 +332,35 @@ class ControllerFetchFileBefore implements ObserverInterface
             }
             $template->setData('colors', $colors);
 
-            $layoutPath = LayoutPathResolver::buildLayoutPath($fileName, $area, $layoutType, $layoutOption);
-            $pathCacheKey = "{$layoutPath}|{$themeId}|{$area}";
-            if (array_key_exists($pathCacheKey, $requestCache->resolvedLayoutPathCache)) {
-                $resolvedLayoutPath = $requestCache->resolvedLayoutPathCache[$pathCacheKey];
-            } elseif ($runtimeCacheAllowed && ($runtimeResolvedPath = self::runtimeCacheGet('layout_path|' . $pathCacheKey))[0]) {
-                $resolvedLayoutPath = $runtimeResolvedPath[1];
-                $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+            $virtualLayout = $this->resolveVirtualLayoutForRequest($request, $themeId, $area, $scope, (string)$layoutType, (string)$layoutOption);
+            $virtualLayoutFilePath = null;
+            if (is_array($virtualLayout)) {
+                $resolvedLayoutPath = (string)$virtualLayout['module_path'];
+                $virtualLayoutFilePath = (string)$virtualLayout['file_path'];
+                $template->setData('themeVirtualLayout', $virtualLayout);
             } else {
-                $resolvedLayoutPath = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
-                $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
-                if ($runtimeCacheAllowed) {
-                    self::runtimeCacheSet('layout_path|' . $pathCacheKey, $resolvedLayoutPath);
+                $layoutPath = LayoutPathResolver::buildLayoutPath($fileName, $area, $layoutType, $layoutOption);
+                $pathCacheKey = "{$layoutPath}|{$themeId}|{$area}";
+                if (array_key_exists($pathCacheKey, $requestCache->resolvedLayoutPathCache)) {
+                    $resolvedLayoutPath = $requestCache->resolvedLayoutPathCache[$pathCacheKey];
+                } elseif ($runtimeCacheAllowed && ($runtimeResolvedPath = self::runtimeCacheGet('layout_path|' . $pathCacheKey))[0]) {
+                    $resolvedLayoutPath = $runtimeResolvedPath[1];
+                    $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+                } else {
+                    $resolvedLayoutPath = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
+                    $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+                    if ($runtimeCacheAllowed) {
+                        self::runtimeCacheSet('layout_path|' . $pathCacheKey, $resolvedLayoutPath);
+                    }
                 }
             }
             if ($resolvedLayoutPath) {
                 $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}";
+                if (is_array($virtualLayout)) {
+                    $paramsCacheKey .= '|virtual:' . (int)($virtualLayout['asset_id'] ?? 0) . ':' . (int)($virtualLayout['version_id'] ?? 0);
+                }
                 // 优化：编译文件存在且源文件未修改则不再做重负载（不重复 performanceLoad/colors/meta）
-                $sourcePath = LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
+                $sourcePath = $virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
                 $lang = class_exists(Cookie::class) ? State::getLang() : 'zh_Hans_CN';
                 $compiledPath = LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang);
                 $compiledLayoutFresh = $sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
@@ -439,7 +451,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 
                 // 读取布局文件的参数配置值
                 // 注意：getFileParams 内部会处理 identify 格式，但需要确保 ThemeData 已正确初始化
-                $layoutFilePath = LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
+                $layoutFilePath = $virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
                 $layoutMetaIdentity = $this->extractLayoutMetaIdentity($layoutFilePath, $resolvedLayoutPath, $area);
                 $layoutParams = ThemeData::getFileParams($metaIdentify, $scope);
                 
@@ -547,6 +559,123 @@ class ControllerFetchFileBefore implements ObserverInterface
             // 保持原路径，不影响原有功能
             return;
         }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveVirtualLayoutForRequest(
+        ?Request $request,
+        int $themeId,
+        string $area,
+        string $scope,
+        string $layoutType,
+        string $layoutOption
+    ): ?array {
+        $layoutType = trim($layoutType);
+        $layoutOption = trim($layoutOption);
+        if ($layoutType === '' || $layoutOption === '') {
+            return null;
+        }
+
+        try {
+            /** @var ThemeVirtualLayoutService $virtualLayoutService */
+            $virtualLayoutService = ObjectManager::getInstance(ThemeVirtualLayoutService::class);
+            return $virtualLayoutService->resolvePublishedRuntimeLayout(
+                $layoutType,
+                $layoutOption,
+                $themeId,
+                $area,
+                $scope,
+                $this->resolveVirtualLayoutTargets($request)
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @return list<array{target_type:string,target_id:int}>
+     */
+    private function resolveVirtualLayoutTargets(?Request $request): array
+    {
+        if ($request === null) {
+            return [];
+        }
+
+        $targets = [];
+        $rawChain = $this->readRequestValue($request, 'theme_layout_target_chain');
+        if (is_string($rawChain) && trim($rawChain) !== '') {
+            $decoded = json_decode($rawChain, true);
+            $rawChain = json_last_error() === JSON_ERROR_NONE ? $decoded : [];
+        }
+        if (is_array($rawChain)) {
+            foreach ($rawChain as $target) {
+                if (!is_array($target)) {
+                    continue;
+                }
+                $this->appendVirtualLayoutTarget(
+                    $targets,
+                    (string)($target['target_type'] ?? ''),
+                    (int)($target['target_id'] ?? 0)
+                );
+            }
+        }
+
+        $this->appendVirtualLayoutTarget(
+            $targets,
+            (string)$this->readRequestValue($request, 'theme_layout_source_target_type'),
+            (int)$this->readRequestValue($request, 'theme_layout_source_target_id')
+        );
+        $this->appendVirtualLayoutTarget(
+            $targets,
+            (string)$this->readRequestValue($request, 'theme_layout_target_type'),
+            (int)$this->readRequestValue($request, 'theme_layout_target_id')
+        );
+
+        return array_values($targets);
+    }
+
+    private function readRequestValue(Request $request, string $key): mixed
+    {
+        $value = null;
+        try {
+            $value = $request->getData($key);
+        } catch (\Throwable) {
+        }
+        if ($value !== null && $value !== '') {
+            return $value;
+        }
+
+        try {
+            $value = $request->getParam($key, null);
+        } catch (\Throwable) {
+        }
+        if ($value !== null && $value !== '') {
+            return $value;
+        }
+
+        try {
+            return $request->getGet($key, '');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * @param array<string, array{target_type:string,target_id:int}> $targets
+     */
+    private function appendVirtualLayoutTarget(array &$targets, string $targetType, int $targetId): void
+    {
+        $targetType = strtolower(trim($targetType));
+        if (!in_array($targetType, ['product', 'category', 'category_product_default'], true) || $targetId <= 0) {
+            return;
+        }
+
+        $targets[$targetType . ':' . $targetId] = [
+            'target_type' => $targetType,
+            'target_id' => $targetId,
+        ];
     }
 
     /**

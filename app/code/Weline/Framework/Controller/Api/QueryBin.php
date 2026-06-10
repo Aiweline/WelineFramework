@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Controller\Api;
 
-use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\App\Controller\FrontendRestController;
+use Weline\Framework\App\State;
 use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Runtime\RequestContext;
@@ -11,7 +12,7 @@ use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendQueryGateway;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 
-class QueryBin extends FrontendController
+class QueryBin extends FrontendRestController
 {
     private const PROTOCOL = 'worker-query-bin-v1';
     private const WORKER_PROTOCOL = 'weline-worker-request-v1';
@@ -285,7 +286,7 @@ class QueryBin extends FrontendController
     private function normalizeWorkerCurrency(mixed $value): string
     {
         $currency = \strtoupper(\trim((string)$value));
-        return \preg_match('/^[A-Z]{3}$/', $currency) === 1 ? $currency : '';
+        return State::isAllowedCurrencyCode($currency) ? $currency : '';
     }
 
     private function assertProtocolHeaders(): void

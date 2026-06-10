@@ -22,7 +22,7 @@
 $meta = $this->getData('meta') ?? [];
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
@@ -70,7 +70,9 @@ $meta = $this->getData('meta') ?? [];
                         position="content"
                         class="policy-main__content-slot">
                 <w:hook>Weline_Theme::frontend::layouts::policy::main-content-before</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::policy::main-content<else/>
+                <w:hook>
+                    Weline_Theme::frontend::layouts::policy::main-content
+                    <else/>
                     <if condition="meta.content">
                         {{meta.content}}
                     <else/>
@@ -272,11 +274,8 @@ $meta = $this->getData('meta') ?? [];
                                 
                                 <section class="policy-footer">
                                     <p class="policy-update-time">
-                                        <lang>最后更新时间：</lang><span id="policy-update-date"></span>
+                                        <lang>最后更新时间：</lang><span><?= date('Y-m-d') ?></span>
                                     </p>
-                                    <script>
-                                        document.getElementById('policy-update-date').textContent = new Date().toLocaleDateString('zh-CN');
-                                    </script>
                                 </section>
                             </div>
                         </div>
@@ -326,14 +325,14 @@ $meta = $this->getData('meta') ?? [];
     .policy-title {
         font-size: var(--weline-layout-font-size-3xl, 1.75rem);
         font-weight: var(--weline-layout-font-weight-semibold, 600);
-        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
     
     .policy-description {
         font-size: var(--weline-layout-font-size-base, 1rem);
         line-height: var(--weline-layout-line-height-relaxed, 1.75);
-        color: var(--weline-layout-text-secondary, var(--color-text-secondary, #565959));
+        color: var(--weline-layout-text-secondary);
         margin: 0;
     }
     
@@ -344,13 +343,13 @@ $meta = $this->getData('meta') ?? [];
     .policy-section .section-title {
         font-size: var(--weline-layout-font-size-xl, 1.25rem);
         font-weight: var(--weline-layout-font-weight-semibold, 600);
-        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
     
     .policy-section .section-text {
         font-size: var(--weline-layout-font-size-base, 1rem);
-        color: var(--weline-layout-text-secondary, var(--color-text-muted, #333));
+        color: var(--weline-layout-text-secondary);
         line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin: 0 0 0.75rem 0;
     }
@@ -363,7 +362,7 @@ $meta = $this->getData('meta') ?? [];
     
     .policy-list li {
         font-size: var(--weline-layout-font-size-base, 1rem);
-        color: var(--weline-layout-text-secondary, var(--color-text-muted, #333));
+        color: var(--weline-layout-text-secondary);
         line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin-bottom: 0.5rem;
     }
@@ -371,13 +370,13 @@ $meta = $this->getData('meta') ?? [];
     .policy-footer {
         margin-top: var(--weline-layout-spacing-2xl, 3rem);
         padding-top: var(--weline-layout-spacing-xl, 2rem);
-        border-top: 1px solid var(--weline-layout-border-color, var(--color-border-light, #e0e0e0));
+        border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-border-color);
         text-align: center;
     }
     
     .policy-update-time {
         font-size: var(--weline-layout-font-size-sm, 0.875rem);
-        color: var(--weline-layout-text-tertiary, var(--color-text-muted, #888));
+        color: var(--weline-layout-text-tertiary);
         margin: 0;
     }
     

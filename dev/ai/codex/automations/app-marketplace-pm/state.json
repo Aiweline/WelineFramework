@@ -1,27 +1,16 @@
 ﻿{
     "marker":  "APP_MARKETPLACE_PM_AUTOMATION",
-    "status":  "blocked",
-    "activeRunId":  "run-20260608-101418-78888e2c",
-    "activeTaskPath":  "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0214-app-marketplace-update-iteration-2",
-    "startedAt":  "2026-06-08T10:14:18+08:00",
-    "updatedAt":  "2026-06-08T10:28:11.8001479+08:00",
-    "lastCompletedAt":  "2026-06-08T08:41:20+08:00",
-    "lastResult":  "Blocked: required Office marketplace source port 9502 is occupied by DEV-workspace PageBuilder/WeShop instance ai-test-pagebuilder-pbai-20260608-100528-32db918d. HTTP root renders WeShop homepage, marketplace API/detail URLs return 404, so client update loop cannot be honestly verified on the fixed source port.",
-    "nextPriority":  "Free or safely reassign the existing DEV-workspace 9502 PageBuilder instance, then start Office marketplace on fixed port 9502 and rerun source-to-client update verification.",
-    "evidence":  [
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0214-app-marketplace-update-iteration-2",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0214-app-marketplace-update-iteration-2\\artifacts\\9502-port-collision-http-evidence.json",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0214-app-marketplace-update-iteration-2\\artifacts\\9502-port-owner-process-evidence.json",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0214-app-marketplace-update-iteration-2\\artifacts\\chrome-headless-9502-desktop.png",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0214-app-marketplace-update-iteration-2\\artifacts\\chrome-headless-9502-mobile.png",
-                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-08\\2026-06-08-0214-app-marketplace-update-iteration-2\\artifacts\\chrome-headless-9502-dom.html"
-                 ],
-    "remainingRisk":  [
-                          "Office 9502 marketplace source was not started because port 9502 is already owned by a DEV-workspace PageBuilder/WeShop dispatcher not started by this run.",
-                          "No client update execution was attempted because the fixed official source URL is not serving Office marketplace data.",
-                          "Codex in-app Browser had zero claimable tabs; Chrome headless fallback was used for visual evidence."
-                      ],
-    "blockedAt":  "2026-06-08T10:28:11.8001479+08:00",
+    "status":  "running",
+    "activeRunId":  "run-20260609-124454-app-marketplace-pm",
+    "activeTaskPath":  "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-09\\2026-06-09-0444-app-marketplace-update-iteration-2",
+    "startedAt":  "2026-06-09T12:44:54+08:00",
+    "updatedAt":  "2026-06-09T12:44:54+08:00",
+    "lastCompletedAt":  null,
     "lastSkippedAt":  null,
+    "lastResult":  "本轮已进入运行：验证上一轮客户端访问官网应用商城源 401 授权阻塞，并尝试恢复真实更新闭环。",
+    "nextPriority":  "验证并恢复客户端应用商城授权，复测 Weline_SampleModule 1.0.24 -\u003e 1.0.25 更新闭环。",
+    "evidence":  [
+                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-09\\2026-06-09-0444-app-marketplace-update-iteration-2"
+                 ],
     "skipReason":  null
 }

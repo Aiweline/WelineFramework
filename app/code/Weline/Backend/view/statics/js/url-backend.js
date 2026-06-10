@@ -93,7 +93,82 @@
             apiAdminArea: site.api_admin_area || config.url?.apiAdminArea || getCookie('WELINE_API_ADMIN_AREA') || '',
             currentLang: site.lang || config.currentLang || config.i18n?.currentLang || 'zh_Hans_CN',
             currentCurrency: site.currency || config.currentCurrency || 'CNY',
+            defaultCurrency: site.default_currency || site.defaultCurrency || config.defaultCurrency || 'CNY',
+            availableCurrencies: config.availableCurrencies || config.supportedCurrencies || config.currencyCodes || config.currencies
+                || site.availableCurrencies || site.supportedCurrencies || site.currencyCodes || site.currencies || [],
         };
+    }
+
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function isCurrencyCodeShape(value) {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function addSupportedCurrencyCode(codes, value) {
+        if (value && typeof value === 'object') {
+            value = value.code || value.currency || value.currency_code || value.value || '';
+        }
+        const code = normalizeCurrencyCode(value);
+        if (isCurrencyCodeShape(code)) {
+            codes[code] = true;
+        }
+    }
+
+    function collectSupportedCurrencyCodes(codes, source) {
+        if (!source) {
+            return;
+        }
+        if (Array.isArray(source)) {
+            source.forEach(item => addSupportedCurrencyCode(codes, item));
+            return;
+        }
+        if (typeof source === 'object') {
+            Object.keys(source).forEach(key => {
+                addSupportedCurrencyCode(codes, key);
+                addSupportedCurrencyCode(codes, source[key]);
+            });
+            return;
+        }
+        String(source).split(/[,\s|]+/).forEach(code => addSupportedCurrencyCode(codes, code));
+    }
+
+    function getSupportedCurrencyCodes(config) {
+        const rawConfig = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+        const site = window.site || {};
+        const codes = Object.create(null);
+        [
+            config.availableCurrencies,
+            rawConfig.availableCurrencies,
+            rawConfig.supportedCurrencies,
+            rawConfig.currencyCodes,
+            rawConfig.currencies,
+            rawConfig.site && rawConfig.site.availableCurrencies,
+            rawConfig.site && rawConfig.site.supportedCurrencies,
+            rawConfig.site && rawConfig.site.currencyCodes,
+            rawConfig.site && rawConfig.site.currencies,
+            site.availableCurrencies,
+            site.supportedCurrencies,
+            site.currencyCodes,
+            site.currencies
+        ].forEach(source => collectSupportedCurrencyCodes(codes, source));
+
+        document.querySelectorAll('[data-currency-switcher] [data-currency], [data-currency-switcher] [data-currency-option], [data-currency-switcher] .currency-option').forEach(option => {
+            addSupportedCurrencyCode(codes, option.getAttribute('data-currency') || option.getAttribute('data-currency-option') || option.dataset.currency);
+        });
+
+        addSupportedCurrencyCode(codes, config.defaultCurrency || rawConfig.defaultCurrency || (rawConfig.site && (rawConfig.site.defaultCurrency || rawConfig.site.default_currency)) || site.defaultCurrency || site.default_currency);
+        return codes;
+    }
+
+    function isSupportedCurrencyCode(value, config = getConfig()) {
+        const code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        return !!getSupportedCurrencyCodes(config)[code];
     }
 
     function normalizePath(path, baseRouter = '') {
@@ -175,7 +250,8 @@
         let prePath = getCookie('WELINE_WEBSITE_URL') || '';
         const config = getConfig();
         const currentLang = getCookie('WELINE_USER_LANG') || config.currentLang || '';
-        const currentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
+        const rawCurrentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
+        const currentCurrency = isSupportedCurrencyCode(rawCurrentCurrency, config) ? normalizeCurrencyCode(rawCurrentCurrency) : '';
 
         if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL') || '')) {
             path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL') || '', '');
@@ -274,15 +350,14 @@
     function rebuildLocalizedPath(pathname, options = {}) {
         const config = getConfig();
         const langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
-        const currencyPattern = /^[A-Z]{3}$/;
         const parts = (pathname || '/').split('/').filter(Boolean);
-        const nonLocalizedParts = parts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
+        const nonLocalizedParts = parts.filter(part => !isSupportedCurrencyCode(part, config) && !langPattern.test(part));
         const prefix = nonLocalizedParts.length ? nonLocalizedParts[0] : '';
         const remain = prefix ? nonLocalizedParts.slice(1) : nonLocalizedParts;
 
         let currentCurrency = '';
         for (const part of parts) {
-            if (currencyPattern.test(part)) {
+            if (isSupportedCurrencyCode(part, config)) {
                 currentCurrency = part.toUpperCase();
                 break;
             }
@@ -296,7 +371,8 @@
             }
         }
 
-        const targetCurrency = (options.currency || currentCurrency || getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || 'CNY').toUpperCase();
+        const rawTargetCurrency = options.currency || currentCurrency || getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || config.defaultCurrency || 'CNY';
+        const targetCurrency = isSupportedCurrencyCode(rawTargetCurrency, config) ? normalizeCurrencyCode(rawTargetCurrency) : '';
         const targetLang = options.lang || currentLang || getCookie('WELINE_USER_LANG') || config.currentLang || 'zh_Hans_CN';
 
         const out = [];

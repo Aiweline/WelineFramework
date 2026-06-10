@@ -2,79 +2,94 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\Payment\Service;
 
-use Weline\Payment\Interface\PaymentProviderInterface;
-use Weline\Payment\Model\PaymentResult;
-use Weline\Payment\Model\PaymentTransaction;
-use Weline\Payment\Model\PaymentMethod;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Payment\Api\Data\Actor;
+use Weline\Payment\Api\Data\AvailabilityRequest;
+use Weline\Payment\Api\Data\CallbackRequest;
+use Weline\Payment\Api\Data\CallbackResult;
+use Weline\Payment\Api\Data\PaymentOperationRequest;
+use Weline\Payment\Api\Data\PaymentRequest;
+use Weline\Payment\Api\Data\PaymentResult;
+use Weline\Payment\Api\Data\PayableSnapshot;
+use Weline\Payment\Api\Data\QueryRequest;
+use Weline\Payment\Api\Data\RefundResult;
+use Weline\Payment\Model\PaymentMethod;
+use Weline\Payment\Model\PaymentRefund;
+use Weline\Payment\Model\PaymentTransaction;
 
-/**
- * 支付核心服务
- * 
- * 处理支付相关的核心业务逻辑
- */
 class PaymentService
 {
-    private PaymentMethodManager $methodManager;
-    private ObjectManager $objectManager;
-
     public function __construct(
-        PaymentMethodManager $methodManager,
-        ObjectManager $objectManager
+        private readonly PaymentMethodManager $methodManager,
+        private readonly ObjectManager $objectManager,
+        private readonly ?PayablePaymentEligibilityService $eligibilityService = null
     ) {
-        $this->methodManager = $methodManager;
-        $this->objectManager = $objectManager;
     }
 
     /**
-     * 创建支付订单
-     * 
-     * @param string $methodCode 支付方式代码
-     * @param array $orderData 订单数据
-     * @return PaymentTransaction
-     * @throws \Exception
+     * @param array<string, mixed> $orderData
      */
     public function createPayment(string $methodCode, array $orderData): PaymentTransaction
     {
-        // 获取支付方式
         $paymentMethod = $this->methodManager->getMethodByCode($methodCode);
         if (!$paymentMethod || !$this->methodManager->isMethodActiveForScope($paymentMethod, $orderData)) {
-            throw new \Exception(__('支付方式 %{code} 不存在或未启用', ['code' => $methodCode]));
+            throw new \RuntimeException(__('支付方式 %{code} 不存在或未启用', ['code' => $methodCode]));
         }
 
-        // 获取支付提供商
         $provider = $this->methodManager->getProviderInstance($paymentMethod, $orderData);
         if (!$provider) {
-            throw new \Exception(__('支付提供商实例化失败'));
+            throw new \RuntimeException(__('支付提供商实例化失败'));
         }
 
-        // 验证货币支持
-        $currency = $orderData['currency'] ?? 'CNY';
-        if (!$provider->supportsCurrency($currency)) {
-            throw new \Exception(__('支付方式不支持货币 %{currency}', ['currency' => $currency]));
+        $transactionNo = $this->generateTransactionNo();
+        $currency = strtoupper((string) ($orderData['currency'] ?? $orderData['currency_code'] ?? 'CNY'));
+        $amount = (float) ($orderData['amount'] ?? 0);
+        $amountMinor = (int) ($orderData['amount_minor'] ?? round($amount * 100));
+        $scope = (new PaymentScopeConfigService())->resolveScope($orderData);
+        $runtimeConfig = $this->methodManager->getRuntimeConfig($paymentMethod, $scope);
+        $runtimeCapabilities = $this->methodManager->getRuntimeCapabilities($paymentMethod, $scope);
+        $actor = $this->buildActor($orderData);
+        $payableSnapshot = $this->buildPayableSnapshot($orderData, $amountMinor, $currency);
+        $context = array_replace($orderData, [
+            'runtime_config' => $runtimeConfig,
+            'runtime_capabilities' => $runtimeCapabilities,
+            'payable_snapshot' => $payableSnapshot->getData(),
+            'scope' => $scope['scope'],
+            'environment' => $scope['environment'],
+        ]);
+
+        $methodEligibility = $this->getEligibilityService()->evaluate(
+            $paymentMethod,
+            $payableSnapshot,
+            $actor,
+            $runtimeConfig,
+            $runtimeCapabilities
+        );
+        if (!$methodEligibility->isAvailable()) {
+            throw new \RuntimeException($methodEligibility->getDisabledReasonText() ?? __('支付方式当前不可用'));
         }
 
-        // 验证金额支持
-        $amount = $orderData['amount'] ?? 0;
-        if (!$provider->supportsAmount($amount)) {
-            throw new \Exception(__('支付金额不在支持范围内'));
+        $availability = $provider->checkAvailability(AvailabilityRequest::fromArray([
+            AvailabilityRequest::FIELD_PAYABLE_TYPE => $payableSnapshot->getPayableType(),
+            AvailabilityRequest::FIELD_PAYABLE_ID => $payableSnapshot->getPayableId(),
+            AvailabilityRequest::FIELD_METHOD_CODE => $methodCode,
+            AvailabilityRequest::FIELD_SCOPE => $scope['scope'],
+            AvailabilityRequest::FIELD_AMOUNT_MINOR => $payableSnapshot->getAmountMinor(),
+            AvailabilityRequest::FIELD_CURRENCY_CODE => $payableSnapshot->getCurrencyCode(),
+            AvailabilityRequest::FIELD_COUNTRY_CODE => (string) $payableSnapshot->getData(PayableSnapshot::FIELD_COUNTRY_CODE),
+            AvailabilityRequest::FIELD_LANGUAGE_CODE => (string) $payableSnapshot->getData(PayableSnapshot::FIELD_LANGUAGE_CODE),
+            AvailabilityRequest::FIELD_BUSINESS_TAGS => $payableSnapshot->getArray('business_tags'),
+            AvailabilityRequest::FIELD_CONTEXT => $context,
+        ]));
+        if (!$availability->isAvailable()) {
+            throw new \RuntimeException($availability->getDisabledReasonText() ?? __('支付方式当前不可用'));
         }
 
-        // 创建支付交易记录
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transactionNo = $this->generateTransactionNo();
-        
-        $transaction->setData(PaymentTransaction::schema_fields_ORDER_ID, $orderData['order_id'] ?? '')
+        $transaction->setData(PaymentTransaction::schema_fields_ORDER_ID, $orderData['order_id'] ?? $orderData['payable_id'] ?? '')
             ->setData(PaymentTransaction::schema_fields_METHOD_CODE, $methodCode)
             ->setData(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo)
             ->setData(PaymentTransaction::schema_fields_AMOUNT, $amount)
@@ -83,122 +98,106 @@ class PaymentService
             ->setRequestData($orderData)
             ->save();
 
-        // 调用支付提供商创建支付
-        $result = $provider->createPayment($orderData);
-        
-        // 更新交易记录
+        $result = $provider->createPayment(PaymentRequest::fromArray([
+            PaymentOperationRequest::FIELD_INTENT_CODE => (string) ($orderData['intent_code'] ?? $transactionNo),
+            PaymentOperationRequest::FIELD_ATTEMPT_CODE => (string) ($orderData['attempt_code'] ?? $transactionNo . '-1'),
+            PaymentOperationRequest::FIELD_PAYABLE_TYPE => (string) ($orderData['payable_type'] ?? 'order'),
+            PaymentOperationRequest::FIELD_PAYABLE_ID => (string) ($orderData['payable_id'] ?? $orderData['order_id'] ?? ''),
+            PaymentOperationRequest::FIELD_METHOD_CODE => $methodCode,
+            PaymentOperationRequest::FIELD_PROVIDER_CODE => $provider->getProviderCode(),
+            PaymentOperationRequest::FIELD_SCOPE => $scope['scope'],
+            PaymentOperationRequest::FIELD_AMOUNT_MINOR => $amountMinor,
+            PaymentOperationRequest::FIELD_CURRENCY_CODE => $currency,
+            PaymentOperationRequest::FIELD_IDEMPOTENCY_KEY => (string) ($orderData['idempotency_key'] ?? $transactionNo),
+            PaymentOperationRequest::FIELD_PROVIDER_REFERENCE => $transactionNo,
+            PaymentOperationRequest::FIELD_CONTEXT => $context,
+        ]));
+
         $transaction->setResponseData($result->getData())
+            ->setData(PaymentTransaction::schema_fields_STATUS, $this->mapPaymentStatus($result))
             ->save();
 
-        if ($result->isSuccess()) {
-            // 如果支付提供商返回了交易号，更新
-            if ($result->getData('transaction_no')) {
-                $transaction->setData(PaymentTransaction::schema_fields_TRANSACTION_NO, $result->getData('transaction_no'))
-                    ->save();
-            }
-        } else {
-            // 支付创建失败
-            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_FAILED)
+        if ($result->getProviderReference()) {
+            $transaction->setData(PaymentTransaction::schema_fields_TRANSACTION_NO, $result->getProviderReference())
                 ->save();
-            throw new \Exception($result->getData('message') ?? __('创建支付订单失败'));
+        }
+        if ($result->isSuccessful()) {
+            $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
+                ->save();
+        }
+        if ($result->getStatus() === PaymentResult::STATUS_FAILED) {
+            throw new \RuntimeException((string) ($result->getData(PaymentResult::FIELD_MESSAGE) ?: __('创建支付订单失败')));
         }
 
         return $transaction;
     }
 
     /**
-     * 处理支付回调
-     * 
-     * @param string $methodCode 支付方式代码
-     * @param array $callbackData 回调数据
-     * @return PaymentTransaction|null
-     * @throws \Exception
+     * @param array<string, mixed> $callbackData
      */
     public function handleCallback(string $methodCode, array $callbackData): ?PaymentTransaction
     {
-        // 获取支付方式
         $paymentMethod = $this->methodManager->getMethodByCode($methodCode);
         if (!$paymentMethod) {
-            throw new \Exception(__('支付方式 %{code} 不存在', ['code' => $methodCode]));
+            throw new \RuntimeException(__('支付方式 %{code} 不存在', ['code' => $methodCode]));
         }
 
-        // 获取支付提供商
         $provider = $this->methodManager->getProviderInstance($paymentMethod);
         if (!$provider) {
-            throw new \Exception(__('支付提供商实例化失败'));
+            throw new \RuntimeException(__('支付提供商实例化失败'));
         }
 
-        // 验证签名
-        $signature = $callbackData['signature'] ?? $callbackData['sign'] ?? '';
-        if (!empty($signature)) {
-            $data = $callbackData;
-            unset($data['signature'], $data['sign']);
-            if (!$provider->verifySignature($data, $signature)) {
-                throw new \Exception(__('签名验证失败'));
-            }
-        }
+        $callbackRequest = CallbackRequest::fromArray([
+            CallbackRequest::FIELD_PROVIDER_CODE => $provider->getProviderCode(),
+            CallbackRequest::FIELD_PAYLOAD => $callbackData,
+            CallbackRequest::FIELD_SIGNATURE => (string) ($callbackData['signature'] ?? $callbackData['sign'] ?? ''),
+            CallbackRequest::FIELD_RECEIVED_AT => date('Y-m-d H:i:s'),
+        ]);
 
-        // 查找交易记录
-        $transactionNo = $callbackData['transaction_no'] ?? $callbackData['out_trade_no'] ?? '';
-        if (empty($transactionNo)) {
-            throw new \Exception(__('回调数据中缺少交易号'));
+        $verified = $provider->verifyCallback($callbackRequest);
+        if (!$verified->isVerified()) {
+            throw new \RuntimeException((string) ($verified->getData(CallbackResult::FIELD_MESSAGE) ?: __('签名验证失败')));
+        }
+        $event = $provider->parseCallback($callbackRequest);
+
+        $transactionNo = (string) ($event->getData(CallbackResult::FIELD_TRANSACTION_CODE)
+            ?: $callbackData['transaction_no']
+            ?? $callbackData['out_trade_no']
+            ?? $callbackData['provider_reference']
+            ?? '');
+        if ($transactionNo === '') {
+            throw new \RuntimeException(__('回调数据中缺少交易号'));
         }
 
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
         $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
-        
         if (!$transaction->getId()) {
-            throw new \Exception(__('交易记录不存在: %{no}', ['no' => $transactionNo]));
+            throw new \RuntimeException(__('交易记录不存在: %{no}', ['no' => $transactionNo]));
         }
 
-        // 更新回调数据
+        $transition = (string) ($event->getData(CallbackResult::FIELD_STATUS_TRANSITION) ?: '');
         $transaction->setCallbackData($callbackData)
+            ->setData(PaymentTransaction::schema_fields_STATUS, $this->mapCallbackStatus($transition))
             ->save();
-
-        // 调用支付提供商处理回调
-        $result = $provider->handleCallback($callbackData);
-        
-        // 更新交易状态
-        if ($result->isSuccess()) {
-            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_SUCCESS)
-                ->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
-                ->save();
-        } elseif ($result->isFailed()) {
-            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_FAILED)
-                ->save();
-        } elseif ($result->isProcessing()) {
-            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_PROCESSING)
+        if ($transaction->isSuccess()) {
+            $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
                 ->save();
         }
 
         return $transaction;
     }
 
-    /**
-     * 查询支付状态
-     * 
-     * @param string $transactionNo 交易号
-     * @return PaymentTransaction|null
-     * @throws \Exception
-     */
     public function queryPaymentStatus(string $transactionNo): ?PaymentTransaction
     {
         /** @var PaymentTransaction $transaction */
         $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
         $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
-        
-        if (!$transaction->getId()) {
-            return null;
+        if (!$transaction->getId() || $transaction->isSuccess() || $transaction->isFailed()) {
+            return $transaction->getId() ? $transaction : null;
         }
 
-        // 如果已经是最终状态，直接返回
-        if ($transaction->isSuccess() || $transaction->isFailed()) {
-            return $transaction;
-        }
-
-        // 获取支付提供商查询状态
-        $paymentMethod = $this->methodManager->getMethodByCode($transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE));
+        $paymentMethod = $this->methodManager->getMethodByCode((string) $transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE));
         if (!$paymentMethod) {
             return $transaction;
         }
@@ -208,83 +207,162 @@ class PaymentService
             return $transaction;
         }
 
-        // 查询支付状态
-        $result = $provider->queryPaymentStatus($transactionNo);
-        
-        // 更新交易状态
-        if ($result->isSuccess()) {
-            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_SUCCESS)
-                ->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
-                ->save();
-        } elseif ($result->isFailed()) {
-            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_FAILED)
-                ->save();
-        } elseif ($result->isProcessing()) {
-            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_PROCESSING)
+        $result = $provider->query(QueryRequest::fromArray([
+            PaymentOperationRequest::FIELD_INTENT_CODE => $transactionNo,
+            PaymentOperationRequest::FIELD_METHOD_CODE => (string) $transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE),
+            PaymentOperationRequest::FIELD_PROVIDER_CODE => $provider->getProviderCode(),
+            PaymentOperationRequest::FIELD_PROVIDER_REFERENCE => $transactionNo,
+            PaymentOperationRequest::FIELD_CURRENCY_CODE => (string) $transaction->getData(PaymentTransaction::schema_fields_CURRENCY),
+        ]));
+
+        $transaction->setResponseData($result->getData())
+            ->setData(PaymentTransaction::schema_fields_STATUS, $this->mapPaymentStatus($result))
+            ->save();
+        if ($result->isSuccessful()) {
+            $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
                 ->save();
         }
 
         return $transaction;
     }
 
-    /**
-     * 处理退款
-     * 
-     * @param string $transactionNo 原交易号
-     * @param float $amount 退款金额
-     * @param string $reason 退款原因
-     * @return PaymentResult
-     * @throws \Exception
-     */
-    public function refund(string $transactionNo, float $amount, string $reason = ''): PaymentResult
+    public function refund(string $transactionNo, float $amount, string $reason = ''): RefundResult
     {
-        /** @var PaymentTransaction $transaction */
-        $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $transactionNo);
-        
-        if (!$transaction->getId()) {
-            throw new \Exception(__('交易记录不存在'));
-        }
+        $refund = $this->getRefundService()->refundByTransactionCode(
+            $transactionNo,
+            (int) round($amount * 100),
+            $reason,
+            [
+                'source_code' => 'payment_service_refund',
+                'idempotency_key' => 'payment_service_refund:' . $transactionNo . ':' . (int) round($amount * 100) . ':' . sha1($reason),
+            ]
+        );
 
-        if (!$transaction->isSuccess()) {
-            throw new \Exception(__('只有支付成功的交易才能退款'));
-        }
-
-        if ($transaction->isRefunded()) {
-            throw new \Exception(__('该交易已经退款'));
-        }
-
-        // 获取支付提供商
-        $paymentMethod = $this->methodManager->getMethodByCode($transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE));
-        if (!$paymentMethod) {
-            throw new \Exception(__('支付方式不存在'));
-        }
-
-        $provider = $this->methodManager->getProviderInstance($paymentMethod);
-        if (!$provider) {
-            throw new \Exception(__('支付提供商实例化失败'));
-        }
-
-        // 调用退款
-        $result = $provider->refund($transactionNo, $amount, $reason);
-        
-        // 更新交易状态
-        if ($result->isSuccess()) {
-            $transaction->setData(PaymentTransaction::schema_fields_STATUS, PaymentTransaction::STATUS_REFUNDED)
-                ->save();
-        }
-
-        return $result;
+        return RefundResult::fromArray([
+            RefundResult::FIELD_REFUND_CODE => (string) $refund->getData(PaymentRefund::schema_fields_REFUND_CODE),
+            RefundResult::FIELD_TRANSACTION_CODE => (string) $refund->getData(PaymentRefund::schema_fields_TRANSACTION_CODE),
+            RefundResult::FIELD_STATUS => $this->mapRefundStatus((string) $refund->getData(PaymentRefund::schema_fields_STATUS)),
+            RefundResult::FIELD_PROVIDER_REFERENCE => (string) $refund->getData(PaymentRefund::schema_fields_PROVIDER_REFUND_ID),
+            RefundResult::FIELD_MESSAGE => (string) $refund->getData(PaymentRefund::schema_fields_REASON),
+            RefundResult::FIELD_PAYLOAD => [
+                'requested_amount_minor' => (int) $refund->getData(PaymentRefund::schema_fields_REQUESTED_AMOUNT_MINOR),
+                'approved_amount_minor' => (int) $refund->getData(PaymentRefund::schema_fields_APPROVED_AMOUNT_MINOR),
+                'currency_code' => (string) $refund->getData(PaymentRefund::schema_fields_CURRENCY),
+                'provider_response' => $refund->getProviderResponse(),
+            ],
+        ]);
     }
 
-    /**
-     * 生成交易号
-     * 
-     * @return string
-     */
     private function generateTransactionNo(): string
     {
         return 'PAY' . date('YmdHis') . mt_rand(100000, 999999);
     }
-}
 
+    private function mapPaymentStatus(PaymentResult $result): string
+    {
+        return match ($result->getStatus()) {
+            PaymentResult::STATUS_PAID,
+            PaymentResult::STATUS_CAPTURED,
+            PaymentResult::STATUS_AUTHORIZED => PaymentTransaction::STATUS_SUCCESS,
+            PaymentResult::STATUS_FAILED,
+            PaymentResult::STATUS_UNSUPPORTED => PaymentTransaction::STATUS_FAILED,
+            PaymentResult::STATUS_PROCESSING => PaymentTransaction::STATUS_PROCESSING,
+            default => PaymentTransaction::STATUS_PENDING,
+        };
+    }
+
+    private function mapCallbackStatus(string $transition): string
+    {
+        return match (strtolower($transition)) {
+            'paid', 'captured', 'authorized', 'success', 'succeeded' => PaymentTransaction::STATUS_SUCCESS,
+            'failed', 'cancelled', 'canceled', 'expired' => PaymentTransaction::STATUS_FAILED,
+            'processing' => PaymentTransaction::STATUS_PROCESSING,
+            default => PaymentTransaction::STATUS_PENDING,
+        };
+    }
+
+    private function getEligibilityService(): PayablePaymentEligibilityService
+    {
+        return $this->eligibilityService ?? $this->objectManager->getInstance(PayablePaymentEligibilityService::class);
+    }
+
+    private function getRefundService(): PaymentRefundService
+    {
+        return $this->objectManager->getInstance(PaymentRefundService::class);
+    }
+
+    private function mapRefundStatus(string $status): string
+    {
+        return match ($status) {
+            PaymentRefund::STATUS_REFUNDED => RefundResult::STATUS_REFUNDED,
+            PaymentRefund::STATUS_PENDING,
+            PaymentRefund::STATUS_PROCESSING,
+            PaymentRefund::STATUS_APPROVED,
+            PaymentRefund::STATUS_REQUESTED => RefundResult::STATUS_PENDING,
+            PaymentRefund::STATUS_UNSUPPORTED => RefundResult::STATUS_UNSUPPORTED,
+            default => RefundResult::STATUS_FAILED,
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function buildActor(array $data): ?Actor
+    {
+        $actor = $data['actor'] ?? null;
+        if ($actor instanceof Actor) {
+            return $actor;
+        }
+        if (\is_array($actor)) {
+            return Actor::fromArray($actor);
+        }
+
+        $actorType = trim((string) ($data['actor_type'] ?? $data['payer_type'] ?? ''));
+        $actorId = trim((string) ($data['actor_id'] ?? $data['payer_id'] ?? $data['customer_id'] ?? $data['user_id'] ?? ''));
+        if ($actorType === '' && $actorId === '') {
+            return null;
+        }
+
+        return Actor::fromArray([
+            Actor::FIELD_ACTOR_TYPE => $actorType !== '' ? $actorType : 'customer',
+            Actor::FIELD_ACTOR_ID => $actorId,
+            Actor::FIELD_PERMISSIONS => \is_array($data['actor_permissions'] ?? null) ? $data['actor_permissions'] : [],
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function buildPayableSnapshot(array $data, int $amountMinor, string $currency): PayableSnapshot
+    {
+        $payableType = strtolower(trim((string) ($data['payable_type'] ?? 'order')));
+        if ($payableType === '') {
+            $payableType = 'order';
+        }
+
+        $payableId = trim((string) ($data['payable_id'] ?? $data['order_id'] ?? ''));
+        if ($payableId === '') {
+            throw new \InvalidArgumentException('payment_payable_id_required');
+        }
+
+        return PayableSnapshot::fromArray([
+            PayableSnapshot::FIELD_PAYABLE_TYPE => $payableType,
+            PayableSnapshot::FIELD_PAYABLE_ID => $payableId,
+            PayableSnapshot::FIELD_AMOUNT_MINOR => $amountMinor,
+            PayableSnapshot::FIELD_CURRENCY_CODE => strtoupper($currency),
+            PayableSnapshot::FIELD_PRECISION => (int) ($data['precision'] ?? 2),
+            PayableSnapshot::FIELD_COUNTRY_CODE => strtoupper((string) ($data['country_code'] ?? $data['country'] ?? '')),
+            PayableSnapshot::FIELD_LANGUAGE_CODE => (string) ($data['language_code'] ?? $data['locale'] ?? 'zh_Hans_CN'),
+            PayableSnapshot::FIELD_TIMEZONE => (string) ($data['timezone'] ?? date_default_timezone_get()),
+            PayableSnapshot::FIELD_VERSION => (string) ($data['payable_version'] ?? $data['version'] ?? '1'),
+            PayableSnapshot::FIELD_OWNER => \is_array($data['owner'] ?? null) ? $data['owner'] : [],
+            PayableSnapshot::FIELD_PAYER => \is_array($data['payer'] ?? null) ? $data['payer'] : [],
+            PayableSnapshot::FIELD_ITEMS => \is_array($data['items'] ?? null) ? $data['items'] : [],
+            PayableSnapshot::FIELD_TOTALS => \is_array($data['totals'] ?? null) ? $data['totals'] : [],
+            'business_tags' => \is_array($data['business_tags'] ?? null) ? $data['business_tags'] : [],
+            'status' => (string) ($data['payable_status'] ?? $data['status'] ?? 'open'),
+            'scope' => (string) ($data['scope'] ?? PaymentScopeConfigService::DEFAULT_SCOPE),
+            'metadata' => \is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+        ]);
+    }
+}

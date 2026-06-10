@@ -26,6 +26,10 @@
 页面内容不能为空,页面内容不能为空
 部件管理,部件管理
 "获取部件详情失败: %{1}","获取部件详情失败: %{1}"
+"Widget 生成智能体","Widget 生成智能体"
+"根据 slot 协议生成普通 Widget registry JSON","根据 slot 协议生成普通 Widget registry JSON"
+"AI Widget 生成调用失败：%{1}","AI Widget 生成调用失败：%{1}"
+"AI Widget 生成结果为空","AI Widget 生成结果为空"
 "Widget 查询器不支持的 operation：%{1}","Widget 查询器不支持的 operation：%{1}"
 "Widget 部件查询","Widget 部件查询"
 提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力,提供部件列表、参数定义、配置表单、字段渲染、配置校验、预览等查询能力
@@ -53,6 +57,21 @@
 "获取部件预览 HTML","获取部件预览 HTML"
 部件配置,部件配置
 "获取已注册的 ParamType 类型名列表","获取已注册的 ParamType 类型名列表"
+"根据目标 slot 协议生成 AI Widget 并保存为普通 Widget","根据目标 slot 协议生成 AI Widget 并保存为普通 Widget"
+生成要求,生成要求
+生成上下文,生成上下文
+放置目标,放置目标
+期望部件类型,期望部件类型
+模型代码,模型代码
+请先填写生成要求,请先填写生成要求
+"AI Widget 生成失败","AI Widget 生成失败"
+选择的部件类型不受支持：%{1},选择的部件类型不受支持：%{1}
+"AI 返回内容为空","AI 返回内容为空"
+"AI 返回的 Widget JSON 无法解析","AI 返回的 Widget JSON 无法解析"
+"AI 生成的 Widget 类型不受支持：%{1}","AI 生成的 Widget 类型不受支持：%{1}"
+"AI 生成结果缺少 template_content","AI 生成结果缺少 template_content"
+"AI 生成了不支持的参数类型：%{1}","AI 生成了不支持的参数类型：%{1}"
+"AI 生成模板包含不允许的逻辑：%{1}","AI 生成模板包含不允许的逻辑：%{1}"
 删除,删除
 鍒犻櫎,鍒犻櫎
 基本信息,基本信息

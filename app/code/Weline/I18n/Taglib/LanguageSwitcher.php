@@ -168,6 +168,9 @@ class LanguageSwitcher implements TaglibInterface
                 $backendRoute = trim((string)(Env::getAreaRoutePrefix('backend') ?? $backendRoute), '/');
             }
             $currentCurrency = State::getCurrency();
+            if (!State::isAllowedCurrencyCode($currentCurrency)) {
+                $currentCurrency = self::defaultCurrency();
+            }
             $backendRouteJson = json_encode($backendRoute, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
             if (!is_string($backendRouteJson)) {
                 $backendRouteJson = '""';
@@ -178,14 +181,18 @@ class LanguageSwitcher implements TaglibInterface
                 . 'var pathParts=String(pathname||"/").split("/").filter(Boolean);'
                 . 'var currencyPattern=/^[A-Z]{3}$/;var langPattern=/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;'
                 . 'var cfg=window.__WelineThemeConfig||{};'
+                . 'function addCurrency(codes,value){if(value&&typeof value==="object"){value=value.code||value.currency||value.currency_code||value.value||"";}var code=String(value||"").trim().toUpperCase();if(currencyPattern.test(code)){codes[code]=true;}}'
+                . 'function collectCurrency(codes,source){if(!source){return;}if(Array.isArray(source)){source.forEach(function(item){addCurrency(codes,item);});return;}if(typeof source==="object"){Object.keys(source).forEach(function(key){addCurrency(codes,key);addCurrency(codes,source[key]);});return;}String(source).split(/[,\\s|]+/).forEach(function(code){addCurrency(codes,code);});}'
+                . 'function supportedCurrencies(){var site=window.site||{};var codes={};[cfg.availableCurrencies,cfg.supportedCurrencies,cfg.currencyCodes,cfg.currencies,cfg.site&&cfg.site.availableCurrencies,cfg.site&&cfg.site.supportedCurrencies,cfg.site&&cfg.site.currencyCodes,cfg.site&&cfg.site.currencies,site.availableCurrencies,site.supportedCurrencies,site.currencyCodes,site.currencies].forEach(function(source){collectCurrency(codes,source);});addCurrency(codes,cfg.defaultCurrency||(cfg.site&&(cfg.site.defaultCurrency||cfg.site.default_currency))||site.defaultCurrency||site.default_currency);return codes;}'
+                . 'function isCurrency(value){var code=String(value||"").trim().toUpperCase();return currencyPattern.test(code)&&!!supportedCurrencies()[code];}'
                 . 'var defaultCurrency=String(cfg.defaultCurrency||"CNY").toUpperCase();'
                 . 'var defaultLang=String(cfg.defaultLang||cfg.defaultLanguage||(cfg.i18n&&(cfg.i18n.defaultLang||cfg.i18n.defaultLanguage))||"zh_Hans_CN").replace(/-/g,"_").toLowerCase();'
                 . 'var backendKey=String(' . $backendRouteJson . '||(window.site&&window.site.area)||(window.Weline&&window.Weline.config&&window.Weline.config.url&&window.Weline.config.url.adminArea)||"");'
-                . 'var currency="";for(var i=0;i<pathParts.length;i++){if(currencyPattern.test(pathParts[i])){currency=pathParts[i].toUpperCase();break;}}'
-                . 'if(!currency){currency=String((cfg.currentCurrency)||"CNY").toUpperCase();}'
-                . 'var prefixIndex=-1;if(backendKey){prefixIndex=pathParts.findIndex(function(part){return !langPattern.test(part)&&!currencyPattern.test(part)&&String(part).toLowerCase()===backendKey.toLowerCase();});}'
+                . 'var currency="";for(var i=0;i<pathParts.length;i++){if(isCurrency(pathParts[i])){currency=pathParts[i].toUpperCase();break;}}'
+                . 'if(!currency&&isCurrency(cfg.currentCurrency)){currency=String(cfg.currentCurrency).toUpperCase();}'
+                . 'var prefixIndex=-1;if(backendKey){prefixIndex=pathParts.findIndex(function(part){return !langPattern.test(part)&&!isCurrency(part)&&String(part).toLowerCase()===backendKey.toLowerCase();});}'
                 . 'var prefixSegment=prefixIndex>=0?pathParts[prefixIndex]:backendKey;var remain=[];'
-                . 'pathParts.forEach(function(part,index){if(langPattern.test(part)||currencyPattern.test(part)){return;}if(index===prefixIndex){return;}remain.push(part);});'
+                . 'pathParts.forEach(function(part,index){if(langPattern.test(part)||isCurrency(part)){return;}if(index===prefixIndex){return;}remain.push(part);});'
                 . 'var out=[];if(prefixSegment){out.push(prefixSegment);}if(currency&&currency!==defaultCurrency){out.push(currency);}'
                 . 'var normalizedLang=String(lang||"").replace(/-/g,"_");if(normalizedLang&&normalizedLang.toLowerCase()!==defaultLang){out.push(normalizedLang);}'
                 . 'if(remain.length){out.push.apply(out,remain);}return "/"+out.join("/")+(search||"");'
@@ -279,6 +286,7 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = $defaultAwareBuildLangHrefFallbackJs;
             $html[] = 'function buildLangHref(lang){var pathname=window.location.pathname||"/";var search=window.location.search||"";if(window.WelineI18n&&typeof window.WelineI18n.buildLanguageUrl==="function"){return window.WelineI18n.buildLanguageUrl(lang,pathname,search);}return buildLangHrefFallback(lang);}';
             $html[] = 'function writeLangPreference(lang){if(!lang){return;}if(window.WelineBackendLanguageCookieSync&&typeof window.WelineBackendLanguageCookieSync==="function"){window.WelineBackendLanguageCookieSync(lang);return;}try{if(window.localStorage){localStorage.setItem("weline_user_lang",lang);localStorage.removeItem("api_doc_locale");localStorage.removeItem("WELINE_USER_LANG");}}catch(e){}var expires=new Date(Date.now()+365*24*60*60*1000).toUTCString();var value=encodeURIComponent(lang);var paths=["/"];var langPattern=/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;var currencyPattern=/^[A-Z]{3}$/;var parts=(window.location.pathname||"/").split("/").filter(Boolean);var backendKey=String(' . $backendRouteJson . '||(window.site&&window.site.area)||(window.Weline&&window.Weline.config&&window.Weline.config.url&&window.Weline.config.url.adminArea)||"").replace(/^\\/+|\\/+$/g,"");if(backendKey){paths.push("/"+backendKey);}var first=parts[0]||"";if(first&&!langPattern.test(first)&&!currencyPattern.test(first)){paths.push("/"+first);}var currencyIndex=-1;var langIndex=-1;for(var i=0;i<parts.length;i++){if(currencyIndex<0&&currencyPattern.test(parts[i])){currencyIndex=i;}if(langIndex<0&&langPattern.test(parts[i])){langIndex=i;}}if(currencyIndex>0){paths.push("/"+parts.slice(0,currencyIndex+1).join("/"));}if(langIndex>0){paths.push("/"+parts.slice(0,langIndex+1).join("/"));}var host=window.location.hostname||"";var domains=[""];if(host.indexOf(".")>0&&!/^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(host)){domains.push(";domain="+host);}var expired="Thu, 01 Jan 1970 00:00:00 GMT";var seen={};paths.forEach(function(path){path=path||"/";domains.forEach(function(domain){var key=path+"|"+domain;if(seen[key]){return;}seen[key]=true;document.cookie="WELINE_USER_LANG=;expires="+expired+";path="+path+domain+";SameSite=Lax";document.cookie="WELINE_USER_LANG="+value+";expires="+expires+";path="+path+domain+";SameSite=Lax";});});}';
+            $html[] = 'writeLangPreference=function(lang){if(!lang){return;}if(window.WelineBackendLanguageCookieSync&&typeof window.WelineBackendLanguageCookieSync==="function"){window.WelineBackendLanguageCookieSync(lang);return;}try{if(window.localStorage){localStorage.setItem("weline_user_lang",lang);localStorage.removeItem("api_doc_locale");localStorage.removeItem("WELINE_USER_LANG");}}catch(e){}var expires=new Date(Date.now()+365*24*60*60*1000).toUTCString();var value=encodeURIComponent(lang);var paths=["/"];var backendKey=String(' . $backendRouteJson . '||(window.site&&window.site.area)||(window.Weline&&window.Weline.config&&window.Weline.config.url&&window.Weline.config.url.adminArea)||"").replace(/^\\/+|\\/+$/g,"");if(backendKey){paths.push("/"+backendKey);}var host=window.location.hostname||"";var domains=[""];if(host.indexOf(".")>0&&!/^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(host)){domains.push(";domain="+host);}var expired="Thu, 01 Jan 1970 00:00:00 GMT";var seen={};paths.forEach(function(path){path=path||"/";domains.forEach(function(domain){var key=path+"|"+domain;if(seen[key]){return;}seen[key]=true;document.cookie="WELINE_USER_LANG=;expires="+expired+";path="+path+domain+";SameSite=Lax";document.cookie="WELINE_USER_LANG="+value+";expires="+expires+";path="+path+domain+";SameSite=Lax";});});};';
             $html[] = 'root.querySelectorAll("[data-language-option]").forEach(function(opt){';
             $html[] = 'var code=opt.getAttribute("data-lang")||"";if(!code){return;}';
             $html[] = 'var href=buildLangHref(code);if(href){opt.setAttribute("href",href);}';
@@ -479,12 +487,23 @@ class LanguageSwitcher implements TaglibInterface
         $path = (string)(parse_url($path, PHP_URL_PATH) ?: $path ?: '/');
         $pathParts = array_values(array_filter(explode('/', $path), static fn($part) => $part !== ''));
         $langPattern = '/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i';
-        $currencyPattern = '/^[A-Z]{3}$/';
         $prefixIndex = -1;
+        $fallbackCurrency = strtoupper(trim($fallbackCurrency ?: 'CNY'));
+        $defaultCurrency = self::defaultCurrency();
+        $isCurrency = static function (string $part) use ($fallbackCurrency, $defaultCurrency): bool {
+            $code = strtoupper(trim($part));
+            if (strlen($code) !== 3 || !ctype_upper($code)) {
+                return false;
+            }
+
+            return State::isAllowedCurrencyCode($code)
+                || ($fallbackCurrency !== '' && $code === $fallbackCurrency)
+                || ($defaultCurrency !== '' && $code === $defaultCurrency);
+        };
 
         if ($preferredPrefix !== '') {
             foreach ($pathParts as $index => $part) {
-                if (!preg_match($currencyPattern, $part)
+                if (!$isCurrency((string)$part)
                     && !preg_match($langPattern, $part)
                     && strcasecmp($part, $preferredPrefix) === 0) {
                     $prefixIndex = $index;
@@ -496,7 +515,7 @@ class LanguageSwitcher implements TaglibInterface
         $prefix = $prefixIndex >= 0 ? $pathParts[$prefixIndex] : $preferredPrefix;
         $detectedCurrency = '';
         foreach ($pathParts as $part) {
-            if (preg_match($currencyPattern, $part)) {
+            if ($isCurrency((string)$part)) {
                 $detectedCurrency = strtoupper($part);
                 break;
             }
@@ -504,7 +523,7 @@ class LanguageSwitcher implements TaglibInterface
 
         $remain = [];
         foreach ($pathParts as $index => $part) {
-            if (preg_match($currencyPattern, $part) || preg_match($langPattern, $part)) {
+            if ($isCurrency((string)$part) || preg_match($langPattern, $part)) {
                 continue;
             }
             if ($index === $prefixIndex) {
@@ -514,16 +533,17 @@ class LanguageSwitcher implements TaglibInterface
         }
 
         $currency = strtoupper($detectedCurrency ?: $fallbackCurrency ?: 'CNY');
-        $defaultCurrency = self::defaultCurrency();
-        $defaultLanguage = self::defaultLanguage();
+        if ($currency !== '' && !$isCurrency($currency)) {
+            $currency = '';
+        }
         $out = [];
         if ($prefix !== '') {
             $out[] = $prefix;
         }
-        if ($currency !== '' && $currency !== $defaultCurrency) {
+        if ($currency !== '') {
             $out[] = $currency;
         }
-        if (!self::sameLanguage($targetLang, $defaultLanguage)) {
+        if ($targetLang !== '') {
             $out[] = $targetLang;
         }
         if ($remain !== []) {

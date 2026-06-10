@@ -8,4 +8,11 @@
           parent="Weline_Backend::system_maintenance"
           icon="mdi mdi-source-branch"
           order="70"/>
+    <menu source="Weline_Deploy::deploy_release"
+          name="deploy_release"
+          title="发布历史"
+          action="deploy/backend/release"
+          parent="Weline_Backend::system_maintenance"
+          icon="mdi mdi-rocket-launch"
+          order="71"/>
 </menus>

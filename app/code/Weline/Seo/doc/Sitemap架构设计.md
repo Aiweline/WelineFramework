@@ -56,10 +56,12 @@ pub/sitemaps/
 
 | 平台 | URL 限制 | 文件大小限制 | 提交方式 |
 |------|----------|-------------|---------|
-| Google | 50,000 条 | 50 MB | Search Console API / Ping |
-| Bing | 50,000 条 | 50 MB | Webmaster API / Ping |
+| Google | 50,000 条 | 50 MB | Search Console Sitemap API |
+| Bing | 50,000 条 | 50 MB | Webmaster API / IndexNow |
 | Baidu | 50,000 条 | 10 MB | 站长平台 API |
-| Yandex | 50,000 条 | 50 MB | Webmaster API |
+| Yandex / Naver / Seznam.cz / Yep / Internet Archive / Amazonbot | 50,000 条 | 50 MB | IndexNow |
+| Yahoo / DuckDuckGo / 360搜索 / 搜狗 / 神马 / 头条搜索 | 50,000 条 | 50 MB | Sitemap 生成 / 手动提交 |
+| Brave / Qwant / Ecosia / Startpage / Swisscows / Mojeek / Petal / Daum / Cốc Cốc / Mail.ru / Rambler / You.com / Kagi / AOL / Ask.com / 夸克搜索 / MetaGer / Gibiru | 50,000 条 | 50 MB | Sitemap 生成 / 手动或自然发现 |
 
 ## 提交方式
 
@@ -149,7 +151,7 @@ graph TD
 
 ### 依赖倒置原则 (DIP)
 - WebSitemapData 依赖 SitemapPlatformAdapterInterface 接口
-- 不依赖具体的 Google/Bing/Baidu 适配器
+- 不依赖具体的平台适配器
 
 ## 数据流程
 
@@ -279,9 +281,23 @@ interface SitemapPlatformAdapterInterface
 
 | 适配器 | 平台 | URL 限制 | 文件大小限制 | 提交方式 |
 |--------|------|----------|-------------|---------|
-| GoogleSitemapAdapter | Google | 50,000 条 | 50 MB | Ping / Search Console API |
+| GoogleSitemapAdapter | Google | 50,000 条 | 50 MB | Search Console API |
 | BingSitemapAdapter | Bing | 50,000 条 | 50 MB | Webmaster API / IndexNow |
 | BaiduSitemapAdapter | 百度 | 50,000 条 | 10 MB | 链接提交 API |
+| YandexSitemapAdapter | Yandex | 50,000 条 | 50 MB | IndexNow |
+| NaverSitemapAdapter | Naver | 50,000 条 | 50 MB | IndexNow |
+| SeznamSitemapAdapter | Seznam.cz | 50,000 条 | 50 MB | IndexNow |
+| YepSitemapAdapter | Yep | 50,000 条 | 50 MB | IndexNow |
+| StaticIndexNowSitemapAdapter | Internet Archive / Amazonbot | 50,000 条 | 50 MB | IndexNow |
+| YahooSitemapAdapter | Yahoo | 50,000 条 | 50 MB | Sitemap 生成 / 手动提交 |
+| DuckDuckGoSitemapAdapter | DuckDuckGo | 50,000 条 | 50 MB | Sitemap 生成 / 抓取发现 |
+| So360SitemapAdapter | 360搜索 | 50,000 条 | 50 MB | Sitemap 生成 / 手动提交 |
+| SogouSitemapAdapter | 搜狗 | 50,000 条 | 50 MB | Sitemap 生成 / 手动提交 |
+| ShenmaSitemapAdapter | 神马 | 50,000 条 | 50 MB | Sitemap 生成 / 手动提交 |
+| ToutiaoSitemapAdapter | 头条搜索 | 50,000 条 | 50 MB | Sitemap 生成 / 手动提交 |
+| StaticCatalogSitemapAdapter | Brave / Qwant / Ecosia / Startpage / Swisscows / Mojeek / Petal / Daum / Cốc Cốc / Mail.ru / Rambler / You.com / Kagi / AOL / Ask.com / 夸克搜索 / MetaGer / Gibiru | 50,000 条 | 50 MB | Sitemap 生成 / 手动或自然发现 |
+
+> 自动提交能力以平台适配器 `supportsAutoSubmit()` 为准。没有明确 API 或 IndexNow 协议的平台只生成 sitemap 文件，不创建默认自动推送任务。
 
 ### 8. SitemapAdapterRegistry
 

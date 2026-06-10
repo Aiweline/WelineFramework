@@ -413,7 +413,7 @@ class Installed extends BackendController
             $moduleList[] = [
                 'name' => $moduleName,
                 'module_name' => $moduleName,
-                'version' => (string)($data['version'] ?? '0.0.0'),
+                'version' => $this->resolveInstalledModuleVersion($moduleName, (string)($data['version'] ?? '0.0.0')),
                 'platform_module_id' => (int)($data['platform_module_id'] ?? 0),
                 'license_key' => (string)($data['license_key'] ?? ''),
             ];
@@ -524,6 +524,19 @@ class Installed extends BackendController
         }
 
         return $updates;
+    }
+
+    private function resolveInstalledModuleVersion(string $moduleName, string $recordedVersion): string
+    {
+        $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+        if (is_array($moduleInfo)) {
+            $runtimeVersion = trim((string)($moduleInfo['version'] ?? ''));
+            if ($runtimeVersion !== '') {
+                return $runtimeVersion;
+            }
+        }
+
+        return $recordedVersion !== '' ? $recordedVersion : '0.0.0';
     }
 
     private function getCurrentDomain(): string

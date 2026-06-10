@@ -61,6 +61,11 @@ class Index extends BaseController
         ];
         
         // 准备模板数据
+        $this->setData('faqs', $faqs);
+        $this->setData('seo', [
+            'page_type' => 'faq',
+            'title' => __('客户服务'),
+        ]);
         $this->assign('faqs', $faqs);
         $this->assign('contact_info', $contactInfo);
         

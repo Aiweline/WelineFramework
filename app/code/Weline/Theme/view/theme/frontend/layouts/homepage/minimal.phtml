@@ -15,21 +15,21 @@ $meta = $this->getData('meta') ?? [];
 $class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <style data-theme-inline="layout-homepage-minimal">
         .theme-layout-homepage-minimal .homepage-minimal__hero {
-            padding: clamp(38px, 7vw, 86px) 0 clamp(24px, 4vw, 48px);
+            padding: clamp(var(--weline-layout-spacing-xl), 7vw, calc(var(--weline-layout-spacing-3xl) * 1.3)) 0 clamp(var(--weline-layout-spacing-lg), 4vw, var(--weline-layout-spacing-2xl));
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__hero-card {
             display: grid;
             grid-template-columns: minmax(0, 1.1fr) minmax(260px, .9fr);
-            gap: clamp(24px, 5vw, 64px);
+            gap: clamp(var(--weline-layout-spacing-lg), 5vw, var(--weline-layout-spacing-3xl));
             align-items: center;
-            padding: clamp(28px, 5vw, 58px);
+            padding: clamp(var(--weline-layout-spacing-xl), 5vw, var(--weline-layout-spacing-3xl));
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__eyebrow {
@@ -37,72 +37,72 @@ $class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
             align-items: center;
             width: fit-content;
             min-height: 30px;
-            padding: 0 10px;
-            border-radius: 999px;
-            color: var(--weline-theme-primary, #5b4cf5);
-            background: rgba(91, 76, 245, .09);
-            font-size: 13px;
-            font-weight: 800;
+            padding: 0 var(--weline-layout-spacing-sm);
+            border-radius: var(--weline-layout-radius-full);
+            color: var(--weline-theme-primary-text-emphasis);
+            background: var(--weline-theme-primary-subtle);
+            font-size: var(--weline-layout-font-size-sm);
+            font-weight: var(--weline-layout-font-weight-bold);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__title {
-            margin: 14px 0 0;
-            font-size: clamp(34px, 6vw, 64px);
-            line-height: 1.02;
+            margin: var(--weline-layout-spacing-sm) 0 0;
+            font-size: clamp(var(--weline-layout-font-size-4xl), 6vw, calc(var(--weline-layout-font-size-4xl) * 2));
+            line-height: var(--weline-layout-line-height-tight);
             letter-spacing: 0;
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__lead {
             max-width: 620px;
-            margin: 16px 0 0;
-            color: var(--weline-theme-muted, #657083);
-            font-size: 18px;
+            margin: var(--weline-layout-spacing-md) 0 0;
+            color: var(--weline-theme-text-muted);
+            font-size: var(--weline-layout-font-size-lg);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__actions {
             display: flex;
-            gap: 12px;
+            gap: var(--weline-layout-spacing-sm);
             flex-wrap: wrap;
-            margin-top: 22px;
+            margin-top: var(--weline-layout-spacing-lg);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__visual {
             display: grid;
-            gap: 14px;
+            gap: var(--weline-layout-spacing-sm);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__visual-card {
-            padding: 18px;
+            padding: var(--weline-layout-spacing-lg);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__visual-card strong {
             display: block;
-            margin-bottom: 4px;
-            color: var(--weline-theme-text, #172033);
+            margin-bottom: var(--weline-layout-spacing-xs);
+            color: var(--weline-theme-text);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__content {
-            padding: clamp(22px, 4vw, 48px) 0 clamp(42px, 6vw, 80px);
+            padding: clamp(var(--weline-layout-spacing-lg), 4vw, var(--weline-layout-spacing-2xl)) 0 clamp(var(--weline-layout-spacing-2xl), 6vw, calc(var(--weline-layout-spacing-3xl) * 1.25));
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__fallback-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 20px;
+            gap: var(--weline-layout-spacing-lg);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__fallback-card {
-            padding: 22px;
+            padding: var(--weline-layout-spacing-lg);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__fallback-card h2 {
             margin: 0 0 8px;
-            font-size: 20px;
+            font-size: var(--weline-layout-font-size-xl);
         }
 
         .theme-layout-homepage-minimal .homepage-minimal__fallback-card p {
             margin: 0;
-            color: var(--weline-theme-muted, #657083);
+            color: var(--weline-theme-text-muted);
         }
 
         @media (max-width: 880px) {
@@ -149,7 +149,9 @@ $class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
                         multiple="true"
                         position="content"
                         class="homepage-minimal__content-slot">
-                    <w:hook>Weline_Theme::frontend::layouts::homepage::content<else/>
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::homepage::content
+                        <else/>
                     <if condition="meta.content">
                         {{meta.content}}
                     <else/>
@@ -161,28 +163,30 @@ $class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
                                         exclusive="true"
                                         position="content"
                                         class="weline-layout-surface homepage-minimal__hero-card">
-                                    <w:hook>Weline_Theme::frontend::layouts::homepage::hero<else/>
+                                    <w:hook>
+                                        Weline_Theme::frontend::layouts::homepage::hero
+                                        <else/>
                                     <div>
-                                        <span class="homepage-minimal__eyebrow"><?= __('Default Theme') ?></span>
-                                        <h1 class="homepage-minimal__title"><?= htmlspecialchars((string)($meta['title'] ?? __('A clean Weline homepage')), ENT_QUOTES, 'UTF-8') ?></h1>
-                                        <p class="homepage-minimal__lead"><?= __('Use slots for visual composition, hooks for real module data, and this fallback for a complete default page.') ?></p>
+                                        <span class="homepage-minimal__eyebrow"><?= __('Weline 首页') ?></span>
+                                        <h1 class="homepage-minimal__title"><?= htmlspecialchars((string)($meta['title'] ?? __('干净的 Weline 首页')), ENT_QUOTES, 'UTF-8') ?></h1>
+                                        <p class="homepage-minimal__lead"><?= __('一个克制、清晰的默认首页，适用于店铺、内容站点和模块驱动体验。') ?></p>
                                         <div class="homepage-minimal__actions">
-                                            <a class="weline-button" href="/products"><?= __('Explore') ?></a>
-                                            <a class="weline-button weline-button--ghost" href="/contact"><?= __('Contact') ?></a>
+                                            <a class="weline-button" href="/products"><?= __('浏览') ?></a>
+                                            <a class="weline-button weline-button--ghost" href="/contact"><?= __('联系') ?></a>
                                         </div>
                                     </div>
                                     <div class="homepage-minimal__visual">
                                         <div class="weline-card homepage-minimal__visual-card">
-                                            <strong><?= __('Header') ?></strong>
-                                            <span class="weline-muted"><?= __('Logo, navigation, search, account, and cart slots.') ?></span>
+                                            <strong><?= __('最新上架') ?></strong>
+                                            <span class="weline-muted"><?= __('用于精选商品或文章的区域。') ?></span>
                                         </div>
                                         <div class="weline-card homepage-minimal__visual-card">
-                                            <strong><?= __('Content') ?></strong>
-                                            <span class="weline-muted"><?= __('Hero, products, categories, banners, and module content.') ?></span>
+                                            <strong><?= __('客户服务') ?></strong>
+                                            <span class="weline-muted"><?= __('用于服务链接和支持内容的区域。') ?></span>
                                         </div>
                                         <div class="weline-card homepage-minimal__visual-card">
-                                            <strong><?= __('Footer') ?></strong>
-                                            <span class="weline-muted"><?= __('Links, social, newsletter, payment, and copyright slots.') ?></span>
+                                            <strong><?= __('社区') ?></strong>
+                                            <span class="weline-muted"><?= __('用于社交渠道和品牌故事的区域。') ?></span>
                                         </div>
                                     </div>
                                     </w:hook>
@@ -198,18 +202,20 @@ $class = htmlspecialchars((string)($meta['class'] ?? ''), ENT_QUOTES, 'UTF-8');
                                         multiple="true"
                                         position="content"
                                         class="homepage-minimal__fallback-grid">
-                                    <w:hook>Weline_Theme::frontend::layouts::homepage::features<else/>
+                                    <w:hook>
+                                        Weline_Theme::frontend::layouts::homepage::features
+                                        <else/>
                                     <article class="weline-card homepage-minimal__fallback-card">
-                                        <h2><?= __('Real data first') ?></h2>
-                                        <p><?= __('Modules can replace this card through hooks without changing Theme code.') ?></p>
+                                        <h2><?= __('重点') ?></h2>
+                                        <p><?= __('突出页面上最重要的优惠或故事。') ?></p>
                                     </article>
                                     <article class="weline-card homepage-minimal__fallback-card">
-                                        <h2><?= __('Visual slots') ?></h2>
-                                        <p><?= __('The editor can place widgets into clearly named homepage regions.') ?></p>
+                                        <h2><?= __('灵活') ?></h2>
+                                        <p><?= __('这里可以放集合、活动或编辑内容区块。') ?></p>
                                     </article>
                                     <article class="weline-card homepage-minimal__fallback-card">
-                                        <h2><?= __('Safe defaults') ?></h2>
-                                        <p><?= __('The page remains readable when optional modules are not installed.') ?></p>
+                                        <h2><?= __('可用') ?></h2>
+                                        <p><?= __('可选模块提供真实数据前，页面仍然保持完整。') ?></p>
                                     </article>
                                     </w:hook>
                                 </w:slot>

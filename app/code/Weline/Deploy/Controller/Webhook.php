@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Deploy\Controller;
 
+use Weline\Deploy\Service\DeployWebhookRefResolver;
 use Weline\Deploy\Service\DeployConfigService;
 use Weline\Framework\App\Controller\FrontendController;
 
 class Webhook extends FrontendController
 {
     public function __construct(
-        private readonly DeployConfigService $deployConfigService
+        private readonly DeployConfigService    $deployConfigService,
+        private readonly DeployWebhookRefResolver $refResolver
     ) {
     }
 
@@ -22,7 +24,19 @@ class Webhook extends FrontendController
         }
 
         if ($this->request->isGet() && (string)$this->request->getGet('health', '') === '1') {
-            return $this->fetchJson(['ok' => true]);
+            $health = ['ok' => true];
+            try {
+                $rtFile = BP . 'var' . DS . 'deploy' . DS . 'current.json';
+                if (is_file($rtFile)) {
+                    $rt = json_decode((string)file_get_contents($rtFile), true);
+                    if (is_array($rt)) {
+                        $health['deploy_version'] = (string)($rt['deploy_version'] ?? '');
+                        $health['release_id']     = (string)($rt['release_id'] ?? '');
+                    }
+                }
+            } catch (\Throwable) {
+            }
+            return $this->fetchJson($health);
         }
 
         if (!$this->request->isPost()) {
@@ -39,19 +53,26 @@ class Webhook extends FrontendController
             return $this->fetchJson(['ok' => false, 'error' => 'invalid webhook token'], 403);
         }
 
-        $branch = (string)($config['WEBHOOK_BRANCH'] ?? $config['GIT_BRANCH'] ?? '');
-        if ($branch !== '') {
-            $payload = json_decode($rawBody, true);
-            $ref = is_array($payload) && isset($payload['ref']) ? (string)$payload['ref'] : '';
-            if ($ref !== '' && $ref !== $branch && $ref !== 'refs/heads/' . $branch) {
-                return $this->fetchJson([
-                    'ok' => true,
-                    'skipped' => true,
-                    'reason' => 'branch mismatch',
-                    'ref' => $ref,
-                ], 202);
-            }
+        // --- ref 解析（支持 branch + tag）---
+        $payload = json_decode($rawBody, true);
+        $ref     = is_array($payload) ? $this->refResolver->extractRef($payload) : '';
+        $refInfo = $this->refResolver->resolve($ref, $config);
+
+        if ($refInfo['skipped']) {
+            return $this->fetchJson([
+                'ok'     => true,
+                'skipped'=> true,
+                'reason' => $refInfo['reason'],
+                'ref'    => $ref,
+            ], 202);
         }
+
+        // 将 ref 上下文写入 runtime config
+        $config['DEPLOY_REF_TYPE']        = $refInfo['type'];
+        $config['DEPLOY_REF']             = $refInfo['ref'];
+        $config['DEPLOY_VERSION_HINT']    = $refInfo['deploy_version_hint'] ?? '';
+        $config['DEPLOY_GIT_CHECKOUT']    = $refInfo['git_checkout'] ?? '';
+        $config['DEPLOY_TRIGGER']         = 'webhook';
 
         $script = BP . 'dev/deploy/webhook.sh';
         if (!is_file($script)) {
@@ -59,17 +80,20 @@ class Webhook extends FrontendController
         }
 
         $runtimeConfig = $this->writeRuntimeConfig($config);
-        $bash = (string)($config['WEBHOOK_BASH'] ?? 'bash');
-        $command = 'DEPLOY_CONFIG_FILE=' . escapeshellarg($runtimeConfig) . ' ' . escapeshellarg($bash) . ' ' . escapeshellarg($script) . ' deploy --from-webhook 2>&1';
-        $output = [];
-        $exitCode = 1;
+        $bash          = (string)($config['WEBHOOK_BASH'] ?? 'bash');
+        $command       = 'DEPLOY_CONFIG_FILE=' . escapeshellarg($runtimeConfig) . ' '
+            . escapeshellarg($bash) . ' ' . escapeshellarg($script) . ' deploy --from-webhook 2>&1';
+        $output    = [];
+        $exitCode  = 1;
         exec($command, $output, $exitCode);
         @unlink($runtimeConfig);
 
         return $this->fetchJson([
-            'ok' => $exitCode === 0,
-            'exit_code' => $exitCode,
-            'output_tail' => array_slice($output, -20),
+            'ok'           => $exitCode === 0,
+            'exit_code'    => $exitCode,
+            'deploy_version_hint' => $refInfo['deploy_version_hint'],
+            'git_ref_type' => $refInfo['type'],
+            'output_tail'  => array_slice($output, -20),
         ], $exitCode === 0 ? 200 : 500);
     }
 
@@ -87,7 +111,7 @@ class Webhook extends FrontendController
 
     private function validToken(string $secret, string $rawBody): bool
     {
-        $giteeToken = (string)$this->request->getHeader('X-Gitee-Token');
+        $giteeToken     = (string)$this->request->getHeader('X-Gitee-Token');
         $giteeTimestamp = (string)$this->request->getHeader('X-Gitee-Timestamp');
         if ($giteeToken !== '' && $giteeTimestamp !== '') {
             $computed = base64_encode(hash_hmac('sha256', $giteeTimestamp . "\n" . $secret, $secret, true));
@@ -122,7 +146,7 @@ class Webhook extends FrontendController
                 continue;
             }
             [$key, $value] = explode('=', $line, 2);
-            $key = trim($key);
+            $key   = trim($key);
             $value = trim($value);
             if ($value !== '' && ($value[0] === '"' || $value[0] === "'")) {
                 $value = trim($value, "'\"");

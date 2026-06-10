@@ -23,18 +23,18 @@ $this->setData('layoutOption', $layoutOption);
         .test-container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
-            background: var(--color-bg, #ffffff);
+            padding: var(--weline-layout-spacing-lg);
+            background: var(--weline-layout-surface-primary);
         }
         .test-header {
-            color: var(--color-primary, #007bff);
-            font-size: 24px;
-            margin-bottom: 20px;
+            color: var(--weline-theme-primary);
+            font-size: var(--weline-layout-font-size-2xl);
+            margin-bottom: var(--weline-layout-spacing-lg);
         }
         .test-content {
-            padding: 15px;
-            border: 1px solid var(--color-border, #dee2e6);
-            border-radius: 4px;
+            padding: var(--weline-layout-spacing-md);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+            border-radius: var(--weline-layout-radius-md);
         }
     </style>
 </head>
@@ -62,17 +62,6 @@ $this->setData('layoutOption', $layoutOption);
         </w:slot>
     </div>
     
-    <!-- 内联JS - 应该被提取到外部文件 -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const button = document.getElementById('test-button');
-            if (button) {
-                button.addEventListener('click', function() {
-                    alert('JS提取功能正常工作！');
-                });
-            }
-        });
-    </script>
 </body>
 </html>
 

@@ -7,6 +7,27 @@ $themeModel = (string)$themeConfig->getThemeModel();
 $themeCssSuffix = $themeModel !== '' ? '-' . $themeModel : '';
 $currentLang = (string)\w_env('user.lang', 'zh_Hans_CN');
 $currentCurrency = (string)\w_env('user.currency', 'CNY');
+$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
+$availableCurrencies = [];
+try {
+    if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+        foreach (\Weline\Websites\Data\WebsiteData::getCurrencyCodes() as $currencyCode) {
+            $currencyCode = strtoupper(trim((string)$currencyCode));
+            if ($currencyCode !== '') {
+                $availableCurrencies[] = $currencyCode;
+            }
+        }
+    }
+} catch (\Throwable) {
+    $availableCurrencies = [];
+}
+$defaultCurrency = strtoupper(trim((string)$defaultCurrency)) ?: 'CNY';
+$availableCurrencies[] = $defaultCurrency;
+$availableCurrencies = array_values(array_unique($availableCurrencies));
+$currentCurrency = strtoupper(trim((string)$currentCurrency));
+if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
+    $currentCurrency = $defaultCurrency;
+}
 ?>
 <base href="@backend-url('/')">
 <meta charset="UTF-8">
@@ -31,6 +52,8 @@ $currentCurrency = (string)\w_env('user.currency', 'CNY');
 window.__WelineLoginConfig = <?= json_encode([
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
+    'defaultCurrency' => $defaultCurrency,
+    'availableCurrencies' => $availableCurrencies,
     'themeMode' => $themeModel === '' ? 'light' : $themeModel,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 </script>

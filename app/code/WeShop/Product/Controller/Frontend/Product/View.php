@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Controller\Frontend\Product;
 
 use WeShop\Frontend\Controller\BaseController;
+use WeShop\Product\Service\ProductLayoutService;
 use WeShop\Product\Service\ProductViewPageDataService;
 use WeShop\RecentlyViewed\Service\StorefrontRecentlyViewedRecorder;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
@@ -30,16 +31,19 @@ class View extends BaseController
     /** @var list<array{name:string, duration_ms:float, meta:array<string, mixed>}> */
     private array $productProfileSteps = [];
     private ?StorefrontRecentlyViewedRecorder $storefrontRecentlyViewedRecorder = null;
+    private ?ProductLayoutService $productLayoutService = null;
     private ?ProductViewPageDataService $productViewPageDataService = null;
 
     protected ?string $layoutType = 'product';
 
     public function __construct(
         ?StorefrontRecentlyViewedRecorder $storefrontRecentlyViewedRecorder = null,
-        ?ProductViewPageDataService $productViewPageDataService = null
+        ?ProductViewPageDataService $productViewPageDataService = null,
+        ?ProductLayoutService $productLayoutService = null
     ) {
         $this->storefrontRecentlyViewedRecorder = $storefrontRecentlyViewedRecorder;
         $this->productViewPageDataService = $productViewPageDataService;
+        $this->productLayoutService = $productLayoutService;
     }
 
     public function index(): string
@@ -55,13 +59,24 @@ class View extends BaseController
             return '';
         }
 
-        $cacheKey = $this->buildViewPayloadCacheKey($productId);
-        $cachedView = $this->getViewPayloadCache($cacheKey);
-        if (is_array($cachedView) && isset($cachedView['html'])) {
-            $this->recordRecentlyViewedIfNeeded($productId);
-            $this->dispatchProductViewedIfNeeded($productId, is_array($cachedView['assigns'] ?? null) ? $cachedView['assigns'] : []);
-            $this->applyCachedViewPayload($cachedView);
-            return (string)$cachedView['html'];
+        $layoutContext = $this->resolveProductLayoutContext($productId);
+        $layoutOption = is_array($layoutContext) ? trim((string)($layoutContext['layout_code'] ?? '')) : null;
+        if ($layoutOption !== null) {
+            $this->layoutType = 'product.' . $layoutOption;
+        }
+        $this->applyThemeLayoutTargetContext($productId, $layoutContext);
+
+        $isLayoutPreviewRequest = $this->isLayoutPreviewRequest();
+        $layoutRuntimeIdentity = $this->productLayoutService()->buildLayoutRuntimeCacheIdentity($layoutContext, 'product');
+        $cacheKey = $this->buildViewPayloadCacheKey($productId, $layoutOption ?? 'default', $layoutRuntimeIdentity);
+        if (!$isLayoutPreviewRequest) {
+            $cachedView = $this->getViewPayloadCache($cacheKey);
+            if (is_array($cachedView) && isset($cachedView['html'])) {
+                $this->recordRecentlyViewedIfNeeded($productId);
+                $this->dispatchProductViewedIfNeeded($productId, is_array($cachedView['assigns'] ?? null) ? $cachedView['assigns'] : []);
+                $this->applyCachedViewPayload($cachedView);
+                return (string)$cachedView['html'];
+            }
         }
 
         $this->cooperativeControllerYield();
@@ -86,17 +101,19 @@ class View extends BaseController
             fn (): string => $this->fetch(self::CONTENT_TEMPLATE),
             ['product_id' => $productId]
         );
-        $this->traceProductStep(
-            'product::payload_cache_store',
-            function () use ($cacheKey, $html, $pageData) {
-                $this->rememberViewPayloadCache($cacheKey, [
-                    'html' => $html,
-                    'assigns' => $pageData,
-                ]);
-                return null;
-            },
-            ['product_id' => $productId]
-        );
+        if (!$isLayoutPreviewRequest) {
+            $this->traceProductStep(
+                'product::payload_cache_store',
+                function () use ($cacheKey, $html, $pageData) {
+                    $this->rememberViewPayloadCache($cacheKey, [
+                        'html' => $html,
+                        'assigns' => $pageData,
+                    ]);
+                    return null;
+                },
+                ['product_id' => $productId]
+            );
+        }
 
         return $html;
     }
@@ -144,6 +161,10 @@ class View extends BaseController
 
     private function shouldRecordRecentlyViewed(): bool
     {
+        if ($this->isLayoutPreviewRequest()) {
+            return false;
+        }
+
         return (string)($_SERVER['WLS_INTERNAL_DYNAMIC_WARMUP'] ?? '') !== '1'
             && (string)($_SERVER['HTTP_X_WLS_DYNAMIC_WARMUP'] ?? '') !== '1'
             && (string)($_SERVER['HTTP_X_WLS_DYNAMIC_BENCHMARK'] ?? '') !== '1'
@@ -167,6 +188,124 @@ class View extends BaseController
         }
 
         return $this->productViewPageDataService = ObjectManager::getInstance(ProductViewPageDataService::class);
+    }
+
+    private function productLayoutService(): ProductLayoutService
+    {
+        if ($this->productLayoutService instanceof ProductLayoutService) {
+            return $this->productLayoutService;
+        }
+
+        return $this->productLayoutService = ObjectManager::getInstance(ProductLayoutService::class);
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function resolveProductLayoutContext(int $productId): ?array
+    {
+        $previewOption = $this->resolvePreviewLayoutOption('product');
+        if ($previewOption !== null) {
+            $sourceType = (string)($this->request->getParam('theme_layout_source_target_type') ?? $this->request->getGet('theme_layout_source_target_type', 'product'));
+            $sourceId = (int)($this->request->getParam('theme_layout_source_target_id') ?? $this->request->getGet('theme_layout_source_target_id', $productId));
+            if (!in_array($sourceType, ['product', 'category_product_default'], true) || $sourceId <= 0) {
+                $sourceType = 'product';
+                $sourceId = $productId;
+            }
+
+            return [
+                'layout_code' => $previewOption,
+                'entity_type' => $sourceType,
+                'entity_id' => $sourceId,
+                'layout_type' => 'product',
+                'source' => 'preview',
+            ];
+        }
+
+        try {
+            return $this->productLayoutService()->resolveProductLayoutContext(
+                $productId,
+                'product',
+                $this->resolveCurrentCategoryId()
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function resolveCurrentCategoryId(): ?int
+    {
+        foreach (['category_id', 'current_category_id', 'cid'] as $key) {
+            $value = (int)($this->request->getParam($key) ?? $this->request->getGet($key, 0));
+            if ($value > 0) {
+                return $value;
+            }
+        }
+
+        $category = $this->request->getData('category');
+        if (is_array($category)) {
+            $value = (int)($category['category_id'] ?? $category['id'] ?? 0);
+            return $value > 0 ? $value : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed>|null $layoutContext
+     */
+    private function applyThemeLayoutTargetContext(int $productId, ?array $layoutContext): void
+    {
+        $chain = [];
+        $sourceType = (string)($layoutContext['entity_type'] ?? '');
+        $sourceId = (int)($layoutContext['entity_id'] ?? 0);
+        if ($sourceType !== '' && $sourceId > 0) {
+            $chain[] = [
+                'target_type' => $sourceType,
+                'target_id' => $sourceId,
+            ];
+            $this->request->setData('theme_layout_source_target_type', $sourceType);
+            $this->request->setData('theme_layout_source_target_id', $sourceId);
+        }
+
+        $chain[] = [
+            'target_type' => 'product',
+            'target_id' => $productId,
+        ];
+
+        $this->request->setData('theme_layout_target_type', 'product');
+        $this->request->setData('theme_layout_target_id', $productId);
+        $this->request->setData('theme_layout_target_chain', $chain);
+        if (is_array($layoutContext)) {
+            $this->request->setData('theme_layout_context', $layoutContext);
+        }
+    }
+
+    private function isLayoutPreviewRequest(): bool
+    {
+        foreach (['layout_preview', 'preview_layout'] as $key) {
+            $value = (string)($this->request->getParam($key) ?? $this->request->getGet($key, ''));
+            if ($value !== '' && $value !== '0') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolvePreviewLayoutOption(string $layoutType): ?string
+    {
+        if (!$this->isLayoutPreviewRequest()) {
+            return null;
+        }
+
+        $layoutOption = (string)($this->request->getParam('layout_option') ?? $this->request->getGet('layout_option', ''));
+        $layoutOption = $this->productLayoutService()->normalizeLayoutOptionCode($layoutOption);
+        if ($layoutOption === '') {
+            return null;
+        }
+
+        return $layoutOption;
     }
 
     /**
@@ -327,7 +466,7 @@ class View extends BaseController
         ]);
     }
 
-    private function buildViewPayloadCacheKey(int $productId): string
+    private function buildViewPayloadCacheKey(int $productId, string $layoutOption, string $layoutRuntimeIdentity): string
     {
         $host = $this->normalizeViewPayloadCacheHost(\function_exists('w_env_http_host') ? (string)\w_env_http_host() : '');
         $environment = KeyBuilder::environmentContext([
@@ -335,8 +474,10 @@ class View extends BaseController
         ]);
 
         return \sha1((string)\json_encode([
-            'v' => 19,
+            'v' => 20,
             'product_id' => $productId,
+            'layout_option' => $layoutOption,
+            'layout_runtime_identity' => $layoutRuntimeIdentity,
             'environment' => $environment,
             'host' => $host,
             'view_fingerprint' => $this->viewPayloadTemplateFingerprint(),
@@ -354,6 +495,10 @@ class View extends BaseController
             BP . '/app/code/WeShop/Product/view/templates/frontend/product/view.phtml',
             BP . '/app/design/WeShop/default/frontend/pages/product/view.phtml',
         ];
+
+        foreach (\glob(BP . '/app/code/Weline/Theme/view/theme/frontend/layouts/product/*.phtml') ?: [] as $path) {
+            $paths[] = $path;
+        }
 
         foreach ($this->viewPayloadHookFingerprintPatterns() as $pattern) {
             foreach (\glob($pattern) ?: [] as $path) {

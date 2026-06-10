@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
 
@@ -160,7 +161,7 @@ class GlobalsEmulator
         }
 
         $currency = \strtoupper(\trim((string)($_COOKIE['WELINE_USER_CURRENCY'] ?? $_COOKIE['WELINE_WEBSITE_CURRENCY'] ?? '')));
-        if ($currency !== '' && \preg_match('/^[A-Z]{3}$/', $currency)) {
+        if ($currency !== '' && State::isAllowedCurrencyCode($currency)) {
             $server['WELINE_USER_CURRENCY'] = $currency;
         }
     }

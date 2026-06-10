@@ -15,6 +15,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Observer;
 
 use WeShop\Product\Model\Product;
+use WeShop\Product\Model\ProductLayout;
 use WeShop\Product\Service\ProductLayoutService;
 use WeShop\Product\Service\ProductService;
 use Weline\Framework\DataObject\DataObject;
@@ -78,7 +79,10 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $template->setData('product', $product);
 
                 // 获取产品布局（优先级：活动计划 > 产品专属布局 > 默认布局）
-                $productLayoutCode = $this->layoutService->getProductLayout($productId, $layoutType);
+                $runtimeLayoutType = $layoutType === ProductLayout::LAYOUT_TYPE_PRODUCT_DETAIL
+                    ? ProductLayout::LAYOUT_TYPE_PRODUCT
+                    : $layoutType;
+                $productLayoutCode = $this->layoutService->getProductLayout($productId, $runtimeLayoutType);
                 
                 if ($productLayoutCode) {
                     // 如果找到产品专属布局，更新布局选项
@@ -93,11 +97,11 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $currentLayoutType = $eventData->getData('layoutType');
                     if (strpos($currentLayoutType, '.') === false) {
                         // 如果当前布局类型不包含选项，添加产品布局选项
-                        $eventData->setData('layoutType', $layoutType . '.' . $productLayoutCode);
+                        $eventData->setData('layoutType', $runtimeLayoutType . '.' . $productLayoutCode);
                     } else {
                         // 如果已包含选项，替换为产品布局选项
                         $parts = explode('.', $currentLayoutType, 2);
-                        $eventData->setData('layoutType', $parts[0] . '.' . $productLayoutCode);
+                        $eventData->setData('layoutType', $runtimeLayoutType . '.' . $productLayoutCode);
                     }
                 } else {
                     // 即使没有专属布局，也设置产品ID到meta中

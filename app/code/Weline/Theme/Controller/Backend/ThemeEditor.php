@@ -8,6 +8,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Url;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
+use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\EditorLockService;
@@ -313,6 +314,7 @@ class ThemeEditor extends BackendController
             )
             : ($requestedLayoutOption !== '' ? $requestedLayoutOption : 'default');
         $pageTypes = $this->mergeLayoutTypesWithEditorOptions(ThemeLayout::getPageTypes(), $layoutOptionsByType, $pageType);
+        $layoutEditorLock = $this->buildLayoutEditorLock($currentThemeId, $editorArea, $pageType, $layoutOption, $requestedLayoutOption);
 
         $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
         $themesById = [];
@@ -337,11 +339,9 @@ class ThemeEditor extends BackendController
             $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType);
         }
 
-        $availableWidgets = $this->layoutService->getAvailableWidgets(
-            $pageType,
-            $editorArea === PreviewContextService::AREA_BACKEND ? ['area' => PreviewContextService::AREA_BACKEND] : []
-        );
-        $availableWidgets = $this->attachWidgetPreviewHtml($availableWidgets);
+        // 部件库改为前端异步加载（页面与主预览就绪后再拉取），首屏不再同步渲染全部部件预览，
+        // 避免阻塞编辑器首屏与主预览加载。前端通过 theme-editor/widgets 接口按当前主题获取。
+        $availableWidgets = [];
 
         $this->assign('theme_id', $currentThemeId);
         $this->assign('theme', $currentTheme);
@@ -359,11 +359,78 @@ class ThemeEditor extends BackendController
         $this->assign('editor_area', $editorArea);
         $this->assign('theme_has_backend', $frontendHasBackend || $backendThemeId > 0);
         $this->assign('preview_context', $context);
+        $this->assign('layout_editor_lock', $layoutEditorLock);
         $this->assign('layout', $layout);
         $this->assign('available_widgets', $availableWidgets);
         $this->assign('has_draft', $hasDraft);
 
         return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/index.phtml');
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function buildLayoutEditorLock(
+        int $themeId,
+        string $area,
+        string $pageType,
+        string $layoutOption,
+        string $requestedLayoutOption = ''
+    ): array
+    {
+        $enabled = $this->isTruthyParam('lock_layout')
+            || $this->isTruthyParam('layout_locked')
+            || $this->isTruthyParam('lock_layout_context');
+        if (!$enabled) {
+            return ['enabled' => false];
+        }
+
+        $lockLayoutOption = $this->normalizeLayoutOption($requestedLayoutOption);
+        if ($lockLayoutOption === '') {
+            $lockLayoutOption = $this->normalizeLayoutOption($layoutOption);
+        }
+        $lockTargetType = (string)$this->request->getParam(
+            'virtual_target_type',
+            (string)$this->request->getParam('layout_lock_target_type', ThemeVirtualLayout::TARGET_GLOBAL)
+        );
+        $lockTargetId = (int)$this->request->getParam(
+            'virtual_target_id',
+            (int)$this->request->getParam('target_id', 0)
+        );
+
+        return [
+            'enabled' => true,
+            'theme_id' => $themeId,
+            'area' => $area === PreviewContextService::AREA_BACKEND ? PreviewContextService::AREA_BACKEND : PreviewContextService::AREA_FRONTEND,
+            'page_type' => $pageType,
+            'layout_type' => $pageType,
+            'layout_option' => $lockLayoutOption !== '' ? $lockLayoutOption : 'default',
+            'scope' => (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
+            'target_type' => $this->normalizeVirtualLayoutTargetType($lockTargetType),
+            'target_id' => max(0, $lockTargetId),
+            'source' => (string)$this->request->getParam('lock_source', 'external'),
+        ];
+    }
+
+    private function isTruthyParam(string $key): bool
+    {
+        $value = $this->request->getParam($key, '');
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function normalizeVirtualLayoutTargetType(string $targetType): string
+    {
+        $targetType = strtolower(trim($targetType));
+        return match ($targetType) {
+            ThemeVirtualLayout::TARGET_PRODUCT,
+            ThemeVirtualLayout::TARGET_CATEGORY,
+            ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT => $targetType,
+            default => ThemeVirtualLayout::TARGET_GLOBAL,
+        };
     }
 
     public function legacyIndex()
@@ -432,11 +499,6 @@ class ThemeEditor extends BackendController
             $layout = $this->layoutService->getFullDraftLayout($themeId, $pageType);
         }
 
-        // 获取可用部件列表
-        $availableWidgets = $this->layoutService->getAvailableWidgets();
-        // 预编译部件预览 HTML（用于部件库快速预览）
-        $availableWidgets = $this->attachWidgetPreviewHtml($availableWidgets);
-
         // 页面类型列表
         $pageTypes = ThemeLayout::getPageTypes();
 
@@ -448,6 +510,9 @@ class ThemeEditor extends BackendController
         if (!$themeHasBackend || ($editorArea !== 'frontend' && $editorArea !== 'backend')) {
             $editorArea = 'frontend';
         }
+
+        // 部件库改为前端异步加载，首屏不再同步渲染全部部件预览。
+        $availableWidgets = [];
 
         $this->assign('theme_id', $themeId);
         $this->assign('theme', $this->welineTheme);
@@ -514,15 +579,138 @@ class ThemeEditor extends BackendController
     public function getWidgets()
     {
         $pageType = $this->request->getParam('page_type', null);
-        $filterOptions = ['area' => 'backend'];
+        $editorArea = (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND);
+        $editorArea = $editorArea === PreviewContextService::AREA_BACKEND
+            ? PreviewContextService::AREA_BACKEND
+            : PreviewContextService::AREA_FRONTEND;
+        $theme = $this->resolveEditorThemeFromRequest();
+        $filterOptions = $editorArea === PreviewContextService::AREA_BACKEND
+            ? ['area' => PreviewContextService::AREA_BACKEND]
+            : [];
 
-        $widgets = $this->layoutService->getAvailableWidgets($pageType, $filterOptions);
+        $limit = (int)$this->request->getParam('limit', 0);
+        $offset = max(0, (int)$this->request->getParam('offset', 0));
+        $slotId = trim((string)$this->request->getParam('slot_id', ''));
+        $keyword = trim((string)$this->request->getParam('keyword', ''));
+
+        // 获取分组元数据（不渲染预览，开销低）。带 slot_id 时按插槽过滤。
+        if ($slotId !== '') {
+            $slotArea = $this->request->getParam('area', null);
+            $acceptCodes = $this->normalizeSlotCodeParam($this->request->getParam('accept', []));
+            $rejectCodes = $this->normalizeSlotCodeParam($this->request->getParam('reject', []));
+            $slotResult = $this->layoutService->getWidgetsForSlot(
+                $slotId,
+                $slotArea,
+                $pageType,
+                $acceptCodes,
+                $rejectCodes,
+                $theme
+            );
+            $groups = $this->buildSlotWidgetGroups($slotResult);
+        } else {
+            $groups = $this->layoutService->getAvailableWidgets($pageType, $filterOptions, 'frontend', $theme);
+        }
+
+        // 未指定 limit：返回完整分组元数据（用于配置查找等，不渲染预览，保持轻量）
+        if ($limit <= 0) {
+            return $this->fetchJson([
+                'success' => true,
+                'data' => $groups,
+                'page_type' => $pageType,
+                'theme_id' => $theme?->getId() ?: 0,
+                'editor_area' => $editorArea,
+            ]);
+        }
+
+        // 分页模式：拍平 -> 关键词过滤 -> 切片 -> 仅对切片渲染预览
+        $flat = [];
+        foreach ($groups as $type => $group) {
+            if (!is_array($group)) {
+                continue;
+            }
+            $groupLabel = (string)($group['label'] ?? $type);
+            foreach (($group['widgets'] ?? []) as $widget) {
+                if (!is_array($widget)) {
+                    continue;
+                }
+                $widget['group_type'] = (string)$type;
+                $widget['group_label'] = $groupLabel;
+                $flat[] = $widget;
+            }
+        }
+
+        if ($keyword !== '') {
+            $kw = mb_strtolower($keyword);
+            $flat = array_values(array_filter($flat, static function (array $w) use ($kw): bool {
+                $haystack = mb_strtolower(
+                    (string)($w['name'] ?? '') . ' '
+                    . (string)($w['code'] ?? '') . ' '
+                    . (string)($w['description'] ?? '')
+                );
+                return mb_strpos($haystack, $kw) !== false;
+            }));
+        }
+
+        $total = count($flat);
+        $slice = array_slice($flat, $offset, $limit);
+        foreach ($slice as &$widget) {
+            $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
+        }
+        unset($widget);
 
         return $this->fetchJson([
             'success' => true,
-            'data' => $widgets,
+            'items' => $slice,
+            'total' => $total,
+            'offset' => $offset,
+            'limit' => $limit,
+            'has_more' => ($offset + $limit) < $total,
+            'slot_id' => $slotId,
+            'keyword' => $keyword,
             'page_type' => $pageType,
+            'theme_id' => $theme?->getId() ?: 0,
+            'editor_area' => $editorArea,
         ]);
+    }
+
+    /**
+     * 将 getWidgetsForSlot 的结果（独占/普通/精确匹配）合并去重为「按部件类型分组」结构，
+     * 供分页拍平复用。去重以 module + code 为准。
+     *
+     * @param array $slotResult
+     * @return array<string, array{label:string, widgets:array}>
+     */
+    private function buildSlotWidgetGroups(array $slotResult): array
+    {
+        $merged = array_merge(
+            $slotResult['exclusive_widgets'] ?? [],
+            $slotResult['matched_widgets'] ?? [],
+            $slotResult['regular_widgets'] ?? []
+        );
+
+        $groups = [];
+        $seen = [];
+        foreach ($merged as $widget) {
+            if (!is_array($widget)) {
+                continue;
+            }
+            $dedupeKey = (string)($widget['module'] ?? '') . '::' . (string)($widget['code'] ?? '');
+            if (isset($seen[$dedupeKey])) {
+                continue;
+            }
+            $seen[$dedupeKey] = true;
+
+            $type = (string)($widget['type'] ?? 'other');
+            if (!isset($groups[$type])) {
+                $groups[$type] = [
+                    'label' => $type,
+                    'widgets' => [],
+                ];
+            }
+            $groups[$type]['widgets'][] = $widget;
+        }
+
+        return $groups;
     }
     
     /**
@@ -553,23 +741,36 @@ class ThemeEditor extends BackendController
             ]);
         }
         
+        $editorArea = (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND);
+        $editorArea = $editorArea === PreviewContextService::AREA_BACKEND
+            ? PreviewContextService::AREA_BACKEND
+            : PreviewContextService::AREA_FRONTEND;
+        $theme = $this->resolveEditorThemeFromRequest();
+
         // 获取精细筛选的部件
-        $result = $this->layoutService->getWidgetsForSlot($slotId, $area, $pageType, $acceptCodes, $rejectCodes);
+        $result = $this->layoutService->getWidgetsForSlot(
+            $slotId,
+            $area,
+            $pageType,
+            $acceptCodes,
+            $rejectCodes,
+            $theme
+        );
         
         // 预编译预览 HTML
         if (!empty($result['exclusive_widgets'])) {
             foreach ($result['exclusive_widgets'] as &$widget) {
-                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget);
+                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
             }
         }
         if (!empty($result['regular_widgets'])) {
             foreach ($result['regular_widgets'] as &$widget) {
-                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget);
+                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
             }
         }
         if (!empty($result['matched_widgets'])) {
             foreach ($result['matched_widgets'] as &$widget) {
-                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget);
+                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
             }
         }
         
@@ -2074,9 +2275,29 @@ class ThemeEditor extends BackendController
     }
 
     /**
+     * 解析编辑器当前选中的主题（优先请求参数 theme_id）
+     */
+    private function resolveEditorThemeFromRequest(): ?WelineTheme
+    {
+        $themeId = (int)$this->request->getParam('theme_id', 0);
+        if ($themeId <= 0) {
+            return null;
+        }
+
+        $theme = ObjectManager::getInstance(WelineTheme::class);
+        $theme->reset()->load($themeId);
+
+        return $theme->getId() ? $theme : null;
+    }
+
+    /**
      * 为部件库预编译预览 HTML
      */
-    private function attachWidgetPreviewHtml(array $availableWidgets): array
+    private function attachWidgetPreviewHtml(
+        array $availableWidgets,
+        ?WelineTheme $theme = null,
+        string $editorArea = PreviewContextService::AREA_FRONTEND
+    ): array
     {
         foreach ($availableWidgets as $type => &$group) {
             if (empty($group['widgets']) || !is_array($group['widgets'])) {
@@ -2086,7 +2307,7 @@ class ThemeEditor extends BackendController
                 if (!is_array($widget)) {
                     continue;
                 }
-                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget);
+                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
             }
         }
 
@@ -2096,47 +2317,83 @@ class ThemeEditor extends BackendController
     /**
      * 使用默认参数渲染部件预览 HTML
      */
-    private function buildWidgetPreviewHtml(array $widget): string
+    private function buildWidgetPreviewHtml(
+        array $widget,
+        ?WelineTheme $theme = null,
+        string $editorArea = PreviewContextService::AREA_FRONTEND
+    ): string
     {
+        $previewArea = $editorArea === PreviewContextService::AREA_BACKEND
+            ? PreviewContextService::AREA_BACKEND
+            : PreviewContextService::AREA_FRONTEND;
         $widgetModule = (string)($widget['module'] ?? $widget['widget_module'] ?? '');
         $widgetType = (string)($widget['type'] ?? $widget['widget_type'] ?? '');
         $widgetCode = (string)($widget['code'] ?? $widget['widget_code'] ?? '');
-        if ($widgetModule === 'Weline_Theme' && ($widgetType === 'theme_component' || str_contains($widgetCode, '/'))) {
-            /** @var \Weline\Theme\Service\ThemePlaceableRegistry $placeableRegistry */
-            $placeableRegistry = ObjectManager::getInstance(\Weline\Theme\Service\ThemePlaceableRegistry::class);
-            $html = $placeableRegistry->renderPreview('Weline_Theme', 'theme_component', $widgetCode, [], null, 'frontend');
-            if ($html !== '') {
-                return $this->sanitizeWidgetPreviewHtml($html);
-            }
-        }
 
-        $template = $widget['template'] ?? '';
-        if (!$template) {
-            $name = $widget['name'] ?? $widget['code'] ?? '';
-            return '<div class="widget-preview-placeholder">' . htmlspecialchars((string)$name) . '</div>';
+        // 在所选主题上下文中渲染，确保部件库预览反映当前编辑主题的模板覆盖，
+        // 而不是回退到全局激活主题。
+        $previousThemeData = ThemeData::getCurrentTheme();
+        $previousArea = ThemeData::getCurrentArea();
+        $shouldSwitchThemeData = $theme?->getId()
+            && (int)($previousThemeData?->getId() ?? 0) !== (int)$theme->getId();
+        if ($shouldSwitchThemeData) {
+            ThemeData::setCurrentTheme($theme);
+            ThemeData::setCurrentArea($previewArea);
         }
-
-        $defaultConfig = [];
-        foreach ($widget['params'] ?? [] as $key => $param) {
-            if (!is_array($param)) {
-                continue;
-            }
-            $defaultValue = $param['default'] ?? '';
-            if (($key === 'end_date' || $key === 'countdown_end') && empty($defaultValue)) {
-                $defaultValue = date('Y-m-d H:i:s', time() + 86400);
-            }
-            $defaultConfig[$key] = $defaultValue;
-        }
-        $defaultConfig['preview_mode'] = true;
 
         try {
-            $templateObj = $this->getTemplate();
-            // WLS 下 Template 单例 _data 会跨请求残留，渲染前清空，避免上一部件数据污染当前预览
-            $templateObj->unsetData();
-            $html = $templateObj->fetchHtml($template, $defaultConfig);
-            return $this->sanitizeWidgetPreviewHtml(is_string($html) ? $html : '');
-        } catch (\Exception $e) {
-            return '<div class="widget-preview-error">' . htmlspecialchars((string)$e->getMessage()) . '</div>';
+            if ($widgetModule === 'Weline_Theme' && $widgetCode !== '') {
+                /** @var \Weline\Theme\Service\ThemePlaceableRegistry $placeableRegistry */
+                $placeableRegistry = ObjectManager::getInstance(\Weline\Theme\Service\ThemePlaceableRegistry::class);
+                $registryType = $widgetType === 'theme_component' || str_contains($widgetCode, '/')
+                    ? 'theme_component'
+                    : ($widgetType !== '' ? $widgetType : 'theme_component');
+                $html = $placeableRegistry->renderPreview(
+                    $widgetModule,
+                    $registryType,
+                    $widgetCode,
+                    ['preview_mode' => true],
+                    $theme,
+                    $previewArea
+                );
+                if ($html !== '' && !str_contains($html, 'widget-preview-placeholder')) {
+                    return $this->sanitizeWidgetPreviewHtml($html);
+                }
+            }
+
+            $template = $widget['template'] ?? '';
+            if (!$template) {
+                $name = $widget['name'] ?? $widget['code'] ?? '';
+                return '<div class="widget-preview-placeholder">' . htmlspecialchars((string)$name) . '</div>';
+            }
+
+            $defaultConfig = [];
+            foreach ($widget['params'] ?? [] as $key => $param) {
+                if (!is_array($param)) {
+                    continue;
+                }
+                $defaultValue = $param['default'] ?? '';
+                if (($key === 'end_date' || $key === 'countdown_end') && empty($defaultValue)) {
+                    $defaultValue = date('Y-m-d H:i:s', time() + 86400);
+                }
+                $defaultConfig[$key] = $defaultValue;
+            }
+            $defaultConfig['preview_mode'] = true;
+
+            try {
+                $templateObj = $this->getTemplate();
+                // WLS 下 Template 单例 _data 会跨请求残留，渲染前清空，避免上一部件数据污染当前预览
+                $templateObj->unsetData();
+                $html = $templateObj->fetchHtml($template, $defaultConfig);
+                return $this->sanitizeWidgetPreviewHtml(is_string($html) ? $html : '');
+            } catch (\Exception $e) {
+                return '<div class="widget-preview-error">' . htmlspecialchars((string)$e->getMessage()) . '</div>';
+            }
+        } finally {
+            if ($shouldSwitchThemeData) {
+                ThemeData::setCurrentTheme($previousThemeData);
+                ThemeData::setCurrentArea($previousArea);
+            }
         }
     }
 

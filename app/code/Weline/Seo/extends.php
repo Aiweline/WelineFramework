@@ -34,5 +34,12 @@ return [
             'required' => false,
             'multiple' => true,
         ],
+        'SeoStructureNodeBuilder' => [
+            'path' => 'extends/module/Weline_Seo/SeoStructureNodeBuilder',
+            'interface' => 'Weline\Seo\Structure\SeoStructureNodeBuilderInterface',
+            'description' => 'SEO structured data node builder for schema.org graph nodes.',
+            'required' => false,
+            'multiple' => true,
+        ],
     ],
 ];

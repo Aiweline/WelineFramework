@@ -502,3 +502,49 @@ $layoutService->clearProductLayoutCache($productId, $layoutType);
   - 支持产品专属布局配置
   - 支持产品布局计划管理
 
+## 2026-06-09 产品/分类级布局解析补充
+
+本系统现在把“选择哪个布局”放在产品级布局解析器里完成，然后再交给 Theme layout 体系渲染。布局模板只负责页面骨架、slot、hook 和样式，不承载加购、价格、库存、接口请求等业务逻辑。
+
+### 有效布局优先级
+
+商品详情页按以下顺序解析有效 layout option：
+
+1. 产品当前有效的活动计划布局。
+2. 产品专属布局。
+3. 商品所属分类的“分类下商品默认布局”当前有效活动计划。
+4. 商品所属分类的“分类下商品默认布局”。
+5. Theme 的商品默认布局。
+
+分类展示页按以下顺序解析有效 layout option：
+
+1. 分类当前有效的活动计划布局。
+2. 分类专属布局。
+3. Theme 的分类默认布局。
+
+### 可编辑布局文件
+
+后台保存的自定义布局是真实模板文件，不只是选择项：
+
+- 商品详情布局：`app/code/Weline/Theme/view/theme/frontend/layouts/product/{layout_code}.phtml`
+- 分类展示布局：`app/code/Weline/Theme/view/theme/frontend/layouts/category/{layout_code}.phtml`
+
+后台支持三种上下文：
+
+- `entity_type=product&product_id=...`：产品专属详情布局。
+- `entity_type=category&category_id=...`：分类展示布局。
+- `entity_type=category_product_default&category_id=...`：该分类下商品详情页的默认布局。
+
+### 定时计划恢复策略
+
+定时计划激活时只把该计划作为“当前有效 option”，不会把活动布局写入产品或分类的 baseline 布局记录。计划停用或结束后，解析器会重新回到原来的产品专属布局、分类默认布局或 Theme 默认布局。
+
+### 后台预览
+
+后台预览通过前台 URL 参数临时渲染：
+
+- `layout_preview=1`
+- `layout_option={layout_code}`
+- `no_cache=1`
+
+预览请求会绕过商品/分类页面缓存，不写入产品、分类或定时计划配置，也不会记录最近浏览商品。

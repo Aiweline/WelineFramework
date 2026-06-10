@@ -40,6 +40,10 @@
         currentCurrency: 'CNY',
         defaultLang: 'zh_Hans_CN',
         defaultCurrency: 'CNY',
+        availableCurrencies: [],
+        htmlDir: 'ltr',
+        textDirection: 'ltr',
+        isRtl: false,
         debug: false,
         modulesBaseUrl: '',
         modulesConfigUrl: '',
@@ -116,6 +120,7 @@
             applyEnv(config);
         }
         deepMerge(runtimeConfig, config);
+        applyTextDirection(runtimeConfig);
     }
 
     deepMerge(runtimeConfig, defaultConfig);
@@ -203,10 +208,6 @@
         writeCookieValue('WELINE_USER_CURRENCY', currency, expiry);
     }
 
-    function isValidCurrency(value) {
-        return /^[A-Z]{3}$/.test((value || '').toUpperCase());
-    }
-
     function isValidLocale(value) {
         return localePattern.test(value || '');
     }
@@ -222,8 +223,94 @@
         return String(value || '').trim().toUpperCase();
     }
 
+    function isCurrencyCodeShape(value) {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function addSupportedCurrencyCode(codes, value) {
+        if (value && typeof value === 'object') {
+            value = value.code || value.currency || value.currency_code || value.value || '';
+        }
+        const code = normalizeCurrencyCode(value);
+        if (isCurrencyCodeShape(code)) {
+            codes[code] = true;
+        }
+    }
+
+    function collectSupportedCurrencyCodes(codes, source) {
+        if (!source) {
+            return;
+        }
+        if (Array.isArray(source)) {
+            source.forEach(item => addSupportedCurrencyCode(codes, item));
+            return;
+        }
+        if (typeof source === 'object') {
+            Object.keys(source).forEach(key => {
+                addSupportedCurrencyCode(codes, key);
+                addSupportedCurrencyCode(codes, source[key]);
+            });
+            return;
+        }
+        String(source).split(/[,\s|]+/).forEach(code => addSupportedCurrencyCode(codes, code));
+    }
+
+    function getSupportedCurrencyCodes(config = runtimeConfig) {
+        const codes = Object.create(null);
+        const site = window.site || {};
+        [
+            config.availableCurrencies,
+            config.supportedCurrencies,
+            config.currencyCodes,
+            config.currencies,
+            config.site && config.site.availableCurrencies,
+            config.site && config.site.supportedCurrencies,
+            config.site && config.site.currencyCodes,
+            config.site && config.site.currencies,
+            site.availableCurrencies,
+            site.supportedCurrencies,
+            site.currencyCodes,
+            site.currencies
+        ].forEach(source => collectSupportedCurrencyCodes(codes, source));
+
+        document.querySelectorAll('[data-currency-switcher] [data-currency], [data-currency-switcher] [data-currency-option], [data-currency-switcher] .currency-option').forEach(option => {
+            addSupportedCurrencyCode(codes, option.getAttribute('data-currency') || option.getAttribute('data-currency-option') || option.dataset.currency);
+        });
+
+        addSupportedCurrencyCode(codes, config.defaultCurrency || (config.site && (config.site.defaultCurrency || config.site.default_currency)) || site.defaultCurrency || site.default_currency);
+        return codes;
+    }
+
+    function isValidCurrency(value, config = runtimeConfig) {
+        const code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        return !!getSupportedCurrencyCodes(config)[code];
+    }
+
     function normalizeLangCode(value) {
         return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function normalizeTextDirection(value) {
+        return String(value || '').toLowerCase() === 'rtl' ? 'rtl' : 'ltr';
+    }
+
+    function applyTextDirection(config = runtimeConfig) {
+        const direction = normalizeTextDirection(config.htmlDir || config.textDirection || config.i18n?.direction);
+        const root = document.documentElement;
+        root.setAttribute('dir', direction);
+        root.setAttribute('data-dir', direction);
+        root.classList.toggle('is-rtl', direction === 'rtl');
+        root.classList.toggle('is-ltr', direction !== 'rtl');
+        runtimeConfig.htmlDir = direction;
+        runtimeConfig.textDirection = direction;
+        runtimeConfig.isRtl = direction === 'rtl';
+        if (!runtimeConfig.i18n || typeof runtimeConfig.i18n !== 'object') {
+            runtimeConfig.i18n = {};
+        }
+        runtimeConfig.i18n.direction = direction;
     }
 
     function sameLang(a, b) {
@@ -242,7 +329,7 @@
 
     function shouldOutputCurrency(currency, config = runtimeConfig) {
         currency = normalizeCurrencyCode(currency);
-        return currency !== '' && currency !== resolveDefaultCurrency(config);
+        return isValidCurrency(currency, config) && currency !== resolveDefaultCurrency(config);
     }
 
     function shouldOutputLang(lang, config = runtimeConfig) {
@@ -251,12 +338,11 @@
     }
 
     function buildLocalizedFrontendPath(pathOnly, currency, lang) {
-        const currencyPattern = /^[A-Z]{3}$/;
         const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
         const pathParts = String(pathOnly || '/').split('/').filter(Boolean);
-        const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-        const outputParts = [];
         const config = window.__WelineThemeConfig || runtimeConfig || {};
+        const filteredParts = pathParts.filter(part => !isValidCurrency(part, config) && !langPattern.test(part));
+        const outputParts = [];
         const targetCurrency = normalizeCurrencyCode(currency);
         const targetLang = normalizeLangCode(lang);
 
@@ -2735,7 +2821,7 @@
             }
 
             // 从配置获取
-            const config = window.__WelineThemeConfig || {};
+            const config = window.__WelineThemeConfig || runtimeConfig || {};
             return config.currentLang || config.i18n?.currentLang || (window.site && window.site.lang) || 'zh_Hans_CN';
         }
 
@@ -2847,13 +2933,15 @@
             let currentCurrency = '';
             const pathParts = currentPath.split('?')[0].split('/').filter(Boolean);
             for (const part of pathParts) {
-                if (/^[A-Z]{3}$/.test(part)) {
+                if (isValidCurrency(part, config)) {
                     currentCurrency = part;
                     break;
                 }
             }
             if (!currentCurrency) {
-                currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
+                currentCurrency = isValidCurrency(config.currentCurrency, config)
+                    ? normalizeCurrencyCode(config.currentCurrency)
+                    : resolveDefaultCurrency(config);
             }
 
             languageSwitchers.forEach(languageSwitcher => {
@@ -2922,17 +3010,19 @@
 
             // 最后的降级方案：手动构建 URL
             let currentPath = window.location.pathname;
+            const config = window.__WelineThemeConfig || runtimeConfig || {};
             const pathParts = currentPath.split('/').filter(Boolean);
             let currentCurrency = '';
             for (const part of pathParts) {
-                if (/^[A-Z]{3}$/.test(part)) {
+                if (isValidCurrency(part, config)) {
                     currentCurrency = part;
                     break;
                 }
             }
             if (!currentCurrency) {
-                const config = window.__WelineThemeConfig || {};
-                currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
+                currentCurrency = isValidCurrency(config.currentCurrency, config)
+                    ? normalizeCurrencyCode(config.currentCurrency)
+                    : resolveDefaultCurrency(config);
             }
 
             const langUrl = buildLocalizedFrontendPath(currentPath, currentCurrency, lang) + sanitizeLanguageSearch(window.location.search || '');
@@ -3001,29 +3091,32 @@
          * 获取当前货币代码
          */
         function getCurrentCurrency() {
+            const config = window.__WelineThemeConfig || runtimeConfig || {};
             const cookieCurrency = readCookieValue('WELINE_USER_CURRENCY');
-            if (cookieCurrency) {
+            if (isValidCurrency(cookieCurrency, config)) {
                 return cookieCurrency.toUpperCase();
             }
 
             // 从 URL 参数获取
             const urlParams = new URLSearchParams(window.location.search);
             const urlCurrency = urlParams.get('currency');
-            if (urlCurrency) {
+            if (isValidCurrency(urlCurrency, config)) {
                 return urlCurrency.toUpperCase();
             }
 
             // 从 URL 路径获取（如 /CNY/...）
             const pathParts = window.location.pathname.split('/').filter(Boolean);
             for (const part of pathParts) {
-                if (/^[A-Z]{3}$/.test(part)) {
+                if (isValidCurrency(part, config)) {
                     return part.toUpperCase();
                 }
             }
 
             // 从配置获取
-            const config = window.__WelineThemeConfig || {};
-            return (config.currentCurrency || (window.site && window.site.currency) || 'CNY').toUpperCase();
+            const fallbackCurrency = isValidCurrency(config.currentCurrency, config)
+                ? config.currentCurrency
+                : (config.defaultCurrency || 'CNY');
+            return fallbackCurrency.toUpperCase();
         }
 
         /**

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Payment\Service;
 
 use Weline\Payment\Interface\PaymentConfigTesterInterface;
+use Weline\Payment\Interface\ProviderInterface;
+use Weline\Payment\Api\Data\TestConnectionRequest;
 use Weline\Payment\Model\PaymentMethodConfig;
 
 class PaymentConfigValidationService
@@ -48,6 +50,35 @@ class PaymentConfigValidationService
                 (string) ($testResult['message'] ?? (!empty($testResult['success']) ? 'Configuration test passed.' : 'Configuration test failed.')),
                 [],
                 \is_array($testResult['details'] ?? null) ? $testResult['details'] : [],
+                $testedAt
+            );
+        }
+
+        if ($provider instanceof ProviderInterface) {
+            try {
+                $testResult = $provider->testConnection(TestConnectionRequest::fromArray([
+                    'provider_code' => $provider->getProviderCode(),
+                    'method_code' => $provider->getCode(),
+                    'merchant_account' => (string) ($resolvedConfig['merchant_account'] ?? ''),
+                    'scope' => (string) ($context['scope'] ?? 'default'),
+                    'environment' => (string) ($resolvedConfig['environment'] ?? 'sandbox'),
+                    'config' => $resolvedConfig,
+                    'context' => array_merge($context, [
+                        'config' => $resolvedConfig,
+                        'payment_method' => $method,
+                    ]),
+                ]));
+            } catch (\Throwable $throwable) {
+                return $this->result(false, $throwable->getMessage(), [], [
+                    'exception' => $throwable::class,
+                ], $testedAt);
+            }
+
+            return $this->result(
+                $testResult->isSuccessful(),
+                (string) ($testResult->getData('message') ?? ($testResult->isSuccessful() ? 'Configuration test passed.' : 'Configuration test failed.')),
+                [],
+                $testResult->getPayload(),
                 $testedAt
             );
         }

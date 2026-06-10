@@ -212,6 +212,72 @@
         return String(value || '').trim().toUpperCase();
     }
 
+    function isCurrencyCodeShape(value) {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function addSupportedCurrencyCode(codes, value) {
+        if (value && typeof value === 'object') {
+            value = value.code || value.currency || value.currency_code || value.value || '';
+        }
+        const code = normalizeCurrencyCode(value);
+        if (isCurrencyCodeShape(code)) {
+            codes[code] = true;
+        }
+    }
+
+    function collectSupportedCurrencyCodes(codes, source) {
+        if (!source) {
+            return;
+        }
+        if (Array.isArray(source)) {
+            source.forEach(item => addSupportedCurrencyCode(codes, item));
+            return;
+        }
+        if (typeof source === 'object') {
+            Object.keys(source).forEach(key => {
+                addSupportedCurrencyCode(codes, key);
+                addSupportedCurrencyCode(codes, source[key]);
+            });
+            return;
+        }
+        String(source).split(/[,\s|]+/).forEach(code => addSupportedCurrencyCode(codes, code));
+    }
+
+    function getSupportedCurrencyCodes(config) {
+        const codes = Object.create(null);
+        const site = window.site || {};
+        [
+            config.availableCurrencies,
+            config.supportedCurrencies,
+            config.currencyCodes,
+            config.currencies,
+            config.site && config.site.availableCurrencies,
+            config.site && config.site.supportedCurrencies,
+            config.site && config.site.currencyCodes,
+            config.site && config.site.currencies,
+            site.availableCurrencies,
+            site.supportedCurrencies,
+            site.currencyCodes,
+            site.currencies
+        ].forEach(source => collectSupportedCurrencyCodes(codes, source));
+
+        document.querySelectorAll('[data-currency-switcher] [data-currency], [data-currency-switcher] [data-currency-option], [data-currency-switcher] .currency-option').forEach(option => {
+            addSupportedCurrencyCode(codes, option.getAttribute('data-currency') || option.getAttribute('data-currency-option') || option.dataset.currency);
+        });
+
+        addSupportedCurrencyCode(codes, config.defaultCurrency || (config.site && (config.site.defaultCurrency || config.site.default_currency)) || site.defaultCurrency || site.default_currency);
+        return codes;
+    }
+
+    function isSupportedCurrencyCode(value, config) {
+        const code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        return !!getSupportedCurrencyCodes(config || {})[code];
+    }
+
     function normalizeLangCode(value) {
         return String(value || '').trim().replace(/-/g, '_');
     }
@@ -225,7 +291,7 @@
     function shouldOutputCurrency(currency, config) {
         currency = normalizeCurrencyCode(currency);
         const defaultCurrency = normalizeCurrencyCode(config.defaultCurrency || 'CNY');
-        return currency !== '' && currency !== defaultCurrency;
+        return isSupportedCurrencyCode(currency, config) && currency !== defaultCurrency;
     }
 
     function shouldOutputLang(lang, config) {
@@ -243,7 +309,6 @@
         const safeSearch = sanitizeLanguageSearch(typeof search === 'string' ? search : (window.location.search || ''));
         const pathParts = safePathname.split('/').filter(Boolean);
         const langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
-        const currencyPattern = /^[A-Z]{3}$/;
         const config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
         const backendKey = String(
             (window.site && window.site.area)
@@ -252,7 +317,7 @@
         );
         let currency = '';
         for (const part of pathParts) {
-            if (currencyPattern.test(part)) {
+            if (isSupportedCurrencyCode(part, config)) {
                 currency = part.toUpperCase();
                 break;
             }
@@ -268,13 +333,13 @@
         let prefixIndex = -1;
         if (backendKey) {
             prefixIndex = pathParts.findIndex(part => !langPattern.test(part)
-                && !currencyPattern.test(part)
+                && !isSupportedCurrencyCode(part, config)
                 && String(part).toLowerCase() === backendKey.toLowerCase());
         }
         const prefixSegment = prefixIndex >= 0 ? pathParts[prefixIndex] : '';
 
         pathParts.forEach((part, index) => {
-            if (langPattern.test(part) || currencyPattern.test(part)) {
+            if (langPattern.test(part) || isSupportedCurrencyCode(part, config)) {
                 return;
             }
             if (index === prefixIndex) {
@@ -342,7 +407,7 @@
             let currentCurrency = '';
             const pathParts = currentPath.split('?')[0].split('/').filter(Boolean);
             for (const part of pathParts) {
-                if (/^[A-Z]{3}$/.test(part)) {
+                if (isSupportedCurrencyCode(part, config)) {
                     currentCurrency = part;
                     break;
                 }

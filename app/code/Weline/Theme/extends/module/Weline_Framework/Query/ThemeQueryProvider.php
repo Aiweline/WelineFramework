@@ -8,6 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeVirtualLayoutService;
 
 /**
  * 主题查询器
@@ -16,10 +17,14 @@ use Weline\Theme\Service\ThemeContextService;
  */
 class ThemeQueryProvider implements QueryProviderInterface
 {
+    private ?ThemeVirtualLayoutService $virtualLayoutService;
+
     public function __construct(
         private readonly WelineTheme $welineTheme,
         private readonly ThemeContextService $themeContext,
+        ?ThemeVirtualLayoutService $virtualLayoutService = null,
     ) {
+        $this->virtualLayoutService = $virtualLayoutService;
     }
 
     public function getProviderName(): string
@@ -34,6 +39,13 @@ class ThemeQueryProvider implements QueryProviderInterface
             'getConfigValue' => $this->getConfigValue($params),
             'getTemplatePath' => $this->getTemplatePath($params),
             'scanThemeLayoutsByType' => $this->scanThemeLayoutsByType($params),
+            'listVirtualLayoutOptions' => $this->listVirtualLayoutOptions($params),
+            'saveVirtualLayoutSource' => $this->saveVirtualLayoutSource($params),
+            'rollbackVirtualLayoutVersion' => $this->rollbackVirtualLayoutVersion($params),
+            'resolveVirtualLayoutRuntime' => $this->resolveVirtualLayoutRuntime($params),
+            'saveLayoutSelection' => $this->saveLayoutSelection($params),
+            'deleteLayoutSelection' => $this->deleteLayoutSelection($params),
+            'resolveLayoutSelection' => $this->resolveLayoutSelection($params),
             'editorRequest' => $this->editorRequest($params),
             'setBackendThemeMode' => $this->setBackendThemeMode($params),
             default => throw new \InvalidArgumentException(
@@ -171,7 +183,92 @@ class ThemeQueryProvider implements QueryProviderInterface
         if (!$theme->getId()) {
             return [];
         }
-        return $this->doScanThemeLayouts($layoutType, $area, $theme);
+        $fileOptions = $this->doScanThemeLayouts($layoutType, $area, $theme);
+        $virtualOptions = $this->virtualLayoutService()->listLayoutOptions(
+            $layoutType,
+            (int)$theme->getId(),
+            $area,
+            isset($params['scope']) ? (string)$params['scope'] : null
+        );
+
+        return array_replace($fileOptions, $virtualOptions);
+    }
+
+    private function listVirtualLayoutOptions(array $params): array
+    {
+        return $this->virtualLayoutService()->listLayoutOptions(
+            (string)($params['layout_type'] ?? ''),
+            (int)($params['theme_id'] ?? 0),
+            $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND,
+            isset($params['scope']) ? (string)$params['scope'] : null
+        );
+    }
+
+    private function saveVirtualLayoutSource(array $params): array
+    {
+        $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
+        $source = (string)($params['source'] ?? $params['source_code'] ?? '');
+        $versionData = is_array($params['version_data'] ?? null) ? $params['version_data'] : [];
+        $publish = array_key_exists('publish', $params) ? $this->normalizeBool($params['publish']) : true;
+
+        return $this->virtualLayoutService()->saveSourceVersion($identity, $source, $versionData, $publish);
+    }
+
+    private function rollbackVirtualLayoutVersion(array $params): array
+    {
+        return $this->virtualLayoutService()->rollbackPublishedVersion(
+            (int)($params['asset_id'] ?? 0),
+            (int)($params['version_id'] ?? $params['target_version_id'] ?? 0),
+            is_array($params['options'] ?? null) ? $params['options'] : []
+        );
+    }
+
+    private function resolveVirtualLayoutRuntime(array $params): ?array
+    {
+        return $this->virtualLayoutService()->resolvePublishedRuntimeLayout(
+            (string)($params['layout_type'] ?? ''),
+            (string)($params['layout_option'] ?? ''),
+            (int)($params['theme_id'] ?? 0),
+            $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND,
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            is_array($params['target_chain'] ?? null) ? $params['target_chain'] : []
+        );
+    }
+
+    private function saveLayoutSelection(array $params): array
+    {
+        return $this->virtualLayoutService()->saveLayoutSelection(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? ''),
+            (string)($params['layout_option'] ?? $params['layout_code'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+            is_array($params['options'] ?? null) ? $params['options'] : []
+        );
+    }
+
+    private function deleteLayoutSelection(array $params): array
+    {
+        return $this->virtualLayoutService()->deleteLayoutSelection(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+            is_array($params['options'] ?? null) ? $params['options'] : []
+        );
+    }
+
+    private function resolveLayoutSelection(array $params): ?array
+    {
+        return $this->virtualLayoutService()->resolveLayoutSelection(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null
+        );
     }
 
     private function editorRequest(array $params): mixed
@@ -279,6 +376,7 @@ class ThemeQueryProvider implements QueryProviderInterface
 
         $path = strtolower($this->normalizeEditorRequestPath((string)$parts['path']));
         if (!str_starts_with($path, '/theme/backend/theme-editor/')
+            && !str_starts_with($path, '/theme/backend/virtual-theme/')
             && !str_starts_with($path, '/theme/backend/widget/paramrender/')
         ) {
             return null;
@@ -332,6 +430,14 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/publish-version' => ($themeEditor ??= $this->createDirectThemeEditor())->publishVersionPayload(),
                 '/theme/backend/theme-editor/delete-version' => ($themeEditor ??= $this->createDirectThemeEditor())->deleteVersionPayload(),
                 '/theme/backend/theme-editor/rename-version' => ($themeEditor ??= $this->createDirectThemeEditor())->renameVersionPayload(),
+                '/theme/backend/virtual-theme/manifest' => $this->createDirectVirtualTheme()->getManifest(),
+                '/theme/backend/virtual-theme/ai-catalog' => $this->createDirectVirtualTheme()->getAiCatalog(),
+                '/theme/backend/virtual-theme/source' => $this->createDirectVirtualTheme()->getSource(),
+                '/theme/backend/virtual-theme/create-draft' => $this->createDirectVirtualTheme()->postCreateDraft(),
+                '/theme/backend/virtual-theme/block-action' => $this->createDirectVirtualTheme()->postBlockAction(),
+                '/theme/backend/virtual-theme/save-source' => $this->createDirectVirtualTheme()->postSaveSource(),
+                '/theme/backend/virtual-theme/publish-version' => $this->createDirectVirtualTheme()->postPublishVersion(),
+                '/theme/backend/virtual-theme/rollback-version' => $this->createDirectVirtualTheme()->postRollbackVersion(),
                 '/theme/backend/widget/paramrender/form' => $this->createDirectParamRender()->postForm(),
                 default => null,
             };
@@ -378,6 +484,17 @@ class ThemeQueryProvider implements QueryProviderInterface
     private function createDirectParamRender(): \Weline\Theme\Controller\Backend\Widget\ParamRender
     {
         $controller = new \Weline\Theme\Controller\Backend\Widget\ParamRender();
+        $this->injectRequestIntoController($controller);
+        return $controller;
+    }
+
+    private function createDirectVirtualTheme(): \Weline\Theme\Controller\Backend\VirtualTheme
+    {
+        $controller = new \Weline\Theme\Controller\Backend\VirtualTheme(
+            ObjectManager::getInstance(WelineTheme::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeVirtualThemeManifestService::class),
+            ObjectManager::getInstance(ThemeVirtualLayoutService::class)
+        );
         $this->injectRequestIntoController($controller);
         return $controller;
     }
@@ -533,6 +650,7 @@ class ThemeQueryProvider implements QueryProviderInterface
         $normalizedPath = $this->normalizeEditorRequestPath((string)$parts['path']);
         foreach ([
             '/theme/backend/theme-editor/',
+            '/theme/backend/virtual-theme/',
             '/theme/backend/widget/paramrender/form',
             '/weline/eav/api/options',
         ] as $allowedPrefix) {
@@ -607,6 +725,15 @@ class ThemeQueryProvider implements QueryProviderInterface
         return $meta;
     }
 
+    private function virtualLayoutService(): ThemeVirtualLayoutService
+    {
+        if ($this->virtualLayoutService instanceof ThemeVirtualLayoutService) {
+            return $this->virtualLayoutService;
+        }
+
+        return $this->virtualLayoutService = ObjectManager::getInstance(ThemeVirtualLayoutService::class);
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -651,6 +778,83 @@ class ThemeQueryProvider implements QueryProviderInterface
                     'params' => [
                         ['name' => 'layout_type', 'type' => 'string', 'required' => true],
                         ['name' => 'area', 'type' => 'string', 'required' => false, 'description' => __('默认 frontend')],
+                    ],
+                ],
+                [
+                    'name' => 'listVirtualLayoutOptions',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('列出 Theme 虚拟布局选项'),
+                    'params' => [
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'theme_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'saveVirtualLayoutSource',
+                    'description' => __('保存 Theme 虚拟布局源码版本'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'identity', 'type' => 'array', 'required' => true],
+                        ['name' => 'source', 'type' => 'string', 'required' => true],
+                        ['name' => 'publish', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'rollbackVirtualLayoutVersion',
+                    'description' => __('回滚 Theme 虚拟布局发布版本'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'asset_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'version_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'resolveVirtualLayoutRuntime',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('解析当前有效 Theme 虚拟布局运行时信息'),
+                    'params' => [
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'layout_option', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_chain', 'type' => 'array', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'saveLayoutSelection',
+                    'description' => __('保存 Theme 布局选择'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'layout_option', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'deleteLayoutSelection',
+                    'description' => __('删除 Theme 布局选择并恢复继承'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'resolveLayoutSelection',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('解析 Theme 布局选择及来源'),
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
                     ],
                 ],
                 [

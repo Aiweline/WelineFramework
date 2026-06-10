@@ -19,6 +19,12 @@
         apiSaveLayoutSelection: '',
         apiSaveLayoutConfig: '',
         apiAiTranslateConfig: '',
+        apiVirtualThemeAiCatalog: '',
+        apiVirtualThemeCreateDraft: '',
+        apiVirtualThemeBlockAction: '',
+        apiVirtualThemeSource: '',
+        apiVirtualThemeSaveSource: '',
+        apiVirtualThemePublishVersion: '',
         apiLayoutPreview: '',
         apiParamRenderForm: '',
         autoSaveDelay: 1000,
@@ -76,6 +82,8 @@
         nestStack: [],
         nestIndex: 0,
         lastHoverPoint: null,
+        virtualThemeAiCatalog: null,
+        layoutLock: { enabled: false },
     };
 
     // DOM 元素
@@ -262,6 +270,208 @@
         }
     }
 
+    function parseLayoutLock(value) {
+        if (!value) {
+            return { enabled: false };
+        }
+        if (typeof value === 'object') {
+            return value && value.enabled ? value : { enabled: false };
+        }
+        try {
+            const parsed = JSON.parse(String(value));
+            return parsed && parsed.enabled ? parsed : { enabled: false };
+        } catch (error) {
+            console.warn('[ThemeEditor] Invalid layout lock payload:', error);
+            return { enabled: false };
+        }
+    }
+
+    function isLayoutLocked() {
+        return Boolean(state.layoutLock && state.layoutLock.enabled);
+    }
+
+    function getLayoutLockVirtualPayload() {
+        if (!isLayoutLocked()) {
+            return {};
+        }
+
+        return {
+            scope: state.layoutLock.scope || 'global',
+            target_type: state.layoutLock.target_type || 'global',
+            target_id: parseInt(state.layoutLock.target_id || 0, 10) || 0,
+        };
+    }
+
+    function buildLayoutLockVirtualIdentityPayload(extra = {}) {
+        const layoutType = normalizeLayoutOptionValue(state.layoutType || getCurrentPageType() || 'homepage') || 'homepage';
+        const layoutOption = normalizeLayoutOptionValue(state.layoutOption || state.layoutLock?.layout_option || 'default') || 'default';
+        return {
+            theme_id: state.themeId || 0,
+            area: state.editorArea || 'frontend',
+            page_type: layoutType,
+            layout_type: layoutType,
+            layout_option: layoutOption,
+            ...getLayoutLockVirtualPayload(),
+            ...extra,
+        };
+    }
+
+    async function saveLockedVirtualLayoutDraft() {
+        if (!config.apiVirtualThemeCreateDraft) {
+            throw new Error('Virtual layout draft endpoint is unavailable');
+        }
+        const payload = buildLayoutLockVirtualIdentityPayload({
+            use_ai: 0,
+            request_id: `virtual-layout-save-${Date.now()}`,
+            instructions: 'Save the current locked virtual layout as a draft version without AI changes.',
+        });
+        const result = await apiJson(config.apiVirtualThemeCreateDraft, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!result.success) {
+            throw new Error(result.message || 'Save virtual layout draft failed');
+        }
+        const data = result.data || {};
+        if (data.layout_option) {
+            await refreshLayoutOptions({
+                layout_type: payload.layout_type,
+                layout_option: data.layout_option,
+                silent: true,
+            });
+        }
+        return data;
+    }
+
+    async function loadLockedVirtualLayoutSource() {
+        if (!config.apiVirtualThemeSource) {
+            throw new Error('Virtual layout source endpoint is unavailable');
+        }
+        const url = new URL(config.apiVirtualThemeSource, window.location.origin);
+        Object.entries(buildLayoutLockVirtualIdentityPayload()).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && String(value) !== '') {
+                url.searchParams.set(key, String(value));
+            }
+        });
+        url.searchParams.set('_t', String(Date.now()));
+        const result = await apiJson(url.toString(), { method: 'GET' });
+        if (!result.success) {
+            throw new Error(result.message || 'Load virtual layout source failed');
+        }
+        return result.data || {};
+    }
+
+    async function publishLatestLockedVirtualLayoutVersion() {
+        if (!config.apiVirtualThemePublishVersion) {
+            throw new Error('Virtual layout publish endpoint is unavailable');
+        }
+        const source = await loadLockedVirtualLayoutSource();
+        const versionId = parseInt(source.version_id || source.draft_version_id || 0, 10) || 0;
+        if (versionId <= 0) {
+            throw new Error('No virtual layout draft version is available to publish');
+        }
+        const result = await apiJson(config.apiVirtualThemePublishVersion, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildLayoutLockVirtualIdentityPayload({ version_id: versionId })),
+        });
+        if (!result.success) {
+            throw new Error(result.message || 'Publish virtual layout version failed');
+        }
+        return result.data || {};
+    }
+
+    function ensureSelectOption(select, value, label = '') {
+        if (!select || !value) {
+            return;
+        }
+        const normalized = normalizeLayoutOptionValue(value);
+        if (!normalized) {
+            return;
+        }
+        const exists = Array.from(select.options || []).some(option => normalizeLayoutOptionValue(option.value) === normalized);
+        if (exists) {
+            return;
+        }
+        const option = document.createElement('option');
+        option.value = normalized;
+        option.textContent = label || normalized;
+        select.appendChild(option);
+    }
+
+    function enforceLayoutLock() {
+        if (!isLayoutLocked()) {
+            return;
+        }
+        const lock = state.layoutLock || {};
+        if (lock.page_type || lock.layout_type) {
+            const lockedType = normalizeLayoutOptionValue(lock.page_type || lock.layout_type) || state.pageType;
+            state.pageType = lockedType;
+            state.layoutType = lockedType;
+            if (elements.pageTypeSelect) {
+                elements.pageTypeSelect.value = lockedType;
+            }
+        }
+        if (lock.layout_option) {
+            state.layoutOption = normalizeLayoutOptionValue(lock.layout_option) || state.layoutOption || 'default';
+            if (elements.layoutOptionSelect) {
+                ensureSelectOption(elements.layoutOptionSelect, state.layoutOption, state.layoutOption);
+                elements.layoutOptionSelect.value = state.layoutOption;
+            }
+        }
+        if (lock.area) {
+            state.editorArea = lock.area === 'backend' ? 'backend' : 'frontend';
+            if (elements.editorAreaSelect) {
+                elements.editorAreaSelect.value = state.editorArea;
+            }
+        }
+        [elements.themeSelect, elements.pageTypeSelect, elements.layoutOptionSelect, elements.editorAreaSelect].forEach((select) => {
+            if (select) {
+                select.disabled = true;
+                select.dataset.layoutLocked = '1';
+            }
+        });
+        if (elements.btnSave) {
+            elements.btnSave.disabled = false;
+            elements.btnSave.title = translateUiText('Save locked virtual layout draft');
+        }
+        if (elements.btnPublish) {
+            elements.btnPublish.disabled = false;
+            elements.btnPublish.title = translateUiText('Publish locked virtual layout version');
+        }
+    }
+
+    function isThemeMutationBlockedByLayoutLock(url, method) {
+        if (!isLayoutLocked() || String(method || 'GET').toUpperCase() === 'GET') {
+            return false;
+        }
+        const path = String(url || '');
+        if (path.includes('/virtual-theme/')) {
+            return false;
+        }
+
+        return [
+            '/save-widget',
+            '/update-config',
+            '/delete-widget',
+            '/save-layout-selection',
+            '/save-layout-config',
+            '/save-compiled-layout',
+            '/save-version',
+            '/publish-version',
+            '/switch-version',
+            '/delete-version',
+            '/rename-version',
+            '/restore-original',
+            '/swap-widget-order',
+            '/update-sort',
+            '/save-widget-config',
+            '/publish',
+            '/publish-and-exit',
+        ].some((endpoint) => path.includes(endpoint));
+    }
+
     function getLayoutOptionsForType(layoutType) {
         const type = normalizeLayoutOptionValue(layoutType || getCurrentPageType() || 'homepage');
         return Array.isArray(state.layoutOptionsByType[type]) ? state.layoutOptionsByType[type] : [];
@@ -276,6 +486,9 @@
     function resolveLayoutOptionForType(layoutType, requestedOption = '') {
         const requested = normalizeLayoutOptionValue(requestedOption);
         const options = getLayoutOptionsForType(layoutType);
+        if (isLayoutLocked() && requested) {
+            return requested;
+        }
         if (requested && options.some(option => option.value === requested)) {
             return requested;
         }
@@ -289,12 +502,20 @@
 
         const options = getLayoutOptionsForType(layoutType);
         const selected = resolveLayoutOptionForType(layoutType, selectedOption);
-        const renderOptions = options.length > 0 ? options : [{
+        const renderOptions = options.length > 0 ? options.slice() : [{
             value: selected || 'default',
             label: selected === 'default' ? 'Default' : selected,
             description: '',
             file: ''
         }];
+        if (isLayoutLocked() && selected && !renderOptions.some(option => normalizeLayoutOptionValue(option.value) === selected)) {
+            renderOptions.push({
+                value: selected,
+                label: selected,
+                description: translateUiText('Virtual layout locked option'),
+                file: ''
+            });
+        }
 
         elements.layoutOptionSelect.innerHTML = renderOptions.map(option => {
             const value = normalizeLayoutOptionValue(option.value);
@@ -303,11 +524,12 @@
             return `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}${description}>${escapeHtml(label)}</option>`;
         }).join('');
         elements.layoutOptionSelect.value = selected;
-        elements.layoutOptionSelect.disabled = false;
+        elements.layoutOptionSelect.disabled = isLayoutLocked();
         elements.layoutOptionSelect.dataset.singleOption = renderOptions.length <= 1 ? '1' : '0';
         elements.layoutOptionSelect.title = renderOptions.length <= 1
             ? translateUiText('当前布局类型只有一个布局选项')
             : translateUiText('选择布局选项');
+        enforceLayoutLock();
     }
 
     function setCurrentLayoutSelection(layoutType, layoutOption = '') {
@@ -380,6 +602,15 @@
         throw new Error('Weline API is not available');
     }
 
+    function resolveSameOriginEditorUrl(url) {
+        try {
+            const resolved = new URL(String(url), window.location.href);
+            return resolved.origin === window.location.origin ? resolved.toString() : '';
+        } catch (error) {
+            return '';
+        }
+    }
+
     async function apiRequest(url, options = {}) {
         const headers = normalizeRequestHeaders(options.headers);
         let body = options.body ?? null;
@@ -392,11 +623,26 @@
             url: String(url),
             method: String(options.method || 'GET').toUpperCase(),
         };
+        if (isThemeMutationBlockedByLayoutLock(params.url, params.method)) {
+            throw new Error('Virtual layout lock mode only allows virtual layout draft actions');
+        }
         if (Object.keys(headers).length > 0) {
             params.headers = headers;
         }
         if (body !== null) {
             params.body = body;
+        }
+        const sameOriginUrl = resolveSameOriginEditorUrl(params.url);
+        if (sameOriginUrl && typeof window.fetch === 'function') {
+            const fetchOptions = {
+                method: params.method,
+                headers,
+                credentials: 'same-origin',
+            };
+            if (body !== null) {
+                fetchOptions.body = body;
+            }
+            return window.fetch(sameOriginUrl, fetchOptions);
         }
         const editorApi = resolveEditorApi();
         if (editorApi.mode === 'direct') {
@@ -578,6 +824,12 @@
         config.apiSaveLayoutSelection = container.dataset.apiSaveLayoutSelection || `${config.apiBase}/save-layout-selection`;
         config.apiSaveLayoutConfig = container.dataset.apiSaveLayoutConfig || `${config.apiBase}/save-layout-config`;
         config.apiAiTranslateConfig = container.dataset.apiAiTranslateConfig || `${config.apiBase}/ai-translate-config`;
+        config.apiVirtualThemeAiCatalog = container.dataset.apiVirtualThemeAiCatalog || '/theme/backend/virtual-theme/ai-catalog';
+        config.apiVirtualThemeCreateDraft = container.dataset.apiVirtualThemeCreateDraft || '/theme/backend/virtual-theme/create-draft';
+        config.apiVirtualThemeBlockAction = container.dataset.apiVirtualThemeBlockAction || '/theme/backend/virtual-theme/block-action';
+        config.apiVirtualThemeSource = container.dataset.apiVirtualThemeSource || '/theme/backend/virtual-theme/source';
+        config.apiVirtualThemeSaveSource = container.dataset.apiVirtualThemeSaveSource || '/theme/backend/virtual-theme/save-source';
+        config.apiVirtualThemePublishVersion = container.dataset.apiVirtualThemePublishVersion || '/theme/backend/virtual-theme/publish-version';
         config.apiLayoutPreview = container.dataset.apiLayoutPreview || `${config.apiBase}/layout-preview`;
         config.apiFrontendLayoutPreview = container.dataset.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
@@ -615,6 +867,7 @@
         state.editorArea = container.dataset.editorArea || 'frontend';
         state.previewStatus = container.dataset.previewStatus || getCurrentWindowParam('status') || 'draft';
         state.layoutOptionsByType = parseLayoutOptionsByType(container.dataset.layoutOptions || '{}');
+        state.layoutLock = parseLayoutLock(container.dataset.layoutLock || '{}');
 
         // 缓存 DOM 元素
         elements = {
@@ -662,9 +915,10 @@
         initDragAndDrop();
 
         // 适配部件库预览缩放
-        fitWidgetPreviews();
+        initWidgetPreviewFitObserver();
+        scheduleFitWidgetPreviews();
         window.addEventListener('resize', debounce(() => {
-            fitWidgetPreviews();
+            scheduleFitWidgetPreviews();
         }, 200));
 
         // 加载版本列表（初始化时获取当前版本显示）
@@ -672,8 +926,8 @@
             loadVersions();
         }
 
-        // 若服务端未渲染部件列表（#widgetList 为空），则请求部件接口并渲染
-        loadWidgetListIfEmpty();
+        // 部件库延迟加载：首屏不阻塞，等主预览开始加载、浏览器空闲后再异步拉取并渲染右侧部件库
+        deferWidgetLibraryLoad();
         if (state.themeId) {
             setConfigMode('layout');
             loadLayoutConfig({ silent: true });
@@ -733,6 +987,7 @@
                     loadLayoutPreview();
                     loadLayoutConfig({ silent: true });
                     loadVersions();
+                    reloadWidgetLibrary({ silent: true });
                 }
             });
         }
@@ -757,6 +1012,7 @@
                     });
                     loadLayoutPreview();
                     loadLayoutConfig({ silent: true });
+                    reloadWidgetLibrary({ silent: true });
                 }
             });
         }
@@ -782,6 +1038,7 @@
                     loadLayoutPreview();
                     loadLayoutConfig({ silent: true });
                     loadVersions();
+                    reloadWidgetLibrary({ silent: true });
                     showToast(__('已切换到: ') + this.options[this.selectedIndex].text, 'info');
                 }
             });
@@ -826,11 +1083,13 @@
             }
         });
 
-        // 部件搜索
+        // 部件搜索：服务端关键词检索（在当前插槽过滤条件内），重置分页
         if (elements.widgetSearch) {
             elements.widgetSearch.addEventListener('input', debounce(function() {
-                filterWidgets(this.value);
-            }, 300));
+                const lib = getWidgetLibState();
+                lib.keyword = (this.value || '').trim();
+                loadWidgetLibrary({ reset: true, silent: true });
+            }, 350));
         }
 
         // 组件预览按钮（部件库列表中的「预览」）
@@ -1099,7 +1358,10 @@
                 if (elements.previewLoading) {
                     elements.previewLoading.classList.add('hidden');
                 }
-                
+
+                // 主预览加载完成后，再初始化右侧部件库（仅一次），避免阻塞首屏与主预览
+                initWidgetLibraryOnce();
+
                 // 设置 iframe 内链接拦截，使链接跳转到预览模式
                 setupIframeLinkInterception();
                 
@@ -1175,6 +1437,100 @@
      * 默认 PC 设计视口宽度（部件在此宽度下布局后整体缩放填满 canvas）
      */
     const WIDGET_PREVIEW_DESIGN_WIDTH = 1200;
+    let widgetPreviewFitObserver = null;
+
+    function measureWidgetPreviewContentHeight(inner) {
+        if (!inner) {
+            return 72;
+        }
+        let maxHeight = 0;
+        inner.childNodes.forEach(function (node) {
+            if (!node || node.nodeType !== 1) {
+                return;
+            }
+            const el = /** @type {HTMLElement} */ (node);
+            if (el.matches('style, script')) {
+                return;
+            }
+            const height = Math.max(el.offsetHeight || 0, el.scrollHeight || 0);
+            if (height > maxHeight) {
+                maxHeight = height;
+            }
+        });
+        if (maxHeight > 0) {
+            return Math.max(40, Math.min(maxHeight, 600));
+        }
+        const raw = inner.scrollHeight || 0;
+        return Math.max(40, Math.min(raw || 72, 600));
+    }
+
+    function initWidgetPreviewFitObserver() {
+        const panel = elements.widgetPanel;
+        if (!panel || panel.dataset.previewFitObserver === '1') {
+            return;
+        }
+        panel.dataset.previewFitObserver = '1';
+        if (typeof ResizeObserver === 'undefined') {
+            return;
+        }
+        widgetPreviewFitObserver = new ResizeObserver(function () {
+            scheduleFitWidgetPreviews();
+        });
+        widgetPreviewFitObserver.observe(panel);
+    }
+
+    function scheduleFitWidgetPreviews() {
+        fitWidgetPreviews();
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function () {
+                fitWidgetPreviews();
+            });
+        }
+    }
+
+    async function ensureWidgetCanvasPreview(canvas, widgetModule, widgetCode) {
+        if (!canvas || canvas.dataset.previewLoading === '1' || canvas.dataset.previewLoaded === '1') {
+            return;
+        }
+        if (canvas.querySelector('[class*="widget-"]') && !canvas.querySelector('.widget-preview-placeholder, .widget-preview-error')) {
+            canvas.dataset.previewLoaded = '1';
+            scheduleFitWidgetPreviews();
+            return;
+        }
+        if (!widgetModule || !widgetCode || !config.apiWidgetPreview) {
+            return;
+        }
+        canvas.dataset.previewLoading = '1';
+        try {
+            const url = new URL(config.apiWidgetPreview, window.location.origin);
+            url.searchParams.set('widget_module', widgetModule);
+            url.searchParams.set('widget_code', widgetCode);
+            const data = await apiJson(url.toString());
+            const html = (data && data.html) ? String(data.html) : '';
+            if (html.trim() !== '') {
+                canvas.innerHTML = html;
+                canvas.dataset.previewLoaded = '1';
+                scheduleFitWidgetPreviews();
+            }
+        } catch (err) {
+            console.warn('[ThemeEditor] ensureWidgetCanvasPreview failed:', widgetModule, widgetCode, err);
+        } finally {
+            delete canvas.dataset.previewLoading;
+        }
+    }
+
+    function mountWidgetPreviewHtml(canvas, previewHtml) {
+        if (!canvas) {
+            return;
+        }
+        canvas.innerHTML = '';
+        const html = (previewHtml ?? '').toString().trim();
+        if (!html) {
+            return;
+        }
+        canvas.insertAdjacentHTML('beforeend', html);
+        canvas.dataset.previewLoaded = '1';
+    }
 
     /**
      * 适配部件库预览：按默认 PC 视口缩放，使预览内容填满 widget-preview-canvas，避免大块灰色空白
@@ -1211,9 +1567,13 @@
 
             const canvasWidth = canvas.clientWidth;
             const canvasHeight = canvas.clientHeight;
-            const contentHeight = inner.scrollHeight || viewport.scrollHeight || 1;
+            const contentHeight = measureWidgetPreviewContentHeight(inner);
 
-            if (!canvasWidth || !canvasHeight) return;
+            if (!canvasWidth || !canvasHeight) {
+                canvas.dataset.previewFitPending = '1';
+                return;
+            }
+            delete canvas.dataset.previewFitPending;
 
             const scale = Math.min(1, canvasWidth / WIDGET_PREVIEW_DESIGN_WIDTH, canvasHeight / contentHeight);
             if (!isFinite(scale) || scale <= 0) return;
@@ -1678,6 +2038,8 @@
         }
     }
 
+    let layoutConfigAutoSaveTimer = null;
+
     function bindLayoutConfigEvents(container) {
         const form = container.querySelector('.layout-config-form');
         if (!form) {
@@ -1685,11 +2047,56 @@
         }
         form.addEventListener('submit', function(e) {
             e.preventDefault();
+            if (layoutConfigAutoSaveTimer) {
+                clearTimeout(layoutConfigAutoSaveTimer);
+                layoutConfigAutoSaveTimer = null;
+            }
             saveLayoutConfig(form);
+        });
+
+        function shouldIgnoreLayoutConfigAutoSave(target) {
+            if (!target || !target.closest) {
+                return true;
+            }
+            if (target.closest('.w-param-i18n-panel, .i18n-edit-panel')) {
+                return true;
+            }
+            if (target.closest('.btn-save-layout-config, [type="submit"]')) {
+                return true;
+            }
+            return false;
+        }
+
+        function scheduleLayoutConfigAutoSave() {
+            if (layoutConfigAutoSaveTimer) {
+                clearTimeout(layoutConfigAutoSaveTimer);
+            }
+            layoutConfigAutoSaveTimer = setTimeout(async function() {
+                layoutConfigAutoSaveTimer = null;
+                try {
+                    await saveLayoutConfig(form, '', { silent: true });
+                } catch (error) {
+                    console.error('[ThemeEditor] layout config auto-save error:', error);
+                }
+            }, 400);
+        }
+
+        form.addEventListener('input', function(e) {
+            if (shouldIgnoreLayoutConfigAutoSave(e.target)) {
+                return;
+            }
+            scheduleLayoutConfigAutoSave();
+        });
+        form.addEventListener('change', function(e) {
+            if (shouldIgnoreLayoutConfigAutoSave(e.target)) {
+                return;
+            }
+            scheduleLayoutConfigAutoSave();
         });
     }
 
-    async function saveLayoutConfig(form, locale) {
+    async function saveLayoutConfig(form, locale, options = {}) {
+        const silent = options.silent === true;
         const configData = collectWidgetConfigData(form);
         const payload = {
             theme_id: state.themeId || 0,
@@ -1709,9 +2116,13 @@
         if (!result.success) {
             throw new Error(result.message || 'Save layout config failed');
         }
-        showToast(result.message || '布局配置已保存', 'success');
+        if (!silent) {
+            showToast(result.message || '布局配置已保存', 'success');
+        }
         fetchLayoutSlots();
-        loadLayoutPreview();
+        if (options.refreshPreview !== false) {
+            loadLayoutPreview();
+        }
     }
 
     async function refreshLayoutOptions(options = {}) {
@@ -1964,6 +2375,37 @@
             return fieldParam.default ?? '';
         };
 
+        const renderFallbackMediaImageField = (inputId, fieldKey, value, fieldParam) => {
+            const mediaOptions = fieldParam.media_options || {};
+            const defaultDir = mediaOptions.default_directory || fieldParam.default_directory || 'banner';
+            const recommendW = mediaOptions.recommend_width || fieldParam.recommend_width || '';
+            const recommendH = mediaOptions.recommend_height || fieldParam.recommend_height || '';
+            const escapedValue = escapeHtml(value);
+            const hasImage = !!value;
+            let html = '<div class="w-param-media-image">';
+            html += `<div class="w-param-image-preview${hasImage ? ' w-param-has-image' : ''}" id="${escapeHtml(inputId)}_preview">`;
+            if (hasImage) {
+                html += `<img src="${escapedValue}" alt="预览">`;
+            }
+            html += `<div class="w-param-image-placeholder" style="${hasImage ? 'display:none;' : ''}">从媒体库选择</div>`;
+            html += '<div class="w-param-image-actions">';
+            html += `<button type="button" class="w-param-btn w-param-btn-sm w-param-btn-outline-primary w-param-media-image-select" data-target="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" data-default-dir="${escapeHtml(defaultDir)}"`;
+            if (recommendW) {
+                html += ` data-recommend-w="${escapeHtml(String(recommendW))}"`;
+            }
+            if (recommendH) {
+                html += ` data-recommend-h="${escapeHtml(String(recommendH))}"`;
+            }
+            html += '>选择</button>';
+            if (hasImage) {
+                html += `<button type="button" class="w-param-btn w-param-btn-sm w-param-btn-outline-danger w-param-image-clear" data-target="${escapeHtml(inputId)}">×</button>`;
+            }
+            html += '</div></div>';
+            html += `<input type="hidden" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" data-preview="${escapeHtml(inputId)}_preview">`;
+            html += '</div>';
+            return html;
+        };
+
         const renderFallbackArrayItemField = (fieldId, itemIndex, fieldKey, fieldParam, item) => {
             fieldParam = fieldParam && typeof fieldParam === 'object' ? fieldParam : { type: fieldParam || 'string' };
             const label = fieldParam.label || fieldKey;
@@ -1991,7 +2433,9 @@
                 html += `<input type="number" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" min="${escapeHtml(fieldParam.min || '')}" max="${escapeHtml(fieldParam.max || '')}" step="${escapeHtml(fieldParam.step || '')}">`;
             } else if (type === 'url') {
                 html += `<input type="url" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" placeholder="https://">`;
-            } else if (type === 'image' || type === 'image_picker' || type === 'media_image') {
+            } else if (type === 'media_image') {
+                html += renderFallbackMediaImageField(inputId, fieldKey, value, fieldParam);
+            } else if (type === 'image' || type === 'image_picker') {
                 html += `<div class="array-image-field${value ? ' has-image' : ''}">
                     <div class="array-image-preview">${value ? `<img src="${escapedValue}" alt="">` : iconSvg('image')}</div>
                     <input type="text" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" placeholder="图片URL">
@@ -2232,7 +2676,7 @@
         }
         
         return `
-            <form class="widget-accordion-config-form" data-layout-id="${layoutId}">
+            <form class="widget-accordion-config-form w-param-form" data-layout-id="${layoutId}">
                 ${groupsHtml}
                 <div class="config-actions">
                     <button type="submit" class="btn btn-primary">
@@ -2246,6 +2690,17 @@
         `;
     }
     
+    function initWidgetParamPickers(container) {
+        if (!container) {
+            return;
+        }
+        if (typeof window.WidgetParamTypesInit === 'function') {
+            window.WidgetParamTypesInit(container);
+        } else if (typeof window.WidgetParamTypesInitMedia === 'function') {
+            window.WidgetParamTypesInitMedia(container);
+        }
+    }
+
     /**
      * 绑定配置表单事件（多语言、颜色等）；手风琴已在 #themeEditor 根上委托
      */
@@ -2581,6 +3036,7 @@
                     if (newItem) {
                         rememberWidgetPreviewArrayItem(newItem);
                         bindArrayItemEvents(newItem, updateHiddenValue);
+                        initWidgetParamPickers(newItem);
                     }
                     
                     updateHiddenValue();
@@ -2808,6 +3264,8 @@
                 }
             });
         });
+
+        initWidgetParamPickers(container);
     }
 
     /**
@@ -3276,6 +3734,59 @@
             || normalizedAccept.some(accept => normalizedWidgetCodes.includes(accept));
     }
 
+    function isGenericSlotAcceptCode(code) {
+        return [
+            'header', 'footer', 'content', 'container', 'banner', 'carousel', 'slider',
+            'product', 'category', 'navigation', 'search', 'breadcrumb', 'pagination',
+            'social', 'newsletter', 'testimonial', 'faq', 'video', 'sidebar',
+            'left_sidebar', 'right_sidebar'
+        ].includes(normalizeCode(code));
+    }
+
+    function getRecommendationAcceptCodes(acceptCodes) {
+        const normalizedAccept = expandAcceptCodesForLayout(acceptCodes);
+        const specificAccept = normalizedAccept.filter(code => code !== '*' && !isGenericSlotAcceptCode(code));
+
+        return specificAccept.length > 0 ? specificAccept : normalizedAccept;
+    }
+
+    function removeWidgetRecommendationEmptyState() {
+        elements.widgetList?.querySelector('.widget-recommendation-empty')?.remove();
+    }
+
+    function showWidgetRecommendationEmptyState(slot) {
+        const widgetList = elements.widgetList;
+        if (!widgetList) {
+            return;
+        }
+
+        removeWidgetRecommendationEmptyState();
+        const emptyState = document.createElement('div');
+        emptyState.className = 'widget-recommendation-empty';
+        emptyState.innerHTML = `
+            <div class="empty-icon"><i class="ri-inbox-line"></i></div>
+            <div class="empty-title">当前插槽暂无匹配部件</div>
+            <div class="empty-desc">${escapeHtml(slot?.name || slot?.id || '该插槽')} 没有同类型可推荐部件</div>
+        `;
+        widgetList.appendChild(emptyState);
+    }
+
+    function clearWidgetRecommendations(slot) {
+        const widgetList = elements.widgetList;
+        if (!widgetList) {
+            return;
+        }
+
+        widgetList.querySelectorAll('.widget-item').forEach(widget => {
+            widget.style.display = 'none';
+            widget.classList.remove('highlighted', 'area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
+        });
+        widgetList.querySelectorAll('.widget-group').forEach(group => {
+            group.style.display = 'none';
+        });
+        showWidgetRecommendationEmptyState(slot);
+    }
+
     function isSlotDataAccepted(slot, widgetData) {
         return slotAcceptsWidgetCodes(
             slot.accept,
@@ -3285,9 +3796,87 @@
         );
     }
 
+    function dataAttributeSelector(attrName, value) {
+        const safeValue = String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        return `[${attrName}="${safeValue}"]`;
+    }
+
     function dataLayoutIdSelector(layoutId) {
-        const safeLayoutId = String(layoutId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        return `[data-layout-id="${safeLayoutId}"]`;
+        return dataAttributeSelector('data-layout-id', layoutId);
+    }
+
+    function firstNonEmptyValue(...values) {
+        for (const value of values) {
+            if (value === null || value === undefined) {
+                continue;
+            }
+            if (Array.isArray(value) && !value.length) {
+                continue;
+            }
+            if (String(value) === '') {
+                continue;
+            }
+            return value;
+        }
+        return '';
+    }
+
+    function readSlotAttr(slotElement, attrName) {
+        return slotElement ? slotElement.getAttribute(attrName) : null;
+    }
+
+    function findIframeSlotElement(iframeDoc, slotId) {
+        if (!iframeDoc || !slotId) {
+            return null;
+        }
+
+        return iframeDoc.querySelector([
+            dataAttributeSelector('data-wslot', slotId),
+            dataAttributeSelector('data-slot', slotId),
+            dataAttributeSelector('data-slot-id', slotId)
+        ].join(', '));
+    }
+
+    function buildSlotInfoFromElement(slotId, slotElement) {
+        const catalogSlotCandidate = state.slots ? state.slots[slotId] : null;
+        const catalogSlot = catalogSlotCandidate && typeof catalogSlotCandidate === 'object' ? catalogSlotCandidate : {};
+        const position = firstNonEmptyValue(
+            readSlotAttr(slotElement, 'data-wslot-position'),
+            readSlotAttr(slotElement, 'data-position'),
+            catalogSlot.position,
+            catalogSlot.area,
+            inferAreaFromSlotId(slotId)
+        );
+        const exclusiveAttr = readSlotAttr(slotElement, 'data-wslot-exclusive');
+        const multipleAttr = readSlotAttr(slotElement, 'data-wslot-multiple');
+
+        return {
+            id: slotId,
+            name: firstNonEmptyValue(
+                readSlotAttr(slotElement, 'data-wslot-name'),
+                readSlotAttr(slotElement, 'data-slot-name'),
+                readSlotAttr(slotElement, 'data-name'),
+                catalogSlot.name,
+                slotId
+            ),
+            accept: firstNonEmptyValue(
+                readSlotAttr(slotElement, 'data-wslot-accept'),
+                readSlotAttr(slotElement, 'data-accept'),
+                catalogSlot.accept,
+                ''
+            ),
+            reject: firstNonEmptyValue(
+                readSlotAttr(slotElement, 'data-wslot-reject'),
+                readSlotAttr(slotElement, 'data-reject'),
+                catalogSlot.reject,
+                ''
+            ),
+            max: firstNonEmptyValue(readSlotAttr(slotElement, 'data-wslot-max'), catalogSlot.max, ''),
+            min: firstNonEmptyValue(readSlotAttr(slotElement, 'data-wslot-min'), catalogSlot.min, ''),
+            exclusive: exclusiveAttr !== null ? exclusiveAttr === 'true' : catalogSlot.exclusive === true,
+            multiple: multipleAttr !== null ? multipleAttr !== 'false' : catalogSlot.multiple !== false,
+            area: position
+        };
     }
 
     function resolvePreviewWidgetElement(data) {
@@ -3385,7 +3974,7 @@
         handleSlotSelected({
             id: data.slot || '',
             name: data.name || data.slot || '',
-            accept: data.accept || '*',
+            accept: data.accept ?? '',
             reject: data.reject || '',
             area: data.area || data.position || '',
             exclusive: data.exclusive === true || data.exclusive === 'true',
@@ -3398,17 +3987,19 @@
      */
     function highlightAcceptableWidgets(acceptCodes) {
         const slot = state.selectedSlot || { id: '', accept: acceptCodes || [], reject: '' };
-        const normalizedAccept = expandAcceptCodesForLayout(slot.accept ?? acceptCodes ?? []);
+        const normalizedAccept = getRecommendationAcceptCodes(slot.accept ?? acceptCodes ?? []);
         const normalizedReject = normalizeCodeList(slot.reject ?? []);
+        removeWidgetRecommendationEmptyState();
 
         if (!normalizedAccept || normalizedAccept.length === 0) {
-            // 没有 accept 限制 → 保留区域过滤结果，不做进一步筛选
+            clearWidgetRecommendations(slot);
+            // 选中 slot 后必须给出明确推荐；没有可匹配契约时清空右侧列表，避免沿用上次推荐。
             return;
         }
 
         // accept 包含 * 表示接受所有部件，等同于无限制
         if (normalizedAccept.includes('*')) {
-            return;
+            return document.querySelectorAll('.widget-item:not([style*="display: none"])').length;
         }
 
         // 保存原始顺序（如果还没有保存）
@@ -3422,7 +4013,7 @@
         });
 
         const widgetList = elements.widgetList;
-        if (!widgetList) return;
+        if (!widgetList) return 0;
 
         let totalChecked = 0, totalMatched = 0, totalHidden = 0;
 
@@ -3469,6 +4060,12 @@
                 group.classList.remove('collapsed');
             }
         });
+
+        if (totalMatched === 0) {
+            clearWidgetRecommendations(slot);
+        }
+
+        return totalMatched;
         
     }
 
@@ -3542,6 +4139,7 @@
     function restoreWidgetOrder() {
         const widgetList = elements.widgetList;
         if (!widgetList) return;
+        removeWidgetRecommendationEmptyState();
 
         // 移除所有高亮，恢复被隐藏的部件和分组
         document.querySelectorAll('.widget-item.highlighted').forEach(el => {
@@ -3630,6 +4228,12 @@
         if (state.pageType) {
             url.searchParams.set('page_type', state.pageType);
         }
+        if (state.themeId) {
+            url.searchParams.set('theme_id', String(state.themeId));
+        }
+        if (state.editorArea) {
+            url.searchParams.set('editor_area', state.editorArea);
+        }
         return url.toString();
     }
 
@@ -3677,86 +4281,426 @@
         if (!listEl) return;
         const hasItems = listEl.querySelector('.widget-item');
         if (hasItems) return;
+        await reloadWidgetLibrary({ silent: true });
+    }
+
+    /**
+     * 部件库分页状态（懒加载 + 无限滚动 + 插槽/关键词过滤）
+     */
+    function getWidgetLibState() {
+        if (!state.widgetLib) {
+            state.widgetLib = {
+                offset: 0,
+                limit: 50,
+                total: 0,
+                hasMore: true,
+                loading: false,
+                initialized: false,
+                slot: null,
+                slotArea: null,
+                slotLabel: '',
+                keyword: '',
+            };
+        }
+        return state.widgetLib;
+    }
+
+    /**
+     * 延迟加载部件库：不再首屏立即拉取，而是等待主预览 iframe 加载完成后再触发；
+     * 同时设置兜底定时器，避免 iframe 长时间不触发 load 时部件库永远不出现。
+     */
+    function deferWidgetLibraryLoad() {
+        if (!state.themeId) {
+            return;
+        }
+        // 兜底：iframe 6 秒内未触发 load 时，强制初始化部件库
+        setTimeout(function () { initWidgetLibraryOnce(); }, 6000);
+    }
+
+    /**
+     * 仅初始化一次部件库（由 iframe load 或兜底定时器触发）
+     */
+    function initWidgetLibraryOnce() {
+        const lib = getWidgetLibState();
+        if (lib.initialized || !state.themeId) {
+            return;
+        }
+        lib.initialized = true;
+        initWidgetInfiniteScroll();
+        loadWidgetLibrary({ reset: true, silent: true });
+    }
+
+    /**
+     * 构造部件库分页接口 URL
+     */
+    function buildWidgetLibUrl(lib) {
+        const url = new URL(config.apiWidgets, window.location.origin);
+        if (state.pageType) url.searchParams.set('page_type', state.pageType);
+        if (state.themeId) url.searchParams.set('theme_id', String(state.themeId));
+        if (state.editorArea) url.searchParams.set('editor_area', state.editorArea);
+        url.searchParams.set('offset', String(lib.offset));
+        url.searchParams.set('limit', String(lib.limit));
+        if (lib.keyword) url.searchParams.set('keyword', lib.keyword);
+        if (lib.slot) {
+            url.searchParams.set('slot_id', lib.slot);
+            if (lib.slotArea) url.searchParams.set('area', lib.slotArea);
+        }
+        return url.toString();
+    }
+
+    /**
+     * 加载部件库（分页）。reset=true 时清空并从第 0 页开始；否则加载下一页。
+     */
+    async function loadWidgetLibrary(options = {}) {
+        const listEl = elements.widgetList;
+        if (!listEl || !state.themeId) {
+            return;
+        }
+        const lib = getWidgetLibState();
+        if (lib.loading) {
+            return;
+        }
+        if (options.reset) {
+            lib.offset = 0;
+            lib.total = 0;
+            lib.hasMore = true;
+            listEl.innerHTML = '<div class="widget-list-loading" id="widgetListLoading">'
+                + '<div class="spinner-border spinner-border-sm text-primary" role="status"></div>'
+                + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('部件库加载中...')) + '</span></div>';
+        } else if (!lib.hasMore) {
+            return;
+        }
+        lib.loading = true;
         try {
-            const result = await fetchWidgetsData();
-            if (result.success && result.data && typeof result.data === 'object' && Object.keys(result.data).length > 0) {
-                renderWidgetListToPanel(result.data);
+            const result = await apiJson(buildWidgetLibUrl(lib));
+            const items = (result && Array.isArray(result.items)) ? result.items : [];
+            if (result && typeof result.total === 'number') {
+                lib.total = result.total;
             }
+            if (options.reset) {
+                const loadingEl = document.getElementById('widgetListLoading');
+                if (loadingEl) loadingEl.remove();
+            }
+            appendWidgetItems(items);
+            lib.offset += items.length;
+            lib.hasMore = !!(result && result.has_more);
+            if (lib.offset === 0 && items.length === 0) {
+                const emptyText = lib.slot
+                    ? translateUiText('该插槽暂无可用部件')
+                    : translateUiText('当前主题暂无可用部件');
+                listEl.innerHTML = '<div class="widget-list-loading"><span class="widget-list-loading-text">'
+                    + escapeHtml(emptyText) + '</span></div>';
+                if (!options.silent) showToast(emptyText, 'info');
+            }
+            renderWidgetLoadMoreHint();
         } catch (err) {
-            console.warn('[ThemeEditor] loadWidgetListIfEmpty failed:', err);
+            console.warn('[ThemeEditor] loadWidgetLibrary failed:', err);
+            if (options.reset) {
+                const loadingEl = document.getElementById('widgetListLoading');
+                if (loadingEl) {
+                    loadingEl.innerHTML = '<span class="widget-list-loading-text">'
+                        + escapeHtml(translateUiText('当前主题暂无可用部件')) + '</span>';
+                }
+            }
+        } finally {
+            lib.loading = false;
         }
     }
 
     /**
-     * 将分组部件数据渲染到 #widgetList（与服务端模板结构一致）
+     * 兼容旧调用：主题/区域/页面类型变化时重新加载部件库（重置分页，保留插槽/关键词过滤）
      */
-    function renderWidgetListToPanel(data) {
+    async function reloadWidgetLibrary(options = {}) {
+        const lib = getWidgetLibState();
+        lib.initialized = true;
+        initWidgetInfiniteScroll();
+        await loadWidgetLibrary({ reset: true, silent: options.silent !== false });
+    }
+
+    /**
+     * 绑定部件库无限滚动（仅绑定一次）
+     */
+    function initWidgetInfiniteScroll() {
+        const scroller = (elements.widgetPanel && elements.widgetPanel.querySelector('.panel-content'))
+            || elements.widgetList;
+        if (!scroller || scroller.dataset.infiniteScrollBound === '1') {
+            return;
+        }
+        scroller.dataset.infiniteScrollBound = '1';
+        scroller.addEventListener('scroll', function () {
+            const lib = getWidgetLibState();
+            if (lib.loading || !lib.hasMore) return;
+            if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 200) {
+                loadWidgetLibrary({ silent: true });
+            }
+        });
+    }
+
+    /**
+     * 在列表底部显示"加载更多/已全部加载"提示
+     */
+    function renderWidgetLoadMoreHint() {
         const listEl = elements.widgetList;
         if (!listEl) return;
-        const exclusiveSlots = ['logo', 'search', 'main-nav', 'header-container', 'footer-container', 'content-container'];
-        let html = '';
-        for (const type in data) {
-            const group = data[type];
-            if (!group || !Array.isArray(group.widgets)) continue;
-            const groupLabel = (group.label || type || '').toString();
-            const widgets = group.widgets;
-            html += '<div class="widget-group" data-type="' + escapeHtml(type) + '">';
-            html += '<div class="widget-group-header" data-toggle="collapse">';
-            html += '<i class="ri-arrow-down-s-line toggle-icon"></i><span>' + escapeHtml(groupLabel) + '</span>';
-            html += '<span class="widget-count">' + widgets.length + '</span></div>';
-            html += '<div class="widget-group-content">';
-            for (let i = 0; i < widgets.length; i++) {
-                const w = widgets[i];
-                if (!w || typeof w !== 'object') continue;
-                const wCode = (w.code ?? '').toString();
-                const wModule = (w.module ?? '').toString();
-                const wType = (w.type ?? '').toString();
-                const wName = (w.name ?? wCode ?? '').toString();
-                const wDesc = (w.description ?? '').toString();
-                const wSlot = (w.slot ?? '').toString();
-                const wSupports = normalizeCodeList(w.supports ?? []);
-                const wSlots = normalizeCodeList(w.slots ?? []);
-                const wSupportCodes = [...new Set([...wSupports, ...wSlots])].join(',');
-                const wPageLayouts = w.page_layouts ?? ['*'];
-                const wIsContainer = !!(w.is_container ?? false);
-                const wExclusive = !!(w.exclusive ?? false) || (wSlot && exclusiveSlots.indexOf(wSlot) !== -1);
-                const wCompatible = !!(w.compatible ?? false);
-                const wPosition = w.position ?? [];
-                const posJson = typeof wPosition === 'string' ? wPosition : JSON.stringify(wPosition);
-                const layoutJson = typeof wPageLayouts === 'string' ? wPageLayouts : JSON.stringify(wPageLayouts);
-                const previewHtml = (w.preview_html ?? '').toString();
-                const itemClass = 'widget-item draggable' + (wIsContainer ? ' widget-container' : '') + (wExclusive ? ' widget-exclusive' : '');
-                html += '<div class="' + itemClass + '" draggable="true"';
-                html += ' data-widget-code="' + escapeHtml(wCode) + '" data-widget-module="' + escapeHtml(wModule) + '"';
-                html += ' data-widget-type="' + escapeHtml(wType) + '" data-widget-name="' + escapeHtml(wName) + '"';
-                html += ' data-widget-position="' + escapeHtml(posJson) + '" data-widget-compatible="' + (wCompatible ? '1' : '0') + '"';
-                html += ' data-widget-slot="' + escapeHtml(wSlot) + '" data-widget-exclusive="' + (wExclusive ? '1' : '0') + '"';
-                html += ' data-widget-supports="' + escapeHtml(wSupportCodes) + '" data-widget-slots="' + escapeHtml(wSlots.join(',')) + '"';
-                html += ' data-widget-page-layouts="' + escapeHtml(layoutJson) + '" data-widget-is-container="' + (wIsContainer ? '1' : '0') + '">';
-                html += '<div class="widget-preview"><div class="widget-preview-canvas">' + previewHtml + '</div>';
-                html += '<div class="widget-preview-overlay"><div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2">';
-                html += '<div class="widget-preview-title">' + escapeHtml(wName);
-                if (wIsContainer) html += ' <span class="badge badge-sm bg-primary ms-1" title="容器部件"><i class="ri-layout-grid-line"></i></span>';
-                if (wExclusive) html += ' <span class="badge badge-sm bg-warning ms-1" title="独占部件"><i class="ri-focus-2-line"></i></span>';
-                html += '</div>';
-                html += '<button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="预览" data-widget-module="' + escapeHtml(wModule) + '" data-widget-code="' + escapeHtml(wCode) + '" data-widget-name="' + escapeHtml(wName) + '"><i class="ri-eye-line"></i></button>';
-                html += '</div><div class="widget-preview-desc">' + escapeHtml(wDesc) + '</div></div></div></div>';
-            }
-            html += '</div></div>';
+        let hint = listEl.querySelector('.widget-load-more-hint');
+        const lib = getWidgetLibState();
+        if (lib.total <= 0 || (lib.offset === 0)) {
+            if (hint) hint.remove();
+            return;
         }
-        listEl.innerHTML = html || listEl.innerHTML;
-        listEl.querySelectorAll('.widget-group-header').forEach(function (header) {
-            header.addEventListener('click', function (e) {
-                if (e.target.closest('.widget-item')) return;
-                const group = this.closest('.widget-group');
-                if (group) group.classList.toggle('collapsed');
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.className = 'widget-load-more-hint';
+            listEl.appendChild(hint);
+        } else {
+            listEl.appendChild(hint);
+        }
+        if (lib.hasMore) {
+            hint.textContent = translateUiText('下滑加载更多...') + ' (' + lib.offset + '/' + lib.total + ')';
+        } else {
+            hint.textContent = translateUiText('已全部加载') + ' (' + lib.total + ')';
+        }
+    }
+
+    /**
+     * 确保指定分组容器存在，返回其 .widget-group-content 元素
+     */
+    function ensureWidgetGroup(listEl, type, label) {
+        let group = listEl.querySelector('.widget-group[data-type="' + cssEscape(type) + '"]');
+        if (group) {
+            return group.querySelector('.widget-group-content');
+        }
+        group = document.createElement('div');
+        group.className = 'widget-group';
+        group.setAttribute('data-type', type);
+        group.innerHTML = '<div class="widget-group-header" data-toggle="collapse">'
+            + '<i class="ri-arrow-down-s-line toggle-icon"></i><span>' + escapeHtml(label) + '</span>'
+            + '<span class="widget-count">0</span></div>'
+            + '<div class="widget-group-content"></div>';
+        group.querySelector('.widget-group-header').addEventListener('click', function (e) {
+            if (e.target.closest('.widget-item')) return;
+            group.classList.toggle('collapsed');
+        });
+        listEl.appendChild(group);
+        return group.querySelector('.widget-group-content');
+    }
+
+    /**
+     * 简单 CSS 选择器属性值转义
+     */
+    function cssEscape(value) {
+        return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    /**
+     * 追加一批部件项到列表（按 group_type 归组）
+     */
+    function appendWidgetItems(items) {
+        const listEl = elements.widgetList;
+        if (!listEl || !Array.isArray(items) || items.length === 0) return;
+        items.forEach(function (w) {
+            if (!w || typeof w !== 'object') return;
+            const type = (w.group_type ?? w.type ?? 'other').toString();
+            const label = (w.group_label ?? type).toString();
+            const contentEl = ensureWidgetGroup(listEl, type, label);
+            if (!contentEl) return;
+            const itemEl = createWidgetLibraryItem(w);
+            if (!itemEl) return;
+            itemEl.addEventListener('dragstart', handleDragStart);
+            itemEl.addEventListener('dragend', handleDragEnd);
+            contentEl.appendChild(itemEl);
+            const group = contentEl.closest('.widget-group');
+            const countEl = group && group.querySelector('.widget-count');
+            if (countEl) {
+                countEl.textContent = String(contentEl.querySelectorAll('.widget-item').length);
+            }
+        });
+        scheduleFitWidgetPreviews();
+    }
+
+    /**
+     * 创建部件库列表项（预览 HTML 单独注入 canvas，避免字符串拼接破坏 DOM）
+     */
+    function createWidgetLibraryItem(w) {
+        const exclusiveSlots = ['logo', 'search', 'main-nav', 'header-container', 'footer-container', 'content-container'];
+        const wCode = (w.code ?? '').toString();
+        const wModule = (w.module ?? '').toString();
+        const wType = (w.type ?? '').toString();
+        const wName = (w.name ?? wCode ?? '').toString();
+        const wDesc = (w.description ?? '').toString();
+        const wSlot = (w.slot ?? '').toString();
+        const wSupports = normalizeCodeList(w.supports ?? []);
+        const wSlots = normalizeCodeList(w.slots ?? []);
+        const wSupportCodes = [...new Set([...wSupports, ...wSlots])].join(',');
+        const wPageLayouts = w.page_layouts ?? ['*'];
+        const wIsContainer = !!(w.is_container ?? false);
+        const wExclusive = !!(w.exclusive ?? false) || (wSlot && exclusiveSlots.indexOf(wSlot) !== -1);
+        const wCompatible = !!(w.compatible ?? false);
+        const wPosition = w.position ?? [];
+        const posJson = typeof wPosition === 'string' ? wPosition : JSON.stringify(wPosition);
+        const layoutJson = typeof wPageLayouts === 'string' ? wPageLayouts : JSON.stringify(wPageLayouts);
+        const previewHtml = (w.preview_html ?? '').toString();
+
+        const itemEl = document.createElement('div');
+        itemEl.className = 'widget-item draggable'
+            + (wIsContainer ? ' widget-container' : '')
+            + (wExclusive ? ' widget-exclusive' : '');
+        itemEl.draggable = true;
+        itemEl.dataset.widgetCode = wCode;
+        itemEl.dataset.widgetModule = wModule;
+        itemEl.dataset.widgetType = wType;
+        itemEl.dataset.widgetName = wName;
+        itemEl.dataset.widgetPosition = posJson;
+        itemEl.dataset.widgetCompatible = wCompatible ? '1' : '0';
+        itemEl.dataset.widgetSlot = wSlot;
+        itemEl.dataset.widgetExclusive = wExclusive ? '1' : '0';
+        itemEl.dataset.widgetSupports = wSupportCodes;
+        itemEl.dataset.widgetSlots = wSlots.join(',');
+        itemEl.dataset.widgetPageLayouts = layoutJson;
+        itemEl.dataset.widgetIsContainer = wIsContainer ? '1' : '0';
+
+        const previewWrap = document.createElement('div');
+        previewWrap.className = 'widget-preview';
+
+        const canvas = document.createElement('div');
+        canvas.className = 'widget-preview-canvas';
+        mountWidgetPreviewHtml(canvas, previewHtml);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'widget-preview-overlay';
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'widget-preview-title-row d-flex align-items-center justify-content-between gap-2';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'widget-preview-title';
+        titleEl.textContent = wName;
+        if (wIsContainer) {
+            titleEl.insertAdjacentHTML('beforeend', ' <span class="badge badge-sm bg-primary ms-1" title="容器部件"><i class="ri-layout-grid-line"></i></span>');
+        }
+        if (wExclusive) {
+            titleEl.insertAdjacentHTML('beforeend', ' <span class="badge badge-sm bg-warning ms-1" title="独占部件"><i class="ri-focus-2-line"></i></span>');
+        }
+
+        const previewBtn = document.createElement('button');
+        previewBtn.type = 'button';
+        previewBtn.className = 'btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0';
+        previewBtn.title = translateUiText('预览');
+        previewBtn.dataset.widgetModule = wModule;
+        previewBtn.dataset.widgetCode = wCode;
+        previewBtn.dataset.widgetName = wName;
+        previewBtn.innerHTML = '<i class="ri-eye-line"></i>';
+
+        titleRow.appendChild(titleEl);
+        titleRow.appendChild(previewBtn);
+
+        const descEl = document.createElement('div');
+        descEl.className = 'widget-preview-desc';
+        descEl.textContent = wDesc;
+
+        overlay.appendChild(titleRow);
+        overlay.appendChild(descEl);
+        previewWrap.appendChild(canvas);
+        previewWrap.appendChild(overlay);
+        itemEl.appendChild(previewWrap);
+
+        if (!previewHtml.trim()) {
+            ensureWidgetCanvasPreview(canvas, wModule, wCode);
+        }
+
+        return itemEl;
+    }
+
+    /**
+     * 构造单个部件项 HTML（与服务端模板结构保持一致）
+     */
+    function getWidgetItemHtml(w) {
+        const exclusiveSlots = ['logo', 'search', 'main-nav', 'header-container', 'footer-container', 'content-container'];
+        const wCode = (w.code ?? '').toString();
+        const wModule = (w.module ?? '').toString();
+        const wType = (w.type ?? '').toString();
+        const wName = (w.name ?? wCode ?? '').toString();
+        const wDesc = (w.description ?? '').toString();
+        const wSlot = (w.slot ?? '').toString();
+        const wSupports = normalizeCodeList(w.supports ?? []);
+        const wSlots = normalizeCodeList(w.slots ?? []);
+        const wSupportCodes = [...new Set([...wSupports, ...wSlots])].join(',');
+        const wPageLayouts = w.page_layouts ?? ['*'];
+        const wIsContainer = !!(w.is_container ?? false);
+        const wExclusive = !!(w.exclusive ?? false) || (wSlot && exclusiveSlots.indexOf(wSlot) !== -1);
+        const wCompatible = !!(w.compatible ?? false);
+        const wPosition = w.position ?? [];
+        const posJson = typeof wPosition === 'string' ? wPosition : JSON.stringify(wPosition);
+        const layoutJson = typeof wPageLayouts === 'string' ? wPageLayouts : JSON.stringify(wPageLayouts);
+        const previewHtml = (w.preview_html ?? '').toString();
+        const itemClass = 'widget-item draggable' + (wIsContainer ? ' widget-container' : '') + (wExclusive ? ' widget-exclusive' : '');
+        let html = '<div class="' + itemClass + '" draggable="true"';
+        html += ' data-widget-code="' + escapeHtml(wCode) + '" data-widget-module="' + escapeHtml(wModule) + '"';
+        html += ' data-widget-type="' + escapeHtml(wType) + '" data-widget-name="' + escapeHtml(wName) + '"';
+        html += ' data-widget-position="' + escapeHtml(posJson) + '" data-widget-compatible="' + (wCompatible ? '1' : '0') + '"';
+        html += ' data-widget-slot="' + escapeHtml(wSlot) + '" data-widget-exclusive="' + (wExclusive ? '1' : '0') + '"';
+        html += ' data-widget-supports="' + escapeHtml(wSupportCodes) + '" data-widget-slots="' + escapeHtml(wSlots.join(',')) + '"';
+        html += ' data-widget-page-layouts="' + escapeHtml(layoutJson) + '" data-widget-is-container="' + (wIsContainer ? '1' : '0') + '">';
+        html += '<div class="widget-preview"><div class="widget-preview-canvas">' + previewHtml + '</div>';
+        html += '<div class="widget-preview-overlay"><div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2">';
+        html += '<div class="widget-preview-title">' + escapeHtml(wName);
+        if (wIsContainer) html += ' <span class="badge badge-sm bg-primary ms-1" title="容器部件"><i class="ri-layout-grid-line"></i></span>';
+        if (wExclusive) html += ' <span class="badge badge-sm bg-warning ms-1" title="独占部件"><i class="ri-focus-2-line"></i></span>';
+        html += '</div>';
+        html += '<button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="预览" data-widget-module="' + escapeHtml(wModule) + '" data-widget-code="' + escapeHtml(wCode) + '" data-widget-name="' + escapeHtml(wName) + '"><i class="ri-eye-line"></i></button>';
+        html += '</div><div class="widget-preview-desc">' + escapeHtml(wDesc) + '</div></div></div></div>';
+        return html;
+    }
+
+    /**
+     * 设置/清除部件库的插槽过滤条件，并刷新搜索框中的插槽标签（chip）
+     * @param {string|null} slotId  插槽/区域代码，null 表示清除
+     * @param {string} slotLabel    展示名
+     * @param {string|null} slotArea 区域代码（可选，传给后端 getWidgetsForSlot）
+     */
+    function setWidgetSlotFilter(slotId, slotLabel, slotArea) {
+        const lib = getWidgetLibState();
+        lib.slot = slotId || null;
+        lib.slotArea = slotArea || null;
+        lib.slotLabel = slotLabel || '';
+        renderWidgetSlotChip();
+        loadWidgetLibrary({ reset: true, silent: true });
+    }
+
+    /**
+     * 渲染搜索框上方的"当前插槽"标签（可点击移除）
+     */
+    function renderWidgetSlotChip() {
+        const search = elements.widgetPanel && elements.widgetPanel.querySelector('.panel-search');
+        if (!search) return;
+        let chip = search.querySelector('#widgetSlotChip');
+        const lib = getWidgetLibState();
+        if (!lib.slot) {
+            if (chip) chip.remove();
+            if (elements.widgetSearch) {
+                elements.widgetSearch.placeholder = translateUiText('搜索部件...');
+            }
+            return;
+        }
+        if (!chip) {
+            chip = document.createElement('div');
+            chip.id = 'widgetSlotChip';
+            chip.className = 'widget-slot-chip';
+            search.insertBefore(chip, search.firstChild);
+        }
+        chip.innerHTML = '<span class="widget-slot-chip-label"><i class="ri-focus-3-line"></i> '
+            + escapeHtml(translateUiText('插槽')) + '：' + escapeHtml(lib.slotLabel || lib.slot) + '</span>'
+            + '<button type="button" class="widget-slot-chip-clear" title="' + escapeHtml(translateUiText('移除插槽过滤')) + '">'
+            + '<i class="ri-close-line"></i></button>';
+        const clearBtn = chip.querySelector('.widget-slot-chip-clear');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                setWidgetSlotFilter(null, '', null);
             });
-        });
-        listEl.querySelectorAll('.widget-item.draggable').forEach(function (item) {
-            item.addEventListener('dragstart', handleDragStart);
-            item.addEventListener('dragend', handleDragEnd);
-        });
-        fitWidgetPreviews();
+        }
+        if (elements.widgetSearch) {
+            elements.widgetSearch.placeholder = translateUiText('在该插槽内搜索...');
+        }
     }
 
     /**
@@ -5533,7 +6477,10 @@
         moveDown: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 13.1716L16.9497 8.22185L15.5355 6.80764L12 10.3431L8.46447 6.80764L7.05025 8.22185L12 13.1716ZM12 18L17.6569 12.3432L16.2426 10.929L12 15.1716L7.75736 10.929L6.34315 12.3432L12 18Z"></path></svg>`,
         info: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z"/></svg>`,
         penetrateUp: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 10.828L7.05 15.778 5.636 14.364 12 8l6.364 6.364L16.95 15.778 12 10.828z"/></svg>`,
-        penetrateDown: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 13.172l4.95-4.95 1.414 1.414L12 16l-6.364-6.364L7.05 10.222 12 13.172z"/></svg>`
+        penetrateDown: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 13.172l4.95-4.95 1.414 1.414L12 16l-6.364-6.364L7.05 10.222 12 13.172z"/></svg>`,
+        aiEdit: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 5.5L18.5 8.5L8.75 18.25H5.75V15.25L15.5 5.5ZM17 4L20 7L21.06 5.94C21.65 5.35 21.65 4.4 21.06 3.81L20.19 2.94C19.6 2.35 18.65 2.35 18.06 2.94L17 4ZM3 20H21V22H3V20Z"></path></svg>`,
+        aiRebuild: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2L13.09 8.26L19 6L15.74 11.35L21 15L14.73 15.9L15 22L12 16.5L9 22L9.27 15.9L3 15L8.26 11.35L5 6L10.91 8.26L12 2Z"></path></svg>`,
+        aiImage: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5 3H19C20.1 3 21 3.9 21 5V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3ZM5 5V14.5L8.5 11L12.5 15L15 12L19 16.5V5H5ZM7.5 10C8.33 10 9 9.33 9 8.5S8.33 7 7.5 7S6 7.67 6 8.5S6.67 10 7.5 10Z"></path></svg>`
     };
 
     /**
@@ -5557,6 +6504,15 @@
                  </button>`;
         html += `<button class="btn-penetrate-down" title="下穿" data-action="penetrate-down" style="display:none;">
                     ${WIDGET_ACTION_ICONS.penetrateDown}
+                 </button>`;
+        html += `<button class="btn-widget-ai-edit" title="AI编辑" data-action="ai-edit" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+                    ${WIDGET_ACTION_ICONS.aiEdit}
+                 </button>`;
+        html += `<button class="btn-widget-ai-rebuild" title="AI重建" data-action="ai-rebuild" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+                    ${WIDGET_ACTION_ICONS.aiRebuild}
+                 </button>`;
+        html += `<button class="btn-widget-ai-image" title="AI图片资源重新生成" data-action="ai-image" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+                    ${WIDGET_ACTION_ICONS.aiImage}
                  </button>`;
         
         // 替换按钮 - 所有部件都有
@@ -5736,6 +6692,11 @@
             }
             .widget-hover-actions .btn-widget-replace:hover {
                 background: rgba(74, 144, 217, 0.85);
+            }
+            .widget-hover-actions .btn-widget-ai-edit:hover,
+            .widget-hover-actions .btn-widget-ai-rebuild:hover,
+            .widget-hover-actions .btn-widget-ai-image:hover {
+                background: rgba(124, 92, 255, 0.9);
             }
             .widget-hover-actions .btn-widget-move-up:hover,
             .widget-hover-actions .btn-widget-move-down:hover {
@@ -5972,6 +6933,25 @@
                         setShowActionsByNest();
                     }
                     break;
+                case 'ai-edit':
+                case 'ai-rebuild':
+                case 'ai-image': {
+                    const effectiveLayoutId = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
+                        ? state.nestStack[state.nestIndex]
+                        : layoutId;
+                    let effectiveSlotId = slotId;
+                    const iframe = elements.previewFrame;
+                    if (iframe && iframe.contentDocument) {
+                        const targetWidget = iframe.contentDocument.querySelector(`[data-layout-id="${effectiveLayoutId}"]`);
+                        if (targetWidget) {
+                            effectiveSlotId = targetWidget.getAttribute('data-slot-id') ||
+                                targetWidget.closest('[data-wslot]')?.getAttribute('data-wslot') ||
+                                targetWidget.closest('[data-slot]')?.getAttribute('data-slot') || slotId;
+                        }
+                    }
+                    handleWidgetAiAction(action, effectiveLayoutId, effectiveSlotId, button);
+                    break;
+                }
                 case 'replace':
                 case 'delete':
                 case 'move-up':
@@ -5995,6 +6975,319 @@
                 }
             }
         }, true); // 使用捕获阶段
+    }
+
+    function getWidgetAiActionLabel(action) {
+        switch (action) {
+            case 'ai-edit':
+                return 'AI编辑';
+            case 'ai-rebuild':
+                return 'AI重建';
+            case 'ai-image':
+                return 'AI图片资源重新生成';
+            default:
+                return 'AI操作';
+        }
+    }
+
+    function setWidgetAiButtonLoading(button, loading) {
+        if (!button) return;
+        if (loading) {
+            button.dataset.originalTitle = button.getAttribute('title') || '';
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            button.setAttribute('title', 'AI处理中');
+            return;
+        }
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+        if (button.dataset.originalTitle) {
+            button.setAttribute('title', button.dataset.originalTitle);
+        }
+        delete button.dataset.originalTitle;
+    }
+
+    async function loadVirtualThemeAiCatalog(force = false) {
+        if (!force && state.virtualThemeAiCatalog) {
+            return state.virtualThemeAiCatalog;
+        }
+        const url = new URL(config.apiVirtualThemeAiCatalog, window.location.origin);
+        url.searchParams.set('adapter_code', 'theme');
+        const result = await apiJson(url.toString(), { silent: true });
+        if (!result.success) {
+            throw new Error(result.message || 'AI目录加载失败');
+        }
+        state.virtualThemeAiCatalog = result.data || {};
+        return state.virtualThemeAiCatalog;
+    }
+
+    function normalizeCatalogItems(catalog, key) {
+        const bucket = catalog && catalog[key] ? catalog[key] : {};
+        return Array.isArray(bucket.items) ? bucket.items : [];
+    }
+
+    function injectVirtualThemeAiDialogStyle() {
+        if (document.getElementById('virtual-theme-ai-dialog-style')) return;
+        const style = document.createElement('style');
+        style.id = 'virtual-theme-ai-dialog-style';
+        style.textContent = `
+            .virtual-theme-ai-dialog {
+                position: fixed;
+                inset: 0;
+                z-index: 10080;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .virtual-theme-ai-dialog__overlay {
+                position: absolute;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.45);
+            }
+            .virtual-theme-ai-dialog__panel {
+                position: relative;
+                width: min(560px, calc(100vw - 32px));
+                max-height: calc(100vh - 48px);
+                overflow: auto;
+                background: #fff;
+                border: 1px solid rgba(15, 23, 42, 0.12);
+                border-radius: 8px;
+                box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+            }
+            .virtual-theme-ai-dialog__head,
+            .virtual-theme-ai-dialog__foot {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 14px 16px;
+                border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+            }
+            .virtual-theme-ai-dialog__foot {
+                justify-content: flex-end;
+                border-top: 1px solid rgba(15, 23, 42, 0.08);
+                border-bottom: 0;
+            }
+            .virtual-theme-ai-dialog__body {
+                display: grid;
+                gap: 14px;
+                padding: 16px;
+            }
+            .virtual-theme-ai-dialog__title {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 700;
+            }
+            .virtual-theme-ai-dialog__field {
+                display: grid;
+                gap: 6px;
+            }
+            .virtual-theme-ai-dialog__label {
+                font-size: 12px;
+                color: #475569;
+                font-weight: 600;
+            }
+            .virtual-theme-ai-dialog__textarea,
+            .virtual-theme-ai-dialog__input {
+                width: 100%;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 8px 10px;
+                font: inherit;
+            }
+            .virtual-theme-ai-dialog__textarea {
+                min-height: 96px;
+                resize: vertical;
+            }
+            .virtual-theme-ai-dialog__grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+            }
+            .virtual-theme-ai-dialog__choice {
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+                padding: 8px;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                min-width: 0;
+            }
+            .virtual-theme-ai-dialog__choice span {
+                min-width: 0;
+                overflow-wrap: anywhere;
+                font-size: 12px;
+            }
+            .virtual-theme-ai-dialog__empty {
+                color: #64748b;
+                font-size: 12px;
+            }
+            @media (max-width: 640px) {
+                .virtual-theme-ai-dialog__grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function renderAiSkillChoices(items) {
+        if (!items.length) {
+            return '<div class="virtual-theme-ai-dialog__empty">暂无可选技能</div>';
+        }
+        return items.map((item) => {
+            const code = String(item.code || '');
+            const checked = item.locked || item.manual ? 'checked' : '';
+            const disabled = item.readonly && !item.locked && !item.manual ? 'disabled' : '';
+            return `<label class="virtual-theme-ai-dialog__choice">
+                <input type="checkbox" name="virtual_ai_skill" value="${escapeHtml(code)}" ${checked} ${disabled}>
+                <span><strong>${escapeHtml(item.name || code)}</strong><br><small>${escapeHtml(item.description || code)}</small></span>
+            </label>`;
+        }).join('');
+    }
+
+    function renderAiStyleChoices(items) {
+        const auto = `<label class="virtual-theme-ai-dialog__choice">
+            <input type="radio" name="virtual_ai_style" value="" checked>
+            <span><strong>自动匹配</strong><br><small>由 Theme AI 根据当前指令选择方向</small></span>
+        </label>`;
+        if (!items.length) {
+            return auto;
+        }
+        return auto + items.map((item) => {
+            const code = String(item.code || '');
+            return `<label class="virtual-theme-ai-dialog__choice">
+                <input type="radio" name="virtual_ai_style" value="${escapeHtml(code)}">
+                <span><strong>${escapeHtml(item.name || code)}</strong><br><small>${escapeHtml(item.description || code)}</small></span>
+            </label>`;
+        }).join('');
+    }
+
+    function readCheckedValues(root, selector) {
+        return Array.from(root.querySelectorAll(selector))
+            .filter(input => input.checked && !input.disabled)
+            .map(input => String(input.value || '').trim())
+            .filter(Boolean);
+    }
+
+    async function openVirtualThemeAiDialog(action, layoutId, slotId) {
+        let catalog = {};
+        try {
+            catalog = await loadVirtualThemeAiCatalog(false);
+        } catch (err) {
+            console.warn('[ThemeEditor] AI catalog unavailable:', err);
+        }
+        const label = getWidgetAiActionLabel(action);
+        const skillItems = normalizeCatalogItems(catalog, 'skills');
+        const styleItems = normalizeCatalogItems(catalog, 'styles');
+        injectVirtualThemeAiDialogStyle();
+
+        return new Promise((resolve) => {
+            const container = document.createElement('div');
+            container.className = 'virtual-theme-ai-dialog';
+            container.innerHTML = `
+                <div class="virtual-theme-ai-dialog__overlay" data-virtual-ai-cancel></div>
+                <div class="virtual-theme-ai-dialog__panel" role="dialog" aria-modal="true">
+                    <div class="virtual-theme-ai-dialog__head">
+                        <h3 class="virtual-theme-ai-dialog__title">${escapeHtml(label)}</h3>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-virtual-ai-cancel>×</button>
+                    </div>
+                    <div class="virtual-theme-ai-dialog__body">
+                        <div class="virtual-theme-ai-dialog__field">
+                            <label class="virtual-theme-ai-dialog__label">指令</label>
+                            <textarea class="virtual-theme-ai-dialog__textarea" data-virtual-ai-instructions placeholder="说明这个 block 要如何变化"></textarea>
+                        </div>
+                        <div class="virtual-theme-ai-dialog__field">
+                            <label class="virtual-theme-ai-dialog__label">技能</label>
+                            <div class="virtual-theme-ai-dialog__grid">${renderAiSkillChoices(skillItems)}</div>
+                        </div>
+                        <div class="virtual-theme-ai-dialog__field">
+                            <label class="virtual-theme-ai-dialog__label">方向</label>
+                            <div class="virtual-theme-ai-dialog__grid">${renderAiStyleChoices(styleItems)}</div>
+                        </div>
+                        <input type="hidden" data-virtual-ai-layout-id value="${escapeHtml(layoutId)}">
+                        <input type="hidden" data-virtual-ai-slot-id value="${escapeHtml(slotId || '')}">
+                    </div>
+                    <div class="virtual-theme-ai-dialog__foot">
+                        <button type="button" class="btn btn-outline-secondary" data-virtual-ai-cancel>取消</button>
+                        <button type="button" class="btn btn-primary" data-virtual-ai-confirm>${escapeHtml(label)}</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(container);
+            const cleanup = (value) => {
+                container.remove();
+                resolve(value);
+            };
+            container.querySelectorAll('[data-virtual-ai-cancel]').forEach(btn => {
+                btn.addEventListener('click', () => cleanup(null));
+            });
+            container.querySelector('[data-virtual-ai-confirm]')?.addEventListener('click', () => {
+                cleanup({
+                    instructions: String(container.querySelector('[data-virtual-ai-instructions]')?.value || ''),
+                    selected_skill_codes: readCheckedValues(container, 'input[name="virtual_ai_skill"]'),
+                    selected_style_codes: readCheckedValues(container, 'input[name="virtual_ai_style"]'),
+                    use_ai: true,
+                });
+            });
+            container.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') cleanup(null);
+            });
+            container.querySelector('[data-virtual-ai-instructions]')?.focus();
+        });
+    }
+
+    async function handleWidgetAiAction(action, layoutId, slotId, button) {
+        if (!layoutId) {
+            showToast('缺少 block 身份', 'warning');
+            return;
+        }
+        const dialog = await openVirtualThemeAiDialog(action, layoutId, slotId);
+        if (!dialog) {
+            return;
+        }
+
+        setWidgetAiButtonLoading(button, true);
+        try {
+            const result = await apiJson(config.apiVirtualThemeBlockAction, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: action,
+                    theme_id: state.themeId || 0,
+                    area: state.editorArea || 'frontend',
+                    page_type: state.layoutType || getCurrentPageType() || 'homepage',
+                    layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                    layout_option: state.layoutOption || 'default',
+                    layout_id: layoutId,
+                    slot_id: slotId || '',
+                    request_id: `block-${action}-${layoutId}-${Date.now()}`,
+                    instructions: dialog.instructions,
+                    selected_skill_codes: dialog.selected_skill_codes,
+                    selected_style_codes: dialog.selected_style_codes,
+                    use_ai: 1,
+                    ...getLayoutLockVirtualPayload(),
+                })
+            });
+            if (!result.success) {
+                throw new Error(result.message || `${getWidgetAiActionLabel(action)}失败`);
+            }
+
+            const data = result.data || {};
+            if (data.layout_option) {
+                await refreshLayoutOptions({
+                    layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                    layout_option: data.layout_option,
+                    silent: true
+                });
+            }
+            showToast(result.message || `${getWidgetAiActionLabel(action)}草稿已生成`, 'success');
+        } catch (err) {
+            console.error('[ThemeEditor] block AI action failed:', err);
+            showToast(err.message || `${getWidgetAiActionLabel(action)}失败`, 'error');
+        } finally {
+            setWidgetAiButtonLoading(button, false);
+        }
     }
 
     /**
@@ -6832,7 +8125,6 @@
                 form.addEventListener('input', scheduleAutoSave);
                 form.addEventListener('change', scheduleAutoSave);
             }
-            if (typeof window.WidgetParamTypesInit === 'function') window.WidgetParamTypesInit(modalBody);
             bindAccordionFormEvents(modalBody);
             bindParamSearch(modalBody);
             return;
@@ -7240,7 +8532,6 @@
             form.id = 'widgetConfigForm';
             form.setAttribute('data-layout-id', layoutId);
         }
-        if (typeof window.WidgetParamTypesInit === 'function') window.WidgetParamTypesInit(elements.configContent);
         bindAccordionFormEvents(elements.configContent);
         bindParamSearch(elements.configContent);
         bindConfigLangSwitcher();
@@ -8098,6 +9389,17 @@
      * 保存布局为新版本
      */
     async function saveLayout() {
+        if (isLayoutLocked()) {
+            try {
+                showToast('Saving virtual layout draft...', 'info');
+                const data = await saveLockedVirtualLayoutDraft();
+                showToast(data.version_id ? `Virtual layout draft saved: #${data.version_id}` : 'Virtual layout draft saved', 'success');
+            } catch (error) {
+                console.error('[ThemeEditor] Save virtual layout draft error:', error);
+                showToast(error.message || 'Save virtual layout draft failed', 'error');
+            }
+            return;
+        }
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
             return;
@@ -8106,11 +9408,11 @@
         try {
             // 弹出输入版本名称的对话框
             const versionName = await showPromptDialog(
-                '保存新版本',
-                '请输入版本名称（可选）：',
+                'Save new version',
+                'Enter a version name (optional).',
                 '',
-                '保存',
-                '取消'
+                'Save',
+                'Cancel'
             );
 
             // 如果用户取消了对话框
@@ -8118,7 +9420,7 @@
                 return;
             }
 
-            showToast('正在保存版本...', 'info');
+            showToast('Saving version...', 'info');
 
             const result = await apiJson(config.apiSaveVersion, {
                 method: 'POST',
@@ -8133,15 +9435,15 @@
             });
 
             if (result.success) {
-                showToast(result.message || '版本已保存', 'success');
+                showToast(result.message || 'Version saved', 'success');
                 // 刷新版本列表
                 await loadVersions();
             } else {
-                showToast(result.message || '保存失败', 'error');
+                showToast(result.message || 'Save failed', 'error');
             }
         } catch (error) {
             console.error('[ThemeEditor] Save version error:', error);
-            showToast('保存版本失败：' + error.message, 'error');
+            showToast('Save version failed: ' + error.message, 'error');
         }
     }
 
@@ -8149,23 +9451,43 @@
      * 发布主题（发布当前版本）
      */
     async function publishTheme() {
+        if (isLayoutLocked()) {
+            const confirmed = await showCustomConfirm(
+                'Publish virtual layout?',
+                'Publish the latest locked virtual layout version for this page context.',
+                'Publish',
+                'Cancel'
+            );
+            if (!confirmed) {
+                return;
+            }
+            try {
+                showToast('Publishing virtual layout...', 'info');
+                const data = await publishLatestLockedVirtualLayoutVersion();
+                showToast(data.version_id ? `Virtual layout version published: #${data.version_id}` : 'Virtual layout version published', 'success');
+            } catch (error) {
+                console.error('[ThemeEditor] Publish virtual layout error:', error);
+                showToast(error.message || 'Publish virtual layout version failed', 'error');
+            }
+            return;
+        }
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
             return;
         }
 
         const confirmed = await showCustomConfirm(
-            '确认发布主题？',
-            '确定要发布当前版本吗？发布后将生成缓存文件，前台将显示此版本的布局。',
-            '确认发布',
-            '取消'
+            'Confirm publish theme?',
+            'Publish the current version and refresh generated cache files?',
+            'Publish',
+            'Cancel'
         );
         if (!confirmed) {
             return;
         }
 
         try {
-            showToast('正在发布...', 'info');
+            showToast('Publishing...', 'info');
 
             const result = await apiJson(config.apiPublishVersion, {
                 method: 'POST',
@@ -8601,22 +9923,13 @@
         areaElement.classList.add('area-selected');
         state.selectedArea = areaCode;
 
-        // 按区域过滤部件
-        filterWidgetsByArea(areaCode);
-
-        // 滚动到匹配的部件
-        scrollToMatchedWidgets(areaCode);
-
-        // 更新部件面板标题（如果有）
-        const widgetPanelTitle = document.querySelector('.widget-panel-title, .editor-widget-panel .panel-header h3');
-        if (widgetPanelTitle) {
-            widgetPanelTitle.innerHTML = `${iconSvg('apps')} 部件库 <span class="area-filter-badge" onclick="window.ThemeEditor?.deselectArea?.()">${areaName} ${iconSvg('close')}</span>`;
-        }
+        // 按区域/插槽在服务端重新过滤加载部件库（分页），并在搜索框显示当前插槽标签
+        setWidgetSlotFilter(areaCode, areaName, areaCode);
 
         // 显示提示
         showToast(`已筛选 "${areaName}" 区域的部件`, 'info');
 
-        console.log('[ThemeEditor] Area selected:', areaCode, '- showing compatible widgets');
+        console.log('[ThemeEditor] Area selected:', areaCode, '- reloading slot-filtered widgets');
     }
 
     /**
@@ -8629,13 +9942,10 @@
         });
         state.selectedArea = null;
 
-        // 显示所有部件
-        filterWidgetsByArea(null);
-
-        // 恢复部件面板标题
-        const widgetPanelTitle = document.querySelector('.widget-panel-title, .editor-widget-panel .panel-header h3');
-        if (widgetPanelTitle) {
-            widgetPanelTitle.innerHTML = `${iconSvg('apps')} 部件库`;
+        // 清除插槽过滤，恢复完整部件库（分页）
+        const lib = getWidgetLibState();
+        if (lib.slot) {
+            setWidgetSlotFilter(null, '', null);
         }
     }
 
@@ -9391,29 +10701,38 @@
         `;
     }
 
+    /**
+     * 全局暴露：滚动并选中预览里的目标 slot。
+     */
     window.scrollToSlot = function(slotId) {
-        if (!elements.previewFrame || !elements.previewFrame.contentWindow) return;
+        const normalizedSlotId = String(slotId || '').trim();
+        if (!normalizedSlotId) {
+            return;
+        }
+
+        let slotElement = null;
 
         try {
-            const iframeDoc = elements.previewFrame.contentDocument || elements.previewFrame.contentWindow.document;
-            const slotElement = iframeDoc.querySelector(`[data-slot-id="${slotId}"]`);
-            
-            if (slotElement) {
-                slotElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                // 高亮插槽
-                slotElement.classList.add('slot-highlight');
-                setTimeout(() => slotElement.classList.remove('slot-highlight'), 2000);
+            if (elements.previewFrame && elements.previewFrame.contentWindow) {
+                const iframeDoc = elements.previewFrame.contentDocument || elements.previewFrame.contentWindow.document;
+                slotElement = findIframeSlotElement(iframeDoc, normalizedSlotId);
+
+                if (slotElement) {
+                    iframeDoc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id], .content-slot').forEach(element => {
+                        element.classList.remove('slot-selected');
+                    });
+                    slotElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    slotElement.classList.add('slot-highlight', 'slot-selected');
+                    setTimeout(() => slotElement.classList.remove('slot-highlight'), 2000);
+                }
             }
         } catch (err) {
-            console.error('无法访问 iframe 内容:', err);
+            console.error('Scroll to slot failed:', err);
         }
+
+        handleSlotSelected(buildSlotInfoFromElement(normalizedSlotId, slotElement));
     };
-    
-    /**
-     * 全局暴露：切换预览版本
-     * 可从 UI 按钮调用：onclick="switchPreviewStatus('draft')" 或 onclick="switchPreviewStatus('published')"
-     */
+
     window.switchPreviewStatus = switchPreviewStatus;
     
     /**
@@ -9435,11 +10754,461 @@
     /**
      * 全局暴露：取消区域选中（用于清除部件过滤）
      */
+    function getPreviewDocument() {
+        try {
+            return elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document || null;
+        } catch (err) {
+            console.warn('[ThemeEditor] Unable to access preview document:', err);
+            return null;
+        }
+    }
+
+    function normalizePlacementSlotInfo(slot) {
+        if (!slot || typeof slot !== 'object') {
+            return null;
+        }
+        const id = String(slot.id || slot.slot_id || '').trim();
+        if (!id) {
+            return null;
+        }
+        const accept = normalizeCodeList(slot.accept ?? slot.accept_codes ?? []);
+        const reject = normalizeCodeList(slot.reject ?? slot.reject_codes ?? []);
+        return {
+            id,
+            slot_id: id,
+            name: slot.name || id,
+            area: slot.area || inferAreaFromSlotId(id),
+            accept,
+            reject,
+            exclusive: slot.exclusive === true || slot.exclusive === 'true',
+            multiple: slot.multiple !== false && slot.multiple !== 'false',
+            max: slot.max ?? '',
+            min: slot.min ?? '',
+            source: slot.source || 'registry',
+        };
+    }
+
+    function collectWidgetPlacementSlots() {
+        const slotsById = new Map();
+        Object.entries(state.slots || {}).forEach(([slotId, slot]) => {
+            const normalized = normalizePlacementSlotInfo({
+                ...(slot && typeof slot === 'object' ? slot : {}),
+                id: slotId,
+                source: 'registry',
+            });
+            if (normalized) {
+                slotsById.set(normalized.id, normalized);
+            }
+        });
+
+        const iframeDoc = getPreviewDocument();
+        if (iframeDoc) {
+            iframeDoc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id]').forEach(slotEl => {
+                const slotId = slotEl.getAttribute('data-wslot') || slotEl.getAttribute('data-slot') || slotEl.getAttribute('data-slot-id') || '';
+                if (!slotId) {
+                    return;
+                }
+                const normalized = normalizePlacementSlotInfo({
+                    ...buildSlotInfoFromElement(slotId, slotEl),
+                    source: 'dom',
+                });
+                if (normalized) {
+                    slotsById.set(normalized.id, {
+                        ...(slotsById.get(normalized.id) || {}),
+                        ...normalized,
+                    });
+                }
+            });
+        }
+
+        return Array.from(slotsById.values());
+    }
+
+    function buildWidgetPlacementSlotTree(slots, anchors) {
+        const areas = ['header', 'content', 'footer'];
+        const root = {
+            id: 'page',
+            label: '页面',
+            type: 'page',
+            children: areas.map(area => ({
+                id: area,
+                label: area === 'header' ? '页头' : area === 'footer' ? '页脚' : '内容',
+                type: 'area',
+                area,
+                children: [],
+            })),
+        };
+        const areaNodes = new Map(root.children.map(node => [node.area, node]));
+
+        slots.forEach(slot => {
+            const area = slot.area || inferAreaFromSlotId(slot.id);
+            const areaNode = areaNodes.get(area) || areaNodes.get('content');
+            areaNode.children.push({
+                id: slot.id,
+                label: slot.name || slot.id,
+                type: 'slot',
+                area,
+                slot,
+                children: [],
+            });
+        });
+
+        const slotNodes = new Map();
+        root.children.forEach(areaNode => {
+            areaNode.children.forEach(slotNode => slotNodes.set(slotNode.id, slotNode));
+        });
+
+        anchors.forEach(anchor => {
+            const slotNode = slotNodes.get(anchor.slot_id);
+            if (!slotNode) {
+                return;
+            }
+            const anchorNode = {
+                id: `widget:${anchor.layout_id}`,
+                label: anchor.widget_name || anchor.widget_code || anchor.layout_id,
+                type: 'widget',
+                area: anchor.area,
+                anchor,
+                children: [],
+            };
+            (anchor.inner_slots || []).forEach(innerSlot => {
+                anchorNode.children.push({
+                    id: innerSlot.id,
+                    label: innerSlot.name || innerSlot.id,
+                    type: 'slot',
+                    area: innerSlot.area || anchor.area,
+                    slot: innerSlot,
+                    children: [],
+                });
+            });
+            slotNode.children.push(anchorNode);
+        });
+
+        return root;
+    }
+
+    function collectWidgetPlacementAnchors() {
+        const anchors = [];
+        const seen = new Set();
+        const iframeDoc = getPreviewDocument();
+        const collectFromElement = (element, source) => {
+            if (!element) {
+                return;
+            }
+            const layoutId = element.dataset.layoutId || element.getAttribute('data-layout-id') || '';
+            if (!layoutId || seen.has(layoutId)) {
+                return;
+            }
+            seen.add(layoutId);
+            const slotEl = element.closest('[data-wslot], [data-slot], [data-slot-id]');
+            const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
+            const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
+            const innerSlots = [];
+            element.querySelectorAll?.('[data-wslot], [data-slot], [data-slot-id]')?.forEach(inner => {
+                if (inner === slotEl) {
+                    return;
+                }
+                const innerSlotId = inner.getAttribute('data-wslot') || inner.getAttribute('data-slot') || inner.getAttribute('data-slot-id') || '';
+                const normalized = normalizePlacementSlotInfo({
+                    ...buildSlotInfoFromElement(innerSlotId, inner),
+                    source: 'inner_dom',
+                });
+                if (normalized) {
+                    innerSlots.push(normalized);
+                }
+            });
+            anchors.push({
+                layout_id: layoutId,
+                widget_code: element.dataset.widgetCode || element.getAttribute('data-widget-code') || '',
+                widget_module: element.dataset.widgetModule || element.getAttribute('data-widget-module') || '',
+                widget_type: element.dataset.widgetType || element.getAttribute('data-widget-type') || '',
+                widget_name: element.dataset.widgetName || element.getAttribute('data-widget-name') || '',
+                slot_id: slotId,
+                area,
+                source,
+                inner_slots: innerSlots,
+            });
+        };
+
+        if (iframeDoc) {
+            iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id]').forEach(el => collectFromElement(el, 'preview'));
+        }
+        document.querySelectorAll('.preview-widget-item[data-layout-id]').forEach(el => collectFromElement(el, 'structure'));
+
+        return anchors;
+    }
+
+    function getSelectedWidgetPlacementTarget(slots, anchors) {
+        if (state.selectedSlot) {
+            const selected = normalizePlacementSlotInfo(state.selectedSlot);
+            if (selected) {
+                return {
+                    type: 'slot',
+                    area: selected.area,
+                    slot_id: selected.id,
+                    insert_mode: 'into_slot',
+                    slot: selected,
+                };
+            }
+        }
+        if (state.selectedWidget) {
+            const layoutId = state.selectedWidget.dataset?.layoutId || state.selectedWidget.getAttribute?.('data-layout-id') || '';
+            const anchor = anchors.find(item => String(item.layout_id) === String(layoutId));
+            if (anchor) {
+                return {
+                    type: 'widget',
+                    area: anchor.area,
+                    slot_id: anchor.slot_id,
+                    anchor_layout_id: anchor.layout_id,
+                    insert_mode: 'after',
+                    anchor,
+                };
+            }
+        }
+        const firstSlot = slots.find(slot => slot.area === 'content') || slots[0] || null;
+        return firstSlot ? {
+            type: 'slot',
+            area: firstSlot.area,
+            slot_id: firstSlot.id,
+            insert_mode: 'into_slot',
+            slot: firstSlot,
+        } : null;
+    }
+
+    function getWidgetPlacementContext() {
+        const slots = collectWidgetPlacementSlots();
+        const anchors = collectWidgetPlacementAnchors();
+        return {
+            theme_id: state.themeId,
+            page_type: state.pageType,
+            layout_type: state.layoutType,
+            layout_option: state.layoutOption,
+            editor_area: state.editorArea || 'frontend',
+            preview_status: state.previewStatus || 'draft',
+            slots,
+            slot_tree: buildWidgetPlacementSlotTree(slots, anchors),
+            widget_anchors: anchors,
+            selected_target: getSelectedWidgetPlacementTarget(slots, anchors),
+        };
+    }
+
+    function collectThemeAiCssVariables(sourceDoc, sourceName) {
+        const result = {};
+        if (!sourceDoc || !sourceDoc.documentElement || !window.getComputedStyle) {
+            return result;
+        }
+        let styles = null;
+        try {
+            styles = sourceDoc.defaultView?.getComputedStyle(sourceDoc.documentElement) || window.getComputedStyle(sourceDoc.documentElement);
+        } catch (error) {
+            return result;
+        }
+        if (!styles) {
+            return result;
+        }
+        const allowed = /^(--te-|--theme-|--weline-|--color-|--font-|--space-|--spacing-|--radius-|--shadow-|--layout-)/i;
+        for (let i = 0; i < styles.length; i++) {
+            const name = styles[i];
+            if (!name || !name.startsWith('--') || !allowed.test(name)) {
+                continue;
+            }
+            const value = String(styles.getPropertyValue(name) || '').trim();
+            if (value !== '') {
+                result[`${sourceName}.${name}`] = value;
+            }
+            if (Object.keys(result).length >= 80) {
+                break;
+            }
+        }
+        return result;
+    }
+
+    function collectThemeAiCurrentValues() {
+        const values = {
+            theme_id: state.themeId,
+            page_type: state.pageType,
+            layout_type: state.layoutType,
+            layout_option: state.layoutOption,
+            editor_area: state.editorArea || 'frontend',
+            preview_status: state.previewStatus || 'draft',
+        };
+        const themeSelect = document.querySelector('#themeSelect');
+        const layoutSelect = document.querySelector('#layoutOptionSelect');
+        const areaSelect = document.querySelector('#editorAreaSelect, [name="editor_area"]');
+        if (themeSelect) {
+            values.theme_label = themeSelect.options?.[themeSelect.selectedIndex]?.textContent?.trim() || '';
+        }
+        if (layoutSelect) {
+            values.layout_option_label = layoutSelect.options?.[layoutSelect.selectedIndex]?.textContent?.trim() || '';
+        }
+        if (areaSelect) {
+            values.editor_area_label = areaSelect.options?.[areaSelect.selectedIndex]?.textContent?.trim() || '';
+        }
+        return values;
+    }
+
+    function getThemeWidgetAiContext() {
+        const iframeDoc = getPreviewDocument();
+        return {
+            provider: 'Weline_Theme',
+            kind: 'theme_editor_context',
+            guidance: 'Optional reference only. Use these current theme values and variables when they help the user request; user prompt and Widget slot protocol have priority.',
+            current_values: collectThemeAiCurrentValues(),
+            css_variables: {
+                editor: collectThemeAiCssVariables(document, 'editor'),
+                preview: collectThemeAiCssVariables(iframeDoc, 'preview'),
+            },
+            placement_context: getWidgetPlacementContext(),
+        };
+    }
+
+    function registerThemeWidgetAiContextProvider() {
+        const provider = {
+            id: 'theme',
+            label: '主题上下文',
+            description: '当前主题、布局、slot 树、CSS 变量和当前值。默认参考，可取消。',
+            defaultSelected: true,
+            optional: true,
+            getContext: getThemeWidgetAiContext,
+        };
+        if (typeof window.WelineRegisterWidgetAiContextProvider === 'function') {
+            window.WelineRegisterWidgetAiContextProvider(provider);
+            return;
+        }
+        window.WelineWidgetAiContextProviders = window.WelineWidgetAiContextProviders || [];
+        window.WelineWidgetAiContextProviders.push(provider);
+    }
+
+    function resolveAnchorPlacementInfo(layoutId) {
+        const iframeDoc = getPreviewDocument();
+        const widgetEl = iframeDoc?.querySelector(`[data-layout-id="${layoutId}"]`) || document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`);
+        if (!widgetEl) {
+            return null;
+        }
+        const slotEl = widgetEl.closest('[data-wslot], [data-slot], [data-slot-id]');
+        const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
+        const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
+        const siblingContainer = widgetEl.parentElement;
+        const siblings = siblingContainer ? Array.from(siblingContainer.children).filter(el => el.hasAttribute('data-layout-id')) : [];
+        const index = siblings.findIndex(el => String(el.getAttribute('data-layout-id')) === String(layoutId));
+        return { widgetEl, slotEl, slotId, area, index: index < 0 ? 0 : index };
+    }
+
+    function normalizeProviderWidgetData(widgetData) {
+        const defaultConfig = widgetData.default_config || widgetData.defaultConfig || {};
+        return {
+            code: widgetData.code || widgetData.widget_code || '',
+            module: widgetData.module || 'Weline_Widget',
+            type: widgetData.type || 'content',
+            name: widgetData.name || widgetData.code || widgetData.widget_code || 'Widget',
+            position: widgetData.position || [],
+            compatible: widgetData.compatible !== false,
+            slot: widgetData.slot || null,
+            supports: widgetData.supports || [],
+            slots: widgetData.slots || [],
+            exclusive: widgetData.exclusive === true || widgetData.exclusive === 'true',
+            pageLayouts: widgetData.page_layouts || widgetData.pageLayouts || ['*'],
+            isContainer: widgetData.is_container === true || widgetData.isContainer === true,
+            config: widgetData.config || defaultConfig || {},
+        };
+    }
+
+    async function deleteLayoutWidgetForPlacement(layoutId, slotId, area) {
+        if (!layoutId) {
+            return true;
+        }
+        const result = await apiJson(config.apiDeleteWidget, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                layout_id: layoutId,
+                theme_id: state.themeId,
+                slot_id: slotId || '',
+                area: area || inferAreaFromSlotId(slotId),
+                layout_type: state.layoutType || state.pageType || 'homepage',
+                layout_option: state.layoutOption || 'default',
+            })
+        });
+        return !!result?.success;
+    }
+
+    async function placeWidgetFromProvider(widgetData, placementTarget = {}) {
+        const normalizedWidget = normalizeProviderWidgetData(widgetData || {});
+        if (!normalizedWidget.code) {
+            showToast('生成的部件缺少 code，无法放置', 'error');
+            return null;
+        }
+
+        const mode = placementTarget.insert_mode || placementTarget.mode || 'into_slot';
+        const anchorInfo = placementTarget.anchor_layout_id ? resolveAnchorPlacementInfo(placementTarget.anchor_layout_id) : null;
+        const selectedSlot = state.selectedSlot ? normalizePlacementSlotInfo(state.selectedSlot) : null;
+        let slotId = placementTarget.slot_id || placementTarget.parent_slot_id || anchorInfo?.slotId || selectedSlot?.id || normalizedWidget.slot || '';
+        let area = placementTarget.area || anchorInfo?.area || selectedSlot?.area || inferAreaFromSlotId(slotId);
+        let sortOrder = placementTarget.sort_order != null ? Number(placementTarget.sort_order) : null;
+
+        if ((mode === 'before' || mode === 'after' || mode === 'replace') && anchorInfo) {
+            slotId = slotId || anchorInfo.slotId;
+            area = area || anchorInfo.area;
+            if (sortOrder === null || Number.isNaN(sortOrder)) {
+                sortOrder = mode === 'after' ? anchorInfo.index + 1 : anchorInfo.index;
+            }
+        }
+
+        if (!slotId && selectedSlot) {
+            slotId = selectedSlot.id;
+            area = selectedSlot.area;
+        }
+        if (!slotId) {
+            showToast('请先选择要放置的 slot', 'warning');
+            return null;
+        }
+
+        if (mode === 'replace' && anchorInfo?.widgetEl) {
+            const deleted = await deleteLayoutWidgetForPlacement(placementTarget.anchor_layout_id, slotId, area);
+            if (!deleted) {
+                showToast('替换目标删除失败，已停止放置', 'error');
+                return null;
+            }
+        }
+
+        if (sortOrder === null || Number.isNaN(sortOrder)) {
+            sortOrder = getNextSlotSortOrder(slotId);
+        }
+
+        const exclusive = placementTarget.exclusive !== undefined
+            ? !!placementTarget.exclusive
+            : (mode === 'replace' && isExclusiveSlot(slotId, normalizedWidget.code)) || normalizedWidget.exclusive || isExclusiveSlot(slotId, normalizedWidget.code);
+
+        return saveWidget({
+            area,
+            slotId,
+            widgetData: normalizedWidget,
+            sortOrder,
+            exclusive,
+            switchToPreview: true,
+        });
+    }
+
+    function registerWidgetLibraryItem(item) {
+        if (!item || item.__themeEditorWidgetBound) {
+            return;
+        }
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+        item.__themeEditorWidgetBound = true;
+        scheduleFitWidgetPreviews();
+    }
+
     window.ThemeEditor = window.ThemeEditor || {};
     window.ThemeEditor.apiJson = apiJson;
     window.ThemeEditor.deselectArea = deselectArea;
     window.ThemeEditor.selectArea = selectArea;
     window.ThemeEditor.filterWidgetsByArea = filterWidgetsByArea;
+    window.ThemeEditor.getWidgetPlacementContext = getWidgetPlacementContext;
+    window.ThemeEditor.getWidgetAiContext = getThemeWidgetAiContext;
+    window.ThemeEditor.placeWidgetFromProvider = placeWidgetFromProvider;
+    window.ThemeEditor.registerWidgetLibraryItem = registerWidgetLibraryItem;
+    registerThemeWidgetAiContextProvider();
 
     // ==================== 版本控制功能 ====================
 

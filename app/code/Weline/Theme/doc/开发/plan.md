@@ -7,6 +7,7 @@
 > 本计划按当前代码实际状态重建，替代旧的 `w_msg()` 模块子计划。
 > 当前任务跟踪以 `doc/开发/plan.md` 与 `doc/开发/task.md` 为准。
 > 历史参考文档：`doc/需求文档-完整版.md`、`doc/widget-config-enhancement-plan.md`、`doc/widget-config-i18n-implementation-summary.md`、`doc/widget-config-i18n-testing.md`、`doc/主题配置方案.md`、`doc/主题配置系统实施总结.md`、`doc/widget-config-ui-beautification.md`
+> 虚拟布局与 scope 配置的新规划见：[Theme 虚拟布局与产品/分类布局计划](../virtual-layout-scope-plan.md)；跨模块总计划见：[SystemConfig 与 Theme 虚拟布局总计划](../../../SystemConfig/doc/scope-config-theme-layout-master-plan.md)。
 
 ## 代码现状结论
 

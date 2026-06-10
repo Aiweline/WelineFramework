@@ -111,6 +111,7 @@ if ($isDev) {
     $modulesBaseUrl = '/static/Weline/Backend/js/weline-api';
 }
 
+$__dv = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $themeConfigPayload = [
     'env' => [
         'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
@@ -121,6 +122,8 @@ $themeConfigPayload = [
     'area' => $backendRoutePrefix,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
+    'deployVersion' => ($__dv && is_array($__dv)) ? ($__dv['deploy_version'] ?? 'dev') : 'dev',
+    'workerBuildId' => ($__dv && is_array($__dv)) ? ($__dv['worker_build_id'] ?? 'dev') : 'dev',
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'debug' => DEV,

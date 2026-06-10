@@ -35,6 +35,7 @@
 | 命令、代码生成、生成链路 | `框架核心工程师-命令与代码生成` |
 | 业务模块功能 | `业务模块工程师-模块开发`；`业务模块工程师-服务层与业务逻辑` |
 | 配置、缓存、后台权限 | `业务模块工程师-配置缓存与后台权限` |
+| 第三方支付方式、支付 Provider、支付配置模板、checkout 支付模板 | `.codex/skills/payment-provider-development/SKILL.md` |
 | 主题模板、Taglib、Widget | `前端主题工程师-主题模板开发` |
 | GuoLaiRen 供应商模块 | `app/code/GuoLaiRen` 已整体迁移到 `E:\公司\远程\src\weline`；源仓库不再支持该 vendor，切换到目标仓库处理 |
 | 组件、页面、视觉状态 | `前端主题工程师-组件与页面构建`；`ui-ux-pro-max` |
