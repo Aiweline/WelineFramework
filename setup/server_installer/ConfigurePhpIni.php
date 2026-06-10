@@ -11,6 +11,10 @@ final class ConfigurePhpIni
     private const MANAGED_EXTENSIONS_BEGIN = '; >>> installer managed extensions >>>';
     private const MANAGED_EXTENSIONS_END = '; <<< installer managed extensions <<<';
 
+    private const CACERT_URL = 'https://curl.se/ca/cacert.pem';
+
+    private const MIN_CACERT_SIZE = 100_000;
+
     private string $projectRoot;
     private string $phpDir;
 
@@ -154,10 +158,110 @@ final class ConfigurePhpIni
             $content = preg_replace('/(\[PHP\])/', '$1' . "\nmemory_limit = 512M\n", $content, 1) ?? $content;
         }
 
+        $this->ensurePublicCaBundle();
         $content = $this->configureLogPaths($content);
+        $content = $this->configureSslCaPaths($content);
         $content = $this->configureOpcache($content, $isWindows);
         file_put_contents($iniPath, $content);
         file_put_contents($this->phpDir . '/php.installer.ini', $this->buildInstallerIni($extList, $extDirReal, $isWindows));
+    }
+
+    public function getCaBundlePath(): string
+    {
+        return $this->phpDir . '/extras/ssl/cacert.pem';
+    }
+
+    /**
+     * 确保公网 CA 证书包存在（用于 HTTPS 下载 composer.phar 等）。
+     * 本地 _local_ca 仅适用于开发自签证书，不能用于校验 getcomposer.org 等公网站点。
+     */
+    public function ensurePublicCaBundle(): bool
+    {
+        $path = $this->getCaBundlePath();
+        if ($this->isValidCaBundle($path)) {
+            return true;
+        }
+
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
+        return $this->downloadCaBundle($path);
+    }
+
+    private function isValidCaBundle(string $path): bool
+    {
+        if (!is_file($path) || filesize($path) < self::MIN_CACERT_SIZE) {
+            return false;
+        }
+        $sample = @file_get_contents($path, false, null, 0, 8192);
+        if (!is_string($sample) || $sample === '') {
+            return false;
+        }
+
+        return str_contains($sample, 'BEGIN CERTIFICATE')
+            || str_contains($sample, 'Bundle of CA Root Certificates');
+    }
+
+    private function downloadCaBundle(string $outPath): bool
+    {
+        $tmpPath = $outPath . '.download';
+        if (is_file($tmpPath)) {
+            @unlink($tmpPath);
+        }
+
+        $ok = false;
+        if (function_exists('curl_init')) {
+            $fp = fopen($tmpPath, 'w');
+            if ($fp) {
+                $ch = curl_init(self::CACERT_URL);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => false,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS => 10,
+                    CURLOPT_CONNECTTIMEOUT => 30,
+                    CURLOPT_TIMEOUT => 120,
+                    CURLOPT_FILE => $fp,
+                    CURLOPT_HTTPHEADER => [
+                        'User-Agent: Mozilla/5.0 (compatible; WelineInstaller/1.0)',
+                        'Accept: text/plain, */*',
+                    ],
+                    // 引导阶段尚无可用 CA 包，仅对 curl.se 官方 cacert.pem 关闭校验
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => 0,
+                    CURLOPT_ENCODING => '',
+                ]);
+                $ok = curl_exec($ch) !== false && (int) curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200;
+                curl_close($ch);
+                fclose($fp);
+            }
+        }
+
+        if (!$ok || !$this->isValidCaBundle($tmpPath)) {
+            @unlink($tmpPath);
+            return is_file($outPath) && $this->isValidCaBundle($outPath);
+        }
+
+        if (is_file($outPath)) {
+            @unlink($outPath);
+        }
+
+        return @rename($tmpPath, $outPath);
+    }
+
+    private function configureSslCaPaths(string $content): string
+    {
+        $caPath = str_replace('\\', '/', $this->getCaBundlePath());
+        if (!$this->isValidCaBundle($this->getCaBundlePath())) {
+            return $content;
+        }
+
+        foreach (['curl.cainfo', 'openssl.cafile'] as $key) {
+            $content = $this->upsertIniDirective($content, $key, $caPath);
+        }
+
+        return $content;
     }
 
     private function isOpcacheAvailable(bool $isWindows): bool
@@ -358,6 +462,13 @@ final class ConfigurePhpIni
             foreach ($this->getOpcacheInstallerIniLines(true) as $opcacheLine) {
                 $lines[] = $opcacheLine;
             }
+        }
+
+        $this->ensurePublicCaBundle();
+        $caPath = str_replace('\\', '/', $this->getCaBundlePath());
+        if ($this->isValidCaBundle($this->getCaBundlePath())) {
+            $lines[] = 'curl.cainfo = "' . $caPath . '"';
+            $lines[] = 'openssl.cafile = "' . $caPath . '"';
         }
 
         return implode("\n", $lines) . "\n";
