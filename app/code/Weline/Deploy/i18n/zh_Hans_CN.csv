@@ -55,11 +55,65 @@
 "tar 备份失败","tar 备份失败"
 "✓ zip 备份创建成功","✓ zip 备份创建成功"
 "zip 备份失败","zip 备份失败"
+查看当前部署版本,查看当前部署版本
+尚未发布过,尚未发布过
+当前部署版本,当前部署版本
+版本：%{1},版本：%{1}
+"发布 ID：%{1}","发布 ID：%{1}"
+"ref 类型：%{1}","ref 类型：%{1}"
+commit：%{1},commit：%{1}
+tag：%{1},tag：%{1}
+"Worker ID：%{1}","Worker ID：%{1}"
+部署时间：%{1},部署时间：%{1}
+部署模式：%{1},部署模式：%{1}
+最近发布历史,最近发布历史
+"等待指定版本生效（用于 CI 门禁）","等待指定版本生效（用于 CI 门禁）"
+"缺少 --expect 参数","缺少 --expect 参数"
+"等待版本：%{1}（超时 %{2} 秒）","等待版本：%{1}（超时 %{2} 秒）"
+"版本已生效：%{1}（第 %{2} 次检测）","版本已生效：%{1}（第 %{2} 次检测）"
+"第 %{1} 次检测：当前 %{2}，期望 %{3}","第 %{1} 次检测：当前 %{2}，期望 %{3}"
+"超时：版本 %{1} 未在 %{2} 秒内生效","超时：版本 %{1} 未在 %{2} 秒内生效"
+"完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
+发布失败：%{1},发布失败：%{1}
+"生成或更新框架 Webhook 访问密钥，并输出 curl 测试命令与部署关联指引","生成或更新框架 Webhook 访问密钥，并输出 curl 测试命令与部署关联指引"
+"--force 将重新生成 Webhook 密钥与随机公网路径，须同步更新 Git 平台。","--force 将重新生成 Webhook 密钥与随机公网路径，须同步更新 Git 平台。"
+"--rotate-path 将重新生成随机公网路径，须同步更新 Git 平台 Webhook URL。","--rotate-path 将重新生成随机公网路径，须同步更新 Git 平台 Webhook URL。"
+"添加 -y 跳过确认。","添加 -y 跳过确认。"
+是否继续？,是否继续？
+"Weline 部署 Webhook 关联助手","Weline 部署 Webhook 关联助手"
+"已生成新的随机 Webhook 公网路径。","已生成新的随机 Webhook 公网路径。"
+"沿用后台已有 Webhook 路径（使用 --rotate-path 或 --force 可重新生成）。","沿用后台已有 Webhook 路径（使用 --rotate-path 或 --force 可重新生成）。"
+"已生成 Webhook 公网路径。","已生成 Webhook 公网路径。"
+"已生成新的 Webhook 访问密钥。","已生成新的 Webhook 访问密钥。"
+"沿用后台已有 Webhook 密钥（使用 --force 可重新生成）。","沿用后台已有 Webhook 密钥（使用 --force 可重新生成）。"
+"已生成 Webhook 访问密钥。","已生成 Webhook 访问密钥。"
+"随机 Webhook 公网路径已保存到后台部署配置。","随机 Webhook 公网路径已保存到后台部署配置。"
+"Webhook 路径保存失败。","Webhook 路径保存失败。"
+"密钥已保存到后台「部署配置 > Webhook 密钥」。","密钥已保存到后台「部署配置 > Webhook 密钥」。"
+密钥保存失败，请手动写入后台部署配置。,密钥保存失败，请手动写入后台部署配置。
+--no-save：未写入后台配置，请自行保存下方密钥与路径。,--no-save：未写入后台配置，请自行保存下方密钥与路径。
+"Webhook 公网路径（随机，~wh~ 前缀）","Webhook 公网路径（随机，~wh~ 前缀）"
+"Git 平台 Webhook 部署地址（完整 URL）","Git 平台 Webhook 部署地址（完整 URL）"
+"站点根 URL 来源：%{1}","站点根 URL 来源：%{1}"
+相对路径（需自行拼接域名）：/%{1},相对路径（需自行拼接域名）：/%{1}
+"版本探测 URL","版本探测 URL"
+"Webhook 访问密钥（webhook_secret）","Webhook 访问密钥（webhook_secret）"
+"部署 SSH 密钥","部署 SSH 密钥"
+"SSH 密钥生成失败。","SSH 密钥生成失败。"
+"SSH 密钥对已生成。","SSH 密钥对已生成。"
+"沿用已有 SSH 密钥（使用 --ssh-force 可重新生成）。","沿用已有 SSH 密钥（使用 --ssh-force 可重新生成）。"
+私钥：%{1},私钥：%{1}
+公钥：%{1},公钥：%{1}
+"curl 测试命令（专用部署环境执行）","curl 测试命令（专用部署环境执行）"
+"无法生成 curl 示例：缺少完整 Webhook URL。","无法生成 curl 示例：缺少完整 Webhook URL。"
+配置指引,配置指引
+完成。,完成。
 "从 Git 仓库增量更新框架核心代码（只更新变化的文件）","从 Git 仓库增量更新框架核心代码（只更新变化的文件）"
 "从 Git 仓库增量更新框架核心代码","从 Git 仓库增量更新框架核心代码"
 "指定分支（未配置默认分支时必填，如：main, master, dev）","指定分支（未配置默认分支时必填，如：main, master, dev）"
 "指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）","指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）"
-"仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；未配置时使用公用官网","仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；未配置时使用公用官网"
+"未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像","未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像"
+"仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换","仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换"
 "核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理","核心更新不会拷贝 app/code/Aiweline 和 app/code/WeShop；这些项目级模块由目标项目自行管理"
 "使用自定义仓库（需先配置 .env 或 env.php）","使用自定义仓库（需先配置 .env 或 env.php）"
 "框架核心代码更新（强制模式 - 完整重新下载并覆盖）","框架核心代码更新（强制模式 - 完整重新下载并覆盖）"
@@ -67,6 +121,7 @@
 "步骤 1/6：检查 Git...","步骤 1/6：检查 Git..."
 "步骤 2/6：验证参数...","步骤 2/6：验证参数..."
 仓库：%{1},仓库：%{1}
+备用仓库：%{1},备用仓库：%{1}
 标签：%{1},标签：%{1}
 更新模式：%{1},更新模式：%{1}
 "步骤 3/6：准备临时目录...","步骤 3/6：准备临时目录..."
@@ -83,35 +138,43 @@
 "- 跳过文件：%{1} 个（受保护或排除的文件）","- 跳过文件：%{1} 个（受保护或排除的文件）"
 "错误：未检测到 Git","错误：未检测到 Git"
 "✓ Git 检查通过","✓ Git 检查通过"
+"检测 GitHub 连通性（ping github.com）...","检测 GitHub 连通性（ping github.com）..."
+"✓ GitHub 可达，使用 GitHub 仓库","✓ GitHub 可达，使用 GitHub 仓库"
+"GitHub 不可达，使用 Gitee 镜像仓库","GitHub 不可达，使用 Gitee 镜像仓库"
+"GitHub ping 未响应，但 HTTPS 端口可达","GitHub ping 未响应，但 HTTPS 端口可达"
 "错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default","错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default"
 强制模式：删除旧缓存目录...,强制模式：删除旧缓存目录...
 "✓ 创建新缓存目录：%{1}","✓ 创建新缓存目录：%{1}"
 "✓ 使用现有缓存目录：%{1}","✓ 使用现有缓存目录：%{1}"
 "增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更...","增量更新：检测到现有仓库缓存，使用 git fetch 拉取变更..."
-"fetch 失败，尝试重新克隆...","fetch 失败，尝试重新克隆..."
+"fetch 失败，尝试切换仓库并重新克隆...","fetch 失败，尝试切换仓库并重新克隆..."
 获取标签...,获取标签...
 "检测到 %{1} 个变化的文件","检测到 %{1} 个变化的文件"
 "标签不存在: %{1}","标签不存在: %{1}"
 "✓ 已切换到标签 %{1}","✓ 已切换到标签 %{1}"
 "重置到远程分支 %{1} 最新...","重置到远程分支 %{1} 最新..."
 "分支不存在: %{1}","分支不存在: %{1}"
-重置失败，尝试重新克隆...,重置失败，尝试重新克隆...
+重置失败，尝试切换仓库并重新克隆...,重置失败，尝试切换仓库并重新克隆...
 "✓ 已更新到分支 %{1} 最新版本","✓ 已更新到分支 %{1} 最新版本"
 "无法获取 Git diff，将使用全量更新","无法获取 Git diff，将使用全量更新"
 完整克隆仓库...,完整克隆仓库...
+主仓库失败，尝试备用仓库：%{1},主仓库失败，尝试备用仓库：%{1}
+所有仓库均无法克隆或初始化,所有仓库均无法克隆或初始化
+克隆仓库：%{1},克隆仓库：%{1}
 克隆失败，尝试初始化仓库...,克隆失败，尝试初始化仓库...
-初始化仓库失败,初始化仓库失败
 "拉取标签 %{1}...","拉取标签 %{1}..."
 "拉取分支 %{1}...","拉取分支 %{1}..."
 "✓ 仓库初始化成功","✓ 仓库初始化成功"
 "✓ 仓库克隆成功","✓ 仓库克隆成功"
 "切换到标签 %{1}...","切换到标签 %{1}..."
 最新提交：%{1},最新提交：%{1}
+同步目录：%{1},同步目录：%{1}
 完全覆盖模式：更新所有文件...,完全覆盖模式：更新所有文件...
 "增量模式：只更新 Git 变化的文件...","增量模式：只更新 Git 变化的文件..."
 "✓ 已是最新版本，无需更新文件","✓ 已是最新版本，无需更新文件"
 "⚠ vendor 目录未更新，保留现有依赖包","⚠ vendor 目录未更新，保留现有依赖包"
 "✓ 处理了 %{1} 个变化的文件","✓ 处理了 %{1} 个变化的文件"
+"补缺：同步 %{1} 个本地缺失的核心文件","补缺：同步 %{1} 个本地缺失的核心文件"
 "⚠ 源路径不存在: %{1}","⚠ 源路径不存在: %{1}"
 "拷贝 %{1}...","拷贝 %{1}..."
 "✓ %{1}","✓ %{1}"
@@ -141,6 +204,41 @@
 请求方式错误,请求方式错误
 部署配置已保存,部署配置已保存
 部署配置保存失败：%{1},部署配置保存失败：%{1}
+"Git fetch 失败：%{1}","Git fetch 失败：%{1}"
+"Git checkout tag 失败：%{1}","Git checkout tag 失败：%{1}"
+"Git checkout 分支失败：%{1}","Git checkout 分支失败：%{1}"
+"Git reset 失败：%{1}","Git reset 失败：%{1}"
+"Git pull 失败：%{1}","Git pull 失败：%{1}"
+开始发布：%{1},开始发布：%{1}
+备份中...,备份中...
+"Git 更新中...","Git 更新中..."
+执行后置命令...,执行后置命令...
+版本戳已写入：%{1},版本戳已写入：%{1}
+重载服务...,重载服务...
+发布成功：%{1},发布成功：%{1}
+无法创建部署版本目录：%{1},无法创建部署版本目录：%{1}
+无法写入部署版本文件,无法写入部署版本文件
+无法创建目录：%{1},无法创建目录：%{1}
+"无法生成 SSH 密钥，请确认服务器已安装 ssh-keygen。","无法生成 SSH 密钥，请确认服务器已安装 ssh-keygen。"
+"命令行 --base-url","命令行 --base-url"
+"运行环境 website_url","运行环境 website_url"
+"环境配置 %{1}","环境配置 %{1}"
+"app/etc/env.php website_url","app/etc/env.php website_url"
+"app/etc/env.php website.url","app/etc/env.php website.url"
+"网站管理默认站点 URL","网站管理默认站点 URL"
+"推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）","推荐：Bearer 鉴权（GitHub / 通用 HTTP 客户端）"
+"兼容：X-Webhook-Token 请求头（与部分平台密码字段等价）","兼容：X-Webhook-Token 请求头（与部分平台密码字段等价）"
+"兼容：URL 查询参数 token","兼容：URL 查询参数 token"
+健康检查（GET，无需密钥）,健康检查（GET，无需密钥）
+"【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。","【1】Webhook 公网路径为随机生成（~wh~ 前缀），仅 deploy:webhook:setup 可轮换；Git 平台 URL 须与命令输出完全一致。"
+"【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。","【2】Git 平台 Secret / 密码须与下方 webhook_secret 一致；推荐使用 Authorization: Bearer。"
+"【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。","【3】版本探测地址为 Webhook 路径后加 /version（可配合后台「发布探测 Token」）。"
+"【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}","【4】Git 平台 Webhook URL（复制到仓库配置）：%{1}"
+"【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。","【4】未能自动推断站点域名，请追加 --base-url=https://你的域名 后重新运行以输出完整部署地址与 curl。"
+"【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。","【5】仅在专用部署目录测试 curl，避免误触发开发机上的未提交代码。"
+"【6】本次已生成新的 Webhook 密钥并写入后台配置，请同步更新 Git 平台 Webhook 中的密钥。","【6】本次已生成新的 Webhook 密钥并写入后台配置，请同步更新 Git 平台 Webhook 中的密钥。"
+"【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。","【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。"
+"【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。","【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。"
 已配置，留空表示不修改,已配置，留空表示不修改
 未配置,未配置
 部署配置,部署配置
@@ -166,80 +264,28 @@
 核心仓库用户名,核心仓库用户名
 "核心仓库 Token","核心仓库 Token"
 Webhook,Webhook
-监听地址,监听地址
-监听端口,监听端口
-请求路径,请求路径
-"Webhook 分支","Webhook 分支"
+公网路径与访问密码均由命令生成，勿手工填写常见路径。首次或轮换：,公网路径与访问密码均由命令生成，勿手工填写常见路径。首次或轮换：
+；仅轮换路径：,；仅轮换路径：
+"Webhook 公网路径（只读）","Webhook 公网路径（只读）"
+"尚未生成，请执行 deploy:webhook:setup","尚未生成，请执行 deploy:webhook:setup"
+"随机路径以 ~wh~ 开头，由 ModuleRouter 特征匹配；版本探测为同路径后加 /version。","随机路径以 ~wh~ 开头，由 ModuleRouter 特征匹配；版本探测为同路径后加 /version。"
 "Webhook 密钥","Webhook 密钥"
+"即 webhook_secret；留空保存表示不修改已有密钥。","即 webhook_secret；留空保存表示不修改已有密钥。"
 "Bash 命令","Bash 命令"
-Cloudflare,Cloudflare
-启用缓存清理,启用缓存清理
-"Cloudflare Zone ID","Cloudflare Zone ID"
-"Cloudflare API Token","Cloudflare API Token"
-保存配置,保存配置
-允许 Tag 发布,允许 Tag 发布
-"Tag 前缀过滤","Tag 前缀过滤"
-"留空表示允许所有 tag；填写后仅匹配此前缀的 tag 触发部署","留空表示允许所有 tag；填写后仅匹配此前缀的 tag 触发部署"
-"发布探测 Token","发布探测 Token"
-"访问 GET /deploy/version?token=xxx 可查看详细版本信息","访问 GET /deploy/version?token=xxx 可查看详细版本信息"
-"Tag 发布与探测","Tag 发布与探测"
-发布历史,发布历史
-版本,版本
-类型,类型
-触发,触发
-状态,状态
-耗时,耗时
-当前,当前
-暂无发布记录,暂无发布记录
-当前版本,当前版本
-尚未发布过,尚未发布过
-"发布 ID：%{1}","发布 ID：%{1}"
-"版本：%{1}","版本：%{1}"
-探测：php bin/w deploy:release:status,探测：php bin/w deploy:release:status
-"发布失败：%{1}","发布失败：%{1}"
-"等待版本：%{1}（超时 %{2} 秒）","等待版本：%{1}（超时 %{2} 秒）"
-"版本已生效：%{1}（第 %{2} 次检测）","版本已生效：%{1}（第 %{2} 次检测）"
-"第 %{1} 次检测：当前 %{2}，期望 %{3}","第 %{1} 次检测：当前 %{2}，期望 %{3}"
-"超时：版本 %{1} 未在 %{2} 秒内生效","超时：版本 %{1} 未在 %{2} 秒内生效"
-缺少 --expect 参数,缺少 --expect 参数
-"完整发布：Git 更新 + 后置命令 + 写版本戳 + reload","完整发布：Git 更新 + 后置命令 + 写版本戳 + reload"
-"开始发布：%{1}","开始发布：%{1}"
-备份中...,备份中...
-Git 更新中...,Git 更新中...
-执行后置命令...,执行后置命令...
-"版本戳已写入：%{1}","版本戳已写入：%{1}"
-重载服务...,重载服务...
-"发布成功：%{1}","发布成功：%{1}"
-当前部署版本,当前部署版本
-"ref 类型：%{1}","ref 类型：%{1}"
-"commit：%{1}","commit：%{1}"
-"tag：%{1}","tag：%{1}"
-"Worker ID：%{1}","Worker ID：%{1}"
-"部署时间：%{1}","部署时间：%{1}"
-"部署模式：%{1}","部署模式：%{1}"
-最近发布历史,最近发布历史
-查看当前部署版本,查看当前部署版本
-查看发布历史与版本信息,查看发布历史与版本信息
-查看发布历史列表,查看发布历史列表
-"无法创建部署版本目录：%{1}","无法创建部署版本目录：%{1}"
-无法写入部署版本文件,无法写入部署版本文件
-"Git fetch 失败：%{1}","Git fetch 失败：%{1}"
-"Git checkout tag 失败：%{1}","Git checkout tag 失败：%{1}"
-"Git checkout 分支失败：%{1}","Git checkout 分支失败：%{1}"
-"Git reset 失败：%{1}","Git reset 失败：%{1}"
-"Git pull 失败：%{1}","Git pull 失败：%{1}"
 "Webhook 配置引导","Webhook 配置引导"
-"配置 Webhook 后，Git 平台推送代码时会自动触发部署。请先填写上方「Webhook 密钥」，然后在你的 Git 平台完成以下配置。","配置 Webhook 后，Git 平台推送代码时会自动触发部署。请先填写上方「Webhook 密钥」，然后在你的 Git 平台完成以下配置。"
+"Git 平台 Webhook URL 使用上方只读「公网路径」（完整地址见 deploy:webhook:setup 输出）；Secret/密码与「Webhook 密钥」相同。","Git 平台 Webhook URL 使用上方只读「公网路径」（完整地址见 deploy:webhook:setup 输出）；Secret/密码与「Webhook 密钥」相同。"
+其他平台,其他平台
 "第 1 步：进入 Gitee 仓库设置","第 1 步：进入 Gitee 仓库设置"
 "打开 Gitee 仓库页面，点击顶部「管理」","打开 Gitee 仓库页面，点击顶部「管理」"
 "左侧菜单找到「WebHooks」，点击「添加 WebHook」","左侧菜单找到「WebHooks」，点击「添加 WebHook」"
 "第 2 步：填写 Webhook 信息","第 2 步：填写 Webhook 信息"
-"密码","密码"
+密码,密码
 "填写上方「Webhook 密钥」中保存的值","填写上方「Webhook 密钥」中保存的值"
-"触发事件","触发事件"
-"勾选「Push」","勾选「Push」"
+触发事件,触发事件
+勾选「Push」,勾选「Push」
+数据格式,数据格式
 "第 3 步：验证","第 3 步：验证"
-"返回 {"ok":true} 即表示 Webhook 入口正常。","返回 {"ok":true} 即表示 Webhook 入口正常。"
+"返回 {""ok"":true} 即表示 Webhook 入口正常。","返回 {""ok"":true} 即表示 Webhook 入口正常。"
 "第 1 步：进入 GitHub 仓库设置","第 1 步：进入 GitHub 仓库设置"
 "打开 GitHub 仓库页面，点击「Settings」","打开 GitHub 仓库页面，点击「Settings」"
 "左侧菜单找到「Webhooks」，点击「Add webhook」","左侧菜单找到「Webhooks」，点击「Add webhook」"
@@ -251,27 +297,45 @@ Git 更新中...,Git 更新中...
 "Gitee 专用（自动识别）","Gitee 专用（自动识别）"
 "GitHub 专用（HMAC-SHA256）","GitHub 专用（HMAC-SHA256）"
 "Payload 要求","Payload 要求"
-"Nginx 反代示例","Nginx 反代示例"
-"手动测试","手动测试"
-"返回 {"ok":true} 表示部署触发成功；{"skipped":true,"reason":"branch_mismatch"} 表示分支不匹配，不会部署。","返回 {"ok":true} 表示部署触发成功；{"skipped":true,"reason":"branch_mismatch"} 表示分支不匹配，不会部署。"
-"Tag 发布说明","Tag 发布说明"
-"勾选「允许 Tag 发布」后，Git 平台推送 tag 时也会触发部署。Tag 发布时版本号等于 tag 名（如 v2.4.1）。","勾选「允许 Tag 发布」后，Git 平台推送 tag 时也会触发部署。Tag 发布时版本号等于 tag 名（如 v2.4.1）。"
-"Git 平台额外配置：","Git 平台额外配置："
-"Webhook 触发事件勾选「Tag Push」；","Webhook 触发事件勾选「Tag Push」；"
-"Events 选择「Let me select individual events」，勾选「Pushes」（包含 tag push）。","Events 选择「Let me select individual events」，勾选「Pushes」（包含 tag push）。"
-"测试：","测试："
-"你的密钥","你的密钥"
-"其他平台","其他平台"
-"触发模式","触发模式"
-"部署触发方式","部署触发方式"
+"请求体为 JSON 格式，必须包含 <code>ref</code> 字段：","请求体为 JSON 格式，必须包含 <code>ref</code> 字段："
+"Nginx 反代示例（WLS）","Nginx 反代示例（WLS）"
+"/deploy 与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。","/deploy 与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。"
+手动测试,手动测试
+"返回 {""ok"":true} 表示部署触发成功；{""skipped"":true,""reason"":""branch_mismatch""} 表示分支不匹配，不会部署。","返回 {""ok"":true} 表示部署触发成功；{""skipped"":true,""reason"":""branch_mismatch""} 表示分支不匹配，不会部署。"
+触发模式,触发模式
+部署触发方式,部署触发方式
 "仅分支 Push","仅分支 Push"
 "仅 Tag Push","仅 Tag Push"
 "分支 + Tag 都生效","分支 + Tag 都生效"
 "选择 Webhook 触发部署的条件：仅分支推送、仅 Tag 推送、或两者都生效","选择 Webhook 触发部署的条件：仅分支推送、仅 Tag 推送、或两者都生效"
-"分支过滤","分支过滤"
+分支过滤,分支过滤
 "留空匹配所有分支；填写后仅该分支的 push 触发部署","留空匹配所有分支；填写后仅该分支的 push 触发部署"
-"版本策略","版本策略"
+"Tag 前缀过滤","Tag 前缀过滤"
+"留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署","留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署"
+"发布探测 Token","发布探测 Token"
+"访问 GET /deploy/version?token=xxx 可查看详细版本信息","访问 GET /deploy/version?token=xxx 可查看详细版本信息"
+版本策略,版本策略
 "分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。","分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。"
 "Git 平台配置提示","Git 平台配置提示"
 "「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。","「触发模式」选「仅 Tag Push」时，Webhook 触发事件需额外勾选「Tag Push」；选「仅分支 Push」或「都生效」时勾选「Push」即可。"
 "默认「Just the push event」已包含分支和 tag push，无需额外配置。","默认「Just the push event」已包含分支和 tag push，无需额外配置。"
+测试：,测试：
+你的密钥,你的密钥
+Cloudflare,Cloudflare
+启用缓存清理,启用缓存清理
+"Cloudflare Zone ID","Cloudflare Zone ID"
+"Cloudflare API Token","Cloudflare API Token"
+保存配置,保存配置
+发布历史,发布历史
+当前版本,当前版本
+暂无发布记录,暂无发布记录
+时间,时间
+版本,版本
+类型,类型
+触发,触发
+状态,状态
+耗时,耗时
+Commit,Commit
+当前,当前
+tag,tag
+branch,branch
