@@ -91,7 +91,7 @@ $secretHint = static fn(string $key): string => ((string)($settings[$key . '_con
             <div class="row g-3">
                 <div class="col-md-8">
                     <label class="form-label"><?= __('核心仓库地址') ?></label>
-                    <input type="text" name="core_repo_url" class="form-control" value="<?= $value('core_repo_url') ?>" placeholder="https://gitee.com/aiweline/WelineFramework.git">
+                    <input type="text" name="core_repo_url" class="form-control" value="<?= $value('core_repo_url') ?>" placeholder="https://github.com/Aiweline/WelineFramework.git">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label"><?= __('核心默认分支') ?></label>
@@ -108,24 +108,25 @@ $secretHint = static fn(string $key): string => ((string)($settings[$key . '_con
             </div>
 
             <h6 class="mt-4 mb-3"><?= __('Webhook') ?></h6>
+            <div class="alert alert-secondary py-2 small mb-3">
+                <?= __('公网路径与访问密码均由命令生成，勿手工填写常见路径。首次或轮换：') ?>
+                <code>php bin/w deploy:webhook:setup --base-url=https://你的域名</code>
+                <?= __('；仅轮换路径：') ?>
+                <code>php bin/w deploy:webhook:setup --rotate-path -y --base-url=https://你的域名</code>
+            </div>
             <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label"><?= __('监听地址') ?></label>
-                    <input type="text" name="webhook_host" class="form-control" value="<?= $value('webhook_host', '127.0.0.1') ?>">
+                <div class="col-md-12">
+                    <label class="form-label"><?= __('Webhook 公网路径（只读）') ?></label>
+                    <?php $whPath = trim((string)($settings['webhook_path'] ?? '')); ?>
+                    <input type="text" class="form-control font-monospace" readonly value="<?= $whPath !== '' ? $value('webhook_path') : (string)__('尚未生成，请执行 deploy:webhook:setup') ?>">
+                    <div class="form-text"><?= __('随机路径以 ~wh~ 开头，由 ModuleRouter 特征匹配；版本探测为同路径后加 /version。') ?></div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label"><?= __('监听端口') ?></label>
-                    <input type="text" name="webhook_port" class="form-control" value="<?= $value('webhook_port', '9097') ?>">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label"><?= __('请求路径') ?></label>
-                    <input type="text" name="webhook_path" class="form-control" value="<?= $value('webhook_path', '/deploy') ?>">
-                </div>
-                <div class="col-md-6">
+                <div class="col-md-8">
                     <label class="form-label"><?= __('Webhook 密钥') ?></label>
                     <input type="password" name="webhook_secret" class="form-control" placeholder="<?= $secretHint('webhook_secret') ?>">
+                    <div class="form-text"><?= __('即 webhook_secret；留空保存表示不修改已有密钥。') ?></div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label"><?= __('Bash 命令') ?></label>
                     <input type="text" name="webhook_bash" class="form-control" value="<?= $value('webhook_bash', 'bash') ?>">
                 </div>
@@ -137,7 +138,7 @@ $secretHint = static fn(string $key): string => ((string)($settings[$key . '_con
                     <h6 class="card-title mb-3">
                         <i class="mdi mdi-webhook me-1"></i> <?= __('Webhook 配置引导') ?>
                     </h6>
-                    <p class="text-muted small mb-3"><?= __('配置 Webhook 后，Git 平台推送代码时会自动触发部署。请先填写上方「Webhook 密钥」，然后在你的 Git 平台完成以下配置。') ?></p>
+                    <p class="text-muted small mb-3"><?= __('Git 平台 Webhook URL 使用上方只读「公网路径」（完整地址见 deploy:webhook:setup 输出）；Secret/密码与「Webhook 密钥」相同。') ?></p>
 
                     <!-- 平台 Tab -->
                     <ul class="nav nav-tabs nav-tabs-sm" role="tablist">
@@ -174,7 +175,7 @@ $secretHint = static fn(string $key): string => ((string)($settings[$key . '_con
                                         <tbody>
                                             <tr>
                                                 <td class="text-nowrap fw-semibold" style="width:120px">URL</td>
-                                                <td><code>https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8') ?>/deploy</code></td>
+                                                <td><code>https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8') ?>/<?= $whPath !== '' ? htmlspecialchars($whPath, ENT_QUOTES, 'UTF-8') : '~wh~…' ?></code></td>
                                             </tr>
                                             <tr>
                                                 <td class="fw-semibold"><?= __('密码') ?></td>
@@ -215,7 +216,7 @@ $secretHint = static fn(string $key): string => ((string)($settings[$key . '_con
                                         <tbody>
                                             <tr>
                                                 <td class="text-nowrap fw-semibold" style="width:140px">Payload URL</td>
-                                                <td><code>https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8') ?>/deploy</code></td>
+                                                <td><code>https://<?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '你的域名', ENT_QUOTES, 'UTF-8') ?>/<?= $whPath !== '' ? htmlspecialchars($whPath, ENT_QUOTES, 'UTF-8') : '~wh~…' ?></code></td>
                                             </tr>
                                             <tr>
                                                 <td class="fw-semibold">Content type</td>
@@ -259,15 +260,16 @@ $secretHint = static fn(string $key): string => ((string)($settings[$key . '_con
                                     {"ref": "refs/heads/main"}
                                 </div>
 
-                                <p class="fw-bold mb-2"><?= __('Nginx 反代示例') ?></p>
+                                <p class="fw-bold mb-2"><?= __('Nginx 反代示例（WLS）') ?></p>
                                 <div class="bg-dark text-light p-2 rounded mb-3" style="font-family:monospace;font-size:12px">
-<pre class="mb-0" style="background:transparent;color:inherit;padding:0">location = /deploy {
-    include fastcgi_params;
-    fastcgi_param SCRIPT_FILENAME /path/to/project/dev/deploy/webhook.php;
-    fastcgi_param DEPLOY_CONFIG_FILE /path/to/project/dev/deploy/.config;
-    fastcgi_pass 127.0.0.1:9000;
+<pre class="mb-0" style="background:transparent;color:inherit;padding:0">location / {
+    proxy_pass http://127.0.0.1:9501;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }</pre>
                                 </div>
+                                <p class="text-muted small mb-3"><?= __('/deploy 与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。') ?></p>
 
                                 <p class="fw-bold mb-2"><?= __('手动测试') ?></p>
                                 <div class="bg-dark text-light p-2 rounded mb-3" style="font-family:monospace;font-size:12px">
