@@ -112,8 +112,8 @@ class Core extends CommandAbstract
             [
                 '双仓库策略' => __('未指定仓库时优先 GitHub；先 ping github.com，不可达时自动切换 Gitee 镜像'),
                 '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；显式配置后不再自动切换'),
-                '增量更新' => '默认使用 git fetch 增量拉取；Git 有变更的文件直接覆盖，其余文件若本地修改时间比源文件旧则覆盖',
-                '同步目录' => 'app、bin、pub、setup、dev（vendor 不更新；缺失或过期的核心文件会自动同步）',
+                '增量更新' => '默认使用 git fetch 增量拉取；Git 有变更的文件直接覆盖，其余文件按大小/hash 与源不一致则覆盖',
+                '同步目录' => 'app、bin、pub、setup、dev（vendor 不更新；缺失或内容不一致的核心文件会自动同步）',
                 '强制更新' => '使用 -f 参数强制删除缓存并重新克隆，完全覆盖目标目录',
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
                 '版本验证' => '如果指定了标签但不存在，命令会报错并退出',
@@ -701,7 +701,7 @@ class Core extends CommandAbstract
         
         // 判断更新模式：
         // 1. 强制模式(-f)或新克隆 → 全量覆盖
-        // 2. 增量模式 → Git diff 变更直接覆盖；再扫描缺失或本地 mtime 更旧的文件并覆盖
+        // 2. 增量模式 → Git diff 变更直接覆盖；再扫描缺失或内容与源不一致的文件并覆盖
         
         if ($this->forceUpdate || $this->isNewClone) {
             // 强制模式或新克隆：完全覆盖所有文件
@@ -710,7 +710,7 @@ class Core extends CommandAbstract
         } else {
             $processedBefore = $this->newFiles + $this->updatedFiles;
 
-            $this->printer->note(__('增量模式：Git 变更 + 本地过期文件同步...'));
+            $this->printer->note(__('增量模式：Git 变更 + 内容不一致文件同步...'));
 
             if (!empty($this->changedFiles)) {
                 $this->copyChangedFilesOnly($tmpDir, $allPaths);
@@ -791,7 +791,7 @@ class Core extends CommandAbstract
     }
 
     /**
-     * 增量模式：同步缺失文件，并覆盖本地修改时间比源文件旧的文件
+     * 增量模式：同步缺失文件，并覆盖内容与源不一致的文件
      */
     private function syncIncrementalCoreFiles(string $tmpDir): void
     {
@@ -837,17 +837,13 @@ class Core extends CommandAbstract
                     continue;
                 }
 
-                $sourceMtime = filemtime($sourcePath);
-                $targetMtime = filemtime($targetPath);
-                if ($sourceMtime === false || $targetMtime === false) {
+                if (!$this->shouldSyncIncrementalFile($sourcePath, $targetPath)) {
                     continue;
                 }
 
-                if ($sourceMtime > $targetMtime) {
-                    copy($sourcePath, $targetPath);
-                    $this->updatedFiles++;
-                    $staleCount++;
-                }
+                copy($sourcePath, $targetPath);
+                $this->updatedFiles++;
+                $staleCount++;
             }
         }
 
@@ -855,8 +851,48 @@ class Core extends CommandAbstract
             $this->printer->note(__('补缺：同步 %{1} 个本地缺失的核心文件', [$missingCount]));
         }
         if ($staleCount > 0) {
-            $this->printer->note(__('刷新：覆盖 %{1} 个本地过期的核心文件', [$staleCount]));
+            $this->printer->note(__('刷新：覆盖 %{1} 个内容与源不一致的核心文件', [$staleCount]));
         }
+    }
+
+    /**
+     * 增量扫描：先比文件大小，再比 hash；hash 不可用时回退到 mtime
+     */
+    private function shouldSyncIncrementalFile(string $sourcePath, string $targetPath): bool
+    {
+        $sourceSize = filesize($sourcePath);
+        $targetSize = filesize($targetPath);
+        if ($sourceSize !== false && $targetSize !== false && $sourceSize !== $targetSize) {
+            return true;
+        }
+
+        $sourceHash = $this->hashCoreUpdateFile($sourcePath);
+        $targetHash = $this->hashCoreUpdateFile($targetPath);
+        if ($sourceHash !== null && $targetHash !== null) {
+            return !hash_equals($sourceHash, $targetHash);
+        }
+
+        $sourceMtime = filemtime($sourcePath);
+        $targetMtime = filemtime($targetPath);
+
+        return $sourceMtime !== false
+            && $targetMtime !== false
+            && $sourceMtime > $targetMtime;
+    }
+
+    private function hashCoreUpdateFile(string $filePath): ?string
+    {
+        $hash = @hash_file('xxh128', $filePath);
+        if ($hash !== false) {
+            return $hash;
+        }
+
+        $hash = @md5_file($filePath);
+        if ($hash !== false) {
+            return $hash;
+        }
+
+        return null;
     }
     
     /**
