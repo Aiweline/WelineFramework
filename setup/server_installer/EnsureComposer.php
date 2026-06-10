@@ -45,10 +45,33 @@ final class EnsureComposer
 
         $constraint = $this->readComposerConstraint();
         $phar = self::pharPath($this->projectRoot);
+        $constraintLabel = $constraint ?? 'latest-stable';
+
+        echo 'Step 0c: Ensuring composer.phar at extend/server/'
+            . ' (constraint: ' . $constraintLabel . ")...\n";
 
         if ($this->isValidPhar($phar) && $this->pharSatisfiesConstraint($phpBin, $phar, $constraint)) {
+            $installedVersion = $this->parsePharVersion($phpBin, $phar);
+            echo 'composer.phar already present at ' . $phar;
+            if ($installedVersion !== null) {
+                echo ' (Composer version ' . $installedVersion . ')';
+            }
+            echo ". Skipping download.\n";
             $this->ensureWrapperScripts();
             return true;
+        }
+
+        if ($this->isValidPhar($phar)) {
+            $installedVersion = $this->parsePharVersion($phpBin, $phar);
+            echo 'Existing composer.phar does not satisfy constraint ' . $constraintLabel;
+            if ($installedVersion !== null) {
+                echo ' (current: ' . $installedVersion . ')';
+            }
+            echo ". Downloading replacement...\n";
+        } elseif (is_file($phar)) {
+            echo "Existing composer.phar at {$phar} is invalid or too small. Downloading replacement...\n";
+        } else {
+            echo "composer.phar not found. Downloading...\n";
         }
 
         $version = $this->resolveDownloadVersion($constraint);
@@ -61,8 +84,6 @@ final class EnsureComposer
             @mkdir($serverDir, 0755, true);
         }
 
-        echo 'Step 0c: Downloading composer.phar to extend/server/'
-            . ' (constraint: ' . ($constraint ?? 'latest-stable') . ')...' . "\n";
         echo "URL: $url\n";
 
         $tmpPath = $phar . '.download';
