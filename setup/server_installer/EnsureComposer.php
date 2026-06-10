@@ -369,6 +369,13 @@ final class EnsureComposer
 
     private function download(string $url, string $outPath): bool
     {
+        if (!$this->phpNetworkReady()) {
+            echo "NOTE: PHP curl/openssl 扩展未加载（首次安装常见），使用系统下载工具（与 PHP 安装相同）...\n";
+            if ($this->downloadWithExternalTool($url, $outPath)) {
+                return true;
+            }
+        }
+
         if ($this->downloadWithCurl($url, $outPath)) {
             return true;
         }
@@ -383,6 +390,11 @@ final class EnsureComposer
             return file_put_contents($outPath, $data) !== false;
         }
 
+        echo "WARNING: PHP HTTPS 下载失败，正在使用系统下载工具重试（PowerShell / curl，与 PHP 安装相同）...\n";
+        if ($this->downloadWithExternalTool($url, $outPath)) {
+            return true;
+        }
+
         echo "WARNING: HTTPS 下载失败（CA 证书包不可用或 SSL 校验失败），正在关闭证书校验后重试...\n";
 
         if ($this->downloadWithCurl($url, $outPath, ['allow_insecure_fallback' => true])) {
@@ -390,11 +402,112 @@ final class EnsureComposer
         }
 
         $data = $this->httpGet($url, ['allow_insecure_fallback' => true]);
-        if ($data === null || strlen($data) < self::MIN_PHAR_SIZE) {
+        if ($data !== null && strlen($data) >= self::MIN_PHAR_SIZE) {
+            return file_put_contents($outPath, $data) !== false;
+        }
+
+        return $this->downloadWithExternalTool($url, $outPath, true);
+    }
+
+    private function phpNetworkReady(): bool
+    {
+        return function_exists('curl_init') || extension_loaded('openssl');
+    }
+
+    private function downloadWithExternalTool(string $url, string $outPath, bool $insecure = false): bool
+    {
+        if (DIRECTORY_SEPARATOR === '\\' && $this->downloadWithPowerShell($url, $outPath)) {
+            return true;
+        }
+
+        return $this->downloadWithCurlExe($url, $outPath, $insecure);
+    }
+
+    private function downloadWithPowerShell(string $url, string $outPath): bool
+    {
+        if (DIRECTORY_SEPARATOR !== '\\') {
             return false;
         }
 
-        return file_put_contents($outPath, $data) !== false;
+        $dir = dirname($outPath);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        if (is_file($outPath)) {
+            @unlink($outPath);
+        }
+
+        $escapedUrl = str_replace("'", "''", $url);
+        $escapedOut = str_replace("'", "''", $outPath);
+        $cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "'
+            . "try { Invoke-WebRequest -Uri '$escapedUrl' -OutFile '$escapedOut' -UseBasicParsing -TimeoutSec 180; exit 0 } catch { exit 1 }"
+            . '"';
+        echo "Attempting download via PowerShell: $url\n";
+        exec($cmd, $output, $code);
+
+        return $code === 0 && $this->isDownloadedPayload($outPath);
+    }
+
+    private function downloadWithCurlExe(string $url, string $outPath, bool $insecure = false): bool
+    {
+        $curlBin = $this->resolveCurlExecutable();
+        if ($curlBin === null) {
+            return false;
+        }
+
+        $dir = dirname($outPath);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        if (is_file($outPath)) {
+            @unlink($outPath);
+        }
+
+        $insecureFlag = $insecure ? ' -k' : '';
+        $cmd = escapeshellarg($curlBin)
+            . ' -L --fail --retry 2 --retry-delay 2 --connect-timeout 30 --max-time 300'
+            . $insecureFlag
+            . ' -o ' . escapeshellarg($outPath)
+            . ' ' . escapeshellarg($url);
+        echo 'Attempting download via curl: ' . $url . ($insecure ? ' (insecure)' : '') . "\n";
+        exec($cmd . ' 2>&1', $output, $code);
+
+        return $code === 0 && $this->isDownloadedPayload($outPath);
+    }
+
+    private function resolveCurlExecutable(): ?string
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $candidates = ['curl.exe'];
+            $systemRoot = getenv('SystemRoot') ?: 'C:\\Windows';
+            $candidates[] = $systemRoot . '\\System32\\curl.exe';
+        } else {
+            $candidates = ['curl', '/usr/bin/curl', '/usr/local/bin/curl'];
+        }
+
+        foreach ($candidates as $candidate) {
+            if ($candidate === 'curl' || $candidate === 'curl.exe') {
+                $probe = DIRECTORY_SEPARATOR === '\\' ? 'where curl.exe 2>nul' : 'command -v curl 2>/dev/null';
+                exec($probe, $output, $code);
+                if ($code === 0 && isset($output[0]) && trim($output[0]) !== '') {
+                    $resolved = trim($output[0]);
+                    if (is_file($resolved) || $resolved === 'curl' || str_ends_with($resolved, 'curl.exe')) {
+                        return $resolved;
+                    }
+                }
+                continue;
+            }
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function isDownloadedPayload(string $path): bool
+    {
+        return is_file($path) && filesize($path) >= self::MIN_PHAR_SIZE;
     }
 
     /** @param array<string, mixed> $options */
