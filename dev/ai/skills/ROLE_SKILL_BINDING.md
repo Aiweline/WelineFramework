@@ -84,6 +84,7 @@
 - `windows-command-quoting` -> `CI发布工程师-环境兼容与命令安全`
 - `php84-performance` -> `CI发布工程师-环境兼容与命令安全`
 - `testing` -> `CI发布工程师-CI与发布门禁`
+- `fencang-release` / 口令「分仓」 -> `CI发布工程师-分仓发布`（Codex 别名：`.codex/skills/fencang-release`）
 
 ## 文档知识库工程师
 

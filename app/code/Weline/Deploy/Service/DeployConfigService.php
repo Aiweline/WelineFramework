@@ -58,7 +58,7 @@ class DeployConfigService
             'core_repo_token' => '',
             'webhook_host' => '127.0.0.1',
             'webhook_port' => '9097',
-            'webhook_path' => '/deploy',
+            'webhook_path' => '',
             'webhook_secret' => '',
             'webhook_branch' => '',
             'webhook_bash' => 'bash',
@@ -137,12 +137,21 @@ class DeployConfigService
             }
         }
 
-        return $this->systemConfig->setConfig(
+        $saved = $this->systemConfig->setConfig(
             self::CONFIG_KEY,
             json_encode($filtered, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             self::MODULE,
             SystemConfig::area_BACKEND
         );
+
+        if ($saved && array_key_exists('webhook_path', $filtered)) {
+            try {
+                (new DeployWebhookRouteService($this))->clearCache();
+            } catch (\Throwable) {
+            }
+        }
+
+        return $saved;
     }
 
     public function getProjectDeployConfig(): array

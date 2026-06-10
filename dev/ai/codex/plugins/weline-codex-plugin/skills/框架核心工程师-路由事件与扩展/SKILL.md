@@ -1,12 +1,15 @@
 ---
 name: 框架核心工程师-路由事件与扩展
-description: Framework core engineer skill for routing, events, hooks, extends, and extension-point contract design.
-version: 1.1.2
+description: >-
+  路由、ModuleRouter、Controller/Router.php。Canonical 正文见 dev/ai/skills/框架核心工程师-路由事件与扩展/SKILL.md
+version: 1.2.0
 ---
+
+> **Canonical（含 ModuleRouter / `Controller/Router.php` 完整说明）**：`dev/ai/skills/框架核心工程师-路由事件与扩展/SKILL.md`
 
 # Role
 
-This skill owns route definition patterns, event contracts, hook naming, and extends-based extension points in WelineFramework. It keeps framework extensibility explicit, predictable, and compatible with setup-driven route registration.
+负责路由、事件、Hook、extends；**自定义公网 URL 用模块 `Controller/Router.php`（`RouterInterface`）**，经 `Weline_ModuleRouter` 在 URI 处理前改写 `$path` 到内部控制器路由。固定路径仍用 `etc/env.php` + `setup:upgrade --route`。
 
 # When To Use
 

@@ -74,44 +74,61 @@ php bin/w setup:upgrade --route
 
 ## 5. Webhook
 
-Webhook 配置用于 `dev/deploy/webhook.php` 和 `dev/deploy/webhook.sh listen`。
-
-建议填写：
-
-- `Webhook 密钥`：Gitee/GitHub Webhook Secret
-- `请求路径`：通常是 `/deploy`
-- `Bash 命令`：通常是 `bash`，服务器路径特殊时可填 `/bin/bash`
-- `监听地址` / `监听端口`：仅常驻监听模式使用，PHP 入口方式一般不依赖它们
-
-推荐触发方式：
+Webhook 由 **Weline_Deploy 模块统一入口**处理：Git 平台 `POST` 到站点 `/deploy`（或后台配置的 `请求路径`），框架校验访问密码后执行 `dev/deploy/webhook.sh deploy`。
 
 ```text
-Git 平台 Webhook -> Nginx/Caddy -> dev/deploy/webhook.php -> webhook.sh deploy
+Git 平台 Webhook → Nginx（HTTPS）→ WLS → deploy/webhook/deploy → webhook.sh deploy
 ```
 
-`webhook.php` 会先读取后台配置；如果后台或数据库不可用，再回退 `dev/deploy/.config`。
+### 5.1 Webhook 访问密码（webhook_secret）
 
-### 5.1 服务器 Nginx 配置
+访问密码是框架与 Git 平台共用的**唯一密钥**，后台字段名为「Webhook 密钥」（`webhook_secret`）。Gitee 的「密码」、GitHub 的「Secret」等须填写**完全相同**的值。
 
-在服务器 Nginx 中添加以下配置，将 Webhook 请求转发到 PHP 入口：
+**推荐：用命令生成或刷新**
+
+```bash
+# 首次：生成密钥并写入后台，输出 curl 与填表指引
+php bin/w deploy:webhook:setup --base-url=https://你的域名
+
+# 刷新（轮换）访问密码：生成新密钥并覆盖后台，须同步更新 Git 平台
+php bin/w deploy:webhook:setup --force -y --url=https://你的域名/deploy
+
+# 仅查看当前密钥与 curl 示例（不覆盖已有密钥）
+php bin/w deploy:webhook:setup --url=https://你的域名/deploy
+```
+
+也可在下方「Webhook 密钥」手工填写；留空保存表示不修改已有密钥。详细说明见 [`doc/webhook-secret.md`](webhook-secret.md)。
+
+后台建议同时确认：
+
+- `请求路径`：默认 `/deploy`
+- `Bash 命令`：默认 `bash`，服务器路径特殊时可填 `/bin/bash`
+
+### 5.2 服务器 Nginx 配置
+
+将公网 HTTPS 反代到 WLS 监听地址（端口以实际 `server:start` / 实例配置为准）：
 
 ```nginx
-location = /deploy {
-    include fastcgi_params;
-    fastcgi_param SCRIPT_FILENAME /www/wwwroot/weline/dev/deploy/webhook.php;
-    fastcgi_param DEPLOY_CONFIG_FILE /www/wwwroot/weline/dev/deploy/.config;
-    fastcgi_pass 127.0.0.1:9000;
+location / {
+    proxy_pass http://127.0.0.1:9501;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
 ```
 
-健康检查（验证 Webhook 入口是否可达）：
+`/deploy` 与站点其他路径走同一条 WLS 反代即可，无需单独 fastcgi 或额外监听端口。
+
+健康检查：
 
 ```bash
 curl -s 'https://你的域名/deploy?health=1'
-# 返回 {"ok":true} 表示正常
+# 返回 {"ok":true} 表示入口可达
 ```
 
-### 5.2 Gitee 配置步骤
+### 5.3 Gitee 配置步骤
 
 1. 打开 Gitee 仓库页面，点击顶部「管理」。
 2. 左侧菜单找到「WebHooks」，点击「添加 WebHook」。
@@ -135,7 +152,7 @@ curl -s -X POST 'https://你的域名/deploy' \
 
 Gitee 兼容两种鉴权形式：`X-Gitee-Token` 直接等于密钥，或 `X-Gitee-Timestamp` + `X-Gitee-Token` HMAC 签名。
 
-### 5.3 GitHub 配置步骤
+### 5.4 GitHub 配置步骤
 
 1. 打开 GitHub 仓库页面，点击「Settings」。
 2. 左侧菜单找到「Webhooks」，点击「Add webhook」。
@@ -157,7 +174,7 @@ curl -s -X POST 'https://你的域名/deploy' \
 
 GitHub 校验签名算法为 `HMAC-SHA256`（`X-Hub-Signature-256` 头），密钥就是后台填写的「Webhook 密钥」。
 
-### 5.4 其他平台（通用）
+### 5.5 其他平台（通用）
 
 本系统兼容标准 Webhook 协议，支持以下鉴权方式：
 
@@ -280,6 +297,7 @@ Token 至少需要对应 Zone 的 Cache Purge 权限。
 
 ## 10. 关联指南
 
-- `app/code/Weline/Deploy/doc/gitee-webhook.md`：Gitee Webhook 完整配置
-- `app/code/Weline/Deploy/doc/github-webhook.md`：GitHub Webhook 完整配置
-- `dev/deploy/.config.exsample`：服务器文件配置示例
+- `app/code/Weline/Deploy/doc/webhook-secret.md`：访问密码配置与轮换命令
+- `app/code/Weline/Deploy/doc/gitee-webhook.md`：Gitee Webhook 填表步骤
+- `app/code/Weline/Deploy/doc/github-webhook.md`：GitHub Webhook 填表步骤
+- `dev/deploy/.config.exsample`：服务器文件配置示例（后台不可用时）
