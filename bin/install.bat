@@ -200,6 +200,30 @@ if defined MYSQL_OK (
 )
 :skip_mysql
 
+call :cecho Cyan "========== Composer =========="
+set "COMPOSER_PHAR=%SERVER%\composer.phar"
+set "COMPOSER_OK="
+if exist "%COMPOSER_PHAR%" (
+  for %%F in ("%COMPOSER_PHAR%") do set "COMPOSER_SIZE=%%~zF"
+  if defined COMPOSER_SIZE if !COMPOSER_SIZE! GEQ 500000 set "COMPOSER_OK=1"
+)
+if defined COMPOSER_OK (
+  set "CECHO_MSG=composer.phar already present at %COMPOSER_PHAR%." & call :cecho Green ""
+  if exist "%PHP_EXE%" (
+    for /f "usebackq tokens=*" %%v in (`"%PHP_EXE%" "%COMPOSER_PHAR%" --no-ansi --version 2^>nul`) do (
+      set "CECHO_MSG=%%v" & call :cecho Gray ""
+      goto :composer_ver_done
+    )
+  )
+) else (
+  if exist "%COMPOSER_PHAR%" (
+    set "CECHO_MSG=composer.phar at %COMPOSER_PHAR% is invalid or too small; run.php will replace it." & call :cecho Yellow ""
+  ) else (
+    set "CECHO_MSG=composer.phar not at %COMPOSER_PHAR%; run.php will download it." & call :cecho Yellow ""
+  )
+)
+:composer_ver_done
+
 REM 安装后：将 php、pgsql、composer（extend/server）、项目 bin（w 命令）写入用户 PATH（与 Linux/Mac 一致）
 if exist "%PHP_DIR%\php.exe" call :add_path "%PHP_DIR%"
 if exist "%SERVER%\pgsql\bin\psql.exe" call :add_path "%SERVER%\pgsql\bin"

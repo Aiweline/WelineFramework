@@ -20,10 +20,14 @@ $resolveProjectPhpBin = static function (string $root, string $phpDir): string {
             $bin = (string) PHP_BINARY;
         }
     } else {
-        $phpPath = $phpDir . DIRECTORY_SEPARATOR . 'php';
-        if (is_file($phpPath) && is_executable($phpPath)) {
-            $bin = $phpPath;
-        } elseif (defined('PHP_BINARY') && PHP_BINARY !== '' && PHP_BINARY !== 'php') {
+        foreach (['bin' . DIRECTORY_SEPARATOR . 'php', 'php'] as $rel) {
+            $phpPath = $phpDir . DIRECTORY_SEPARATOR . $rel;
+            if (is_file($phpPath) && is_executable($phpPath)) {
+                $bin = $phpPath;
+                break;
+            }
+        }
+        if ($bin === 'php' && defined('PHP_BINARY') && PHP_BINARY !== '' && PHP_BINARY !== 'php') {
             $bin = (string) PHP_BINARY;
         }
     }
@@ -194,9 +198,14 @@ if ($isEnvPhpInstalled($envPhpFile)) {
             echo "setup:upgrade 已完成。\n";
             exit(0);
         } else {
-            // 系统已安装：仍补全 composer.phar（避免仅提示退出后 setup:upgrade 找不到 composer）
-            if (!is_file(EnsureComposer::pharPath($projectRoot))) {
-                echo "检测到 composer.phar 缺失，正在补全...\n";
+            // 系统已安装：报告 composer 状态；缺失时补全（避免仅提示退出后 setup:upgrade 找不到 composer）
+            echo "========== Composer ==========\n";
+            $composerPhar = EnsureComposer::pharPath($projectRoot);
+            $composerOk = is_file($composerPhar) && filesize($composerPhar) >= 500_000;
+            if ($composerOk) {
+                echo "composer.phar already present at {$composerPhar}\n\n";
+            } else {
+                echo "检测到 composer.phar 缺失或无效，正在补全...\n";
                 if (!$ensureLocalComposer($projectRoot)) {
                     fwrite(STDERR, "ERROR: 无法下载 composer.phar 到 extend/server/，请检查网络后重试。\n");
                     exit(1);
@@ -332,6 +341,7 @@ if (!$fromStep5b && is_dir($phpDir)) {
 
 // 0c. 按 composer.json 下载 composer.phar 到 extend/server/（不纳入 Git）
 if (!$fromStep5b) {
+    echo "========== Composer ==========\n";
     if (!$ensureLocalComposer($projectRoot)) {
         fwrite(STDERR, "ERROR: 无法确保 composer.phar，安装中止。\n");
         exit(1);
