@@ -692,6 +692,9 @@ class Url implements UrlInterface
         if (Env::isAreaRoutePathSegment($currency)) {
             $currency = '';
         }
+        if ('' !== $currency && !State::isAllowedCurrencyCode($currency)) {
+            $currency = '';
+        }
 
         if (Env::isAreaRoutePathSegment($language)) {
             $language = '';
@@ -1713,12 +1716,9 @@ class Url implements UrlInterface
             
             // 从URL参数获取currency（如果路径级别没有）
             if (empty($data['currency']) && isset($query_params['currency'])) {
-                $currency = trim($query_params['currency'] ?? '');
-                if (!empty($currency) && strlen($currency) === 3) {
-                    // 验证是否为有效的货币代码（3位大写字母）
-                    if (ctype_upper($currency)) {
-                        $data['currency'] = $currency;
-                    }
+                $currency = strtoupper(trim((string)($query_params['currency'] ?? '')));
+                if ($currency !== '' && State::isAllowedCurrencyCode($currency)) {
+                    $data['currency'] = $currency;
                 }
             }
             

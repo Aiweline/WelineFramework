@@ -43,7 +43,7 @@ required_fields: api_url, api_key, merchant_id, return_url, notify_url
 ## 常见错误
 - QR code expired：客户超时未付。
 - BRL 以外币种被拒绝。
-- Webhook 重复导致状态回退。
+- Webhook 重复导致状态倒退。
 
 ## 官方文档链接
 - https://docs.ebanx.com/docs/pay-in/payment-methods/pix

@@ -75,6 +75,15 @@ curl -s 'https://example.com/deploy?health=1'
 8. 勾选 `Active`。
 9. 保存。
 
+### Tag 发布（可选）
+
+如果需要 tag 推送也触发部署：
+
+1. 在后台 `部署配置` 的「触发模式」区域，将「部署触发方式」选为「仅 Tag Push」或「分支 + Tag 都生效」。
+2. 可选填写「Tag 前缀过滤」（如 `v`），仅匹配此前缀的 tag 才会触发部署。
+3. GitHub Webhook 页面：默认「Just the push event」已包含 tag push，无需额外配置。
+4. Tag 发布时，`deploy_version` 等于 tag 名（如 `v2.4.1`），而非 commit SHA。
+
 脚本会校验 GitHub 的 `X-Hub-Signature-256`，签名算法为 `HMAC-SHA256`，密钥就是 `WEBHOOK_SECRET`。
 
 ## 4. 请求验证
@@ -106,7 +115,7 @@ curl -s -X POST 'https://example.com/deploy' \
 ## 5. 常见问题
 
 - `403 invalid webhook token`：GitHub Secret 与 `WEBHOOK_SECRET` 不一致，或反向代理没有传递 `X-Hub-Signature-256`。
-- `branch mismatch`：GitHub 推送分支与 `WEBHOOK_BRANCH` 不一致。注意 GitHub payload 通常是 `refs/heads/main`。
+- `branch mismatch` / `trigger_mode_tag_only` / `trigger_mode_branch_only`：触发模式或分支不匹配。检查后台「部署触发方式」和「分支过滤」配置。注意 GitHub payload 通常是 `refs/heads/main`。
 - `Repository not found` 或 `Authentication failed`：服务器上的 Git remote 没有权限拉取私有仓库。
 - `Tracked files have local changes`：服务器部署目录存在本地改动。先人工确认并清理，不要随意开启 `DEPLOY_FORCE_RESET=1`。
 - `Cloudflare: disabled`：这是当前默认行为，不是错误。

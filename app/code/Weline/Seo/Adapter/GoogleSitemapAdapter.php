@@ -12,15 +12,13 @@ declare(strict_types=1);
 namespace Weline\Seo\Adapter;
 
 /**
- * Google Indexing API Sitemap 适配器
+ * Google Search Console Sitemap 适配器
  *
  * Google 平台规则：
  * - 最大 50,000 条 URL
  * - 最大 50 MB（未压缩）
- * - 使用 Indexing API 提交 URL（2023年6月后 Ping 方式已弃用）
+ * - 使用 Search Console Sitemap API 提交 Sitemap（2023年6月后 Ping 方式已弃用）
  * - 支持 Service Account 认证
- *
- * 注意：Indexing API 每天有配额限制（默认 200 次/天）
  *
  * @package Weline_Seo
  */
@@ -33,9 +31,11 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
     public const MAX_SIZE = 52428800; // 50 MB
     public const INDEXING_API_URL = 'https://indexing.googleapis.com/v3/urlNotifications:publish';
     public const INDEXING_API_SCOPE = 'https://www.googleapis.com/auth/indexing';
-    public const WEBMASTER_API_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+    public const WEBMASTER_API_SCOPE = 'https://www.googleapis.com/auth/webmasters';
+    public const WEBMASTER_READONLY_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+    public const SITEMAP_SUBMIT_URL = 'https://www.googleapis.com/webmasters/v3/sites/%s/sitemaps/%s';
     public const SEARCH_ANALYTICS_URL = 'https://searchconsole.googleapis.com/webmasters/v3/sites/%s/searchAnalytics/query';
-    public const SITEMAPS_LIST_URL = 'https://searchconsole.googleapis.com/webmasters/v3/sites/%s/sitemaps';
+    public const SITEMAPS_LIST_URL = 'https://www.googleapis.com/webmasters/v3/sites/%s/sitemaps';
     
     /** @deprecated Google Ping 已于 2023 年弃用 */
     public const PING_URL = 'https://www.google.com/webmasters/sitemaps/ping?sitemap=';
@@ -73,9 +73,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
     /**
      * 提交 sitemap 到 Google
      *
-     * 支持两种方式：
-     * 1. Ping 方式（无需 API 密钥）
-     * 2. Search Console API（需要 OAuth2 配置）
+     * 使用 Search Console API（需要 OAuth2 配置）
      *
      * 账户配置支持代理设置：
      * - proxy: 代理地址，如 http://127.0.0.1:7890
@@ -86,7 +84,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
         // 从配置中提取代理设置
         $proxyConfig = $this->extractProxyConfig($accountConfig);
         
-        $config = $accountConfig['config'] ?? $accountConfig;
+        $config = $this->resolveGoogleConfig($accountConfig);
         
         // 检测是否有 Service Account 配置（通过 client_email 和 private_key 判断）
         $hasServiceAccount = !empty($config['client_email']) && !empty($config['private_key']);
@@ -179,14 +177,13 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
     }
 
     /**
-     * 通过 Google Indexing API 提交
+     * 通过 Google Search Console Sitemap API 提交
      *
-     * 使用 Service Account 进行 JWT 认证，调用 Indexing API 通知 Google 更新 URL
-     * 注意：Indexing API 每天有配额限制（默认 200 次/天）
+     * 使用 Service Account 进行 JWT 认证，调用 Search Console API 绑定 sitemap。
      */
     protected function submitViaApi(string $sitemapUrl, array $accountConfig, array $proxyConfig = []): array
     {
-        $config = $accountConfig['config'] ?? $accountConfig;
+        $config = $this->resolveGoogleConfig($accountConfig);
         
         // 验证必要的配置
         if (empty($config['client_email']) || empty($config['private_key'])) {
@@ -198,8 +195,17 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
         }
         
         try {
-            // 1. 获取 Access Token（使用 Indexing API scope）
-            $accessToken = $this->getAccessToken($config, $proxyConfig, self::INDEXING_API_SCOPE);
+            $siteUrl = $this->resolveSearchConsoleSiteUrl($sitemapUrl, $config);
+            if ($siteUrl === '') {
+                return [
+                    'success' => false,
+                    'message' => __('缺少 Search Console 站点属性 URL'),
+                    'response' => null,
+                ];
+            }
+
+            // 1. 获取 Access Token（使用 Search Console sitemap 写权限 scope）
+            $accessToken = $this->getAccessToken($config, $proxyConfig, self::WEBMASTER_API_SCOPE);
             if (empty($accessToken)) {
                 return [
                     'success' => false,
@@ -208,23 +214,26 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                 ];
             }
             
-            // 2. 调用 Indexing API 通知 URL 更新
+            // 2. 调用 Search Console Sitemap API 提交 sitemap
+            $apiUrl = sprintf(
+                self::SITEMAP_SUBMIT_URL,
+                rawurlencode($siteUrl),
+                rawurlencode($sitemapUrl)
+            );
+
             $ch = curl_init();
             $curlOptions = [
-                CURLOPT_URL => self::INDEXING_API_URL,
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => json_encode([
-                    'url' => $sitemapUrl,
-                    'type' => 'URL_UPDATED',
-                ]),
+                CURLOPT_URL => $apiUrl,
+                CURLOPT_CUSTOMREQUEST => 'PUT',
+                CURLOPT_POSTFIELDS => '',
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => 30,
                 CURLOPT_HTTPHEADER => [
                     'Authorization: Bearer ' . $accessToken,
-                    'Content-Type: application/json',
+                    'Content-Length: 0',
                 ],
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
             ];
             
             // 添加代理设置
@@ -245,7 +254,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             if ($error) {
                 return [
                     'success' => false,
-                    'message' => __('Indexing API 请求失败：%{1}', $error),
+                    'message' => __('Google Search Console API 请求失败：%{1}', $error),
                     'response' => null,
                 ];
             }
@@ -270,7 +279,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                 
                 return [
                     'success' => false,
-                    'message' => __('Google Indexing API 错误：%{1}', $errorMessage),
+                    'message' => __('Google Search Console API 错误：%{1}', $errorMessage),
                     'response' => $responseData,
                 ];
             }
@@ -278,9 +287,11 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             return [
                 'success' => $success,
                 'message' => $success 
-                    ? __('已成功通过 Indexing API 通知 Google 更新 URL') 
-                    : __('Indexing API 返回错误码：%{1}', $httpCode),
+                    ? __('已通过 Google Search Console API 提交 Sitemap')
+                    : __('Google Search Console API 返回错误码：%{1}', $httpCode),
                 'response' => [
+                    'api_url' => $apiUrl,
+                    'site_url' => $siteUrl,
                     'http_code' => $httpCode,
                     'body' => $responseData,
                 ],
@@ -362,8 +373,8 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             CURLOPT_HTTPHEADER => [
                 'Content-Type: application/x-www-form-urlencoded',
             ],
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
         ];
         
         // 添加代理设置
@@ -397,6 +408,52 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
     }
 
     /**
+     * 兼容 service_account 嵌套 JSON 与平铺配置。
+     */
+    protected function resolveGoogleConfig(array $accountConfig): array
+    {
+        $config = $accountConfig['config'] ?? $accountConfig;
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+            $config = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($config)) {
+            return [];
+        }
+
+        $serviceAccount = $config['service_account'] ?? null;
+        if (is_string($serviceAccount)) {
+            $decoded = json_decode($serviceAccount, true);
+            $serviceAccount = is_array($decoded) ? $decoded : null;
+        }
+
+        if (is_array($serviceAccount)) {
+            $config = array_merge($config, $serviceAccount);
+        }
+
+        return $config;
+    }
+
+    /**
+     * 获取 Search Console 中已验证的站点属性 URL。
+     */
+    protected function resolveSearchConsoleSiteUrl(string $sitemapUrl, array $config): string
+    {
+        $siteUrl = trim((string)($config['search_console_site_url'] ?? $config['site_url'] ?? ''));
+        if ($siteUrl !== '') {
+            return $siteUrl;
+        }
+
+        $parsed = parse_url($sitemapUrl);
+        $host = (string)($parsed['host'] ?? '');
+        if ($host === '') {
+            return '';
+        }
+
+        return ($parsed['scheme'] ?? 'https') . '://' . $host . '/';
+    }
+
+    /**
      * Google 支持获取统计数据
      */
     public function supportsStats(): bool
@@ -414,7 +471,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
      */
     public function getStats(string $siteUrl, array $accountConfig): array
     {
-        $config = $accountConfig['config'] ?? $accountConfig;
+        $config = $this->resolveGoogleConfig($accountConfig);
         $proxyConfig = $this->extractProxyConfig($accountConfig);
         
         // 验证必要的配置
@@ -428,7 +485,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
         
         try {
             // 获取 Access Token（使用 Webmaster 只读权限）
-            $accessToken = $this->getAccessToken($config, $proxyConfig, self::WEBMASTER_API_SCOPE);
+            $accessToken = $this->getAccessToken($config, $proxyConfig, self::WEBMASTER_READONLY_SCOPE);
             if (empty($accessToken)) {
                 return [
                     'success' => false,
@@ -438,7 +495,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             }
             
             // 格式化站点 URL（Google 要求 URL 编码）
-            $encodedSiteUrl = urlencode($siteUrl);
+            $encodedSiteUrl = rawurlencode($siteUrl);
             
             $statsData = [
                 'indexed_pages' => 0,
@@ -450,7 +507,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                 'average_position' => 0.0,
                 'error_count' => 0,
                 'warning_count' => 0,
-                'daily_quota' => 200, // Google Indexing API 默认配额
+                'daily_quota' => 0,
                 'quota_used' => 0,
                 'extra' => [],
             ];
@@ -535,7 +592,8 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                 'Authorization: Bearer ' . $accessToken,
                 'Content-Type: application/json',
             ],
-            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
         ];
         
         if (!empty($proxyConfig['proxy'])) {
@@ -590,7 +648,8 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             CURLOPT_HTTPHEADER => [
                 'Authorization: Bearer ' . $accessToken,
             ],
-            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
         ];
         
         if (!empty($proxyConfig['proxy'])) {

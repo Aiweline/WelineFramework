@@ -58,6 +58,7 @@ class ProcessPreviewThemeUriBefore implements ObserverInterface
             || $previewToken !== '';
 
         ThemeRouter::rewritePreviewThemeQuery($path, $ruleArr);
+        ThemeRouter::rewriteDefaultThemePublicPage($path, $ruleArr);
 
         if ($hasPreviewContext) {
             try {

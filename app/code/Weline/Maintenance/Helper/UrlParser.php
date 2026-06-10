@@ -49,7 +49,8 @@ class UrlParser
         $server['WELINE_BACKEND_AREA'] = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: 'admin';
         $server['WELINE_AREA_ROUTE'] = '';
         $server['WELINE_AREA'] = 'frontend';
-        $server['WELINE_USER_CURRENCY'] = \w_env_cookie('WELINE_USER_CURRENCY') ?? 'CNY';
+        $cookieCurrency = strtoupper(trim((string)(\w_env_cookie('WELINE_USER_CURRENCY') ?? '')));
+        $server['WELINE_USER_CURRENCY'] = self::isValidCurrencyCode($cookieCurrency) ? $cookieCurrency : 'CNY';
         $server['WELINE_USER_LANG'] = \w_env_cookie('WELINE_USER_LANG') ?? 'zh_Hans_CN';
         $server['WELINE_WEBSITE_ID'] = w_env('website.id') ?? '';
         $server['WELINE_WEBSITE_CODE'] = w_env('website.code') ?? '';
@@ -150,10 +151,10 @@ class UrlParser
         // 检查第一个路径段
         if ($pre_path_1) {
             // 检查是否是货币（3位大写字母）
-            if (strlen($pre_path_1) === 3 && ctype_upper($pre_path_1)) {
+            if (self::isValidCurrencyCode($pre_path_1)) {
                 $has_currency = true;
-                $result['currency'] = $pre_path_1;
-                $server['WELINE_USER_CURRENCY'] = $pre_path_1;
+                $result['currency'] = strtoupper($pre_path_1);
+                $server['WELINE_USER_CURRENCY'] = $result['currency'];
                 array_shift($segments);
             }
             // 检查是否是语言（格式：xx_XXX，前两个字符是小写字母，第三个字符是下划线，长度 5-10）
@@ -185,10 +186,10 @@ class UrlParser
             // 检查是否是货币（如果第一个不是货币）
             if (!$has_currency && !empty($segments)) {
                 $pre_path_2 = $segments[0] ?? '';
-                if (strlen($pre_path_2) === 3 && ctype_upper($pre_path_2)) {
+                if (self::isValidCurrencyCode($pre_path_2)) {
                     $has_currency = true;
-                    $result['currency'] = $pre_path_2;
-                    $server['WELINE_USER_CURRENCY'] = $pre_path_2;
+                    $result['currency'] = strtoupper($pre_path_2);
+                    $server['WELINE_USER_CURRENCY'] = $result['currency'];
                     array_shift($segments);
                 }
             }
@@ -239,6 +240,29 @@ class UrlParser
      * @param string $code 语言代码
      * @return bool
      */
+    private static function isValidCurrencyCode(string $code): bool
+    {
+        $code = strtoupper(trim($code));
+        if (!preg_match('/^[A-Z]{3}$/', $code)) {
+            return false;
+        }
+
+        try {
+            if (\Weline\Framework\App\State::isAllowedCurrencyCode($code)) {
+                return true;
+            }
+        } catch (\Throwable) {
+        }
+
+        $websiteScope = trim((string)(
+            \w_env('website.id')
+            ?? \w_env('website_id')
+            ?? \Weline\Framework\Env\WelineEnv::server('WELINE_WEBSITE_ID', '')
+        ));
+
+        return ($websiteScope === '' || $websiteScope === '0') && $code === 'CNY';
+    }
+
     private static function isValidLanguageCode(string $code): bool
     {
         // 长度检查：5-10 字符（与 Url::parser() 保持一致）

@@ -51,7 +51,7 @@ $normalizeDefaultLocaleUrl = static function (string $url): string {
     while ($segments !== []) {
         $segment = (string)$segments[0];
         $upperSegment = strtoupper($segment);
-        $isCurrencySegment = (bool)preg_match('/^[A-Z]{3}$/', $upperSegment);
+        $isCurrencySegment = State::isAllowedCurrencyCode($upperSegment);
         $isLanguageSegment = (bool)preg_match('/^[a-z]{2}_[a-z0-9]+(?:_[a-z0-9]+)?$/i', $segment);
         if (!$isCurrencySegment && !$isLanguageSegment) {
             break;

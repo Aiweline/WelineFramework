@@ -1,0 +1,99 @@
+<?php
+$accountResult = (array)($this->getData('account_result') ?? []);
+$creativeResult = (array)($this->getData('creative_result') ?? []);
+$batchResult = (array)($this->getData('batch_result') ?? []);
+$website = (array)($this->getData('website') ?? []);
+$relationResult = (array)($this->getData('relation_result') ?? []);
+$resolveResult = (array)($this->getData('resolve_result') ?? []);
+$noPublish = (bool)($this->getData('no_publish') ?? false);
+$batch = is_array($batchResult['batch'] ?? null) ? $batchResult['batch'] : [];
+$draft = is_array($creativeResult['draft'] ?? null) ? $creativeResult['draft'] : [];
+$account = is_array($accountResult['account'] ?? null) ? $accountResult['account'] : [];
+$resolvedAccounts = is_array($resolveResult['accounts'] ?? null) ? $resolveResult['accounts'] : [];
+$relationPassed = !empty($relationResult['success']) && !empty($resolveResult['success']) && $resolvedAccounts !== [];
+$passed = $noPublish
+    ? (!empty($accountResult['success']) && $relationPassed)
+    : (!empty($accountResult['success']) && !empty($creativeResult['success']) && !empty($batchResult['success']) && (string)($batch['status'] ?? '') === 'done');
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+?>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= $h((string)__('Weline Social Fake Smoke')) ?></title>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background: #f6f8fb; color: #162033; }
+        main { max-width: 920px; margin: 40px auto; padding: 0 18px; }
+        .panel { background: #fff; border: 1px solid #dce5f2; border-radius: 8px; padding: 22px; box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08); }
+        .status { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; font-weight: 700; }
+        .passed { background: #e8f8ef; color: #087443; }
+        .failed { background: #feecec; color: #b42318; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 18px; }
+        .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; background: #fbfdff; }
+        .label { color: #64748b; font-size: 13px; }
+        .widget-smoke { margin-top: 18px; border-top: 1px solid #e2e8f0; padding-top: 18px; }
+        code { background: #eef4ff; padding: 2px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<main data-social-smoke="<?= $passed ? 'passed' : 'failed' ?>">
+    <section class="panel">
+        <span class="status <?= $passed ? 'passed' : 'failed' ?>">
+            <?= $passed ? __('Fake 验证通过') : __('Fake 验证失败') ?>
+        </span>
+        <h1><?= __('Weline_Social Fake 模式') ?></h1>
+        <p><?= $noPublish ? __('该页面只验证 fake 账户与站点默认社媒关系，不创建发布批次。') : __('该页面只调用 fake_browser Provider，不访问任何外部社媒平台。') ?></p>
+        <div class="grid">
+            <div class="card">
+                <div class="label"><?= __('账户') ?></div>
+                <strong><?= $h((string)($account['account_name'] ?? '')) ?></strong>
+                <div><code><?= $h((string)($account['test_status'] ?? '')) ?></code></div>
+            </div>
+            <div class="card">
+                <div class="label"><?= __('站点') ?></div>
+                <strong><?= $h((string)($website['name'] ?? '')) ?></strong>
+                <div><code><?= $h((string)($website['code'] ?? '')) ?></code></div>
+            </div>
+            <div class="card" data-social-site-account-smoke="<?= $relationPassed ? 'passed' : 'failed' ?>">
+                <div class="label"><?= __('站点社媒关系') ?></div>
+                <strong><?= $relationPassed ? __('已打通') : __('未打通') ?></strong>
+                <div><?= $h((string)($relationResult['message'] ?? '')) ?></div>
+            </div>
+            <div class="card">
+                <div class="label"><?= __('默认发布账户') ?></div>
+                <strong><?= count($resolvedAccounts) ?></strong>
+                <?php foreach ($resolvedAccounts as $resolvedAccount): ?>
+                    <?php if (!is_array($resolvedAccount)) { continue; } ?>
+                    <div><?= $h((string)($resolvedAccount['account_name'] ?? '')) ?> · <?= $h((string)($resolvedAccount['platform_code'] ?? '')) ?></div>
+                <?php endforeach; ?>
+            </div>
+            <?php if (!$noPublish): ?>
+            <div class="card">
+                <div class="label"><?= __('创意草稿') ?></div>
+                <strong>#<?= (int)($draft['draft_id'] ?? 0) ?></strong>
+                <div><?= $h((string)($draft['content'] ?? '')) ?></div>
+            </div>
+            <div class="card">
+                <div class="label"><?= __('发布批次') ?></div>
+                <strong>#<?= (int)($batch['batch_id'] ?? 0) ?></strong>
+                <div><code><?= $h((string)($batch['status'] ?? '')) ?></code></div>
+            </div>
+            <div class="card">
+                <div class="label"><?= __('目标结果') ?></div>
+                <strong><?= (int)($batch['success_count'] ?? 0) ?>/<?= (int)($batch['target_count'] ?? 0) ?></strong>
+                <?php foreach ((array)($batch['targets'] ?? []) as $target): ?>
+                    <?php if (!is_array($target)) { continue; } ?>
+                    <div><?= $h((string)($target['platform_code'] ?? '')) ?> · <?= $h((string)($target['status'] ?? '')) ?></div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <div class="widget-smoke" data-social-widget-smoke="mounted">
+            <div class="label"><?= __('社媒账户部件') ?></div>
+            <w:widget type="social" name="social-accounts" params='{"title":"社媒账户部件","show_label":"1","limit":"8"}'/>
+        </div>
+    </section>
+</main>
+</body>
+</html>

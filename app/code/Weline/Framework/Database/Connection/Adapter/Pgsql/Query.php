@@ -1615,17 +1615,31 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public function rollBack(): void
     {
         $pdo = $this->getLink();
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-            return;
-        }
-        // PostgreSQL：语句失败后 inTransaction() 可能错误返回 false，但连接仍处于 aborted 状态，
-        // 必须执行 ROLLBACK 才能恢复，否则后续操作报 25P02
         try {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+                return;
+            }
+
+            // PostgreSQL can leave the connection in an aborted transaction even
+            // when PDO reports no active transaction, so try one cleanup rollback.
             $pdo->rollBack();
-        } catch (\Throwable) {
-            // 无活跃事务时 rollBack 会抛错，忽略
+        } catch (\PDOException $exception) {
+            if (!$this->isIgnorableRollbackFailure($exception)) {
+                throw $exception;
+            }
         }
+    }
+
+    private function isIgnorableRollbackFailure(\PDOException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'no active transaction')
+            || str_contains($message, 'no connection to the server')
+            || str_contains($message, 'server closed the connection')
+            || str_contains($message, 'terminating connection')
+            || str_contains($message, 'ssl connection has been closed');
     }
 
     public function commit(): void

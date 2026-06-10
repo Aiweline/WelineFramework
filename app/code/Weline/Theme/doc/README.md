@@ -4,6 +4,12 @@
 
 Weline Theme 是系统的主题管理模块，提供了多主题支持、主题切换、主题定制等功能，让系统具有灵活的界面展示能力。
 
+## 当前规划入口
+
+- [Theme 虚拟布局与产品/分类布局计划](./virtual-layout-scope-plan.md)：Theme 模块子计划，覆盖虚拟布局、产品/分类布局、源码编辑、可视化编辑、AI 创建和定时恢复。
+- [SystemConfig 与 Theme 虚拟布局总计划](../../SystemConfig/doc/scope-config-theme-layout-master-plan.md)：跨模块总计划，关联 Framework Scope、SystemConfig 配置树和 Theme 虚拟布局。
+- [SystemConfig Scope 配置树计划](../../SystemConfig/doc/scope-config-tree-plan.md)：配置模块子计划，定义统一 scope 配置系统、fallback、缓存和后台配置树。
+
 ## 主要功能
 
 ### 1. 主题管理

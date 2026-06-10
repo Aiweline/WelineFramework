@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiUsageLog;
 use Weline\Ai\Model\Provider\Account;
@@ -1204,7 +1205,13 @@ class AiService
                     : ($allowZeroBalanceProvider
                         ? __("没有满足条件的%{provider}供应商账户（需激活、连通成功）", ['provider' => $providerCode])
                         : __("没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）", ['provider' => $providerCode]));
-                throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]));
+                throw new AiBillingException(
+                    ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]),
+                    $allowZeroBalanceProvider || $isTestMode
+                        ? AiBillingException::CODE_PROVIDER_UNAVAILABLE
+                        : AiBillingException::CODE_INSUFFICIENT_BALANCE,
+                    402
+                );
             }
             usort($candidateAccounts, function ($a, $b) {
                 $d1 = (int)($a['is_default'] ?? 0);
@@ -1301,7 +1308,7 @@ class AiService
             
             // 记录错误
             w_log_error("AI API调用失败: " . $e->getMessage());
-            throw new Exception("AI生成失败: " . $e->getMessage());
+            throw $this->wrapAiBillingExceptionIfNeeded($e, "AI生成失败: " . $e->getMessage());
         }
     }
 
@@ -1916,5 +1923,18 @@ class AiService
             $isBackend,
             $model  // 传递已注入账户配置的模型实例
         );
+    }
+
+    private function wrapAiBillingExceptionIfNeeded(\Throwable $throwable, string $message): \Throwable
+    {
+        if ($throwable instanceof AiBillingException) {
+            return $throwable;
+        }
+        $billingCode = AiBillingException::classifyMessageToCode($message);
+        if ($billingCode === '') {
+            return new Exception($message, (int)$throwable->getCode(), $throwable);
+        }
+
+        return new AiBillingException($message, $billingCode, 402, $throwable);
     }
 }

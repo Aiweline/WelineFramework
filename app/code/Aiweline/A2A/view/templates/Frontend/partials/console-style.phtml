@@ -1,0 +1,665 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+?>
+<style>
+    :root {
+        --a2a-bg: #f6f2ea;
+        --a2a-surface: #ffffff;
+        --a2a-surface-soft: #f8f5ef;
+        --a2a-panel: #faf7f0;
+        --a2a-border: #ddd2c0;
+        --a2a-border-strong: #a99578;
+        --a2a-text: #1f2724;
+        --a2a-muted: #6f665a;
+        --a2a-primary: #0f6f62;
+        --a2a-primary-strong: #084f47;
+        --a2a-accent: #a46422;
+        --a2a-success: #247245;
+        --a2a-warning: #9b6418;
+        --a2a-danger: #b42318;
+        --a2a-radius: 8px;
+        --a2a-shadow: 0 16px 34px rgba(45, 37, 27, .08);
+        --a2a-shadow-soft: 0 1px 2px rgba(45, 37, 27, .08);
+        --a2a-focus: 0 0 0 3px rgba(15, 111, 98, .18);
+        --a2a-topbar: #15211e;
+        --a2a-topbar-muted: #b9cabe;
+        --a2a-trust: #e5f4ef;
+        --a2a-ledger: #fff2d9;
+    }
+
+    html {
+        background: var(--a2a-bg);
+    }
+
+    body {
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, .72) 0%, rgba(246, 242, 234, 0) 360px),
+            linear-gradient(90deg, rgba(15, 111, 98, .06) 0 1px, transparent 1px 96px),
+            linear-gradient(0deg, rgba(164, 100, 34, .05) 0 1px, transparent 1px 96px),
+            var(--a2a-bg);
+        color: var(--a2a-text);
+        font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+        letter-spacing: 0;
+        text-rendering: optimizeLegibility;
+    }
+
+    body::selection {
+        background: rgba(15, 111, 98, .18);
+        color: var(--a2a-text);
+    }
+
+    .a2a-page,
+    .a2a-shell,
+    .a2a-accept-shell,
+    .a2a-ruling-shell,
+    .a2a-confirm-shell,
+    .a2a-delivery-shell,
+    .a2a-scope-shell,
+    .a2a-purchase-shell,
+    .a2a-quote-shell,
+    .a2a-reputation-shell,
+    .a2a-role-shell,
+    .a2a-case-shell,
+    .a2a-wallet-shell {
+        color: var(--a2a-text);
+    }
+
+    .a2a-shell,
+    .a2a-accept-shell,
+    .a2a-ruling-shell,
+    .a2a-confirm-shell,
+    .a2a-delivery-shell,
+    .a2a-scope-shell,
+    .a2a-purchase-shell,
+    .a2a-quote-shell,
+    .a2a-reputation-shell,
+    .a2a-role-shell,
+    .a2a-case-shell,
+    .a2a-wallet-shell {
+        width: min(1360px, calc(100% - 40px));
+        padding: 22px 0 40px;
+    }
+
+    .a2a-panel,
+    .a2a-card,
+    .a2a-agent,
+    .a2a-quote-row,
+    .a2a-sku-card,
+    .a2a-option,
+    .a2a-work-item,
+    .a2a-flow-item,
+    .a2a-detail-row,
+    .a2a-evidence-row,
+    .a2a-action-row,
+    .a2a-ledger-row,
+    .a2a-ledger-item,
+    .a2a-instruction-row,
+    .a2a-contract-row,
+    .a2a-summary-item,
+    .a2a-metric,
+    .a2a-field,
+    .a2a-score-card,
+    .a2a-decision-note,
+    .a2a-risk-note {
+        border-color: var(--a2a-border);
+        border-radius: var(--a2a-radius);
+        box-shadow: var(--a2a-shadow-soft);
+        min-width: 0;
+    }
+
+    .a2a-panel {
+        background: rgba(255, 255, 255, .96);
+        padding: 20px;
+    }
+
+    .a2a-card,
+    .a2a-summary-item,
+    .a2a-metric,
+    .a2a-detail-row,
+    .a2a-evidence-row,
+    .a2a-ledger-row,
+    .a2a-ledger-item,
+    .a2a-instruction-row,
+    .a2a-contract-row,
+    .a2a-action-row,
+    .a2a-work-item,
+    .a2a-flow-item,
+    .a2a-field {
+        background: var(--a2a-surface-soft);
+        box-shadow: none;
+    }
+
+    .a2a-hero-copy,
+    .a2a-command {
+        border-color: var(--a2a-border);
+        background: var(--a2a-surface);
+        box-shadow: var(--a2a-shadow);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+        letter-spacing: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    h1 {
+        margin-bottom: 10px;
+        font-size: 36px;
+        line-height: 1.12;
+    }
+
+    h2 {
+        font-size: 22px;
+        line-height: 1.22;
+    }
+
+    h3 {
+        font-size: 16px;
+        line-height: 1.28;
+    }
+
+    .a2a-hero h2 {
+        font-size: 42px;
+        line-height: 1.06;
+    }
+
+    .a2a-muted,
+    .a2a-card span,
+    .a2a-summary-item span,
+    .a2a-ledger-row span,
+    .a2a-contract-row span,
+    .a2a-instruction-row span,
+    .a2a-meta-grid span {
+        color: var(--a2a-muted);
+    }
+
+    .a2a-button,
+    .a2a-nav a,
+    .a2a-accept-nav a,
+    .a2a-ruling-nav a,
+    .a2a-confirm-nav a,
+    .a2a-delivery-nav a,
+    .a2a-scope-nav a,
+    .a2a-purchase-nav a,
+    .a2a-quote-nav a,
+    .a2a-reputation-nav a,
+    .a2a-case-nav a,
+    .a2a-wallet-nav a,
+    .a2a-role-nav a,
+    .a2a-role-tab,
+    .a2a-mode-tab,
+    .a2a-option-tab,
+    .a2a-tier-filter,
+    .a2a-sort-chip,
+    .a2a-segment {
+        border-color: var(--a2a-border);
+        background: var(--a2a-surface);
+        color: var(--a2a-text);
+        box-shadow: var(--a2a-shadow-soft);
+        font-weight: 700;
+        text-decoration: none;
+        transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    .a2a-button:hover,
+    .a2a-nav a:hover,
+    .a2a-accept-nav a:hover,
+    .a2a-ruling-nav a:hover,
+    .a2a-confirm-nav a:hover,
+    .a2a-delivery-nav a:hover,
+    .a2a-scope-nav a:hover,
+    .a2a-purchase-nav a:hover,
+    .a2a-quote-nav a:hover,
+    .a2a-reputation-nav a:hover,
+    .a2a-case-nav a:hover,
+    .a2a-wallet-nav a:hover,
+    .a2a-role-nav a:hover,
+    .a2a-role-tab:hover,
+    .a2a-mode-tab:hover,
+    .a2a-option-tab:hover,
+    .a2a-tier-filter:hover,
+    .a2a-sort-chip:hover,
+    .a2a-segment:hover {
+        border-color: var(--a2a-primary);
+        color: var(--a2a-primary);
+        box-shadow: var(--a2a-shadow);
+        transform: translateY(-1px);
+    }
+
+    .a2a-button-primary,
+    .a2a-role-tab-active,
+    .a2a-mode-active,
+    .a2a-option-active,
+    .a2a-segment-active,
+    .a2a-tier-filter-active,
+    .a2a-sort-chip-active,
+    .a2a-confirm-button,
+    .a2a-scope-button,
+    .a2a-delivery-action {
+        border-color: var(--a2a-primary);
+        background: var(--a2a-primary);
+        color: #fff;
+    }
+
+    .a2a-button-primary:hover,
+    .a2a-role-tab-active:hover,
+    .a2a-mode-active:hover,
+    .a2a-option-active:hover,
+    .a2a-segment-active:hover,
+    .a2a-tier-filter-active:hover,
+    .a2a-sort-chip-active:hover,
+    .a2a-confirm-button:hover,
+    .a2a-scope-button:hover,
+    .a2a-delivery-action:hover {
+        border-color: var(--a2a-primary-strong);
+        background: var(--a2a-primary-strong);
+        color: #fff;
+    }
+
+    .a2a-button-danger {
+        border-color: var(--a2a-danger);
+        background: var(--a2a-danger);
+        color: #fff;
+    }
+
+    .a2a-button-warning {
+        border-color: #d69020;
+        background: #f6c15d;
+        color: #2d1b02;
+    }
+
+    .a2a-button-disabled,
+    .a2a-option-locked {
+        cursor: default;
+        opacity: .64;
+        transform: none;
+    }
+
+    .a2a-kicker,
+    .a2a-state-pill,
+    .a2a-public-id,
+    .a2a-badge,
+    .a2a-tag,
+    .a2a-tier,
+    .a2a-identity-badge {
+        border: 1px solid rgba(15, 111, 98, .2);
+        border-radius: var(--a2a-radius);
+        background: var(--a2a-trust);
+        color: var(--a2a-primary);
+        font-weight: 800;
+    }
+
+    .a2a-public-id,
+    .a2a-order-id {
+        background: #f0e8dc;
+        color: var(--a2a-text);
+        overflow-wrap: anywhere;
+    }
+
+    .a2a-state-success,
+    .a2a-badge-success,
+    .a2a-identity-badge-ready,
+    .a2a-tier-gold,
+    .a2a-tier-platinum {
+        border-color: rgba(36, 114, 69, .2);
+        background: #e9f5ed;
+        color: var(--a2a-success);
+    }
+
+    .a2a-state-warning,
+    .a2a-badge-warning,
+    .a2a-tier-silver,
+    .a2a-tier-risk {
+        border-color: rgba(155, 100, 24, .24);
+        background: var(--a2a-ledger);
+        color: var(--a2a-warning);
+    }
+
+    .a2a-state-danger,
+    .a2a-badge-danger,
+    .a2a-state-blocked,
+    .a2a-forbidden,
+    .a2a-tier-black {
+        border-color: rgba(180, 35, 24, .18);
+        background: #fff0ef;
+        color: var(--a2a-danger);
+    }
+
+    .a2a-alert,
+    .a2a-result {
+        border-color: rgba(15, 111, 98, .22);
+        background: #edf8f4;
+        color: var(--a2a-primary-strong);
+        box-shadow: none;
+    }
+
+    .a2a-error,
+    .a2a-result-forbidden {
+        border-color: rgba(180, 35, 24, .24);
+        background: #fff4f3;
+        color: var(--a2a-danger);
+    }
+
+    .a2a-persisted-strip {
+        border-color: rgba(148, 96, 6, .24);
+        background: #fff8ea;
+        box-shadow: none;
+    }
+
+    .a2a-persisted-strip-review {
+        border-color: rgba(15, 107, 143, .22);
+        background: #edf8fb;
+    }
+
+    .a2a-persisted-strip-rework {
+        border-color: rgba(180, 35, 24, .2);
+        background: #fff4f3;
+    }
+
+    .a2a-grid,
+    .a2a-accept-grid,
+    .a2a-ruling-grid,
+    .a2a-confirm-grid,
+    .a2a-delivery-grid,
+    .a2a-scope-grid,
+    .a2a-purchase-grid,
+    .a2a-quote-grid,
+    .a2a-reputation-grid,
+    .a2a-role-grid,
+    .a2a-case-grid,
+    .a2a-wallet-grid,
+    .a2a-bottom-grid,
+    .a2a-score-layout,
+    .a2a-market-layout {
+        gap: 18px;
+    }
+
+    .a2a-topbar,
+    .a2a-accept-nav,
+    .a2a-ruling-nav,
+    .a2a-confirm-nav,
+    .a2a-delivery-nav,
+    .a2a-scope-nav,
+    .a2a-purchase-nav,
+    .a2a-quote-nav,
+    .a2a-reputation-nav,
+    .a2a-role-nav,
+    .a2a-case-nav,
+    .a2a-wallet-nav {
+        border: 1px solid rgba(255, 255, 255, .08);
+        border-radius: var(--a2a-radius);
+        background: var(--a2a-topbar);
+        box-shadow: var(--a2a-shadow);
+        margin-bottom: 18px;
+        padding: 10px;
+    }
+
+    .a2a-topbar h1,
+    .a2a-topbar p,
+    .a2a-topbar .a2a-brand-title,
+    .a2a-topbar .a2a-brand-subtitle {
+        color: #f5f7f1;
+    }
+
+    .a2a-topbar .a2a-brand-subtitle {
+        color: var(--a2a-topbar-muted);
+    }
+
+    .a2a-brand-mark {
+        border: 1px solid rgba(255, 255, 255, .18);
+        background: #f4b04a;
+        color: #16211d;
+        box-shadow: none;
+    }
+
+    .a2a-brand {
+        max-width: 100%;
+    }
+
+    .a2a-brand > div:last-child {
+        flex: 1 1 0;
+        max-width: calc(100% - 54px);
+        min-width: 0;
+    }
+
+    .a2a-brand-title,
+    .a2a-brand-subtitle {
+        overflow-wrap: anywhere;
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .a2a-topbar .a2a-nav a,
+    .a2a-topbar .a2a-button,
+    .a2a-accept-nav a,
+    .a2a-ruling-nav a,
+    .a2a-confirm-nav a,
+    .a2a-delivery-nav a,
+    .a2a-scope-nav a,
+    .a2a-purchase-nav a,
+    .a2a-quote-nav a,
+    .a2a-reputation-nav a,
+    .a2a-role-nav a,
+    .a2a-case-nav a,
+    .a2a-wallet-nav a {
+        border-color: rgba(255, 255, 255, .16);
+        background: rgba(255, 255, 255, .08);
+        color: #eff7f2;
+        box-shadow: none;
+    }
+
+    .a2a-topbar .a2a-nav a:hover,
+    .a2a-topbar .a2a-button:hover,
+    .a2a-accept-nav a:hover,
+    .a2a-ruling-nav a:hover,
+    .a2a-confirm-nav a:hover,
+    .a2a-delivery-nav a:hover,
+    .a2a-scope-nav a:hover,
+    .a2a-purchase-nav a:hover,
+    .a2a-quote-nav a:hover,
+    .a2a-reputation-nav a:hover,
+    .a2a-role-nav a:hover,
+    .a2a-case-nav a:hover,
+    .a2a-wallet-nav a:hover {
+        border-color: rgba(244, 176, 74, .78);
+        background: rgba(244, 176, 74, .14);
+        color: #ffffff;
+    }
+
+    .a2a-agent:hover,
+    .a2a-quote-row:hover,
+    .a2a-sku-card:hover,
+    .a2a-option:hover,
+    .a2a-action-row:hover,
+    .a2a-instruction-row:hover {
+        border-color: var(--a2a-border-strong);
+        box-shadow: var(--a2a-shadow);
+    }
+
+    .a2a-card strong,
+    .a2a-summary-item strong,
+    .a2a-ledger-row strong,
+    .a2a-contract-row strong,
+    .a2a-metric strong,
+    .a2a-score-card strong {
+        color: var(--a2a-text);
+        overflow-wrap: anywhere;
+    }
+
+    .a2a-market-controls,
+    .a2a-sku-card,
+    .a2a-stage {
+        background: #fffcf7;
+    }
+
+    .a2a-disclaimer,
+    .a2a-risk-list li,
+    .a2a-risk-note {
+        border-left-color: var(--a2a-accent);
+        background: #fff7e8;
+        color: #4f3820;
+    }
+
+    .a2a-list,
+    .a2a-ledger-list,
+    .a2a-work-list,
+    .a2a-risk-list,
+    .a2a-evidence-list,
+    .a2a-flow-list,
+    .a2a-option-list,
+    .a2a-action-list,
+    .a2a-trust-list,
+    .a2a-next-actions {
+        gap: 10px;
+    }
+
+    .a2a-search input,
+    .a2a-field input,
+    .a2a-field textarea,
+    .a2a-field select,
+    input,
+    textarea,
+    select {
+        border-color: var(--a2a-border);
+        border-radius: var(--a2a-radius);
+    }
+
+    .a2a-button:focus-visible,
+    .a2a-nav a:focus-visible,
+    .a2a-accept-nav a:focus-visible,
+    .a2a-ruling-nav a:focus-visible,
+    .a2a-confirm-nav a:focus-visible,
+    .a2a-delivery-nav a:focus-visible,
+    .a2a-scope-nav a:focus-visible,
+    .a2a-purchase-nav a:focus-visible,
+    .a2a-quote-nav a:focus-visible,
+    .a2a-reputation-nav a:focus-visible,
+    .a2a-role-nav a:focus-visible,
+    .a2a-case-nav a:focus-visible,
+    .a2a-wallet-nav a:focus-visible,
+    .a2a-role-tab:focus-visible,
+    .a2a-mode-tab:focus-visible,
+    .a2a-option-tab:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
+        outline: none;
+        box-shadow: var(--a2a-focus);
+    }
+
+    @media (max-width: 960px) {
+        .a2a-shell,
+        .a2a-accept-shell,
+        .a2a-ruling-shell,
+        .a2a-confirm-shell,
+        .a2a-delivery-shell,
+        .a2a-scope-shell,
+        .a2a-purchase-shell,
+        .a2a-quote-shell,
+        .a2a-reputation-shell,
+        .a2a-role-shell,
+        .a2a-case-shell,
+        .a2a-wallet-shell {
+            width: min(100% - 24px, 720px);
+            padding: 12px 0 28px;
+        }
+
+        h1 {
+            font-size: 28px;
+        }
+
+        h2,
+        .a2a-hero h2 {
+            font-size: 24px;
+        }
+
+        .a2a-panel {
+            padding: 16px;
+        }
+
+        .a2a-topbar,
+        .a2a-accept-nav,
+        .a2a-ruling-nav,
+        .a2a-confirm-nav,
+        .a2a-delivery-nav,
+        .a2a-scope-nav,
+        .a2a-purchase-nav,
+        .a2a-quote-nav,
+        .a2a-reputation-nav,
+        .a2a-role-nav,
+        .a2a-case-nav,
+        .a2a-wallet-nav {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .a2a-nav,
+        .a2a-nav-links,
+        .a2a-role-tabs,
+        .a2a-mode-tabs,
+        .a2a-option-actions,
+        .a2a-action-links,
+        .a2a-hero-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            width: 100%;
+        }
+
+        .a2a-brand {
+            width: 100%;
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .a2a-brand > div:last-child {
+            max-width: 100%;
+            width: 100%;
+        }
+
+        .a2a-button,
+        .a2a-nav a,
+        .a2a-accept-nav a,
+        .a2a-ruling-nav a,
+        .a2a-confirm-nav a,
+        .a2a-delivery-nav a,
+        .a2a-scope-nav a,
+        .a2a-purchase-nav a,
+        .a2a-quote-nav a,
+        .a2a-reputation-nav a,
+        .a2a-role-nav a,
+        .a2a-case-nav a,
+        .a2a-wallet-nav a,
+        .a2a-role-tab,
+        .a2a-mode-tab,
+        .a2a-option-tab {
+            width: 100%;
+            min-height: 42px;
+            white-space: normal;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            scroll-behavior: auto !important;
+            transition-duration: .01ms !important;
+            animation-duration: .01ms !important;
+            animation-iteration-count: 1 !important;
+        }
+
+        .a2a-button:hover,
+        .a2a-nav a:hover,
+        .a2a-role-tab:hover,
+        .a2a-mode-tab:hover,
+        .a2a-option-tab:hover,
+        .a2a-tier-filter:hover,
+        .a2a-sort-chip:hover,
+        .a2a-segment:hover {
+            transform: none;
+        }
+    }
+</style>

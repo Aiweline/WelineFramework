@@ -20,22 +20,28 @@
 "已成功通知 Google 更新 sitemap","已成功通知 Google 更新 sitemap"
 "Ping 请求返回错误码：%{1}","Ping 请求返回错误码：%{1}"
 "缺少 Service Account 配置（client_email 或 private_key）","缺少 Service Account 配置（client_email 或 private_key）"
+"缺少 Search Console 站点属性 URL","缺少 Search Console 站点属性 URL"
 "获取 Google Access Token 失败","获取 Google Access Token 失败"
-"Indexing API 请求失败：%{1}","Indexing API 请求失败：%{1}"
+"Google Search Console API 请求失败：%{1}","Google Search Console API 请求失败：%{1}"
 未知错误,未知错误
 "权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者","权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者"
-"Google Indexing API 错误：%{1}","Google Indexing API 错误：%{1}"
-"已成功通过 Indexing API 通知 Google 更新 URL","已成功通过 Indexing API 通知 Google 更新 URL"
-"Indexing API 返回错误码：%{1}","Indexing API 返回错误码：%{1}"
+"Google Search Console API 错误：%{1}","Google Search Console API 错误：%{1}"
+"已通过 Google Search Console API 提交 Sitemap","已通过 Google Search Console API 提交 Sitemap"
+"Google Search Console API 返回错误码：%{1}","Google Search Console API 返回错误码：%{1}"
 提交异常：%{1},提交异常：%{1}
 "缺少 Service Account 配置","缺少 Service Account 配置"
 "成功获取 Google Search Console 统计数据","成功获取 Google Search Console 统计数据"
 获取统计数据失败：%{1},获取统计数据失败：%{1}
+"缺少 IndexNow Key","缺少 IndexNow Key"
+"Sitemap URL 缺少主机名","Sitemap URL 缺少主机名"
+"已通过 IndexNow 通知 %{1}","已通过 IndexNow 通知 %{1}"
+"IndexNow 返回错误码：%{1}","IndexNow 返回错误码：%{1}"
 SEO账户配置,SEO账户配置
 账户不存在,账户不存在
 无效的请求方法,无效的请求方法
 账户名称不能为空,账户名称不能为空
 平台不能为空,平台不能为空
+平台未注册：%{1},平台未注册：%{1}
 账户保存成功,账户保存成功
 账户保存失败：%{1},账户保存失败：%{1}
 账户ID无效,账户ID无效
@@ -111,26 +117,24 @@ SEO主体管理,SEO主体管理
 "Sitemap 提交提示","Sitemap 提交提示"
 "以下站点未绑定 SEO 账户，无法自动提交 sitemap：","以下站点未绑定 SEO 账户，无法自动提交 sitemap："
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。"
-SEO主体创建,SEO主体创建
-当SEO主体（店铺、网站等）被创建时触发，允许其他模块监听并处理SEO主体创建逻辑。,当SEO主体（店铺、网站等）被创建时触发，允许其他模块监听并处理SEO主体创建逻辑。
-SEO主体更新,SEO主体更新
-当SEO主体信息被更新时触发，允许其他模块监听并处理SEO主体更新逻辑。,当SEO主体信息被更新时触发，允许其他模块监听并处理SEO主体更新逻辑。
-关键词提取完成,关键词提取完成
-当关键词提取任务完成时触发，允许其他模块监听并处理提取的关键词。,当关键词提取任务完成时触发，允许其他模块监听并处理提取的关键词。
-SEO建议生成完成,SEO建议生成完成
-当AI生成SEO建议完成时触发，允许其他模块监听并处理生成的建议。,当AI生成SEO建议完成时触发，允许其他模块监听并处理生成的建议。
-站点绑定SEO账户,站点绑定SEO账户
-当站点绑定SEO账户时触发，自动保存站点与账户的关联关系，用于控制sitemap自动提交。,当站点绑定SEO账户时触发，自动保存站点与账户的关联关系，用于控制sitemap自动提交。
-"SEO Feed收集","SEO Feed收集"
-允许其他模块向SEO模块注入Feed数据，实现跨模块的SEO信息收集。,允许其他模块向SEO模块注入Feed数据，实现跨模块的SEO信息收集。
-SEO任务入队,SEO任务入队
-当SEO任务被加入队列时触发，允许其他模块监听任务入队事件。,当SEO任务被加入队列时触发，允许其他模块监听任务入队事件。
-SEO任务处理完成,SEO任务处理完成
-当SEO任务处理完成时触发，允许其他模块监听任务完成事件。,当SEO任务处理完成时触发，允许其他模块监听任务完成事件。
-"统一 URL 提交入口","统一 URL 提交入口"
-"统一 URL 提交入口事件，由 SEO 模块自身 Observer 处理提交逻辑。","统一 URL 提交入口事件，由 SEO 模块自身 Observer 处理提交逻辑。"
-SEO趋势数据同步完成,SEO趋势数据同步完成
-当趋势数据同步任务完成时触发，允许其他模块监听趋势同步结果。,当趋势数据同步任务完成时触发，允许其他模块监听趋势同步结果。
+"SEO subject created","SEO subject created"
+"Dispatched when an SEO subject is created.","Dispatched when an SEO subject is created."
+"SEO subject updated","SEO subject updated"
+"Dispatched when SEO subject data is updated.","Dispatched when SEO subject data is updated."
+"SEO keywords extracted","SEO keywords extracted"
+"Dispatched when keyword extraction is completed.","Dispatched when keyword extraction is completed."
+"SEO suggestion generated","SEO suggestion generated"
+"Dispatched when AI SEO suggestions are generated.","Dispatched when AI SEO suggestions are generated."
+"Website SEO account bound","Website SEO account bound"
+"Dispatched when a website is bound to an SEO account.","Dispatched when a website is bound to an SEO account."
+"SEO feed collect","SEO feed collect"
+"Allows other modules to provide SEO feed data.","Allows other modules to provide SEO feed data."
+"SEO task enqueued","SEO task enqueued"
+"Dispatched after an SEO task is enqueued.","Dispatched after an SEO task is enqueued."
+"SEO task completed","SEO task completed"
+"Dispatched after an SEO task is completed.","Dispatched after an SEO task is completed."
+"SEO trend sync completed","SEO trend sync completed"
+"Dispatched when trend data sync is completed.","Dispatched when trend data sync is completed."
 百度站长平台,百度站长平台
 "缺少百度站点 URL","缺少百度站点 URL"
 "URL 列表为空","URL 列表为空"
@@ -142,18 +146,30 @@ SEO趋势数据同步完成,SEO趋势数据同步完成
 "Bing API 返回错误码：%{1}","Bing API 返回错误码：%{1}"
 "已在 Bing Webmaster Tools 验证的站点 URL","已在 Bing Webmaster Tools 验证的站点 URL"
 "已成功向 Bing 提交 %{1} 个 URL","已成功向 Bing 提交 %{1} 个 URL"
-"缺少 IndexNow Key","缺少 IndexNow Key"
 "已通过 IndexNow 提交 %{1} 个 URL","已通过 IndexNow 提交 %{1} 个 URL"
-"IndexNow 返回错误码：%{1}","IndexNow 返回错误码：%{1}"
 "已向Google Indexing API 提交 %{success} 个URL","已向Google Indexing API 提交 %{success} 个URL"
 "向Google Indexing API 提交URL失败","向Google Indexing API 提交URL失败"
 "Sitemap URL为空","Sitemap URL为空"
+"Google Indexing API 不用于提交 Sitemap，请使用 Google Search Console Sitemap API","Google Indexing API 不用于提交 Sitemap，请使用 Google Search Console Sitemap API"
 "Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）","Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）"
 "获取 Google Indexing API 访问令牌失败","获取 Google Indexing API 访问令牌失败"
 "URL 已提交给 Google Indexing API","URL 已提交给 Google Indexing API"
 "服务器未启用 cURL 扩展，无法调用 Google Indexing API","服务器未启用 cURL 扩展，无法调用 Google Indexing API"
 "请求失败: %{1}","请求失败: %{1}"
 "HTTP错误: %{1}","HTTP错误: %{1}"
+"Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交","Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交"
+"Google Service Account JSON 凭据内容","Google Service Account JSON 凭据内容"
+"Search Console 中已验证的站点属性 URL","Search Console 中已验证的站点属性 URL"
+"URL 缺少主机名：%{1}","URL 缺少主机名：%{1}"
+"IndexNow Key","IndexNow Key"
+"可公开访问的 IndexNow Key 文件地址","可公开访问的 IndexNow Key 文件地址"
+"缺少 Naver Search Advisor Access Token","缺少 Naver Search Advisor Access Token"
+"Naver Search Advisor 请求失败：%{1}","Naver Search Advisor 请求失败：%{1}"
+"Naver Search Advisor 返回错误：%{1}","Naver Search Advisor 返回错误：%{1}"
+"已通过 Naver Search Advisor 提交 %{1} 个 URL","已通过 Naver Search Advisor 提交 %{1} 个 URL"
+"Naver Search Advisor 收集请求 API 面向落地页 URL，不用于 Sitemap 文件；请使用 IndexNow 或在 Naver Search Advisor 手动提交 Sitemap","Naver Search Advisor 收集请求 API 面向落地页 URL，不用于 Sitemap 文件；请使用 IndexNow 或在 Naver Search Advisor 手动提交 Sitemap"
+"Naver Search Advisor Access Token","Naver Search Advisor Access Token"
+"提交类型：update 或 delete","提交类型：update 或 delete"
 "该站点没有 URL 数据，请先点击""调用所有生成器""按钮生成 URL","该站点没有 URL 数据，请先点击""调用所有生成器""按钮生成 URL"
 "该站点未绑定 SEO 账户，已有 %{1} 条 URL 数据，但无法生成 sitemap 文件。请前往""站点管理""或""SEO管理 > 账户管理""绑定 SEO 账户。","该站点未绑定 SEO 账户，已有 %{1} 条 URL 数据，但无法生成 sitemap 文件。请前往""站点管理""或""SEO管理 > 账户管理""绑定 SEO 账户。"
 "平台 %{1} 不支持自动提交","平台 %{1} 不支持自动提交"
@@ -169,10 +185,6 @@ id属性不能为空,id属性不能为空
 SEO管理,SEO管理
 在新窗口打开,在新窗口打开
 "SEO 协议与搜索提交","SEO 协议与搜索提交"
-"SEO 账户","SEO 账户"
-"绑定后由 Weline_Seo 处理 sitemap 与新 URL 自动提交。","绑定后由 Weline_Seo 处理 sitemap 与新 URL 自动提交。"
-自动提交,自动提交
-"新 URL 产生后自动提交到已配置搜索引擎","新 URL 产生后自动提交到已配置搜索引擎"
 robots.txt,robots.txt
 "启用站点 robots 协议输出","启用站点 robots 协议输出"
 "Sitemap 声明","Sitemap 声明"
@@ -182,7 +194,6 @@ Google-Extended,Google-Extended
 "禁止 Google-Extended","禁止 Google-Extended"
 "robots.txt 追加规则","robots.txt 追加规则"
 "每行一条 robots 指令；基础安全规则由 Weline_Seo 自动生成。","每行一条 robots 指令；基础安全规则由 Weline_Seo 自动生成。"
-"请选择 SEO 账户","请选择 SEO 账户"
 编辑SEO账户,编辑SEO账户
 新增SEO账户,新增SEO账户
 账户管理,账户管理
@@ -192,7 +203,7 @@ Scope,Scope
 "由URL参数指定的scope不可修改，用于区分不同业务范围，例如 page_builder。","由URL参数指定的scope不可修改，用于区分不同业务范围，例如 page_builder。"
 账户名称,账户名称
 平台(Platform),平台(Platform)
-"👉 请选择平台（选择后将显示配置获取指南）","👉 请选择平台（选择后将显示配置获取指南）"
+请选择平台（选择后将显示配置获取指南）,请选择平台（选择后将显示配置获取指南）
 选择目标搜索引擎平台后，下方将自动显示：,选择目标搜索引擎平台后，下方将自动显示：
 平台支持的功能列表,平台支持的功能列表
 详细的配置获取步骤指南,详细的配置获取步骤指南
@@ -210,6 +221,21 @@ Scope,Scope
 保存,保存
 返回列表,返回列表
 取消,取消
+"标准 XML Sitemap 生成","标准 XML Sitemap 生成"
+站点绑定后生成独立平台目录,站点绑定后生成独立平台目录
+"IndexNow 自动通知","IndexNow 自动通知"
+"站长平台手动 Sitemap 提交","站长平台手动 Sitemap 提交"
+"需要配置 IndexNow Key 和可公开访问的 Key 文件","需要配置 IndexNow Key 和可公开访问的 Key 文件"
+"无需 API 配置；生成 sitemap 后到对应站长平台手动提交","无需 API 配置；生成 sitemap 后到对应站长平台手动提交"
+"%{1} 配置步骤","%{1} 配置步骤"
+"1. 生成 8-128 位 IndexNow Key","1. 生成 8-128 位 IndexNow Key"
+"2. 在网站根目录放置 Key 文件，文件内容只包含该 Key","2. 在网站根目录放置 Key 文件，文件内容只包含该 Key"
+"3. 在下方配置中填写 indexnow_key 和 key_location","3. 在下方配置中填写 indexnow_key 和 key_location"
+"4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交","4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交"
+"1. 保存账户并绑定站点","1. 保存账户并绑定站点"
+"2. 运行 Sitemap 生成或等待定时任务生成平台目录","2. 运行 Sitemap 生成或等待定时任务生成平台目录"
+"3. 将 %{1} 提交到对应站长平台","3. 将 %{1} 提交到对应站长平台"
+"4. 保持 robots.txt 中的 Sitemap 入口可访问","4. 保持 robots.txt 中的 Sitemap 入口可访问"
 成功,成功
 错误,错误
 提示,提示
@@ -303,8 +329,9 @@ Sitemap管理,Sitemap管理
 "URL 数据采集","URL 数据采集"
 "各模块通过 SitemapProvider 提供 URL 数据，包括页面、产品、分类等","各模块通过 SitemapProvider 提供 URL 数据，包括页面、产品、分类等"
 平台适配器生成,平台适配器生成
-"根据站点绑定的 SEO 平台（Google/Bing/Baidu），由对应适配器生成符合规范的 sitemap.xml","根据站点绑定的 SEO 平台（Google/Bing/Baidu），由对应适配器生成符合规范的 sitemap.xml"
-"定时任务自动将 sitemap 提交到各搜索引擎，支持 Ping、API 和 IndexNow 协议","定时任务自动将 sitemap 提交到各搜索引擎，支持 Ping、API 和 IndexNow 协议"
+"根据站点绑定的 SEO 平台，由对应适配器生成符合规范的 sitemap.xml","根据站点绑定的 SEO 平台，由对应适配器生成符合规范的 sitemap.xml"
+自动提交,自动提交
+"定时任务只向支持官方 API 或 IndexNow 的平台自动提交 sitemap","定时任务只向支持官方 API 或 IndexNow 的平台自动提交 sitemap"
 架构设计,架构设计
 "Provider 扩展机制","Provider 扩展机制"
 "各模块通过 <code>extends/module/Weline_Seo/SitemapProvider/</code> 注册自己的 URL 提供器","各模块通过 <code>extends/module/Weline_Seo/SitemapProvider/</code> 注册自己的 URL 提供器"
@@ -322,6 +349,8 @@ Sitemap管理,Sitemap管理
 "最大 URL 数量","最大 URL 数量"
 最大文件大小,最大文件大小
 提交方式,提交方式
+长尾平台,长尾平台
+"Sitemap 生成 / 手动或自然发现","Sitemap 生成 / 手动或自然发现"
 核心接口,核心接口
 "模块实现此接口以提供 URL 数据","模块实现此接口以提供 URL 数据"
 平台适配器接口，处理平台特定逻辑,平台适配器接口，处理平台特定逻辑
@@ -375,44 +404,8 @@ Sitemap管理,Sitemap管理
 请先在站点管理中创建站点,请先在站点管理中创建站点
 个账户,个账户
 管理绑定,管理绑定
-管理站点SEO账户绑定,管理站点SEO账户绑定
-暂无可用的SEO账户,暂无可用的SEO账户
-当前模块/Scope下没有SEO账户，请先创建账户,当前模块/Scope下没有SEO账户，请先创建账户
-系统中还没有SEO账户，请先前往账户管理创建,系统中还没有SEO账户，请先前往账户管理创建
-配置说明,配置说明
-"请选择要绑定到该站点的 SEO 账户（可多选），并为每个账户配置 Sitemap 生成策略。配置完成后，系统将按照设定的频率自动生成并提交 Sitemap 到对应的搜索引擎。","请选择要绑定到该站点的 SEO 账户（可多选），并为每个账户配置 Sitemap 生成策略。配置完成后，系统将按照设定的频率自动生成并提交 Sitemap 到对应的搜索引擎。"
-"选择 SEO 账户","选择 SEO 账户"
-可多选,可多选
-"Sitemap 配置","Sitemap 配置"
-配置此站点在该SEO账户下的提交策略,配置此站点在该SEO账户下的提交策略
-"Sitemap 生成频率","Sitemap 生成频率"
-"Sitemap 重新生成和提交的频率","Sitemap 重新生成和提交的频率"
-搜索引擎抓取频率,搜索引擎抓取频率
-告知搜索引擎建议的抓取间隔,告知搜索引擎建议的抓取间隔
-"URL 优先级","URL 优先级"
-范围：0.0-1.0，数值越高优先级越高,范围：0.0-1.0，数值越高优先级越高
-启用自动提交,启用自动提交
-"开启后，内容更新时会自动生成 Sitemap 并推送到搜索引擎","开启后，内容更新时会自动生成 Sitemap 并推送到搜索引擎"
-提示：,提示：
-"配置保存后将立即生效，系统会按照新的频率自动执行 Sitemap 生成和提交任务。","配置保存后将立即生效，系统会按照新的频率自动执行 Sitemap 生成和提交任务。"
-所有更改都会被安全保存,所有更改都会被安全保存
-保存配置,保存配置
-未知站点,未知站点
-"控制 Sitemap 文件的更新频率","控制 Sitemap 文件的更新频率"
-实时,实时
-每小时,每小时
-每天,每天
-每周,每周
-每月,每月
-建议搜索引擎多久抓取一次,建议搜索引擎多久抓取一次
-总是,总是
-每年,每年
-从不,从不
-"0.0 到 1.0 之间，默认 0.5","0.0 到 1.0 之间，默认 0.5"
-保存中...,保存中...
-绑定配置已更新,绑定配置已更新
-请检查输入后重试,请检查输入后重试
-网络连接失败，请重试,网络连接失败，请重试
+当前网站,当前网站
+"管理站点 SEO 账户启用","管理站点 SEO 账户启用"
 前往SEO管理配置,前往SEO管理配置
 暂无SEO账户配置,暂无SEO账户配置
 点击前往配置,点击前往配置
@@ -420,3 +413,29 @@ URL推送,URL推送
 Sitemap提交,Sitemap提交
 共,共
 过滤条件,过滤条件
+搜索引擎账户启用,搜索引擎账户启用
+暂无可启用的搜索引擎账户,暂无可启用的搜索引擎账户
+"先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。","先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。"
+Sitemap,Sitemap
+数据同步,数据同步
+"Sitemap 频率","Sitemap 频率"
+抓取频率,抓取频率
+"URL 优先级","URL 优先级"
+启用该账户的网站自动提交,启用该账户的网站自动提交
+保存后立即更新该网站的搜索引擎账户启用状态。,保存后立即更新该网站的搜索引擎账户启用状态。
+保存启用状态,保存启用状态
+实时,实时
+每小时,每小时
+每天,每天
+每周,每周
+每月,每月
+总是,总是
+每年,每年
+从不,从不
+"打开 SEO 账户管理","打开 SEO 账户管理"
+未知平台,未知平台
+停用,停用
+保存搜索引擎账户启用状态,保存搜索引擎账户启用状态
+保存中,保存中
+启用状态已保存,启用状态已保存
+请检查输入后重试,请检查输入后重试

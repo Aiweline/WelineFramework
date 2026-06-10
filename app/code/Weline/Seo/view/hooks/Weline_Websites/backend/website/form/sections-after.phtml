@@ -5,8 +5,6 @@
  */
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Seo\Model\SeoAccount;
-use Weline\Seo\Model\SeoWebsiteAccount;
 use Weline\Seo\Model\WebsiteProtocolConfig;
 
 $website = (array)($this->getData('website') ?? []);
@@ -14,15 +12,11 @@ $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
 $hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'website'));
 $accordionParentId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('accordion_parent_id') ?? 'websiteFormAccordion'));
 $sectionId = $hookId . '_seo_protocol';
-$accountFieldId = $sectionId . '_account';
-$autoSubmitFieldId = $sectionId . '_auto_submit';
 $robotsFieldId = $sectionId . '_robots_enabled';
 $sitemapFieldId = $sectionId . '_sitemap_enabled';
 $googleExtendedFieldId = $sectionId . '_google_extended';
 $robotsExtraFieldId = $sectionId . '_robots_extra';
 
-$seoAccountId = '';
-$seoAccountDisplay = (string)__('请选择 SEO 账户');
 $robotsEnabled = true;
 $sitemapEnabled = true;
 $googleExtended = 'allow';
@@ -36,20 +30,6 @@ try {
         $sitemapEnabled = $protocolConfig->isSitemapEnabled();
         $googleExtended = $protocolConfig->getGoogleExtendedPolicy();
         $robotsExtra = $protocolConfig->getRobotsExtra();
-
-        /** @var SeoWebsiteAccount $websiteAccount */
-        $websiteAccount = ObjectManager::getInstance(SeoWebsiteAccount::class);
-        $bindings = $websiteAccount->getByWebsiteId($websiteId);
-        $firstBinding = is_array($bindings) ? ($bindings[0] ?? []) : [];
-        $seoAccountId = (string)((int)($firstBinding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0) ?: '');
-        if ($seoAccountId !== '') {
-            /** @var SeoAccount $accountModel */
-            $accountModel = ObjectManager::getInstance(SeoAccount::class);
-            $account = $accountModel->reset()->load((int)$seoAccountId);
-            if ($account->getId()) {
-                $seoAccountDisplay = (string)$account->getData('name') . ' (' . (string)$account->getData('provider') . ')';
-            }
-        }
     }
 } catch (\Throwable) {
 }
@@ -65,24 +45,15 @@ try {
     <div id="<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>" class="accordion-collapse collapse" aria-labelledby="<?= htmlspecialchars($sectionId . '_heading', ENT_QUOTES, 'UTF-8') ?>" data-bs-parent="#<?= htmlspecialchars($accordionParentId, ENT_QUOTES, 'UTF-8') ?>">
         <div class="accordion-body">
             <div class="row">
-                <div class="col-6 mb-3">
-                    <label for="seo_account" class="form-label"><lang>SEO 账户</lang></label>
-                    <w:seo:account:select
-                        id="accountFieldId"
-                        name="extensions[seo][account_id]"
-                        value="seoAccountId"
-                        display="seoAccountDisplay"
-                        class="w-100"
-                    />
-                    <div class="form-text-hint"><lang>绑定后由 Weline_Seo 处理 sitemap 与新 URL 自动提交。</lang></div>
-                </div>
-                <div class="col-6 mb-3">
-                    <label class="form-label"><lang>自动提交</lang></label>
-                    <input type="hidden" name="extensions[seo][auto_submit]" value="0">
-                    <div class="form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($autoSubmitFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[seo][auto_submit]" value="1" checked>
-                        <label class="form-check-label" for="seo_auto_submit"><lang>新 URL 产生后自动提交到已配置搜索引擎</lang></label>
-                    </div>
+                <div class="col-12 mb-3">
+                    <?= framework_view_process_block([
+                        'class' => \Weline\Seo\Block\Widget\WebsiteAccountEnablement::class,
+                        'website_id' => $websiteId,
+                        'website' => $website,
+                        'mode' => 'embedded',
+                        'field_prefix' => 'extensions[seo]',
+                        'show_submit' => false,
+                    ]) ?>
                 </div>
                 <div class="col-4 mb-3">
                     <label class="form-label"><lang>robots.txt</lang></label>

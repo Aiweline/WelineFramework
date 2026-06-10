@@ -10,6 +10,7 @@ use Weline\Ai\Interface\ScenarioAdapterInterface;
 class ThemeAdapter implements ScenarioAdapterInterface, AdapterModelBindingInterface
 {
     private const OPERATION_CONFIG_I18N_TRANSLATE = 'config_i18n_translate';
+    private const VIRTUAL_LAYOUT_OPERATION_PREFIX = 'virtual_layout_';
 
     public function getDefaultModelBindings(): array
     {
@@ -31,7 +32,7 @@ class ThemeAdapter implements ScenarioAdapterInterface, AdapterModelBindingInter
 
     public function getDescription(): string
     {
-        return __('用于主题可视化编辑器的配置翻译、文案生成和主题图片生成。');
+        return __('用于主题可视化编辑器的配置翻译、虚拟主题布局源码生成、文案生成和主题图片生成。');
     }
 
     public function getVersion(): string
@@ -47,7 +48,11 @@ class ThemeAdapter implements ScenarioAdapterInterface, AdapterModelBindingInter
     public function adaptPrompt(string $prompt, array $params = []): string
     {
         $normalized = trim($prompt);
-        if (($params['operation'] ?? '') !== self::OPERATION_CONFIG_I18N_TRANSLATE || $normalized === '') {
+        $operation = (string)($params['operation'] ?? '');
+        if (str_starts_with($operation, self::VIRTUAL_LAYOUT_OPERATION_PREFIX)) {
+            return $this->adaptVirtualLayoutPrompt($normalized !== '' ? $normalized : $prompt, $params);
+        }
+        if ($operation !== self::OPERATION_CONFIG_I18N_TRANSLATE || $normalized === '') {
             return $prompt;
         }
 
@@ -67,7 +72,11 @@ class ThemeAdapter implements ScenarioAdapterInterface, AdapterModelBindingInter
 
     public function processResponse(string $response, array $params = []): string
     {
-        if (($params['operation'] ?? '') !== self::OPERATION_CONFIG_I18N_TRANSLATE) {
+        $operation = (string)($params['operation'] ?? '');
+        if (str_starts_with($operation, self::VIRTUAL_LAYOUT_OPERATION_PREFIX)) {
+            return $this->extractJsonObject($response);
+        }
+        if ($operation !== self::OPERATION_CONFIG_I18N_TRANSLATE) {
             return $response;
         }
 
@@ -82,7 +91,18 @@ class ThemeAdapter implements ScenarioAdapterInterface, AdapterModelBindingInter
 
     public function validateParams(array $params = []): array
     {
-        if (($params['operation'] ?? '') !== self::OPERATION_CONFIG_I18N_TRANSLATE) {
+        $operation = (string)($params['operation'] ?? '');
+        if (str_starts_with($operation, self::VIRTUAL_LAYOUT_OPERATION_PREFIX)) {
+            $errors = [];
+            if (trim((string)($params['layout_type'] ?? '')) === '') {
+                $errors[] = __('缺少布局类型。');
+            }
+            if (trim((string)($params['layout_option'] ?? '')) === '') {
+                $errors[] = __('缺少布局选项。');
+            }
+            return $errors;
+        }
+        if ($operation !== self::OPERATION_CONFIG_I18N_TRANSLATE) {
             return [];
         }
 
@@ -104,11 +124,21 @@ class ThemeAdapter implements ScenarioAdapterInterface, AdapterModelBindingInter
             'fields' => [
                 'operation' => [
                     'type' => 'select',
-                    'options' => [self::OPERATION_CONFIG_I18N_TRANSLATE],
+                    'options' => [
+                        self::OPERATION_CONFIG_I18N_TRANSLATE,
+                        'virtual_layout_create',
+                        'virtual_layout_edit',
+                        'virtual_layout_rebuild',
+                        'virtual_layout_regenerate_images',
+                    ],
                 ],
                 'source_locale' => ['type' => 'string'],
                 'target_locales' => ['type' => 'array'],
                 'field_key' => ['type' => 'string'],
+                'layout_type' => ['type' => 'string'],
+                'layout_option' => ['type' => 'string'],
+                'selected_skill_codes' => ['type' => 'array'],
+                'design_direction_snapshot' => ['type' => 'object'],
             ],
         ];
     }
@@ -128,6 +158,23 @@ class ThemeAdapter implements ScenarioAdapterInterface, AdapterModelBindingInter
     public function supportsModel(string $modelCode): bool
     {
         return $modelCode !== '';
+    }
+
+    private function adaptVirtualLayoutPrompt(string $prompt, array $params = []): string
+    {
+        $operation = (string)($params['operation'] ?? '');
+        $layoutType = (string)($params['layout_type'] ?? '');
+        $layoutOption = (string)($params['layout_option'] ?? '');
+
+        return trim($prompt) . "\n\n"
+            . "Theme adapter virtual layout contract:\n"
+            . "1. Operation: {$operation}; layout_type: {$layoutType}; layout_option: {$layoutOption}.\n"
+            . "2. Output exactly one JSON object and no markdown, explanation, comments, or code fences.\n"
+            . "3. JSON must include `source_code` as a complete Weline .phtml layout source, plus `name`, `description`, `asset_rewrites`, and `notes`.\n"
+            . "4. The source_code must preserve default theme metadata comments, slots, hooks, head/body structure, data attributes, template variables, and theme CSS variables unless the user explicitly asks to change them.\n"
+            . "5. Do not remove default-theme capabilities. If you change a section, keep an equivalent slot/hook/render path so existing widgets and runtime rendering keep working.\n"
+            . "6. Do not add browser-side business logic, network calls, event listeners, external scripts, or asset rewrites for non virtual-theme-owned assets.\n"
+            . "7. For image regeneration, rewrite only assets explicitly marked as virtual-theme-owned by the caller and leave inherited/default theme assets untouched.\n";
     }
 
     private function extractJsonObject(string $response): string

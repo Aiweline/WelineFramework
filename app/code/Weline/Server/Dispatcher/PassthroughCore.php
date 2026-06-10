@@ -28,6 +28,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Dispatcher;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\InternalRequestLabel;
@@ -2006,7 +2007,7 @@ class PassthroughCore
             if ($lang === '' || !\preg_match('/^[a-z]{2}_[A-Za-z0-9_]{2,}$/', $lang)) {
                 continue;
             }
-            if (!\preg_match('/^[A-Z]{3}$/', $currency)) {
+            if (!State::isAllowedCurrencyCode($currency)) {
                 continue;
             }
 
@@ -2086,10 +2087,13 @@ class PassthroughCore
         $path = '/' . \ltrim($path, '/');
 
         if (\preg_match('#^/([A-Z]{3})/([A-Za-z]{2}_[A-Za-z0-9_]{2,})(?:/|$)#', $path, $matches)) {
-            return [
-                'currency' => \strtoupper((string)$matches[1]),
-                'lang' => \str_replace('-', '_', (string)$matches[2]),
-            ];
+            $currency = \strtoupper((string)$matches[1]);
+            if (State::isAllowedCurrencyCode($currency)) {
+                return [
+                    'currency' => $currency,
+                    'lang' => \str_replace('-', '_', (string)$matches[2]),
+                ];
+            }
         }
 
         if (\preg_match('#^/([A-Za-z]{2}_[A-Za-z0-9_]{2,})(?:/|$)#', $path, $matches)) {
@@ -2100,10 +2104,13 @@ class PassthroughCore
         }
 
         if (\preg_match('#^/([A-Z]{3})(?:/|$)#', $path, $matches)) {
-            return [
-                'currency' => \strtoupper((string)$matches[1]),
-                'lang' => '',
-            ];
+            $currency = \strtoupper((string)$matches[1]);
+            if (State::isAllowedCurrencyCode($currency)) {
+                return [
+                    'currency' => $currency,
+                    'lang' => '',
+                ];
+            }
         }
 
         return ['lang' => '', 'currency' => ''];
@@ -2155,7 +2162,10 @@ class PassthroughCore
             if ($name === 'WELINE_USER_LANG') {
                 $context['lang'] = \str_replace('-', '_', $value);
             } elseif ($name === 'WELINE_USER_CURRENCY') {
-                $context['currency'] = \strtoupper($value);
+                $currency = \strtoupper($value);
+                if (State::isAllowedCurrencyCode($currency)) {
+                    $context['currency'] = $currency;
+                }
             }
         }
 

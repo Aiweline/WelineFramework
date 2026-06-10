@@ -43,7 +43,7 @@ required_fields: api_url, api_key, merchant_id, return_url, notify_url
 ## 常见错误
 - invalid_bsb：BSB 格式错误。
 - mandate_invalid：授权信息不完整。
-- webhook 重复触发状态回退。
+- webhook 重复触发状态倒退。
 
 ## 官方文档链接
 - https://docs.stripe.com/payments/au-becs-debit

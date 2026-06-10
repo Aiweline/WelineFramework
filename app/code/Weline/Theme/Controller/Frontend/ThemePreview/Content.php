@@ -6,6 +6,8 @@ namespace Weline\Theme\Controller\Frontend\ThemePreview;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\ThemeData;
+use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\EditorModeAssetInjector;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\ThemePageTypeResolver;
@@ -68,6 +70,9 @@ class Content extends FrontendController
             (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
             (int)($this->request->getParam('version_id', $context['version_id'] ?? 0)) ?: null
         );
+        $editorArea = (string)($context['editor_area'] ?? PreviewContextService::AREA_FRONTEND);
+        $scope = (string)($context['scope'] ?? PreviewContextService::DEFAULT_SCOPE);
+        $layoutMeta = $this->resolveLayoutMetaForPreview($themeId, $layoutType, $layoutOption, $editorArea, $scope);
         $this->assign('content', $previewPayload['content']);
         $this->assign('meta', array_merge([
             'showHeader' => true,
@@ -78,7 +83,7 @@ class Content extends FrontendController
             'showTestimonials' => true,
             'showNews' => true,
             'showPartners' => true,
-        ], $previewPayload['meta']));
+        ], $previewPayload['meta'], $layoutMeta));
 
         $html = (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
         $editorMode = (string)$this->request->getParam('editor_mode', '');
@@ -89,5 +94,37 @@ class Content extends FrontendController
         }
 
         return $html;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveLayoutMetaForPreview(
+        int $themeId,
+        string $layoutType,
+        string $layoutOption,
+        string $editorArea,
+        string $scope
+    ): array {
+        if ($themeId <= 0) {
+            return [];
+        }
+
+        try {
+            /** @var WelineTheme $theme */
+            $theme = ObjectManager::getInstance(WelineTheme::class);
+            $theme->reset()->load($themeId);
+            if (!$theme->getId()) {
+                return [];
+            }
+
+            ThemeData::setCurrentTheme($theme);
+            ThemeData::setCurrentArea($editorArea === PreviewContextService::AREA_BACKEND ? 'backend' : 'frontend');
+            $metaIdentify = 'layouts.' . $layoutType . '.' . $layoutOption;
+
+            return ThemeData::getFileParams($metaIdentify, $scope);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 }

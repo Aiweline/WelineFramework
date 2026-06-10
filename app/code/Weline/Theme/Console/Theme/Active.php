@@ -10,9 +10,11 @@
 namespace Weline\Theme\Console\Theme;
 
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 class Active extends AbstractConsole
 {
@@ -60,6 +62,7 @@ class Active extends AbstractConsole
                 }
                 try {
                     $theme->save();
+                    $this->clearActivationRuntimeCaches((int)$theme->getId(), $activationArea);
                     $this->printing->success(__('已成功激活主题：') . $theme_name);
                 } catch (\ReflectionException $e) {
                     throw $e;
@@ -102,5 +105,16 @@ class Active extends AbstractConsole
                 '仅激活前台' => 'php bin/w theme:active Weline_Default frontend',
             ]
         );
+    }
+
+    private function clearActivationRuntimeCaches(int $themeId, ?string $area): void
+    {
+        try {
+            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
+                $themeId,
+                'theme_cli_active_' . ($area ?? 'global')
+            );
+        } catch (\Throwable) {
+        }
     }
 }
