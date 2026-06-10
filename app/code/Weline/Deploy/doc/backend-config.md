@@ -67,7 +67,7 @@ php bin/w setup:upgrade --route
 
 后台核心仓库配置会覆盖 `app/etc/env.php` 的 `core_update` 和 `.env` 的 `CORE_UPDATE_*`。
 
-核心更新会增量同步以下根目录（基于 Git diff，并自动补缺本地缺失文件；`vendor` 不更新）：
+核心更新会增量同步以下根目录（Git 有变更的文件直接覆盖；其余文件若本地修改时间比源文件旧则覆盖；`vendor` 不更新）：
 
 - `app`
 - `bin`
