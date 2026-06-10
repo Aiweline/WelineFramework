@@ -25,7 +25,7 @@
 $meta = $this->getData('meta') ?? [];
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
@@ -99,7 +99,9 @@ $meta = $this->getData('meta') ?? [];
                         multiple="true"
                         position="content">
                     <w:hook>Weline_Theme::frontend::layouts::activity::main-content-before</w:hook>
-                    <w:hook>Weline_Theme::frontend::layouts::activity::main-content<else/>
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::activity::main-content
+                        <else/>
                         <if condition="meta.content">
                             {{meta.content}}
                         <else/>
@@ -207,14 +209,14 @@ $meta = $this->getData('meta') ?? [];
     .activity-title {
         font-size: var(--weline-layout-font-size-3xl, 1.75rem);
         font-weight: var(--weline-layout-font-weight-semibold, 600);
-        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
     
     .activity-description {
         font-size: var(--weline-layout-font-size-base, 1rem);
         line-height: var(--weline-layout-line-height-relaxed, 1.75);
-        color: var(--weline-layout-text-secondary, var(--color-text-secondary, #565959));
+        color: var(--weline-layout-text-secondary);
         margin: 0;
     }
     
@@ -229,8 +231,8 @@ $meta = $this->getData('meta') ?? [];
     }
     
     .activity-preview-card {
-        background-color: var(--weline-layout-surface-primary, var(--color-bg-primary, #fff));
-        border: 1px solid var(--weline-layout-border-color, var(--color-border-light, #e0e0e0));
+        background-color: var(--weline-layout-surface-primary);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-border-color);
         border-radius: var(--weline-layout-radius-lg, 8px);
         padding: var(--weline-layout-spacing-lg, 1.5rem);
     }
@@ -242,13 +244,13 @@ $meta = $this->getData('meta') ?? [];
     .activity-section .section-title {
         font-size: var(--weline-layout-font-size-xl, 1.25rem);
         font-weight: var(--weline-layout-font-weight-semibold, 600);
-        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
     
     .activity-section .section-text {
         font-size: var(--weline-layout-font-size-base, 1rem);
-        color: var(--weline-layout-text-secondary, var(--color-text-muted, #333));
+        color: var(--weline-layout-text-secondary);
         line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin: 0;
     }

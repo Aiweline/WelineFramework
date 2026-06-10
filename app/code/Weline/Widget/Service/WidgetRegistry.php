@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Widget\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 部件注册表管理
@@ -26,10 +27,12 @@ class WidgetRegistry
     private static ?int $staticCachedFileMtime = null;
     
     private WidgetScanner $scanner;
+    private ?AiWidgetRegistrySource $aiWidgetRegistrySource;
 
-    public function __construct(WidgetScanner $scanner)
+    public function __construct(WidgetScanner $scanner, ?AiWidgetRegistrySource $aiWidgetRegistrySource = null)
     {
         $this->scanner = $scanner;
+        $this->aiWidgetRegistrySource = $aiWidgetRegistrySource;
     }
 
     /**
@@ -43,30 +46,30 @@ class WidgetRegistry
         // 使用静态缓存，跨实例共享，避免每次请求都读取文件
         if (!$forceReload && self::$staticCachedRegistry !== null) {
             if (!file_exists(self::REGISTRY_FILE)) {
-                return self::$staticCachedRegistry;
+                return $this->mergeAiWidgets(self::$staticCachedRegistry);
             }
             $currentMtime = filemtime(self::REGISTRY_FILE);
             $mtimeUnchanged = self::$staticCachedFileMtime !== null && $currentMtime === self::$staticCachedFileMtime;
             // 缓存非空且 mtime 未变：直接返回
             if (self::$staticCachedRegistry !== [] && $mtimeUnchanged) {
-                return self::$staticCachedRegistry;
+                return $this->mergeAiWidgets(self::$staticCachedRegistry);
             }
             // 缓存为空：若文件可能已有内容（mtime 变了或文件较大）则重载，否则返回空
             if (self::$staticCachedRegistry === []) {
                 if (!$mtimeUnchanged || filesize(self::REGISTRY_FILE) > 100) {
                     // 重载
                 } else {
-                    return self::$staticCachedRegistry;
+                    return $this->mergeAiWidgets(self::$staticCachedRegistry);
                 }
             } elseif ($mtimeUnchanged) {
-                return self::$staticCachedRegistry;
+                return $this->mergeAiWidgets(self::$staticCachedRegistry);
             }
         }
 
         if (!file_exists(self::REGISTRY_FILE)) {
             self::$staticCachedRegistry = [];
             self::$staticCachedFileMtime = 0;
-            return [];
+            return $this->mergeAiWidgets([]);
         }
 
         $registry = include self::REGISTRY_FILE;
@@ -78,7 +81,14 @@ class WidgetRegistry
         self::$staticCachedRegistry = $registry;
         self::$staticCachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
 
-        return $registry;
+        return $this->mergeAiWidgets($registry);
+    }
+
+    public static function clearRuntimeCache(): void
+    {
+        self::$staticCachedRegistry = null;
+        self::$staticCachedFileMtime = null;
+        WidgetData::clearCache();
     }
 
     /**
@@ -138,9 +148,7 @@ class WidgetRegistry
             fwrite($fh, "\n];\n");
             fclose($fh);
 
-            self::$staticCachedRegistry = null;
-            self::$staticCachedFileMtime = null;
-            \Weline\Widget\Service\WidgetData::clearCache();
+            self::clearRuntimeCache();
             return true;
         } catch (\Exception $e) {
             w_log_error("保存部件注册表失败: " . $e->getMessage(), [], 'WidgetRegistry');
@@ -186,13 +194,38 @@ class WidgetRegistry
             }
             fwrite($fh, "\n];\n");
             fclose($fh);
-            self::$staticCachedRegistry = null;
-            self::$staticCachedFileMtime = null;
-            \Weline\Widget\Service\WidgetData::clearCache();
+            self::clearRuntimeCache();
             return true;
         } catch (\Exception $e) {
             w_log_error("保存部件注册表失败: " . $e->getMessage(), [], 'WidgetRegistry');
             return false;
         }
+    }
+
+    private function mergeAiWidgets(array $registry): array
+    {
+        try {
+            $source = $this->aiWidgetRegistrySource ?? ObjectManager::getInstance(AiWidgetRegistrySource::class);
+            $aiRegistry = $source->getRegistryEntries();
+        } catch (\Throwable $e) {
+            w_log_error('合并 AI Widget 注册表失败: ' . $e->getMessage(), [], 'WidgetRegistry');
+            return $registry;
+        }
+
+        foreach ($aiRegistry as $type => $widgets) {
+            if (!is_array($widgets)) {
+                continue;
+            }
+            if (!isset($registry[$type]) || !is_array($registry[$type])) {
+                $registry[$type] = [];
+            }
+            foreach ($widgets as $code => $widget) {
+                if (is_string($code) && is_array($widget)) {
+                    $registry[$type][$code] = $widget;
+                }
+            }
+        }
+
+        return $registry;
     }
 }

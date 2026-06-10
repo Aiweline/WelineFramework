@@ -15,6 +15,8 @@ interface SeoProfileProviderInterface
      * - schema_nodes: additional JSON-LD graph nodes
      * - item_list: list page entries
      * - article: article/news structured facts
+     * - faqs: normalized FAQ facts for FAQPage schema
+     * - qa_list: Q&A listing facts for QAPage schema
      * - sitemap: sitemap extension payload
      * - geo: GEO/feed metadata
      *

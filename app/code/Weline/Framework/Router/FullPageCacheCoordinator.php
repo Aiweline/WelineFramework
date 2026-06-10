@@ -9,6 +9,7 @@ use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Response;
@@ -968,7 +969,7 @@ final class FullPageCacheCoordinator
 
     private function isCurrencyPrefix(string $segment): bool
     {
-        return (bool)\preg_match('/^[A-Z]{3}$/', $segment);
+        return State::isAllowedCurrencyCode($segment);
     }
 
     private function requestHasSseAcceptHeader(): bool
@@ -2022,7 +2023,7 @@ final class FullPageCacheCoordinator
     private function normalizeVariantCurrency(string $currency): string
     {
         $currency = \strtoupper(\trim($currency));
-        if (!\preg_match('/^[A-Z]{3}$/', $currency)) {
+        if (!State::isAllowedCurrencyCode($currency)) {
             return self::DEFAULT_CURRENCY;
         }
 

@@ -940,14 +940,19 @@ class ThemeLayoutService
      *   - show_exclusive_only: bool 是否只显示独占部件
      * @return array
      */
-    public function getAvailableWidgets(?string $pageType = null, ?array $filterOptions = null, string $area = 'frontend'): array
+    public function getAvailableWidgets(
+        ?string $pageType = null,
+        ?array $filterOptions = null,
+        string $area = 'frontend',
+        ?WelineTheme $theme = null
+    ): array
     {
         $effectiveArea = (string)($filterOptions['area'] ?? $area);
         if ($effectiveArea !== 'backend') {
             $effectiveArea = 'frontend';
         }
 
-        return $this->placeableRegistry->getAvailableList($pageType, $filterOptions, null, $effectiveArea);
+        return $this->placeableRegistry->getAvailableList($pageType, $filterOptions, $theme, $effectiveArea);
     }
     
     /**
@@ -958,7 +963,14 @@ class ThemeLayoutService
      * @param string|null $pageType 页面类型
      * @return array 包含 exclusive_widgets 和 regular_widgets 两个数组
      */
-    public function getWidgetsForSlot(string $slotId, ?string $area = null, ?string $pageType = null, array $acceptCodes = [], array $rejectCodes = []): array
+    public function getWidgetsForSlot(
+        string $slotId,
+        ?string $area = null,
+        ?string $pageType = null,
+        array $acceptCodes = [],
+        array $rejectCodes = [],
+        ?WelineTheme $theme = null
+    ): array
     {
         // 判断是否是子 slot
         $isSubSlot = isset(self::SUB_SLOTS_MAP[$slotId]);
@@ -974,7 +986,7 @@ class ThemeLayoutService
             'area' => $effectiveArea,
             'accept' => $acceptCodes,
             'reject' => $rejectCodes,
-        ]);
+        ], 'frontend', $theme);
         
         $exclusiveWidgets = [];  // 独占大部件
         $regularWidgets = [];     // 普通小部件

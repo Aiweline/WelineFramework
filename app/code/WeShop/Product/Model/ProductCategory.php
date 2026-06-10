@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Product\Model;
 
+use WeShop\Catalog\Model\Category;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;

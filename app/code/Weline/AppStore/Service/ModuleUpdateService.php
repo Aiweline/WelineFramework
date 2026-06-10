@@ -54,7 +54,7 @@ class ModuleUpdateService
 
         $installOptions = [
             'action' => 'upgrade',
-            'previous_version' => $module->getVersion(),
+            'previous_version' => $this->resolveRuntimeModuleVersion($moduleName, $module->getVersion()),
             'license_key' => $licenseKey,
             'platform_module_id' => $platformModuleId,
             'download_log_id' => (int)($downloadResult['log_id'] ?? 0),
@@ -76,6 +76,19 @@ class ModuleUpdateService
         $result['message'] = __('模块已更新到 %{1}', [$result['version'] ?? $latestVersion]);
 
         return $result;
+    }
+
+    private function resolveRuntimeModuleVersion(string $moduleName, string $recordedVersion): string
+    {
+        $moduleInfo = \Weline\Framework\App\Env::getInstance()->getModuleInfo($moduleName);
+        if (is_array($moduleInfo)) {
+            $runtimeVersion = trim((string)($moduleInfo['version'] ?? ''));
+            if ($runtimeVersion !== '') {
+                return $runtimeVersion;
+            }
+        }
+
+        return $recordedVersion;
     }
 
     private function getInstaller(): ModuleInstallerService

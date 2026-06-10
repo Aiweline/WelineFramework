@@ -1,0 +1,130 @@
+<?php
+/**
+ * @meta.title {default="Fake Card 支付方式",description="Fake Card Provider 配置模板标题"}
+ * @meta.description {default="用于浏览器验收的模拟支付 Provider 配置示例。"}
+ * @config.area {backend}
+ * @config.sort {50}
+ * @config.acl {Weline_Payment::payment_method}
+ */
+?>
+
+<w:config:group code="fake_card" label="Fake Card" description="内置模拟支付 Provider 的配置模板。" sort="10">
+    <w:config:field
+        key="payment/method/fake_card/enabled"
+        label="启用 Fake Card"
+        description="在非生产浏览器和集成验收中启用模拟支付方式。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/fake_card/is_default"
+        label="设为默认支付方式"
+        description="当前 scope 下多个支付方式可用时优先选择 Fake Card。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/fake_card/sort_order"
+        label="排序"
+        description="结账页支付方式排序，数字越小越靠前。"
+        type="number"
+        value-type="int"
+        default="10"
+        scope="global,website,store"
+        validation="min:0|max:9999" />
+
+    <w:config:field
+        key="payment/method/fake_card/default_currency"
+        label="默认支付货币"
+        description="可支付对象没有指定目标支付货币时使用的默认货币。"
+        type="select"
+        value-type="string"
+        default="CNY"
+        scope="global,website,store"
+        options="CNY:CNY,USD:USD,EUR:EUR,GBP:GBP,JPY:JPY,HKD:HKD,SGD:SGD,AUD:AUD,CAD:CAD"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="payment/method/fake_card/supported_currencies"
+        label="支持货币"
+        description="Fake Card 可以在这些货币下展示。"
+        type="multiselect"
+        value-type="json"
+        default="CNY,USD,EUR"
+        scope="global,website,store"
+        options="CNY:CNY,USD:USD,EUR:EUR,GBP:GBP,JPY:JPY,HKD:HKD,SGD:SGD,AUD:AUD,CAD:CAD"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="payment/method/fake_card/supported_countries"
+        label="支持国家"
+        description="Fake Card 可以在这些国家下选择。"
+        type="multiselect"
+        value-type="json"
+        default="CN,US"
+        scope="global,website,store"
+        options="CN:CN,US:US,GB:GB,DE:DE,FR:FR,JP:JP,HK:HK,SG:SG,AU:AU,CA:CA"
+        validation="in_options" />
+
+    <w:config:field
+        key="payment/method/fake_card/min_amount_minor"
+        label="最小支付金额"
+        description="按最小货币单位保存，例如 CNY 分。0 表示不限制。"
+        type="number"
+        value-type="int"
+        default="1"
+        scope="global,website,store"
+        validation="min:0" />
+
+    <w:config:field
+        key="payment/method/fake_card/max_amount_minor"
+        label="最大支付金额"
+        description="按最小货币单位保存，0 表示不限制。"
+        type="number"
+        value-type="int"
+        default="0"
+        scope="global,website,store"
+        validation="min:0" />
+
+    <w:config:field
+        key="payment/method/fake_card/allowed_payable_types"
+        label="允许的可支付对象"
+        description="为空表示当前支付方式允许所有可支付对象。"
+        type="text"
+        value-type="json"
+        default=""
+        scope="global,website,store"
+        validation="max:500" />
+
+    <w:config:field
+        key="payment/method/fake_card/blocked_payable_types"
+        label="禁止的可支付对象"
+        description="逗号分隔，例如 order,subscription。"
+        type="text"
+        value-type="json"
+        default=""
+        scope="global,website,store"
+        validation="max:500" />
+
+    <w:config:field
+        key="payment/method/fake_card/require_authenticated_actor"
+        label="要求付款人身份"
+        description="开启后付款人必须具备 actor_id。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/fake_card/allow_partial_refund"
+        label="允许部分退款"
+        description="Fake Provider 验收中允许走部分退款路径。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website,store" />
+</w:config:group>

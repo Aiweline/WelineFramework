@@ -11,6 +11,7 @@ use WeShop\Filters\Service\FilterUrlService;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
+use WeShop\Product\Service\ProductLayoutService;
 use WeShop\Product\Service\ProductService;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Cache\KeyBuilder;
@@ -53,24 +54,6 @@ class View extends BaseController
         $categoriesCtx = $this->request->getData('categories') ?? null;
         $handle = $this->request->getParam('handle') ?? $this->request->getGet('handle');
         $categoryId = (int) ($this->request->getParam('id') ?? $this->request->getGet('id') ?? 0);
-        $viewCacheKey = $this->buildViewPayloadCacheKey($handle, $categoryId);
-        $cachedView = $this->getViewPayloadCache($viewCacheKey);
-        if (is_array($cachedView) && isset($cachedView['html'])) {
-            $this->applyCachedViewPayload($cachedView);
-            if ($this->canUseFullHtmlViewCache() && isset($cachedView['full_html']) && is_string($cachedView['full_html']) && $cachedView['full_html'] !== '') {
-                $this->setPerfHeader('X-WLS-Category-View-Cache-Full-Html', 'hit');
-                return $cachedView['full_html'];
-            }
-
-            $fullHtml = $this->renderCategoryLayoutWithContent((string)$cachedView['html']);
-            if ($this->canUseFullHtmlViewCache()) {
-                $cachedView['full_html'] = $fullHtml;
-                $this->rememberViewPayloadCache($viewCacheKey, $cachedView);
-                $this->setPerfHeader('X-WLS-Category-View-Cache-Full-Html', 'stored-from-content-cache');
-            }
-            return $fullHtml;
-        }
-
         $category = $this->traceControllerStep(
             'category::load_current',
             function () use ($categoryService, $handle, $categoryId) {
@@ -95,6 +78,38 @@ class View extends BaseController
         if ((int) ($category->getData(\WeShop\Catalog\Model\Category::schema_fields_IS_ACTIVE) ?? 0) !== 1) {
             MessageManager::error(__('Category is unavailable.'));
             return $this->redirect('weshop') ?? '';
+        }
+
+        $categoryId = (int)$category->getId();
+        $layoutContext = $this->resolveCategoryLayoutContext($categoryId);
+        $layoutOption = is_array($layoutContext) ? trim((string)($layoutContext['layout_code'] ?? '')) : null;
+        if ($layoutOption !== null) {
+            $this->layoutType = 'category.' . $layoutOption;
+        }
+        $this->applyThemeLayoutTargetContext($categoryId, $layoutContext);
+
+        $isLayoutPreviewRequest = $this->isLayoutPreviewRequest();
+        /** @var ProductLayoutService $layoutService */
+        $layoutService = ObjectManager::getInstance(ProductLayoutService::class);
+        $layoutRuntimeIdentity = $layoutService->buildLayoutRuntimeCacheIdentity($layoutContext, 'category');
+        $viewCacheKey = $this->buildViewPayloadCacheKey($handle, $categoryId, $layoutOption ?? 'default', $layoutRuntimeIdentity);
+        if (!$isLayoutPreviewRequest) {
+            $cachedView = $this->getViewPayloadCache($viewCacheKey);
+            if (is_array($cachedView) && isset($cachedView['html'])) {
+                $this->applyCachedViewPayload($cachedView);
+                if ($this->canUseFullHtmlViewCache() && isset($cachedView['full_html']) && is_string($cachedView['full_html']) && $cachedView['full_html'] !== '') {
+                    $this->setPerfHeader('X-WLS-Category-View-Cache-Full-Html', 'hit');
+                    return $cachedView['full_html'];
+                }
+
+                $fullHtml = $this->renderCategoryLayoutWithContent((string)$cachedView['html']);
+                if ($this->canUseFullHtmlViewCache()) {
+                    $cachedView['full_html'] = $fullHtml;
+                    $this->rememberViewPayloadCache($viewCacheKey, $cachedView);
+                    $this->setPerfHeader('X-WLS-Category-View-Cache-Full-Html', 'stored-from-content-cache');
+                }
+                return $fullHtml;
+            }
         }
 
         $categoryData = [
@@ -307,11 +322,13 @@ class View extends BaseController
         ];
 
         $fullHtml = $this->renderCategoryLayoutWithContent($html);
-        if ($this->canUseFullHtmlViewCache()) {
+        if (!$isLayoutPreviewRequest && $this->canUseFullHtmlViewCache()) {
             $payload['full_html'] = $fullHtml;
             $this->setPerfHeader('X-WLS-Category-View-Cache-Full-Html', 'stored');
         }
-        $this->rememberViewPayloadCache($viewCacheKey, $payload);
+        if (!$isLayoutPreviewRequest) {
+            $this->rememberViewPayloadCache($viewCacheKey, $payload);
+        }
 
         return $fullHtml;
     }
@@ -487,7 +504,7 @@ class View extends BaseController
         ]);
     }
 
-    private function buildViewPayloadCacheKey(mixed $handle, int $categoryId): string
+    private function buildViewPayloadCacheKey(mixed $handle, int $categoryId, string $layoutOption, string $layoutRuntimeIdentity): string
     {
         $query = $this->getSemanticCategoryQuery();
         ksort($query);
@@ -498,15 +515,44 @@ class View extends BaseController
         ]);
 
         return sha1((string)json_encode([
-            'v' => 24,
+            'v' => 25,
             'handle' => (string)($handle ?? ''),
             'category_id' => $categoryId,
+            'layout_option' => $layoutOption,
+            'layout_runtime_identity' => $layoutRuntimeIdentity,
             'query' => $query,
             'environment' => $environment,
             'host' => $host,
             'uri' => $uri,
             'html_scope' => $this->fullHtmlViewCacheScope(),
+            'view_fingerprint' => $this->categoryLayoutTemplateFingerprint(),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function categoryLayoutTemplateFingerprint(): string
+    {
+        $paths = [
+            BP . '/app/code/Weline/Theme/view/theme/frontend/layouts/category/default.phtml',
+            BP . '/app/code/WeShop/Catalog/view/templates/Frontend/Category/content.phtml',
+            BP . '/app/code/WeShop/Product/view/templates/frontend/product/list/index.phtml',
+        ];
+
+        foreach (glob(BP . '/app/code/Weline/Theme/view/theme/frontend/layouts/category/*.phtml') ?: [] as $path) {
+            $paths[] = $path;
+        }
+
+        $paths = array_values(array_unique($paths));
+        sort($paths, SORT_STRING);
+
+        $fingerprint = [];
+        foreach ($paths as $path) {
+            if (!is_file($path)) {
+                continue;
+            }
+            $fingerprint[] = basename($path) . ':' . (string)filemtime($path) . ':' . (string)filesize($path);
+        }
+
+        return implode('|', $fingerprint);
     }
 
     private function normalizeViewPayloadCacheHost(string $host): string
@@ -995,6 +1041,84 @@ class View extends BaseController
             1,
             (int)($categoryData['category_id'] ?? 0)
         );
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function resolveCategoryLayoutContext(int $categoryId): ?array
+    {
+        $previewOption = $this->resolvePreviewLayoutOption('category');
+        if ($previewOption !== null) {
+            return [
+                'layout_code' => $previewOption,
+                'entity_type' => 'category',
+                'entity_id' => $categoryId,
+                'layout_type' => 'category',
+                'source' => 'preview',
+            ];
+        }
+
+        try {
+            /** @var ProductLayoutService $layoutService */
+            $layoutService = ObjectManager::getInstance(ProductLayoutService::class);
+            return $layoutService->resolveCategoryLayoutContext($categoryId, 'category');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param array<string,mixed>|null $layoutContext
+     */
+    private function applyThemeLayoutTargetContext(int $categoryId, ?array $layoutContext): void
+    {
+        $chain = [[
+            'target_type' => 'category',
+            'target_id' => $categoryId,
+        ]];
+
+        $this->request->setData('theme_layout_target_type', 'category');
+        $this->request->setData('theme_layout_target_id', $categoryId);
+        $this->request->setData('theme_layout_target_chain', $chain);
+        if (is_array($layoutContext)) {
+            $this->request->setData('theme_layout_context', $layoutContext);
+            $this->request->setData('theme_layout_source_target_type', (string)($layoutContext['entity_type'] ?? 'category'));
+            $this->request->setData('theme_layout_source_target_id', (int)($layoutContext['entity_id'] ?? $categoryId));
+        }
+    }
+
+    private function isLayoutPreviewRequest(): bool
+    {
+        foreach (['layout_preview', 'preview_layout'] as $key) {
+            $value = (string)($this->request->getParam($key) ?? $this->request->getGet($key, ''));
+            if ($value !== '' && $value !== '0') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolvePreviewLayoutOption(string $layoutType): ?string
+    {
+        if (!$this->isLayoutPreviewRequest()) {
+            return null;
+        }
+
+        try {
+            /** @var ProductLayoutService $layoutService */
+            $layoutService = ObjectManager::getInstance(ProductLayoutService::class);
+            $layoutOption = (string)($this->request->getParam('layout_option') ?? $this->request->getGet('layout_option', ''));
+            $layoutOption = $layoutService->normalizeLayoutOptionCode($layoutOption);
+            if ($layoutOption === '') {
+                return null;
+            }
+
+            return $layoutOption;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

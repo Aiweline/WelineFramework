@@ -18,6 +18,7 @@ use Weline\Framework\View\Template;
 use Weline\Taglib\TaglibInterface;
 use Weline\Widget\Service\WidgetData;
 use Weline\Widget\Service\WidgetRegistry;
+use Weline\Widget\Service\WidgetRuntimeTemplateRenderer;
 
 /**
  * w:widget 标签实现
@@ -184,6 +185,9 @@ class Widget implements TaglibInterface
             $type = $widget['type'] ?? '';
             $name = $widget['code'] ?? $widget['name'] ?? '';
             $templatePath = $template ?: ($widget['template'] ?? '');
+            if (empty($templatePath) && !empty($widget['template_content'])) {
+                $templatePath = 'content:' . md5((string)$widget['template_content']);
+            }
             if (empty($templatePath) && !empty($widget['path'])) {
                 $module = $widget['module'] ?? '';
                 $templatePath = $module . '::widgets/' . $type . '/' . $name . '.phtml';
@@ -230,6 +234,15 @@ class Widget implements TaglibInterface
         }
 
         // 尝试查找默认模板
+        $widgetTemplateContent = (string)($widget['template_content'] ?? '');
+        if ($widgetTemplateContent !== '') {
+            $result = self::renderRuntimeTemplateContent($widgetTemplateContent, $params);
+            if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
+                self::$renderCache[$cacheKey] = $result;
+            }
+            return $result;
+        }
+
         $widgetPath = $widget['path'] ?? '';
         if (!empty($widgetPath)) {
             $defaultTemplate = $widgetPath . DIRECTORY_SEPARATOR . 'template.phtml';
@@ -257,6 +270,18 @@ class Widget implements TaglibInterface
      * @param array $params 参数
      * @return string
      */
+    private static function renderRuntimeTemplateContent(string $templateContent, array $params): string
+    {
+        try {
+            /** @var WidgetRuntimeTemplateRenderer $renderer */
+            $renderer = ObjectManager::getInstance(WidgetRuntimeTemplateRenderer::class);
+            return $renderer->renderContent($templateContent, $params);
+        } catch (\Throwable $e) {
+            w_log_error("Widget 运行时模板渲染错误: " . $e->getMessage(), [], 'WidgetTaglib');
+            return '<!-- Widget 错误: ' . htmlspecialchars($e->getMessage()) . ' -->';
+        }
+    }
+
     private static function renderBlock(string $blockClass, array $params): string
     {
         try {

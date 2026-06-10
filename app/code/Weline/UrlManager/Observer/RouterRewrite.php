@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\UrlManager\Observer;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
@@ -256,7 +257,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             return true;
         }
 
-        if (\preg_match('/^[A-Z]{3}$/i', $segments[0]) === 1) {
+        if (State::isAllowedCurrencyCode((string)$segments[0])) {
             \array_shift($segments);
         }
         if (isset($segments[0]) && (

@@ -60,7 +60,7 @@ class ThemeBuilderSchemaService
                 $this->directoryResolver->getThemeChain($theme)
             ),
             'defaults' => [
-                'layouts' => ThemeData::getLayoutsConfig($area),
+                'layouts' => ThemeData::getLayoutConfig($area),
                 'partials' => ThemeData::getPartialsConfig($area),
                 'variables' => ThemeData::getVariablesConfig($area),
                 'colors' => ThemeData::getColorConfig($area),

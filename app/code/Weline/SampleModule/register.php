@@ -7,6 +7,6 @@ Register::register(
     Register::MODULE,
     'Weline_SampleModule',
     __DIR__,
-    '1.0.18',
+    '1.0.25',
     __('Weline 官方示例功能模块')
 );

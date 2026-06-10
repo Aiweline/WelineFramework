@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service\Head;
 
+use Weline\Seo\Structure\Faq\FaqStructureNormalizer;
+
 class PageSeoContextResolver
 {
     public function __construct(
-        private readonly ?HeadProviderRegistry $providerRegistry = null
+        private readonly ?HeadProviderRegistry $providerRegistry = null,
+        private readonly ?HeadIntegrationContextService $headIntegrationContextService = null,
+        private readonly ?FaqStructureNormalizer $faqStructureNormalizer = null
     ) {
     }
 
@@ -147,10 +151,20 @@ class PageSeoContextResolver
                 $this->read($page, ['geo']),
             ])),
             'faqs' => $this->normalizeFaqs($this->firstNonEmpty([$this->readTemplate($template, 'faqs'), $this->read($page, ['faqs'])])),
+            'qa_list' => $this->normalizeQaList($this->firstNonEmpty([
+                $this->readTemplate($template, 'qa_list'),
+                $this->read($page, ['qa_list']),
+            ])),
             'organization' => $this->normalizeOrganization($seo, $meta, $template, (string) $siteName),
         ];
 
+        $context = $this->mergeIntegrationContext(
+            $context,
+            $this->resolveIntegrationContext($template, $context)
+        );
+
         $context = $this->applySeoProfileProviders($template, $context);
+        $context['faqs'] = $this->normalizeFaqs($context['faqs'] ?? []);
         if (trim((string) ($context['robots'] ?? '')) === '') {
             $context['robots'] = $this->defaultRobots(
                 (string) ($context['page_type'] ?? $pageType),
@@ -757,25 +771,61 @@ class PageSeoContextResolver
     }
 
     /**
+     * @param mixed $template
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function resolveIntegrationContext($template, array $context): array
+    {
+        if ($this->headIntegrationContextService === null) {
+            return [];
+        }
+
+        return $this->headIntegrationContextService->resolve($template, $context);
+    }
+
+    /**
      * @return array<int, array{question:string,answer:string}>
      */
     private function normalizeFaqs(mixed $faqs): array
     {
-        if (!is_array($faqs)) {
+        return ($this->faqStructureNormalizer ?? new FaqStructureNormalizer())->normalize($faqs);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeQaList(mixed $items): array
+    {
+        if (!is_array($items) || !$this->isList($items)) {
             return [];
         }
-        $normalized = [];
-        foreach ($faqs as $faq) {
-            if (!is_array($faq)) {
-                continue;
-            }
-            $question = trim((string) ($faq['question'] ?? $faq['q'] ?? ''));
-            $answer = trim((string) ($faq['answer'] ?? $faq['a'] ?? ''));
-            if ($question !== '' && $answer !== '') {
-                $normalized[] = ['question' => $question, 'answer' => $answer];
+
+        return array_values(array_filter($items, static fn ($item): bool => is_array($item)));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $integration
+     * @return array<string, mixed>
+     */
+    private function mergeIntegrationContext(array $context, array $integration): array
+    {
+        if ($integration === []) {
+            return $context;
+        }
+
+        foreach (['schema_nodes', 'item_list', 'faqs', 'qa_list'] as $listKey) {
+            if (isset($integration[$listKey]) && is_array($integration[$listKey]) && $this->isList($integration[$listKey])) {
+                $existing = isset($context[$listKey]) && is_array($context[$listKey]) && $this->isList($context[$listKey])
+                    ? $context[$listKey]
+                    : [];
+                $context[$listKey] = array_values(array_merge($existing, $integration[$listKey]));
+                unset($integration[$listKey]);
             }
         }
-        return $normalized;
+
+        return array_replace_recursive($context, $integration);
     }
 
     /**
@@ -880,7 +930,7 @@ class PageSeoContextResolver
      */
     private function mergeProviderContext(array $context, array $provided): array
     {
-        foreach (['schema_nodes', 'item_list', 'faqs'] as $listKey) {
+        foreach (['schema_nodes', 'item_list', 'faqs', 'qa_list'] as $listKey) {
             if (isset($provided[$listKey]) && is_array($provided[$listKey]) && $this->isList($provided[$listKey])) {
                 $existing = isset($context[$listKey]) && is_array($context[$listKey]) && $this->isList($context[$listKey])
                     ? $context[$listKey]

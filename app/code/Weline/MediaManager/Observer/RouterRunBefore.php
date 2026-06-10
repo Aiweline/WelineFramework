@@ -34,7 +34,8 @@ class RouterRunBefore implements ObserverInterface
         $path = $path_original !== false ? strtolower($path_original) : '';
         # 匹配静态资源/static/
         if (str_starts_with($path, '/static/')) {
-            $file_path = BP .'/pub' . $path;
+            $staticPath = (string)($path_original !== false ? $path_original : $path);
+            $file_path = BP .'/pub' . $staticPath;
             if(IS_WIN){
                 $file_path = str_replace('/','\\',$file_path);
                 $file_path = str_replace('\\\\','\\',$file_path);
@@ -45,11 +46,11 @@ class RouterRunBefore implements ObserverInterface
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
                 // 传递包含pub目录的完整路径
-                $full_path = '/pub' . $path;
+                $full_path = '/pub' . $staticPath;
                 $core->StaticFile($full_path, true);
             }
 
-            $publishedThemePath = $this->publishThemeOverrideStaticPath((string)($path_original !== false ? $path_original : $path));
+            $publishedThemePath = $this->publishThemeOverrideStaticPath($staticPath);
             if ($publishedThemePath !== null) {
                 /** @var Core $core */
                 $core = ObjectManager::getInstance(Core::class);

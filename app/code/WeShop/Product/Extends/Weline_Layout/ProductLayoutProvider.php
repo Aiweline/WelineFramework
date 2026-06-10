@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace WeShop\Product\Extends\Weline_Layout;
 
+use WeShop\Catalog\Model\Category;
 use WeShop\Product\Helper\ProductLayoutScanner;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductLayout;
@@ -56,6 +57,10 @@ class ProductLayoutProvider implements LayoutProviderInterface
     public function getLayoutTypes(): array
     {
         return [
+            'product' => [
+                'name' => '产品详情页布局',
+                'description' => '用于商品详情页的 Theme 布局；产品自身未设置时可从分类默认商品布局继承'
+            ],
             'product_list' => [
                 'name' => '产品列表布局',
                 'description' => '用于产品列表页面的布局，支持网格、列表等多种展示方式'
@@ -67,6 +72,10 @@ class ProductLayoutProvider implements LayoutProviderInterface
             'category' => [
                 'name' => '分类页布局',
                 'description' => '用于产品分类页面的布局'
+            ],
+            'category_product_default' => [
+                'name' => '分类下商品默认布局',
+                'description' => '分类下商品没有产品专属布局时使用的商品详情页布局'
             ],
             'product_widget' => [
                 'name' => '产品组件布局',
@@ -102,6 +111,14 @@ class ProductLayoutProvider implements LayoutProviderInterface
                     'template' => 'WeShop_Product::Frontend/Product/list-compact.phtml',
                     'preview_image' => 'WeShop_Product::images/layout/list-compact.png',
                     'columns' => 6
+                ]
+            ],
+            'product' => [
+                'default' => [
+                    'name' => '默认商品详情布局',
+                    'description' => 'Theme 默认商品详情页布局',
+                    'template' => 'Weline_Theme::theme/frontend/layouts/product/default.phtml',
+                    'preview_image' => ''
                 ]
             ],
             'product_detail' => [
@@ -141,6 +158,14 @@ class ProductLayoutProvider implements LayoutProviderInterface
                     'template' => 'WeShop_Product::Frontend/Category/no-sidebar.phtml'
                 ]
             ],
+            'category_product_default' => [
+                'default' => [
+                    'name' => '默认商品详情布局',
+                    'description' => '分类下商品未设置产品专属布局时使用默认商品详情布局',
+                    'template' => 'Weline_Theme::theme/frontend/layouts/product/default.phtml',
+                    'preview_image' => ''
+                ]
+            ],
             'product_widget' => [
                 'carousel' => [
                     'name' => '轮播组件',
@@ -160,10 +185,16 @@ class ProductLayoutProvider implements LayoutProviderInterface
             ]
         ];
 
-        $options = $defaultOptions[$layoutType] ?? [];
+        $optionLayoutType = match ($layoutType) {
+            ProductLayout::LAYOUT_TYPE_PRODUCT_DETAIL,
+            ProductLayout::LAYOUT_TYPE_CATEGORY_PRODUCT_DEFAULT => ProductLayout::LAYOUT_TYPE_PRODUCT,
+            default => $layoutType,
+        };
+
+        $options = $defaultOptions[$layoutType] ?? ($defaultOptions[$optionLayoutType] ?? []);
 
         // 扫描产品模块的专属布局文件
-        $productLayouts = ProductLayoutScanner::scanProductLayouts($layoutType);
+        $productLayouts = ProductLayoutScanner::scanProductLayouts($optionLayoutType);
         
         // 合并产品专属布局和默认布局（产品布局优先）
         $options = ProductLayoutScanner::mergeLayoutOptions($productLayouts, $options);
@@ -183,6 +214,13 @@ class ProductLayoutProvider implements LayoutProviderInterface
                 $layoutType,
                 $layoutCode
             );
+        }
+        if ($entity instanceof Category && $entity->getId()) {
+            if ($layoutType === ProductLayout::LAYOUT_TYPE_CATEGORY_PRODUCT_DEFAULT) {
+                $this->layoutService->applyCategoryProductDefaultLayout($entity->getId(), $layoutCode);
+            } else {
+                $this->layoutService->applyCategoryLayout($entity->getId(), $layoutCode);
+            }
         }
 
         // 将布局配置保存到缓存
@@ -209,6 +247,17 @@ class ProductLayoutProvider implements LayoutProviderInterface
         }
 
         // 从缓存读取
+        if ($entity instanceof Category && $entity->getId()) {
+            $categoryLayout = $layoutType === ProductLayout::LAYOUT_TYPE_CATEGORY_PRODUCT_DEFAULT
+                ? $this->layoutService->resolveCategoryProductDefaultLayoutOption($entity->getId())
+                : $this->layoutService->resolveCategoryLayoutOption($entity->getId(), ProductLayout::LAYOUT_TYPE_CATEGORY);
+            if ($categoryLayout) {
+                $cacheKey = $this->getCacheKey($layoutType, $entity);
+                $this->getCache()->set($cacheKey, $categoryLayout, self::CACHE_TTL);
+                return $categoryLayout;
+            }
+        }
+
         $cacheKey = $this->getCacheKey($layoutType, $entity);
         $layout = $this->getCache()->get($cacheKey);
         
@@ -222,8 +271,10 @@ class ProductLayoutProvider implements LayoutProviderInterface
     {
         $defaults = [
             'product_list' => 'grid',
-            'product_detail' => 'standard',
-            'category' => 'sidebar_left',
+            'product' => 'default',
+            'product_detail' => 'default',
+            'category' => 'default',
+            'category_product_default' => 'default',
             'product_widget' => 'carousel'
         ];
         

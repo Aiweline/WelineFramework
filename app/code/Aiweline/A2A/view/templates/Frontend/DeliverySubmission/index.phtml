@@ -1,0 +1,340 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$pageTitle = (string)($this->getData('page_title') ?? __('A2A Agent 交付证据提交'));
+$hasError = (bool)($this->getData('has_error') ?? false);
+$errorMessage = (string)($this->getData('error_message') ?? '');
+$order = $this->getData('order') ?? [];
+$deliverySubmission = $this->getData('delivery_submission') ?? [];
+$evidenceItems = $this->getData('evidence_items') ?? [];
+$controlPoints = $this->getData('control_points') ?? [];
+$persisted = $this->getData('persisted') ?? [];
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <style>
+        :root {
+            --a2a-bg: #f6f8fb;
+            --a2a-surface: #ffffff;
+            --a2a-border: #d8e0ea;
+            --a2a-text: #172033;
+            --a2a-muted: #64748b;
+            --a2a-primary: #0369a1;
+            --a2a-primary-strong: #075985;
+            --a2a-success: #15803d;
+            --a2a-warning: #a16207;
+            --a2a-danger: #b91c1c;
+            --a2a-radius: 8px;
+            --a2a-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--a2a-bg);
+            color: var(--a2a-text);
+            font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+            letter-spacing: 0;
+        }
+
+        .a2a-delivery-shell {
+            width: min(1120px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 28px 0 44px;
+        }
+
+        .a2a-delivery-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .a2a-delivery-nav a,
+        .a2a-button {
+            min-height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 8px 12px;
+            background: var(--a2a-surface);
+            color: var(--a2a-text);
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .a2a-button-primary {
+            background: var(--a2a-primary);
+            border-color: var(--a2a-primary);
+            color: #fff;
+        }
+
+        .a2a-button-primary:hover {
+            background: var(--a2a-primary-strong);
+            color: #fff;
+        }
+
+        .a2a-delivery-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .a2a-panel {
+            min-width: 0;
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            background: var(--a2a-surface);
+            box-shadow: var(--a2a-shadow);
+            padding: 18px;
+        }
+
+        .a2a-panel + .a2a-panel {
+            margin-top: 16px;
+        }
+
+        .a2a-kicker,
+        .a2a-state-pill {
+            display: inline-flex;
+            min-height: 28px;
+            align-items: center;
+            border-radius: var(--a2a-radius);
+            padding: 4px 9px;
+            background: #e0f2fe;
+            color: var(--a2a-primary);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        h1,
+        h2,
+        p {
+            margin-top: 0;
+        }
+
+        h1 {
+            margin: 14px 0 10px;
+            font-size: clamp(28px, 4vw, 42px);
+            line-height: 1.08;
+        }
+
+        .a2a-muted {
+            color: var(--a2a-muted);
+            line-height: 1.65;
+        }
+
+        .a2a-id-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .a2a-public-id {
+            display: inline-flex;
+            min-height: 32px;
+            align-items: center;
+            border-radius: var(--a2a-radius);
+            padding: 5px 9px;
+            background: #f1f5f9;
+            color: var(--a2a-text);
+            font-weight: 800;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        .a2a-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .a2a-summary div,
+        .a2a-list li {
+            border: 1px solid var(--a2a-border);
+            border-radius: var(--a2a-radius);
+            padding: 10px;
+            background: #f8fafc;
+            line-height: 1.5;
+        }
+
+        .a2a-summary strong {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--a2a-text);
+            font-size: 18px;
+            overflow-wrap: anywhere;
+        }
+
+        .a2a-summary span {
+            color: var(--a2a-muted);
+            font-size: 13px;
+        }
+
+        .a2a-list {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .a2a-next-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .a2a-persisted-strip {
+            display: grid;
+            grid-template-columns: 1.2fr repeat(2, minmax(0, .6fr));
+            gap: 8px;
+            margin-top: 14px;
+            padding: 10px;
+            border: 1px solid #bbf7d0;
+            border-radius: var(--a2a-radius);
+            background: #f0fdf4;
+        }
+
+        .a2a-persisted-strip strong {
+            display: block;
+            margin-bottom: 2px;
+            color: var(--a2a-success);
+            font-size: 14px;
+            overflow-wrap: anywhere;
+        }
+
+        .a2a-persisted-strip span {
+            color: var(--a2a-muted);
+            font-size: 12px;
+        }
+
+        .a2a-warning {
+            border-color: #fde68a;
+            background: #fffbeb;
+            color: var(--a2a-warning);
+        }
+
+        .a2a-error {
+            border-color: #fecaca;
+            background: #fff1f2;
+            color: var(--a2a-danger);
+        }
+
+        @media (max-width: 860px) {
+            .a2a-delivery-grid,
+            .a2a-summary,
+            .a2a-persisted-strip {
+                grid-template-columns: 1fr;
+            }
+
+            .a2a-delivery-nav {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .a2a-button,
+            .a2a-delivery-nav a {
+                width: 100%;
+            }
+        }
+    </style>
+    <?= $this->fetch('Aiweline_A2A::templates/Frontend/partials/console-style.phtml') ?>
+</head>
+<body>
+    <main class="a2a-delivery-shell">
+        <nav class="a2a-delivery-nav" aria-label="<?= __('A2A 交付提交导航') ?>">
+            <a href="/a2a/frontend#orders"><?= __('返回订单工作台') ?></a>
+            <?php if (!$hasError): ?>
+                <a class="a2a-button a2a-button-primary" href="<?= htmlspecialchars((string)$this->getData('buyer_console_url')) ?>"><?= __('切换到买方验收控制台') ?></a>
+            <?php endif; ?>
+        </nav>
+
+        <?php if ($hasError): ?>
+            <section class="a2a-panel a2a-error">
+                <span class="a2a-kicker"><?= __('无法提交交付证据') ?></span>
+                <h1><?= __('Agent 交付提交不可执行') ?></h1>
+                <p><?= htmlspecialchars($errorMessage) ?></p>
+                <a class="a2a-button" href="/a2a/frontend#orders"><?= __('返回订单工作台') ?></a>
+            </section>
+        <?php else: ?>
+            <section class="a2a-panel">
+                <span class="a2a-kicker"><?= __('Agent 交付证据已提交') ?></span>
+                <h1><?= htmlspecialchars((string)$order['sku_title']) ?></h1>
+                <p class="a2a-muted">
+                    <?= htmlspecialchars((string)$order['provider']) ?> 路 <?= __('证据已留痕') ?> 路 <?= __('等待买方验收，不释放托管') ?>
+                </p>
+                <div class="a2a-id-stack">
+                    <span class="a2a-public-id"><?= htmlspecialchars((string)$this->getData('order_id')) ?></span>
+                    <span class="a2a-public-id"><?= htmlspecialchars((string)$this->getData('scope_id')) ?></span>
+                    <span class="a2a-public-id"><?= htmlspecialchars((string)$this->getData('delivery_id')) ?></span>
+                    <span class="a2a-state-pill"><?= htmlspecialchars((string)$this->getData('status')) ?></span>
+                </div>
+                <div class="a2a-summary">
+                    <div><strong><?= htmlspecialchars((string)$order['amount']) ?></strong><span><?= __('托管金额') ?></span></div>
+                    <div><strong><?= htmlspecialchars((string)$order['provider_payout']) ?></strong><span><?= __('Agent 待验收收入') ?></span></div>
+                    <div><strong><?= htmlspecialchars((string)($deliverySubmission['output_hash'] ?? '')) ?></strong><span><?= __('输出哈希') ?></span></div>
+                </div>
+                <?php if (is_array($persisted) && $persisted): ?>
+                    <div class="a2a-persisted-strip" aria-label="<?= __('持久化状态') ?>">
+                        <div><strong><?= htmlspecialchars((string)$persisted['status']) ?></strong><span><?= __('持久化状态') ?></span></div>
+                        <div><strong><?= htmlspecialchars((string)$persisted['provider_scope_id']) ?></strong><span><?= __('范围主键') ?></span></div>
+                        <div><strong><?= htmlspecialchars((string)$persisted['trade_order_id']) ?></strong><span><?= __('正式订单主键') ?></span></div>
+                    </div>
+                <?php endif; ?>
+                <div class="a2a-next-actions">
+                    <a class="a2a-button a2a-button-primary" href="<?= htmlspecialchars((string)$this->getData('buyer_console_url')) ?>"><?= __('交给买方验收') ?></a>
+                    <a class="a2a-button" href="/a2a/frontend/role-console?role=provider&order=<?= urlencode((string)$this->getData('order_id')) ?>"><?= __('返回 Agent 控制台') ?></a>
+                </div>
+            </section>
+
+            <div class="a2a-delivery-grid">
+                <section class="a2a-panel">
+                    <h2><?= __('Agent 交付证据包') ?></h2>
+                    <p class="a2a-muted"><?= __('交付提交只形成证据快照，买方验收或争议分支才会影响托管资金。') ?></p>
+                    <ul class="a2a-list">
+                        <?php foreach ($evidenceItems as $item): ?>
+                            <li><?= htmlspecialchars((string)$item) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </section>
+                <aside>
+                    <section class="a2a-panel a2a-warning">
+                        <h2><?= __('放款门禁') ?></h2>
+                        <p><?= __('当前动作不会释放托管。只有买方绑定角色完成验收，或仲裁员签发裁决后，账本才会流转。') ?></p>
+                    </section>
+                    <section class="a2a-panel">
+                        <h2><?= __('控制点') ?></h2>
+                        <ul class="a2a-list">
+                            <?php foreach ($controlPoints as $item): ?>
+                                <li><?= htmlspecialchars((string)$item) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </section>
+                    <section class="a2a-panel">
+                        <h2><?= __('信任标签') ?></h2>
+                        <ul class="a2a-list">
+                            <?php foreach (($deliverySubmission['trust_tags'] ?? []) as $tag): ?>
+                                <li><?= htmlspecialchars((string)$tag) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </section>
+                </aside>
+            </div>
+        <?php endif; ?>
+    </main>
+</body>
+</html>

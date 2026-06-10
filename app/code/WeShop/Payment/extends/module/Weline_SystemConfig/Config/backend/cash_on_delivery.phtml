@@ -1,0 +1,122 @@
+<?php
+/**
+ * @meta.title {default="WeShop 货到付款",description="WeShop Cash on Delivery Provider 配置模板标题"}
+ * @meta.description {default="通过统一 SystemConfig scope 配置中心暴露货到付款 Provider 的普通配置字段。"}
+ * @config.area {backend}
+ * @config.sort {61}
+ * @config.acl {WeShop_Payment::payment}
+ */
+?>
+
+<w:config:group code="cash_on_delivery" label="货到付款" description="WeShop 货到付款 Provider 的展示与准入配置。" sort="10">
+    <w:config:field
+        key="payment/method/cash_on_delivery/enabled"
+        label="启用货到付款"
+        description="允许当前 scope 下的 WeShop 订单使用货到付款。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/is_default"
+        label="设为默认支付方式"
+        description="当前 scope 下多个支付方式可用时优先选择货到付款。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/sort_order"
+        label="排序"
+        description="结账页支付方式排序，数字越小越靠前。"
+        type="number"
+        value-type="int"
+        default="100"
+        scope="global,website,store"
+        validation="min:0|max:9999" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/instructions"
+        label="收款说明"
+        description="展示给客户的货到付款说明。"
+        type="textarea"
+        value-type="string"
+        default="配送送达时向客户收款。"
+        scope="global,website,store"
+        validation="max:500" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/fee"
+        label="货到付款手续费"
+        description="用于展示和后续结算的货到付款手续费。"
+        type="number"
+        value-type="float"
+        default="0"
+        scope="global,website,store"
+        validation="min:0" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/default_currency"
+        label="默认支付货币"
+        description="可支付对象没有指定目标支付货币时使用的默认货币。"
+        type="select"
+        value-type="string"
+        default="USD"
+        scope="global,website,store"
+        options="USD:USD,AED:AED,SAR:SAR,KWD:KWD,QAR:QAR,OMR:OMR,BHD:BHD,INR:INR,IDR:IDR,THB:THB,VND:VND,PHP:PHP"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/supported_currencies"
+        label="支持货币"
+        description="货到付款可在这些货币下展示。"
+        type="multiselect"
+        value-type="json"
+        default="USD,AED,SAR,KWD,QAR,OMR,BHD,INR,IDR,THB,VND,PHP"
+        scope="global,website,store"
+        options="USD:USD,AED:AED,SAR:SAR,KWD:KWD,QAR:QAR,OMR:OMR,BHD:BHD,INR:INR,IDR:IDR,THB:THB,VND:VND,PHP:PHP"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/supported_countries"
+        label="支持国家"
+        description="货到付款可在这些国家展示；为空时使用 Provider 默认国家能力。"
+        type="multiselect"
+        value-type="json"
+        default="AE,SA,KW,QA,OM,BH,IN,ID,TH,VN,PH"
+        scope="global,website,store"
+        options="AE:AE,SA:SA,KW:KW,QA:QA,OM:OM,BH:BH,IN:IN,ID:ID,TH:TH,VN:VN,PH:PH"
+        validation="in_options" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/min_amount_minor"
+        label="最小支付金额"
+        description="按最小货币单位保存，0 表示不限制。"
+        type="number"
+        value-type="int"
+        default="1"
+        scope="global,website,store"
+        validation="min:0" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/max_amount_minor"
+        label="最大支付金额"
+        description="按最小货币单位保存，0 表示不限制。"
+        type="number"
+        value-type="int"
+        default="0"
+        scope="global,website,store"
+        validation="min:0" />
+
+    <w:config:field
+        key="payment/method/cash_on_delivery/allowed_payable_types"
+        label="允许的可支付对象"
+        description="为空表示当前支付方式允许所有可支付对象。"
+        type="text"
+        value-type="json"
+        default="order"
+        scope="global,website,store"
+        validation="max:500" />
+</w:config:group>

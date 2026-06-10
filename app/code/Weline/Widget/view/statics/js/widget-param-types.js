@@ -661,5 +661,624 @@
         }
     }
     ready(run);
-    if (typeof window !== 'undefined') window.WidgetParamTypesInit = initForms;
+    if (typeof window !== 'undefined') {
+        window.WidgetParamTypesInit = initForms;
+        window.WidgetParamTypesInitMedia = function (root) {
+            initMediaImagePicker(root || doc);
+        };
+    }
+})();
+
+(function () {
+    'use strict';
+
+    var doc = document;
+    var state = {
+        open: false,
+        context: null,
+        target: null,
+        nodeMap: new Map(),
+        contextProviders: [],
+        contextSelections: {},
+        iframeClickBound: false,
+    };
+
+    var KNOWN_TYPES = [
+        'content', 'banner', 'carousel', 'slider', 'footer', 'header', 'navigation',
+        'search', 'social', 'newsletter', 'card', 'form', 'list', 'grid', 'product',
+        'category', 'faq', 'testimonial', 'container'
+    ];
+
+    function ready(fn) {
+        if (doc.readyState !== 'loading') fn();
+        else doc.addEventListener('DOMContentLoaded', fn);
+    }
+
+    function escapeHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function cssEscape(value) {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(String(value || ''));
+        }
+        return String(value || '').replace(/["\\]/g, '\\$&');
+    }
+
+    function normalizeCode(value) {
+        return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_*\-]+/g, '_').replace(/^_+|_+$/g, '');
+    }
+
+    function normalizeCodeList(value) {
+        var items = [];
+        if (Array.isArray(value)) {
+            value.forEach(function (item) {
+                if (Array.isArray(item)) items = items.concat(normalizeCodeList(item));
+                else if (item && typeof item === 'object') items = items.concat(normalizeCodeList(Object.values(item)));
+                else items.push(item);
+            });
+        } else if (value && typeof value === 'object') {
+            items = items.concat(Object.keys(value), normalizeCodeList(Object.values(value)));
+        } else if (typeof value === 'string') {
+            items = value.split(/[\s,;|]+/);
+        } else if (value !== null && value !== undefined) {
+            items.push(value);
+        }
+        return Array.from(new Set(items.map(normalizeCode).filter(Boolean)));
+    }
+
+    function ensureAiContextProviderApi() {
+        if (!Array.isArray(window.WelineWidgetAiContextProviders)) {
+            window.WelineWidgetAiContextProviders = [];
+        }
+        if (typeof window.WelineRegisterWidgetAiContextProvider !== 'function') {
+            window.WelineRegisterWidgetAiContextProvider = function (provider) {
+                if (!provider || typeof provider !== 'object') return null;
+                var id = normalizeCode(provider.id || provider.code || provider.name || '');
+                if (!id) return null;
+                var existingIndex = window.WelineWidgetAiContextProviders.findIndex(function (item) {
+                    return normalizeCode(item.id || item.code || item.name || '') === id;
+                });
+                var normalized = Object.assign({}, provider, { id: id });
+                if (existingIndex >= 0) {
+                    window.WelineWidgetAiContextProviders.splice(existingIndex, 1, normalized);
+                } else {
+                    window.WelineWidgetAiContextProviders.push(normalized);
+                }
+                window.dispatchEvent(new CustomEvent('weline-widget-ai-context-provider-change', { detail: { provider: normalized } }));
+                return normalized;
+            };
+        }
+        window.Weline = window.Weline || {};
+        window.Weline.WidgetAi = window.Weline.WidgetAi || {};
+        window.Weline.WidgetAi.registerContextProvider = window.WelineRegisterWidgetAiContextProvider;
+        window.Weline.WidgetAi.getContextProviders = function () {
+            return window.WelineWidgetAiContextProviders.slice();
+        };
+    }
+
+    function getContextProviders() {
+        ensureAiContextProviderApi();
+        return window.WelineWidgetAiContextProviders
+            .map(function (provider) {
+                var id = normalizeCode(provider.id || provider.code || provider.name || '');
+                return id ? Object.assign({}, provider, { id: id }) : null;
+            })
+            .filter(Boolean);
+    }
+
+    function refreshContextProviders() {
+        state.contextProviders = getContextProviders();
+        state.contextProviders.forEach(function (provider) {
+            if (!Object.prototype.hasOwnProperty.call(state.contextSelections, provider.id)) {
+                state.contextSelections[provider.id] = provider.defaultSelected !== false;
+            }
+        });
+    }
+
+    async function collectSelectedContextInjections() {
+        refreshContextProviders();
+        var selected = state.contextProviders.filter(function (provider) {
+            return state.contextSelections[provider.id] !== false;
+        });
+        var injections = [];
+        for (var i = 0; i < selected.length; i++) {
+            var provider = selected[i];
+            var payload = null;
+            try {
+                if (typeof provider.getContext === 'function') {
+                    payload = await provider.getContext();
+                } else if (provider.context !== undefined) {
+                    payload = provider.context;
+                }
+            } catch (error) {
+                console.warn('[Widget AI] context provider failed:', provider.id, error);
+                payload = { error: error.message || 'context provider failed' };
+            }
+            injections.push({
+                id: provider.id,
+                label: provider.label || provider.name || provider.id,
+                description: provider.description || '',
+                optional: provider.optional !== false,
+                data: payload || {},
+            });
+        }
+        return injections;
+    }
+
+    function getThemeAdapter() {
+        return window.ThemeEditor || null;
+    }
+
+    function getPlacementContext() {
+        var adapter = getThemeAdapter();
+        if (!adapter || typeof adapter.getWidgetPlacementContext !== 'function') {
+            return null;
+        }
+        return adapter.getWidgetPlacementContext();
+    }
+
+    function findSlot(context, slotId) {
+        if (!context || !slotId) return null;
+        return (context.slots || []).find(function (slot) { return String(slot.id || slot.slot_id || '') === String(slotId); }) || null;
+    }
+
+    function installStyles() {
+        if (doc.getElementById('w-ai-widget-style')) return;
+        var style = doc.createElement('style');
+        style.id = 'w-ai-widget-style';
+        style.textContent = [
+            '.w-ai-widget-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #d8d6ff;background:#f5f3ff;color:#4f46e5;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:all .18s ease;}',
+            '.w-ai-widget-btn:hover{background:#ece9ff;border-color:#b8b3ff;}',
+            '.w-ai-widget-overlay{position:fixed;inset:0;background:rgba(15,23,42,.42);z-index:100200;display:flex;align-items:center;justify-content:center;padding:24px;}',
+            '.w-ai-widget-panel{width:min(980px,96vw);height:min(760px,92vh);background:#fff;border-radius:8px;box-shadow:0 18px 60px rgba(15,23,42,.28);display:flex;flex-direction:column;overflow:hidden;}',
+            '.w-ai-widget-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #edf0f5;}',
+            '.w-ai-widget-title{font-size:16px;font-weight:700;color:#111827;display:flex;align-items:center;gap:8px;}',
+            '.w-ai-widget-close{border:0;background:#f3f4f6;color:#64748b;border-radius:6px;width:32px;height:32px;cursor:pointer;}',
+            '.w-ai-widget-body{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:16px;padding:16px;min-height:0;flex:1;background:#f8fafc;}',
+            '.w-ai-widget-section{background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-height:0;}',
+            '.w-ai-widget-section-title{padding:11px 12px;border-bottom:1px solid #edf0f5;font-size:13px;font-weight:700;color:#374151;}',
+            '.w-ai-widget-target{padding:12px;font-size:13px;color:#111827;line-height:1.5;}',
+            '.w-ai-widget-tree{padding:8px;overflow:auto;max-height:520px;}',
+            '.w-ai-tree-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;text-align:left;border-radius:6px;padding:7px 8px;font-size:12px;color:#374151;cursor:pointer;}',
+            '.w-ai-tree-row:hover{background:#f3f4f6;}',
+            '.w-ai-tree-row.active{background:#eef2ff;color:#4338ca;font-weight:700;}',
+            '.w-ai-tree-indent{display:inline-block;width:calc(var(--level,0) * 14px);flex:0 0 calc(var(--level,0) * 14px);}',
+            '.w-ai-tree-type{font-size:10px;color:#64748b;border:1px solid #e5e7eb;border-radius:999px;padding:1px 6px;background:#fff;}',
+            '.w-ai-widget-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;}',
+            '.w-ai-widget-field{display:flex;flex-direction:column;gap:6px;}',
+            '.w-ai-widget-field.full{grid-column:1/-1;}',
+            '.w-ai-widget-field label{font-size:12px;font-weight:700;color:#374151;}',
+            '.w-ai-widget-field select,.w-ai-widget-field textarea,.w-ai-widget-field input{border:1px solid #dbe2ea;border-radius:6px;padding:9px 10px;font-size:13px;outline:none;background:#fff;}',
+            '.w-ai-widget-field textarea{min-height:150px;resize:vertical;line-height:1.5;}',
+            '.w-ai-widget-field select:focus,.w-ai-widget-field textarea:focus,.w-ai-widget-field input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12);}',
+            '.w-ai-context-options{display:grid;grid-template-columns:1fr;gap:8px;border:1px solid #e5e7eb;border-radius:6px;padding:8px;background:#f8fafc;}',
+            '.w-ai-context-option{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#374151;}',
+            '.w-ai-context-option input{margin-top:2px;flex:0 0 auto;}',
+            '.w-ai-context-option strong{display:block;font-size:12px;color:#111827;}',
+            '.w-ai-context-option span{display:block;color:#64748b;line-height:1.35;}',
+            '.w-ai-widget-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border-top:1px solid #edf0f5;background:#fff;}',
+            '.w-ai-widget-generate{border:0;background:#6d5df6;color:#fff;border-radius:6px;padding:10px 16px;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(109,93,246,.22);}',
+            '.w-ai-widget-generate[disabled]{opacity:.6;cursor:not-allowed;box-shadow:none;}',
+            '.w-ai-widget-muted{font-size:12px;color:#64748b;}',
+            '.w-ai-badge{display:inline-flex;align-items:center;border-radius:999px;background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;font-size:10px;font-weight:800;padding:1px 6px;margin-left:6px;vertical-align:middle;}',
+            '.w-ai-widget-placeholder{height:90px;display:flex;align-items:center;justify-content:center;background:#eef2ff;color:#4f46e5;font-weight:800;border-radius:6px;}',
+            '@media(max-width:760px){.w-ai-widget-body{grid-template-columns:1fr}.w-ai-widget-form{grid-template-columns:1fr}.w-ai-widget-panel{height:94vh}}'
+        ].join('\n');
+        doc.head.appendChild(style);
+    }
+
+    function markAiWidgets(root) {
+        root = root || doc;
+        root.querySelectorAll('.widget-item[data-widget-code]').forEach(function (item) {
+            var code = item.getAttribute('data-widget-code') || '';
+            if (!/^ai[_-]/.test(code) || item.querySelector('.w-ai-badge')) return;
+            var title = item.querySelector('.widget-preview-title, .widget-name') || item;
+            var badge = doc.createElement('span');
+            badge.className = 'w-ai-badge';
+            badge.textContent = 'AI';
+            title.appendChild(badge);
+        });
+    }
+
+    function installButton() {
+        if (doc.getElementById('wAiWidgetButton')) return;
+        var panel = doc.getElementById('widgetPanel');
+        if (!panel) return;
+        var header = panel.querySelector('.panel-header, .widget-panel-header') || panel;
+        var button = doc.createElement('button');
+        button.type = 'button';
+        button.id = 'wAiWidgetButton';
+        button.className = 'w-ai-widget-btn';
+        button.innerHTML = '<i class="ri-sparkling-line"></i><span>AI 生成</span>';
+        button.addEventListener('click', openPanel);
+        header.appendChild(button);
+    }
+
+    function refreshContext() {
+        refreshContextProviders();
+        state.context = getPlacementContext();
+        if (!state.context) {
+            state.target = null;
+            return;
+        }
+        if (!state.target) {
+            state.target = state.context.selected_target || null;
+        } else if (state.context.selected_target && !state.manualTarget) {
+            state.target = state.context.selected_target;
+        }
+    }
+
+    function targetLabel(target) {
+        if (!target) return '未选择';
+        if (target.type === 'widget') {
+            var anchor = target.anchor || {};
+            return (anchor.area || target.area || '') + ' > ' + (anchor.slot_id || target.slot_id || '') + ' > ' + (anchor.widget_name || anchor.widget_code || target.anchor_layout_id || '');
+        }
+        var slot = target.slot || findSlot(state.context, target.slot_id) || {};
+        return (target.area || slot.area || '') + ' > ' + (slot.name || target.slot_id || slot.id || '');
+    }
+
+    function inferTypesForTarget(target) {
+        var slot = (target && (target.slot || findSlot(state.context, target.slot_id))) || {};
+        var accept = normalizeCodeList(slot.accept || target?.accept || []);
+        var area = normalizeCode(target?.area || slot.area || '');
+        var inferred = [];
+        accept.forEach(function (code) {
+            if (KNOWN_TYPES.indexOf(code) !== -1) inferred.push(code);
+            KNOWN_TYPES.forEach(function (type) {
+                if (code.indexOf(type) !== -1 && inferred.indexOf(type) === -1) inferred.push(type);
+            });
+        });
+        if (accept.indexOf('*') !== -1 || inferred.length === 0) {
+            if (area === 'footer') inferred.push('content', 'newsletter', 'social', 'footer', 'container');
+            else if (area === 'header') inferred.push('navigation', 'search', 'header', 'container');
+            else inferred.push('content', 'banner', 'card', 'container');
+        }
+        return Array.from(new Set(inferred.filter(function (type) { return KNOWN_TYPES.indexOf(type) !== -1; })));
+    }
+
+    function modeOptionsForTarget(target) {
+        if (!target) return [{ value: 'into_slot', label: '放入 slot' }];
+        if (target.type === 'widget') {
+            var options = [
+                { value: 'after', label: '作为后一个兄弟' },
+                { value: 'before', label: '作为前一个兄弟' },
+                { value: 'replace', label: '替换当前部件' }
+            ];
+            if (target.anchor && target.anchor.inner_slots && target.anchor.inner_slots.length) {
+                options.push({ value: 'inside', label: '放入当前容器内部 slot' });
+            }
+            return options;
+        }
+        if (target.parent_anchor_layout_id) {
+            return [{ value: 'inside', label: '放入当前容器内部 slot' }];
+        }
+        return [{ value: 'into_slot', label: '放入 slot' }];
+    }
+
+    function hasPlacementTarget(target) {
+        return !!(target && (target.slot_id || target.parent_slot_id || target.anchor_layout_id));
+    }
+
+    function renderTreeNode(node, level, parentAnchor) {
+        if (!node || !state.nodeMap) return '';
+        var id = 'n' + state.nodeMap.size;
+        var target = null;
+        var nextParentAnchor = parentAnchor;
+        if (node.type === 'slot') {
+            target = {
+                type: 'slot',
+                area: node.area || node.slot?.area || '',
+                slot_id: node.slot?.id || node.id,
+                slot: node.slot || null,
+                insert_mode: parentAnchor ? 'inside' : 'into_slot',
+                parent_anchor_layout_id: parentAnchor ? parentAnchor.layout_id : null,
+            };
+        } else if (node.type === 'widget') {
+            target = {
+                type: 'widget',
+                area: node.area || node.anchor?.area || '',
+                slot_id: node.anchor?.slot_id || '',
+                anchor_layout_id: node.anchor?.layout_id || '',
+                anchor: node.anchor || null,
+                insert_mode: 'after',
+            };
+            nextParentAnchor = node.anchor || parentAnchor;
+        }
+        if (target) state.nodeMap.set(id, target);
+        var active = target && state.target && (
+            (target.slot_id && target.slot_id === state.target.slot_id && target.parent_anchor_layout_id === state.target.parent_anchor_layout_id)
+            || (target.anchor_layout_id && target.anchor_layout_id === state.target.anchor_layout_id)
+        );
+        var html = '<button type="button" class="w-ai-tree-row ' + (active ? 'active' : '') + '" data-node-id="' + id + '" style="--level:' + level + '">';
+        html += '<span class="w-ai-tree-indent"></span><span class="w-ai-tree-type">' + escapeHtml(node.type || '') + '</span><span>' + escapeHtml(node.label || node.id || '') + '</span></button>';
+        (node.children || []).forEach(function (child) {
+            html += renderTreeNode(child, level + 1, nextParentAnchor);
+        });
+        return html;
+    }
+
+    function renderContextOptions(panel) {
+        var container = panel.querySelector('[data-ai-context-options]');
+        if (!container) return;
+        refreshContextProviders();
+        if (!state.contextProviders.length) {
+            container.innerHTML = '<div class="w-ai-widget-muted">No context providers. AI will only use the prompt.</div>';
+            return;
+        }
+        container.innerHTML = state.contextProviders.map(function (provider) {
+            var checked = state.contextSelections[provider.id] !== false;
+            return [
+                '<label class="w-ai-context-option">',
+                '<input type="checkbox" data-ai-context-provider="' + escapeHtml(provider.id) + '"' + (checked ? ' checked' : '') + '>',
+                '<span><strong>' + escapeHtml(provider.label || provider.name || provider.id) + '</strong>',
+                '<span>' + escapeHtml(provider.description || 'Optional AI reference context') + '</span></span>',
+                '</label>'
+            ].join('');
+        }).join('');
+        container.querySelectorAll('[data-ai-context-provider]').forEach(function (input) {
+            input.addEventListener('change', function () {
+                state.contextSelections[input.getAttribute('data-ai-context-provider')] = input.checked;
+            });
+        });
+    }
+
+    function renderPanel() {
+        var panel = doc.getElementById('wAiWidgetPanel');
+        if (!panel) return;
+        var context = state.context || {};
+        var types = inferTypesForTarget(state.target);
+        var modes = modeOptionsForTarget(state.target);
+        var currentMode = state.target?.insert_mode || modes[0]?.value || 'into_slot';
+        var slot = state.target ? (state.target.slot || findSlot(context, state.target.slot_id) || {}) : {};
+        var accept = normalizeCodeList(slot.accept || state.target?.accept || []);
+        state.nodeMap = new Map();
+
+        panel.querySelector('[data-ai-target-summary]').textContent = targetLabel(state.target);
+        panel.querySelector('[data-ai-target-protocol]').textContent = accept.length ? ('协议：' + accept.join(', ')) : '协议：未声明，可生成通用或容器内容';
+        panel.querySelector('[data-ai-tree]').innerHTML = context.slot_tree ? renderTreeNode(context.slot_tree, 0, null) : '<div class="w-ai-widget-muted">暂无 slot</div>';
+        renderContextOptions(panel);
+        panel.querySelectorAll('.w-ai-tree-row').forEach(function (row) {
+            row.addEventListener('click', function () {
+                var selected = state.nodeMap.get(row.getAttribute('data-node-id'));
+                if (!selected) return;
+                state.target = selected;
+                state.manualTarget = true;
+                renderPanel();
+            });
+        });
+
+        var modeSelect = panel.querySelector('[data-ai-insert-mode]');
+        modeSelect.innerHTML = modes.map(function (mode) {
+            return '<option value="' + escapeHtml(mode.value) + '"' + (mode.value === currentMode ? ' selected' : '') + '>' + escapeHtml(mode.label) + '</option>';
+        }).join('');
+        modeSelect.onchange = function () {
+            if (!state.target) state.target = {};
+            state.target.insert_mode = modeSelect.value;
+        };
+
+        var typeSelect = panel.querySelector('[data-ai-widget-type]');
+        typeSelect.innerHTML = types.map(function (type) {
+            return '<option value="' + escapeHtml(type) + '">' + escapeHtml(type) + '</option>';
+        }).join('');
+    }
+
+    function bindVisualSelectionRefresh() {
+        if (state.iframeClickBound) return;
+        state.iframeClickBound = true;
+        var refreshLater = function () {
+            if (!state.open) return;
+            window.setTimeout(function () {
+                state.manualTarget = false;
+                refreshContext();
+                renderPanel();
+            }, 120);
+        };
+        doc.addEventListener('click', function (e) {
+            if (!state.open) return;
+            if (e.target.closest('#previewViewStructure, #previewViewPreview')) refreshLater();
+        }, true);
+        window.setInterval(function () {
+            if (!state.open) return;
+            var frame = doc.querySelector('#previewFrame, iframe[name="previewFrame"]');
+            var frameDoc = null;
+            try { frameDoc = frame?.contentDocument || frame?.contentWindow?.document || null; } catch (e) {}
+            if (frameDoc && !frameDoc.__wAiWidgetSelectionBound) {
+                frameDoc.__wAiWidgetSelectionBound = true;
+                frameDoc.addEventListener('click', refreshLater, true);
+            }
+        }, 900);
+    }
+
+    function openPanel() {
+        installStyles();
+        refreshContext();
+        state.open = true;
+        state.manualTarget = false;
+        var overlay = doc.createElement('div');
+        overlay.className = 'w-ai-widget-overlay';
+        overlay.id = 'wAiWidgetOverlay';
+        overlay.innerHTML = [
+            '<div class="w-ai-widget-panel" id="wAiWidgetPanel">',
+            '<div class="w-ai-widget-header"><div class="w-ai-widget-title"><i class="ri-sparkling-line"></i><span>AI 生成 Widget</span></div><button type="button" class="w-ai-widget-close" data-ai-close>×</button></div>',
+            '<div class="w-ai-widget-body">',
+            '<div class="w-ai-widget-section"><div class="w-ai-widget-section-title">位置选择器</div><div class="w-ai-widget-target"><strong data-ai-target-summary></strong><div class="w-ai-widget-muted" data-ai-target-protocol></div></div><div class="w-ai-widget-tree" data-ai-tree></div></div>',
+            '<div class="w-ai-widget-section"><div class="w-ai-widget-section-title">生成配置</div><div class="w-ai-widget-form">',
+            '<div class="w-ai-widget-field"><label>插入方式</label><select data-ai-insert-mode></select></div>',
+            '<div class="w-ai-widget-field"><label>部件类型</label><select data-ai-widget-type></select></div>',
+            '<div class="w-ai-widget-field full"><label>参考上下文</label><div class="w-ai-context-options" data-ai-context-options></div></div>',
+            '<div class="w-ai-widget-field full"><label>生成要求</label><textarea data-ai-prompt placeholder="例如：在页脚生成一个品牌社交链接区，包含微信、抖音、YouTube 和邮箱订阅入口"></textarea></div>',
+            '</div><div class="w-ai-widget-actions"><span class="w-ai-widget-muted" data-ai-status>生成后会保存为普通 Widget 并自动放入目标位置</span><button type="button" class="w-ai-widget-generate" data-ai-generate>生成并放入</button></div></div>',
+            '</div></div>'
+        ].join('');
+        doc.body.appendChild(overlay);
+        overlay.querySelector('[data-ai-close]').addEventListener('click', closePanel);
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) closePanel(); });
+        overlay.querySelector('[data-ai-generate]').addEventListener('click', generateWidget);
+        bindVisualSelectionRefresh();
+        renderPanel();
+    }
+
+    function closePanel() {
+        state.open = false;
+        var overlay = doc.getElementById('wAiWidgetOverlay');
+        if (overlay) overlay.remove();
+    }
+
+    async function buildGenerationContext() {
+        var context = state.context || {};
+        var target = state.target || context.selected_target || {};
+        var slot = target.slot || findSlot(context, target.slot_id) || {};
+        return {
+            area: target.area || slot.area || '',
+            slot: slot,
+            page_type: context.page_type || '',
+            layout_type: context.layout_type || '',
+            layout_option: context.layout_option || '',
+            editor_area: context.editor_area || 'frontend',
+            selected_target: target,
+            context_injections: await collectSelectedContextInjections(),
+        };
+    }
+
+    async function generateWidget() {
+        var panel = doc.getElementById('wAiWidgetPanel');
+        if (!panel) return;
+        var prompt = (panel.querySelector('[data-ai-prompt]').value || '').trim();
+        var status = panel.querySelector('[data-ai-status]');
+        var button = panel.querySelector('[data-ai-generate]');
+        if (!prompt) {
+            status.textContent = '请填写生成要求';
+            return;
+        }
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+            status.textContent = 'Weline.Api 尚未就绪';
+            return;
+        }
+        var placementTarget = hasPlacementTarget(state.target) ? state.target : null;
+        if (placementTarget) {
+            state.target.insert_mode = panel.querySelector('[data-ai-insert-mode]').value || state.target.insert_mode || 'into_slot';
+        }
+        var desiredType = panel.querySelector('[data-ai-widget-type]').value || '';
+        button.disabled = true;
+        status.textContent = '正在生成 Widget...';
+        try {
+            var WidgetApi = await window.Weline.Api.resource('widget');
+            var response = await WidgetApi.generateAiWidget({
+                prompt: prompt,
+                desired_type: desiredType,
+                generation_context: await buildGenerationContext(),
+                placement_target: placementTarget || {}
+            }, { requestTimeoutMs: 180000 });
+            var data = response && response.data && response.data.widget ? response.data : response;
+            if (!data || data.success === false || !data.widget) {
+                throw new Error((data && (data.message || data.error)) || 'AI Widget 生成失败');
+            }
+            addWidgetToLibrary(data.widget);
+            if (!placementTarget) {
+                status.textContent = '已生成并保存为普通 Widget';
+                window.setTimeout(closePanel, 900);
+                return;
+            }
+            status.textContent = '已生成，正在放入布局...';
+            var adapter = getThemeAdapter();
+            if (!adapter || typeof adapter.placeWidgetFromProvider !== 'function') {
+                status.textContent = '已生成并保存为普通 Widget，当前页面没有可用放置适配器';
+                window.setTimeout(closePanel, 1200);
+                return;
+            }
+            var placed = await adapter.placeWidgetFromProvider(data.widget, data.placement_target || placementTarget);
+            if (!placed || placed.success === false) {
+                throw new Error((placed && placed.message) || '生成成功，但放入布局失败');
+            }
+            status.textContent = '已生成并放入目标位置';
+            window.setTimeout(closePanel, 900);
+        } catch (err) {
+            console.error('[Widget AI] generate failed:', err);
+            status.textContent = err.message || '生成失败';
+        } finally {
+            button.disabled = false;
+            markAiWidgets();
+        }
+    }
+
+    function slotCodes(slots) {
+        if (!slots) return [];
+        if (Array.isArray(slots)) return slots;
+        if (typeof slots === 'object') return Object.keys(slots);
+        return String(slots).split(',');
+    }
+
+    function addWidgetToLibrary(widget) {
+        var list = doc.getElementById('widgetList');
+        if (!list || !widget) return;
+        var type = widget.type || 'content';
+        var group = list.querySelector('.widget-group[data-type="' + cssEscape(type) + '"]');
+        if (!group) {
+            group = doc.createElement('div');
+            group.className = 'widget-group';
+            group.setAttribute('data-type', type);
+            group.innerHTML = '<div class="widget-group-header" data-toggle="collapse"><i class="ri-arrow-down-s-line toggle-icon"></i><span>' + escapeHtml(type) + '</span><span class="widget-count">0</span></div><div class="widget-group-content"></div>';
+            list.insertBefore(group, list.firstChild);
+        }
+        var content = group.querySelector('.widget-group-content') || group;
+        var existing = content.querySelector('.widget-item[data-widget-code="' + cssEscape(widget.code) + '"]');
+        if (existing) existing.remove();
+        var item = doc.createElement('div');
+        item.className = 'widget-item draggable' + (widget.is_container ? ' widget-container' : '') + (widget.exclusive ? ' widget-exclusive' : '');
+        item.draggable = true;
+        item.setAttribute('data-widget-code', widget.code || '');
+        item.setAttribute('data-widget-module', widget.module || 'Weline_Widget');
+        item.setAttribute('data-widget-type', widget.type || '');
+        item.setAttribute('data-widget-name', widget.name || widget.code || '');
+        item.setAttribute('data-widget-position', JSON.stringify(widget.position || []));
+        item.setAttribute('data-widget-compatible', widget.compatible === false ? '0' : '1');
+        item.setAttribute('data-widget-slot', widget.slot || '');
+        item.setAttribute('data-widget-exclusive', widget.exclusive ? '1' : '0');
+        item.setAttribute('data-widget-supports', normalizeCodeList(widget.supports || []).join(','));
+        item.setAttribute('data-widget-slots', normalizeCodeList(slotCodes(widget.slots)).join(','));
+        item.setAttribute('data-widget-page-layouts', JSON.stringify(widget.page_layouts || ['*']));
+        item.setAttribute('data-widget-is-container', widget.is_container ? '1' : '0');
+        item.innerHTML = '<div class="widget-preview"><div class="widget-preview-canvas"><div class="w-ai-widget-placeholder">AI 部件</div></div><div class="widget-preview-overlay"><div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2"><div class="widget-preview-title">' + escapeHtml(widget.name || widget.code || '') + '<span class="w-ai-badge">AI</span></div><button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="预览" data-widget-module="' + escapeHtml(widget.module || 'Weline_Widget') + '" data-widget-code="' + escapeHtml(widget.code || '') + '" data-widget-name="' + escapeHtml(widget.name || widget.code || '') + '"><i class="ri-eye-line"></i></button></div><div class="widget-preview-desc">' + escapeHtml(widget.description || '') + '</div></div></div>';
+        content.insertBefore(item, content.firstChild);
+        var count = group.querySelector('.widget-count');
+        if (count) count.textContent = String(content.querySelectorAll('.widget-item').length);
+        var adapter = getThemeAdapter();
+        if (adapter && typeof adapter.registerWidgetLibraryItem === 'function') {
+            adapter.registerWidgetLibraryItem(item);
+        }
+    }
+
+    function init() {
+        ensureAiContextProviderApi();
+        if (!doc.getElementById('widgetPanel')) return;
+        installStyles();
+        installButton();
+        markAiWidgets();
+        if (typeof MutationObserver !== 'undefined') {
+            var observer = new MutationObserver(function (mutations) {
+                mutations.forEach(function (mutation) {
+                    mutation.addedNodes.forEach(function (node) {
+                        if (node.nodeType === 1) markAiWidgets(node);
+                    });
+                });
+            });
+            observer.observe(doc.getElementById('widgetPanel'), { childList: true, subtree: true });
+        }
+    }
+
+    ensureAiContextProviderApi();
+    window.addEventListener('weline-widget-ai-context-provider-change', function () {
+        refreshContextProviders();
+        if (state.open) renderPanel();
+        installButton();
+    });
+    ready(init);
 })();

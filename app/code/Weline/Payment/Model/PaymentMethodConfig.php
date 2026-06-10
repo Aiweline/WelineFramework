@@ -10,8 +10,8 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 
 #[Table(comment: 'Scoped payment method configuration')]
-#[Index(name: 'uniq_payment_method_scope_env', columns: ['method_code', 'scope_type', 'scope_code', 'environment'], type: 'UNIQUE')]
-#[Index(name: 'idx_payment_scope_enabled', columns: ['scope_type', 'scope_code', 'enabled'])]
+#[Index(name: 'uniq_payment_method_scope_env', columns: ['method_code', 'scope', 'environment'], type: 'UNIQUE')]
+#[Index(name: 'idx_payment_scope_enabled', columns: ['scope', 'enabled'])]
 #[Index(name: 'idx_payment_scope_test_status', columns: ['method_code', 'test_status'])]
 class PaymentMethodConfig extends Model
 {
@@ -26,10 +26,9 @@ class PaymentMethodConfig extends Model
     public const schema_fields_ID = 'config_id';
     #[Col('varchar', 96, nullable: false, comment: 'Payment method code')]
     public const schema_fields_METHOD_CODE = 'method_code';
-    #[Col('varchar', 32, nullable: false, default: 'global', comment: 'Scope type')]
-    public const schema_fields_SCOPE_TYPE = 'scope_type';
-    #[Col('varchar', 96, nullable: false, default: 'default', comment: 'Scope code')]
-    public const schema_fields_SCOPE_CODE = 'scope_code';
+    #[Col('varchar', 191, nullable: false, default: 'default.default.default', comment: 'SystemConfig-compatible payment config scope')]
+    public const schema_fields_SCOPE = 'scope';
+
     #[Col('varchar', 16, nullable: false, default: 'sandbox', comment: 'sandbox or live')]
     public const schema_fields_ENVIRONMENT = 'environment';
     #[Col('smallint', 1, nullable: false, default: 0, comment: 'Enabled for this scope')]
@@ -46,13 +45,15 @@ class PaymentMethodConfig extends Model
     public const schema_fields_TEST_MESSAGE = 'test_message';
     #[Col('datetime', nullable: true, comment: 'Last tested at')]
     public const schema_fields_TESTED_AT = 'tested_at';
+    #[Col('varchar', 96, nullable: true, comment: 'Config release code')]
+    public const schema_fields_CONFIG_RELEASE_CODE = 'config_release_code';
     #[Col('datetime', nullable: true, comment: 'Created at')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('datetime', nullable: true, comment: 'Updated at')]
     public const schema_fields_UPDATED_AT = 'updated_at';
 
     public array $_unit_primary_keys = ['config_id'];
-    public array $_index_sort_keys = ['method_code', 'scope_type', 'scope_code', 'environment', 'enabled', 'test_status'];
+    public array $_index_sort_keys = ['method_code', 'scope', 'environment', 'enabled', 'test_status'];
 
     public function _init(): void
     {
@@ -100,12 +101,11 @@ class PaymentMethodConfig extends Model
         return $this->setData(self::schema_fields_CONFIG_JSON, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
-    public function loadByScope(string $methodCode, string $scopeType, string $scopeCode, string $environment): self
+    public function loadByScope(string $methodCode, string $scope, string $environment): self
     {
         $this->reset()
             ->where(self::schema_fields_METHOD_CODE, $methodCode)
-            ->where(self::schema_fields_SCOPE_TYPE, $scopeType)
-            ->where(self::schema_fields_SCOPE_CODE, $scopeCode)
+            ->where(self::schema_fields_SCOPE, $scope)
             ->where(self::schema_fields_ENVIRONMENT, $environment)
             ->find()
             ->fetch();

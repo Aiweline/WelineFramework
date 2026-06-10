@@ -17,14 +17,75 @@
 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
 -->
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+<style>
+.account-orders {
+    display: flex;
+    min-height: calc(100vh - var(--header-height));
+    background: var(--weline-layout-surface-secondary);
+}
+
+.account-orders__sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    background: var(--weline-layout-surface-primary);
+    border-right: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+    padding: var(--weline-layout-spacing-lg);
+    position: sticky;
+    top: var(--header-height);
+    height: calc(100vh - var(--header-height));
+    overflow-y: auto;
+}
+
+.account-orders__main {
+    flex: 1;
+    padding: var(--weline-layout-spacing-lg);
+    display: flex;
+    justify-content: center;
+}
+
+.account-orders__container {
+    width: 100%;
+    max-width: var(--weline-layout-content-max-width);
+}
+
+.account-orders__filters {
+    margin-bottom: var(--weline-layout-spacing-lg);
+}
+
+.account-orders__list {
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .account-orders {
+        flex-direction: column;
+        min-height: auto;
+    }
+
+    .account-orders__sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+        padding: var(--weline-layout-spacing-md);
+    }
+
+    .account-orders__main {
+        padding: var(--weline-layout-spacing-md);
+    }
+}
+</style>
 </head>
 <body>
-    @template(Weline_Frontend::templates/public/header.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
 
     <div class="account-orders {{meta.class}}" id="account-orders" data-layout="account_orders">
         <aside class="account-orders__sidebar">
@@ -33,7 +94,14 @@
                     accept="layout-account-orders-sidebar,layout-account-sidebar,account-sidebar,sidebar,account-nav"
                     multiple="true"
                     position="sidebar">
-                @template(Weline_Customer::templates/frontend/account/sidebar/side.phtml)
+                <w:hook>
+                    Weline_Theme::frontend::layouts::account_orders::sidebar
+                    <else/>
+                <nav class="weline-card">
+                    <strong><?= __('账户中心') ?></strong>
+                    <p class="weline-muted"><?= __('这里预留账户导航 slot，可由会员模块接入真实菜单。') ?></p>
+                </nav>
+                </w:hook>
             </w:slot>
         </aside>
 
@@ -64,80 +132,22 @@
                         multiple="true"
                         position="content"
                         class="account-orders__list">
-                    {{meta.content}}
+                    <if condition="meta.content">
+                        {{meta.content}}
+                    <else/>
+                        <section class="weline-layout-surface">
+                            <h1><?= __('我的订单') ?></h1>
+                            <p class="weline-muted"><?= __('这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。') ?></p>
+                        </section>
+                    </if>
                     </w:slot>
                 </w:slot>
             </div>
         </main>
     </div>
 
-    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
 </body>
 </html>
-
-<style>
-.account-orders {
-    --ao-sidebar-width: 280px;
-    --ao-content-max-width: 1200px;
-    --ao-gutter: var(--spacing-lg, 2rem);
-    --ao-border-radius: var(--border-radius-xl, 1rem);
-    --ao-transition: var(--transition-base, 0.2s ease);
-
-    display: flex;
-    min-height: calc(100vh - 80px);
-    background: var(--color-bg-secondary);
-}
-
-.account-orders__sidebar {
-    width: var(--ao-sidebar-width);
-    flex-shrink: 0;
-    background: var(--color-bg-primary);
-    border-right: 1px solid var(--color-border-light);
-    padding: var(--ao-gutter);
-    position: sticky;
-    top: 80px;
-    height: calc(100vh - 80px);
-    overflow-y: auto;
-}
-
-.account-orders__main {
-    flex: 1;
-    padding: var(--ao-gutter);
-    display: flex;
-    justify-content: center;
-}
-
-.account-orders__container {
-    width: 100%;
-    max-width: var(--ao-content-max-width);
-}
-
-.account-orders__filters {
-    margin-bottom: var(--spacing-lg, 1.5rem);
-}
-
-.account-orders__list {
-    width: 100%;
-}
-
-@media (max-width: 768px) {
-    .account-orders {
-        flex-direction: column;
-        min-height: auto;
-    }
-
-    .account-orders__sidebar {
-        width: 100%;
-        height: auto;
-        position: static;
-        border-right: none;
-        border-bottom: 1px solid var(--color-border-light);
-        padding: var(--spacing-md, 1rem);
-    }
-
-    .account-orders__main {
-        padding: var(--spacing-md, 1rem);
-    }
-}
-</style>
-

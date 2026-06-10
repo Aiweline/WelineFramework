@@ -46,9 +46,54 @@
         return /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale) ? locale : '';
     };
 
-    const normalizeCurrency = (value) => {
-        const currency = String(value || '').trim().toUpperCase();
-        return /^[A-Z]{3}$/.test(currency) ? currency : '';
+    const normalizeCurrencyCode = (value) => {
+        return String(value || '').trim().toUpperCase();
+    };
+
+    const isCurrencyCodeShape = (value) => {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    };
+
+    const addSupportedCurrencyCode = (codes, value) => {
+        if (value && typeof value === 'object') {
+            value = value.code || value.currency || value.currency_code || value.value || '';
+        }
+        const code = normalizeCurrencyCode(value);
+        if (isCurrencyCodeShape(code)) {
+            codes[code] = true;
+        }
+    };
+
+    const collectSupportedCurrencyCodes = (config = {}) => {
+        const codes = {};
+        [
+            config.availableCurrencies,
+            config.supportedCurrencies,
+            config.currencyCodes,
+            config.currencies,
+            config.defaultCurrency,
+            config.default_currency,
+        ].forEach((source) => {
+            if (Array.isArray(source)) {
+                source.forEach((entry) => addSupportedCurrencyCode(codes, entry));
+                return;
+            }
+            addSupportedCurrencyCode(codes, source);
+        });
+        return codes;
+    };
+
+    const isSupportedCurrencyCode = (value, config = {}) => {
+        const code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        return collectSupportedCurrencyCodes(config)[code] === true;
+    };
+
+    const normalizeCurrency = (value, currencyConfig = {}) => {
+        const currency = normalizeCurrencyCode(value);
+        return isSupportedCurrencyCode(currency, currencyConfig) ? currency : '';
     };
 
     const sameOriginUrl = (path, fallbackPath) => {
@@ -233,8 +278,13 @@
     config.deployVersion = String(apiConfig.deployVersion || apiConfig.deploy_version || config.deployVersion || 'dev');
     config.workerBuildId = String(apiConfig.workerBuildId || apiConfig.worker_build_id || config.workerBuildId || 'dev');
     config.area = String(apiConfig.area || apiConfig.context || config.area || '');
+    config.defaultCurrency = normalizeCurrencyCode(
+        apiConfig.defaultCurrency || apiConfig.default_currency || runtimeConfig.defaultCurrency || runtimeConfig.default_currency || 'CNY'
+    );
+    config.availableCurrencies = apiConfig.availableCurrencies || apiConfig.supportedCurrencies || apiConfig.currencyCodes || apiConfig.currencies
+        || runtimeConfig.availableCurrencies || runtimeConfig.supportedCurrencies || runtimeConfig.currencyCodes || runtimeConfig.currencies || [];
     config.locale = normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || config.locale);
-    config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || config.currency);
+    config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || config.currency, config);
 
     class WelineApiClient {
         constructor(clientConfig) {
@@ -396,7 +446,10 @@
             this.ensureWorker();
             const messageId = this.buildMessageId();
             return new Promise((resolve, reject) => {
-                const configuredTimeout = parseInt(this.config.requestTimeoutMs || 15000, 10);
+                const optionTimeout = payload && payload.options
+                    ? (payload.options.requestTimeoutMs || payload.options.timeoutMs || payload.options.timeout)
+                    : null;
+                const configuredTimeout = parseInt(optionTimeout || this.config.requestTimeoutMs || 15000, 10);
                 const timeoutMs = Number.isFinite(configuredTimeout) ? Math.max(1000, configuredTimeout) : 15000;
                 const timeoutId = window.setTimeout(() => {
                     if (!this.pending.has(messageId)) {
@@ -424,6 +477,8 @@
                         workerBuildId: this.config.workerBuildId,
                         locale: this.config.locale,
                         currency: this.config.currency,
+                        defaultCurrency: this.config.defaultCurrency,
+                        availableCurrencies: this.config.availableCurrencies,
                     },
                 }));
             });

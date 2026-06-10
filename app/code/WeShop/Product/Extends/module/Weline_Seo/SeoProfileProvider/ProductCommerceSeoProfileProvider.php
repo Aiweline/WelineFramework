@@ -5,9 +5,15 @@ declare(strict_types=1);
 namespace WeShop\Product\Extends\Module\Weline_Seo\SeoProfileProvider;
 
 use Weline\Seo\Interface\SeoProfileProviderInterface;
+use Weline\Seo\Structure\Faq\FaqStructureNormalizer;
 
 class ProductCommerceSeoProfileProvider implements SeoProfileProviderInterface
 {
+    public function __construct(
+        private readonly ?FaqStructureNormalizer $faqStructureNormalizer = null
+    ) {
+    }
+
     /**
      * @param mixed $template
      * @param array<string, mixed> $context
@@ -421,18 +427,7 @@ class ProductCommerceSeoProfileProvider implements SeoProfileProviderInterface
      */
     private function qaFaqs(array $items): array
     {
-        $faqs = [];
-        foreach ($items as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $question = trim((string) ($item['question'] ?? $item['q'] ?? $item['title'] ?? ''));
-            $answer = trim((string) ($item['answer'] ?? $item['a'] ?? $item['content'] ?? ''));
-            if ($question !== '' && $answer !== '') {
-                $faqs[] = ['question' => $question, 'answer' => $answer];
-            }
-        }
-        return $faqs;
+        return ($this->faqStructureNormalizer ?? new FaqStructureNormalizer())->normalize($items);
     }
 
     private function readTemplate($template, string $key): mixed

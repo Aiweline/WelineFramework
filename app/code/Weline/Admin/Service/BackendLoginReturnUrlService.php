@@ -218,8 +218,14 @@ class BackendLoginReturnUrlService
         $path = (string)($parsed['path'] ?? '/');
         $path = $this->normalizeBackendPathForSameOrigin($path);
         $backendPrefix = $this->resolveCurrentBackendPrefix();
-        if ($backendPrefix !== '' && str_starts_with($path, '/pagebuilder/backend/')) {
-            $path = '/' . $backendPrefix . $path;
+        if ($backendPrefix !== '') {
+            $prefixPath = '/' . trim($backendPrefix, '/');
+            if ($path !== $prefixPath && !str_starts_with($path, $prefixPath . '/')) {
+                $routePath = $this->extractRoutePath($path);
+                if ($routePath !== '') {
+                    $path = $prefixPath . '/' . ltrim($routePath, '/');
+                }
+            }
         }
         $query = isset($parsed['query']) && $parsed['query'] !== '' ? '?' . $parsed['query'] : '';
         $fragment = isset($parsed['fragment']) && $parsed['fragment'] !== '' ? '#' . $parsed['fragment'] : '';

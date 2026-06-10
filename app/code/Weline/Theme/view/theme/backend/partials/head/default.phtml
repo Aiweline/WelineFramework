@@ -108,6 +108,27 @@ if ($isDev) {
 
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $currentCurrency = \w_env('user.currency', 'CNY');
+$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
+$availableCurrencies = [];
+try {
+    if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+        foreach (\Weline\Websites\Data\WebsiteData::getCurrencyCodes() as $currencyCode) {
+            $currencyCode = strtoupper(trim((string)$currencyCode));
+            if ($currencyCode !== '') {
+                $availableCurrencies[] = $currencyCode;
+            }
+        }
+    }
+} catch (\Throwable) {
+    $availableCurrencies = [];
+}
+$defaultCurrency = strtoupper(trim((string)$defaultCurrency)) ?: 'CNY';
+$availableCurrencies[] = $defaultCurrency;
+$availableCurrencies = array_values(array_unique($availableCurrencies));
+$currentCurrency = strtoupper(trim((string)$currentCurrency));
+if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
+    $currentCurrency = $defaultCurrency;
+}
 $siteName = $this->getData('site_name') ?? __('Weline Admin');
 $pageTitle = $meta['title'] ?? $this->getData('title') ?? __('Weline Admin 管理面板');
 $pageDescription = $meta['description'] ?? __('Weline Framework - 后台管理系统');
@@ -120,13 +141,18 @@ $envConfig = [
     'PROD' => !DEV,
 ];
 // API 模块的 workerUrl 由 API 模块内部自动处理，无需在此处配置
+$__dv = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $themeConfigPayload = [
     'env' => $envConfig,
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
+    'deployVersion' => ($__dv && is_array($__dv)) ? ($__dv['deploy_version'] ?? 'dev') : 'dev',
+    'workerBuildId' => ($__dv && is_array($__dv)) ? ($__dv['worker_build_id'] ?? 'dev') : 'dev',
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
+    'defaultCurrency' => $defaultCurrency,
+    'availableCurrencies' => $availableCurrencies,
     'debug' => DEV,
     'site' => [
         'name' => $siteName,
