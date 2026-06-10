@@ -160,7 +160,31 @@ layout 是页面骨架、默认占位和挂载点，不是业务实现层。
 
 禁止把控制台账号、密码、token、cookie、私钥正文或生产连接串写入仓库文档；仓库文档只能记录本机凭据目标名、非敏感 SSH 别名、密钥文件路径和部署流程，不记录私钥正文。
 
-## 13. 多智能体协作
+## 13. Git 提交与双端推送
+
+- 仅当用户**明确要求提交**时才执行 `git commit`；不得擅自提交。
+- 用户要求提交时，**commit 与 push 视为同一交付步骤**：本地 `commit` 成功后，必须**在同一次任务内**连续推送到 **`origin`（Gitee）** 与 **`github`（GitHub）** 两个 remote；禁止只推一端后结束任务。
+- 远程命名约定：`origin` = Gitee，`github` = GitHub；推送前用 `git remote -v` 确认 remote 存在且 URL 正确。
+- 标准流程（PowerShell 可用 here-string 传 commit message）：
+
+```bash
+git status
+git diff
+git log -5 --oneline
+git add <files>
+git commit -m "..."
+git push origin HEAD
+git push github HEAD
+```
+
+- 若当前分支有 upstream 且可能落后，推送前先 `git pull --rebase origin <branch>`（或按仓库既有习惯 merge），再执行双端 push。
+- 任一端 push 失败：报告已成功/失败的平台与错误信息，不得声称「已推送完成」；修复后补推失败端，并确认两端一致。
+- 禁止 `--force` / `--force-with-lease` 推送到 `main`/`master`，除非用户明确授权。
+- 禁止提交含密钥、token、`.env` 等敏感文件；提交前审查 `git diff --staged`。
+- 提交前若改动涉及代码符号，按 GitNexus 要求执行 `gitnexus_detect_changes()` 核对影响范围。
+- 其他工作区（如分仓目录 `E:\WelineFramework\weline\*`、SaaS 发布目录）若配置了 `origin`/`github` 双 remote，同样遵守本节的 commit + 双端 push 闭环。
+
+## 14. 多智能体协作
 
 - 当前 AI 是 Owner，负责拆分、分派、整合、审查和验收。
 - 每次会话默认尽可能开启 6 个子智能体并行分工处理，修复任务也适用；只有修复点明确只有一个、并行会增加额外风险或开销时，才采用串行处理。

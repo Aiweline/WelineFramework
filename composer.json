@@ -16,6 +16,7 @@
   "minimum-stability": "dev",
   "prefer-stable": true,
   "license": "proprietary",
+  "composer": "^2.7",
   "authors": [
     {
       "name": "秋枫雁飞",

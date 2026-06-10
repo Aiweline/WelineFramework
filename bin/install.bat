@@ -200,9 +200,10 @@ if defined MYSQL_OK (
 )
 :skip_mysql
 
-REM 安装后：将 php、pgsql、项目 bin（w 命令）写入用户 PATH（与 Linux/Mac 一致，所有系统都处理好）
+REM 安装后：将 php、pgsql、composer（extend/server）、项目 bin（w 命令）写入用户 PATH（与 Linux/Mac 一致）
 if exist "%PHP_DIR%\php.exe" call :add_path "%PHP_DIR%"
 if exist "%SERVER%\pgsql\bin\psql.exe" call :add_path "%SERVER%\pgsql\bin"
+if exist "%SERVER%" call :add_path "%SERVER%"
 call :add_path "%ROOT%\bin"
 
 REM 若 setup\server_installer\run.php 不存在，说明代码未安装：按 -b 指定分支拉取，未指定则 master

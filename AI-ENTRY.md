@@ -21,6 +21,16 @@ php bin/w server:restart -r # Restart test instance when master-level changes re
 php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance
 ```
 
+Git commit + dual push（用户明确要求提交时；`origin`=Gitee，`github`=GitHub）：
+
+```bash
+git status && git diff && git log -5 --oneline
+git add <files>
+git commit -m "..."
+git push origin HEAD
+git push github HEAD
+```
+
 ## Resources
 
 - AI general rules: `dev/ai/global-constraints.md`

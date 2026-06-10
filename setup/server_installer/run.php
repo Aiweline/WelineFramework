@@ -36,6 +36,7 @@ $resolveProjectPhpBin = static function (string $root, string $phpDir): string {
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsqlData.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsureComposer.php';
 
 $phpDirEarly = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 if (is_dir($phpDirEarly)) {
@@ -114,15 +115,9 @@ if ($isEnvPhpInstalled($envPhpFile)) {
                 try {
                     $iniCfg = new ConfigurePhpIni($projectRoot, $phpDir);
                     $iniCfg->apply($env);
-                    $installerIni = $phpDir . DIRECTORY_SEPARATOR . 'php.installer.ini';
-                    $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
-                    if (is_file($composerPhar)) {
-                        $composerPhp = is_file($installerIni)
-                            ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe" -c "' . $installerIni . '"'
-                            : '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"';
-                        putenv('WELINE_COMPOSER_COMMAND=' . $composerPhp . ' "' . $composerPhar . '"');
-                    }
                     $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
+                    (new EnsureComposer($projectRoot))->ensure($phpBin);
+                    EnsureComposer::applyEnvCommand($projectRoot, $phpBin);
                     $run = function (string $cmd) use ($phpBin): int {
                         $full = $phpBin . ' ' . $cmd;
                         echo "鎵ц鍛戒护锛?full\n";
@@ -250,14 +245,6 @@ $fromStep5b = in_array('--from', $argv, true)
 
 $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
-$installerIni = $phpDir . DIRECTORY_SEPARATOR . 'php.installer.ini';
-$composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
-if (is_file($composerPhar)) {
-    $composerPhp = is_file($installerIni)
-        ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe" -c "' . $installerIni . '"'
-        : '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"';
-    putenv('WELINE_COMPOSER_COMMAND=' . $composerPhp . ' "' . $composerPhar . '"');
-}
 $run = function (string $cmd) use ($projectRoot, $phpBin): int {
     $full = $phpBin . ' ' . $cmd;
     echo "执行命令：$full\n";
@@ -301,18 +288,10 @@ if (!$fromStep5b && is_dir($phpDir)) {
     try {
         $iniCfg = new ConfigurePhpIni($projectRoot, $phpDir);
         $iniCfg->apply($env);
-        $installerIni = $phpDir . DIRECTORY_SEPARATOR . 'php.installer.ini';
-        $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
-        if (is_file($composerPhar)) {
-            $composerPhp = is_file($installerIni)
-                ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe" -c "' . $installerIni . '"'
-                : '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"';
-            putenv('WELINE_COMPOSER_COMMAND=' . $composerPhp . ' "' . $composerPhar . '"');
-        }
         $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
         $run = function (string $cmd) use ($projectRoot, $phpBin): int {
             $full = $phpBin . ' ' . $cmd;
-            echo "鎵ц鍛戒护锛?full\n";
+            echo "执行命令：$full\n";
             passthru($full, $code);
             return (int) $code;
         };
@@ -321,16 +300,22 @@ if (!$fromStep5b && is_dir($phpDir)) {
     }
 }
 
-// 1. composer install（无论 vendor 是否存在都执行，确保依赖完整）；composer 为独立命令，不能用 php composer 方式调用
+// 0c. 按 composer.json 下载 composer.phar 到 extend/server/（不纳入 Git）
 if (!$fromStep5b) {
-    $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
+    (new EnsureComposer($projectRoot))->ensure($phpBin);
+    EnsureComposer::applyEnvCommand($projectRoot, $phpBin);
+}
+
+// 1. composer install（无论 vendor 是否存在都执行，确保依赖完整）
+if (!$fromStep5b) {
     $composerArgs = ' install -n --no-interaction';
     if (!extension_loaded('exif') || !extension_loaded('fileinfo')) {
         $composerArgs .= ' --ignore-platform-req=ext-exif --ignore-platform-req=ext-fileinfo';
         echo "exif/fileinfo 扩展未安装，composer 将忽略平台要求以继续安装。建议在宝塔面板中安装：软件商店 -> PHP -> 安装扩展 -> exif、fileinfo\n";
     }
-    $code = is_file($composerPhar)
-        ? $run($composerPhar . $composerArgs)
+    $composerPharQuoted = EnsureComposer::quotedPharPath($projectRoot);
+    $code = $composerPharQuoted !== null
+        ? $run($composerPharQuoted . $composerArgs)
         : $runRaw('composer' . $composerArgs);
     if ($code !== 0) {
         fwrite(STDERR, "ERROR: composer install failed (exit $code).\n");
