@@ -294,16 +294,33 @@ final class EnsureComposer
         @chmod($wrapper, 0755);
     }
 
+    private function createPhpIniConfigurator(string $phpDir): ConfigurePhpIni
+    {
+        if (!class_exists(ConfigurePhpIni::class, false)) {
+            require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
+        }
+
+        return new ConfigurePhpIni($this->projectRoot, $phpDir);
+    }
+
+    private function resolveDefaultCaBundlePath(string $phpDir): string
+    {
+        return $phpDir . DIRECTORY_SEPARATOR . 'extras' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . 'cacert.pem';
+    }
+
     private function bootstrapPublicCaBundle(): void
     {
         $phpDir = self::serverDir($this->projectRoot) . DIRECTORY_SEPARATOR . 'php';
         if (!is_dir($phpDir)) {
             return;
         }
-        if (!class_exists(ConfigurePhpIni::class, false)) {
-            require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
+        $cfg = $this->createPhpIniConfigurator($phpDir);
+        if (!method_exists($cfg, 'ensurePublicCaBundle')) {
+            fwrite(STDERR, "ERROR: setup/server_installer/ConfigurePhpIni.php 版本过旧，缺少 ensurePublicCaBundle()。"
+                . " 请执行 php bin/w update:core -b dev 同步 setup 目录后重试。\n");
+            return;
         }
-        (new ConfigurePhpIni($this->projectRoot, $phpDir))->ensurePublicCaBundle();
+        $cfg->ensurePublicCaBundle();
     }
 
     private function resolveCaBundlePath(): ?string
@@ -312,13 +329,15 @@ final class EnsureComposer
         if (!is_dir($phpDir)) {
             return null;
         }
-        if (!class_exists(ConfigurePhpIni::class, false)) {
-            require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
-        }
-        $cfg = new ConfigurePhpIni($this->projectRoot, $phpDir);
-        $path = $cfg->getCaBundlePath();
+        $cfg = $this->createPhpIniConfigurator($phpDir);
+        $path = method_exists($cfg, 'getCaBundlePath')
+            ? $cfg->getCaBundlePath()
+            : $this->resolveDefaultCaBundlePath($phpDir);
         if (is_file($path) && filesize($path) >= 100_000) {
             return $path;
+        }
+        if (!method_exists($cfg, 'ensurePublicCaBundle')) {
+            return null;
         }
         if ($cfg->ensurePublicCaBundle() && is_file($path)) {
             return $path;
