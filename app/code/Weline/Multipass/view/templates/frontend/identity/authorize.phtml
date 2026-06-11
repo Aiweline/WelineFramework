@@ -1,0 +1,165 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Multipass\Model\TrustedApp|null $app */
+/** @var \Weline\Customer\Model\Customer|null $user */
+
+$app = $this->getData('app');
+$user = $this->getData('user');
+$error = (string) ($this->getData('authorization_error') ?? '');
+$redirectUri = (string) ($this->getData('redirect_uri') ?? '');
+$state = (string) ($this->getData('state') ?? '');
+$requestedScopes = (array) ($this->getData('requested_scopes') ?? []);
+$requestedScopeDetails = (array) ($this->getData('requested_scope_details') ?? []);
+$clientId = $app && method_exists($app, 'getClientId') ? (string) $app->getClientId() : '';
+$appName = $app && method_exists($app, 'getName') ? (string) $app->getName() : (string) __('未知应用');
+$trustedDomain = $app && method_exists($app, 'getTrustedDomain') ? (string) $app->getTrustedDomain() : '';
+$email = $user && method_exists($user, 'getEmail') ? (string) $user->getEmail() : '';
+$username = $user && method_exists($user, 'getUsername') ? (string) ($user->getUsername() ?? '') : '';
+$avatar = $user && method_exists($user, 'getAvatar') ? (string) ($user->getAvatar() ?? '') : '';
+$avatarInitial = $username !== '' ? mb_strtoupper(mb_substr($username, 0, 1)) : 'W';
+$authorizeAction = $this->getFrontendUrl('multipass/frontend/identity/authorize');
+$loginUrl = (string) ($this->getData('login_url') ?: $this->getFrontendUrl('customer/account/login'));
+$cancelUrl = '/';
+$scopeCopy = [
+    'profile.basic' => ['label' => '基础资料', 'description' => '读取用户 ID、昵称和头像，用于识别当前账号。'],
+    'profile.email' => ['label' => '邮箱地址', 'description' => '读取账号邮箱，用于登录识别和账号关联。'],
+    'account.bind' => ['label' => '账号绑定', 'description' => '创建或更新该应用与你的 Weline 账号之间的关联。'],
+    'appstore.account' => ['label' => '应用商城账号', 'description' => '创建或关联应用商城账号，实现一键登录和授权互通。'],
+    'community.account' => ['label' => '社区账号', 'description' => '创建或关联论坛/社区账号，实现一键登录和授权互通。'],
+];
+
+if ($redirectUri !== '') {
+    $cancelParams = ['error' => 'access_denied'];
+    if ($state !== '') {
+        $cancelParams['state'] = $state;
+    }
+    $cancelUrl = $redirectUri . (str_contains($redirectUri, '?') ? '&' : '?') . http_build_query($cancelParams);
+}
+?>
+<style>
+.multipass-auth{--mp-primary:#2563eb;--mp-primary-strong:#1d4ed8;--mp-warning:#b45309;--mp-panel:#fff;--mp-muted:#64748b;--mp-border:#dbeafe;--mp-text:#0f172a;width:min(100%,760px);margin:0 auto;color:var(--mp-text)}
+.multipass-auth__card{background:var(--mp-panel);border:1px solid var(--mp-border);border-radius:8px;box-shadow:0 22px 70px rgba(15,23,42,.14);overflow:hidden}
+.multipass-auth__header{padding:30px 30px 24px;background:linear-gradient(135deg,#eff6ff 0%,#f8fafc 68%,#ecfdf5 100%);border-bottom:1px solid var(--mp-border)}
+.multipass-auth__eyebrow{margin:0 0 8px;color:var(--mp-primary-strong);font-size:13px;font-weight:800}
+.multipass-auth__title{margin:0;color:var(--mp-text);font-size:28px;line-height:1.25;letter-spacing:0}
+.multipass-auth__subtitle{margin:10px 0 0;max-width:620px;color:#475569;font-size:14px;line-height:1.7}
+.multipass-auth__body{padding:28px 30px 30px}
+.multipass-auth__notice{margin-bottom:18px;padding:14px 16px;border:1px solid #fed7aa;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:14px;line-height:1.6}
+.multipass-auth__notice--error{border-color:#fecaca;background:#fef2f2;color:#991b1b}
+.multipass-auth__section{padding:18px 0;border-bottom:1px solid #e2e8f0}
+.multipass-auth__section:first-of-type{padding-top:0}
+.multipass-auth__section:last-of-type{border-bottom:0}
+.multipass-auth__label{margin:0 0 10px;color:#334155;font-size:13px;font-weight:800}
+.multipass-auth__identity{display:flex;align-items:center;gap:14px}
+.multipass-auth__mark,.multipass-auth__avatar,.multipass-auth__avatar-fallback{width:50px;height:50px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;background:var(--mp-primary);color:#fff;font-weight:900}
+.multipass-auth__avatar,.multipass-auth__avatar-fallback{border-radius:50%}
+.multipass-auth__avatar{object-fit:cover}
+.multipass-auth__name{margin:0;color:var(--mp-text);font-size:16px;font-weight:800}
+.multipass-auth__meta{margin:4px 0 0;color:var(--mp-muted);font-size:13px;line-height:1.5;word-break:break-word}
+.multipass-auth__scope-list{display:grid;gap:10px}
+.multipass-auth__scope{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;padding:14px 0;border-bottom:1px solid #e2e8f0}
+.multipass-auth__scope:last-child{border-bottom:0}
+.multipass-auth__scope-title{margin:0 0 4px;color:var(--mp-text);font-size:14px;font-weight:800}
+.multipass-auth__scope-desc{margin:0;color:var(--mp-muted);font-size:13px;line-height:1.55}
+.multipass-auth__risk{min-width:56px;padding:4px 9px;border-radius:999px;background:#ecfdf5;color:#166534;font-size:12px;font-weight:800;text-align:center}
+.multipass-auth__risk[data-risk=medium],.multipass-auth__risk[data-risk=high]{background:#fff7ed;color:var(--mp-warning)}
+.multipass-auth__actions{display:flex;justify-content:flex-end;gap:12px;margin-top:24px}
+.multipass-auth__button,.multipass-auth__link{min-height:44px;padding:0 18px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;text-decoration:none;cursor:pointer}
+.multipass-auth__button{border:1px solid var(--mp-primary);background:var(--mp-primary);color:#fff}
+.multipass-auth__button:hover{background:var(--mp-primary-strong)}
+.multipass-auth__link{border:1px solid #cbd5e1;background:#fff;color:#334155}
+.multipass-auth__footnote{margin:16px 0 0;color:var(--mp-muted);font-size:12px;line-height:1.6}
+@media (max-width:640px){.multipass-auth__header,.multipass-auth__body{padding-left:20px;padding-right:20px}.multipass-auth__title{font-size:23px}.multipass-auth__actions{flex-direction:column-reverse}.multipass-auth__button,.multipass-auth__link{width:100%}}
+</style>
+
+<section class="multipass-auth" aria-labelledby="multipass-auth-title">
+    <div class="multipass-auth__card">
+        <header class="multipass-auth__header">
+            <p class="multipass-auth__eyebrow"><?= htmlspecialchars((string) __('Weline 账号授权'), ENT_QUOTES, 'UTF-8') ?></p>
+            <h1 class="multipass-auth__title" id="multipass-auth-title"><?= htmlspecialchars((string) __('授权应用访问你的 Weline 账号'), ENT_QUOTES, 'UTF-8') ?></h1>
+            <p class="multipass-auth__subtitle"><?= htmlspecialchars((string) __('请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。'), ENT_QUOTES, 'UTF-8') ?></p>
+        </header>
+
+        <div class="multipass-auth__body">
+            <?php if ($error !== ''): ?>
+                <div class="multipass-auth__notice multipass-auth__notice--error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php elseif (!$user): ?>
+                <div class="multipass-auth__notice"><?= htmlspecialchars((string) __('你还没有登录。登录后会回到这里继续确认授权。'), ENT_QUOTES, 'UTF-8') ?></div>
+            <?php endif; ?>
+
+            <div class="multipass-auth__section">
+                <p class="multipass-auth__label"><?= htmlspecialchars((string) __('请求授权的应用'), ENT_QUOTES, 'UTF-8') ?></p>
+                <div class="multipass-auth__identity">
+                    <div class="multipass-auth__mark" aria-hidden="true">ID</div>
+                    <div>
+                        <p class="multipass-auth__name"><?= htmlspecialchars($appName, ENT_QUOTES, 'UTF-8') ?></p>
+                        <?php if ($trustedDomain !== ''): ?><p class="multipass-auth__meta"><?= htmlspecialchars($trustedDomain, ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="multipass-auth__section">
+                <p class="multipass-auth__label"><?= htmlspecialchars((string) __('当前 Weline 账号'), ENT_QUOTES, 'UTF-8') ?></p>
+                <?php if ($user): ?>
+                    <div class="multipass-auth__identity">
+                        <?php if ($avatar !== ''): ?>
+                            <img class="multipass-auth__avatar" src="<?= htmlspecialchars($avatar, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($username, ENT_QUOTES, 'UTF-8') ?>">
+                        <?php else: ?>
+                            <div class="multipass-auth__avatar-fallback" aria-hidden="true"><?= htmlspecialchars($avatarInitial, ENT_QUOTES, 'UTF-8') ?></div>
+                        <?php endif; ?>
+                        <div>
+                            <p class="multipass-auth__name"><?= htmlspecialchars($username !== '' ? $username : (string) __('已登录用户'), ENT_QUOTES, 'UTF-8') ?></p>
+                            <?php if ($email !== ''): ?><p class="multipass-auth__meta"><?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <p class="multipass-auth__meta"><?= htmlspecialchars((string) __('登录后将显示你的账号信息，并由你决定是否继续授权。'), ENT_QUOTES, 'UTF-8') ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="multipass-auth__section">
+                <p class="multipass-auth__label"><?= htmlspecialchars((string) __('应用请求的权限'), ENT_QUOTES, 'UTF-8') ?></p>
+                <div class="multipass-auth__scope-list">
+                    <?php foreach ($requestedScopeDetails as $scope): ?>
+                        <?php
+                        $scopeCode = (string) ($scope['scope'] ?? '');
+                        $copy = $scopeCopy[$scopeCode] ?? [];
+                        $scopeLabel = (string) ($copy['label'] ?? $scope['label'] ?? $scopeCode);
+                        $scopeDescription = (string) ($copy['description'] ?? $scope['description'] ?? '');
+                        $risk = (string) ($scope['risk'] ?? 'medium');
+                        $riskLabel = $risk === 'low' ? (string) __('低风险') : (string) __('需确认');
+                        ?>
+                        <article class="multipass-auth__scope">
+                            <div>
+                                <p class="multipass-auth__scope-title"><?= htmlspecialchars($scopeLabel, ENT_QUOTES, 'UTF-8') ?></p>
+                                <p class="multipass-auth__scope-desc"><?= htmlspecialchars($scopeDescription, ENT_QUOTES, 'UTF-8') ?></p>
+                            </div>
+                            <span class="multipass-auth__risk" data-risk="<?= htmlspecialchars($risk, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($riskLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <?php if ($user && $error === ''): ?>
+                <form method="post" action="<?= htmlspecialchars($authorizeAction, ENT_QUOTES, 'UTF-8') ?>">
+                    <?= $this->getFormKey($authorizeAction) ?>
+                    <input type="hidden" name="client_id" value="<?= htmlspecialchars($clientId, ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="redirect_uri" value="<?= htmlspecialchars($redirectUri, ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="scopes" value="<?= htmlspecialchars(implode(',', $requestedScopes), ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="state" value="<?= htmlspecialchars($state, ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="multipass-auth__actions">
+                        <a class="multipass-auth__link" href="<?= htmlspecialchars($cancelUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) __('取消'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <button class="multipass-auth__button" type="submit"><?= htmlspecialchars((string) __('同意并继续'), ENT_QUOTES, 'UTF-8') ?></button>
+                    </div>
+                </form>
+            <?php else: ?>
+                <div class="multipass-auth__actions">
+                    <a class="multipass-auth__link" href="<?= htmlspecialchars($cancelUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) __('取消'), ENT_QUOTES, 'UTF-8') ?></a>
+                    <a class="multipass-auth__button" href="<?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string) __('登录后继续'), ENT_QUOTES, 'UTF-8') ?></a>
+                </div>
+            <?php endif; ?>
+
+            <p class="multipass-auth__footnote"><?= htmlspecialchars((string) __('如果你不认识这个应用或域名，请取消授权。'), ENT_QUOTES, 'UTF-8') ?></p>
+        </div>
+    </div>
+</section>
