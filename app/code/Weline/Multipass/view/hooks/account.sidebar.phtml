@@ -1,0 +1,28 @@
+<?php
+/**
+ * Weline_Multipass module - account identity bridge entry.
+ *
+ * Hook: account.sidebar
+ *
+ * @hook-priority 170
+ * @hook-sort-order 12
+ * @hook-solo false
+ */
+$accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
+if (!is_string($accountIndexPath) || $accountIndexPath === '') {
+    $accountIndexPath = '/customer/account/index';
+}
+$accountIndexPath = rtrim($accountIndexPath, '/');
+?>
+<a class="account-hook-nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#identity-bridge" data-section="identity-bridge" data-account-nav-link="true">
+    <span class="account-hook-nav-link__label">
+        <i class="ri-shield-keyhole-line" aria-hidden="true"></i>
+        <span class="account-hook-nav-link__text">
+            <strong><?= __('授权应用') ?></strong>
+            <span><?= __('管理通信登录与账号绑定') ?></span>
+        </span>
+    </span>
+    <span class="account-hook-nav-link__arrow" aria-hidden="true">
+        <i class="fa fa-angle-right"></i>
+    </span>
+</a>

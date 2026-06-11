@@ -1,0 +1,42 @@
+<?php
+/**
+ * Weline_Multipass module - account identity bridge content.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 170
+ * @hook-sort-order 12
+ * @hook-solo false
+ */
+use Weline\Customer\Model\Customer;
+use Weline\Customer\Service\AccountSidebarContentGate;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Multipass\Service\IdentityBridgeService;
+
+if (!AccountSidebarContentGate::accepts('identity-bridge')) {
+    return;
+}
+
+$user = $this->getData('user');
+if (!$user instanceof Customer) {
+    try {
+        $sessionUser = SessionFactory::getInstance()->createFrontendSession()->getUser();
+        if ($sessionUser instanceof Customer) {
+            $user = $sessionUser;
+        }
+    } catch (\Throwable) {
+    }
+}
+
+$identityBindings = [];
+if ($user instanceof Customer && $user->getId()) {
+    $identityBindings = ObjectManager::getInstance(IdentityBridgeService::class)
+        ->listBindingsForCustomer((int)$user->getId());
+}
+
+$this->assign('identity_bindings', $identityBindings);
+?>
+<section class="account-hook-section account-index__section d-none" id="identity-bridge-section" data-account-section="identity-bridge" hidden>
+    <?= $this->fetch('Weline_Multipass::templates/frontend/account/identity-bridge.phtml') ?>
+</section>

@@ -151,6 +151,168 @@ Token 结构：
 
 **返回**：包含解密后的用户数据的 JSON 数据
 
+## 信任通信与互通授权 MVP
+
+本模块同时提供框架核心通信授权能力，用于 `app`、`skill`、`bbs.a2a`、应用商城等可信域名之间的一键登录、账号关联和资料读取。该能力不替换旧 Multipass 加密登录，而是在同一模块内新增一条授权码 + Token 的互通信任链。
+
+### 后台配置
+
+后台入口：`Multipass管理 -> 互通应用`
+
+可信应用需要配置：
+
+- **应用名称**：展示给用户确认授权。
+- **应用类型**：`app`、`skill`、`bbs`、`appstore`、`community` 或 `custom`。
+- **回调地址**：授权码换 token 时精确匹配的 `redirect_uri`。
+- **可信域名**：用于运营识别和域名信任管理，留空时从回调地址提取。
+- **授权范围**：默认包含 `profile.basic`、`profile.email`、`account.bind`。
+- **client_secret**：只在创建或轮换时返回一次，数据库只保存哈希。
+
+### 授权流程
+
+1. 可信应用跳转到官网授权页：`GET /multipass/frontend/identity/authorize`
+2. 未登录用户先进入 `/customer/account/login`，登录成功后回到授权页。
+3. 已登录用户确认授权：`POST /multipass/frontend/identity/authorize`
+4. 官网发放短期授权码并回跳可信应用 `redirect_uri?code=...&state=...`
+5. 可信应用使用授权码换取 token：`POST /{rest_frontend}/multipass/rest/v1/identity/token`
+6. 可信应用使用 `Authorization: Bearer {access_token}` 读取资料：`GET /{rest_frontend}/multipass/rest/v1/identity/userinfo`
+7. 可信应用按需回写外部账号绑定：`POST /{rest_frontend}/multipass/rest/v1/identity/bind`
+
+### 子站接入官网登录
+
+BBS、Skill、App、A2A 等 Office 子站更新内核后，可以在后台 `Multipass管理 -> 官网登录提供方` 配置官网生成的 `client_id`、`client_secret`、官网授权地址和官网 REST 地址。配置完成后，Customer 登录页会通过 `Weline_Customer::frontend::account::login::providers` hook 显示“使用官网登录”。
+
+客户端流程：
+
+1. 子站访问 `/multipass/frontend/identity/login`，生成 state 并跳转到官网 `/multipass/frontend/identity/authorize`。
+2. 官网用户登录并同意授权后，携带授权码回跳子站 `/multipass/frontend/identity/callback`。
+3. 子站用 `client_secret` 向官网 REST `/multipass/rest/v1/identity/token` 换取 token，再读取 `/userinfo`。
+4. 子站按官网邮箱查找或创建本地 `Weline_Customer` 账号，写入前台会话，并调用官网 `/bind` 记录外部账号绑定。
+
+目标站回调地址必须与官网“互通应用”中的回调地址完全一致，例如：
+
+```text
+https://bbs.example.com/multipass/frontend/identity/callback
+```
+
+### 前台授权页
+
+**页面**：`GET /multipass/frontend/identity/authorize`
+
+**参数**：
+
+- `client_id`（必需）：后台生成的应用 Client ID。
+- `redirect_uri`（可选）：不传时使用后台配置的默认回调地址；传入时必须精确匹配。
+- `scope` 或 `scopes`（可选）：逗号分隔、数组或 JSON 数组。
+- `state`（建议）：原样带回下游站点，用于防 CSRF 和恢复登录前状态。
+
+页面会展示当前登录账号、可信应用、可信域名和请求权限。用户确认后直接回跳 `redirect_uri`，取消时回跳 `redirect_uri?error=access_denied`。
+
+### 个人中心授权管理
+
+`Weline_Multipass` 会通过 `account.sidebar` 与 `account.sidebar.content` hook 在 `/customer/account` 注入“授权应用”分区。用户可查看已授权的 App、Skill、BBS、A2A 等可信应用，并可撤销授权。撤销后对应绑定会置为 revoked，存量 Access Token / Refresh Token 会立即失效。
+
+### 授权信息
+
+**接口**：`GET /{rest_frontend}/multipass/rest/v1/identity/authorize`
+
+**参数**：
+
+- `client_id`（必需）：后台生成的应用 Client ID
+- `redirect_uri`（可选）：不传时使用后台配置的默认回调地址
+- `scopes` 或 `scope`（可选）：逗号分隔、数组或 JSON 数组
+
+**返回**：应用信息、允许授权范围、当前登录状态和当前用户摘要。
+
+### 批准授权
+
+**接口**：`POST /{rest_frontend}/multipass/rest/v1/identity/authorize`
+
+**参数**：
+
+- `client_id`（必需）
+- `redirect_uri`（可选，必须与后台配置精确一致）
+- `scopes`（可选）
+- `state`（可选，原样回传到 `redirect_url`）
+
+**返回**：
+
+```json
+{
+    "success": true,
+    "data": {
+        "code": "mpc_xxx",
+        "expires_at": 1760000000,
+        "redirect_uri": "https://app.example.com/oauth/callback",
+        "redirect_url": "https://app.example.com/oauth/callback?code=mpc_xxx&state=abc",
+        "scopes": ["profile.basic", "profile.email"]
+    }
+}
+```
+
+### 换取 Token
+
+**接口**：`POST /{rest_frontend}/multipass/rest/v1/identity/token`
+
+**参数**：
+
+- `client_id`（必需）
+- `client_secret`（必需）
+- `code`（必需）
+- `redirect_uri`（可选；传入时必须与授权码内记录一致）
+
+**返回**：
+
+```json
+{
+    "success": true,
+    "data": {
+        "access_token": "mpt_xxx",
+        "refresh_token": "mpt_xxx",
+        "token_type": "Bearer",
+        "expires_in": 3600,
+        "expire_time": 1760000000,
+        "scopes": ["profile.basic", "profile.email"],
+        "binding": {
+            "binding_id": 1,
+            "local_customer_id": 10,
+            "external_subject_id": ""
+        }
+    }
+}
+```
+
+### 刷新与撤销
+
+- 刷新：`POST /{rest_frontend}/multipass/rest/v1/identity/refresh`
+- 撤销：`POST /{rest_frontend}/multipass/rest/v1/identity/revoke`
+
+刷新参数：`client_id`、`client_secret`、`refresh_token`。
+
+撤销参数：`Authorization: Bearer {token}`、`X-API-Token` 或 `token` 参数。
+
+### 用户资料
+
+**接口**：`GET /{rest_frontend}/multipass/rest/v1/identity/userinfo`
+
+**鉴权**：`Authorization: Bearer {access_token}`
+
+返回包含 `sub`、`customer_id`、`username`、`avatar`、应用信息、绑定信息和 token 过期时间；只有授权范围包含 `profile.email` 时返回 `email`。
+
+### 外部账号绑定
+
+**接口**：`POST /{rest_frontend}/multipass/rest/v1/identity/bind`
+
+**鉴权**：`Authorization: Bearer {access_token}`
+
+**参数**：
+
+- `external_subject_id`（必需）：外部系统用户 ID
+- `external_display_name`（可选）：外部系统显示名称
+- `metadata`（可选）：JSON 对象或表单数组
+
+该接口要求 token scopes 包含 `account.bind`、`appstore.account` 或 `community.account`。
+
 ## 示例代码
 
 ### PHP 示例
@@ -232,4 +394,14 @@ fetch('https://api.example.com/rest/v1/multipass/token/generate', {
 如有问题，请访问：
 - 论坛：https://bbs.aiweline.com
 - 邮箱：aiweline@qq.com
+
+## Runtime Route Note
+
+Identity endpoints must include the configured frontend REST prefix before
+`/multipass/rest/v1/identity/*`. In this local environment the prefix is
+`api123`, so the browser smoke URL is:
+
+```text
+/api123/multipass/rest/v1/identity/authorize
+```
 
