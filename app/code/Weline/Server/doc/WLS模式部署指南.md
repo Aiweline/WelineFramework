@@ -188,6 +188,7 @@ server {
 ## 5. HTTPS / SSL
 
 - **默认**：WLS 启动时自动启用 HTTPS，无证书时对本地/内网（127.0.0.1、localhost 等）**自动签发自签证书**，证书按域名存放在 `app/etc/ssl/{域名}/`。
+- **本地 CA 复用**：本地/内网证书优先使用 Weline 本地 CA 签发。项目内 CA 可用时会同步到用户级全局目录；新项目缺少 CA 时会先从该全局目录恢复，避免每个项目重复生成并导入新的本地 CA。可用 `wls.ssl.local_ca_dir` 指定全局 CA 目录。系统信任库只有 CA 证书但没有 `rootCA.key` 时，不能作为签发材料复用。
 - **已有证书**：自动检测 `app/etc/ssl/` 下证书，或使用 `--ssl-cert` / `--ssl-key` 指定。
 - **生产**：可继续用 Nginx 终结 HTTPS（80/443）反代到 WLS 高端口，或直连 WLS 80/443（需 root/setcap）。
 - **HTTP 重定向到 HTTPS**：**Master 默认启用**。HTTPS 启用时，Master 会**自动启动一个独立的 HTTP 进程**（不计入 Worker 数），监听 80 端口，将 HTTP 请求 301 重定向到 HTTPS。
