@@ -15,7 +15,12 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\InstallInterface;
+use Weline\Multipass\Model\AccountBinding;
+use Weline\Multipass\Model\AuthorizationCode;
+use Weline\Multipass\Model\IdentityProvider;
+use Weline\Multipass\Model\IdentityToken;
 use Weline\Multipass\Model\MultipassSite;
+use Weline\Multipass\Model\TrustedApp;
 
 /**
  * 模块安装脚本
@@ -25,11 +30,21 @@ class Install implements InstallInterface
     public function setup(Setup $setup, Context $context): void
     {
         try {
-            /** @var MultipassSite $multipassSite */
-            $multipassSite = ObjectManager::getInstance(MultipassSite::class);
             $modelSetup = ObjectManager::make(ModelSetup::class);
-            $modelSetup->putModel($multipassSite);
-            $multipassSite->install($modelSetup, $context);
+            $models = [
+                MultipassSite::class,
+                TrustedApp::class,
+                IdentityProvider::class,
+                AccountBinding::class,
+                AuthorizationCode::class,
+                IdentityToken::class,
+            ];
+
+            foreach ($models as $modelClass) {
+                $model = ObjectManager::getInstance($modelClass);
+                $modelSetup->putModel($model);
+                $model->install($modelSetup, $context);
+            }
 
             $context->getPrinter()->success(__('Multipass 模块安装完成'));
 

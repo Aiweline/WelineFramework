@@ -1,9 +1,30 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$isLoggedIn = false;
+$displayName = '';
+try {
+    $frontendSession = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession();
+    $isLoggedIn = $frontendSession->isLoggedIn();
+    $user = $frontendSession->getUser();
+    if (is_object($user) && method_exists($user, 'getUsername')) {
+        $displayName = (string)($user->getUsername() ?? '');
+    }
+    if ($displayName === '' && is_object($user) && method_exists($user, 'getEmail')) {
+        $displayName = (string)$user->getEmail();
+    }
+} catch (\Throwable) {
+}
+$loginUrl = '/customer/account/login';
+$registerUrl = '/customer/account/register';
+$accountUrl = '/customer/account';
+$identityUrl = '/customer/account/index#identity-bridge';
+?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>欢迎使用WelineFramework</title>
+    <title><?= __('欢迎使用WelineFramework') ?></title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -32,6 +53,55 @@
             text-decoration: underline;
         }
 
+        .account-panel {
+            width: min(92vw, 720px);
+            margin: 2.25rem auto 1.75rem;
+            padding: 1.25rem;
+            border: 1px solid rgba(97, 218, 251, 0.28);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            box-sizing: border-box;
+        }
+
+        .account-panel__title {
+            margin: 0 0 0.4rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .account-panel__desc {
+            margin: 0 0 1rem;
+            color: rgba(255, 255, 255, 0.76);
+            font-size: 0.95rem;
+        }
+
+        .account-panel__actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .account-panel__action {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 1rem;
+            border: 1px solid rgba(97, 218, 251, 0.45);
+            border-radius: 8px;
+            background: rgba(97, 218, 251, 0.12);
+            color: #dff8ff;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .account-panel__action--primary {
+            background: #22c55e;
+            border-color: #22c55e;
+            color: #052e16;
+        }
+
         .github, .gitee {
             display: inline-block;
             margin: 0 1em;
@@ -46,8 +116,25 @@
     </style>
 </head>
 <body>
-<h1>欢迎使用WelineFramework</h1>
-<p>感谢您选择WelineFramework，一个强大的Web开发框架。</p>
+<h1><?= __('欢迎使用WelineFramework') ?></h1>
+<p><?= __('感谢您选择WelineFramework，一个强大的Web开发框架。') ?></p>
+<section class="account-panel" aria-label="<?= __('官网账户') ?>">
+    <?php if ($isLoggedIn): ?>
+        <h2 class="account-panel__title"><?= __('已登录官网账号') ?><?= $displayName !== '' ? '：' . htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') : '' ?></h2>
+        <p class="account-panel__desc"><?= __('您可以进入个人中心管理资料、安全设置以及 App、Skill、BBS、A2A 等站点的通信授权。') ?></p>
+        <div class="account-panel__actions">
+            <a class="account-panel__action account-panel__action--primary" href="<?= htmlspecialchars($accountUrl, ENT_QUOTES, 'UTF-8') ?>"><?= __('个人中心') ?></a>
+            <a class="account-panel__action" href="<?= htmlspecialchars($identityUrl, ENT_QUOTES, 'UTF-8') ?>"><?= __('授权应用') ?></a>
+        </div>
+    <?php else: ?>
+        <h2 class="account-panel__title"><?= __('官网登录与互通授权') ?></h2>
+        <p class="account-panel__desc"><?= __('登录前端账号后，可通过官网授权 App、Skill、BBS、A2A 等可信站点通信登录。') ?></p>
+        <div class="account-panel__actions">
+            <a class="account-panel__action account-panel__action--primary" href="<?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') ?>"><?= __('登录官网账号') ?></a>
+            <a class="account-panel__action" href="<?= htmlspecialchars($registerUrl, ENT_QUOTES, 'UTF-8') ?>"><?= __('注册账号') ?></a>
+        </div>
+    <?php endif; ?>
+</section>
 <div class="github">
     <a href="https://github.com/Aiweline/WelineFramework" target="_blank">
         <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub">
