@@ -50,6 +50,8 @@ class SslCertificateService
     private const LOCAL_CA_CERT_FILENAME = 'rootCA.pem';
     private const LOCAL_CA_KEY_FILENAME = 'rootCA.key';
     private const LOCAL_CA_SERIAL_FILENAME = 'serial.txt';
+    private const GLOBAL_LOCAL_CA_VENDOR_DIR = 'Weline';
+    private const GLOBAL_LOCAL_CA_APP_DIR = 'WLS';
 
     /**
      * ACME 申请进行中锁文件（位于 app/etc/ssl/{domain}/），用于避免颁发过程中 sync/页面同步覆盖证书记录
@@ -934,6 +936,187 @@ CNF;
         return $this->getLocalCaDir() . self::LOCAL_CA_SERIAL_FILENAME;
     }
 
+    protected function getGlobalLocalCaDir(bool $create = true): string
+    {
+        $configured = '';
+        try {
+            $value = Env::get('wls.ssl.local_ca_dir');
+            if (\is_string($value)) {
+                $configured = \trim($value);
+            }
+        } catch (\Throwable) {
+            $configured = '';
+        }
+
+        if ($configured !== '') {
+            $dir = \rtrim($configured, "\\/") . DS;
+        } else {
+            $baseDir = $this->resolveUserStateBaseDir();
+            if ($baseDir === '') {
+                return '';
+            }
+            $dir = \rtrim($baseDir, "\\/") . DS
+                . self::GLOBAL_LOCAL_CA_VENDOR_DIR . DS
+                . self::GLOBAL_LOCAL_CA_APP_DIR . DS
+                . self::LOCAL_CA_DIRNAME . DS;
+        }
+
+        if ($create && !\is_dir($dir)) {
+            @\mkdir($dir, 0700, true);
+        }
+
+        return \is_dir($dir) || !$create ? $dir : '';
+    }
+
+    protected function resolveUserStateBaseDir(): string
+    {
+        $candidates = [];
+        if ($this->getOsFamily() === 'Windows') {
+            $candidates = [
+                (string) \getenv('LOCALAPPDATA'),
+                (string) \getenv('APPDATA'),
+                (string) \getenv('USERPROFILE'),
+            ];
+        } else {
+            $home = (string) \getenv('HOME');
+            $candidates = [
+                (string) \getenv('XDG_STATE_HOME'),
+                $home !== '' ? $home . DS . '.local' . DS . 'state' : '',
+                $home,
+            ];
+        }
+
+        foreach ($candidates as $candidate) {
+            $candidate = \trim($candidate);
+            if ($candidate !== '' && \is_dir($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    protected function getGlobalLocalCaCertPath(): string
+    {
+        $dir = $this->getGlobalLocalCaDir();
+
+        return $dir !== '' ? $dir . self::LOCAL_CA_CERT_FILENAME : '';
+    }
+
+    protected function getGlobalLocalCaKeyPath(): string
+    {
+        $dir = $this->getGlobalLocalCaDir();
+
+        return $dir !== '' ? $dir . self::LOCAL_CA_KEY_FILENAME : '';
+    }
+
+    protected function getGlobalLocalCaSerialPath(): string
+    {
+        $dir = $this->getGlobalLocalCaDir();
+
+        return $dir !== '' ? $dir . self::LOCAL_CA_SERIAL_FILENAME : '';
+    }
+
+    protected function canUseLocalCertificateAuthorityPair(string $certPath, string $keyPath): bool
+    {
+        return \is_file($certPath)
+            && \is_file($keyPath)
+            && $this->isCertificateValid($certPath)
+            && $this->isCertificateSelfSigned($certPath)
+            && $this->isCertificateAuthority($certPath)
+            && $this->canReuseConfiguredCertificate($certPath, $keyPath);
+    }
+
+    protected function certificateFilesHaveSameFingerprint(string $leftPath, string $rightPath): bool
+    {
+        $left = $this->getCertificateSha1Fingerprint($leftPath);
+        $right = $this->getCertificateSha1Fingerprint($rightPath);
+
+        return $left !== '' && $right !== '' && $left === $right;
+    }
+
+    protected function localAndGlobalCertificateAuthorityMatch(): bool
+    {
+        $localCertPath = $this->getLocalCaCertPath();
+        $globalCertPath = $this->getGlobalLocalCaCertPath();
+        if ($globalCertPath === '' || !\is_file($localCertPath) || !\is_file($globalCertPath)) {
+            return false;
+        }
+
+        return $this->certificateFilesHaveSameFingerprint($localCertPath, $globalCertPath);
+    }
+
+    protected function syncGlobalLocalCertificateAuthority(string $certPath, string $keyPath): bool
+    {
+        if (!$this->canUseLocalCertificateAuthorityPair($certPath, $keyPath)) {
+            return false;
+        }
+
+        $globalCertPath = $this->getGlobalLocalCaCertPath();
+        $globalKeyPath = $this->getGlobalLocalCaKeyPath();
+        if ($globalCertPath === '' || $globalKeyPath === '') {
+            return false;
+        }
+
+        if ($this->canUseLocalCertificateAuthorityPair($globalCertPath, $globalKeyPath)) {
+            return $this->certificateFilesHaveSameFingerprint($certPath, $globalCertPath);
+        }
+
+        if (@\copy($certPath, $globalCertPath) === false || @\copy($keyPath, $globalKeyPath) === false) {
+            w_log_warning(__('[SslCertificateService] Failed to persist reusable global local CA files to %{1}', [\dirname($globalCertPath)]), [], 'ssl_cert');
+            return false;
+        }
+
+        $localSerialPath = $this->getLocalCaSerialPath();
+        $globalSerialPath = $this->getGlobalLocalCaSerialPath();
+        if ($globalSerialPath !== '' && \is_file($localSerialPath)) {
+            @\copy($localSerialPath, $globalSerialPath);
+        }
+
+        @\chmod($globalCertPath, 0644);
+        @\chmod($globalKeyPath, 0600);
+        w_log_info(__('[SslCertificateService] Local CA is now reusable across projects from %{1}', [\dirname($globalCertPath)]));
+
+        return true;
+    }
+
+    protected function restoreProjectLocalCertificateAuthorityFromGlobal(): ?array
+    {
+        $globalCertPath = $this->getGlobalLocalCaCertPath();
+        $globalKeyPath = $this->getGlobalLocalCaKeyPath();
+        if ($globalCertPath === '' || $globalKeyPath === '') {
+            return null;
+        }
+
+        if (!$this->canUseLocalCertificateAuthorityPair($globalCertPath, $globalKeyPath)) {
+            return null;
+        }
+
+        $certPath = $this->getLocalCaCertPath();
+        $keyPath = $this->getLocalCaKeyPath();
+        if (@\copy($globalCertPath, $certPath) === false || @\copy($globalKeyPath, $keyPath) === false) {
+            w_log_warning(__('[SslCertificateService] Failed to restore project local CA files from global reusable CA'), [], 'ssl_cert');
+            return null;
+        }
+
+        $globalSerialPath = $this->getGlobalLocalCaSerialPath();
+        if ($globalSerialPath !== '' && \is_file($globalSerialPath)) {
+            @\copy($globalSerialPath, $this->getLocalCaSerialPath());
+        }
+
+        @\chmod($certPath, 0644);
+        @\chmod($keyPath, 0600);
+        w_log_info(__('[SslCertificateService] Reusing global Weline local CA for this project'));
+
+        return [
+            'success' => true,
+            'cert_path' => $certPath,
+            'key_path' => $keyPath,
+            'is_new' => false,
+            'reused_global' => true,
+        ];
+    }
+
     protected function buildLocalCaOpenSslConfig(): string
     {
         return <<<CNF
@@ -1126,13 +1309,23 @@ CNF;
     {
         $certPath = $this->getLocalCaCertPath();
         $keyPath = $this->getLocalCaKeyPath();
-        if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
+        if ($this->canUseLocalCertificateAuthorityPair($certPath, $keyPath)) {
+            $this->syncGlobalLocalCertificateAuthority($certPath, $keyPath);
             return [
                 'success' => true,
                 'cert_path' => $certPath,
                 'key_path' => $keyPath,
                 'is_new' => false,
             ];
+        }
+
+        $globalCa = $this->restoreProjectLocalCertificateAuthorityFromGlobal();
+        if ($globalCa !== null) {
+            return $globalCa;
+        }
+
+        if ($this->hasLocalCertificateAuthorityInSystemStore()) {
+            w_log_warning(__('[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key'), [], 'ssl_cert');
         }
 
         // 首次生成 CA（或既有 CA 失效）时 RSA 2048 可能很慢：
@@ -1186,6 +1379,7 @@ CNF;
 
         @\chmod($certPath, 0644);
         @\chmod($keyPath, 0600);
+        $this->syncGlobalLocalCertificateAuthority($certPath, $keyPath);
 
         $caMs = (int) \round((\hrtime(true) - $caGenStart) / 1_000_000.0);
         w_log_info(\sprintf('[SslCertificateService] local CA generated in %dms', $caMs));
@@ -1278,6 +1472,34 @@ CNF;
             : 'command -v ' . \escapeshellarg($command) . ' 2>/dev/null';
 
         return \trim($this->runTrustCommand($probe, $exitCode)) !== '' && $exitCode === 0;
+    }
+
+    protected function hasLocalCertificateAuthorityInSystemStore(): bool
+    {
+        if ($this->getOsFamily() === 'Windows') {
+            if (!$this->commandExists('certutil.exe')) {
+                return false;
+            }
+            $output = $this->runTrustCommand(
+                'certutil -user -store Root ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
+                $exitCode
+            );
+
+            return $exitCode === 0
+                && $output !== ''
+                && !\preg_match('/command\s+FAILED|0x80092004|NOT_FOUND|Cannot\s+find|找不到/i', $output);
+        }
+
+        if ($this->getOsFamily() === 'Darwin' && $this->commandExists('security')) {
+            $output = $this->runTrustCommand(
+                '/usr/bin/security find-certificate -a -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
+                $exitCode
+            );
+
+            return $exitCode === 0 && $output !== '' && !\preg_match('/could not be found|error/i', $output);
+        }
+
+        return false;
     }
 
     protected function isLocalCertificateAuthorityTrustedOnWindows(string $caCertPath): bool
@@ -1607,17 +1829,27 @@ CNF;
 
     protected function nextLocalCaSerial(): int
     {
-        $serialPath = $this->getLocalCaSerialPath();
+        $serialPaths = [$this->getLocalCaSerialPath()];
+        $globalSerialPath = $this->getGlobalLocalCaSerialPath();
+        if ($globalSerialPath !== '' && $this->localAndGlobalCertificateAuthorityMatch()) {
+            \array_unshift($serialPaths, $globalSerialPath);
+        }
+
         $current = 1000;
-        if (\is_file($serialPath)) {
+        foreach (\array_values(\array_unique($serialPaths)) as $serialPath) {
+            if (!\is_file($serialPath)) {
+                continue;
+            }
             $stored = (int) \trim((string) @\file_get_contents($serialPath));
             if ($stored > 0) {
-                $current = $stored;
+                $current = \max($current, $stored);
             }
         }
 
         $next = $current + 1;
-        @\file_put_contents($serialPath, (string) $next);
+        foreach (\array_values(\array_unique($serialPaths)) as $serialPath) {
+            @\file_put_contents($serialPath, (string) $next);
+        }
 
         return $current;
     }
