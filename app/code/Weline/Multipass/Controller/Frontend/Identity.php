@@ -37,14 +37,16 @@ class Identity extends FrontendController
                 $this->getStringParam('state')
             );
 
-            return (string) $this->redirect($this->buildRedirectUrl(
+            $redirectUrl = $this->buildRedirectUrl(
                 $authorizationCode->getRedirectUri(),
                 $authorizationCode->getCode(),
                 $authorizationCode->getState()
-            ));
+            );
         } catch (\Throwable $e) {
             return $this->renderAuthorizePage($e->getMessage());
         }
+
+        return (string) $this->redirect($redirectUrl);
     }
 
     public function postRevoke(): string
@@ -79,14 +81,16 @@ class Identity extends FrontendController
         }
 
         try {
-            return (string) $this->redirect($this->getIdentityClientService()->buildAuthorizeUrl(
+            $authorizeUrl = $this->getIdentityClientService()->buildAuthorizeUrl(
                 $provider,
                 $this->getStringParam('return_url')
-            ));
+            );
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError($e->getMessage());
             return (string) $this->redirect('/customer/account/login');
         }
+
+        return (string) $this->redirect($authorizeUrl);
     }
 
     public function getCallback(): string
@@ -98,11 +102,13 @@ class Identity extends FrontendController
             );
             $this->getMessageManager()->addSuccess(__('官网授权登录成功'));
 
-            return (string) $this->redirect((string) ($result['return_url'] ?? '/customer/account'));
+            $returnUrl = (string) ($result['return_url'] ?? '/customer/account');
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError(__('官网授权登录失败：%{1}', [$e->getMessage()]));
             return (string) $this->redirect('/customer/account/login');
         }
+
+        return (string) $this->redirect($returnUrl);
     }
 
     private function renderAuthorizePage(string $errorMessage = ''): string
