@@ -805,6 +805,10 @@ class Core
         $url = $this->normalizeRouterUrlPathSegments($url);
         $is_api_admin = $this->request_area === \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND;
 
+        if (!$is_api_admin && $this->isFrontendQueryBinApiUrl($url)) {
+            return $this->routeFrontendQueryBinApi();
+        }
+
         if ($is_api_admin) {
             $router_filepath = Env::path_BACKEND_REST_API_ROUTER_FILE;
         } else {
@@ -839,6 +843,36 @@ class Core
             $this->request->getResponse()->noRouter();
         }
         return false;
+    }
+
+    private function isFrontendQueryBinApiUrl(string $url): bool
+    {
+        $normalized = \strtolower(\trim($url, '/'));
+        $restFrontendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
+        $prefixedQueryBin = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/framework/query-bin' : '';
+
+        return $normalized === 'framework/query-bin'
+            || $normalized === 'api/framework/query-bin'
+            || ($prefixedQueryBin !== '' && $normalized === $prefixedQueryBin);
+    }
+
+    private function routeFrontendQueryBinApi()
+    {
+        $this->router = [
+            'module' => Env::MODULE_FRAMEWORK,
+            'module_path' => Env::framework_code_path,
+            'router' => 'framework',
+            'class' => [
+                'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
+                'name' => \Weline\Framework\Controller\Api\QueryBin::class,
+                'controller_name' => 'QueryBin',
+                'method' => 'postIndex',
+                'request_method' => 'POST',
+            ],
+            'type' => 'api',
+        ];
+
+        return $this->route();
     }
 
     public static function resetGeneratedRouterFileCache(): void
