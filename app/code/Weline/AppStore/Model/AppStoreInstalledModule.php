@@ -11,6 +11,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'AppStore 已安装模块表')]
 #[Index(name: 'idx_module_name', columns: ['module_name'], type: 'UNIQUE', comment: '模块名唯一索引')]
 #[Index(name: 'idx_license_key', columns: ['license_key'], type: 'KEY', comment: '许可证密钥索引')]
+#[Index(name: 'idx_primary_tag_code', columns: ['primary_tag_code'], type: 'KEY', comment: 'Marketplace primary tag index')]
 class AppStoreInstalledModule extends Model
 {
     public const schema_table = 'weline_appstore_installed_module';
@@ -48,6 +49,21 @@ class AppStoreInstalledModule extends Model
 
     #[Col(type: 'text', nullable: true, comment: '模块描述')]
     public const schema_fields_description = 'description';
+
+    #[Col(type: 'text', nullable: true, comment: 'Marketplace Meta JSON')]
+    public const schema_fields_marketplace_meta_json = 'marketplace_meta_json';
+
+    #[Col(type: 'varchar', length: 64, nullable: true, comment: 'Marketplace Meta hash')]
+    public const schema_fields_marketplace_meta_hash = 'marketplace_meta_hash';
+
+    #[Col(type: 'varchar', length: 20, nullable: true, comment: 'Marketplace Meta locale')]
+    public const schema_fields_marketplace_meta_locale = 'marketplace_meta_locale';
+
+    #[Col(type: 'varchar', length: 120, nullable: true, comment: 'Marketplace primary tag code')]
+    public const schema_fields_primary_tag_code = 'primary_tag_code';
+
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Marketplace surface codes JSON')]
+    public const schema_fields_surface_codes = 'surface_codes';
 
     #[Col(type: 'varchar', length: 255, nullable: true, comment: '模块图标')]
     public const schema_fields_icon = 'icon';
@@ -157,6 +173,89 @@ class AppStoreInstalledModule extends Model
     public function setDescription(?string $description): static
     {
         $this->setData(self::schema_fields_description, $description);
+        return $this;
+    }
+
+    public function getMarketplaceMetaJson(): array
+    {
+        $value = $this->getData(self::schema_fields_marketplace_meta_json);
+        if (is_array($value)) {
+            return $value;
+        }
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    public function setMarketplaceMetaJson(array|string|null $meta): static
+    {
+        if (is_array($meta)) {
+            $meta = json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        }
+        $this->setData(self::schema_fields_marketplace_meta_json, $meta ?: null);
+        return $this;
+    }
+
+    public function getMarketplaceMetaHash(): string
+    {
+        return (string)($this->getData(self::schema_fields_marketplace_meta_hash) ?? '');
+    }
+
+    public function setMarketplaceMetaHash(?string $hash): static
+    {
+        $this->setData(self::schema_fields_marketplace_meta_hash, $hash !== null && $hash !== '' ? $hash : null);
+        return $this;
+    }
+
+    public function getMarketplaceMetaLocale(): string
+    {
+        return (string)($this->getData(self::schema_fields_marketplace_meta_locale) ?? '');
+    }
+
+    public function setMarketplaceMetaLocale(?string $locale): static
+    {
+        $this->setData(self::schema_fields_marketplace_meta_locale, $locale !== null && $locale !== '' ? $locale : null);
+        return $this;
+    }
+
+    public function getPrimaryTagCode(): string
+    {
+        return (string)($this->getData(self::schema_fields_primary_tag_code) ?? '');
+    }
+
+    public function setPrimaryTagCode(?string $code): static
+    {
+        $this->setData(self::schema_fields_primary_tag_code, $code !== null && $code !== '' ? $code : null);
+        return $this;
+    }
+
+    public function getSurfaceCodes(): array
+    {
+        $value = $this->getData(self::schema_fields_surface_codes);
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('strval', $value)));
+        }
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? array_values(array_filter(array_map('strval', $decoded))) : [];
+    }
+
+    /**
+     * @param string[] $codes
+     */
+    public function setSurfaceCodes(array $codes): static
+    {
+        $codes = array_values(array_unique(array_filter(array_map('strval', $codes))));
+        $this->setData(
+            self::schema_fields_surface_codes,
+            $codes !== [] ? json_encode($codes, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null
+        );
         return $this;
     }
 

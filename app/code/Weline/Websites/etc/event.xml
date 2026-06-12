@@ -80,4 +80,11 @@
                   disabled="false"
                   shared="true" sort="20"/>
     </event>
+
+    <event name="Weline_Seo::integration::head_context_resolve">
+        <observer name="Weline_Websites::seo_head_context_resolve"
+                  instance="Weline\Websites\Observer\SeoHeadContextResolve"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
 </config>
