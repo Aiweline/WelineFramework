@@ -2304,3 +2304,7 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 编辑器加载超时，正在重试%{count}/%{max}...,"Editor load timed out, retrying %{count}/%{max}..."
 编辑器加载失败，请刷新页面重试,"Editor failed to load, please refresh the page and try again"
 该页面尚未生成完成,"This page has not been fully generated yet"
+首页入口路由,"Homepage entry route"
+继承全局首页配置,"Inherit global homepage configuration"
+选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
+首页入口路由无效,"Invalid homepage entry route"

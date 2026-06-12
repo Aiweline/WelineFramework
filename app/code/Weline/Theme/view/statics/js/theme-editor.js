@@ -296,18 +296,69 @@
         }
 
         return {
-            scope: state.layoutLock.scope || 'global',
+            scope: state.layoutLock.scope || 'default',
             target_type: state.layoutLock.target_type || 'global',
             target_id: parseInt(state.layoutLock.target_id || 0, 10) || 0,
         };
     }
 
+    function getEffectiveLayoutType(fallback = 'homepage') {
+        const lockedType = isLayoutLocked()
+            ? normalizeLayoutOptionValue(state.layoutLock?.page_type || state.layoutLock?.layout_type || '')
+            : '';
+        return lockedType
+            || normalizeLayoutOptionValue(state.layoutType || getCurrentPageType() || fallback)
+            || fallback;
+    }
+
+    function getEffectivePageType(fallback = 'homepage') {
+        const lockedType = isLayoutLocked()
+            ? normalizeLayoutOptionValue(state.layoutLock?.page_type || state.layoutLock?.layout_type || '')
+            : '';
+        return lockedType
+            || normalizeLayoutOptionValue(state.pageType || getEffectiveLayoutType(fallback))
+            || fallback;
+    }
+
+    function getEffectiveLayoutOption(fallback = 'default') {
+        const lockedOption = isLayoutLocked()
+            ? normalizeLayoutOptionValue(state.layoutLock?.layout_option || '')
+            : '';
+        return lockedOption
+            || normalizeLayoutOptionValue(state.layoutOption || fallback)
+            || fallback;
+    }
+
+    function getEffectiveEditorArea(fallback = 'frontend') {
+        const lockedArea = isLayoutLocked() ? String(state.layoutLock?.area || '') : '';
+        const area = lockedArea || state.editorArea || fallback;
+        return area === 'backend' ? 'backend' : 'frontend';
+    }
+
+    function appendLayoutLockRuntimeParams(url) {
+        if (!isLayoutLocked() || !url || !url.searchParams) {
+            return;
+        }
+        const payload = getLayoutLockVirtualPayload();
+        if (payload.scope) {
+            url.searchParams.set('scope', String(payload.scope));
+        }
+        const targetType = String(payload.target_type || '');
+        const targetId = parseInt(payload.target_id || 0, 10) || 0;
+        if (targetType && targetType !== 'global' && targetId > 0) {
+            url.searchParams.set('theme_layout_target_type', targetType);
+            url.searchParams.set('theme_layout_target_id', String(targetId));
+            url.searchParams.set('theme_layout_source_target_type', targetType);
+            url.searchParams.set('theme_layout_source_target_id', String(targetId));
+        }
+    }
+
     function buildLayoutLockVirtualIdentityPayload(extra = {}) {
-        const layoutType = normalizeLayoutOptionValue(state.layoutType || getCurrentPageType() || 'homepage') || 'homepage';
-        const layoutOption = normalizeLayoutOptionValue(state.layoutOption || state.layoutLock?.layout_option || 'default') || 'default';
+        const layoutType = getEffectiveLayoutType();
+        const layoutOption = getEffectiveLayoutOption();
         return {
             theme_id: state.themeId || 0,
-            area: state.editorArea || 'frontend',
+            area: getEffectiveEditorArea(),
             page_type: layoutType,
             layout_type: layoutType,
             layout_option: layoutOption,
@@ -450,11 +501,18 @@
         if (path.includes('/virtual-theme/')) {
             return false;
         }
-
-        return [
+        if ([
             '/save-widget',
             '/update-config',
             '/delete-widget',
+            '/swap-widget-order',
+            '/update-sort',
+            '/save-widget-config',
+        ].some((endpoint) => path.includes(endpoint))) {
+            return false;
+        }
+
+        return [
             '/save-layout-selection',
             '/save-layout-config',
             '/save-compiled-layout',
@@ -464,9 +522,6 @@
             '/delete-version',
             '/rename-version',
             '/restore-original',
-            '/swap-widget-order',
-            '/update-sort',
-            '/save-widget-config',
             '/publish',
             '/publish-and-exit',
         ].some((endpoint) => path.includes(endpoint));
@@ -735,13 +790,13 @@
         const currentUrl = getCurrentWindowUrl();
         const layoutType = (typeof overrides.layout_type === 'string' && overrides.layout_type)
             ? overrides.layout_type
-            : (state.layoutType || getCurrentPageType() || 'homepage');
+            : getEffectiveLayoutType();
         const pageType = (typeof overrides.page_type === 'string' && overrides.page_type)
             ? overrides.page_type
-            : (state.pageType || layoutType || 'homepage');
+            : getEffectivePageType(layoutType || 'homepage');
         const layoutOption = (typeof overrides.layout_option === 'string' && overrides.layout_option)
             ? overrides.layout_option
-            : (state.layoutOption || 'default');
+            : getEffectiveLayoutOption();
         const previewStatus = (typeof overrides.status === 'string' && overrides.status)
             ? overrides.status
             : (state.previewStatus || 'draft');
@@ -750,7 +805,7 @@
             : (
                 (typeof overrides.editor_area === 'string' && overrides.editor_area)
                     ? overrides.editor_area
-                    : (state.editorArea || currentUrl.searchParams.get('preview_area') || 'frontend')
+                    : (getEffectiveEditorArea(currentUrl.searchParams.get('preview_area') || 'frontend'))
             );
         const previewArea = requestedPreviewArea === 'backend' ? 'backend' : 'frontend';
         const themeId = overrides.theme_id || state.themeId || 0;
@@ -775,6 +830,7 @@
                 url.searchParams.set(key, String(overrideValue));
             }
         });
+        appendLayoutLockRuntimeParams(url);
 
         url.searchParams.set('_t', String(overrides._t || Date.now()));
         return url.toString();
@@ -1998,10 +2054,10 @@
     function buildLayoutConfigUrl(locale) {
         const url = new URL(config.apiLayoutConfig, window.location.origin);
         url.searchParams.set('theme_id', String(state.themeId || 0));
-        url.searchParams.set('layout_type', state.layoutType || getCurrentPageType() || 'homepage');
-        url.searchParams.set('layout_option', state.layoutOption || 'default');
-        url.searchParams.set('editor_area', state.editorArea || 'frontend');
-        url.searchParams.set('preview_area', state.editorArea || 'frontend');
+        url.searchParams.set('layout_type', getEffectiveLayoutType());
+        url.searchParams.set('layout_option', getEffectiveLayoutOption());
+        url.searchParams.set('editor_area', getEffectiveEditorArea());
+        url.searchParams.set('preview_area', getEffectiveEditorArea());
         url.searchParams.set('scope', getCurrentWindowParam('scope') || 'default');
         if (locale) {
             url.searchParams.set('locale', locale);
@@ -2098,12 +2154,13 @@
     async function saveLayoutConfig(form, locale, options = {}) {
         const silent = options.silent === true;
         const configData = collectWidgetConfigData(form);
+        const editorArea = getEffectiveEditorArea();
         const payload = {
             theme_id: state.themeId || 0,
-            layout_type: state.layoutType || getCurrentPageType() || 'homepage',
-            layout_option: state.layoutOption || 'default',
-            editor_area: state.editorArea || 'frontend',
-            preview_area: state.editorArea || 'frontend',
+            layout_type: getEffectiveLayoutType(),
+            layout_option: getEffectiveLayoutOption(),
+            editor_area: editorArea,
+            preview_area: editorArea,
             scope: getCurrentWindowParam('scope') || 'default',
             locale: locale || '',
             config: configData
@@ -5541,7 +5598,11 @@
 
         const payload = {
             theme_id: state.themeId,
-            page_type: state.pageType,
+            page_type: getEffectivePageType(state.pageType || 'homepage'),
+            layout_type: getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage'),
+            layout_option: getEffectiveLayoutOption(state.layoutOption || 'default'),
+            editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+            ...getLayoutLockVirtualPayload(),
             area: area,
             slot_id: slotId || null,
             widget_code: widgetData.code,
@@ -5824,6 +5885,7 @@
 
         const areaCode = area.dataset.area;
         if (!areaCode) return;
+        const slotId = area.dataset.wslot || area.dataset.slot || null;
 
         // 获取部件数据（委托 getDropWidgetData）
         const widgetData = getDropWidgetData(e);
@@ -5848,10 +5910,12 @@
         }
 
         // 使用拖拽时计算的插入索引，如果没有则追加到末尾
-        const sortOrder = state.dragInsertIndex != null ? state.dragInsertIndex : getNextSortOrder(areaCode);
+        const sortOrder = state.dragInsertIndex != null
+            ? state.dragInsertIndex
+            : (slotId ? getNextSlotSortOrder(slotId) : getNextSortOrder(areaCode));
         state.dragInsertIndex = null;
 
-        saveWidget({ area: areaCode, slotId: null, widgetData, sortOrder, exclusive: info.exclusive });
+        saveWidget({ area: areaCode, slotId, widgetData, sortOrder, exclusive: info.exclusive });
     }
 
     /**
@@ -6034,6 +6098,7 @@
             <div class="preview-widget-item widget-new" 
                  id="widget_${layoutId}"
                  data-layout-id="${layoutId}"
+                 data-slot-id="${escapeHtml(slotId || '')}"
                  data-widget-code="${escapeHtml(widgetData.code)}"
                  data-widget-module="${escapeHtml(widgetData.module || '')}"
                  data-widget-type="${escapeHtml(widgetData.type || '')}"
@@ -10624,13 +10689,14 @@
         try {
             const url = new URL(config.apiCompileLayout, window.location.origin);
             url.searchParams.set('theme_id', state.themeId);
-            url.searchParams.set('page_type', overrides.page_type || getCurrentPageType());
-            url.searchParams.set('layout_type', overrides.layout_type || state.layoutType);
-            url.searchParams.set('layout_option', overrides.layout_option || state.layoutOption);
-            url.searchParams.set('editor_area', overrides.editor_area || state.editorArea || 'frontend');
+            url.searchParams.set('page_type', overrides.page_type || getEffectivePageType());
+            url.searchParams.set('layout_type', overrides.layout_type || getEffectiveLayoutType());
+            url.searchParams.set('layout_option', overrides.layout_option || getEffectiveLayoutOption());
+            url.searchParams.set('editor_area', overrides.editor_area || getEffectiveEditorArea());
             url.searchParams.set('preview_mode', overrides.preview_mode || 'live');
             url.searchParams.set('status', overrides.status || state.previewStatus || 'draft');
             url.searchParams.set('include_html', '0');
+            appendLayoutLockRuntimeParams(url);
             if (overrides.version_id) {
                 url.searchParams.set('version_id', String(overrides.version_id));
             }

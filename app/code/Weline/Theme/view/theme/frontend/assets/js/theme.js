@@ -1807,6 +1807,18 @@
                     throw new Error('[Weline.Query] browser backend query is disabled; use backend code or External API.');
                 }
                 return Weline.Api.call(provider, operation, params, options);
+            },
+            help: async (provider = null, params = {}, options = {}) => {
+                if (provider == null || provider === '') {
+                    return Weline.Api.call('query_help', 'providers', params, options);
+                }
+                if (typeof provider === 'string' && !params.operation) {
+                    return Weline.Api.call('query_help', 'provider', { provider, ...params }, options);
+                }
+                if (params.provider && params.operation) {
+                    return Weline.Api.call('query_help', 'operation', params, options);
+                }
+                return Weline.Api.call('query_help', 'provider', { provider, ...params }, options);
             }
         },
 
@@ -2276,6 +2288,9 @@
     }
     window.Theme = Weline.Theme;
     window.w_query = function (provider, operation, params = {}, options = {}) {
+        if (operation == null || operation === '') {
+            return Weline.Query.help(provider, params, options);
+        }
         return Weline.Query.request(provider, operation, params, options);
     };
     window.w_providerQuery = window.w_query;

@@ -250,6 +250,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             // 解析布局类型和选项
             // 支持格式：'account.auth' (布局类型.布局选项) 或 'account' (仅布局类型)
             $layoutOption = null;
+            $explicitLayoutOption = $this->resolveExplicitLayoutOption($eventData, $request);
             
             // 检查是否包含点号
             $dotPos = strpos($layoutType, '.');
@@ -259,10 +260,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                 
                 $layoutType = trim($parts[0]);  // 布局类型：account
                 $layoutOption = isset($parts[1]) && !empty(trim($parts[1])) ? trim($parts[1]) : null; // 布局选项：auth（代码中明确指定，优先级最高）
+            } elseif ($explicitLayoutOption !== '') {
+                $layoutOption = $explicitLayoutOption;
             }
 
             // 先解析 scope 和 configCacheKey，再按需 performanceLoad（有 layoutConfig 缓存则跳过）
-            $scope = $this->themeContext->resolveCurrentScope($area);
+            $scope = $this->themeContext->resolveCurrentScope(
+                $area,
+                $this->resolveExplicitScopeParam($request, $area)
+            );
 
             self::registerStateManager();
             $themeId = $theme->getId() ?: 0;
@@ -288,7 +294,7 @@ class ControllerFetchFileBefore implements ObserverInterface
 
             // 配置来自元数据配置的布局：仅当控制器未显式传入「类型.选项」时才用 theme 的 layoutConfig 同步 option。
             // 否则会把 default.blank 强行改回 layoutConfig['default']（多为 default），导致 iframe/offcanvas 仍套 default.default。
-            $hadExplicitLayoutSpec = str_contains((string)$originalLayoutType, '.');
+            $hadExplicitLayoutSpec = str_contains((string)$originalLayoutType, '.') || $explicitLayoutOption !== '';
             if (!$hadExplicitLayoutSpec && isset($layoutConfig[$layoutType]) && $layoutOption !== $layoutConfig[$layoutType]) {
                 $layoutOption = $layoutConfig[$layoutType];
             }
@@ -559,6 +565,45 @@ class ControllerFetchFileBefore implements ObserverInterface
             // 保持原路径，不影响原有功能
             return;
         }
+    }
+
+    private function resolveExplicitLayoutOption(DataObject $eventData, ?Request $request): string
+    {
+        foreach ([
+            $eventData->getData('layoutOption'),
+            $request ? $this->readRequestValue($request, 'layout_option') : null,
+            $request ? $this->readRequestValue($request, 'layoutOption') : null,
+        ] as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $layoutOption = \trim(\str_replace('\\', '/', (string)$value), '/ ');
+            if ($layoutOption !== '') {
+                return $layoutOption;
+            }
+        }
+
+        return '';
+    }
+
+    private function resolveExplicitScopeParam(?Request $request, string $area): ?string
+    {
+        if ($request === null) {
+            return null;
+        }
+
+        foreach (['scope_' . $area, 'scope'] as $key) {
+            $value = $this->readRequestValue($request, $key);
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $scope = \trim((string)$value);
+            if ($scope !== '') {
+                return $scope;
+            }
+        }
+
+        return null;
     }
 
     /**

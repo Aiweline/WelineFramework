@@ -10,6 +10,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeContext;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
@@ -100,6 +101,11 @@ class DetectWebsite implements ObserverInterface
         $data->setData('default_currency', $site->getDefaultCurrency());
         $data->setData('default_language', $site->getDefaultLanguage());
         $data->setData('default_timezone', $site->getDefaultTimezone());
+
+        RequestContext::setWelineWebsiteId((int)$site->getWebsiteId());
+        RequestContext::setWelineWebsiteCode($site->getCode());
+        RequestContext::setWelineWebsiteUrl((string)$websiteUrl);
+        ScopeContext::setWebsiteCode($site->getCode());
 
         date_default_timezone_set($site->getDefaultTimezone());
         WebsiteData::setWebsite($site);

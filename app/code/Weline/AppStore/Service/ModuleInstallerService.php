@@ -8,6 +8,7 @@ use GuzzleHttp\Exception\RequestException;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\MarketplaceMeta\MarketplaceMetaReader;
 use Weline\Framework\System\File\Compress;
 use Weline\AppStore\Model\AppStoreDownloadLog;
 use Weline\AppStore\Model\AppStoreAccount;
@@ -250,6 +251,7 @@ class ModuleInstallerService
         // 解压到临时目录
         $tempDir = $this->extract($zipPath);
         $packageManifest = [];
+        $marketplaceMeta = [];
         $bundledBackups = [];
         $backupDir = null;
         $targetDir = '';
@@ -259,6 +261,12 @@ class ModuleInstallerService
             $this->normalizePhpFiles($tempDir);
             $moduleInfo = $this->validateStructure($tempDir);
             $packageManifest = $this->readPackageManifest($tempDir);
+            $marketplaceMeta = $this->readMarketplaceMeta(
+                $tempDir,
+                (string)$moduleInfo['dir'],
+                $packageManifest,
+                (string)$moduleInfo['name']
+            );
 
             // 检查依赖
             $dependencyCheck = $this->checkDependencies($moduleInfo['dependencies'] ?? []);
@@ -315,6 +323,7 @@ class ModuleInstallerService
             }
 
             $this->updateInstalledModule($moduleName, $moduleInfo, $options);
+            $marketplaceMetaWarning = $this->syncInstalledMarketplaceMeta($moduleName, $targetDir, $options, $marketplaceMeta);
             $readmePath = $this->writeMarketplaceReadme($targetDir, $moduleName, $moduleInfo, $options);
             $installRecordPath = $this->appendInstallRecord([
                 'action' => $action,
@@ -357,6 +366,7 @@ class ModuleInstallerService
                 'bundled_paths' => array_column($this->packageBundledPaths($packageManifest), 'target_path'),
                 'frontend_path' => $this->getInstalledFrontendPath($targetDir),
                 'marketplace_readme' => $readmePath,
+                'marketplace_meta_warning' => $marketplaceMetaWarning,
                 'install_record_path' => $installRecordPath,
                 'install_output' => trim(($installResult['output'] ?? '') . "\n" . ($commandUpgradeResult['output'] ?? '')),
             ];
@@ -639,6 +649,44 @@ class ModuleInstallerService
         }
 
         return $data;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     * @return array{meta:?array,hash?:string,path?:string,warnings?:string[]}
+     * @throws Exception
+     */
+    private function readMarketplaceMeta(string $tempDir, string $moduleDir, array $manifest, string $moduleName): array
+    {
+        try {
+            /** @var MarketplaceMetaReader $reader */
+            $reader = ObjectManager::getInstance(MarketplaceMetaReader::class);
+            return $reader->readFromPackageDir($tempDir, $moduleDir, $manifest, $moduleName, true);
+        } catch (\RuntimeException $e) {
+            throw new Exception(__('模块 Marketplace Meta 校验失败：') . $e->getMessage());
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     * @param array{meta:?array,hash?:string,path?:string,warnings?:string[]} $marketplaceMeta
+     */
+    private function syncInstalledMarketplaceMeta(string $moduleName, string $targetDir, array $options, array $marketplaceMeta): string
+    {
+        try {
+            /** @var InstalledModuleMetaService $metaService */
+            $metaService = ObjectManager::getInstance(InstalledModuleMetaService::class);
+            $metaService->syncOnInstall(
+                $moduleName,
+                $targetDir,
+                is_array($options['api_module_info'] ?? null) ? $options['api_module_info'] : [],
+                $marketplaceMeta
+            );
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+
+        return '';
     }
 
     /**
@@ -1001,6 +1049,7 @@ class ModuleInstallerService
             '- 终端域名：' . $this->getCurrentDomain(),
             '- 功能入口：' . ($frontendPath !== '' ? $frontendPath : '未声明'),
             '',
+            ...$this->marketplaceReadmeTagSection($moduleName),
             '## 卸载说明',
             '',
             '请使用系统模块卸载流程，例如：',
@@ -1018,6 +1067,48 @@ class ModuleInstallerService
         }
 
         return $readmePath;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function marketplaceReadmeTagSection(string $moduleName): array
+    {
+        try {
+            /** @var InstalledModuleMetaService $metaService */
+            $metaService = ObjectManager::getInstance(InstalledModuleMetaService::class);
+            $info = $metaService->getLocalizedInfo($moduleName);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $tags = is_array($info['tags'] ?? null) ? $info['tags'] : [];
+        $surfaces = is_array($info['surfaces'] ?? null) ? $info['surfaces'] : [];
+        if ($tags === [] && $surfaces === []) {
+            return [];
+        }
+
+        $lines = [
+            '## 应用标签',
+            '',
+        ];
+        foreach ($tags as $tag) {
+            if (!is_array($tag)) {
+                continue;
+            }
+            $code = trim((string)($tag['code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $label = trim((string)($tag['label'] ?? ''));
+            $lines[] = '- ' . $code . ($label !== '' ? '：' . $label : '');
+        }
+        if ($surfaces !== []) {
+            $lines[] = '- surfaces：' . implode(', ', array_values(array_filter(array_map('strval', $surfaces))));
+        }
+        $lines[] = '';
+
+        return $lines;
     }
 
     private function appendInstallRecord(array $record): string
