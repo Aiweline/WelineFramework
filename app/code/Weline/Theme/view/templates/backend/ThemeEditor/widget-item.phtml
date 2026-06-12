@@ -10,6 +10,10 @@ $widget = $this->getData('widget');
 if (!$widget) return;
 
 $layoutId = (string)($widget['layout_id'] ?? '');
+$slotId = (string)($widget['slot_id'] ?? '');
+if ($slotId === '') {
+    $slotId = (string)($widget['area'] ?? '');
+}
 $widgetCode = (string)($widget['widget_code'] ?? '');
 $widgetModule = (string)($widget['widget_module'] ?? '');
 $widgetType = (string)($widget['widget_type'] ?? '');
@@ -38,6 +42,7 @@ $icon = $typeIcons[$widgetType] ?? 'ri-widgets-line';
 
 <div class="preview-widget-item" 
      data-layout-id="<?= htmlspecialchars($layoutId) ?>"
+     data-slot-id="<?= htmlspecialchars($slotId) ?>"
      data-widget-code="<?= htmlspecialchars($widgetCode) ?>"
      data-widget-module="<?= htmlspecialchars($widgetModule) ?>"
      data-widget-type="<?= htmlspecialchars($widgetType) ?>"

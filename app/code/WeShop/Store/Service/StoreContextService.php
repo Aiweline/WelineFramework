@@ -8,6 +8,7 @@ use WeShop\Store\Model\Store;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Server\Service\MemoryStateFacade;
 use Weline\Websites\Data\WebsiteData;
@@ -44,6 +45,7 @@ class StoreContextService
         $cacheKey = $this->buildCurrentStoreCacheKey($websiteId, $locale, $currency);
         $cachedStore = $this->storeCacheGet($cacheKey);
         if (is_array($cachedStore)) {
+            $this->syncStoreScopeContext($cachedStore);
             return $cachedStore;
         }
 
@@ -57,7 +59,10 @@ class StoreContextService
 
         $store = $this->pickBestStore(is_array($stores) ? $stores : [], $websiteId, $locale, $currency);
         if (is_array($store)) {
+            $this->syncStoreScopeContext($store);
             $this->storeCacheSet($cacheKey, $store);
+        } else {
+            ScopeContext::setStoreCode(null);
         }
 
         return $store;
@@ -174,6 +179,14 @@ class StoreContextService
     private function buildCurrentStoreCacheKey(int $websiteId, string $locale, string $currency): string
     {
         return 'store.current.' . sha1($websiteId . '|' . $locale . '|' . $currency);
+    }
+
+    /**
+     * @param array<string, mixed> $store
+     */
+    private function syncStoreScopeContext(array $store): void
+    {
+        ScopeContext::setStoreCode((string) ($store[Store::schema_fields_CODE] ?? $store['code'] ?? ''));
     }
 
     /**

@@ -4,6 +4,8 @@
 
 框架内所有 Ajax 异步请求**必须**使用 `Weline.Api.request`，禁止直接使用 `fetch()` 或 `$.ajax()`。
 
+站内 QueryProvider/Graph/Stream 请求由 Theme 运行时注入 `api.endpoint`，实际路径形如 `/{rest_frontend}/framework/query-bin`，其中 `{rest_frontend}` 来自 `Env::getAreaRoutePrefix('rest_frontend')`（例如 `api` 或 `api123`）。业务 JS 不得手写 query-bin URL。
+
 ### 1.1 维护模式感知
 
 当系统进入维护模式（503 或 `code: 'maintenance'`）时，Weline.Api 会：
