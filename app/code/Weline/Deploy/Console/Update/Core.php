@@ -179,6 +179,7 @@ class Core extends CommandAbstract
         // 5. 拷贝核心文件
         $this->printer->setup(__('步骤 5/6：更新核心文件...'));
         $this->copyCoreFiles($tmpDir);
+        $this->refreshReflectionFactoriesAfterUpdate();
 
         // 6. 保留临时目录（用于下次增量更新）
         $this->printer->setup(__('步骤 6/6：完成处理...'));
@@ -726,6 +727,34 @@ class Core extends CommandAbstract
         // 注意：不更新 vendor 目录，保留现有的依赖包
         $this->printer->note('');
         $this->printer->note(__('⚠ vendor 目录未更新，保留现有依赖包'));
+    }
+
+    private function refreshReflectionFactoriesAfterUpdate(): void
+    {
+        if (($this->newFiles + $this->updatedFiles + $this->deletedFiles) === 0) {
+            $this->printer->note(__('未检测到核心文件变化，跳过反射工厂刷新'));
+            return;
+        }
+
+        $this->printer->setup(__('刷新反射元数据与编译工厂...'));
+
+        $phpBin = PHP_BINARY ?: 'php';
+        $binW = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+        $command = '"' . $phpBin . '" "' . $binW . '" reflection:compile 2>&1';
+
+        $output = [];
+        $exitCode = 0;
+        exec($command, $output, $exitCode);
+
+        if ($exitCode === 0) {
+            $this->printer->success(__('反射工厂刷新完成'));
+            return;
+        }
+
+        $this->printer->warning(__('反射工厂刷新失败，退出码：%{1}。可手动执行：php bin/w reflection:compile', [$exitCode]));
+        if (!empty($output)) {
+            $this->printer->printList(array_slice($output, -20));
+        }
     }
     
     /**
