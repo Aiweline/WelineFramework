@@ -120,6 +120,10 @@ foreach ($platforms as $code => $info) {
     $code = (string)$code;
     $platformName = (string)($info['name'] ?? ucfirst($code));
     $supportsSubmit = !empty($info['supports_submit']);
+    $supportsUrlPush = !empty($info['supports_url_push']);
+    $supportsSitemapSubmit = !empty($info['supports_sitemap_submit']) || $supportsSubmit;
+    $supportsIndexNow = !empty($info['supports_indexnow']);
+    $catalogOnly = !empty($info['catalog_only']);
 
     if (!isset($platformFeatures[$code])) {
         $platformFeatures[$code] = [
@@ -156,6 +160,10 @@ foreach ($platforms as $code => $info) {
     }
 
     $platformFeatures[$code]['supports_submit'] = $supportsSubmit;
+    $platformFeatures[$code]['supports_url_push'] = $supportsUrlPush;
+    $platformFeatures[$code]['supports_sitemap_submit'] = $supportsSitemapSubmit;
+    $platformFeatures[$code]['supports_indexnow'] = $supportsIndexNow;
+    $platformFeatures[$code]['catalog_only'] = $catalogOnly;
 }
 
 
@@ -346,19 +354,23 @@ foreach ($platforms as $code => $info) {
                  * 根据平台能力控制自动提交开关
                  */
                 function syncSubmitToggles(platform) {
-                    const supportsSubmit = !!(platform && platform.supports_submit);
+                    const supportsUrlPush = !!(platform && platform.supports_url_push);
+                    const supportsSitemapSubmit = !!(platform && platform.supports_sitemap_submit);
                     const pushToggle = document.getElementById('enable_cron_push_urls');
                     const sitemapToggle = document.getElementById('enable_cron_sitemap');
 
-                    [pushToggle, sitemapToggle].forEach(function(toggle) {
-                        if (!toggle) {
-                            return;
+                    if (pushToggle) {
+                        pushToggle.disabled = !supportsUrlPush;
+                        if (!supportsUrlPush) {
+                            pushToggle.checked = false;
                         }
-                        toggle.disabled = !supportsSubmit;
-                        if (!supportsSubmit) {
-                            toggle.checked = false;
+                    }
+                    if (sitemapToggle) {
+                        sitemapToggle.disabled = !supportsSitemapSubmit;
+                        if (!supportsSitemapSubmit) {
+                            sitemapToggle.checked = false;
                         }
-                    });
+                    }
                 }
 
                 /**

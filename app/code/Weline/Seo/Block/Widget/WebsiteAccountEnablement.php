@@ -8,9 +8,9 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Block;
 use Weline\Seo\Model\SeoAccount;
-use Weline\Seo\Model\SeoWebsiteAccount;
-use Weline\Seo\Service\SitemapAdapterRegistry;
-use Weline\Websites\Model\Website;
+use Weline\Seo\Service\SeoPlatformCapabilityService;
+use Weline\Seo\Service\SeoWebsiteAccountBindingService;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 
 class WebsiteAccountEnablement extends Block
 {
@@ -25,35 +25,28 @@ class WebsiteAccountEnablement extends Block
         $scope = trim((string)($this->getData('scope') ?? ''));
 
         if ($websiteId > 0 && $website === []) {
-            /** @var Website $websiteModel */
-            $websiteModel = ObjectManager::getInstance(Website::class);
-            $websiteModel->reset()->load($websiteId);
-            if ($websiteModel->getId()) {
-                $website = $websiteModel->getData();
+            /** @var SeoWebsiteDirectory $websiteDirectory */
+            $websiteDirectory = ObjectManager::getInstance(SeoWebsiteDirectory::class);
+            $resolvedWebsite = $websiteDirectory->getWebsiteById($websiteId);
+            if ($resolvedWebsite !== null) {
+                $website = $resolvedWebsite;
             }
         }
 
-        if ($scope === '' && isset($website[Website::schema_fields_SCOPE])) {
-            $scope = trim((string)$website[Website::schema_fields_SCOPE]);
+        if ($scope === '' && isset($website['scope'])) {
+            $scope = trim((string)$website['scope']);
         }
 
         /** @var SeoAccount $accountModel */
         $accountModel = ObjectManager::getInstance(SeoAccount::class);
         $accounts = $this->loadAccounts($accountModel, $scope);
 
-        /** @var SeoWebsiteAccount $websiteAccountModel */
-        $websiteAccountModel = ObjectManager::getInstance(SeoWebsiteAccount::class);
-        $bindings = $websiteId > 0 ? $websiteAccountModel->reset()->getByWebsiteId($websiteId) : [];
-        $bindingsMap = [];
-        foreach ($bindings as $binding) {
-            $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
-            if ($accountId > 0) {
-                $bindingsMap[$accountId] = $binding;
-            }
-        }
+        /** @var SeoWebsiteAccountBindingService $bindingService */
+        $bindingService = ObjectManager::getInstance(SeoWebsiteAccountBindingService::class);
+        $bindingsMap = $websiteId > 0 ? $bindingService->getBindingMapByWebsite($websiteId) : [];
 
-        /** @var SitemapAdapterRegistry $registry */
-        $registry = ObjectManager::getInstance(SitemapAdapterRegistry::class);
+        /** @var SeoPlatformCapabilityService $platformCapabilityService */
+        $platformCapabilityService = ObjectManager::getInstance(SeoPlatformCapabilityService::class);
 
         /** @var Url $url */
         $url = ObjectManager::getInstance(Url::class);
@@ -71,7 +64,7 @@ class WebsiteAccountEnablement extends Block
             'scope' => $scope,
             'accounts' => $accounts,
             'bindingsMap' => $bindingsMap,
-            'platforms' => $registry->getPlatformInfo(),
+            'platforms' => $platformCapabilityService->getCapabilities(),
             'mode' => $mode,
             'field_prefix' => $fieldPrefix,
             'show_submit' => (bool)($this->getData('show_submit') ?? ($mode === 'standalone')),

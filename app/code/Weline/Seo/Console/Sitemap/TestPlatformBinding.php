@@ -8,8 +8,8 @@ use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SeoAccount;
 use Weline\Seo\Model\SeoWebsiteAccount;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\WebSitemapData;
-use Weline\Websites\Model\Website;
 
 /**
  * 测试 SEO 平台绑定逻辑
@@ -24,18 +24,18 @@ class TestPlatformBinding implements CommandInterface
     private SeoAccount $seoAccountModel;
     private SeoWebsiteAccount $seoWebsiteAccountModel;
     private WebSitemapData $webSitemapData;
-    private Website $websiteModel;
+    private SeoWebsiteDirectory $websiteDirectory;
 
     public function __construct(
         SeoAccount $seoAccountModel,
         SeoWebsiteAccount $seoWebsiteAccountModel,
         WebSitemapData $webSitemapData,
-        Website $websiteModel
+        SeoWebsiteDirectory $websiteDirectory
     ) {
         $this->seoAccountModel = $seoAccountModel;
         $this->seoWebsiteAccountModel = $seoWebsiteAccountModel;
         $this->webSitemapData = $webSitemapData;
-        $this->websiteModel = $websiteModel;
+        $this->websiteDirectory = $websiteDirectory;
     }
 
     public function execute(array $args = [], array $options = []): string
@@ -140,7 +140,7 @@ class TestPlatformBinding implements CommandInterface
         echo "└─────────────────────────────────────────────────────────────┘\n";
         
         // 获取所有站点
-        $websites = $this->websiteModel->reset()->select()->fetchArray();
+        $websites = $this->websiteDirectory->listWebsites();
         
         if (empty($websites)) {
             echo "  ⚠ 没有找到站点，跳过测试\n\n";
@@ -226,7 +226,7 @@ class TestPlatformBinding implements CommandInterface
         echo "│ 步骤 3: 验证 Sitemap 生成逻辑                         │\n";
         echo "└─────────────────────────────────────────────────────────────┘\n";
         
-        $websites = $this->websiteModel->reset()->select()->fetchArray();
+        $websites = $this->websiteDirectory->listWebsites();
         
         foreach ($websites as $website) {
             $websiteId = (int)$website['website_id'];

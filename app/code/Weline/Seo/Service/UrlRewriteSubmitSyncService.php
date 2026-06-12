@@ -7,7 +7,6 @@ namespace Weline\Seo\Service;
 use Weline\Seo\Model\SeoAccount;
 use Weline\Seo\Model\SeoTask;
 use Weline\UrlManager\Model\UrlRewrite;
-use Weline\Websites\Model\Website;
 
 class UrlRewriteSubmitSyncService
 {
@@ -18,19 +17,18 @@ class UrlRewriteSubmitSyncService
 
     public function __construct(
         private readonly UrlRewrite $urlRewrite,
-        private readonly SeoAccount $seoAccount,
         private readonly SeoTask $seoTask,
-        private readonly Website $website,
+        private readonly SeoWebsiteDirectory $websiteDirectory,
+        private readonly SeoWebsiteAccountBindingService $bindingService,
         private readonly EventDispatcher $eventDispatcher
     ) {
     }
 
     /**
-     * @return array{rewrites:int, urls:int, accounts:int, created_tasks:int, skipped_existing:int}
+     * @return array{rewrites:int, urls:int, accounts:int, created_tasks:int, skipped_existing:int, skipped_unbound:int}
      */
     public function sync(): array
     {
-        $accounts = $this->loadAccounts();
         $rawRewrites = $this->loadRawRewrites();
         $targets = $this->loadRouteTargets($rawRewrites);
         $known = $this->loadKnownFingerprints();
@@ -38,52 +36,55 @@ class UrlRewriteSubmitSyncService
         $stats = [
             'rewrites' => count($rawRewrites),
             'urls' => count($targets),
-            'accounts' => count($accounts),
+            'accounts' => 0,
             'created_tasks' => 0,
             'skipped_existing' => 0,
+            'skipped_unbound' => 0,
         ];
 
-        if ($accounts === [] || $targets === []) {
+        if ($targets === []) {
             return $stats;
         }
 
-        foreach ($accounts as $account) {
-            $provider = trim((string)($account[SeoAccount::schema_fields_PROVIDER] ?? ''));
-            $accountId = (int)($account[SeoAccount::schema_fields_ACCOUNT_ID] ?? 0);
-            $accountScope = trim((string)($account[SeoAccount::schema_fields_SCOPE] ?? ''));
+        $accountTargets = [];
+        $accountInfoMap = [];
 
-            if ($provider === '' || $accountId <= 0) {
+        foreach ($targets as $target) {
+            $websiteId = (int)($target['website_id'] ?? 0);
+            if ($websiteId <= 0) {
                 continue;
             }
 
-            $missing = [];
-            foreach ($targets as $target) {
+            $pushAccounts = $this->bindingService->getUrlPushAccounts($websiteId);
+            if ($pushAccounts === []) {
+                $stats['skipped_unbound']++;
+                continue;
+            }
+
+            foreach ($pushAccounts as $accountInfo) {
+                $accountId = (int)($accountInfo['account_id'] ?? 0);
+                if ($accountId <= 0) {
+                    continue;
+                }
+
                 $knownKey = $accountId . ':' . $target['route_fingerprint'];
                 if (isset($known[$knownKey])) {
                     $stats['skipped_existing']++;
                     continue;
                 }
 
-                $missing[] = $target;
+                $accountTargets[$accountId][] = $target;
+                $accountInfoMap[$accountId] = $accountInfo;
                 $known[$knownKey] = true;
             }
+        }
 
-            $stats['created_tasks'] += $this->enqueueAccountTasks($account, $provider, $accountId, $accountScope, $missing);
+        $stats['accounts'] = count($accountInfoMap);
+        foreach ($accountTargets as $accountId => $missing) {
+            $stats['created_tasks'] += $this->enqueueAccountTasks($accountInfoMap[$accountId] ?? [], $missing);
         }
 
         return $stats;
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    private function loadAccounts(): array
-    {
-        return $this->seoAccount->reset()
-            ->where(SeoAccount::schema_fields_IS_ACTIVE, SeoAccount::STATUS_ACTIVE)
-            ->where(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, 1)
-            ->select()
-            ->fetchArray();
     }
 
     /**
@@ -100,11 +101,11 @@ class UrlRewriteSubmitSyncService
 
     /**
      * @param list<array<string, mixed>> $rawRewrites
-     * @return list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, rewrite:string, path:string, scope:string}>
+     * @return list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}>
      */
     private function loadRouteTargets(array $rawRewrites): array
     {
-        $websites = $this->loadWebsiteUrls();
+        $websites = $this->loadWebsiteContexts();
         $targets = [];
 
         foreach ($rawRewrites as $rewriteRow) {
@@ -117,13 +118,13 @@ class UrlRewriteSubmitSyncService
                 continue;
             }
 
-            $websiteUrls = $this->resolveWebsiteUrls($sourceWebsiteId, $websites, $rewrite);
-            if ($websiteUrls === []) {
+            $websiteContexts = $this->resolveWebsiteContexts($sourceWebsiteId, $websites, $rewrite);
+            if ($websiteContexts === []) {
                 continue;
             }
 
-            foreach ($websiteUrls as $websiteId => $baseUrl) {
-                $url = $this->buildAbsoluteUrl($rewrite, $baseUrl);
+            foreach ($websiteContexts as $websiteId => $website) {
+                $url = $this->buildAbsoluteUrl($rewrite, (string)($website['url'] ?? ''));
                 if ($url === '') {
                     continue;
                 }
@@ -143,6 +144,8 @@ class UrlRewriteSubmitSyncService
                     'route_id' => $rewriteId,
                     'source_website_id' => $sourceWebsiteId,
                     'website_id' => (int)$websiteId,
+                    'website_code' => (string)($website['code'] ?? ''),
+                    'website_scope' => (string)($website['scope'] ?? ''),
                     'rewrite' => $rewrite,
                     'path' => $path,
                     'scope' => $this->inferScope($path, $rewrite),
@@ -154,29 +157,32 @@ class UrlRewriteSubmitSyncService
     }
 
     /**
-     * @return array<int, string>
+     * @return array<int, array<string, mixed>>
      */
-    private function loadWebsiteUrls(): array
+    private function loadWebsiteContexts(): array
     {
-        $urls = [];
-        foreach ($this->website->reset()->select()->fetchArray() as $row) {
-            $websiteId = (int)($row[Website::schema_fields_ID] ?? 0);
-            $url = rtrim(trim((string)($row[Website::schema_fields_URL] ?? '')), '/');
+        $websites = [];
+        foreach ($this->websiteDirectory->listWebsites() as $row) {
+            $websiteId = (int)($row['website_id'] ?? 0);
+            $url = rtrim(trim((string)($row['url'] ?? '')), '/');
             if ($websiteId > 0 && $url !== '') {
-                $urls[$websiteId] = $url;
+                $row['url'] = $url;
+                $websites[$websiteId] = $row;
             }
         }
-        return $urls;
+        return $websites;
     }
 
     /**
-     * @param array<int, string> $websites
-     * @return array<int, string>
+     * @param array<int, array<string, mixed>> $websites
+     * @return array<int, array<string, mixed>>
      */
-    private function resolveWebsiteUrls(int $sourceWebsiteId, array $websites, string $rewrite): array
+    private function resolveWebsiteContexts(int $sourceWebsiteId, array $websites, string $rewrite): array
     {
         if ($this->isAbsoluteUrl($rewrite)) {
-            return [$sourceWebsiteId => ''];
+            $website = $this->websiteDirectory->matchWebsiteByUrl($rewrite);
+            $websiteId = (int)($website['website_id'] ?? 0);
+            return $websiteId > 0 ? [$websiteId => $website] : [];
         }
 
         if ($sourceWebsiteId > 0) {
@@ -243,8 +249,8 @@ class UrlRewriteSubmitSyncService
     }
 
     /**
-     * @param list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, rewrite:string, path:string, scope:string}> $targets
-     * @return list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, rewrite:string, path:string, scope:string}>
+     * @param list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}> $targets
+     * @return list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}>
      */
     private function uniqueTargets(array $targets): array
     {
@@ -333,16 +339,22 @@ class UrlRewriteSubmitSyncService
 
     /**
      * @param array<string, mixed> $account
-     * @param list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, rewrite:string, path:string, scope:string}> $targets
+     * @param list<array{url:string, route_fingerprint:string, route_id:int, source_website_id:int, website_id:int, website_code:string, website_scope:string, rewrite:string, path:string, scope:string}> $targets
      */
     private function enqueueAccountTasks(
-        array $account,
-        string $provider,
-        int $accountId,
-        string $accountScope,
+        array $accountInfo,
         array $targets
     ): int {
         if ($targets === []) {
+            return 0;
+        }
+
+        $account = (array)($accountInfo['account'] ?? []);
+        $provider = trim((string)($account[SeoAccount::schema_fields_PROVIDER] ?? $accountInfo['platform_code'] ?? ''));
+        $accountId = (int)($accountInfo['account_id'] ?? $account[SeoAccount::schema_fields_ACCOUNT_ID] ?? 0);
+        $accountScope = trim((string)($account[SeoAccount::schema_fields_SCOPE] ?? ''));
+
+        if ($provider === '' || $accountId <= 0) {
             return 0;
         }
 

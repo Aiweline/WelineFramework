@@ -13,12 +13,10 @@ namespace Weline\Seo\Cron;
 
 use Weline\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Seo\Model\SeoAccount;
-use Weline\Seo\Model\SeoWebsiteAccount;
-use Weline\Seo\Service\SitemapAdapterRegistry;
+use Weline\Seo\Service\SeoWebsiteAccountBindingService;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\SitemapRegistryService;
 use Weline\Seo\Service\WebSitemapData;
-use Weline\Websites\Model\Website;
 
 /**
  * SEO Sitemap 提交任务
@@ -60,14 +58,10 @@ class SitemapSubmit implements CronTaskInterface
             $sitemapRegistry = ObjectManager::getInstance(SitemapRegistryService::class);
             /** @var WebSitemapData $webSitemapData */
             $webSitemapData = ObjectManager::getInstance(WebSitemapData::class);
-            /** @var SeoWebsiteAccount $seoWebsiteAccountModel */
-            $seoWebsiteAccountModel = ObjectManager::getInstance(SeoWebsiteAccount::class);
-            /** @var SeoAccount $accountModel */
-            $accountModel = ObjectManager::getInstance(SeoAccount::class);
-            /** @var SitemapAdapterRegistry $sitemapAdapterRegistry */
-            $sitemapAdapterRegistry = ObjectManager::getInstance(SitemapAdapterRegistry::class);
-            /** @var Website $websiteModel */
-            $websiteModel = ObjectManager::getInstance(Website::class);
+            /** @var SeoWebsiteDirectory $websiteDirectory */
+            $websiteDirectory = ObjectManager::getInstance(SeoWebsiteDirectory::class);
+            /** @var SeoWebsiteAccountBindingService $bindingService */
+            $bindingService = ObjectManager::getInstance(SeoWebsiteAccountBindingService::class);
 
             $stats = [
                 'collected_websites' => 0,
@@ -103,7 +97,7 @@ class SitemapSubmit implements CronTaskInterface
             }
 
             // ========== 步骤2：为所有站点生成 sitemap 文件 ==========
-            $websites = $websiteModel->reset()->select()->fetchArray();
+            $websites = $websiteDirectory->listWebsites();
 
             foreach ($websites as $website) {
                 $websiteId = (int)($website['website_id'] ?? 0);
@@ -115,17 +109,7 @@ class SitemapSubmit implements CronTaskInterface
                     $result = $webSitemapData->generateSitemapFiles($websiteId);
                     $stats['generated_files'] += ($result['total_files'] ?? 0);
 
-                    // 检查是否绑定 SEO 账户（getByWebsiteId 返回数组）
-                    $bindings = $seoWebsiteAccountModel->getByWebsiteId($websiteId);
-                    $hasAutoSubmit = false;
-                    if (!empty($bindings)) {
-                        foreach ($bindings as $bindingRow) {
-                            if ((int)($bindingRow[SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] ?? 0) === 1) {
-                                $hasAutoSubmit = true;
-                                break;
-                            }
-                        }
-                    }
+                    $hasAutoSubmit = $bindingService->getSitemapSubmitAccounts($websiteId) !== [];
                     if (!$hasAutoSubmit) {
                         $stats['unbound_websites'][] = $website['name'] ?? "站点ID: {$websiteId}";
                     }
@@ -140,48 +124,21 @@ class SitemapSubmit implements CronTaskInterface
             }
 
             // ========== 步骤3：提交 sitemap URL 到搜索引擎（只提交已绑定的）==========
-            $autoBindings = $seoWebsiteAccountModel->getAutoSubmitBindings();
-            
-            // 按 website_id 分组，避免同一站点重复提交
-            $websiteBindingsMap = [];
-            foreach ($autoBindings as $binding) {
-                $wId = (int)($binding[SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
-                $aId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
-                if ($wId > 0 && $aId > 0) {
-                    $websiteBindingsMap[$wId][] = $binding;
+            foreach ($websites as $website) {
+                $websiteId = (int)($website['website_id'] ?? 0);
+                if ($websiteId <= 0) {
+                    continue;
                 }
-            }
-
-            foreach ($websiteBindingsMap as $websiteId => $websiteBindings) {
-                foreach ($websiteBindings as $binding) {
-                    $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
-
+                foreach ($bindingService->getSitemapSubmitAccounts($websiteId) as $bindingInfo) {
+                    $accountId = (int)($bindingInfo['account_id'] ?? 0);
                     try {
-                        // 获取账户信息
-                        $account = $accountModel->reset()->load($accountId);
-                        if (!$account->getId() || !$account->isActive()) {
-                            continue;
-                        }
-
-                        // 通过账户的 platform 字段获取平台适配器
-                        $platformCode = $account->getPlatform();
-                        
-                        // 如果 platform 字段为空，从 provider 推断（向后兼容）
-                        if (empty($platformCode)) {
-                            $providerCode = $account->getData(SeoAccount::schema_fields_PROVIDER);
-                            $platformCode = $sitemapAdapterRegistry->extractPlatformFromProvider($providerCode);
-                        }
-                        
+                        $platformCode = (string)($bindingInfo['platform_code'] ?? '');
                         if (empty($platformCode)) {
                             $stats['errors']++;
                             continue;
                         }
 
-                        $adapter = $sitemapAdapterRegistry->getAdapter($platformCode);
-                        if ($adapter === null || !$adapter->supportsAutoSubmit()) {
-                            $stats['errors']++;
-                            continue;
-                        }
+                        $adapter = $bindingInfo['adapter'] ?? null;
 
                         // 获取该平台的 sitemap 索引 URL
                         $sitemapUrl = $webSitemapData->getPlatformSitemapUrl($websiteId, $platformCode);
@@ -190,7 +147,7 @@ class SitemapSubmit implements CronTaskInterface
                         }
 
                         // 提交到搜索引擎（直接传递账户配置数组，适配器内部解析所需字段）
-                        $accountConfig = $account->getConfigArray();
+                        $accountConfig = (array)($bindingInfo['account_config'] ?? []);
                         $result = $adapter->submitSitemap($sitemapUrl, $accountConfig);
 
                         if ($result['success'] ?? false) {

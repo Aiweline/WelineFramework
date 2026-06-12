@@ -26,8 +26,10 @@ $meta = $this->getData('meta') ?? [];
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.cookie::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.cookie::body-start</w:hook>
 
@@ -248,6 +250,7 @@ $meta = $this->getData('meta') ?? [];
         }
     }
     </style>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
 

@@ -735,8 +735,10 @@ $area = $themeData['area'] ?? 'frontend';
             background-color: rgba(var(--weshop-background-rgb), 0.7);
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="weshop-cart-1">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::cart::body-start</w:hook>
     
@@ -1047,5 +1049,6 @@ $area = $themeData['area'] ?? 'frontend';
             // Implement add to cart
         }
     </script>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

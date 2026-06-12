@@ -6,13 +6,13 @@
 
 ## 能力概览
 
-`Weline_Seo` 在页面 `<head>` 中统一输出：
+`Weline_Seo` 通过模板中的 `<w:seo>` 标签统一输出 SEO 内容。标签可放在 `head`、`body`、`footer` 或业务自定义位置；`slot=head` 是默认值。
 
 - Meta / Open Graph / 多语言 alternate
 - `application/ld+json` 图（`@context` + `@graph`）
 - 与 Sitemap、GEO Feed 共享的事实字段
 
-**业务模块不要在模板里手写 JSON-LD。** 将事实写入控制器或模板的 context，由 `HeadRenderer` 与 `SeoStructureRegistry` 组装最终图。
+**业务模块不要在模板或 Provider 里手写 HTML/JSON-LD。** 将事实写入控制器、模板 context，或由 `SeoProfileProvider` / `SeoSlotProvider` 返回结构数据，由 `HeadRenderer` 与 `SeoStructureRegistry` 组装最终输出。
 
 ---
 
@@ -21,11 +21,12 @@
 | 扩展点 | 路径 | 接口 | 用途 |
 |--------|------|------|------|
 | `SeoProfileProvider` | `extends/module/Weline_Seo/SeoProfileProvider` | `SeoProfileProviderInterface` | 页面类型、robots、canonical、结构事实、sitemap/geo 元数据 |
+| `SeoSlotProvider` | `extends/module/Weline_Seo/SeoSlotProvider` | `SeoSlotProviderInterface` | `<w:seo slot="..."/>` 自定义结构化输出 |
 | `SitemapUrlProvider` | `extends/module/Weline_Seo/SitemapUrlProvider` | `SitemapUrlProviderInterface` | 可发现 URL 及 image/video/news/hreflang 等 sitemap 载荷 |
 | `SeoStructureNodeBuilder` | `extends/module/Weline_Seo/SeoStructureNodeBuilder` | `SeoStructureNodeBuilderInterface` | 自定义 schema.org 图节点 Builder |
 | `FeedProvider` | `extends/module/Weline_Seo/FeedProvider` | `FeedProviderInterface` | 主体级 SEO Feed 上报（与页面 Profile 互补） |
 
-页面级 SEO/GEO 的**唯一推荐入口**是 `SeoProfileProvider`；模块特有实体 enrichment 与 `schema_nodes` 也应在此返回。
+页面级 SEO/GEO 的**唯一推荐入口**是 `SeoProfileProvider`；模块特有实体 enrichment 与 `schema_nodes` 也应在此返回。自定义位置输出使用 `SeoSlotProvider`，仍然返回结构数据。`SitemapUrlProvider` 只用于 sitemap/cron，不由 `<w:seo>` 触发。
 
 ---
 
@@ -35,7 +36,7 @@ Provider 或控制器通过 `seo` / `setData()` 合并进页面 context。常用
 
 ```php
 [
-    'page_type' => 'product|category|blog_post|news_article|faq|qa|review_page|web_page',
+    'page_type' => 'product|category|tag_collection|blog_post|news_article|faq|qa|review_page|web_page',
     'title' => '页面标题',
     'description' => '搜索结果摘要',
     'canonical_url' => 'https://example.com/current-page',
@@ -59,6 +60,36 @@ Provider 或控制器通过 `seo` / `setData()` 合并进页面 context。常用
 
 - 列表型键 `schema_nodes`、`item_list`、`faqs`、`qa_list`：**追加**到已有 context
 - 其余键：**递归覆盖或 enrichment**
+- `<w:seo>` 调用时，context 会带 `_slot` 与 `_options`，Provider 可据此判断当前渲染位置
+
+---
+
+## 自定义 Slot 字段约定
+
+自定义 slot 示例：
+
+```html
+<w:seo slot="blog-footer"/>
+```
+
+对应 Provider 返回：
+
+```php
+[
+    'blocks' => [
+        [
+            'type' => 'related_posts',
+            'title' => '相关文章',
+            'items' => [
+                ['name' => '文章标题', 'url' => 'https://example.com/blog/post'],
+            ],
+        ],
+    ],
+    'schema_nodes' => [],
+]
+```
+
+`blocks` 是结构化展示数据，`schema_nodes` 会继续进入 JSON-LD 图。Provider 只负责根据当前 template/context/slot/options 生成结构，不负责最终 HTML。
 
 ---
 
@@ -116,7 +147,7 @@ product | category | blog_post | news_article | faq | qa | review_page | web_pag
 | 场景 | 接受的 page_type |
 |------|------------------|
 | 文章 | `article`、`blog_post`、`post`、`news`、`news_article` |
-| 集合/列表 | `category`、`collection`、`collection_page`、`blog_list`、`blog_category`、`searchable_landing` |
+| 集合/列表 | `category`、`collection`、`collection_page`、`blog_list`、`blog_category`、`searchable_landing`、`tag_collection`、`tag_landing` |
 | FAQ | `faq`、`faq_page` |
 | QA | `qa`、`qa_page` |
 | 关于/联系 | `about`、`about_page`、`contact`、`contact_page` |
@@ -129,13 +160,15 @@ product | category | blog_post | news_article | faq | qa | review_page | web_pag
 | `about` / `about_page` | `AboutPage` |
 | `contact` / `contact_page` | `ContactPage` |
 | `faq` / `faq_page` | `FAQPage` |
-| `category` / `collection` / `blog_list` 等 | `CollectionPage` |
+| `category` / `collection` / `blog_list` / `tag_collection` / `tag_landing` 等 | `CollectionPage` |
 | 默认 | `WebPage` |
 
 ### 页面类型规则（摘要）
 
 - **商品页**：必须提供 `product` 事实，不要只写自定义 schema
 - **集合页**：提供 `item_list`，保持 `CollectionPage` 与 `ItemList` 一致
+- **标签落地页**：使用 `tag_collection` 或 `tag_landing`，继续提供 `item_list`；不要新增非标准 `TagPage`
+- **软件/模块详情页**：可通过 `schema_nodes` 输出 `SoftwareApplication`；`applicationCategory` 建议取主 surface/tag
 - **博客/新闻**：提供 `article`；新闻页还需 `sitemap.news` 字段
 - **FAQ/QA**：提供 `faqs` 或 `qa_list`，勿在模板手写 `FAQPage` / `QAPage`
 - **购物车、结账、登录、账户、预览、后台、API、低价值筛选页**：`robots => noindex,follow`，且 `sitemap.include` / `geo.include` 为 `false`

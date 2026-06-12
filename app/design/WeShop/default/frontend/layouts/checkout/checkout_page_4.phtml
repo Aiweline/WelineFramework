@@ -567,8 +567,10 @@ $area = $themeData['area'] ?? 'frontend';
             color: var(--weshop-text-primary);
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="weshop-checkout-1">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::checkout::body-start</w:hook>
     
@@ -899,5 +901,6 @@ $area = $themeData['area'] ?? 'frontend';
             // Implement place order functionality
         }
     </script>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

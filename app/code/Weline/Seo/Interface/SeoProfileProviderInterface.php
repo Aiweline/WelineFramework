@@ -20,6 +20,10 @@ interface SeoProfileProviderInterface
      * - sitemap: sitemap extension payload
      * - geo: GEO/feed metadata
      *
+     * Runtime context also includes `_slot` and `_options` when invoked from the
+     * `<w:seo>` tag. Providers should use the context to decide whether they
+     * support the current page and return structured facts only, not HTML.
+     *
      * @param mixed $template
      * @param array<string, mixed> $context
      * @return array<string, mixed>
