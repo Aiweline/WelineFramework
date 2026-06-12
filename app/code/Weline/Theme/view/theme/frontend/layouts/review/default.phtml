@@ -28,8 +28,10 @@ shell even when the active theme does not provide a review-specific layout.
     width: 100%;
 }
 </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="review-layout">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::review::body-start</w:hook>
 
@@ -81,5 +83,6 @@ shell even when the active theme does not provide a review-specific layout.
 
     <w:hook>Weline_Theme::frontend::layouts::review::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

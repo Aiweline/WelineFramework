@@ -38,12 +38,13 @@ class UrlRewriteSubmitSync implements CronTaskInterface
         try {
             $stats = $this->syncService->sync();
             return sprintf(
-                'SEO URL rewrite submit sync done: rewrites=%d, urls=%d, accounts=%d, created_tasks=%d, existing=%d.',
+                'SEO URL rewrite submit sync done: rewrites=%d, urls=%d, accounts=%d, created_tasks=%d, existing=%d, unbound=%d.',
                 $stats['rewrites'],
                 $stats['urls'],
                 $stats['accounts'],
                 $stats['created_tasks'],
-                $stats['skipped_existing']
+                $stats['skipped_existing'],
+                $stats['skipped_unbound'] ?? 0
             );
         } catch (\Throwable $e) {
             return 'SEO URL rewrite submit sync failed: ' . $e->getMessage();

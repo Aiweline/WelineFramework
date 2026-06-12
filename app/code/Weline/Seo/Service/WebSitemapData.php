@@ -11,12 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service;
 
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Model\SitemapUrl;
-use Weline\Seo\Model\SeoWebsiteAccount;
-use Weline\Seo\Model\SeoAccount;
 use Weline\Seo\Interface\SitemapPlatformAdapterInterface;
-use Weline\Websites\Model\Website;
 
 /**
  * Sitemap 数据服务
@@ -49,41 +45,20 @@ class WebSitemapData
     public const SITEMAP_DIR = 'pub/sitemaps';
 
     private SitemapUrl $sitemapUrlModel;
-    private SeoWebsiteAccount $seoWebsiteAccountModel;
     private SitemapAdapterRegistry $adapterRegistry;
-    private ?Website $websiteModel = null;
-    private ?SeoAccount $seoAccountModel = null;
+    private SeoWebsiteDirectory $websiteDirectory;
+    private SeoWebsiteAccountBindingService $bindingService;
 
     public function __construct(
         SitemapUrl $sitemapUrlModel,
-        SeoWebsiteAccount $seoWebsiteAccountModel,
-        SitemapAdapterRegistry $adapterRegistry
+        SitemapAdapterRegistry $adapterRegistry,
+        SeoWebsiteDirectory $websiteDirectory,
+        SeoWebsiteAccountBindingService $bindingService
     ) {
         $this->sitemapUrlModel = $sitemapUrlModel;
-        $this->seoWebsiteAccountModel = $seoWebsiteAccountModel;
         $this->adapterRegistry = $adapterRegistry;
-    }
-
-    /**
-     * 获取 Website Model（延迟加载）
-     */
-    private function getWebsiteModel(): Website
-    {
-        if ($this->websiteModel === null) {
-            $this->websiteModel = ObjectManager::getInstance(Website::class);
-        }
-        return $this->websiteModel;
-    }
-
-    /**
-     * 获取 SeoAccount Model（延迟加载）
-     */
-    private function getSeoAccountModel(): SeoAccount
-    {
-        if ($this->seoAccountModel === null) {
-            $this->seoAccountModel = ObjectManager::getInstance(SeoAccount::class);
-        }
-        return $this->seoAccountModel;
+        $this->websiteDirectory = $websiteDirectory;
+        $this->bindingService = $bindingService;
     }
 
     /**
@@ -94,49 +69,7 @@ class WebSitemapData
      */
     public function getWebsiteAdapters(int $websiteId): array
     {
-        $adapters = [];
-        
-        // 获取站点绑定的 SEO 账户
-        $bindings = $this->seoWebsiteAccountModel->reset()
-            ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
-            ->select()
-            ->fetchArray();
-        
-        if (empty($bindings)) {
-            // 🔥 重要：如果站点没有绑定 SEO 账户，返回空数组
-            // 不生成任何平台的 sitemap
-            return [];
-        }
-        
-        foreach ($bindings as $binding) {
-            $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
-            if ($accountId <= 0) {
-                continue;
-            }
-            
-            $account = $this->getSeoAccountModel()->reset()->load($accountId);
-            if (!$account->getId() || !$account->isActive()) {
-                continue;
-            }
-            
-            // 优先使用账户的 platform 字段
-            $platformCode = $account->getPlatform();
-            
-            // 如果 platform 字段为空，尝试从 provider 推断（向后兼容）
-            if (empty($platformCode)) {
-                $provider = $account->getData(SeoAccount::schema_fields_PROVIDER);
-                $platformCode = $this->adapterRegistry->extractPlatformFromProvider($provider);
-            }
-            
-            if ($platformCode) {
-                $adapter = $this->adapterRegistry->getAdapter($platformCode);
-                if ($adapter && !isset($adapters[$platformCode])) {
-                    $adapters[$platformCode] = $adapter;
-                }
-            }
-        }
-        
-        return $adapters;
+        return $this->bindingService->getWebsiteAdapters($websiteId);
     }
 
     /**
@@ -147,44 +80,7 @@ class WebSitemapData
      */
     public function getWebsiteAccountsWithPlatforms(int $websiteId): array
     {
-        $result = [];
-        
-        $bindings = $this->seoWebsiteAccountModel->reset()
-            ->where(SeoWebsiteAccount::schema_fields_WEBSITE_ID, $websiteId)
-            ->select()
-            ->fetchArray();
-        
-        foreach ($bindings as $binding) {
-            $accountId = (int)($binding[SeoWebsiteAccount::schema_fields_ACCOUNT_ID] ?? 0);
-            if ($accountId <= 0) {
-                continue;
-            }
-            
-            $account = $this->getSeoAccountModel()->reset()->load($accountId);
-            if (!$account->getId()) {
-                continue;
-            }
-            
-            // 优先使用账户的 platform 字段
-            $platformCode = $account->getPlatform();
-            
-            // 如果 platform 字段为空，尝试从 provider 推断（向后兼容）
-            if (empty($platformCode)) {
-                $provider = $account->getData(SeoAccount::schema_fields_PROVIDER);
-                $platformCode = $this->adapterRegistry->extractPlatformFromProvider($provider);
-            }
-            
-            $adapter = $platformCode ? $this->adapterRegistry->getAdapter($platformCode) : null;
-            
-            $result[] = [
-                'account' => $account,
-                'platform_code' => $platformCode,
-                'adapter' => $adapter,
-                'binding' => $binding,
-            ];
-        }
-        
-        return $result;
+        return $this->bindingService->getWebsiteAccountsWithPlatforms($websiteId, false);
     }
 
     /**
@@ -196,9 +92,9 @@ class WebSitemapData
     public function generateSitemapFiles(int $websiteId): array
     {
         // 获取站点信息
-        $website = $this->getWebsiteModel()->load($websiteId);
-        $websiteCode = $website->getData('code') ?: ('website_' . $websiteId);
-        $baseUrl = rtrim($website->getData('url') ?? '', '/');
+        $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
+        $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
+        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
         
         // 按模块分组获取 URL
         $groupedUrls = $this->sitemapUrlModel->getActiveUrlsByWebsiteGrouped($websiteId);
@@ -274,15 +170,15 @@ class WebSitemapData
     {
         $results = [];
         
-        $website = $this->getWebsiteModel()->load($websiteId);
-        $websiteCode = $website->getData('code') ?: ('website_' . $websiteId);
-        $baseUrl = rtrim($website->getData('url') ?? '', '/');
+        $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
+        $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
+        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
         
         // 获取账户和平台信息
-        $accountsInfo = $this->getWebsiteAccountsWithPlatforms($websiteId);
+        $accountsInfo = $this->bindingService->getSitemapSubmitAccounts($websiteId);
         
         foreach ($accountsInfo as $info) {
-            $account = $info['account'];
+            $account = (array)($info['account'] ?? []);
             $adapter = $info['adapter'];
             $platformCode = $info['platform_code'];
             
@@ -298,7 +194,7 @@ class WebSitemapData
             $sitemapUrl = $adapter->getIndexUrl($baseUrl, $websiteCode);
             
             // 获取账户配置
-            $accountConfig = $account->getConfigArray();
+            $accountConfig = (array)($info['account_config'] ?? []);
             
             // 调用适配器提交
             $results[$platformCode] = $adapter->submitSitemap($sitemapUrl, $accountConfig);
@@ -312,9 +208,9 @@ class WebSitemapData
      */
     public function getMainSitemapUrl(int $websiteId): ?string
     {
-        $website = $this->getWebsiteModel()->load($websiteId);
-        $websiteCode = $website->getData('code') ?: ('website_' . $websiteId);
-        $baseUrl = rtrim($website->getData('url') ?? '', '/');
+        $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
+        $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
+        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
         
         $adapters = $this->getWebsiteAdapters($websiteId);
         
@@ -336,9 +232,9 @@ class WebSitemapData
             return null;
         }
         
-        $website = $this->getWebsiteModel()->load($websiteId);
-        $websiteCode = $website->getData('code') ?: ('website_' . $websiteId);
-        $baseUrl = rtrim($website->getData('url') ?? '', '/');
+        $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
+        $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
+        $baseUrl = rtrim((string)($website['url'] ?? ''), '/');
         
         return $adapter->getIndexUrl($baseUrl, $websiteCode);
     }
@@ -364,8 +260,8 @@ class WebSitemapData
      */
     public function getSitemapFileList(int $websiteId): array
     {
-        $website = $this->getWebsiteModel()->load($websiteId);
-        $websiteCode = $website->getData('code') ?: ('website_' . $websiteId);
+        $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
+        $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
         $siteDir = BP . '/' . self::SITEMAP_DIR . '/' . $websiteCode;
 
         if (!is_dir($siteDir)) {
@@ -430,8 +326,8 @@ class WebSitemapData
      */
     public function deleteSitemapFiles(int $websiteId): void
     {
-        $website = $this->getWebsiteModel()->load($websiteId);
-        $websiteCode = $website->getData('code') ?: ('website_' . $websiteId);
+        $website = $this->websiteDirectory->getWebsiteById($websiteId) ?? [];
+        $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
         $siteDir = BP . '/' . self::SITEMAP_DIR . '/' . $websiteCode;
 
         if (is_dir($siteDir)) {
@@ -468,11 +364,11 @@ class WebSitemapData
      */
     public function getAllWebsiteStats(): array
     {
-        $websites = $this->getWebsiteModel()->reset()->select()->fetchArray();
+        $websites = $this->websiteDirectory->listWebsites();
         $stats = [];
 
         foreach ($websites as $website) {
-            $websiteId = (int)$website['website_id'];
+            $websiteId = (int)($website['website_id'] ?? 0);
             $adapters = $this->getWebsiteAdapters($websiteId);
             $scopeStats = $this->sitemapUrlModel->getScopeStats($websiteId);
 

@@ -314,6 +314,9 @@ $crawlOptions = [
                         $platformColor = $visual->sanitizeColor((string)($platformInfo['color'] ?? ''));
                         $supportsSubmit = (bool)($platformInfo['supports_submit'] ?? false);
                         $supportsStats = (bool)($platformInfo['supports_stats'] ?? false);
+                        $supportsUrlPush = (bool)($platformInfo['supports_url_push'] ?? false);
+                        $supportsIndexNow = (bool)($platformInfo['supports_indexnow'] ?? false);
+                        $catalogOnly = (bool)($platformInfo['catalog_only'] ?? false);
                         $binding = $bindingsMap[$accountId] ?? [];
                         $isSelected = $binding !== [];
                         $isActive = (int)($account[SeoAccount::schema_fields_IS_ACTIVE] ?? 0) === SeoAccount::STATUS_ACTIVE;
@@ -323,6 +326,7 @@ $crawlOptions = [
                         $currentCrawlFrequency = (string)($binding[SeoWebsiteAccount::schema_fields_CRAWL_FREQUENCY] ?? SeoWebsiteAccount::DEFAULT_CRAWL_FREQUENCY);
                         $currentPriority = (string)($binding[SeoWebsiteAccount::schema_fields_PRIORITY] ?? number_format(SeoWebsiteAccount::DEFAULT_PRIORITY, 2));
                         $currentAutoSubmit = !isset($binding[SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT]) || (int)$binding[SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] === 1;
+                        $currentUrlPush = !isset($binding[SeoWebsiteAccount::schema_fields_ENABLE_URL_PUSH]) || (int)$binding[SeoWebsiteAccount::schema_fields_ENABLE_URL_PUSH] === 1;
                         $checkboxId = $widgetId . '_account_' . $accountId;
                         ?>
                         <div class="seo-engine-card<?= $isSelected ? ' is-selected' : '' ?><?= !$isActive ? ' is-inactive' : '' ?>" data-account-card="<?= $accountId ?>" style="--seo-platform-color: <?= htmlspecialchars($platformColor, ENT_QUOTES, 'UTF-8') ?>;">
@@ -344,9 +348,11 @@ $crawlOptions = [
                                         <span class="seo-chip"><?= htmlspecialchars($platformName, ENT_QUOTES, 'UTF-8') ?></span>
                                         <span class="seo-chip">ID <?= $accountId ?></span>
                                         <span class="seo-chip<?= $isActive ? ' is-on' : ' is-off' ?>"><?= $isActive ? __('启用') : __('停用') ?></span>
-                                        <span class="seo-chip<?= $pushEnabled ? ' is-on' : ' is-off' ?>"><lang>URL</lang></span>
+                                        <span class="seo-chip<?= $pushEnabled && $supportsUrlPush ? ' is-on' : ' is-off' ?>"><lang>URL Push</lang></span>
                                         <span class="seo-chip<?= $sitemapEnabled ? ' is-on' : ' is-off' ?>"><lang>Sitemap</lang></span>
-                                        <?php if ($supportsSubmit): ?><span class="seo-chip is-on"><lang>自动提交</lang></span><?php endif; ?>
+                                        <?php if ($supportsIndexNow): ?><span class="seo-chip is-on"><lang>IndexNow</lang></span><?php endif; ?>
+                                        <?php if ($catalogOnly): ?><span class="seo-chip"><lang>Catalog Only</lang></span><?php endif; ?>
+                                        <?php if ($supportsSubmit): ?><span class="seo-chip is-on"><lang>Sitemap Submit</lang></span><?php endif; ?>
                                         <?php if ($supportsStats): ?><span class="seo-chip is-on"><lang>数据同步</lang></span><?php endif; ?>
                                     </div>
                                 </div>
@@ -383,6 +389,13 @@ $crawlOptions = [
                                             <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($checkboxId . '_auto', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.is_auto_submit'), ENT_QUOTES, 'UTF-8') ?>" value="1" <?= $currentAutoSubmit ? 'checked' : '' ?>>
                                             <label class="form-check-label" for="<?= htmlspecialchars($checkboxId . '_auto', ENT_QUOTES, 'UTF-8') ?>">
                                                 <lang>启用该账户的网站自动提交</lang>
+                                            </label>
+                                        </div>
+                                        <input type="hidden" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.enable_url_push'), ENT_QUOTES, 'UTF-8') ?>" value="0">
+                                        <div class="form-check form-switch mt-2 mb-0">
+                                            <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($checkboxId . '_url_push', ENT_QUOTES, 'UTF-8') ?>" name="<?= htmlspecialchars($fieldName('configs.' . $accountId . '.enable_url_push'), ENT_QUOTES, 'UTF-8') ?>" value="1" <?= $currentUrlPush ? 'checked' : '' ?> <?= !$supportsUrlPush ? 'disabled' : '' ?>>
+                                            <label class="form-check-label" for="<?= htmlspecialchars($checkboxId . '_url_push', ENT_QUOTES, 'UTF-8') ?>">
+                                                <lang>启用该账户的 URL rewrite 推送</lang>
                                             </label>
                                         </div>
                                     </div>

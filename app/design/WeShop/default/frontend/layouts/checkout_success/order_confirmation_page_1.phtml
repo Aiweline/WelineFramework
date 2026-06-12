@@ -644,8 +644,10 @@ $order = $this->getData('order');
             color: var(--weshop-text-primary);
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="weshop-order-confirmation-1">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::checkout_success::body-start</w:hook>
     
@@ -929,5 +931,6 @@ $order = $this->getData('order');
     
     <w:hook>Weline_Theme::frontend::layouts::checkout_success::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
