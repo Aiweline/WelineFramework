@@ -7,7 +7,7 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect
 <style>
 /* ========== 登录表单容器 ========== */
 .auth-form {
-    max-width: 440px;
+    max-width: 488px;
     width: 100%;
     margin: 0 auto;
     padding: var(--spacing-xl, 2rem) var(--spacing-lg, 1.5rem);
@@ -15,6 +15,7 @@ $redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect
     border-radius: var(--radius-lg, 12px);
     box-shadow: var(--shadow-md);
     animation: authFadeInUp 0.6s ease-out;
+    box-sizing: border-box;
 }
 
 @keyframes authFadeInUp {
@@ -173,6 +174,57 @@ html.dark .auth-form__input:-webkit-autofill:active {
     color: var(--color-text-tertiary);
 }
 
+.auth-form__input-wrapper--password .auth-form__input {
+    padding-right: calc(var(--auth-input-height, 44px) + var(--spacing-sm, 0.75rem));
+}
+
+.auth-form__password-toggle {
+    position: absolute;
+    right: var(--spacing-xs, 0.5rem);
+    top: 50%;
+    z-index: 2;
+    width: calc(var(--auth-input-height, 44px) - 0.5rem);
+    height: calc(var(--auth-input-height, 44px) - 0.5rem);
+    min-width: calc(var(--auth-input-height, 44px) - 0.5rem);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm, 6px);
+    background: transparent;
+    color: var(--color-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transform: translateY(-50%);
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.auth-form__password-toggle:hover,
+.auth-form__password-toggle:focus-visible {
+    background: var(--color-accent-light);
+    color: var(--color-primary);
+}
+
+.auth-form__password-toggle:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+.auth-form__password-toggle-icon,
+.auth-form__pwd-svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.auth-form__pwd-svg[hidden] {
+    display: none;
+}
+
 /* ========== 记住登录状态区块 ========== */
 .auth-form__remember {
     margin: var(--spacing-md, 1rem) 0;
@@ -190,6 +242,35 @@ html.dark .auth-form__input:-webkit-autofill:active {
 
 .auth-form__remember-label i {
     color: var(--color-primary);
+}
+
+.auth-form__select {
+    width: 100%;
+    min-height: var(--auth-input-height, 44px);
+    padding: var(--auth-input-padding-y, 0.75rem) var(--spacing-md, 1rem);
+    border: var(--auth-input-border-width, 2px) solid var(--color-border-default);
+    border-radius: var(--auth-input-radius, var(--radius-md, 8px));
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font: inherit;
+    line-height: 1.4;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-form__select:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
+    background-color: var(--color-bg-primary);
+}
+
+.dark .auth-form__select,
+html.dark .auth-form__select {
+    background-color: var(--color-bg-dark-tertiary, #334155);
+    color: var(--color-text-light, #f5f5f5);
+    border-color: rgba(148, 163, 184, 0.35);
 }
 
 /* ========== 忘记密码链接 ========== */
@@ -419,6 +500,258 @@ html.dark .auth-form__input:-webkit-autofill:active {
     .auth-form__icon-svg {
         width: 1.75rem;
         height: 1.75rem;
+    }
+
+    .auth-form__input,
+    .auth-form__select {
+        font-size: 1rem;
+    }
+}
+.auth-form {
+    --auth-surface: #ffffff;
+    --auth-surface-soft: #f8fafc;
+    --auth-border: #dbe4f0;
+    --auth-border-strong: #b9c7dc;
+    --auth-text: #0f172a;
+    --auth-text-soft: #475569;
+    --auth-text-muted: #64748b;
+    --auth-primary: #4f46e5;
+    --auth-primary-strong: #4338ca;
+    --auth-primary-soft: rgba(79, 70, 229, 0.12);
+    padding: clamp(1.5rem, 4vw, 2.25rem);
+    background: var(--auth-surface);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+    overflow: hidden;
+}
+
+.auth-form__header {
+    margin-bottom: 1.75rem;
+}
+
+.auth-form__icon {
+    margin-bottom: 1.25rem;
+    background: linear-gradient(135deg, var(--auth-primary) 0%, var(--auth-primary-strong) 100%);
+    box-shadow: 0 16px 34px rgba(79, 70, 229, 0.26);
+}
+
+.auth-form__title {
+    color: var(--auth-text);
+    font-size: clamp(1.75rem, 5vw, 2rem);
+    letter-spacing: 0;
+    line-height: 1.15;
+    margin-bottom: 0.45rem;
+}
+
+.auth-form__subtitle,
+.auth-form__footer {
+    color: var(--auth-text-soft);
+}
+
+.auth-form__label,
+.auth-form__remember-label {
+    color: var(--auth-text);
+}
+
+.auth-form__label i,
+.auth-form__remember-label i,
+.auth-form__input:focus + i,
+.auth-form__input-wrapper:focus-within > i {
+    color: var(--auth-primary);
+}
+
+.auth-form__input-wrapper {
+    width: 100%;
+}
+
+.auth-form__input-wrapper > i {
+    color: var(--auth-text-muted);
+}
+
+.auth-form__input,
+.dark .auth-form__input,
+html.dark .auth-form__input {
+    min-height: 52px;
+    padding: 0.875rem 1rem 0.875rem 2.75rem;
+    border: 1px solid var(--auth-border);
+    background-color: var(--auth-surface-soft);
+    color: var(--auth-text);
+    font-size: var(--font-size-base, 1rem);
+}
+
+.auth-form__input:focus,
+.dark .auth-form__input:focus,
+html.dark .auth-form__input:focus {
+    border-color: var(--auth-primary);
+    background-color: #ffffff;
+    box-shadow: 0 0 0 4px var(--auth-primary-soft);
+}
+
+.auth-form__input::placeholder {
+    color: var(--auth-text-muted);
+}
+
+.auth-form__input:-webkit-autofill,
+.auth-form__input:-webkit-autofill:hover,
+.auth-form__input:-webkit-autofill:focus,
+.auth-form__input:-webkit-autofill:active,
+.dark .auth-form__input:-webkit-autofill,
+.dark .auth-form__input:-webkit-autofill:hover,
+.dark .auth-form__input:-webkit-autofill:focus,
+.dark .auth-form__input:-webkit-autofill:active,
+html.dark .auth-form__input:-webkit-autofill,
+html.dark .auth-form__input:-webkit-autofill:hover,
+html.dark .auth-form__input:-webkit-autofill:focus,
+html.dark .auth-form__input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--auth-surface-soft) inset !important;
+    -webkit-text-fill-color: var(--auth-text) !important;
+    caret-color: var(--auth-text);
+}
+
+.auth-form__input-wrapper--password .auth-form__input {
+    padding-right: calc(52px + 0.75rem);
+}
+
+.auth-form__password-toggle {
+    right: 0.5rem;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    color: var(--auth-text-soft);
+    box-sizing: border-box;
+    line-height: 1;
+}
+
+.auth-form__password-toggle:hover,
+.auth-form__password-toggle:focus-visible {
+    background: var(--auth-primary-soft);
+    color: var(--auth-primary);
+}
+
+.auth-form__password-toggle:focus-visible {
+    box-shadow: 0 0 0 3px var(--auth-primary-soft);
+}
+
+.auth-form__pwd-svg[hidden] {
+    display: none !important;
+}
+
+.auth-form__remember {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.875rem;
+    margin: 0.75rem 0 1rem;
+    padding: 0.85rem;
+    border: 1px solid var(--auth-border);
+    border-radius: var(--radius-md, 8px);
+    background: var(--auth-surface-soft);
+}
+
+.auth-form__remember-label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.auth-form__select,
+.dark .auth-form__select,
+html.dark .auth-form__select {
+    width: auto;
+    min-width: 9.5rem;
+    min-height: 42px;
+    padding: 0.65rem 2.4rem 0.65rem 0.875rem;
+    border: 1px solid var(--auth-border);
+    background-color: #ffffff;
+    color: var(--auth-text);
+    background-image: linear-gradient(45deg, transparent 50%, var(--auth-text-muted) 50%), linear-gradient(135deg, var(--auth-text-muted) 50%, transparent 50%);
+    background-position: calc(100% - 1rem) 50%, calc(100% - 0.7rem) 50%;
+    background-size: 0.32rem 0.32rem, 0.32rem 0.32rem;
+    background-repeat: no-repeat;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.auth-form__select:focus {
+    border-color: var(--auth-primary);
+    background-color: #ffffff;
+    box-shadow: 0 0 0 4px var(--auth-primary-soft);
+}
+
+.auth-form__forgot-link,
+.auth-form__footer-link {
+    color: var(--auth-primary);
+}
+
+.auth-form__forgot-link:hover,
+.auth-form__footer-link:hover {
+    color: var(--auth-primary-strong);
+}
+
+.auth-form__submit {
+    min-height: 52px;
+    padding: 0.875rem 1rem;
+    background: linear-gradient(135deg, var(--auth-primary) 0%, var(--auth-primary-strong) 100%);
+    border: 1px solid var(--auth-primary);
+    color: #ffffff;
+    box-shadow: 0 14px 28px rgba(79, 70, 229, 0.22);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    box-sizing: border-box;
+    text-decoration: none;
+}
+
+.auth-form__submit:hover {
+    box-shadow: 0 18px 34px rgba(79, 70, 229, 0.28);
+}
+
+.auth-form__social {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--auth-border);
+}
+
+.auth-form__provider {
+    width: 100%;
+    margin: 0;
+}
+
+.auth-form__provider + .auth-form__provider {
+    margin-top: 0.75rem;
+}
+
+.auth-form__provider .auth-form__submit {
+    width: 100%;
+}
+
+.auth-form__provider--multipass .auth-form__submit {
+    background: #ffffff;
+    color: var(--auth-primary-strong);
+    border-color: rgba(79, 70, 229, 0.28);
+    box-shadow: none;
+}
+
+.auth-form__provider--multipass .auth-form__submit:hover,
+.auth-form__provider--multipass .auth-form__submit:focus-visible {
+    background: var(--auth-primary-soft);
+    border-color: rgba(79, 70, 229, 0.42);
+    box-shadow: 0 12px 24px rgba(79, 70, 229, 0.14);
+    text-decoration: none;
+}
+
+@media (max-width: 640px) {
+    .auth-form {
+        padding: 1.25rem;
+    }
+
+    .auth-form__remember {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .auth-form__select {
+        width: 100%;
     }
 }
 </style>
