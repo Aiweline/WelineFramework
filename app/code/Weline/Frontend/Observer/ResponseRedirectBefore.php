@@ -233,13 +233,26 @@ class ResponseRedirectBefore implements ObserverInterface
      */
     protected function isAllowedHost(string $host): bool
     {
+        $host = strtolower(trim($host));
         $allowedHosts = [
             'localhost',
             '127.0.0.1',
+            'weline.test',
+            'aiweline.com',
             // 鍙互娣诲姞鏇村鍏佽鐨勫煙鍚?
         ];
         
-        return in_array($host, $allowedHosts);
+        if (in_array($host, $allowedHosts, true)) {
+            return true;
+        }
+
+        foreach (['.weline.test', '.aiweline.com'] as $allowedSuffix) {
+            if (str_ends_with($host, $allowedSuffix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
