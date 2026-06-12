@@ -1355,6 +1355,21 @@ class Env extends DataObject
         $areaRoutes = self::getAreaRoutes();
         return $areaRoutes[$area]['prefix'] ?? null;
     }
+
+    /**
+     * 前台 Worker query-bin 路径（随 area_routes.rest_frontend.prefix 变化，如 /api123/framework/query-bin）。
+     */
+    public static function getFrontendQueryBinPath(): string
+    {
+        try {
+            $prefix = \trim((string)(self::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/');
+        } catch (\Throwable) {
+            $prefix = 'api';
+        }
+        $prefix = \strtolower($prefix !== '' ? $prefix : 'api');
+
+        return '/' . $prefix . '/framework/query-bin';
+    }
     
     /**
      * 根据 URL 前缀判断对应的区域类型
