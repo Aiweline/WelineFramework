@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Log\LogConfig;
 
 /**
@@ -66,10 +67,24 @@ class WlsRequest extends Request
      */
     public static function fromRaw(string $rawData, array $serverInfo = []): self
     {
-        $request = new self();
+        $request = self::createRequestInstance();
         $request->rawData = $rawData;
         $request->parseRawHttp($rawData, $serverInfo);
         return $request;
+    }
+
+    private static function createRequestInstance(): self
+    {
+        try {
+            $request = ObjectManager::getInstance(self::class, [], false);
+            if ($request instanceof self) {
+                return $request;
+            }
+        } catch (\Throwable) {
+            // Fall back to a raw request during early bootstrap or recovery paths.
+        }
+
+        return new self();
     }
 
     private static function normalizeHeaderName(string $name): string
@@ -77,6 +92,40 @@ class WlsRequest extends Request
         $name = \strtolower($name);
 
         return \implode('-', \array_map(static fn(string $part): string => \ucfirst($part), \explode('-', $name)));
+    }
+
+    public function getUrlPath(string $url = ''): string
+    {
+        return parent::getUrlPath($url);
+    }
+
+    public function replaceParsedUriForRouting(string $uri): static
+    {
+        $uri = trim($uri);
+        if ($uri === '') {
+            $uri = '/';
+        }
+        if (!\str_starts_with($uri, '/')) {
+            $uri = '/' . $uri;
+        }
+
+        $this->parsedUri = $uri;
+
+        try {
+            $parts = \parse_url($uri);
+            $parts = \is_array($parts) ? $parts : [];
+        } catch (\ValueError) {
+            $parts = [];
+        }
+
+        $queryString = (string)($parts['query'] ?? '');
+        $this->parsedQueryString = $queryString;
+        $this->parsedGetParams = [];
+        if ($queryString !== '') {
+            \parse_str($queryString, $this->parsedGetParams);
+        }
+
+        return $this;
     }
 
     /**
