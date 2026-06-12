@@ -284,23 +284,34 @@ class SitemapAdapterRegistry
         }
         
         foreach ($files as $file) {
+            $normalized = str_replace('\\', '/', $file);
             // 从文件路径推断类名
             // e.g., /app/code/Vendor/Module/extends/module/Weline_Seo/SitemapAdapter/YandexSitemapAdapter.php
             // => Vendor\Module\Extends\Module\Weline_Seo\SitemapAdapter\YandexSitemapAdapter
             
-            if (preg_match('#app/code/([^/]+)/([^/]+)/extends/module/Weline_Seo/SitemapAdapter/([^/]+)Adapter\.php$#', $file, $matches)) {
+            if (preg_match('#app/code/([^/]+)/([^/]+)/extends/module/Weline_Seo/SitemapAdapter/([^/]+)Adapter\.php$#', $normalized, $matches)) {
                 $vendor = $matches[1];
                 $module = $matches[2];
                 $adapterName = $matches[3];
                 
-                $class = sprintf(
-                    '%s\\%s\\Extends\\Module\\Weline_Seo\\SitemapAdapter\\%sAdapter',
-                    $vendor,
-                    $module,
-                    $adapterName
-                );
-                
-                $this->registerAdapter($class);
+                $classes = [
+                    sprintf(
+                        '%s\\%s\\Extends\\Module\\Weline_Seo\\SitemapAdapter\\%sAdapter',
+                        $vendor,
+                        $module,
+                        $adapterName
+                    ),
+                    sprintf(
+                        '%s\\%s\\extends\\module\\Weline_Seo\\SitemapAdapter\\%sAdapter',
+                        $vendor,
+                        $module,
+                        $adapterName
+                    ),
+                ];
+
+                foreach ($classes as $class) {
+                    $this->registerAdapter($class);
+                }
             }
         }
     }

@@ -121,8 +121,10 @@ $this->assign('meta', $meta);
             }
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::account::body-start</w:hook>
 
@@ -209,6 +211,7 @@ $this->assign('meta', $meta);
     </if>
 
     <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
 

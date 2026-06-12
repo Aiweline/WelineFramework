@@ -45,8 +45,10 @@ $this->assign('meta', $meta);
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product::body-start</w:hook>
     
@@ -440,5 +442,6 @@ $this->assign('meta', $meta);
     </style>
 
     <!-- 编辑模式脚本由 ThemeEditor 控制器注入 -->
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
