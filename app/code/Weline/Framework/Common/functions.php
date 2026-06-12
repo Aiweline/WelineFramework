@@ -262,35 +262,31 @@ if (!function_exists('w_query')) {
      * 对应前端 JS 的 window.w_query()，用于模块间数据查询。
      * 内部调用 FrameworkQueryService::execute()，由 QueryProviderRegistry 中已注册的查询器处理。
      *
-     * @param string $provider  提供者标识（如 crud、widget、websites、saas）或 framework（introspect）
-     * @param string $operation 操作名
-     * @param array  $params    操作参数
-     * @param string $area      frontend|backend，默认 backend
-     * @return mixed 查询结果
+     * @param string|null $provider  提供者标识、模块名（WeShop_Product）或 framework；为空时列出全部 provider
+     * @param string|null $operation 操作名；为空时返回 provider/模块帮助
+     * @param array       $params    操作参数
+     * @param string      $area      frontend|backend，默认 backend
+     * @return mixed 查询结果或帮助 descriptor
      * @throws \InvalidArgumentException 参数错误
      * @throws \RuntimeException 查询被拒绝或执行失败
      *
      * @example
+     * // 帮助：列出全部 provider
+     * $all = w_query();
+     *
+     * // 帮助：查看 widget provider 的全部 operations
+     * $help = w_query('widget');
+     *
+     * // 帮助：按模块名查看
+     * $help = w_query('WeShop_Product');
+     *
      * // 查询 Widget 列表
      * $widgets = w_query('widget', 'getAvailableList', ['page_type' => 'homepage']);
      *
-     * // 查询域名列表
-     * $domains = w_query('websites', 'getDomainList', ['account_id' => 123]);
-     *
-     * // 使用 CRUD 通用查询
-     * $products = w_query('crud', 'list', [
-     *     'model' => 'WeShop\\Product\\Model\\Product',
-     *     'page' => 1,
-     *     'page_size' => 20,
-     * ]);
-     *
-     * // 查询所有已注册的 provider
+     * // 高级 introspect
      * $providers = w_query('framework', 'introspect', ['what' => 'providers']);
-     *
-     * // 查询某 provider 的所有 operation
-     * $ops = w_query('framework', 'introspect', ['what' => 'operations', 'provider' => 'widget']);
      */
-    function w_query(string $provider, string $operation, array $params = [], string $area = 'backend'): mixed
+    function w_query(?string $provider = null, ?string $operation = null, array $params = [], string $area = 'backend'): mixed
     {
         /** @var FrameworkQueryService $queryService */
         $queryService = ObjectManager::getInstance(FrameworkQueryService::class);

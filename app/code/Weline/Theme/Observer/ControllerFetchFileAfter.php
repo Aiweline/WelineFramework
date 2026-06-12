@@ -397,6 +397,7 @@ HTML;
         $themeScriptUrl = $isDev
             ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=' . $themeAssetVersion
             : '/static/Weline/Theme/theme/frontend/assets/js/theme.js?v=' . $themeAssetVersion;
+        $queryBinUrl = $this->resolveFrontendQueryBinUrl();
 
         $currentLang = $this->envString('user.lang', 'zh_Hans_CN');
         $currentCurrency = $this->envString('user.currency', 'CNY');
@@ -431,8 +432,8 @@ HTML;
             'workerBuildId' => $this->resolveWorkerBuildId(),
             'api' => [
                 'workerUrl' => $apiWorkerUrl,
-                'endpoint' => '/api/framework/query-bin',
-                'queryBinUrl' => '/api/framework/query-bin',
+                'endpoint' => $queryBinUrl,
+                'queryBinUrl' => $queryBinUrl,
                 'locale' => $currentLang,
                 'currency' => $currentCurrency,
             ],
@@ -449,6 +450,7 @@ HTML;
         ];
 
         $workerUrlJson = $this->jsonEncodeForScript($apiWorkerUrl);
+        $queryBinUrlJson = $this->jsonEncodeForScript($queryBinUrl);
         $configJson = $this->jsonEncodeForScript($themeConfigPayload);
         $welineScriptUrlEsc = \htmlspecialchars($welineScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $themeScriptUrlEsc = \htmlspecialchars($themeScriptUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -458,6 +460,8 @@ HTML;
         (function() {
             window.WelineApiConfig = window.WelineApiConfig || {};
             window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || {$workerUrlJson};
+            window.WelineApiConfig.endpoint = window.WelineApiConfig.endpoint || window.WelineApiConfig.queryBinUrl || {$queryBinUrlJson};
+            window.WelineApiConfig.queryBinUrl = window.WelineApiConfig.queryBinUrl || {$queryBinUrlJson};
             window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
             window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
 
@@ -475,6 +479,11 @@ HTML;
     <script src="{$welineScriptUrlEsc}"></script>
     <script src="{$themeScriptUrlEsc}"></script>
 HTML;
+    }
+
+    private function resolveFrontendQueryBinUrl(): string
+    {
+        return Env::getFrontendQueryBinPath();
     }
 
     private function resolveTemplateBaseUrl(Template $template): string

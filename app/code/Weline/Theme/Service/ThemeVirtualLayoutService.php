@@ -6,7 +6,9 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
+use Weline\SystemConfig\Model\SystemConfigVersion;
 use Weline\Theme\Helper\ThemeData;
+use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Model\ThemeVirtualLayout;
 use Weline\Theme\Model\ThemeVirtualLayoutVersion;
 use Weline\Theme\Model\WelineTheme;
@@ -57,6 +59,23 @@ class ThemeVirtualLayoutService
         $targetType = $this->normalizeTargetType($targetType);
         if ($targetId <= 0 || $layoutType === '' || $layoutOption === '') {
             return ['success' => false, 'status' => 'invalid_identity'];
+        }
+        if (!$this->isSelectableLayoutOption($layoutType, $layoutOption, [
+            'area' => self::DEFAULT_AREA,
+            'scope' => $scope,
+            'target_type' => $targetType,
+            'target_id' => $targetId,
+        ])) {
+            return [
+                'success' => false,
+                'status' => 'invalid_layout_option',
+                'message' => (string)__('布局选项不存在或不允许用于当前对象'),
+                'layout_type' => $layoutType,
+                'layout_option' => $layoutOption,
+                'target_type' => $targetType,
+                'target_id' => $targetId,
+                'scope' => $this->normalizeScope($scope),
+            ];
         }
 
         $result = $this->systemConfig->saveScopeConfig(
@@ -164,6 +183,220 @@ class ThemeVirtualLayoutService
     }
 
     /**
+     * @return list<array<string,mixed>>
+     */
+    public function listLayoutSelectionVersions(
+        string $targetType,
+        int $targetId,
+        string $layoutType,
+        ?string $scope = null,
+        ?string $locale = null,
+        int $limit = 20,
+        bool $withPrecheck = false
+    ): array {
+        $identity = $this->normalizeSelectionIdentity($targetType, $targetId, $layoutType, $scope, $locale);
+        if (!$this->isValidSelectionIdentity($identity)) {
+            return [];
+        }
+
+        $scanLimit = max($limit * 5, 50);
+        $versions = [];
+        foreach ($this->systemConfig->getConfigVersions(
+            self::MODULE_CODE,
+            self::DEFAULT_AREA,
+            (string)$identity['scope'],
+            (string)$identity['locale'],
+            $scanLimit
+        ) as $row) {
+            $versionId = (int)($row[SystemConfigVersion::schema_fields_ID] ?? 0);
+            if ($versionId <= 0) {
+                continue;
+            }
+            $detail = $this->systemConfig->getConfigVersionDetail($versionId);
+            if ($detail === null || !$this->selectionVersionMatchesIdentity($detail, $identity)) {
+                continue;
+            }
+
+            $summary = $this->summarizeSelectionVersion($detail, $identity);
+            if ($withPrecheck) {
+                $summary['rollback_precheck'] = $this->precheckLayoutSelectionRollback($versionId, $identity);
+            }
+            $versions[] = $summary;
+            if ($limit > 0 && count($versions) >= $limit) {
+                break;
+            }
+        }
+
+        return $versions;
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     * @return array<string,mixed>
+     */
+    public function precheckLayoutSelectionRollback(int $versionId, array $context = []): array
+    {
+        if ($versionId <= 0) {
+            return ['rollbackable' => false, 'status' => 'invalid_version', 'version_id' => $versionId, 'blockers' => ['invalid_version']];
+        }
+
+        $detail = $this->systemConfig->getConfigVersionDetail($versionId);
+        if ($detail === null) {
+            return ['rollbackable' => false, 'status' => 'not_found', 'version_id' => $versionId, 'blockers' => ['not_found']];
+        }
+
+        $metadata = is_array($detail['metadata_data'] ?? null) ? $detail['metadata_data'] : [];
+        $identity = $this->normalizeSelectionIdentity(
+            (string)($context['target_type'] ?? $metadata['target_type'] ?? ''),
+            (int)($context['target_id'] ?? $metadata['target_id'] ?? 0),
+            (string)($context['layout_type'] ?? $metadata['layout_type'] ?? ''),
+            isset($context['scope']) ? (string)$context['scope'] : (string)($detail[SystemConfigVersion::schema_fields_SCOPE] ?? self::DEFAULT_SCOPE),
+            isset($context['locale']) ? (string)$context['locale'] : (string)($detail[SystemConfigVersion::schema_fields_LOCALE] ?? SystemConfig::LOCALE_DEFAULT)
+        );
+
+        $blockers = [];
+        $conflicts = [];
+        $expectedRestore = [];
+
+        if (!$this->isValidSelectionIdentity($identity)) {
+            $blockers[] = 'invalid_identity';
+        }
+        if ((string)($detail[SystemConfigVersion::schema_fields_MODULE] ?? '') !== self::MODULE_CODE) {
+            $blockers[] = 'module_mismatch';
+        }
+        if ((string)($detail[SystemConfigVersion::schema_fields_AREA] ?? '') !== self::DEFAULT_AREA) {
+            $blockers[] = 'area_mismatch';
+        }
+        if ((string)($detail[SystemConfigVersion::schema_fields_STATUS] ?? '') !== SystemConfigVersion::STATUS_APPLIED) {
+            $blockers[] = 'version_not_applied';
+        }
+        if ($this->systemConfig->normalizeScope((string)($detail[SystemConfigVersion::schema_fields_SCOPE] ?? self::DEFAULT_SCOPE)) !== (string)$identity['scope']) {
+            $blockers[] = 'scope_mismatch';
+        }
+        if ($this->systemConfig->normalizeLocale((string)($detail[SystemConfigVersion::schema_fields_LOCALE] ?? SystemConfig::LOCALE_DEFAULT)) !== (string)$identity['locale']) {
+            $blockers[] = 'locale_mismatch';
+        }
+        if (!$this->selectionVersionMatchesIdentity($detail, $identity)) {
+            $blockers[] = 'identity_mismatch';
+        }
+
+        $selectionKey = $this->selectionKey((string)$identity['target_type'], (int)$identity['target_id'], (string)$identity['layout_type']);
+        $matchedChanges = $this->selectionChangesFromDetail($detail, $selectionKey);
+        if ($matchedChanges === []) {
+            $blockers[] = 'selection_key_not_found';
+        }
+
+        foreach ($matchedChanges as $change) {
+            $oldRow = is_array($change['old_row'] ?? null) ? $change['old_row'] : null;
+            $newRow = is_array($change['new_row'] ?? null) ? $change['new_row'] : null;
+            $currentRow = $this->systemConfig->getScopedConfigRow(
+                $selectionKey,
+                self::MODULE_CODE,
+                self::DEFAULT_AREA,
+                (string)$identity['scope'],
+                (string)$identity['locale']
+            );
+
+            $expectedVersion = (int)($newRow[SystemConfig::schema_fields_VERSION] ?? 0);
+            $currentVersion = (int)($currentRow[SystemConfig::schema_fields_VERSION] ?? 0);
+            if ($newRow === null && $currentRow !== null) {
+                $conflicts[] = [
+                    'key' => $selectionKey,
+                    'expected_version' => 0,
+                    'current_version' => $currentVersion,
+                    'reason' => 'row_recreated_after_inherit',
+                ];
+                continue;
+            }
+            if ($expectedVersion > 0 && $currentVersion !== $expectedVersion) {
+                $conflicts[] = [
+                    'key' => $selectionKey,
+                    'expected_version' => $expectedVersion,
+                    'current_version' => $currentVersion,
+                    'reason' => 'version_changed',
+                ];
+                continue;
+            }
+
+            if ($oldRow === null) {
+                $expectedRestore[] = [
+                    'key' => $selectionKey,
+                    'action' => 'delete_override',
+                    'layout_option' => null,
+                ];
+                continue;
+            }
+
+            $restoreOption = $this->normalizeLayoutOption((string)($oldRow[SystemConfig::schema_fields_VALUE] ?? ''));
+            if ($restoreOption === '') {
+                $blockers[] = 'empty_restore_option';
+                continue;
+            }
+            if (!$this->isSelectableLayoutOption((string)$identity['layout_type'], $restoreOption, [
+                'area' => self::DEFAULT_AREA,
+                'scope' => (string)$identity['scope'],
+                'target_type' => (string)$identity['target_type'],
+                'target_id' => (int)$identity['target_id'],
+            ])) {
+                $blockers[] = 'layout_option_unavailable:' . $restoreOption;
+                continue;
+            }
+
+            $expectedRestore[] = [
+                'key' => $selectionKey,
+                'action' => 'restore_option',
+                'layout_option' => $restoreOption,
+                'restore_row' => $this->systemConfig->maskSensitiveRow($oldRow),
+            ];
+        }
+
+        $blockers = array_values(array_unique($blockers));
+
+        return [
+            'rollbackable' => $blockers === [] && $conflicts === [],
+            'status' => $blockers === [] && $conflicts === [] ? 'ready' : 'blocked',
+            'version_id' => $versionId,
+            'identity' => $identity,
+            'selection_key' => $selectionKey,
+            'blockers' => $blockers,
+            'conflicts' => $conflicts,
+            'expected_restore' => $expectedRestore,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $context
+     * @return array<string,mixed>
+     */
+    public function rollbackLayoutSelectionVersion(int $versionId, array $context = []): array
+    {
+        $precheck = $this->precheckLayoutSelectionRollback($versionId, $context);
+        if (empty($precheck['rollbackable'])) {
+            return [
+                'success' => false,
+                'status' => 'precheck_failed',
+                'version_id' => $versionId,
+                'precheck' => $precheck,
+            ];
+        }
+
+        $result = $this->systemConfig->rollbackScopeConfigVersion($versionId, array_replace_recursive([
+            'operation' => 'theme_layout_selection_rollback',
+            'reason' => (string)__('回滚布局选择版本'),
+            'metadata' => [
+                'selection_rollback' => true,
+                'selection_precheck' => $precheck,
+            ],
+        ], $context));
+        $result['precheck'] = $precheck;
+        if (!empty($result['success'])) {
+            $this->clearRuntimeCaches(null, 'theme_virtual_layout_selection_rollback');
+        }
+
+        return $result;
+    }
+
+    /**
      * @param array<string,mixed> $identity
      * @param array<string,mixed> $versionData
      * @return array<string,mixed>
@@ -214,8 +447,16 @@ class ThemeVirtualLayoutService
             ->setReason((string)($versionData['reason'] ?? ''))
             ->save();
 
-        if ($publish) {
-            $this->publishVersion($version->getId());
+        if ($publish && !$this->publishVersion($version->getId())) {
+            return [
+                'success' => false,
+                'status' => 'publish_failed',
+                'message' => (string)__('虚拟布局版本保存成功，但发布失败，当前已发布版本保持不变'),
+                'asset_id' => $asset->getId(),
+                'version_id' => $version->getId(),
+                'version_no' => $version->getVersionNo(),
+                'identity' => $identity,
+            ];
         }
 
         ThemeData::clearCache();
@@ -241,26 +482,43 @@ class ThemeVirtualLayoutService
             return false;
         }
 
-        foreach ($this->getVersionsByAsset($asset->getId()) as $versionRow) {
-            $rowVersionId = (int)($versionRow[ThemeVirtualLayoutVersion::schema_fields_ID] ?? 0);
-            if ($rowVersionId <= 0 || $rowVersionId === $version->getId()) {
-                continue;
+        $assetSnapshot = $this->snapshotAssetPublishState($asset);
+        $versionStatusSnapshot = $this->snapshotVersionStatuses($asset->getId());
+
+        try {
+            foreach ($this->getVersionsByAsset($asset->getId()) as $versionRow) {
+                $rowVersionId = (int)($versionRow[ThemeVirtualLayoutVersion::schema_fields_ID] ?? 0);
+                if ($rowVersionId <= 0 || $rowVersionId === $version->getId()) {
+                    continue;
+                }
+                if ((string)($versionRow[ThemeVirtualLayoutVersion::schema_fields_STATUS] ?? '') !== ThemeVirtualLayoutVersion::STATUS_PUBLISHED) {
+                    continue;
+                }
+                $published = clone $this->virtualLayoutVersion;
+                $published->clearData()->clearQuery()->load($rowVersionId);
+                if ($published->getId()) {
+                    $published->setStatus(ThemeVirtualLayoutVersion::STATUS_ARCHIVED)->save();
+                }
             }
-            if ((string)($versionRow[ThemeVirtualLayoutVersion::schema_fields_STATUS] ?? '') !== ThemeVirtualLayoutVersion::STATUS_PUBLISHED) {
-                continue;
-            }
-            $published = clone $this->virtualLayoutVersion;
-            $published->clearData()->clearQuery()->load($rowVersionId);
-            if ($published->getId()) {
-                $published->setStatus(ThemeVirtualLayoutVersion::STATUS_ARCHIVED)->save();
-            }
+
+            $version->setStatus(ThemeVirtualLayoutVersion::STATUS_PUBLISHED)->save();
+            $asset->setPublishedVersionId($version->getId())
+                ->setVersion($version->getVersionNo())
+                ->setIsActive(true)
+                ->save();
+        } catch (\Throwable $throwable) {
+            $this->restorePublishState($asset->getId(), $assetSnapshot, $versionStatusSnapshot);
+            ThemeData::clearCache();
+            $this->clearRuntimeCaches((int)$assetSnapshot['theme_id'], 'theme_virtual_layout_publish_failed_restore');
+            w_log_error('Publish virtual layout version failed and state was restored: {error}', [
+                'error' => $throwable->getMessage(),
+                'asset_id' => $asset->getId(),
+                'version_id' => $version->getId(),
+            ]);
+
+            return false;
         }
 
-        $version->setStatus(ThemeVirtualLayoutVersion::STATUS_PUBLISHED)->save();
-        $asset->setPublishedVersionId($version->getId())
-            ->setVersion($version->getVersionNo())
-            ->setIsActive(true)
-            ->save();
         ThemeData::clearCache();
         $this->clearRuntimeCaches((int)$asset->getThemeId(), 'theme_virtual_layout_publish');
 
@@ -538,6 +796,104 @@ class ThemeVirtualLayoutService
         return 'virtual_layout.selection.' . $this->normalizeTargetType($targetType) . '.' . max(0, $targetId) . '.' . $this->normalizeLayoutType($layoutType);
     }
 
+    /**
+     * @return array{target_type:string,target_id:int,layout_type:string,scope:string,locale:string}
+     */
+    private function normalizeSelectionIdentity(
+        string $targetType,
+        int $targetId,
+        string $layoutType,
+        ?string $scope = null,
+        ?string $locale = null
+    ): array {
+        return [
+            'target_type' => $this->normalizeTargetType($targetType),
+            'target_id' => max(0, $targetId),
+            'layout_type' => $this->normalizeLayoutType($layoutType),
+            'scope' => $this->normalizeScope($scope),
+            'locale' => $this->systemConfig->normalizeLocale($locale),
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    private function isValidSelectionIdentity(array $identity): bool
+    {
+        return (int)($identity['target_id'] ?? 0) > 0
+            && (string)($identity['target_type'] ?? '') !== ThemeVirtualLayout::TARGET_GLOBAL
+            && (string)($identity['layout_type'] ?? '') !== '';
+    }
+
+    /**
+     * @param array<string,mixed> $detail
+     * @param array<string,mixed> $identity
+     */
+    private function selectionVersionMatchesIdentity(array $detail, array $identity): bool
+    {
+        $metadata = is_array($detail['metadata_data'] ?? null) ? $detail['metadata_data'] : [];
+        if (isset($metadata['target_type'], $metadata['target_id'], $metadata['layout_type'])) {
+            return $this->normalizeTargetType((string)$metadata['target_type']) === (string)$identity['target_type']
+                && (int)$metadata['target_id'] === (int)$identity['target_id']
+                && $this->normalizeLayoutType((string)$metadata['layout_type']) === (string)$identity['layout_type'];
+        }
+
+        return $this->selectionChangesFromDetail(
+            $detail,
+            $this->selectionKey((string)$identity['target_type'], (int)$identity['target_id'], (string)$identity['layout_type'])
+        ) !== [];
+    }
+
+    /**
+     * @param array<string,mixed> $detail
+     * @return list<array<string,mixed>>
+     */
+    private function selectionChangesFromDetail(array $detail, string $selectionKey): array
+    {
+        $matches = [];
+        foreach (is_array($detail['changes'] ?? null) ? $detail['changes'] : [] as $change) {
+            if (!is_array($change) || (string)($change['key'] ?? '') !== $selectionKey) {
+                continue;
+            }
+            $matches[] = $change;
+        }
+
+        return $matches;
+    }
+
+    /**
+     * @param array<string,mixed> $detail
+     * @param array<string,mixed> $identity
+     * @return array<string,mixed>
+     */
+    private function summarizeSelectionVersion(array $detail, array $identity): array
+    {
+        $selectionKey = $this->selectionKey((string)$identity['target_type'], (int)$identity['target_id'], (string)$identity['layout_type']);
+        $changes = $this->selectionChangesFromDetail($detail, $selectionKey);
+        $change = $changes[0] ?? [];
+        $oldRow = is_array($change['old_row'] ?? null) ? $change['old_row'] : null;
+        $newRow = is_array($change['new_row'] ?? null) ? $change['new_row'] : null;
+
+        return [
+            'version_id' => (int)($detail[SystemConfigVersion::schema_fields_ID] ?? 0),
+            'operation' => (string)($detail[SystemConfigVersion::schema_fields_OPERATION] ?? ''),
+            'status' => (string)($detail[SystemConfigVersion::schema_fields_STATUS] ?? ''),
+            'scope' => (string)($detail[SystemConfigVersion::schema_fields_SCOPE] ?? ''),
+            'locale' => (string)($detail[SystemConfigVersion::schema_fields_LOCALE] ?? ''),
+            'created_at' => (string)($detail[SystemConfigVersion::schema_fields_CREATED_AT] ?? ''),
+            'actor_id' => (string)($detail[SystemConfigVersion::schema_fields_ACTOR_ID] ?? ''),
+            'actor_name' => (string)($detail[SystemConfigVersion::schema_fields_ACTOR_NAME] ?? ''),
+            'reason' => (string)($detail[SystemConfigVersion::schema_fields_REASON] ?? ''),
+            'identity' => $identity,
+            'selection_key' => $selectionKey,
+            'old_layout_option' => $oldRow !== null ? $this->normalizeLayoutOption((string)($oldRow[SystemConfig::schema_fields_VALUE] ?? '')) : null,
+            'new_layout_option' => $newRow !== null ? $this->normalizeLayoutOption((string)($newRow[SystemConfig::schema_fields_VALUE] ?? '')) : null,
+            'old_row_version' => $oldRow !== null ? (int)($oldRow[SystemConfig::schema_fields_VERSION] ?? 0) : 0,
+            'new_row_version' => $newRow !== null ? (int)($newRow[SystemConfig::schema_fields_VERSION] ?? 0) : 0,
+            'metadata' => is_array($detail['metadata_data'] ?? null) ? $detail['metadata_data'] : [],
+        ];
+    }
+
     private function normalizeArea(string $area): string
     {
         return strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
@@ -562,13 +918,76 @@ class ThemeVirtualLayoutService
 
     private function getActiveThemeId(string $area): int
     {
+        $theme = $this->getActiveTheme($area);
+        return $theme ? (int)$theme->getId() : 0;
+    }
+
+    private function getActiveTheme(string $area): ?WelineTheme
+    {
         try {
             $theme = clone $this->welineTheme;
             $theme->clearData()->clearQuery()->getActiveTheme($area);
-            return (int)$theme->getId();
+            return $theme->getId() ? $theme : null;
         } catch (\Throwable) {
-            return 0;
+            return null;
         }
+    }
+
+    /**
+     * @param array<string,mixed> $identity
+     */
+    private function isSelectableLayoutOption(string $layoutType, string $layoutOption, array $identity): bool
+    {
+        $identity = $this->normalizeIdentity(array_merge($identity, [
+            'layout_type' => $layoutType,
+            'layout_option' => $layoutOption,
+        ]));
+
+        if ($identity['layout_type'] === '' || $identity['layout_option'] === '') {
+            return false;
+        }
+
+        foreach ($this->selectableLayoutTypeCandidates((string)$identity['layout_type']) as $candidateLayoutType) {
+            if ($this->fileLayoutOptionExists($identity['area'], $candidateLayoutType, $identity['layout_option'])) {
+                return true;
+            }
+
+            if ($this->resolveAssetForEdit(
+                $candidateLayoutType,
+                (string)$identity['layout_option'],
+                array_merge($identity, ['layout_type' => $candidateLayoutType])
+            ) !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function selectableLayoutTypeCandidates(string $layoutType): array
+    {
+        $layoutType = $this->normalizeLayoutType($layoutType);
+        $candidates = [$layoutType];
+        if ($layoutType === ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT
+            || $layoutType === 'product_detail') {
+            $candidates[] = 'product';
+        }
+
+        return array_values(array_unique(array_filter($candidates)));
+    }
+
+    private function fileLayoutOptionExists(string $area, string $layoutType, string $layoutOption): bool
+    {
+        $theme = $this->getActiveTheme($area);
+        if (!$theme) {
+            return false;
+        }
+
+        $modulePath = 'Weline_Theme::theme/' . $area . '/layouts/' . $layoutType . '/' . $layoutOption . '.phtml';
+        return LayoutPathResolver::getLayoutFilePath($modulePath, $theme, $area) !== null;
     }
 
     private function loadOrCreateAsset(array $identity): ThemeVirtualLayout
@@ -678,6 +1097,74 @@ class ThemeVirtualLayoutService
             ->fetchArray();
 
         return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * @return array{published_version_id:int,version:int,is_active:bool,theme_id:int}
+     */
+    private function snapshotAssetPublishState(ThemeVirtualLayout $asset): array
+    {
+        return [
+            'published_version_id' => $asset->getPublishedVersionId(),
+            'version' => $asset->getVersion(),
+            'is_active' => (bool)((int)$asset->getData(ThemeVirtualLayout::schema_fields_IS_ACTIVE)),
+            'theme_id' => $asset->getThemeId(),
+        ];
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function snapshotVersionStatuses(int $assetId): array
+    {
+        $statuses = [];
+        foreach ($this->getVersionsByAsset($assetId) as $versionRow) {
+            $rowVersionId = (int)($versionRow[ThemeVirtualLayoutVersion::schema_fields_ID] ?? 0);
+            if ($rowVersionId <= 0) {
+                continue;
+            }
+            $statuses[$rowVersionId] = (string)($versionRow[ThemeVirtualLayoutVersion::schema_fields_STATUS] ?? ThemeVirtualLayoutVersion::STATUS_DRAFT);
+        }
+
+        return $statuses;
+    }
+
+    /**
+     * @param array{published_version_id:int,version:int,is_active:bool,theme_id:int} $assetSnapshot
+     * @param array<int,string> $versionStatusSnapshot
+     */
+    private function restorePublishState(int $assetId, array $assetSnapshot, array $versionStatusSnapshot): void
+    {
+        foreach ($versionStatusSnapshot as $rowVersionId => $status) {
+            try {
+                $restoreVersion = clone $this->virtualLayoutVersion;
+                $restoreVersion->clearData()->clearQuery()->load($rowVersionId);
+                if ($restoreVersion->getId()) {
+                    $restoreVersion->setStatus($status)->save();
+                }
+            } catch (\Throwable $throwable) {
+                w_log_error('Restore virtual layout version status failed: {error}', [
+                    'error' => $throwable->getMessage(),
+                    'asset_id' => $assetId,
+                    'version_id' => $rowVersionId,
+                ]);
+            }
+        }
+
+        try {
+            $restoreAsset = $this->loadAssetById($assetId);
+            if ($restoreAsset && $restoreAsset->getId()) {
+                $restoreAsset->setPublishedVersionId($assetSnapshot['published_version_id'])
+                    ->setVersion($assetSnapshot['version'])
+                    ->setIsActive($assetSnapshot['is_active'])
+                    ->save();
+            }
+        } catch (\Throwable $throwable) {
+            w_log_error('Restore virtual layout asset publish pointer failed: {error}', [
+                'error' => $throwable->getMessage(),
+                'asset_id' => $assetId,
+            ]);
+        }
     }
 
     private function nextVersionNo(int $assetId): int

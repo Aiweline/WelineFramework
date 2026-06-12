@@ -49,6 +49,12 @@ class Layout extends BackendController
         $this->assign('currentLayoutContext', $this->resolveEffectiveLayoutContext($context));
         $this->assign('productLayouts', $layouts);
         $this->assign('schedules', $schedules);
+        $this->assign('selectionVersions', $this->layoutService->listEntityLayoutSelectionVersions(
+            $context['entity_type'],
+            $context['entity_id'],
+            $context['layout_type'],
+            10
+        ));
         $this->assign('layoutOptions', $this->layoutService->getAvailableEditableLayoutOptions(
             $context['editor_layout_type'],
             $this->buildVirtualLayoutIdentity($context)
@@ -86,6 +92,41 @@ class Layout extends BackendController
             $this->getMessageManager()->addSuccess(__('布局配置保存成功'));
         } else {
             $this->getMessageManager()->addError(__('布局配置保存失败'));
+        }
+
+        $this->redirectToLayoutContext($context);
+        return '';
+    }
+
+    #[Acl('WeShop_Product::product_layout_selection_rollback', 'Rollback layout selection version', 'mdi mdi-history', 'Rollback product or category layout selection version')]
+    public function rollbackSelectionVersion()
+    {
+        $context = $this->resolveLayoutContext();
+        if ($context === null) {
+            $this->getMessageManager()->addError(__('参数不完整'));
+            $this->redirect('*/backend/product');
+            return '';
+        }
+
+        $versionId = (int)$this->request->getParam('version_id');
+        if ($versionId <= 0) {
+            $this->getMessageManager()->addError(__('布局选择版本无效'));
+            $this->redirectToLayoutContext($context);
+            return '';
+        }
+
+        $result = $this->layoutService->rollbackEntityLayoutSelectionVersion(
+            $context['entity_type'],
+            $context['entity_id'],
+            $context['layout_type'],
+            $versionId,
+            (string)__('后台回滚布局选择版本')
+        );
+
+        if (!empty($result['success'])) {
+            $this->getMessageManager()->addSuccess(__('布局选择版本已回滚'));
+        } else {
+            $this->getMessageManager()->addError($this->formatSelectionRollbackError($result));
         }
 
         $this->redirectToLayoutContext($context);
@@ -525,6 +566,35 @@ class Layout extends BackendController
         $schedule = ObjectManager::getInstance(ProductLayoutSchedule::class);
         $schedule->load($scheduleId);
         return $schedule->getId() ? $schedule : null;
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     */
+    private function formatSelectionRollbackError(array $result): string
+    {
+        $precheck = is_array($result['precheck'] ?? null) ? $result['precheck'] : [];
+        $blockers = is_array($precheck['blockers'] ?? null) ? $precheck['blockers'] : [];
+        $conflicts = is_array($precheck['conflicts'] ?? null) ? $precheck['conflicts'] : [];
+        $status = (string)($result['status'] ?? $precheck['status'] ?? 'failed');
+
+        $reasons = $blockers;
+        foreach ($conflicts as $conflict) {
+            if (!is_array($conflict)) {
+                continue;
+            }
+            $reason = (string)($conflict['reason'] ?? '');
+            if ($reason !== '') {
+                $reasons[] = $reason;
+            }
+        }
+
+        $reasonText = implode(', ', array_values(array_unique(array_filter(array_map('strval', $reasons)))));
+        if ($reasonText !== '') {
+            return (string)__('布局选择版本回滚失败：%{1}', $reasonText);
+        }
+
+        return (string)__('布局选择版本回滚失败：%{1}', $status);
     }
 
     /**

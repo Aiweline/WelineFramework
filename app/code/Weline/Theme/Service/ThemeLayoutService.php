@@ -36,6 +36,35 @@ class ThemeLayoutService
     }
 
     /**
+     * @param array<string,mixed> $identity
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     */
+    private function normalizeLayoutIdentity(array $identity = []): array
+    {
+        $layoutOption = trim((string)($identity['layout_option'] ?? 'default'));
+        $scope = trim((string)($identity['scope'] ?? 'default'));
+        $targetType = trim((string)($identity['target_type'] ?? 'global'));
+
+        return [
+            'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
+            'scope' => $scope !== '' ? $scope : 'default',
+            'target_type' => $targetType !== '' ? $targetType : 'global',
+            'target_id' => max(0, (int)($identity['target_id'] ?? 0)),
+        ];
+    }
+
+    private function applyLayoutIdentityFilters(mixed $query, array $identity): mixed
+    {
+        $identity = $this->normalizeLayoutIdentity($identity);
+
+        return $query
+            ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
+            ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
+            ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
+            ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id']);
+    }
+
+    /**
      * 获取主题布局配置
      *
      * @param int $themeId 主题ID
@@ -43,7 +72,7 @@ class ThemeLayoutService
      * @param string $status 状态：draft=草稿，published=已发布（默认读取已发布）
      * @return array 按区域分组的部件配置
      */
-    public function getLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, string $status = ThemeLayout::STATUS_PUBLISHED): array
+    public function getLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, string $status = ThemeLayout::STATUS_PUBLISHED, array $identity = []): array
     {
         // 按区域分组
         $groupedLayout = [];
@@ -56,11 +85,13 @@ class ThemeLayoutService
 
         try {
             // 使用 fetchArray() 获取原始数组数据，避免返回对象导致的问题
-            $layouts = $this->themeLayout->reset()
+            $query = $this->themeLayout->reset()
                 ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
                 ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
                 ->where(ThemeLayout::schema_fields_IS_ACTIVE, 1)
-                ->where(ThemeLayout::schema_fields_STATUS, $status)
+                ->where(ThemeLayout::schema_fields_STATUS, $status);
+
+            $layouts = $this->applyLayoutIdentityFilters($query, $identity)
                 ->order(ThemeLayout::schema_fields_AREA, 'ASC')
                 ->order(ThemeLayout::schema_fields_SORT_ORDER, 'ASC')
                 ->order(ThemeLayout::schema_fields_ID, 'ASC')
@@ -87,6 +118,10 @@ class ThemeLayoutService
                         'widget_module' => $layout[ThemeLayout::schema_fields_WIDGET_MODULE] ?? '',
                         'widget_type' => $layout[ThemeLayout::schema_fields_WIDGET_TYPE] ?? '',
                         'slot_id' => $layout[ThemeLayout::schema_fields_SLOT_ID] ?? null,
+                        'layout_option' => $layout[ThemeLayout::schema_fields_LAYOUT_OPTION] ?? 'default',
+                        'scope' => $layout[ThemeLayout::schema_fields_SCOPE] ?? 'default',
+                        'target_type' => $layout[ThemeLayout::schema_fields_TARGET_TYPE] ?? 'global',
+                        'target_id' => (int)($layout[ThemeLayout::schema_fields_TARGET_ID] ?? 0),
                         'config' => is_string($config) ? json_decode($config, true) : $config,
                         'sort_order' => $layout[ThemeLayout::schema_fields_SORT_ORDER] ?? 0,
                         'status' => $layout[ThemeLayout::schema_fields_STATUS] ?? $status,
@@ -107,9 +142,9 @@ class ThemeLayoutService
      * @param string $pageType 页面类型
      * @return array 按区域分组的部件配置
      */
-    public function getDraftLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT): array
+    public function getDraftLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, array $identity = []): array
     {
-        return $this->getLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+        return $this->getLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
     }
 
     /**
@@ -119,9 +154,9 @@ class ThemeLayoutService
      * @param string $pageType 页面类型
      * @return array 按区域分组的部件配置
      */
-    public function getPublishedLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT): array
+    public function getPublishedLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, array $identity = []): array
     {
-        return $this->getLayout($themeId, $pageType, ThemeLayout::STATUS_PUBLISHED);
+        return $this->getLayout($themeId, $pageType, ThemeLayout::STATUS_PUBLISHED, $identity);
     }
 
     /**
@@ -132,9 +167,9 @@ class ThemeLayoutService
      * @param string $status 状态：draft=草稿，published=已发布（默认读取已发布）
      * @return array
      */
-    public function getFullLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, string $status = ThemeLayout::STATUS_PUBLISHED): array
+    public function getFullLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, string $status = ThemeLayout::STATUS_PUBLISHED, array $identity = []): array
     {
-        $layout = $this->getLayout($themeId, $pageType, $status);
+        $layout = $this->getLayout($themeId, $pageType, $status, $identity);
         $widgetRegistry = ObjectManager::getInstance(\Weline\Widget\Service\WidgetRegistry::class)->getRegistry();
 
         // 为每个部件添加元信息，并按 slot_id 组织到 slots 子数组
@@ -197,9 +232,9 @@ class ThemeLayoutService
     /**
      * 获取完整草稿布局数据（后台编辑用）
      */
-    public function getFullDraftLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT): array
+    public function getFullDraftLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, array $identity = []): array
     {
-        return $this->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+        return $this->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
     }
 
     /**
@@ -223,6 +258,7 @@ class ThemeLayoutService
         $exclusive = (bool)($data['exclusive'] ?? false);
         $status = $data['status'] ?? ThemeLayout::STATUS_DRAFT;
         $sortOrder = (int)($data['sort_order'] ?? 0);
+        $identity = $this->normalizeLayoutIdentity($data);
 
         // 如果是独占插槽，先删除该插槽/区域中相同类型的部件（仅限同状态）
         if ($exclusive && !$layoutId) {
@@ -232,7 +268,8 @@ class ThemeLayoutService
                 $data['area'],
                 $slotId,
                 $data['widget_code'],
-                $status
+                $status,
+                $identity
             );
         }
 
@@ -244,7 +281,8 @@ class ThemeLayoutService
                 $data['area'],
                 $slotId,
                 $sortOrder,
-                $status
+                $status,
+                $identity
             );
         }
 
@@ -259,6 +297,10 @@ class ThemeLayoutService
         $this->themeLayout
             ->setThemeId((int)$data['theme_id'])
             ->setPageType($data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT)
+            ->setLayoutOption($identity['layout_option'])
+            ->setScope($identity['scope'])
+            ->setTargetType($identity['target_type'])
+            ->setTargetId($identity['target_id'])
             ->setArea($data['area'])
             ->setSlotId($slotId)
             ->setWidgetCode($data['widget_code'])
@@ -276,7 +318,7 @@ class ThemeLayoutService
     /**
      * 将指定位置及之后的部件 sort_order +1，为新插入腾出位置
      */
-    private function shiftSortOrder(int $themeId, string $pageType, string $area, ?string $slotId, int $fromSortOrder, string $status): void
+    private function shiftSortOrder(int $themeId, string $pageType, string $area, ?string $slotId, int $fromSortOrder, string $status, array $identity = []): void
     {
         try {
             $query = $this->themeLayout->clearQuery()
@@ -285,6 +327,7 @@ class ThemeLayoutService
                 ->where(ThemeLayout::schema_fields_AREA, $area)
                 ->where(ThemeLayout::schema_fields_STATUS, $status)
                 ->where(ThemeLayout::schema_fields_SORT_ORDER, $fromSortOrder, '>=');
+            $query = $this->applyLayoutIdentityFilters($query, $identity);
 
             if ($slotId !== null && $slotId !== '') {
                 $query->where(ThemeLayout::schema_fields_SLOT_ID, $slotId);
@@ -318,13 +361,14 @@ class ThemeLayoutService
      * @param string $widgetCode 新部件代码（用于判断是否同类型）
      * @param string $status 状态
      */
-    private function removeExclusiveWidgets(int $themeId, string $pageType, string $area, ?string $slotId, string $widgetCode, string $status = ThemeLayout::STATUS_DRAFT): void
+    private function removeExclusiveWidgets(int $themeId, string $pageType, string $area, ?string $slotId, string $widgetCode, string $status = ThemeLayout::STATUS_DRAFT, array $identity = []): void
     {
         try {
             $query = $this->themeLayout->clearQuery()
                 ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
                 ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
                 ->where(ThemeLayout::schema_fields_STATUS, $status);
+            $query = $this->applyLayoutIdentityFilters($query, $identity);
 
             // 如果有插槽ID，按插槽删除（不限制 area，因为旧数据的 area 可能不一致）
             // 否则按区域+部件代码删除
@@ -779,6 +823,10 @@ class ThemeLayoutService
             'config' => $config,
             'area' => $this->themeLayout->getArea(),
             'sort_order' => $this->themeLayout->getSortOrder(),
+            'layout_option' => $this->themeLayout->getLayoutOption(),
+            'scope' => $this->themeLayout->getScope(),
+            'target_type' => $this->themeLayout->getTargetType(),
+            'target_id' => $this->themeLayout->getTargetId(),
         ];
     }
 
@@ -852,13 +900,15 @@ class ThemeLayoutService
      * @param string $status 状态
      * @return array
      */
-    public function getSlotWidgets(int $themeId, string $pageType, string $slotId, string $status = 'draft'): array
+    public function getSlotWidgets(int $themeId, string $pageType, string $slotId, string $status = 'draft', array $identity = []): array
     {
-        $layouts = $this->themeLayout->reset()
+        $query = $this->themeLayout->reset()
             ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
             ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
             ->where(ThemeLayout::schema_fields_STATUS, $status)
-            ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId)
+            ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId);
+
+        $layouts = $this->applyLayoutIdentityFilters($query, $identity)
             ->order(ThemeLayout::schema_fields_SORT_ORDER, 'ASC')
             ->select()
             ->fetchArray();

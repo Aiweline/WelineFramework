@@ -18,17 +18,18 @@
         'valueOf',
     ]);
 
-    const getConfig = () => {
-        if (window.Weline && window.Weline.config && window.Weline.config.api) {
-            return window.Weline.config.api;
-        }
-        if (window.__WelineThemeConfig && window.__WelineThemeConfig.api) {
-            return window.__WelineThemeConfig.api;
-        }
-        if (window.WelineApiConfig) {
-            return window.WelineApiConfig;
-        }
-        return {};
+    const mergeApiConfig = () => {
+        const merged = {};
+        [
+            window.WelineApiConfig,
+            window.__WelineThemeConfig && window.__WelineThemeConfig.api,
+            window.Weline && window.Weline.config && window.Weline.config.api,
+        ].forEach((source) => {
+            if (source && typeof source === 'object') {
+                Object.assign(merged, source);
+            }
+        });
+        return merged;
     };
 
     const getRuntimeConfig = () => {
@@ -256,35 +257,57 @@
         return normalized;
     };
 
-    const apiConfig = getConfig();
-    const runtimeConfig = getRuntimeConfig();
-    const config = Object.assign({
-        endpoint: '/api/framework/query-bin',
-        deployVersion: 'dev',
-        workerBuildId: 'dev',
-        cartFlagStorageKey: 'weline_cart_has_items',
-        cartProbeSessionKey: 'weline_cart_probe_done',
-        cartCountCookieKey: 'weline_cart_item_count',
-        autoEnableOnCartClickSelector: '[data-weline-cart-trigger]',
-        area: '',
-        locale: '',
-        currency: '',
-        onHttpError: null,
-        requestTimeoutMs: 15000,
-    }, apiConfig);
+    const buildClientConfig = () => {
+        const apiConfig = mergeApiConfig();
+        const runtimeConfig = getRuntimeConfig();
+        const config = Object.assign({
+            endpoint: '/api/framework/query-bin',
+            deployVersion: 'dev',
+            workerBuildId: 'dev',
+            cartFlagStorageKey: 'weline_cart_has_items',
+            cartProbeSessionKey: 'weline_cart_probe_done',
+            cartCountCookieKey: 'weline_cart_item_count',
+            autoEnableOnCartClickSelector: '[data-weline-cart-trigger]',
+            area: '',
+            locale: '',
+            currency: '',
+            onHttpError: null,
+            requestTimeoutMs: 15000,
+        }, apiConfig);
 
-    config.workerUrl = withDevCacheBust(sameOriginUrl(apiConfig.workerUrl || getDefaultWorkerUrl(), getDefaultWorkerUrl()));
-    config.endpoint = sameOriginUrl(apiConfig.endpoint || apiConfig.queryBinUrl || '/api/framework/query-bin', '/api/framework/query-bin');
-    config.deployVersion = String(apiConfig.deployVersion || apiConfig.deploy_version || config.deployVersion || 'dev');
-    config.workerBuildId = String(apiConfig.workerBuildId || apiConfig.worker_build_id || config.workerBuildId || 'dev');
-    config.area = String(apiConfig.area || apiConfig.context || config.area || '');
-    config.defaultCurrency = normalizeCurrencyCode(
-        apiConfig.defaultCurrency || apiConfig.default_currency || runtimeConfig.defaultCurrency || runtimeConfig.default_currency || 'CNY'
-    );
-    config.availableCurrencies = apiConfig.availableCurrencies || apiConfig.supportedCurrencies || apiConfig.currencyCodes || apiConfig.currencies
-        || runtimeConfig.availableCurrencies || runtimeConfig.supportedCurrencies || runtimeConfig.currencyCodes || runtimeConfig.currencies || [];
-    config.locale = normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || config.locale);
-    config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || config.currency, config);
+        config.workerUrl = withDevCacheBust(sameOriginUrl(apiConfig.workerUrl || getDefaultWorkerUrl(), getDefaultWorkerUrl()));
+        config.endpoint = sameOriginUrl(apiConfig.endpoint || apiConfig.queryBinUrl || '/api/framework/query-bin', '/api/framework/query-bin');
+        config.deployVersion = String(apiConfig.deployVersion || apiConfig.deploy_version || config.deployVersion || 'dev');
+        config.workerBuildId = String(apiConfig.workerBuildId || apiConfig.worker_build_id || config.workerBuildId || 'dev');
+        config.area = String(apiConfig.area || apiConfig.context || config.area || '');
+        config.defaultCurrency = normalizeCurrencyCode(
+            apiConfig.defaultCurrency || apiConfig.default_currency || runtimeConfig.defaultCurrency || runtimeConfig.default_currency || 'CNY'
+        );
+        config.availableCurrencies = apiConfig.availableCurrencies || apiConfig.supportedCurrencies || apiConfig.currencyCodes || apiConfig.currencies
+            || runtimeConfig.availableCurrencies || runtimeConfig.supportedCurrencies || runtimeConfig.currencyCodes || runtimeConfig.currencies || [];
+        config.locale = normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || config.locale);
+        config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || config.currency, config);
+        return config;
+    };
+
+    let client = null;
+    const getOrCreateClient = () => {
+        const freshConfig = buildClientConfig();
+        if (!client) {
+            client = new WelineApiClient(freshConfig);
+            return client;
+        }
+        client.config.endpoint = freshConfig.endpoint;
+        client.config.workerUrl = freshConfig.workerUrl;
+        client.config.deployVersion = freshConfig.deployVersion;
+        client.config.workerBuildId = freshConfig.workerBuildId;
+        client.config.locale = freshConfig.locale;
+        client.config.currency = freshConfig.currency;
+        client.config.defaultCurrency = freshConfig.defaultCurrency;
+        client.config.availableCurrencies = freshConfig.availableCurrencies;
+        client.config.area = freshConfig.area;
+        return client;
+    };
 
     class WelineApiClient {
         constructor(clientConfig) {
@@ -951,23 +974,21 @@
         }
     }
 
-    const client = new WelineApiClient(config);
-
     const ApiModule = {
         __full: true,
-        request: () => client.request(),
-        get: () => client.request(),
-        post: () => client.request(),
-        call: (provider, operation, params, options) => client.call(provider, operation, params, options),
-        graph: (graph, options) => client.graph(graph, options),
-        stream: (channel, params, options) => client.stream(channel, params, options),
-        upload: (provider, operation, formData, options) => client.upload(provider, operation, formData, options),
-        resource: (provider, optionalMap) => client.resource(provider, optionalMap),
-        markCartActive: () => client.markCartActive(),
-        markCartEmpty: () => client.markCartEmpty(),
-        enableAutoRequests: () => client.enableAutoRequests(),
-        disableAutoRequests: () => client.disableAutoRequests(),
-        getClient: () => client,
+        request: () => getOrCreateClient().request(),
+        get: () => getOrCreateClient().request(),
+        post: () => getOrCreateClient().request(),
+        call: (provider, operation, params, options) => getOrCreateClient().call(provider, operation, params, options),
+        graph: (graph, options) => getOrCreateClient().graph(graph, options),
+        stream: (channel, params, options) => getOrCreateClient().stream(channel, params, options),
+        upload: (provider, operation, formData, options) => getOrCreateClient().upload(provider, operation, formData, options),
+        resource: (provider, optionalMap) => getOrCreateClient().resource(provider, optionalMap),
+        markCartActive: () => getOrCreateClient().markCartActive(),
+        markCartEmpty: () => getOrCreateClient().markCartEmpty(),
+        enableAutoRequests: () => getOrCreateClient().enableAutoRequests(),
+        disableAutoRequests: () => getOrCreateClient().disableAutoRequests(),
+        getClient: () => getOrCreateClient(),
     };
 
     window.WelineApiModule = ApiModule;

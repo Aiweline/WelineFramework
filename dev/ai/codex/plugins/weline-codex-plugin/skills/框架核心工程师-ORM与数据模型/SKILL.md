@@ -46,7 +46,8 @@ This skill owns Weline ORM behavior, schema declaration rules, query execution c
 - Do not perform field CRUD in `Setup/Upgrade.php`.
 - ORM chains must end with `fetch()` or `fetchArray()` when execution is required.
 - When a Model/ORM query is already used for list data, pagination must come from the model pagination API (`pagination(...)`, `getPagination(...)`, or the existing provider pagination payload). Do not rebuild pagination in theme/layout templates by parsing `REQUEST_URI`, rewrite internals, or manual query strings.
-- Use `w_query()` and query providers for server-side or framework-internal cross-module data access; browser frontend consumers must reach provider operations through `Weline.Api.resource()/graph()/stream()` and FrontendQueryGateway.
+- Cross-module reads must use `w_query()` and query providers; never `use`/inject another module's Service/Model. Before calling, run `php bin/w query:help <provider|Module>` or `w_query('Module')` to discover operations.
+- Browser consumers use `Weline.Api.resource()/graph()/stream()` or `Weline.Query.help()`; browser help exposes only `frontend=true` operations.
 - Do not create events just to read data from another module.
 
 # Inputs Required

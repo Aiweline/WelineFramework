@@ -11,7 +11,9 @@ use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\Product\LocalDescription as ProductLocalDescription;
 use WeShop\Product\Model\ProductCategory;
+use WeShop\Product\Model\ProductLayout;
 use WeShop\Product\Service\ProductEavCompatibilityService;
+use WeShop\Product\Service\ProductLayoutService;
 
 /**
  * 产品查询器
@@ -37,6 +39,7 @@ class ProductQueryProvider implements QueryProviderInterface
     private readonly ProductCategory $productCategoryModel;
     private readonly EavEntity $eavEntityModel;
     private readonly EavAttribute $eavAttributeModel;
+    private ?ProductLayoutService $layoutService = null;
 
     public function __construct(
         private readonly Product $productModel,
@@ -61,6 +64,9 @@ class ProductQueryProvider implements QueryProviderInterface
             'getProductById' => $this->getProductById($params),
             'getProductByIds' => $this->getProductByIds($params),
             'getProductIdsByCategoryId' => $this->getProductIdsByCategoryId($params),
+            'resolveProductLayoutContext' => $this->resolveProductLayoutContext($params),
+            'resolveCategoryLayoutContext' => $this->resolveCategoryLayoutContext($params),
+            'resolveCategoryProductDefaultLayoutContext' => $this->resolveCategoryProductDefaultLayoutContext($params),
             'searchProducts' => $this->searchProducts($params),
             'getProductSuggestions' => $this->getProductSuggestions($params),
             'getPriceStats' => $this->getPriceStats($params),
@@ -73,6 +79,66 @@ class ProductQueryProvider implements QueryProviderInterface
                 (string)__('Product 查询器不支持的操作：%{1}', $operation)
             ),
         };
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function resolveProductLayoutContext(array $params): ?array
+    {
+        $productId = (int)($params['product_id'] ?? $params['target_id'] ?? 0);
+        if ($productId <= 0) {
+            return null;
+        }
+
+        $currentCategoryId = isset($params['current_category_id']) ? (int)$params['current_category_id'] : null;
+        if ($currentCategoryId !== null && $currentCategoryId <= 0) {
+            $currentCategoryId = null;
+        }
+
+        return $this->layoutService()->resolveProductLayoutContext(
+            $productId,
+            (string)($params['layout_type'] ?? ProductLayout::LAYOUT_TYPE_PRODUCT),
+            $currentCategoryId
+        );
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function resolveCategoryLayoutContext(array $params): ?array
+    {
+        $categoryId = (int)($params['category_id'] ?? $params['target_id'] ?? 0);
+        if ($categoryId <= 0) {
+            return null;
+        }
+
+        return $this->layoutService()->resolveCategoryLayoutContext(
+            $categoryId,
+            (string)($params['layout_type'] ?? ProductLayout::LAYOUT_TYPE_CATEGORY)
+        );
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function resolveCategoryProductDefaultLayoutContext(array $params): ?array
+    {
+        $categoryId = (int)($params['category_id'] ?? $params['target_id'] ?? 0);
+        if ($categoryId <= 0) {
+            return null;
+        }
+
+        return $this->layoutService()->resolveCategoryProductDefaultLayoutContext($categoryId);
+    }
+
+    private function layoutService(): ProductLayoutService
+    {
+        if (!$this->layoutService instanceof ProductLayoutService) {
+            $this->layoutService = ObjectManager::getInstance(ProductLayoutService::class);
+        }
+
+        return $this->layoutService;
     }
 
     private function getProductById(array $params): ?array
@@ -778,6 +844,30 @@ class ProductQueryProvider implements QueryProviderInterface
                     'name' => 'getProductIdsByCategoryId',
                     'description' => __('根据分类 ID 获取关联的商品 ID 列表'),
                     'params' => [['name' => 'category_id', 'type' => 'int', 'required' => true]],
+                ],
+                [
+                    'name' => 'resolveProductLayoutContext',
+                    'description' => __('解析商品详情页当前有效布局和来源'),
+                    'params' => [
+                        ['name' => 'product_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'current_category_id', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'resolveCategoryLayoutContext',
+                    'description' => __('解析分类页当前有效布局和来源'),
+                    'params' => [
+                        ['name' => 'category_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'resolveCategoryProductDefaultLayoutContext',
+                    'description' => __('解析分类下商品默认布局和来源'),
+                    'params' => [
+                        ['name' => 'category_id', 'type' => 'int', 'required' => true],
+                    ],
                 ],
                 [
                     'name' => 'searchProducts',

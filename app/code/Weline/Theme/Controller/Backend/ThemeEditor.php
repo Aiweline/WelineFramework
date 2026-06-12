@@ -315,6 +315,31 @@ class ThemeEditor extends BackendController
             : ($requestedLayoutOption !== '' ? $requestedLayoutOption : 'default');
         $pageTypes = $this->mergeLayoutTypesWithEditorOptions(ThemeLayout::getPageTypes(), $layoutOptionsByType, $pageType);
         $layoutEditorLock = $this->buildLayoutEditorLock($currentThemeId, $editorArea, $pageType, $layoutOption, $requestedLayoutOption);
+        if (!empty($layoutEditorLock['enabled'])) {
+            $lockedLayoutOption = $this->normalizeLayoutOption((string)($layoutEditorLock['layout_option'] ?? ''));
+            if ($lockedLayoutOption !== '') {
+                $layoutOption = $lockedLayoutOption;
+                $hasLockedOption = false;
+                foreach (($layoutOptionsByType[$pageType] ?? []) as $option) {
+                    if (!is_array($option)) {
+                        continue;
+                    }
+                    if ($this->normalizeLayoutOption((string)($option['value'] ?? '')) === $lockedLayoutOption) {
+                        $hasLockedOption = true;
+                        break;
+                    }
+                }
+                if (!$hasLockedOption) {
+                    $layoutOptionsByType[$pageType] ??= [];
+                    $layoutOptionsByType[$pageType][] = [
+                        'value' => $lockedLayoutOption,
+                        'label' => $lockedLayoutOption,
+                        'description' => 'Virtual layout locked option',
+                        'file' => '',
+                    ];
+                }
+            }
+        }
 
         $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
         $themesById = [];
@@ -331,12 +356,18 @@ class ThemeEditor extends BackendController
 
         $layout = [];
         $hasDraft = false;
+        $layoutIdentity = !empty($layoutEditorLock['enabled']) ? [
+            'layout_option' => (string)($layoutEditorLock['layout_option'] ?? 'default'),
+            'scope' => (string)($layoutEditorLock['scope'] ?? PreviewContextService::DEFAULT_SCOPE),
+            'target_type' => (string)($layoutEditorLock['target_type'] ?? ThemeVirtualLayout::TARGET_GLOBAL),
+            'target_id' => (int)($layoutEditorLock['target_id'] ?? 0),
+        ] : [];
         if ($currentThemeId) {
             $hasDraft = $this->layoutService->hasDraft($currentThemeId, $pageType);
             if (!$hasDraft && !$this->hasEmptyCurrentRestoreVersion($currentThemeId, $pageType)) {
                 $this->layoutService->initDraftFromPublished($currentThemeId, $pageType);
             }
-            $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType);
+            $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType, $layoutIdentity);
         }
 
         // 部件库改为前端异步加载（页面与主预览就绪后再拉取），首屏不再同步渲染全部部件预览，
@@ -798,7 +829,21 @@ class ThemeEditor extends BackendController
         }
 
         // 缺失时从 getParam 补全
-        $keys = ['theme_id', 'area', 'widget_code', 'widget_module', 'widget_type', 'page_type', 'slot_id', 'config'];
+        $keys = [
+            'theme_id',
+            'area',
+            'widget_code',
+            'widget_module',
+            'widget_type',
+            'page_type',
+            'slot_id',
+            'config',
+            'layout_option',
+            'scope',
+            'target_type',
+            'target_id',
+            'status',
+        ];
         foreach ($keys as $key) {
             $empty = !isset($data[$key]) || $data[$key] === '' || $data[$key] === null;
             if ($key === 'theme_id') {

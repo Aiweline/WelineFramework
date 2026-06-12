@@ -331,57 +331,69 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     /**
      * 获取当前语言
      * 优先级：
-     * 1. URL 路径中明确指定的语言（通过 UrlParser 解析，已设置到 $_SERVER['WELINE_USER_LANG']）
-     * 2. Cookie 中的语言
-     * 3. 浏览器 Accept-Language 头
-     * 4. 默认语言
+     * 1. URL 查询参数中明确指定的语言（维护页语言切换器使用）
+     * 2. URL 路径中明确指定的语言
+     * 3. 默认语言（默认语言路由不带语言段，不能被 Cookie 或浏览器语言覆盖）
      */
     private function getCurrentLang(): string
     {
-        // 优先级1：从 URL 路径中获取语言（UrlParser 已解析并设置到 $_SERVER['WELINE_USER_LANG']）
-        // 如果路径中明确指定了语言，优先使用路径中的语言
-        $lang = \w_env('user.lang');
-
-        if (empty($lang)) {
-            $queryString = (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', '');
-            if ($queryString !== '') {
-                parse_str($queryString, $queryParams);
-                $queryLang = (string)($queryParams['lang'] ?? '');
-                if (\preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $queryLang) === 1) {
-                    $lang = $queryLang;
-                }
+        $queryString = (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', '');
+        if ($queryString !== '') {
+            parse_str($queryString, $queryParams);
+            $lang = $this->normalizeLangCode((string)($queryParams['lang'] ?? ''));
+            if ($lang !== '') {
+                return $lang;
             }
         }
 
-        // 优先级2：从 Cookie 获取语言（如果路径中没有指定）
-        if (empty($lang)) {
-            $lang = \w_env_cookie('WELINE_USER_LANG');
+        $pathLang = $this->getExplicitPathLang();
+        if ($pathLang !== '') {
+            return $pathLang;
         }
 
-        // 优先级3：从浏览器 Accept-Language 头获取
-        if (empty($lang)) {
-            $acceptLang = \w_env('server.http_accept_language') ?? '';
-            if (!empty($acceptLang)) {
-                $langs = explode(',', $acceptLang);
-                $firstLang = trim(explode(';', $langs[0])[0]);
-                $lang = $this->convertLangCode($firstLang);
+        return self::DEFAULT_LANG;
+    }
+
+    private function getExplicitPathLang(): string
+    {
+        $uri = (string)(
+            \Weline\Framework\Env\WelineEnv::server('ORIGIN_REQUEST_URI', '')
+            ?: \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '')
+        );
+        $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: $uri);
+        foreach (\explode('/', \trim($path, '/')) as $segment) {
+            $lang = $this->normalizeLangCode($segment);
+            if ($lang !== '') {
+                return $lang;
             }
         }
 
-        // 优先级4：使用默认语言
-        // 如果检测到的语言是英文，但用户可能期望中文，优先使用中文
-        // 只有在明确设置了英文 Cookie 或路径中指定了英文时才使用英文
-        if (empty($lang) || ($lang === 'en_US' && empty(\w_env_cookie('WELINE_USER_LANG')) && empty(\w_env('user.lang')))) {
-            // 检查 Accept-Language 是否包含中文
-            $acceptLang = \w_env('server.http_accept_language') ?? '';
-            if (!empty($acceptLang) && (str_contains($acceptLang, 'zh') || str_contains($acceptLang, 'cn'))) {
-                $lang = self::DEFAULT_LANG;
+        return '';
+    }
+
+    private function normalizeLangCode(string $code): string
+    {
+        $code = \trim($code);
+        if ($code === '') {
+            return '';
+        }
+
+        $normalized = \str_replace('-', '_', $code);
+        if (\preg_match('/^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/', $normalized) === 1) {
+            $parts = \explode('_', $normalized);
+            $lang = \strtolower($parts[0]);
+            $scriptOrRegion = $parts[1] ?? '';
+            if (\strlen($scriptOrRegion) === 4) {
+                $scriptOrRegion = \ucfirst(\strtolower($scriptOrRegion));
             } else {
-                $lang = $lang ?: self::DEFAULT_LANG;
+                $scriptOrRegion = \strtoupper($scriptOrRegion);
             }
+            $region = isset($parts[2]) ? '_' . \strtoupper($parts[2]) : '';
+            return $lang . '_' . $scriptOrRegion . $region;
         }
-        
-        return $lang;
+
+        $mapping = $this->getLangMapping();
+        return $mapping[$code] ?? '';
     }
 
     /**

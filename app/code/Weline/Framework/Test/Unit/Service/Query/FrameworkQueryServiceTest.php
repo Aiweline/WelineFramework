@@ -211,4 +211,125 @@ final class FrameworkQueryServiceTest extends TestCase
         self::assertSame([], $registry->requestedProviders);
         self::assertSame([], $eventsManager->events);
     }
+
+    public function testHelpModeListsProvidersWhenProviderAndOperationAreEmpty(): void
+    {
+        $descriptors = [
+            [
+                'provider' => 'demo',
+                'name' => 'Demo Provider',
+                'description' => 'Demo descriptor',
+                'module' => 'Test_Module',
+                'operations' => [
+                    ['name' => 'load', 'description' => 'Load data'],
+                ],
+            ],
+        ];
+        $registry = new FrameworkQueryServiceTestRegistry([], $descriptors);
+        $service = new FrameworkQueryService(new FrameworkQueryServiceTestEventsManager(), $registry);
+
+        $result = $service->execute(null, null, []);
+
+        self::assertSame(
+            [[
+                'provider' => 'demo',
+                'name' => 'Demo Provider',
+                'description' => 'Demo descriptor',
+                'module' => 'Test_Module',
+                'operation_count' => 1,
+            ]],
+            $result
+        );
+    }
+
+    public function testHelpModeReturnsProviderDescriptorForSingleProviderInput(): void
+    {
+        $descriptors = [
+            [
+                'provider' => 'demo',
+                'name' => 'Demo Provider',
+                'description' => 'Demo descriptor',
+                'module' => 'Test_Module',
+                'operations' => [
+                    ['name' => 'load', 'description' => 'Load data'],
+                ],
+            ],
+        ];
+        $registry = new FrameworkQueryServiceTestRegistry([], $descriptors);
+        $service = new FrameworkQueryService(new FrameworkQueryServiceTestEventsManager(), $registry);
+
+        $result = $service->execute('demo', null, []);
+
+        self::assertSame('demo', $result['provider']);
+        self::assertSame('Test_Module', $result['module']);
+        self::assertArrayHasKey('usage', $result);
+        self::assertSame("w_query('demo', 'load', [...])", $result['operations'][0]['example']);
+    }
+
+    public function testHelpModeResolvesProviderByModuleName(): void
+    {
+        $descriptors = [
+            [
+                'provider' => 'theme',
+                'name' => 'Theme Provider',
+                'description' => 'Theme descriptor',
+                'module' => 'Weline_Theme',
+                'operations' => [
+                    ['name' => 'getActiveTheme', 'description' => 'Get active theme'],
+                ],
+            ],
+        ];
+        $registry = new FrameworkQueryServiceTestRegistry([], $descriptors);
+        $service = new FrameworkQueryService(new FrameworkQueryServiceTestEventsManager(), $registry);
+
+        $result = $service->execute('Weline/Theme', null, []);
+
+        self::assertSame('theme', $result['provider']);
+        self::assertSame('Weline_Theme', $result['module']);
+    }
+
+    public function testIntrospectWhatProviderReturnsEnrichedDescriptor(): void
+    {
+        $descriptors = [
+            [
+                'provider' => 'demo',
+                'name' => 'Demo Provider',
+                'description' => 'Demo descriptor',
+                'module' => 'Test_Module',
+                'operations' => [
+                    ['name' => 'load', 'description' => 'Load data'],
+                ],
+            ],
+        ];
+        $registry = new FrameworkQueryServiceTestRegistry([], $descriptors);
+        $service = new FrameworkQueryService(new FrameworkQueryServiceTestEventsManager(), $registry);
+
+        $result = $service->execute('framework', 'introspect', ['what' => 'provider', 'provider' => 'demo']);
+
+        self::assertSame('demo', $result['provider']);
+        self::assertArrayHasKey('usage', $result);
+    }
+
+    public function testFrontendOnlyHelpFiltersNonFrontendOperations(): void
+    {
+        $descriptors = [
+            [
+                'provider' => 'cart',
+                'name' => 'Cart Provider',
+                'description' => 'Cart descriptor',
+                'module' => 'Weline_Cart',
+                'operations' => [
+                    ['name' => 'miniItems', 'description' => 'Mini items', 'frontend' => true, 'mode' => 'read'],
+                    ['name' => 'internalSync', 'description' => 'Internal sync'],
+                ],
+            ],
+        ];
+        $registry = new FrameworkQueryServiceTestRegistry([], $descriptors);
+        $service = new FrameworkQueryService(new FrameworkQueryServiceTestEventsManager(), $registry);
+
+        $result = $service->introspectHelp('cart', ['frontend_only' => true], 'frontend_worker', true);
+
+        self::assertCount(1, $result['operations']);
+        self::assertSame('miniItems', $result['operations'][0]['name']);
+    }
 }

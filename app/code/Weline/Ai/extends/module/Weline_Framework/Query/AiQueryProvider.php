@@ -271,6 +271,25 @@ class AiQueryProvider implements QueryProviderInterface
             'module' => 'Weline_Ai',
             'operations' => array_merge([
                 [
+                    'name' => 'generate',
+                    'description' => __('生成文本内容，供后台适配器创建草稿、配置或模板内容。'),
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 10,
+                    'auth' => 'backend_or_service',
+                    'params' => [
+                        ['name' => 'prompt', 'type' => 'string', 'required' => true, 'description' => __('生成提示词')],
+                        ['name' => 'model_code', 'type' => 'string|null', 'required' => false, 'description' => __('可选模型编码')],
+                        ['name' => 'scenario_code', 'type' => 'string|null', 'required' => false, 'description' => __('可选场景编码')],
+                        ['name' => 'locale', 'type' => 'string|null', 'required' => false, 'description' => __('可选语言')],
+                        ['name' => 'params', 'type' => 'array|null', 'required' => false, 'description' => __('传给模型适配器的上下文参数')],
+                        ['name' => 'user_id', 'type' => 'int|null', 'required' => false, 'description' => __('可选用户 ID')],
+                        ['name' => 'is_backend', 'type' => 'bool', 'required' => false, 'description' => __('是否后台调用')],
+                    ],
+                    'returns' => ['type' => 'string'],
+                    'summary' => 'Generate text through AiService',
+                ],
+                [
                     'name' => 'chat',
                     'frontend' => true,
                     'mode' => 'write',

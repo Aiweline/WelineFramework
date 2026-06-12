@@ -76,8 +76,8 @@ Core framework work must enforce these contracts:
 4. QueryProvider
    - Shared read/query access belongs in `extends/module/Weline_Framework/Query/*QueryProvider.php`.
    - Query providers implement `QueryProviderInterface`: `getProviderName()`, `execute()`, and `getDescriptor()`.
-   - `getDescriptor()` must describe provider, module, operations, params, frontend/write/graph metadata where relevant, so `w_query('framework', 'introspect', ...)` remains useful.
-   - PHP callers use `FrameworkQueryService` or `w_query()`. Browser callers must go through Theme `Weline.Api.resource()/graph()/stream()` and the worker gateway, never direct `fetch`.
+   - `getDescriptor()` must describe provider, module, operations, params, frontend/write/graph metadata where relevant, so `w_query('provider')`, `php bin/w query:help`, and `w_query('framework', 'introspect', ...)` remain useful.
+   - Cross-module PHP reads use `w_query()` only; never `use`/inject other modules' Service/Model classes. PHP callers use `FrameworkQueryService` or `w_query()`. Browser callers use `Weline.Api.resource()/graph()/stream()` or `Weline.Query.help()`; browser help shows only `frontend=true` operations.
 5. ORM and schema
    - Schema changes use model attributes such as `#[Table]`, `#[Col]`, `#[Index]`, and setup/schema diff flows; do not do field CRUD in `Setup/Upgrade.php`.
    - ORM query chains that read or delete data must end with `fetch()` or `fetchArray()` when execution is required; `save()` executes itself.
@@ -108,7 +108,7 @@ Before reporting `DONE`, provide evidence for the affected mechanism:
 - Schema/model change: `php bin/w setup:upgrade` or focused model/schema test.
 - Event change: event spec exists in `event.php`, observer registration is in `etc/event.xml`, payload contract is documented, and the dispatch/observer path is tested or statically verified.
 - Extends change: `extends.php` + `extends.md` + interface/implementation namespace are correct, registry refreshed, and consuming registry or `ExtendsData` can see the implementation.
-- QueryProvider change: provider is under `extends/module/Weline_Framework/Query`, implements `QueryProviderInterface`, descriptor is complete, and `w_query('framework', 'introspect', ...)` or a focused provider test proves discovery.
+- QueryProvider change: provider is under `extends/module/Weline_Framework/Query`, implements `QueryProviderInterface`, descriptor is complete, and `php bin/w query:help <provider>` or `w_query('<provider>')` proves discovery.
 - Hook contract change: hook definition/docs and metadata are valid; if UI output changes, hand off or require Browser validation by the frontend/E2E owners.
 - If validation cannot run, report exact command, failure reason, and unverified scope as `CONDITIONAL` or `BLOCKED`.
 

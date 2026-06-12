@@ -57,6 +57,17 @@ $previewParams = [
     'backend_theme_id' => $backend_theme_id,
     '_t' => time(),
 ];
+if ($layout_editor_locked) {
+    $previewParams['scope'] = (string)($layout_editor_lock['scope'] ?? ($preview_context['scope'] ?? 'default'));
+    $previewTargetType = trim((string)($layout_editor_lock['target_type'] ?? ''));
+    $previewTargetId = (int)($layout_editor_lock['target_id'] ?? 0);
+    if ($previewTargetType !== '' && $previewTargetType !== 'global' && $previewTargetId > 0) {
+        $previewParams['theme_layout_target_type'] = $previewTargetType;
+        $previewParams['theme_layout_target_id'] = $previewTargetId;
+        $previewParams['theme_layout_source_target_type'] = $previewTargetType;
+        $previewParams['theme_layout_source_target_id'] = $previewTargetId;
+    }
+}
 $initialPreviewUrl = 'about:blank';
 if ($theme_id) {
     $initialPreviewUrl = $editor_area === 'frontend'

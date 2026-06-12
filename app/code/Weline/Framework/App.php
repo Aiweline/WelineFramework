@@ -392,7 +392,7 @@ class App
         $protocol = (string)WelineEnv::server('HTTP_X_WELINE_PROTOCOL', '');
         if (
             $requestMethod === 'POST'
-            && $requestUri === '/api/framework/query-bin'
+            && $this->isFrontendQueryBinRequestUri($requestUri)
             && $protocol === 'worker-query-bin-v1'
         ) {
             return;
@@ -403,6 +403,13 @@ class App
         }
 
         SessionFactory::getInstance()->createSession()->start('');
+    }
+
+    private function isFrontendQueryBinRequestUri(string $requestUri): bool
+    {
+        $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
+        $normalizedPath = '/' . \ltrim($path, '/');
+        return \strtolower($normalizedPath) === \strtolower(Env::getFrontendQueryBinPath());
     }
 
     private function canDeferFrontendSessionStart(string $requestMethod): bool

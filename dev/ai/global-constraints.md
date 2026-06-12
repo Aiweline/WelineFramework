@@ -53,6 +53,15 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - 禁止硬编码用户可见文案。
 - 禁止跨模块直接引用对方内部 PHP 类或内部实现；跨模块协作必须使用契约、Hook、事件、Query Provider、配置、接口、队列或扩展点。
 - 禁止用类名白名单、特例分支、路径判断、字符串修补等方式只修症状不修根因。
+
+### 4.1 跨模块协作与 w_query（强制）
+
+- **禁止（跨模块）**：`use`、构造函数/属性注入、`ObjectManager::getInstance`、`new` 等方式引用其他模块的 Service、Model、Helper、Controller 等内部实现类。
+- **禁止**：为跨模块读数据创建 Event；为写操作或副作用滥用 `w_query`（写/通知/异步应走 Event、Hook、Queue 或已发布 Interface）。
+- **允许白名单**：同模块内（同一 `Vendor_Module`）类互调；框架装配层（Registry、Extends 扫描、DI 绑定）；对方模块已文档化发布的 Interface/契约类型（非 `Service/`、`Model/` 内部类）；PHP 标准库与第三方 SDK。
+- **跨模块读数据（强制）**：必须使用 `w_query(provider, operation, params)` 或浏览器侧 `Weline.Api.resource()/graph()/stream()`，不得直接调用对方模块 PHP 类。
+- **开发前先查帮助（强制）**：跨模块调用前须执行 `php bin/w query:help <provider|WeShop_Product> [operation]`，或 PHP 侧 `w_query('WeShop_Product')` / `w_query('product')` 查看可用 operations 与参数；不得凭记忆猜测 operation 名。
+- **浏览器帮助范围**：`window.w_query(provider)` / `Weline.Query.help()` 仅展示 `frontend=true` 的 operations；完整服务端契约以 PHP `w_query` 或 `query:help` CLI 为准。
 - 禁止在 `Setup/Upgrade.php` 做字段 CRUD；字段结构使用 Model `#[Col]` / `#[Index]` 后执行 `setup:upgrade`。
 - 禁止在 `<w:*>` 或自定义 Taglib 属性中写 `<?= ?>` 或 `<?php ?>`。
 - 禁止在 `.phtml` 中写 `declare(strict_types=1)`。
@@ -79,9 +88,9 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 
 ## 7. 前端与请求链路
 
-- 业务前端请求必须通过 Theme 的 `theme.js -> weline-api -> worker -> /api/framework/query-bin -> FrontendQueryGateway -> QueryProvider/service` 链路。
+- 业务前端请求必须通过 Theme 的 `theme.js -> weline-api -> worker -> /{rest_frontend}/framework/query-bin -> FrontendQueryGateway -> QueryProvider/service` 链路；`{rest_frontend}` 由 `Env::getAreaRoutePrefix('rest_frontend')` 生成，禁止假定固定为 `api`。
 - 站内浏览器业务 API 只能使用 `Weline.Api.resource()`、`Weline.Api.graph()` 或 `Weline.Api.stream()`。
-- 禁止在业务 JS、`.phtml`、内联脚本或 API 示例中新增 direct `fetch(window.api(...))`、`XMLHttpRequest`、`$.ajax`、`axios`、`new EventSource(url)` 或手写 `/api/framework/query-bin` URL。
+- 禁止在业务 JS、`.phtml`、内联脚本或 API 示例中新增 direct `fetch(window.api(...))`、`XMLHttpRequest`、`$.ajax`、`axios`、`new EventSource(url)` 或手写 query-bin URL。
 - 涉及前端请求、QueryProvider、流式订阅或 worker 链路，必须加载 `dev/ai/skills/前端主题工程师-前端API交互/SKILL.md`。
 - 涉及浏览器可见 UI、组件、页面、布局、样式、响应式、状态展示、可用性或审美优化，必须加载命中的 Weline 前端技能和 `dev/ai/skills/ui-ux-pro-max/SKILL.md`。
 - `ui-ux-pro-max` 只补设计系统、信息层级、视觉质量和可用性约束；不得覆盖 Weline 的模板边界、layout 约定、i18n、请求链路和验证要求。

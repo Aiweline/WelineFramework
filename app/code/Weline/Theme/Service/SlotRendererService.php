@@ -984,9 +984,57 @@ class SlotRendererService
      * 3. 如果仍然没有数据，尝试生成默认布局种子
      * 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据
      */
+    /**
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     */
+    private function currentLayoutIdentity(): array
+    {
+        $request = null;
+        try {
+            $request = $this->template->getRequest();
+        } catch (\Throwable) {
+            $request = null;
+        }
+        $getParam = static function (string $key, mixed $default = null) use ($request): mixed {
+            if ($request && method_exists($request, 'getParam')) {
+                return $request->getParam($key, $default);
+            }
+            return $default;
+        };
+
+        $layoutOption = trim((string)$getParam('layout_option', 'default'));
+        $scope = trim((string)$getParam('scope', 'default'));
+        $targetType = trim((string)$getParam(
+            'theme_layout_source_target_type',
+            (string)$getParam(
+                'theme_layout_target_type',
+                (string)$getParam('target_type', 'global')
+            )
+        ));
+        $targetId = (int)$getParam(
+            'theme_layout_source_target_id',
+            (int)$getParam(
+                'theme_layout_target_id',
+                (int)$getParam('target_id', 0)
+            )
+        );
+
+        return [
+            'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
+            'scope' => $scope !== '' ? $scope : 'default',
+            'target_type' => $targetType !== '' ? $targetType : 'global',
+            'target_id' => max(0, $targetId),
+        ];
+    }
+
     private function getLayoutData(int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): array
     {
-        $cacheKey = "{$themeId}:{$pageType}:{$status}";
+        $identity = $this->currentLayoutIdentity();
+        $cacheKey = "{$themeId}:{$pageType}:{$status}:"
+            . $identity['layout_option'] . ':'
+            . $identity['scope'] . ':'
+            . $identity['target_type'] . ':'
+            . $identity['target_id'];
         $isDraft = ($status === ThemeLayout::STATUS_DRAFT);
 
         // 草稿不读缓存，保证编辑器/预览每次请求都拿到最新布局（删除、拖拽后立即生效）
@@ -1014,14 +1062,14 @@ class SlotRendererService
         }
 
         // 1. 按指定状态获取数据
-        $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status);
+        $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status, $identity);
         
         // 2. 检查是否有部件数据
         $hasWidgets = $this->hasWidgetsInLayout($layout);
         
         // 3. 如果没有数据且是已发布状态，尝试降级到草稿数据
         if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
-            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
             if ($this->hasWidgetsInLayout($draftLayout)) {
                 // 使用草稿数据，并自动发布（后台静默发布）
                 $this->autoPublishDraft($themeId, $pageType, $draftLayout);
@@ -1037,7 +1085,7 @@ class SlotRendererService
             $seeded = $this->seedDefaultLayoutIfNeeded($themeId, $pageType);
             if ($seeded) {
                 // 重新获取布局数据
-                $layout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+                $layout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
                 if ($this->hasWidgetsInLayout($layout)) {
                     $hasWidgets = true;
                     // 如果是前端请求已发布状态，自动发布

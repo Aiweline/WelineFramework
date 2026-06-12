@@ -59,7 +59,7 @@ Module development must follow these contracts:
 
 1. Module boundary
    - Keep behavior inside the owning module unless the task explicitly assigns framework/core work.
-   - Do not directly reference another module's internal PHP classes for convenience. Cross-module collaboration must use supported contracts: QueryProvider, `w_query`, events, Hook, `extends`, config, interface, queue, or documented service boundary.
+   - Do not directly reference another module's internal PHP classes (`use`, injection, `ObjectManager::getInstance`, `new`). Cross-module reads must use `w_query()` or browser `Weline.Api.*`; writes/side-effects use events, Hook, queue, or published interfaces only. Before any cross-module call, run `php bin/w query:help <provider|Module_Name>` or `w_query('Module_Name')` to discover operations—never guess operation names.
    - Put business orchestration in `Service/`; keep controllers and commands thin; keep models focused on persistence.
 2. Controllers, routes, and APIs
    - Use `Controller/`, `Controller/Backend/`, `Controller/Api/`, and `Controller/Backend/Api/` according to the real entry surface.

@@ -1250,6 +1250,18 @@
                     throw new Error((payload && (payload.msg || payload.message)) ? (payload.msg || payload.message) : 'Query failed.');
                 }
                 return payload.data !== undefined ? payload.data : payload;
+            },
+            help: async (provider = null, params = {}, options = {}) => {
+                if (provider == null || provider === '') {
+                    return Weline.Query.request('query_help', 'providers', params, options);
+                }
+                if (typeof provider === 'string' && !params.operation) {
+                    return Weline.Query.request('query_help', 'provider', { provider, ...params }, options);
+                }
+                if (params.provider && params.operation) {
+                    return Weline.Query.request('query_help', 'operation', params, options);
+                }
+                return Weline.Query.request('query_help', 'provider', { provider, ...params }, options);
             }
         },
 
@@ -1458,6 +1470,9 @@
     setupBackendFetchWorkerBridge();
     setupJQueryAjaxWorkerTransport();
     window.w_query = function (provider, operation, params = {}, options = {}) {
+        if (operation == null || operation === '') {
+            return Weline.Query.help(provider, params, options);
+        }
         return Weline.Query.request(provider, operation, params, options);
     };
     window.w_providerQuery = window.w_query;
