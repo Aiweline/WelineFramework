@@ -253,8 +253,10 @@ $mailHref = 'mailto:' . $contactEmail;
             }
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="contact-layout">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
 
     <div class="contact-layout__page">
@@ -434,5 +436,6 @@ $mailHref = 'mailto:' . $contactEmail;
     </div>
 
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
