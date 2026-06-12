@@ -3031,6 +3031,7 @@ class Start extends CommandAbstract
         $defaults = [
             'host' => $this->getDefaultHost(),  // 使用项目唯一域名，避免多项目 SSL 证书冲突
             'port' => self::DEFAULT_PORT,
+            'https' => true,
             'worker_count' => 'auto',
             'mode' => 'io',
             'daemon' => true,
