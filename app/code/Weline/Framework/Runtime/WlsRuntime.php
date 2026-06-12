@@ -16,6 +16,7 @@ use Weline\Framework\App;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Context;
+use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Http\Request;
@@ -48,6 +49,8 @@ use Weline\Server\Service\MemoryStateFacade;
 class WlsRuntime implements RuntimeInterface
 {
     private const DYNAMIC_WARMUP_COORDINATOR_NS = 'wls_dynamic_warmup';
+    private const FRONTEND_START_PAGE_CONFIG_KEY = 'frontend_start_page_path';
+    private const FRONTEND_START_PAGE_CONFIG_MODULE = 'Weline_Websites';
 
     /**
      * 是否已初始化
@@ -2652,6 +2655,10 @@ class WlsRuntime implements RuntimeInterface
             $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
             WelineEnv::set('request.uri', $timing['uri'], 'WlsRuntime handle');
             WelineEnv::set('request.method', $_SERVER['REQUEST_METHOD'] ?? 'GET', 'WlsRuntime handle');
+            if ($request !== null) {
+                $this->applyFrontendRootStartPageRoute($request);
+                $timing['uri'] = (string)(WelineEnv::get('request.uri', $timing['uri']) ?: $timing['uri']);
+            }
             
             // 请求日志：默认始终写入 runtime.log（由 shouldWriteRequestLog 控制），全量调试见 -log
             $isDev = \defined('DEV') && DEV;
@@ -3198,6 +3205,321 @@ class WlsRuntime implements RuntimeInterface
             );
             $this->releaseCompletedRequestPhase('request_end');
         }
+    }
+
+    private function applyFrontendRootStartPageRoute(Request $request): void
+    {
+        if ($request->isBackend() || $request->isApiBackend() || $request->isApiFrontend()) {
+            return;
+        }
+
+        $currentUri = (string)(WelineEnv::get('request.uri', $_SERVER['REQUEST_URI'] ?? '/') ?: '/');
+        $this->ensureWebsiteContextForStartPage($request);
+        if (!$this->isRootRequestUri($currentUri) && !$this->isWebsiteRootRequestUri($request, $currentUri)) {
+            return;
+        }
+
+        $mappedPath = trim((string)$request->getUrlPath());
+        if ($mappedPath === '' || $this->isRootRequestUri($mappedPath)) {
+            $mappedPath = $this->resolveConfiguredStartPageRoute($request);
+        }
+        if ($mappedPath === '' || $this->isRootRequestUri($mappedPath)) {
+            return;
+        }
+
+        $canonicalUri = $this->buildStartPageRouteUri($mappedPath, $currentUri, $this->getWebsitePathPrefix($request));
+        if ($canonicalUri === null || $canonicalUri === $currentUri) {
+            return;
+        }
+
+        $canonicalPath = $this->parseUriPath($canonicalUri);
+        if ($canonicalPath === '') {
+            $canonicalPath = '/';
+        }
+        $canonicalQuery = $this->parseUriQuery($canonicalUri);
+
+        $_SERVER['REQUEST_URI'] = $canonicalUri;
+        $_SERVER['PATH_INFO'] = $canonicalPath;
+        $_SERVER['QUERY_STRING'] = $canonicalQuery;
+        $fullRequestUri = $this->buildStartPageFullRequestUri($request, $canonicalUri);
+
+        $request->setServer('REQUEST_URI', $canonicalUri);
+        $request->setServer('PATH_INFO', $canonicalPath);
+        $request->setServer('QUERY_STRING', $canonicalQuery);
+        $request->setServer('WELINE_ORIGIN_REQUEST_URI', $canonicalUri);
+        $request->setServer('WELINE_FULL_REQUEST_URI', $fullRequestUri);
+        if ($request instanceof WlsRequest) {
+            $request->replaceParsedUriForRouting($canonicalUri);
+        }
+        $request->invalidateUriCache();
+        Request::clearStaticUrlPathCache();
+
+        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $canonicalUri;
+        $_SERVER['WELINE_FULL_REQUEST_URI'] = $fullRequestUri;
+        WelineEnv::set('request.uri', $canonicalUri, 'WlsRuntime start page route');
+        WelineEnv::set('origin_request_uri', $canonicalUri, 'WlsRuntime start page route');
+        WelineEnv::set('full_request_uri', $fullRequestUri, 'WlsRuntime start page route');
+        WelineEnv::set('request.query_string', $canonicalQuery, 'WlsRuntime start page route');
+        WelineEnv::setServer('REQUEST_URI', $canonicalUri, 'WlsRuntime start page route');
+        WelineEnv::setServer('PATH_INFO', $canonicalPath, 'WlsRuntime start page route');
+        WelineEnv::setServer('QUERY_STRING', $canonicalQuery, 'WlsRuntime start page route');
+        WelineEnv::setServer('WELINE_ORIGIN_REQUEST_URI', $canonicalUri, 'WlsRuntime start page route');
+        WelineEnv::setServer('WELINE_FULL_REQUEST_URI', $fullRequestUri, 'WlsRuntime start page route');
+    }
+
+    private function resolveConfiguredStartPageRoute(Request $request): string
+    {
+        $systemConfigClass = \Weline\SystemConfig\Model\SystemConfig::class;
+        if (\class_exists($systemConfigClass)) {
+            try {
+                $configModel = ObjectManager::getInstance($systemConfigClass);
+                $scope = $this->resolveStartPageScope($request, $configModel);
+                $frontendArea = \defined($systemConfigClass . '::area_FRONTEND')
+                    ? \constant($systemConfigClass . '::area_FRONTEND')
+                    : 'frontend';
+                $backendArea = \defined($systemConfigClass . '::area_BACKEND')
+                    ? \constant($systemConfigClass . '::area_BACKEND')
+                    : 'backend';
+                $configs = [
+                    [self::FRONTEND_START_PAGE_CONFIG_KEY, self::FRONTEND_START_PAGE_CONFIG_MODULE, $frontendArea],
+                ];
+                if (\class_exists(\Weline\Backend\Config\KeysInterface::class)) {
+                    $configs[] = [
+                        \Weline\Backend\Config\KeysInterface::key_start_page_path,
+                        \Weline\Backend\Config\KeysInterface::start_module,
+                        $backendArea,
+                    ];
+                }
+
+                foreach ($configs as [$key, $module, $area]) {
+                    $result = $configModel->getConfig(
+                        key: $key,
+                        module: $module,
+                        area: $area,
+                        default: '',
+                        scope: $scope
+                    );
+                    if (\is_scalar($result) && trim((string)$result) !== '') {
+                        return trim((string)$result);
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $legacyConfigClass = \Weline\Backend\Model\Config::class;
+        if (\class_exists($legacyConfigClass) && \class_exists(\Weline\Backend\Config\KeysInterface::class)) {
+            try {
+                $configModel = ObjectManager::getInstance($legacyConfigClass);
+                $result = $configModel->getConfig(
+                    \Weline\Backend\Config\KeysInterface::key_start_page_path,
+                    \Weline\Backend\Config\KeysInterface::start_module
+                );
+                if (\is_scalar($result)) {
+                    return trim((string)$result);
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return '';
+    }
+
+    private function ensureWebsiteContextForStartPage(Request $request): void
+    {
+        $websiteCode = \trim(RequestContext::getWelineWebsiteCode());
+        if ($websiteCode === '') {
+            $websiteCode = \trim((string)($request->getServer('WELINE_WEBSITE_CODE') ?: ($_SERVER['WELINE_WEBSITE_CODE'] ?? '')));
+        }
+        if ($websiteCode !== '') {
+            RequestContext::setWelineWebsiteCode($websiteCode);
+            return;
+        }
+
+        $url = $this->buildStartPageRequestUrl($request);
+        if ($url === '') {
+            return;
+        }
+        try {
+            $eventData = new DataObject(['url' => $url]);
+            $this->eventManager ??= ObjectManager::getInstance(EventsManager::class);
+            $this->eventManager->dispatch('Weline_Framework_Url::detect_website', $eventData);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $websiteId = (int)$eventData->getData('website_id');
+        if ($websiteId > 0) {
+            $request->setServer('WELINE_WEBSITE_ID', (string)$websiteId);
+            WelineEnv::set('server.WELINE_WEBSITE_ID', (string)$websiteId, 'WlsRuntime detect website');
+        }
+
+        $websiteCode = \trim((string)$eventData->getData('code'));
+        if ($websiteCode !== '') {
+            $request->setServer('WELINE_WEBSITE_CODE', $websiteCode);
+            WelineEnv::set('server.WELINE_WEBSITE_CODE', $websiteCode, 'WlsRuntime detect website');
+        }
+
+        $websiteUrl = \trim((string)$eventData->getData('website_url'));
+        if ($websiteUrl !== '') {
+            $request->setServer('WELINE_WEBSITE_URL', $websiteUrl);
+            WelineEnv::set('server.WELINE_WEBSITE_URL', $websiteUrl, 'WlsRuntime detect website');
+        }
+    }
+
+    private function buildStartPageRequestUrl(Request $request): string
+    {
+        $host = \trim((string)(
+            $request->getServer('HTTP_HOST')
+            ?: $request->getServer('HOST')
+            ?: $request->getServer('SERVER_NAME')
+            ?: ($_SERVER['HTTP_HOST'] ?? '')
+        ));
+        if ($host === '') {
+            return '';
+        }
+
+        $scheme = \strtolower(\trim((string)(
+            $request->getServer('REQUEST_SCHEME')
+            ?: ($_SERVER['REQUEST_SCHEME'] ?? '')
+        )));
+        if ($scheme === '') {
+            $https = \strtolower(\trim((string)($request->getServer('HTTPS') ?: ($_SERVER['HTTPS'] ?? ''))));
+            $scheme = ($https !== '' && !\in_array($https, ['off', '0', 'false'], true)) ? 'https' : 'http';
+        }
+
+        $uri = (string)(WelineEnv::get('request.uri', $_SERVER['REQUEST_URI'] ?? '/') ?: '/');
+        if ($uri === '') {
+            $uri = '/';
+        }
+        if (!\str_starts_with($uri, '/')) {
+            $uri = '/' . $uri;
+        }
+
+        return $scheme . '://' . $host . $uri;
+    }
+
+    private function buildStartPageFullRequestUri(Request $request, string $uri): string
+    {
+        $host = \trim((string)(
+            $request->getServer('HTTP_HOST')
+            ?: $request->getServer('HOST')
+            ?: $request->getServer('SERVER_NAME')
+            ?: ($_SERVER['HTTP_HOST'] ?? '')
+        ));
+        if ($host === '') {
+            return $uri;
+        }
+
+        $scheme = \strtolower(\trim((string)(
+            $request->getServer('REQUEST_SCHEME')
+            ?: ($_SERVER['REQUEST_SCHEME'] ?? '')
+        )));
+        if ($scheme === '') {
+            $https = \strtolower(\trim((string)($request->getServer('HTTPS') ?: ($_SERVER['HTTPS'] ?? ''))));
+            $scheme = ($https !== '' && !\in_array($https, ['off', '0', 'false'], true)) ? 'https' : 'http';
+        }
+
+        return $scheme . '://' . $host . ($uri === '' || \str_starts_with($uri, '/') ? $uri : '/' . $uri);
+    }
+
+    private function resolveStartPageScope(Request $request, object $configModel): string
+    {
+        $this->ensureWebsiteContextForStartPage($request);
+
+        $websiteCode = trim(RequestContext::getWelineWebsiteCode());
+        if ($websiteCode === '') {
+            $websiteCode = trim((string)$request->getServer('WELINE_WEBSITE_CODE'));
+        }
+        if ($websiteCode === '') {
+            $websiteCode = trim((string)($_SERVER['WELINE_WEBSITE_CODE'] ?? ''));
+        }
+
+        if ($websiteCode !== '' && \method_exists($configModel, 'normalizeScope')) {
+            return (string)$configModel->normalizeScope($websiteCode);
+        }
+
+        $systemConfigClass = \Weline\SystemConfig\Model\SystemConfig::class;
+
+        return \defined($systemConfigClass . '::SCOPE_GLOBAL')
+            ? (string)\constant($systemConfigClass . '::SCOPE_GLOBAL')
+            : 'global';
+    }
+
+    private function buildStartPageRouteUri(string $mappedPath, string $currentUri, string $websitePathPrefix = ''): ?string
+    {
+        $path = trim($this->parseUriPath($mappedPath), '/');
+        if ($path === '') {
+            $path = trim($mappedPath, '/');
+        }
+        if ($path === '') {
+            return null;
+        }
+
+        $query = $this->parseUriQuery($mappedPath);
+        if ($query === '') {
+            $query = $this->parseUriQuery($currentUri);
+        }
+
+        $websitePathPrefix = trim($websitePathPrefix, '/');
+        if ($websitePathPrefix !== ''
+            && $path !== $websitePathPrefix
+            && !\str_starts_with($path, $websitePathPrefix . '/')) {
+            $path = $websitePathPrefix . '/' . $path;
+        }
+
+        return '/' . $path . ($query !== '' ? '?' . $query : '');
+    }
+
+    private function isWebsiteRootRequestUri(Request $request, string $uri): bool
+    {
+        $websitePathPrefix = trim($this->getWebsitePathPrefix($request), '/');
+        if ($websitePathPrefix === '') {
+            return false;
+        }
+
+        return trim($this->parseUriPath($uri), '/') === $websitePathPrefix;
+    }
+
+    private function getWebsitePathPrefix(Request $request): string
+    {
+        $websiteUrl = (string)(
+            RequestContext::getWelineWebsiteUrl()
+            ?: $request->getServer('WELINE_WEBSITE_URL')
+            ?: ($_SERVER['WELINE_WEBSITE_URL'] ?? '')
+        );
+        if ($websiteUrl === '') {
+            return '';
+        }
+
+        return trim($this->parseUriPath($websiteUrl), '/');
+    }
+
+    private function isRootRequestUri(string $uri): bool
+    {
+        return trim($this->parseUriPath($uri), '/') === '';
+    }
+
+    private function parseUriPath(string $uri): string
+    {
+        try {
+            $path = \parse_url($uri, \PHP_URL_PATH);
+        } catch (\ValueError) {
+            $path = null;
+        }
+
+        return \is_string($path) ? $path : '';
+    }
+
+    private function parseUriQuery(string $uri): string
+    {
+        try {
+            $query = \parse_url($uri, \PHP_URL_QUERY);
+        } catch (\ValueError) {
+            $query = null;
+        }
+
+        return \is_string($query) ? $query : '';
     }
     
     /**
