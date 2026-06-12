@@ -5475,8 +5475,7 @@ class Start extends CommandAbstract
         $base = \max($startPort, 1);
         for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
             $hasConflict = false;
-            for ($i = 0; $i < $count; $i++) {
-                $port = $base + $i;
+            foreach ($this->buildWorkerAllocationCandidatePorts($base, $count) as $port) {
                 if ($this->isWorkerPortAllocated($port) || isset($reservedPortLookup[$port])) {
                     $hasConflict = true;
                     break;
@@ -5487,6 +5486,27 @@ class Start extends CommandAbstract
             }
         }
         return $startPort;
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function buildWorkerAllocationCandidatePorts(int $workerPort, int $count): array
+    {
+        if ($workerPort <= 0) {
+            return [];
+        }
+
+        $count = \max(1, $count);
+        $ports = \range($workerPort, $workerPort + $count - 1);
+
+        $maintenanceCount = \max(1, (int) \ceil($count / 3));
+        $maintenancePort = $workerPort + $count + 99;
+        for ($i = 0; $i < $maintenanceCount; $i++) {
+            $ports[] = $maintenancePort + $i;
+        }
+
+        return \array_values(\array_unique($ports));
     }
 
     protected function resolveInitialWorkerPort(
@@ -5639,7 +5659,7 @@ class Start extends CommandAbstract
 
         $count = \max(1, (int) ($instanceData['count'] ?? 1));
 
-        return \range($workerPort, $workerPort + $count - 1);
+        return $this->buildWorkerAllocationCandidatePorts($workerPort, $count);
     }
 
     /**
