@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service\Head;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Structure\SeoStructureRegistry;
 
 class HeadRenderer
 {
     public function __construct(
         private readonly PageSeoContextResolver $resolver,
-        private readonly ?SeoStructureRegistry $structureRegistry = null
+        private readonly ?SeoStructureRegistry $structureRegistry = null,
+        private readonly ?SeoSlotProviderRegistry $slotProviderRegistry = null
     ) {
     }
 
@@ -20,7 +22,10 @@ class HeadRenderer
      */
     public function render($template, array $options = []): string
     {
-        $slot = (string) ($options['slot'] ?? 'head');
+        $slot = trim((string) ($options['slot'] ?? 'head'));
+        if ($slot === '') {
+            $slot = 'head';
+        }
         if ($slot === 'head' && $this->claimTemplateRender($template, '__weline_seo_head_rendered')) {
             return '';
         }
@@ -38,10 +43,11 @@ class HeadRenderer
             'social' => $this->renderSocial($context),
             'schema', 'structured-data' => $this->renderStructuredData($context),
             default => implode("\n", array_filter([
-                $this->renderMeta($context),
-                $this->renderCanonical($context),
-                $this->renderSocial($context),
-                $this->renderStructuredData($context),
+                $slot === 'head' ? $this->renderMeta($context) : '',
+                $slot === 'head' ? $this->renderCanonical($context) : '',
+                $slot === 'head' ? $this->renderSocial($context) : '',
+                $slot === 'head' ? $this->renderStructuredData($context) : '',
+                $slot !== 'head' ? $this->renderCustomSlot($slot, $template, $context, $options) : '',
             ])),
         };
     }
@@ -175,6 +181,175 @@ class HeadRenderer
         return '<script type="application/ld+json">' . "\n"
             . json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
             . "\n" . '</script>';
+    }
+
+    /**
+     * @param mixed $template
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $options
+     */
+    private function renderCustomSlot(string $slot, $template, array $context, array $options): string
+    {
+        $slotContext = $context;
+        $slotContext['_slot'] = $slot;
+        $slotContext['_options'] = $options;
+        $providedContext = [];
+
+        foreach ($this->slotProviderRegistry()->getProviders() as $provider) {
+            try {
+                if (!$provider->supports($slot, $template, $slotContext, $options)) {
+                    continue;
+                }
+
+                $provided = $provider->provide($slot, $template, $slotContext, $options);
+                if ($provided !== []) {
+                    $slotContext = $this->mergeProviderContext($slotContext, $provided);
+                    $providedContext = $this->mergeProviderContext($providedContext, $provided);
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        if ($providedContext === []) {
+            return '';
+        }
+
+        return implode("\n", array_filter([
+            $this->renderSlotBlocks($slot, $slotContext),
+            $this->renderSlotStructuredData($providedContext, $slotContext),
+        ]));
+    }
+
+    /**
+     * @param array<string, mixed> $provided
+     * @param array<string, mixed> $context
+     */
+    private function renderSlotStructuredData(array $provided, array $context): string
+    {
+        foreach (['schema_nodes', 'article', 'product', 'item_list', 'faqs', 'qa_list', 'breadcrumbs', 'organization'] as $key) {
+            if (!empty($provided[$key])) {
+                return $this->renderStructuredData($context);
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $provided
+     * @return array<string, mixed>
+     */
+    private function mergeProviderContext(array $context, array $provided): array
+    {
+        foreach (['schema_nodes', 'item_list', 'faqs', 'qa_list', 'blocks'] as $listKey) {
+            if (isset($provided[$listKey]) && is_array($provided[$listKey]) && $this->isList($provided[$listKey])) {
+                $existing = isset($context[$listKey]) && is_array($context[$listKey]) && $this->isList($context[$listKey])
+                    ? $context[$listKey]
+                    : [];
+                $context[$listKey] = array_values(array_merge($existing, $provided[$listKey]));
+                unset($provided[$listKey]);
+            }
+        }
+
+        return array_replace_recursive($context, $provided);
+    }
+
+    /**
+     * @param array<int|string, mixed> $value
+     */
+    private function isList(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function renderSlotBlocks(string $slot, array $context): string
+    {
+        $blocks = $context['blocks'] ?? [];
+        if (!is_array($blocks) || $blocks === []) {
+            return '';
+        }
+
+        $html = [];
+        foreach ($blocks as $block) {
+            if (!is_array($block)) {
+                continue;
+            }
+
+            $rendered = $this->renderSlotBlock($block);
+            if ($rendered !== '') {
+                $html[] = $rendered;
+            }
+        }
+
+        if ($html === []) {
+            return '';
+        }
+
+        return '<div data-seo-slot="' . $this->escape($slot) . '">' . "\n"
+            . implode("\n", $html)
+            . "\n" . '</div>';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function renderSlotBlock(array $block): string
+    {
+        $type = trim((string)($block['type'] ?? ''));
+        if ($type === '') {
+            return '';
+        }
+
+        $items = $block['items'] ?? [];
+        if (is_array($items) && $items !== []) {
+            return $this->renderSlotItemList($type, $block, $items);
+        }
+
+        $text = trim((string)($block['text'] ?? $block['summary'] ?? ''));
+        if ($text === '') {
+            return '';
+        }
+
+        return '<div data-seo-block="' . $this->escape($type) . '">' . $this->escape($text) . '</div>';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<int|string, mixed> $items
+     */
+    private function renderSlotItemList(string $type, array $block, array $items): string
+    {
+        $list = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $name = trim((string)($item['name'] ?? $item['title'] ?? ''));
+            $url = trim((string)($item['url'] ?? $item['href'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $label = $this->escape($name);
+            $list[] = $url !== ''
+                ? '<li><a href="' . $this->escape($url) . '">' . $label . '</a></li>'
+                : '<li>' . $label . '</li>';
+        }
+
+        if ($list === []) {
+            return '';
+        }
+
+        $title = trim((string)($block['title'] ?? ''));
+        return '<nav data-seo-block="' . $this->escape($type) . '">'
+            . ($title !== '' ? '<strong>' . $this->escape($title) . '</strong>' : '')
+            . '<ul>' . implode('', $list) . '</ul>'
+            . '</nav>';
     }
 
     /**
@@ -483,7 +658,7 @@ class HeadRenderer
             'about', 'about_page' => 'AboutPage',
             'contact', 'contact_page' => 'ContactPage',
             'faq', 'faq_page' => 'FAQPage',
-            'category', 'collection', 'collection_page', 'blog_list', 'blog_category', 'searchable_landing' => 'CollectionPage',
+            'category', 'collection', 'collection_page', 'blog_list', 'blog_category', 'searchable_landing', 'tag_collection', 'tag_landing' => 'CollectionPage',
             default => 'WebPage',
         };
     }
@@ -508,6 +683,11 @@ class HeadRenderer
     private function structureRegistry(): SeoStructureRegistry
     {
         return $this->structureRegistry ?? new SeoStructureRegistry();
+    }
+
+    private function slotProviderRegistry(): SeoSlotProviderRegistry
+    {
+        return $this->slotProviderRegistry ?? new SeoSlotProviderRegistry(ObjectManager::getInstance());
     }
 
     /**
@@ -1152,14 +1332,6 @@ class HeadRenderer
             return [$value];
         }
         return $this->isList($value) ? $value : [$value];
-    }
-
-    /**
-     * @param array<int|string, mixed> $value
-     */
-    private function isList(array $value): bool
-    {
-        return $value === [] || array_keys($value) === range(0, count($value) - 1);
     }
 
     private function isInStock(mixed $stock): bool

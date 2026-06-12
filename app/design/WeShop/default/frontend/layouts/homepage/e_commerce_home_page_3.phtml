@@ -432,8 +432,10 @@ $area = $themeData['area'] ?? 'frontend';
             transform: scale(1.05);
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="weshop-homepage-1">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::homepage::body-start</w:hook>
     
@@ -610,5 +612,6 @@ $area = $themeData['area'] ?? 'frontend';
     
     <w:hook>Weline_Theme::frontend::layouts::homepage::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

@@ -37,8 +37,10 @@ $this->setData('layoutOption', $layoutOption);
             border-radius: var(--weline-layout-radius-md);
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <div class="test-container">
         <w:slot id="content"
                 name="内容区"
@@ -62,6 +64,7 @@ $this->setData('layoutOption', $layoutOption);
         </w:slot>
     </div>
     
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
 

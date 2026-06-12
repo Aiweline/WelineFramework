@@ -7,7 +7,8 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\Message;
-use Weline\Websites\Model\Website;
+use Weline\Seo\Service\SeoPlatformCapabilityService;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\SitemapRegistryService;
 
 /**
@@ -202,9 +203,9 @@ class Sitemap extends BackendController
     private function getAllWebsites(): array
     {
         try {
-            /** @var Website $websiteModel */
-            $websiteModel = ObjectManager::getInstance(Website::class);
-            return $websiteModel->select()->fetchArray();
+            /** @var SeoWebsiteDirectory $websiteDirectory */
+            $websiteDirectory = ObjectManager::getInstance(SeoWebsiteDirectory::class);
+            return $websiteDirectory->listWebsites();
         } catch (\Exception $e) {
             return [];
         }
@@ -309,9 +310,9 @@ class Sitemap extends BackendController
         
         // 平台显示名称和颜色
         try {
-            /** @var \Weline\Seo\Service\SitemapAdapterRegistry $adapterRegistry */
-            $adapterRegistry = ObjectManager::getInstance(\Weline\Seo\Service\SitemapAdapterRegistry::class);
-            $platformInfo = $adapterRegistry->getPlatformInfo();
+            /** @var SeoPlatformCapabilityService $capabilityService */
+            $capabilityService = ObjectManager::getInstance(SeoPlatformCapabilityService::class);
+            $platformInfo = $capabilityService->getCapabilities();
         } catch (\Throwable $e) {
             $platformInfo = [];
         }
@@ -364,16 +365,17 @@ class Sitemap extends BackendController
                 foreach ($accountsData as $accInfo) {
                     $pCode = $accInfo['platform_code'] ?? '';
                     if ($pCode) {
-                        $account = $accInfo['account'];
+                        $account = (array)($accInfo['account'] ?? []);
                         $binding = $accInfo['binding'] ?? [];
                         $websiteAccountsInfo[$pCode] = [
-                            'account_id' => $account->getId(),
-                            'account_name' => $account->getData('name') ?: $account->getData('provider'),
-                            'is_active' => $account->isActive(),
+                            'account_id' => (int)($account[\Weline\Seo\Model\SeoAccount::schema_fields_ACCOUNT_ID] ?? 0),
+                            'account_name' => (string)($account[\Weline\Seo\Model\SeoAccount::schema_fields_NAME] ?? $account[\Weline\Seo\Model\SeoAccount::schema_fields_PROVIDER] ?? ''),
+                            'is_active' => (int)($account[\Weline\Seo\Model\SeoAccount::schema_fields_IS_ACTIVE] ?? 0) === \Weline\Seo\Model\SeoAccount::STATUS_ACTIVE,
                             'is_auto_submit' => (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_IS_AUTO_SUBMIT] ?? 0) === 1,
                             'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_SITEMAP_FREQUENCY] ?? 'daily',
-                            'enable_cron_push' => (int)$account->getData('enable_cron_push_urls') === 1,
-                            'enable_cron_sitemap' => (int)$account->getData('enable_cron_sitemap') === 1,
+                            'enable_url_push' => (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_ENABLE_URL_PUSH] ?? 1) === 1,
+                            'enable_cron_push' => (int)($account[\Weline\Seo\Model\SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS] ?? 0) === 1,
+                            'enable_cron_sitemap' => (int)($account[\Weline\Seo\Model\SeoAccount::schema_fields_ENABLE_CRON_SITEMAP] ?? 0) === 1,
                         ];
                     }
                 }

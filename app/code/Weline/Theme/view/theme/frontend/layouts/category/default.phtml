@@ -56,8 +56,10 @@ $this->assign('title', $title);
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     
     <div class="weline-page-wrapper">
@@ -691,5 +693,6 @@ $this->assign('title', $title);
     </style>
 
 
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace Weline\Seo\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Seo\Interface\SeoProfileProviderInterface;
+use Weline\Seo\Interface\SeoSlotProviderInterface;
 use Weline\Seo\Service\Head\HeadRenderer;
+use Weline\Seo\Service\Head\HeadProviderRegistry;
 use Weline\Seo\Service\Head\PageSeoContextResolver;
+use Weline\Seo\Service\Head\SeoSlotProviderRegistry;
+use Weline\Seo\Structure\SeoStructureRegistry;
 
 class HeadRendererSeoProfileTest extends TestCase
 {
@@ -39,7 +44,7 @@ class HeadRendererSeoProfileTest extends TestCase
             ],
         ]);
 
-        $html = (new HeadRenderer($resolver))->render(new SeoProfileHeadTemplateStub());
+        $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
 
         self::assertStringContainsString('<meta name="robots" content="index,follow">', $html);
         self::assertStringContainsString('<meta property="og:type" content="article">', $html);
@@ -56,7 +61,7 @@ class HeadRendererSeoProfileTest extends TestCase
             ->onlyMethods(['resolve'])
             ->getMock();
         $resolver->method('resolve')->willReturn([
-            'page_type' => 'category',
+            'page_type' => 'tag_collection',
             'site_name' => 'Shop',
             'title' => 'Dresses',
             'description' => 'Dress collection.',
@@ -69,12 +74,83 @@ class HeadRendererSeoProfileTest extends TestCase
             ],
         ]);
 
-        $html = (new HeadRenderer($resolver))->render(new SeoProfileHeadTemplateStub());
+        $html = (new HeadRenderer($resolver, new EmptySeoStructureRegistry()))->render(new SeoProfileHeadTemplateStub());
 
         self::assertStringContainsString('"@type": "CollectionPage"', $html);
         self::assertStringContainsString('"@type": "ItemList"', $html);
         self::assertStringContainsString('"name": "Summer Dress"', $html);
         self::assertStringContainsString('"mainEntity": {', $html);
+    }
+
+    public function testSeoProfileProviderReceivesSlotAndOptionsInContext(): void
+    {
+        $template = new SeoProfileHeadTemplateStub();
+        $template->setData('lang_local', 'en_US');
+        $_SERVER['HTTP_HOST'] = 'blog.test';
+        $_SERVER['REQUEST_SCHEME'] = 'https';
+        $provider = new SeoProfileContextProbeProvider();
+        $resolver = new PageSeoContextResolver(new SeoProfileProviderRegistryStub([$provider]));
+
+        $context = $resolver->resolve($template, [
+            'slot' => 'blog-footer',
+            'source' => 'unit',
+        ]);
+
+        self::assertSame('blog-footer', $provider->seenContext['_slot'] ?? null);
+        self::assertSame('unit', $provider->seenContext['_options']['source'] ?? null);
+        self::assertSame('blog_post', $context['page_type']);
+        self::assertSame('Probe Article', $context['article']['headline'] ?? null);
+    }
+
+    public function testCustomSlotProviderReturnsStructuredPayloadRenderedBySeo(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'blog_post',
+            'site_name' => 'Blog',
+            'title' => 'Current Post',
+            'description' => 'Current post summary.',
+            'canonical_url' => 'https://blog.test/current-post',
+            'url' => 'https://blog.test/current-post',
+            'organization' => ['name' => 'Blog', 'url' => 'https://blog.test/'],
+        ]);
+
+        $html = (new HeadRenderer(
+            $resolver,
+            new EmptySeoStructureRegistry(),
+            new SeoSlotProviderRegistryStub([new RelatedPostsSlotProvider()])
+        ))->render(new SeoProfileHeadTemplateStub(), ['slot' => 'blog-footer']);
+
+        self::assertStringContainsString('data-seo-slot="blog-footer"', $html);
+        self::assertStringContainsString('data-seo-block="related_posts"', $html);
+        self::assertStringContainsString('<a href="https://blog.test/related">Related Post</a>', $html);
+        self::assertStringContainsString('"@type": "WebPage"', $html);
+        self::assertStringContainsString('"@id": "https://blog.test/related#webpage"', $html);
+    }
+
+    public function testCustomSlotWithoutProviderPayloadRendersEmptyString(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'blog_post',
+            'title' => 'Current Post',
+            'canonical_url' => 'https://blog.test/current-post',
+            'url' => 'https://blog.test/current-post',
+        ]);
+
+        $html = (new HeadRenderer(
+            $resolver,
+            new EmptySeoStructureRegistry(),
+            new SeoSlotProviderRegistryStub([])
+        ))->render(new SeoProfileHeadTemplateStub(), ['slot' => 'unknown-slot']);
+
+        self::assertSame('', $html);
     }
 }
 
@@ -91,5 +167,95 @@ final class SeoProfileHeadTemplateStub
     public function setData(string $key, mixed $value): void
     {
         $this->data[$key] = $value;
+    }
+}
+
+final class EmptySeoStructureRegistry extends SeoStructureRegistry
+{
+    public function buildNodes(array $context, string $url): array
+    {
+        return [];
+    }
+}
+
+final class SeoProfileProviderRegistryStub extends HeadProviderRegistry
+{
+    /**
+     * @param SeoProfileProviderInterface[] $providers
+     */
+    public function __construct(
+        private readonly array $providers
+    ) {
+    }
+
+    public function getSeoProfileProviders(bool $forceReload = false): array
+    {
+        return $this->providers;
+    }
+}
+
+final class SeoProfileContextProbeProvider implements SeoProfileProviderInterface
+{
+    /** @var array<string, mixed> */
+    public array $seenContext = [];
+
+    public function provideSeoProfile($template, array $context): array
+    {
+        $this->seenContext = $context;
+        return [
+            'page_type' => 'blog_post',
+            'article' => [
+                'headline' => 'Probe Article',
+            ],
+        ];
+    }
+}
+
+final class SeoSlotProviderRegistryStub extends SeoSlotProviderRegistry
+{
+    /**
+     * @param SeoSlotProviderInterface[] $providers
+     */
+    public function __construct(
+        private readonly array $providers
+    ) {
+    }
+
+    public function getProviders(bool $forceReload = false): array
+    {
+        return $this->providers;
+    }
+}
+
+final class RelatedPostsSlotProvider implements SeoSlotProviderInterface
+{
+    public function supports(string $slot, $template, array $context, array $options = []): bool
+    {
+        return $slot === 'blog-footer';
+    }
+
+    public function provide(string $slot, $template, array $context, array $options = []): array
+    {
+        return [
+            'blocks' => [
+                [
+                    'type' => 'related_posts',
+                    'title' => 'Related',
+                    'items' => [
+                        [
+                            'name' => 'Related Post',
+                            'url' => 'https://blog.test/related',
+                        ],
+                    ],
+                ],
+            ],
+            'schema_nodes' => [
+                [
+                    '@type' => 'WebPage',
+                    '@id' => 'https://blog.test/related#webpage',
+                    'name' => 'Related Post',
+                ],
+            ],
+        ];
     }
 }
