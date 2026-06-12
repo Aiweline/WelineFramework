@@ -26,3 +26,13 @@ Use an `appstore/*.log` filename string as the first argument. The second argume
 - The installed-module page uninstalls directly through `ModuleUninstallService`, which delegates to the framework `php bin/w module:remove Vendor_Module` flow so database and file backups stay owned by system uninstall.
 - The installed-module page shows immediate in-page uninstall progress and reads the latest uninstall audit record when the list becomes empty, so users still see a completion result after the module record has been removed.
 - If a previous install left module files with the `商城应用.md` marker but no AppStore install row, the installed-module page recovers only that marked marketplace module record so the user can still manage and uninstall it from My modules.
+
+## Marketplace Meta / Tags
+
+- AppStore package installation requires WMP-Meta v1 from `etc/marketplace/meta.json` after package structure validation. Packages may also declare `marketplace_meta.path` and `marketplace_meta.sha256` in `weline-appstore-package.json`; declared hashes are verified before install continues.
+- `module_name` mismatches, declared meta hash mismatches, missing meta, missing source locale display name, empty tags, or tag entries without source locale labels block AppStore package installation. Legacy local-module recovery and `module:info` keep non-strict compatibility for old modules.
+- Package meta only needs complete source locale text. Other locale labels/descriptions are optional; `InstalledModuleMetaService` submits marketplace source words and any provided translations to `Weline_I18n::collect_translations` so I18n can maintain dictionary rows and AI translation queues.
+- After successful install or upgrade, `InstalledModuleMetaService::syncOnInstall()` writes `marketplace_meta_json`, `marketplace_meta_hash`, `marketplace_meta_locale`, `primary_tag_code`, and `surface_codes` to the installed-module record.
+- The installed-module page shows localized tag badges and supports tag/surface filtering. The marketplace home cards display 1-3 tags when the platform API returns `tags` or `tags_resolved`.
+- `商城应用.md` includes an “应用标签” section when structured meta tags are available.
+- `php bin/w appstore:sync-tags --locale=zh_Hans_CN` refreshes the optional platform tag registry cache used for display fallback.

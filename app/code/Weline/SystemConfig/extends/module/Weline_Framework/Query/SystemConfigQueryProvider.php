@@ -6,11 +6,15 @@ namespace Weline\SystemConfig\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Model\SystemConfigVersion;
+use Weline\SystemConfig\Service\SystemConfigCenterService;
+use Weline\SystemConfig\Service\SystemConfigTemplateService;
 
 class SystemConfigQueryProvider implements QueryProviderInterface
 {
     public function __construct(
-        private readonly SystemConfig $systemConfig
+        private readonly SystemConfig $systemConfig,
+        private readonly SystemConfigTemplateService $templateService,
+        private readonly SystemConfigCenterService $configCenterService
     ) {
     }
 
@@ -26,6 +30,13 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             'resolveConfig' => $this->resolveConfig($params),
             'getConfigs' => $this->getConfigs($params),
             'getFallbacks' => $this->getFallbacks($params),
+            'getTemplates' => $this->getTemplates($params),
+            'getTemplateMeta' => $this->getTemplateMeta($params),
+            'getModules' => $this->getModules($params),
+            'getTree' => $this->getTree($params),
+            'saveTemplateConfig' => $this->saveTemplateConfig($params),
+            'precheckTemplateConfigRollback' => $this->precheckTemplateConfigRollback($params),
+            'rollbackTemplateConfigVersion' => $this->rollbackTemplateConfigVersion($params),
             'setConfig' => $this->setConfig($params),
             'setScopedConfig' => $this->setScopedConfig($params),
             'deleteScopedConfig' => $this->deleteScopedConfig($params),
@@ -109,6 +120,91 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             'locale' => $this->systemConfig->normalizeLocale($locale),
             'fallback_scopes' => $this->systemConfig->getFallbackScopes($scope),
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getTemplates(array $params): array
+    {
+        return $this->templateService->getTemplates(
+            module: isset($params['module']) ? (string)$params['module'] : null,
+            area: isset($params['area']) ? (string)$params['area'] : null,
+            forceReload: (bool)($params['force_reload'] ?? false)
+        );
+    }
+
+    private function getTemplateMeta(array $params): ?array
+    {
+        return $this->templateService->getTemplateMeta(
+            module: (string)($params['module'] ?? ''),
+            area: (string)($params['area'] ?? SystemConfig::area_BACKEND),
+            code: (string)($params['code'] ?? ''),
+            forceReload: (bool)($params['force_reload'] ?? false)
+        );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function getModules(array $params): array
+    {
+        return $this->templateService->getModules(
+            area: isset($params['area']) ? (string)$params['area'] : null,
+            search: isset($params['search']) ? (string)$params['search'] : null,
+            forceReload: (bool)($params['force_reload'] ?? false)
+        );
+    }
+
+    private function getTree(array $params): array
+    {
+        $tree = $this->templateService->getTree(
+            module: isset($params['module']) ? (string)$params['module'] : null,
+            area: isset($params['area']) ? (string)$params['area'] : null,
+            search: isset($params['search']) ? (string)$params['search'] : null,
+            forceReload: (bool)($params['force_reload'] ?? false)
+        );
+
+        if (!empty($params['with_values'])) {
+            return $this->configCenterService->enrichTreeWithValues(
+                $tree,
+                isset($params['scope']) ? (string)$params['scope'] : null,
+                isset($params['locale']) ? (string)$params['locale'] : null
+            );
+        }
+
+        return $tree;
+    }
+
+    private function saveTemplateConfig(array $params): array
+    {
+        return $this->configCenterService->saveTemplateConfig(
+            module: (string)($params['module'] ?? ''),
+            area: (string)($params['area'] ?? SystemConfig::area_BACKEND),
+            code: (string)($params['code'] ?? ''),
+            values: is_array($params['values'] ?? null) ? $params['values'] : [],
+            inheritKeys: array_values(array_map('strval', (array)($params['inherit_keys'] ?? []))),
+            baseVersions: is_array($params['base_versions'] ?? null) ? $params['base_versions'] : [],
+            scope: isset($params['scope']) ? (string)$params['scope'] : null,
+            locale: isset($params['locale']) ? (string)$params['locale'] : null,
+            options: $this->extractSaveOptions($params)
+        );
+    }
+
+    private function precheckTemplateConfigRollback(array $params): array
+    {
+        return $this->configCenterService->precheckTemplateConfigRollback(
+            (int)($params['version_id'] ?? 0),
+            $this->extractRollbackContext($params)
+        );
+    }
+
+    private function rollbackTemplateConfigVersion(array $params): array
+    {
+        return $this->configCenterService->rollbackTemplateConfigVersion(
+            (int)($params['version_id'] ?? 0),
+            array_merge($this->extractRollbackContext($params), $this->extractSaveOptions($params))
+        );
     }
 
     private function setConfig(array $params): bool
@@ -267,6 +363,19 @@ class SystemConfigQueryProvider implements QueryProviderInterface
         return $options;
     }
 
+    private function extractRollbackContext(array $params): array
+    {
+        $allowed = ['module', 'area', 'code', 'scope', 'locale'];
+        $context = [];
+        foreach ($allowed as $key) {
+            if (array_key_exists($key, $params)) {
+                $context[$key] = $params[$key];
+            }
+        }
+
+        return $context;
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -296,6 +405,85 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                     'params' => [
                         ['name' => 'scope', 'type' => 'string', 'required' => false],
                         ['name' => 'locale', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'getTemplates',
+                    'description' => __('List SystemConfig templates registered through Extends.'),
+                    'params' => [
+                        ['name' => 'module', 'type' => 'string', 'required' => false],
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'getTemplateMeta',
+                    'description' => __('Parse one SystemConfig PHTML template without executing it.'),
+                    'params' => [
+                        ['name' => 'module', 'type' => 'string', 'required' => true],
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'code', 'type' => 'string', 'required' => true],
+                        ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'getModules',
+                    'description' => __('List modules that provide SystemConfig templates.'),
+                    'params' => [
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'search', 'type' => 'string', 'required' => false],
+                        ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'getTree',
+                    'description' => __('Build the SystemConfig template tree by module and area.'),
+                    'params' => [
+                        ['name' => 'module', 'type' => 'string', 'required' => false],
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'search', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'with_values', 'type' => 'bool', 'required' => false],
+                        ['name' => 'force_reload', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'saveTemplateConfig',
+                    'description' => __('Save a template-backed config batch after field whitelist validation.'),
+                    'params' => array_merge($this->commonModuleParams(), [
+                        ['name' => 'code', 'type' => 'string', 'required' => true],
+                        ['name' => 'values', 'type' => 'object', 'required' => false],
+                        ['name' => 'inherit_keys', 'type' => 'array', 'required' => false],
+                        ['name' => 'base_versions', 'type' => 'object', 'required' => false],
+                        ['name' => 'reason', 'type' => 'string', 'required' => false],
+                    ]),
+                ],
+                [
+                    'name' => 'precheckTemplateConfigRollback',
+                    'description' => __('Precheck whether a template-backed config version can rollback without mutation.'),
+                    'params' => [
+                        ['name' => 'version_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'module', 'type' => 'string', 'required' => false],
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'code', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'rollbackTemplateConfigVersion',
+                    'description' => __('Rollback a template-backed config version after rollback precheck.'),
+                    'params' => [
+                        ['name' => 'version_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'module', 'type' => 'string', 'required' => false],
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'code', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'actor_id', 'type' => 'string', 'required' => false],
+                        ['name' => 'actor_name', 'type' => 'string', 'required' => false],
+                        ['name' => 'reason', 'type' => 'string', 'required' => false],
                     ],
                 ],
                 [

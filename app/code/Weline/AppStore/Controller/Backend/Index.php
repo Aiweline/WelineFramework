@@ -24,6 +24,8 @@ class Index extends BackendController
         $account = $accountService->getCurrentAccount();
         $searchQuery = trim((string)$this->request->getGet('q', ''));
         $pricingFilter = trim((string)$this->request->getGet('pricing', ''));
+        $tagFilter = trim((string)$this->request->getGet('tag', ''));
+        $surfaceFilter = trim((string)$this->request->getGet('surface', ''));
         if (!in_array($pricingFilter, ['', 'free', 'paid'], true)) {
             $pricingFilter = '';
         }
@@ -32,6 +34,8 @@ class Index extends BackendController
             ? $this->loadPlatformModules($accountService, [
                 'q' => $searchQuery,
                 'pricing' => $pricingFilter,
+                'tag' => $tagFilter,
+                'surface' => $surfaceFilter,
             ])
             : ['items' => [], 'error' => ''];
 
@@ -41,6 +45,8 @@ class Index extends BackendController
         $this->assign('store_error', $moduleResult['error']);
         $this->assign('search_query', $searchQuery);
         $this->assign('pricing_filter', $pricingFilter);
+        $this->assign('tag_filter', $tagFilter);
+        $this->assign('surface_filter', $surfaceFilter);
         $this->assign('platform_url', $accountService->getPlatformUrl());
         $this->assign('store_domain', $this->getCurrentDomain());
         $this->assign('account_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/account'));
@@ -216,6 +222,7 @@ class Index extends BackendController
                 'download_file_hash' => (string)($downloadResult['file_hash'] ?? ''),
                 'download_file_size' => (int)($downloadResult['file_size'] ?? 0),
                 'bound_domain' => (string)($downloadResult['download_domain'] ?? $this->getCurrentDomain()),
+                'api_module_info' => is_array($moduleInfo) ? $moduleInfo : [],
             ];
             if (!empty($moduleInfo['display_name'])) {
                 $installOptions['display_name'] = (string)$moduleInfo['display_name'];
@@ -277,6 +284,12 @@ class Index extends BackendController
             }
             if (!empty($filters['pricing'])) {
                 $payload['pricing'] = (string)$filters['pricing'];
+            }
+            if (!empty($filters['tag'])) {
+                $payload['tag'] = (string)$filters['tag'];
+            }
+            if (!empty($filters['surface'])) {
+                $payload['surface'] = (string)$filters['surface'];
             }
 
             $client = new \GuzzleHttp\Client($accountService->getHttpClientOptions(['timeout' => 30]));

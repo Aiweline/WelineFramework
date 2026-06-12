@@ -100,6 +100,54 @@ theme_id + area + layout_type + layout_option + scope + target_type + target_id
 - 同一个虚拟布局的源码编辑和可视化编辑共享版本模型，保存时必须检查 base version，不能互相静默覆盖。
 - AI 生成只允许创建 draft version，不能直接成为 published version。
 
+保存和发布必须按双阶段处理：
+
+- 保存源码、可视化结构或 AI 结果只创建 draft version，返回 `layout_version_id`。
+- 发布 draft version 时才更新 asset 的 `published_version_id`。
+- 如果“保存并发布”在同一个后台动作里执行，也必须分别返回 draft save 结果和 publish 结果。
+- draft save 成功但 publish 失败时，draft version 保留为可继续编辑状态，当前已发布版本继续生效。
+- publish 之前必须快照 asset 的旧发布指针、asset version 和该 asset 下版本状态。
+- publish 中途失败必须补偿恢复旧发布指针和旧版本状态，并失效相关 runtime cache。
+- rollback 只能发布属于同一 asset、同一 identity、同一 scope 的历史版本；不允许跨产品、跨分类、跨 scope 回滚。
+- rollback 本身生成审计/发布记录，记录 `rollback_of_version_id`、actor、reason、old published version 和 new published version。
+
+### 布局选择版本
+
+布局选择版本和虚拟布局内容版本必须分开：
+
+- 布局内容版本回答“这个 layout option 的源码、可视化结构、AI 草稿是什么”。
+- 布局选择版本回答“当前产品、分类或分类下产品默认指向哪个 layout option”。
+
+产品、分类、分类下产品默认的选择变更需要进入选择版本或 SystemConfig 配置批次：
+
+| 字段 | 说明 |
+| --- | --- |
+| `layout_type` | `product`、`category` |
+| `target_type` | `product`、`category`、`category_product_default`、`global` |
+| `target_id` | 产品或分类 ID |
+| `scope` | 规范化 scope |
+| `old_layout_option` / `new_layout_option` | 变更前后选择 |
+| `old_source` / `new_source` | 产品专属、分类默认、全局或继承来源 |
+| `base_selection_version` | 并发冲突检测 |
+| `actor_id` / `reason` | 操作人和备注 |
+
+选择保存规则：
+
+- 保存前校验 option 存在、未锁定、允许当前 layout type、target type 和 scope 使用。
+- 选择保存失败不能改变当前 effective option。
+- 选择保存成功后返回 `selection_version_id` 或 SystemConfig `version_id`，后台提供立即回滚。
+- 选择回滚只恢复 layout option 指向，不修改 Theme virtual layout `published_version_id`。
+- 如果回滚目标 option 已删除、锁定或不属于当前身份，必须拒绝回滚并提示原因。
+- 定时计划不生成选择版本，不写回选择；它只在解析阶段临时改变有效 option。
+
+当前实现约定：
+
+- 产品、分类、分类下产品默认的 layout option 选择走 `Weline_Theme` 的 SystemConfig 批次版本，`version_id` 就是选择版本 ID。
+- Theme 提供 `w_query('theme', 'listLayoutSelectionVersions', ...)` 列出某个 identity 的选择版本，并可返回 rollback precheck。
+- Theme 提供 `w_query('theme', 'precheckLayoutSelectionRollback', ...)` 预检版本状态、identity、scope、locale、当前 row version 和待恢复 option 可用性。
+- Theme 提供 `w_query('theme', 'rollbackLayoutSelectionVersion', ...)` 通过 SystemConfig 版本回滚恢复选择，并在成功后清理 Theme/WeShop runtime cache。
+- 选择版本回滚只恢复 `virtual_layout.selection.{target_type}.{target_id}.{layout_type}` 这个选择键，不修改虚拟布局内容版本和 `published_version_id`。
+
 ## 解析优先级
 
 产品详情页：
@@ -260,6 +308,7 @@ Theme 不新增自己的 scope 配置系统。
 - 后台配置树：SystemConfig 显示 Theme 普通配置和 Theme 布局管理入口。
 - Theme 只通过 `extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml` 提供配置模板，或通过 `<w:config:adapter>` 提供复杂资产入口。
 - 全局 scope 切换、模块搜索、配置搜索、继承开关、保存、校验和缓存失效都由 SystemConfig 处理，Theme 不接管这些通用配置能力。
+- Theme 的配置模板由其他模块扩展 `Weline_SystemConfig` 的 Extends registry 提供。刷新 Theme/SystemConfig 配置中心时不能只做目标模块级刷新；必须全量执行 `php bin/w extends:rebuild` 或等价的 extenders 重建流程，避免 Theme/Payment/WeShop 等模块贡献的配置模板从 `generated/extends.php` 中丢失。
 
 ## 缺陷补齐清单
 
@@ -282,6 +331,24 @@ Theme 不新增自己的 scope 配置系统。
 | 定时计划创建返回复用对象 | 创建计划保存后返回独立模型对象，解析仍按当前时间、priority 和 fallback 动态计算 |
 | 后台源码编辑没有版本列表和回滚入口 | 产品/分类后台通过 Theme version 列表展示历史版本，回滚时校验 asset/version 属于当前 identity |
 | 保存失败和误保存没有分层恢复策略 | 保存失败保持旧发布版本，误保存通过版本列表立即回滚，并记录 actor/reason/old-new version |
+| 保存失败后还要求人工回滚 | 运营可能以为前台已被污染，恢复路径不清晰 | 保存失败不改变 `published_version_id` 或有效选择；只有成功保存/发布的版本才进入立即回滚 |
+| 布局选择版本和布局内容版本混在一起 | 选择回滚可能误改源码发布版本，源码回滚也可能误改产品/分类选择；必须单独定义选择版本，选择回滚只恢复 option 指向，内容回滚只切换 published version |
+| 回滚入口缺少预检状态 | 可能覆盖后续修改或回滚到已删除/锁定 option；回滚前返回可回滚状态、冲突 key/version、阻断原因和预计恢复结果 |
+| 保存并发布时 publish 失败 | draft 已保存但前台仍应使用旧发布版本；保存结果和发布结果分开返回，publish 失败时恢复旧 `published_version_id` 并保留 draft |
+| 发布中途归档旧版本后失败 | 可能出现没有有效 published version 的状态；发布前快照 asset 和版本状态，失败时补偿恢复，最后清理 runtime cache |
+| 回滚目标身份不匹配 | 可能把其他产品、分类或 scope 的历史布局发布到当前对象；回滚前校验 asset id、layout type、target type、target id、scope 和版本归属 |
+| 布局选择保存非法或锁定 option | 可能导致默认布局被写成对象专属自定义布局；保存前校验 option 白名单和锁定规则，失败时不改变当前 effective option |
+
+### 版本保存验收矩阵
+
+| 操作 | 必须生成的版本 | 何时生效 | 失败恢复 | 回滚范围 |
+| --- | --- | --- | --- | --- |
+| 源码保存 | layout draft version | 不影响前台，预览时按 draft token 生效 | 不改变当前发布版本 | 回滚发布版本，不回滚草稿列表 |
+| 可视化保存 | layout draft version，带 visual schema | 不影响前台，预览时按 draft token 生效 | 不改变当前发布版本 | 回滚发布版本，不回滚真实主题 |
+| AI 生成 | layout draft version，带 prompt/model meta | 只进入草稿，不能直接发布 | 不改变当前发布版本 | 丢弃草稿或回滚后续发布 |
+| 发布草稿 | publish record，更新 asset `published_version_id` | 发布后前台解析命中 | 恢复旧 `published_version_id` 和旧版本状态 | 只能切回同一 asset/identity/scope 的版本 |
+| 布局选择保存 | selection version 或 SystemConfig batch version | 解析器读取 option 时生效 | 保存失败不改变 effective option | 只恢复 option 指向，不改布局源码 |
+| 定时计划保存 | schedule version/audit | 当前时间命中计划时生效 | 保存失败不参与解析 | 回滚或禁用计划，不改产品/分类原选择 |
 
 ## 验收项
 
@@ -296,9 +363,12 @@ Theme 不新增自己的 scope 配置系统。
 - 锁定可视化编辑不能触发真实主题保存、发布、拖拽写入或配置写入，只允许当前虚拟布局 draft/AI 写入。
 - AI 创建草稿可预览，不直接发布。
 - 虚拟布局每次保存生成版本。
+- 源码保存、可视化保存和 AI 生成都只生成 draft version，不能直接覆盖已发布版本。
 - 源码保存失败、可视化保存失败、AI 生成失败不影响当前发布版本。
+- 保存并发布必须分别返回 draft save 结果和 publish 结果；publish 失败时前台继续使用旧发布版本。
 - 发布后可以立即回滚到上一发布版本。
 - 后台可以从版本列表恢复任一属于当前 identity 的可发布历史版本。
+- 布局选择保存生成独立选择版本，选择回滚只恢复 option 指向。
 - 产品/分类后台源码编辑页保存后能显示版本列表，并能回滚到属于当前对象 identity 的历史版本。
 - 回滚发布生成审计记录，且不会删除历史版本。
 - 同一 option 发布新版本或回滚后，产品页和分类页缓存必须自动区分新旧版本。

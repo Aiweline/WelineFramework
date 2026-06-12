@@ -13,6 +13,7 @@ use Weline\Theme\Service\LayoutDataService;
 #[Index(name: 'idx_area_sort', columns: ['area', 'sort_order'])]
 #[Index(name: 'idx_theme_slot', columns: ['theme_id', 'page_type', 'area', 'slot_id'])]
 #[Index(name: 'idx_theme_status', columns: ['theme_id', 'page_type', 'status'])]
+#[Index(name: 'idx_theme_layout_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'target_type', 'target_id', 'status'])]
 class ThemeLayout extends Model
 {
     public const schema_table = 'theme_layout';
@@ -23,6 +24,14 @@ class ThemeLayout extends Model
     public const schema_fields_THEME_ID = 'theme_id';
     #[Col('varchar', 50, nullable: false, default: 'default', comment: '页面类型')]
     public const schema_fields_PAGE_TYPE = 'page_type';
+    #[Col('varchar', 100, nullable: false, default: 'default', comment: 'Layout option')]
+    public const schema_fields_LAYOUT_OPTION = 'layout_option';
+    #[Col('varchar', 120, nullable: false, default: 'default', comment: 'Scope path')]
+    public const schema_fields_SCOPE = 'scope';
+    #[Col('varchar', 50, nullable: false, default: 'global', comment: 'Layout target type')]
+    public const schema_fields_TARGET_TYPE = 'target_type';
+    #[Col('int', 11, nullable: false, default: 0, comment: 'Layout target ID')]
+    public const schema_fields_TARGET_ID = 'target_id';
     #[Col('varchar', 50, nullable: false, comment: '区域标识')]
     public const schema_fields_AREA = 'area';
     #[Col('varchar', 50, comment: '插槽ID')]
@@ -136,6 +145,41 @@ class ThemeLayout extends Model
     public function setPageType(string $pageType): self
     {
         return $this->setData(self::schema_fields_PAGE_TYPE, $pageType);
+    }
+    public function getLayoutOption(): string
+    {
+        return (string)($this->getData(self::schema_fields_LAYOUT_OPTION) ?: 'default');
+    }
+    public function setLayoutOption(string $layoutOption): self
+    {
+        $layoutOption = trim($layoutOption) !== '' ? trim($layoutOption) : 'default';
+        return $this->setData(self::schema_fields_LAYOUT_OPTION, $layoutOption);
+    }
+    public function getScope(): string
+    {
+        return (string)($this->getData(self::schema_fields_SCOPE) ?: 'default');
+    }
+    public function setScope(string $scope): self
+    {
+        $scope = trim($scope) !== '' ? trim($scope) : 'default';
+        return $this->setData(self::schema_fields_SCOPE, $scope);
+    }
+    public function getTargetType(): string
+    {
+        return (string)($this->getData(self::schema_fields_TARGET_TYPE) ?: 'global');
+    }
+    public function setTargetType(string $targetType): self
+    {
+        $targetType = trim($targetType) !== '' ? trim($targetType) : 'global';
+        return $this->setData(self::schema_fields_TARGET_TYPE, $targetType);
+    }
+    public function getTargetId(): int
+    {
+        return max(0, (int)$this->getData(self::schema_fields_TARGET_ID));
+    }
+    public function setTargetId(int $targetId): self
+    {
+        return $this->setData(self::schema_fields_TARGET_ID, max(0, $targetId));
     }
     public function getArea(): string
     {

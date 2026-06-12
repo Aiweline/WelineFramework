@@ -8,6 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeVirtualLayoutService;
 
 /**
@@ -40,12 +41,19 @@ class ThemeQueryProvider implements QueryProviderInterface
             'getTemplatePath' => $this->getTemplatePath($params),
             'scanThemeLayoutsByType' => $this->scanThemeLayoutsByType($params),
             'listVirtualLayoutOptions' => $this->listVirtualLayoutOptions($params),
+            'virtualLayoutExists' => $this->virtualLayoutExists($params),
+            'loadVirtualLayoutSource' => $this->loadVirtualLayoutSource($params),
+            'listVirtualLayoutVersions' => $this->listVirtualLayoutVersions($params),
             'saveVirtualLayoutSource' => $this->saveVirtualLayoutSource($params),
             'rollbackVirtualLayoutVersion' => $this->rollbackVirtualLayoutVersion($params),
             'resolveVirtualLayoutRuntime' => $this->resolveVirtualLayoutRuntime($params),
+            'clearRuntimeLayoutCaches' => $this->clearRuntimeLayoutCaches($params),
             'saveLayoutSelection' => $this->saveLayoutSelection($params),
             'deleteLayoutSelection' => $this->deleteLayoutSelection($params),
             'resolveLayoutSelection' => $this->resolveLayoutSelection($params),
+            'listLayoutSelectionVersions' => $this->listLayoutSelectionVersions($params),
+            'precheckLayoutSelectionRollback' => $this->precheckLayoutSelectionRollback($params),
+            'rollbackLayoutSelectionVersion' => $this->rollbackLayoutSelectionVersion($params),
             'editorRequest' => $this->editorRequest($params),
             'setBackendThemeMode' => $this->setBackendThemeMode($params),
             default => throw new \InvalidArgumentException(
@@ -204,6 +212,35 @@ class ThemeQueryProvider implements QueryProviderInterface
         );
     }
 
+    private function virtualLayoutExists(array $params): bool
+    {
+        $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
+
+        return $this->virtualLayoutService()->layoutExists(
+            (string)($params['layout_type'] ?? $identity['layout_type'] ?? ''),
+            (string)($params['layout_option'] ?? $params['layout_code'] ?? $identity['layout_option'] ?? ''),
+            $identity
+        );
+    }
+
+    private function loadVirtualLayoutSource(array $params): ?string
+    {
+        $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
+
+        return $this->virtualLayoutService()->loadEditableSource(
+            (string)($params['layout_type'] ?? $identity['layout_type'] ?? ''),
+            (string)($params['layout_option'] ?? $params['layout_code'] ?? $identity['layout_option'] ?? ''),
+            $identity
+        );
+    }
+
+    private function listVirtualLayoutVersions(array $params): array
+    {
+        $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
+
+        return $this->virtualLayoutService()->listVersionDetails($identity);
+    }
+
     private function saveVirtualLayoutSource(array $params): array
     {
         $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
@@ -233,6 +270,21 @@ class ThemeQueryProvider implements QueryProviderInterface
             isset($params['scope']) ? (string)$params['scope'] : null,
             is_array($params['target_chain'] ?? null) ? $params['target_chain'] : []
         );
+    }
+
+    private function clearRuntimeLayoutCaches(array $params): array
+    {
+        $reason = trim((string)($params['reason'] ?? 'theme_query_clear_runtime_layout_caches'));
+        if ($reason === '') {
+            $reason = 'theme_query_clear_runtime_layout_caches';
+        }
+
+        ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(null, $reason);
+
+        return [
+            'success' => true,
+            'reason' => $reason,
+        ];
     }
 
     private function saveLayoutSelection(array $params): array
@@ -269,6 +321,39 @@ class ThemeQueryProvider implements QueryProviderInterface
             isset($params['scope']) ? (string)$params['scope'] : null,
             isset($params['locale']) ? (string)$params['locale'] : null
         );
+    }
+
+    private function listLayoutSelectionVersions(array $params): array
+    {
+        return $this->virtualLayoutService()->listLayoutSelectionVersions(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+            (int)($params['limit'] ?? 20),
+            $this->normalizeBool($params['with_precheck'] ?? false)
+        );
+    }
+
+    private function precheckLayoutSelectionRollback(array $params): array
+    {
+        $versionId = (int)($params['version_id'] ?? 0);
+        if ($versionId <= 0) {
+            return ['rollbackable' => false, 'status' => 'invalid_version', 'version_id' => $versionId, 'blockers' => ['invalid_version']];
+        }
+
+        return $this->virtualLayoutService()->precheckLayoutSelectionRollback($versionId, $params);
+    }
+
+    private function rollbackLayoutSelectionVersion(array $params): array
+    {
+        $versionId = (int)($params['version_id'] ?? 0);
+        if ($versionId <= 0) {
+            return ['success' => false, 'status' => 'invalid_version', 'version_id' => $versionId];
+        }
+
+        return $this->virtualLayoutService()->rollbackLayoutSelectionVersion($versionId, $params);
     }
 
     private function editorRequest(array $params): mixed
@@ -794,6 +879,33 @@ class ThemeQueryProvider implements QueryProviderInterface
                     ],
                 ],
                 [
+                    'name' => 'virtualLayoutExists',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('检查 Theme 虚拟布局是否存在'),
+                    'params' => [
+                        ['name' => 'identity', 'type' => 'array', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'loadVirtualLayoutSource',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('读取 Theme 虚拟布局当前可编辑源码'),
+                    'params' => [
+                        ['name' => 'identity', 'type' => 'array', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'listVirtualLayoutVersions',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('列出 Theme 虚拟布局源码/发布版本'),
+                    'params' => [
+                        ['name' => 'identity', 'type' => 'array', 'required' => true],
+                    ],
+                ],
+                [
                     'name' => 'saveVirtualLayoutSource',
                     'description' => __('保存 Theme 虚拟布局源码版本'),
                     'mode' => 'write',
@@ -822,6 +934,14 @@ class ThemeQueryProvider implements QueryProviderInterface
                         ['name' => 'layout_type', 'type' => 'string', 'required' => true],
                         ['name' => 'layout_option', 'type' => 'string', 'required' => true],
                         ['name' => 'target_chain', 'type' => 'array', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'clearRuntimeLayoutCaches',
+                    'description' => __('清理 Theme 运行时布局缓存'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'reason', 'type' => 'string', 'required' => false],
                     ],
                 ],
                 [
@@ -855,6 +975,49 @@ class ThemeQueryProvider implements QueryProviderInterface
                         ['name' => 'target_type', 'type' => 'string', 'required' => true],
                         ['name' => 'target_id', 'type' => 'int', 'required' => true],
                         ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'listLayoutSelectionVersions',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('列出产品/分类布局选择版本'),
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
+                        ['name' => 'with_precheck', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'precheckLayoutSelectionRollback',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('预检产品/分类布局选择版本是否可回滚'),
+                    'params' => [
+                        ['name' => 'version_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'target_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'rollbackLayoutSelectionVersion',
+                    'description' => __('回滚产品/分类布局选择版本'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'version_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'target_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'reason', 'type' => 'string', 'required' => false],
                     ],
                 ],
                 [
