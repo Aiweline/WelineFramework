@@ -54,6 +54,7 @@ $modulesConfigUrl = $isDev
 $modulesBaseUrl = $isDev
     ? '/Weline/Frontend/view/statics/js/weline-api'
     : '/static/Weline/Frontend/js/weline-api';
+$frontendQueryBinUrl = \Weline\Framework\App\Env::getFrontendQueryBinPath();
 
 $themeConfigPayload = [
     'env' => [
@@ -71,8 +72,8 @@ $themeConfigPayload = [
         'workerUrl' => $isDev
             ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
             : '/static/Weline/Frontend/js/weline-api-worker.js',
-        'endpoint' => '/api/framework/query-bin',
-        'queryBinUrl' => '/api/framework/query-bin',
+        'endpoint' => $frontendQueryBinUrl,
+        'queryBinUrl' => $frontendQueryBinUrl,
         'locale' => $currentLang,
         'currency' => $currentCurrency,
     ],
@@ -110,8 +111,6 @@ $this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESC
 <link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
 <link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
 </w:hook>
-
-<w:seo slot="head"/>
 <w:geo slot="head"/>
 
 <theme:css>Weline_Theme::theme/{{area}}/assets/css/theme.css</theme:css>
@@ -483,6 +482,10 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
 
         var themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
+
+        if (themeConfig.api) {
+            window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, themeConfig.api);
+        }
 
         var textDirection = themeConfig.htmlDir === 'rtl' || themeConfig.textDirection === 'rtl' ? 'rtl' : 'ltr';
         document.documentElement.setAttribute('dir', textDirection);

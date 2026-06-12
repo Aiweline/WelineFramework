@@ -66,6 +66,7 @@ class SearchEngineAdapterRegistry
     public function getAdapter(string $provider): ?SearchEngineAdapterInterface
     {
         $provider = trim($provider);
+        $this->loadExtendedAdapters();
         if ($provider === '' || !isset($this->adapters[$provider])) {
             return null;
         }
@@ -86,6 +87,71 @@ class SearchEngineAdapterRegistry
             return;
         }
         $this->adapters[$provider] = $adapterClass;
+    }
+
+    public function hasProvider(string $provider): bool
+    {
+        $provider = trim($provider);
+        if ($provider === '') {
+            return false;
+        }
+
+        $this->loadExtendedAdapters();
+        return isset($this->adapters[$provider]);
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getProviderCodes(): array
+    {
+        $this->loadExtendedAdapters();
+        return array_keys($this->adapters);
+    }
+
+    private bool $extendedLoaded = false;
+
+    private function loadExtendedAdapters(): void
+    {
+        if ($this->extendedLoaded) {
+            return;
+        }
+        $this->extendedLoaded = true;
+
+        $pattern = BP . '/app/code/*/extends/module/Weline_Seo/SearchEngineAdapter/*Adapter.php';
+        foreach (glob($pattern) ?: [] as $file) {
+            $normalized = str_replace('\\', '/', $file);
+            if (!preg_match('#app/code/([^/]+)/([^/]+)/extends/module/Weline_Seo/SearchEngineAdapter/([^/]+Adapter)\.php$#', $normalized, $matches)) {
+                continue;
+            }
+
+            $classes = [
+                sprintf(
+                    '%s\\%s\\Extends\\Module\\Weline_Seo\\SearchEngineAdapter\\%s',
+                    $matches[1],
+                    $matches[2],
+                    $matches[3]
+                ),
+                sprintf(
+                    '%s\\%s\\extends\\module\\Weline_Seo\\SearchEngineAdapter\\%s',
+                    $matches[1],
+                    $matches[2],
+                    $matches[3]
+                ),
+            ];
+
+            foreach ($classes as $class) {
+                if (!class_exists($class)) {
+                    continue;
+                }
+
+                $adapter = $this->objectManager->getInstance($class);
+                if ($adapter instanceof SearchEngineAdapterInterface) {
+                    $this->register($adapter->getCode(), $class);
+                    break;
+                }
+            }
+        }
     }
 }
 

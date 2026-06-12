@@ -2,8 +2,9 @@
 
 > 中文说明见 [SEO结构化数据说明.md](SEO结构化数据说明.md)。模块文档索引见 [设计文档.md](设计文档.md)。
 
-This guide is the module contract for extending page-level SEO, structured data,
-sitemap metadata, and GEO feed facts through `Weline_Seo`.
+This guide is the module contract for extending `<w:seo>` tag rendering,
+page-level SEO, structured data, sitemap metadata, and GEO feed facts through
+`Weline_Seo`.
 
 ## Extension Points
 
@@ -13,15 +14,23 @@ Modules should use these extension points:
    - Path: `extends/module/Weline_Seo/SeoProfileProvider`
    - Interface: `Weline\Seo\Interface\SeoProfileProviderInterface`
    - Use for page type, robots, canonical, schema facts, sitemap metadata, and GEO metadata.
+   - It is called by `<w:seo>` with the current template context. Providers return structured facts only.
 
-2. `SitemapUrlProvider`
+2. `SeoSlotProvider`
+   - Path: `extends/module/Weline_Seo/SeoSlotProvider`
+   - Interface: `Weline\Seo\Interface\SeoSlotProviderInterface`
+   - Use for custom `<w:seo slot="..."/>` regions in body, footer, or module-defined slots.
+   - Providers return structured slot payloads such as `blocks` and `schema_nodes`, not raw HTML.
+
+3. `SitemapUrlProvider`
    - Path: `extends/module/Weline_Seo/SitemapUrlProvider`
    - Interface: `Weline\Seo\Interface\SitemapUrlProviderInterface`
    - Use for discoverable URLs and sitemap payloads such as image/video/news/hreflang metadata.
 
-`SeoProfileProvider` is the only supported page-level SEO/GEO entry point. Put
-module-specific entity enrichment and schema facts there, and return JSON-LD
-nodes through `schema_nodes`.
+`SeoProfileProvider` is the only supported page-level SEO/GEO entry point. It
+receives `_slot` and `_options` inside `$context` when invoked by `<w:seo>`.
+Put module-specific entity enrichment and schema facts there. Do not assemble
+HTML or hand-write JSON-LD in providers; return structure data and let SEO render.
 
 ## Profile Shape
 
@@ -49,6 +58,42 @@ Common keys:
 
 List-style keys `schema_nodes`, `item_list`, `faqs`, and `qa_list` are appended to existing
 context. Other keys override or enrich existing context recursively.
+
+## Custom Slot Shape
+
+`<w:seo>` is not limited to head templates. It may appear in body, footer, or a
+custom module slot:
+
+```html
+<w:seo slot="blog-footer"/>
+```
+
+Custom slots are handled by `SeoSlotProvider`:
+
+```php
+[
+    'blocks' => [
+        [
+            'type' => 'related_posts',
+            'title' => 'Related',
+            'items' => [
+                ['name' => 'Related Post', 'url' => 'https://example.com/post'],
+            ],
+        ],
+    ],
+    'schema_nodes' => [
+        [
+            '@type' => 'WebPage',
+            '@id' => 'https://example.com/post#webpage',
+            'name' => 'Related Post',
+        ],
+    ],
+]
+```
+
+SEO renders the returned structure. Slot providers must decide whether the
+current page and slot are supported by reading `$template`, `$context`, `$slot`,
+and `$options`.
 
 ## Structure Layer
 
@@ -205,8 +250,9 @@ class LandingPageSeoProfileProvider implements SeoProfileProviderInterface
 
 ## Template Guidance
 
-Do not print `application/ld+json` directly from templates. Put facts on the
-template/controller context, then let `Weline_Seo` render the final graph:
+Do not print `application/ld+json` directly from templates or providers. Put
+facts on the template/controller context or return them from `SeoProfileProvider`,
+then let `Weline_Seo` render the final graph:
 
 ```php
 $this->setData('seo', [
@@ -217,7 +263,8 @@ $this->setData('article', $articleFacts);
 ```
 
 If a module needs sitemap support for the same page type, add a matching
-`SitemapUrlProvider` and reuse the same facts in its metadata payload.
+`SitemapUrlProvider` and reuse the same facts in its metadata payload. Sitemap
+providers are not called by `<w:seo>`; they are used by sitemap/cron flows.
 
 ## Validation
 

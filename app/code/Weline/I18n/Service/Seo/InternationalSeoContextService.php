@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service\Seo;
 
+use Weline\Framework\Env\WelineEnv;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 
 class InternationalSeoContextService
@@ -35,10 +36,12 @@ class InternationalSeoContextService
         $defaultLocale = $this->normalizeLocale($this->firstNonEmpty([
             $this->readTemplate($template, 'default_locale'),
             $this->read($seo, ['default_locale', 'website_locale', 'x_default_locale']),
+            $this->websiteDefaultLocale($template, $context),
             $this->env('website.language'),
             $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? '',
             self::DEFAULT_LOCALE,
         ]));
+        $websiteLocaleCodes = $this->websiteLocaleCodes($template, $context, $seo);
         try {
             $activeLocaleCodes = $this->activeLocaleCodeProvider->getInstalledActiveCodes();
         } catch (\Throwable) {
@@ -46,7 +49,7 @@ class InternationalSeoContextService
         }
         $locales = $this->uniqueLocales(array_merge(
             [$defaultLocale],
-            $activeLocaleCodes,
+            $websiteLocaleCodes !== [] ? $websiteLocaleCodes : $activeLocaleCodes,
             [$currentLocale],
         ));
 
@@ -80,6 +83,137 @@ class InternationalSeoContextService
         ];
 
         return array_replace($result, $localizedContext);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $seo
+     * @return string[]
+     */
+    private function websiteLocaleCodes($template, array $context, array $seo): array
+    {
+        $explicit = $this->firstLocaleList([
+            $this->readTemplate($template, 'website_language_codes'),
+            $this->readTemplate($template, 'language_codes'),
+            $this->readTemplate($template, 'available_languages'),
+            $context['website_language_codes'] ?? null,
+            $context['language_codes'] ?? null,
+            $context['available_languages'] ?? null,
+            $this->read($context['website'] ?? [], ['language_codes', 'available_languages']),
+            $this->read($seo, ['website_language_codes', 'language_codes', 'available_languages']),
+        ]);
+        if ($explicit !== []) {
+            return $explicit;
+        }
+
+        $websiteId = $this->websiteId($template, $context);
+        if ($websiteId <= 0) {
+            return [];
+        }
+
+        try {
+            $codes = \w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return $this->uniqueLocales($this->toStringList($codes));
+    }
+
+    /**
+     * @param mixed[] $values
+     * @return string[]
+     */
+    private function firstLocaleList(array $values): array
+    {
+        foreach ($values as $value) {
+            $locales = $this->uniqueLocales($this->toStringList($value));
+            if ($locales !== []) {
+                return $locales;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function websiteDefaultLocale($template, array $context): string
+    {
+        $explicit = $this->normalizeLocale($this->firstNonEmpty([
+            $this->readTemplate($template, 'website_default_language'),
+            $this->readTemplate($template, 'default_language'),
+            $context['website_default_language'] ?? '',
+            $context['default_language'] ?? '',
+            $this->read($context['website'] ?? [], ['default_language', 'default_locale']),
+        ]));
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        $websiteId = $this->websiteId($template, $context);
+        if ($websiteId <= 0) {
+            return '';
+        }
+
+        try {
+            $website = \w_query('websites', 'getWebsiteById', ['website_id' => $websiteId]);
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return $this->normalizeLocale($this->read($this->toArray($website), ['default_language', 'default_locale']));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function websiteId($template, array $context): int
+    {
+        $value = $this->firstNonEmpty([
+            $this->readTemplate($template, 'website_id'),
+            $context['website_id'] ?? null,
+            $this->read($context['website'] ?? [], ['website_id', 'id']),
+            WelineEnv::server('WELINE_WEBSITE_ID', ''),
+            $_SERVER['WELINE_WEBSITE_ID'] ?? '',
+        ]);
+
+        return max(0, (int)$value);
+    }
+
+    /**
+     * @return string[]
+     */
+    private function toStringList(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = preg_split('/[,;\s]+/', $value) ?: [];
+        }
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $list = [];
+        foreach ($value as $key => $item) {
+            if (is_string($item) || is_numeric($item)) {
+                $list[] = (string)$item;
+                continue;
+            }
+            if (is_array($item)) {
+                foreach (['code', 'locale', 'language', 'lang'] as $field) {
+                    if (!empty($item[$field])) {
+                        $list[] = (string)$item[$field];
+                        continue 2;
+                    }
+                }
+            }
+            if (is_string($key)) {
+                $list[] = $key;
+            }
+        }
+
+        return $list;
     }
 
     /**

@@ -44,8 +44,10 @@ body {
     padding: 0;
 }
 </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="blank-full-layout <?= htmlspecialchars((string)($meta['class'] ?? '')) ?>">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::blank::body-start</w:hook>
     <main class="blank-full-content" id="blank-full-content" data-layout="blank_full">
@@ -68,6 +70,7 @@ body {
     </main>
     <w:hook>Weline_Theme::frontend::layouts::blank::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
 <?php endif; ?>

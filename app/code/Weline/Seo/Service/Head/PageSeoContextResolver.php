@@ -22,6 +22,10 @@ class PageSeoContextResolver
      */
     public function resolve($template, array $options = []): array
     {
+        $slot = trim((string)($options['slot'] ?? 'head'));
+        if ($slot === '') {
+            $slot = 'head';
+        }
         $meta = $this->pageMeta($template);
         $seo = $this->toArray($this->readTemplate($template, 'seo'));
         $product = $this->readTemplate($template, 'product');
@@ -156,6 +160,8 @@ class PageSeoContextResolver
                 $this->read($page, ['qa_list']),
             ])),
             'organization' => $this->normalizeOrganization($seo, $meta, $template, (string) $siteName),
+            '_slot' => $slot,
+            '_options' => $options,
         ];
 
         $context = $this->mergeIntegrationContext(

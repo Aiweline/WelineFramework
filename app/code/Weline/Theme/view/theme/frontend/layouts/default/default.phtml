@@ -107,8 +107,10 @@ $hasRealContent = $contentWithoutPreviewPlaceholder !== '';
     </style>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="theme-layout-default <?= $class ?>">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::body-start</w:hook>
 
@@ -241,5 +243,6 @@ $hasRealContent = $contentWithoutPreviewPlaceholder !== '';
 
     <w:hook>Weline_Theme::frontend::layouts::default::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

@@ -202,8 +202,10 @@
         border-width: 0;
     }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="font-display bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark">
+    <w:hook>seo::body</w:hook>
     <!-- Hook: body-start -->
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::body-start</w:hook>
@@ -311,5 +313,6 @@
     }
 })();
 </script>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

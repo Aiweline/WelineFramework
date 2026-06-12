@@ -610,8 +610,10 @@ $area = $themeData['area'] ?? 'frontend';
             color: var(--weshop-text-secondary);
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="weshop-product-list-1">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product_list::body-start</w:hook>
     
@@ -927,5 +929,6 @@ $area = $themeData['area'] ?? 'frontend';
             console.log('Add to cart:', productId);
         }
     </script>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
