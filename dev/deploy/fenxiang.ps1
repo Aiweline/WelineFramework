@@ -43,6 +43,53 @@ function Invoke-Checked {
     }
 }
 
+function Test-WelineCommandOutputFailure {
+    param([object[]]$Output)
+
+    if ($null -eq $Output) {
+        return $false
+    }
+
+    $failureRegexes = @(
+        '\u6ca1\u6709\u627e\u5230\u5339\u914d\u7684\u547d\u4ee4',
+        '\u8bf7\u5148\u66f4\u65b0\u6a21\u5757',
+        'Command registry update failed',
+        'Fatal error',
+        'Parse error',
+        'Uncaught '
+    )
+
+    foreach ($line in $Output) {
+        $text = [string]$line
+        foreach ($pattern in $failureRegexes) {
+            if ($text -match $pattern) {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
+function Test-CoreUpdateCommandAvailable {
+    param(
+        [string]$WorkingDirectory,
+        [string]$Php
+    )
+
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $output = @(& $Php "bin/w" "detail" "core:update" 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        Pop-Location
+    }
+
+    $outputText = [string]::Join("`n", @($output | ForEach-Object { [string]$_ }))
+    return ($exitCode -eq 0) -and $outputText.Contains('Weline\Deploy\Console\Update\Core')
+}
+
 function Resolve-SafeChildPath {
     param(
         [string]$Root,
@@ -167,10 +214,21 @@ foreach ($site in $sites) {
         continue
     }
 
+    if (-not (Test-CoreUpdateCommandAvailable -WorkingDirectory $site.WorkRoot -Php $Php)) {
+        Write-Warning "core:update command is unavailable in $($site.WorkRoot)"
+        $failedSites += $site.SitePath
+        continue
+    }
+
     Push-Location -LiteralPath $site.WorkRoot
     try {
-        & $Php "bin/w" "core:update" "-b" $UpdateBranch
-        if ($LASTEXITCODE -ne 0) {
+        $output = @(& $Php "bin/w" "core:update" "-b" $UpdateBranch 2>&1)
+        $exitCode = $LASTEXITCODE
+        foreach ($line in $output) {
+            Write-Host ([string]$line)
+        }
+
+        if (($exitCode -ne 0) -or (Test-WelineCommandOutputFailure -Output $output)) {
             $failedSites += $site.SitePath
         }
     }
