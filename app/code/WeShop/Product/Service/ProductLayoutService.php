@@ -10,31 +10,25 @@ use WeShop\Product\Model\ProductLayout;
 use WeShop\Product\Model\ProductLayoutSchedule;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
-use Weline\Theme\Service\ThemeVirtualLayoutService;
 
 class ProductLayoutService
 {
     private const CACHE_KEY_PREFIX = 'weshop_product_layout_';
     private const CACHE_TTL = 3600;
+    private const THEME_DEFAULT_AREA = 'frontend';
 
     private ProductLayout $productLayoutModel;
     private ProductLayoutSchedule $scheduleModel;
     private ?ProductCategory $productCategoryModel;
-    private ?ThemeVirtualLayoutService $themeVirtualLayoutService;
 
     public function __construct(
         ProductLayout $productLayoutModel,
         ProductLayoutSchedule $scheduleModel,
-        ?ProductCategory $productCategoryModel = null,
-        mixed $themeVirtualLayoutService = null
+        ?ProductCategory $productCategoryModel = null
     ) {
         $this->productLayoutModel = $productLayoutModel;
         $this->scheduleModel = $scheduleModel;
         $this->productCategoryModel = $productCategoryModel;
-        $this->themeVirtualLayoutService = $themeVirtualLayoutService instanceof ThemeVirtualLayoutService
-            ? $themeVirtualLayoutService
-            : null;
     }
 
     public function getProductLayout(int $productId, string $layoutType): ?string
@@ -126,18 +120,30 @@ class ProductLayoutService
 
     public function resolveCategoryProductDefaultLayoutOption(int $categoryId): ?string
     {
+        $context = $this->resolveCategoryProductDefaultLayoutContext($categoryId);
+        return is_array($context) ? (string)$context['layout_code'] : null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function resolveCategoryProductDefaultLayoutContext(int $categoryId): ?array
+    {
         if ($categoryId <= 0) {
             return null;
         }
 
         foreach ($this->categoryProductDefaultLayoutTypeCandidates() as $candidateLayoutType) {
-            $layoutCode = $this->getActiveEntityLayoutCode(
+            $context = $this->getActiveEntityLayoutContext(
                 ProductLayout::ENTITY_CATEGORY_PRODUCT_DEFAULT,
                 $categoryId,
                 $candidateLayoutType
             );
-            if ($layoutCode !== null) {
-                return $layoutCode;
+            if ($context !== null) {
+                return $context + [
+                    'source' => $context['source'] ?? ProductLayout::ENTITY_CATEGORY_PRODUCT_DEFAULT,
+                    'matched_category_id' => $categoryId,
+                ];
             }
         }
 
@@ -190,19 +196,17 @@ class ProductLayoutService
         }
 
         try {
-            $result = $this->themeVirtualLayoutService()->saveLayoutSelection(
-                $entityType,
-                $entityId,
-                $layoutType,
-                $layoutCode,
-                null,
-                null,
-                [
+            $result = $this->themeQuery('saveLayoutSelection', [
+                'target_type' => $entityType,
+                'target_id' => $entityId,
+                'layout_type' => $layoutType,
+                'layout_option' => $layoutCode,
+                'options' => [
                     'metadata' => [
                         'weshop_config' => $config,
                     ],
-                ]
-            );
+                ],
+            ]);
             if (empty($result['success'])) {
                 w_log_error('Apply Theme layout selection failed: {status}', ['status' => (string)($result['status'] ?? 'unknown')]);
                 return false;
@@ -223,7 +227,11 @@ class ProductLayoutService
         }
 
         try {
-            $result = $this->themeVirtualLayoutService()->deleteLayoutSelection($entityType, $entityId, $layoutType);
+            $result = $this->themeQuery('deleteLayoutSelection', [
+                'target_type' => $entityType,
+                'target_id' => $entityId,
+                'layout_type' => $layoutType,
+            ]);
             if (empty($result['success'])) {
                 return false;
             }
@@ -232,6 +240,81 @@ class ProductLayoutService
         } catch (\Throwable $e) {
             w_log_error('Delete Theme layout selection failed: {error}', ['error' => $e->getMessage()]);
             return false;
+        }
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    public function listEntityLayoutSelectionVersions(
+        string $entityType,
+        int $entityId,
+        string $layoutType,
+        int $limit = 10
+    ): array {
+        $entityType = trim($entityType);
+        $layoutType = trim($layoutType);
+        if ($entityType === '' || $entityId <= 0 || $layoutType === '') {
+            return [];
+        }
+
+        try {
+            $versions = \w_query('theme', 'listLayoutSelectionVersions', [
+                'target_type' => $entityType,
+                'target_id' => $entityId,
+                'layout_type' => $layoutType,
+                'limit' => $limit,
+                'with_precheck' => true,
+            ], 'backend');
+
+            return is_array($versions) ? array_values(array_filter($versions, 'is_array')) : [];
+        } catch (\Throwable $e) {
+            w_log_error('List Theme layout selection versions failed: {error}', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function rollbackEntityLayoutSelectionVersion(
+        string $entityType,
+        int $entityId,
+        string $layoutType,
+        int $versionId,
+        string $reason = ''
+    ): array {
+        $entityType = trim($entityType);
+        $layoutType = trim($layoutType);
+        if ($entityType === '' || $entityId <= 0 || $layoutType === '' || $versionId <= 0) {
+            return ['success' => false, 'status' => 'invalid_params'];
+        }
+
+        try {
+            $result = \w_query('theme', 'rollbackLayoutSelectionVersion', [
+                'version_id' => $versionId,
+                'target_type' => $entityType,
+                'target_id' => $entityId,
+                'layout_type' => $layoutType,
+                'reason' => $reason !== '' ? $reason : (string)__('回滚 WeShop 布局选择版本'),
+            ], 'backend');
+
+            if (!is_array($result)) {
+                return ['success' => false, 'status' => 'invalid_result'];
+            }
+
+            if (!empty($result['success'])) {
+                $this->clearEntityLayoutCache($entityType, $entityId, $layoutType);
+            }
+
+            return $result;
+        } catch (\Throwable $e) {
+            w_log_error('Rollback Theme layout selection version failed: {error}', ['error' => $e->getMessage()]);
+            return [
+                'success' => false,
+                'status' => 'exception',
+                'message' => $e->getMessage(),
+            ];
         }
     }
 
@@ -464,12 +547,12 @@ class ProductLayoutService
         try {
             $options = array_replace(
                 $options,
-                $this->themeVirtualLayoutService()->listLayoutOptions(
-                    $editableLayoutType,
-                    (int)($identity['theme_id'] ?? 0),
-                    (string)($identity['area'] ?? ThemeVirtualLayoutService::DEFAULT_AREA),
-                    isset($identity['scope']) ? (string)$identity['scope'] : null
-                )
+                $this->themeQuery('listVirtualLayoutOptions', [
+                    'layout_type' => $editableLayoutType,
+                    'theme_id' => (int)($identity['theme_id'] ?? 0),
+                    'area' => (string)($identity['area'] ?? self::THEME_DEFAULT_AREA),
+                    'scope' => isset($identity['scope']) ? (string)$identity['scope'] : null,
+                ])
             );
         } catch (\Throwable) {
         }
@@ -514,7 +597,12 @@ class ProductLayoutService
     public function editableLayoutExists(string $layoutType, string $layoutCode, array $identity = []): bool
     {
         try {
-            if ($this->themeVirtualLayoutService()->layoutExists($layoutType, $layoutCode, $identity)) {
+            if ($this->themeQuery('virtualLayoutExists', [
+                'identity' => array_merge($identity, [
+                    'layout_type' => $this->normalizeEditableLayoutType($layoutType),
+                    'layout_option' => $this->normalizeLayoutOptionCode($layoutCode),
+                ]),
+            ])) {
                 return true;
             }
         } catch (\Throwable) {
@@ -527,7 +615,12 @@ class ProductLayoutService
     public function loadEditableLayoutSource(string $layoutType, string $layoutCode, array $identity = []): ?string
     {
         try {
-            $source = $this->themeVirtualLayoutService()->loadEditableSource($layoutType, $layoutCode, $identity);
+            $source = $this->themeQuery('loadVirtualLayoutSource', [
+                'identity' => array_merge($identity, [
+                    'layout_type' => $this->normalizeEditableLayoutType($layoutType),
+                    'layout_option' => $this->normalizeLayoutOptionCode($layoutCode),
+                ]),
+            ]);
             if (is_string($source) && trim($source) !== '') {
                 return $source;
             }
@@ -615,12 +708,17 @@ PHTML;
         }
 
         try {
-            $result = $this->themeVirtualLayoutService()->saveSourceVersion(array_merge($identity, [
-                'layout_type' => $editableLayoutType,
-                'layout_option' => $layoutCode,
-            ]), $source, [
-                'reason' => (string)__('保存产品/分类虚拟布局源码'),
-            ], true);
+            $result = $this->themeQuery('saveVirtualLayoutSource', [
+                'identity' => array_merge($identity, [
+                    'layout_type' => $editableLayoutType,
+                    'layout_option' => $layoutCode,
+                ]),
+                'source' => $source,
+                'publish' => true,
+                'version_data' => [
+                    'reason' => (string)__('保存产品/分类虚拟布局源码'),
+                ],
+            ]);
             if (empty($result['success'])) {
                 $error = (string)($result['message'] ?? $result['status'] ?? __('布局源码保存失败'));
                 return false;
@@ -645,10 +743,13 @@ PHTML;
         }
 
         try {
-            return $this->themeVirtualLayoutService()->listVersionDetails(array_merge($identity, [
-                'layout_type' => $editableLayoutType,
-                'layout_option' => $layoutCode,
-            ]));
+            $versions = $this->themeQuery('listVirtualLayoutVersions', [
+                'identity' => array_merge($identity, [
+                    'layout_type' => $editableLayoutType,
+                    'layout_option' => $layoutCode,
+                ]),
+            ]);
+            return is_array($versions) ? array_values(array_filter($versions, 'is_array')) : [];
         } catch (\Throwable) {
             return [];
         }
@@ -693,8 +794,12 @@ PHTML;
         }
 
         try {
-            $result = $this->themeVirtualLayoutService()->rollbackPublishedVersion($assetId, $versionId, [
-                'reason' => (string)__('Rollback WeShop virtual layout version'),
+            $result = $this->themeQuery('rollbackVirtualLayoutVersion', [
+                'asset_id' => $assetId,
+                'version_id' => $versionId,
+                'options' => [
+                    'reason' => (string)__('Rollback WeShop virtual layout version'),
+                ],
             ]);
             if (empty($result['success'])) {
                 $error = (string)($result['message'] ?? $result['status'] ?? __('Layout version rollback failed'));
@@ -742,14 +847,13 @@ PHTML;
             }
 
             try {
-                $runtime = $this->themeVirtualLayoutService()->resolvePublishedRuntimeLayout(
-                    $layoutType,
-                    $layoutCode,
-                    0,
-                    ThemeVirtualLayoutService::DEFAULT_AREA,
-                    null,
-                    $targets
-                );
+                $runtime = $this->themeQuery('resolveVirtualLayoutRuntime', [
+                    'layout_type' => $layoutType,
+                    'layout_option' => $layoutCode,
+                    'theme_id' => 0,
+                    'area' => self::THEME_DEFAULT_AREA,
+                    'target_chain' => $targets,
+                ], 'frontend');
                 if (is_array($runtime)) {
                     $identity['virtual_asset_id'] = (int)($runtime['asset_id'] ?? 0);
                     $identity['virtual_version_id'] = (int)($runtime['version_id'] ?? 0);
@@ -780,7 +884,9 @@ PHTML;
     private function clearRuntimeLayoutCaches(string $reason): void
     {
         try {
-            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(null, $reason);
+            $this->themeQuery('clearRuntimeLayoutCaches', [
+                'reason' => $reason,
+            ]);
         } catch (\Throwable $e) {
             w_log_error('Clear product layout runtime cache failed: {error}', ['error' => $e->getMessage()]);
         }
@@ -879,7 +985,11 @@ PHTML;
         }
 
         try {
-            $selection = $this->themeVirtualLayoutService()->resolveLayoutSelection($entityType, $entityId, $layoutType);
+            $selection = $this->themeQuery('resolveLayoutSelection', [
+                'target_type' => $entityType,
+                'target_id' => $entityId,
+                'layout_type' => $layoutType,
+            ], 'frontend');
             if (is_array($selection) && trim((string)($selection['layout_code'] ?? '')) !== '') {
                 return $selection + [
                     'entity_type' => $entityType,
@@ -951,13 +1061,9 @@ PHTML;
         return $this->productCategoryModel = ObjectManager::getInstance(ProductCategory::class);
     }
 
-    private function themeVirtualLayoutService(): ThemeVirtualLayoutService
+    private function themeQuery(string $operation, array $params, string $area = 'backend'): mixed
     {
-        if ($this->themeVirtualLayoutService instanceof ThemeVirtualLayoutService) {
-            return $this->themeVirtualLayoutService;
-        }
-
-        return $this->themeVirtualLayoutService = ObjectManager::getInstance(ThemeVirtualLayoutService::class);
+        return \w_query('theme', $operation, $params, $area);
     }
 
     private function normalizeProductLayoutType(string $layoutType): string

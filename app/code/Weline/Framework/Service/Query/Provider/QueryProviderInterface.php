@@ -9,10 +9,15 @@ namespace Weline\Framework\Service\Query\Provider;
  * 各模块通过 extends 注册查询器，实现本接口即可对外提供查询能力。
  * Framework 通过 QueryProviderRegistry 自动扫描并注册所有实现类。
  *
- * 使用说明查询（introspect）：
+ * 使用说明查询（帮助）：
+ *   w_query()                                    => 列出所有 provider 摘要
+ *   w_query('widget')                            => widget 完整 descriptor（含 operations/params）
+ *   w_query('WeShop_Product')                    => 按模块名解析 provider 帮助
  *   w_query('framework', 'introspect', { what: 'providers' })           => 列出所有 provider
  *   w_query('framework', 'introspect', { what: 'operations', provider: 'xxx' }) => 某 provider 的 operations
  *   w_query('framework', 'introspect', { what: 'operation', provider: 'xxx', operation: 'yyy' }) => 详细参数
+ *   w_query('framework', 'introspect', { what: 'provider', provider: 'xxx' }) => 单 provider 完整 descriptor
+ *   php bin/w query:help [provider|WeShop_Product] [operation]          => CLI 人类可读帮助
  *
  * getDescriptor() 返回格式（必须遵守）：
  *   [

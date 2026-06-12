@@ -44,7 +44,7 @@ class ModuleInstalledObserver implements ObserverInterface
         try {
             /** @var AppStoreInstalledModule $installedModule */
             $installedModule = ObjectManager::getInstance(AppStoreInstalledModule::class);
-            $installedModule->load($moduleName, AppStoreInstalledModule::schema_fields_module_name);
+            $installedModule->load(AppStoreInstalledModule::schema_fields_module_name, $moduleName);
 
             // 更新模块信息
             $installedModule->setModuleName($moduleName);

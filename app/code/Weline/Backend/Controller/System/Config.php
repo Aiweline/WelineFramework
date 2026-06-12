@@ -11,10 +11,12 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Controller\System;
 
+use Weline\Backend\Config\KeysInterface;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Console\Cache\Clear;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\SystemConfig\Model\SystemConfig;
 
 class Config extends \Weline\Framework\App\Controller\BackendController
 {
@@ -23,15 +25,32 @@ class Config extends \Weline\Framework\App\Controller\BackendController
         $key = $this->request->getGet('key');
         $value = $this->request->getGet('value');
         $type = $this->request->getGet('module', '');
+        $scope = trim((string)$this->request->getGet('scope', ''));
+        $locale = trim((string)$this->request->getGet('locale', ''));
+        $module = trim((string)$type) ?: KeysInterface::start_module;
         // 检查三个参数
         if (!$key || !$value) {
             MessageManager::error(__('保存失败，请重试!'));
             return $this->redirect($this->request->getReferer());
         }
-        /**@var \Weline\Backend\Model\Config $config */
-        $config = ObjectManager::getInstance(\Weline\Backend\Model\Config::class);
         try {
-            $config->setConfig($key, $value, 'Weline_Backend');
+            if ($scope !== '') {
+                /** @var SystemConfig $systemConfig */
+                $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+                $systemConfig->setScopedConfig(
+                    key: (string)$key,
+                    value: (string)$value,
+                    module: $module,
+                    area: SystemConfig::area_BACKEND,
+                    scope: $scope,
+                    locale: $locale !== '' ? $locale : SystemConfig::LOCALE_DEFAULT,
+                    options: ['operation' => 'backend_system_config_set']
+                );
+            } else {
+                /**@var \Weline\Backend\Model\Config $config */
+                $config = ObjectManager::getInstance(\Weline\Backend\Model\Config::class);
+                $config->setConfig($key, $value, 'Weline_Backend');
+            }
         } catch (Exception $e) {
             $this->getMessageManager()->addWarning(__('保存失败，请重试！%{1}', $e->getMessage()));
             return $this->redirect($this->request->getReferer());

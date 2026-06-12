@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_SystemConfig::config_center"
+          name="system_config_center"
+          title="统一配置中心"
+          action="weline_systemconfig/backend/config"
+          parent="Weline_Backend::system_config_group"
+          icon="mdi mdi-tune-variant"
+          order="5"/>
+</menus>

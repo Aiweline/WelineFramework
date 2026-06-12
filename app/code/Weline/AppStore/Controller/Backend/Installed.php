@@ -5,6 +5,7 @@ namespace Weline\AppStore\Controller\Backend;
 
 use Weline\AppStore\Model\AppStoreInstalledModule;
 use Weline\AppStore\Service\AccountBindService;
+use Weline\AppStore\Service\InstalledModuleMetaService;
 use Weline\AppStore\Service\ModuleUpdateService;
 use Weline\AppStore\Service\ModuleUninstallService;
 use Weline\Framework\Acl\Acl;
@@ -26,12 +27,24 @@ class Installed extends BackendController
             ->select()
             ->fetch();
         $modules = $this->recoverFileOnlyInstalledModules($moduleModel->getItems());
+        $locale = (string)w_env('user.lang', Env::get('user.lang', 'zh_Hans_CN'));
+        $tagFilter = trim((string)$this->request->getGet('tag', ''));
+        $surfaceFilter = trim((string)$this->request->getGet('surface', ''));
+        $modules = $this->enrichModulesWithMarketplaceMeta($modules, $locale);
+        $tagFilterOptions = $this->collectTagFilterOptions($modules);
+        $surfaceFilterOptions = $this->collectSurfaceFilterOptions($modules);
+        $modules = $this->filterModulesByMarketplaceMeta($modules, $tagFilter, $surfaceFilter);
         $updateResult = $this->loadUpdateIndex($modules);
 
         $this->assign('modules', $modules);
+        $this->assign('tag_filter', $tagFilter);
+        $this->assign('surface_filter', $surfaceFilter);
+        $this->assign('tag_filter_options', $tagFilterOptions);
+        $this->assign('surface_filter_options', $surfaceFilterOptions);
         $this->assign('update_index', $updateResult['updates']);
         $this->assign('update_error', $updateResult['error']);
         $this->assign('system_modules', Env::getInstance()->getModuleList(true));
+        $this->assign('installed_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed'));
         $this->assign('check_update_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/checkUpdate'));
         $this->assign('update_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/update'));
         $this->assign('uninstall_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/uninstall'));
@@ -84,7 +97,7 @@ class Installed extends BackendController
             if ($installId) {
                 $moduleModel->load($installId);
             } else {
-                $moduleModel->load($moduleName, AppStoreInstalledModule::schema_fields_module_name);
+                $moduleModel->load(AppStoreInstalledModule::schema_fields_module_name, $moduleName);
             }
 
             if (!$moduleModel->getInstallId()) {
@@ -311,6 +324,12 @@ class Installed extends BackendController
             $installedModule->setInstalledAt($recordTime);
             $installedModule->setData(AppStoreInstalledModule::schema_fields_updated_at, date('Y-m-d H:i:s'));
             $installedModule->save();
+            try {
+                /** @var InstalledModuleMetaService $metaService */
+                $metaService = ObjectManager::getInstance(InstalledModuleMetaService::class);
+                $metaService->syncOnInstall($moduleName, $moduleDir);
+            } catch (\Throwable) {
+            }
 
             $existing[$moduleName] = true;
             $recovered = true;
@@ -361,6 +380,117 @@ class Installed extends BackendController
             'version' => (string)$matches[2],
             'display_name' => (string)$matches[3],
         ];
+    }
+
+    private function enrichModulesWithMarketplaceMeta(array $modules, string $locale): array
+    {
+        /** @var InstalledModuleMetaService $metaService */
+        $metaService = ObjectManager::getInstance(InstalledModuleMetaService::class);
+        $result = [];
+
+        foreach ($modules as $module) {
+            $data = is_object($module) && method_exists($module, 'getData') ? $module->getData() : (array)$module;
+            $moduleName = (string)($data[AppStoreInstalledModule::schema_fields_module_name] ?? $data['module_name'] ?? '');
+            $info = [];
+            if ($moduleName !== '') {
+                try {
+                    $info = $metaService->getLocalizedInfo($moduleName, $locale);
+                } catch (\Throwable) {
+                    $info = [];
+                }
+            }
+
+            if (!empty($info['display_name'])) {
+                $data[AppStoreInstalledModule::schema_fields_display_name] = (string)$info['display_name'];
+            }
+            if (!empty($info['description'])) {
+                $data[AppStoreInstalledModule::schema_fields_description] = (string)$info['description'];
+            }
+            $data['marketplace_tags'] = is_array($info['tags'] ?? null) ? $info['tags'] : [];
+            $data['surface_codes'] = is_array($info['surfaces'] ?? null)
+                ? array_values(array_filter(array_map('strval', $info['surfaces'])))
+                : [];
+            if (($data['surface_codes'] ?? []) === [] && !empty($data[AppStoreInstalledModule::schema_fields_surface_codes])) {
+                $decoded = json_decode((string)$data[AppStoreInstalledModule::schema_fields_surface_codes], true);
+                $data['surface_codes'] = is_array($decoded) ? array_values(array_filter(array_map('strval', $decoded))) : [];
+            }
+
+            $result[] = $data;
+        }
+
+        return $result;
+    }
+
+    private function filterModulesByMarketplaceMeta(array $modules, string $tagFilter, string $surfaceFilter): array
+    {
+        $tagFilter = strtolower(trim($tagFilter));
+        $surfaceFilter = strtolower(trim($surfaceFilter));
+        if ($tagFilter === '' && $surfaceFilter === '') {
+            return $modules;
+        }
+
+        return array_values(array_filter($modules, static function (array $module) use ($tagFilter, $surfaceFilter): bool {
+            if ($tagFilter !== '') {
+                $tagCodes = [];
+                foreach ((array)($module['marketplace_tags'] ?? []) as $tag) {
+                    if (is_array($tag) && !empty($tag['code'])) {
+                        $tagCodes[] = strtolower((string)$tag['code']);
+                    }
+                }
+                if (!in_array($tagFilter, $tagCodes, true)) {
+                    return false;
+                }
+            }
+
+            if ($surfaceFilter !== '') {
+                $surfaceCodes = array_map('strtolower', array_map('strval', (array)($module['surface_codes'] ?? [])));
+                if (!in_array($surfaceFilter, $surfaceCodes, true)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function collectTagFilterOptions(array $modules): array
+    {
+        $options = [];
+        foreach ($modules as $module) {
+            foreach ((array)($module['marketplace_tags'] ?? []) as $tag) {
+                if (!is_array($tag)) {
+                    continue;
+                }
+                $code = trim((string)($tag['code'] ?? ''));
+                if ($code === '') {
+                    continue;
+                }
+                $options[$code] = trim((string)($tag['label'] ?? $code)) ?: $code;
+            }
+        }
+        asort($options);
+        return $options;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function collectSurfaceFilterOptions(array $modules): array
+    {
+        $options = [];
+        foreach ($modules as $module) {
+            foreach ((array)($module['surface_codes'] ?? []) as $surface) {
+                $surface = trim((string)$surface);
+                if ($surface !== '') {
+                    $options[$surface] = $surface;
+                }
+            }
+        }
+        ksort($options);
+        return $options;
     }
 
     private function loadLatestUninstallRecord(): array

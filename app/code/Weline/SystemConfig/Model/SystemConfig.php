@@ -10,6 +10,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeContext;
 
 #[Table(comment: 'System config table')]
 #[Index(name: 'idx_system_config_identity', columns: ['module', 'area', 'key', 'scope', 'locale'], type: 'UNIQUE')]
@@ -94,14 +95,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
     {
         $scope = trim((string)($scope ?? ''));
         if ($scope === '') {
-            $scope = trim((string)RequestContext::get('system_config.scope', ''));
-        }
-        if ($scope === '') {
-            $scope = trim((string)RequestContext::get('scope', ''));
-        }
-        if ($scope === '') {
-            $websiteCode = trim(RequestContext::getWelineWebsiteCode());
-            $scope = $websiteCode !== '' ? $websiteCode : self::SCOPE_GLOBAL;
+            $scope = ScopeContext::getScope();
         }
 
         $segments = array_values(array_filter(
@@ -336,6 +330,25 @@ class SystemConfig extends \Weline\Framework\Database\Model
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    public function getScopedConfigRow(
+        string $key,
+        string $module,
+        string $area,
+        ?string $scope = null,
+        ?string $locale = null
+    ): ?array {
+        return $this->loadExactConfigRow(
+            $key,
+            $module,
+            $area,
+            $this->normalizeScope($scope),
+            $this->normalizeLocale($locale)
+        );
+    }
+
+    /**
      * @throws Exception
      */
     public function setConfig(string $key, string $value, string $module, string $area): bool
@@ -401,6 +414,9 @@ class SystemConfig extends \Weline\Framework\Database\Model
         $actorName = (string)($options['actor_name'] ?? RequestContext::get('system_config.actor_name', ''));
         $reason = (string)($options['reason'] ?? '');
         $metadata = is_array($options['metadata'] ?? null) ? $options['metadata'] : [];
+        $valueTypes = is_array($options['value_types'] ?? null) ? $options['value_types'] : [];
+        $sensitiveKeys = array_fill_keys(array_map('strval', (array)($options['sensitive_keys'] ?? [])), true);
+        $sensitiveValues = is_array($options['is_sensitive_values'] ?? null) ? $options['is_sensitive_values'] : [];
         $now = date('Y-m-d H:i:s');
 
         $changes = [];
@@ -437,8 +453,11 @@ class SystemConfig extends \Weline\Framework\Database\Model
                     continue;
                 }
 
-                $serialized = $this->serializeValue($value, (string)($options['value_type'] ?? ''));
+                $serialized = $this->serializeValue($value, (string)($valueTypes[$key] ?? ($options['value_type'] ?? '')));
                 $newVersion = ((int)($oldRow[self::schema_fields_VERSION] ?? 0)) + 1;
+                $isSensitive = array_key_exists($key, $sensitiveKeys)
+                    ? 1
+                    : (int)($sensitiveValues[$key] ?? ($options['is_sensitive'] ?? ($oldRow[self::schema_fields_IS_SENSITIVE] ?? 0)));
                 $row = [
                     self::schema_fields_KEY => $key,
                     self::schema_fields_MODULE => $module,
@@ -447,7 +466,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
                     self::schema_fields_LOCALE => $locale,
                     self::schema_fields_VALUE => $serialized['value'],
                     self::schema_fields_VALUE_TYPE => $serialized['type'],
-                    self::schema_fields_IS_SENSITIVE => (int)($options['is_sensitive'] ?? ($oldRow[self::schema_fields_IS_SENSITIVE] ?? 0)),
+                    self::schema_fields_IS_SENSITIVE => $isSensitive,
                     self::schema_fields_IS_ACTIVE => 1,
                     self::schema_fields_VERSION => $newVersion,
                     self::schema_fields_METADATA => $this->encodeJson(is_array($options['field_metadata'][$key] ?? null) ? $options['field_metadata'][$key] : []),
@@ -596,6 +615,7 @@ class SystemConfig extends \Weline\Framework\Database\Model
             throw new Exception((string)__('回滚配置失败，已恢复本次回滚前状态。%{1}', $e->getMessage()));
         }
 
+        $rollbackMark = $this->markVersionRolledBack($versionId);
         $this->invalidateConfigCachesForModule($module, $area, $scope, $locale, array_column($rollbackChanges, 'key'));
 
         return [
@@ -603,6 +623,8 @@ class SystemConfig extends \Weline\Framework\Database\Model
             'status' => 'applied',
             'version_id' => $versionId,
             'rollback_version_id' => $rollbackVersionId,
+            'rolled_back_marked' => $rollbackMark['marked'],
+            'rolled_back_mark_error' => $rollbackMark['error'],
             'changes' => $rollbackChanges,
         ];
     }
@@ -1356,6 +1378,25 @@ class SystemConfig extends \Weline\Framework\Database\Model
                 return null;
             }
             throw $e;
+        }
+    }
+
+    /**
+     * @return array{marked: bool, error: string|null}
+     */
+    private function markVersionRolledBack(int $versionId): array
+    {
+        try {
+            /** @var SystemConfigVersion $version */
+            $version = ObjectManager::getInstance(SystemConfigVersion::class);
+            $version->clear()->reset()
+                ->where(SystemConfigVersion::schema_fields_ID, $versionId)
+                ->update([SystemConfigVersion::schema_fields_STATUS => SystemConfigVersion::STATUS_ROLLED_BACK])
+                ->fetch();
+
+            return ['marked' => true, 'error' => null];
+        } catch (\Throwable $e) {
+            return ['marked' => false, 'error' => $e->getMessage()];
         }
     }
 }
