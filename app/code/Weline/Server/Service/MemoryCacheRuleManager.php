@@ -126,7 +126,7 @@ class MemoryCacheRuleManager
         // 2. 检查内置绕过路径
         $uri = $context['http.request.uri.path'] ?? '/';
         foreach (self::BYPASS_PATH_PATTERNS as $pattern) {
-            if (preg_match('/' . $pattern . '/', $uri)) {
+            if (preg_match('~' . $pattern . '~', $uri)) {
                 return false;
             }
         }
@@ -139,9 +139,10 @@ class MemoryCacheRuleManager
             }
         }
 
-        // 4. 检查 Cache-Control: no-cache
+        // 4. 检查浏览器强刷/禁用缓存请求头
         $cacheControl = $headers['cache-control'] ?? '';
-        if (str_contains($cacheControl, 'no-cache') || str_contains($cacheControl, 'no-store')) {
+        $pragma = $headers['pragma'] ?? '';
+        if ($this->clientCacheControlBypassesCache($cacheControl) || $this->clientPragmaRequestsNoCache($pragma)) {
             return false;
         }
 
@@ -179,6 +180,44 @@ class MemoryCacheRuleManager
 
         // 默认：缓存 GET/HEAD 请求
         return true;
+    }
+
+    private function clientCacheControlBypassesCache(string $cacheControl): bool
+    {
+        $cacheControl = strtolower(trim($cacheControl));
+        if ($cacheControl === '') {
+            return false;
+        }
+
+        foreach (explode(',', $cacheControl) as $directive) {
+            $directive = trim($directive);
+            if ($directive === 'no-cache'
+                || str_starts_with($directive, 'no-cache=')
+                || $directive === 'no-store'
+                || str_starts_with($directive, 'no-store=')
+                || preg_match('/^max-age\s*=\s*0+$/', $directive) === 1
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function clientPragmaRequestsNoCache(string $pragma): bool
+    {
+        $pragma = strtolower(trim($pragma));
+        if ($pragma === '') {
+            return false;
+        }
+
+        foreach (explode(',', $pragma) as $directive) {
+            if (trim($directive) === 'no-cache') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -485,7 +524,7 @@ class MemoryCacheRuleManager
     public function matchesBypassPattern(string $uri): bool
     {
         foreach (self::BYPASS_PATH_PATTERNS as $pattern) {
-            if (preg_match('/' . $pattern . '/', $uri)) {
+            if (preg_match('~' . $pattern . '~', $uri)) {
                 return true;
             }
         }
