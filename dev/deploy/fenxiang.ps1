@@ -79,10 +79,13 @@ function Test-CoreUpdateCommandAvailable {
 
     Push-Location -LiteralPath $WorkingDirectory
     try {
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         $output = @(& $Php "bin/w" "detail" "core:update" 2>&1)
         $exitCode = $LASTEXITCODE
     }
     finally {
+        $ErrorActionPreference = $previousErrorActionPreference
         Pop-Location
     }
 
@@ -222,8 +225,11 @@ foreach ($site in $sites) {
 
     Push-Location -LiteralPath $site.WorkRoot
     try {
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         $output = @(& $Php "bin/w" "core:update" "-b" $UpdateBranch 2>&1)
         $exitCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousErrorActionPreference
         foreach ($line in $output) {
             Write-Host ([string]$line)
         }
@@ -233,6 +239,7 @@ foreach ($site in $sites) {
         }
     }
     finally {
+        $ErrorActionPreference = "Stop"
         Pop-Location
     }
 }
