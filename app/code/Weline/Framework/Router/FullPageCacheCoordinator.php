@@ -390,7 +390,9 @@ final class FullPageCacheCoordinator
 
     public function canServeCachedResponse(string $method = 'GET'): bool
     {
-        if ($this->shouldBypassForDynamicFirstRender()) {
+        if ($this->shouldBypassForDynamicFirstRender()
+            || $this->shouldBypassCachedResponseForClientCacheControl()
+        ) {
             return false;
         }
 
@@ -403,7 +405,9 @@ final class FullPageCacheCoordinator
 
     public function canBuildCachedResponse(string $method = 'GET'): bool
     {
-        if ($this->shouldBypassForDynamicFirstRender()) {
+        if ($this->shouldBypassForDynamicFirstRender()
+            || $this->shouldSkipCacheBuildForClientCacheControl()
+        ) {
             return false;
         }
 
@@ -446,6 +450,82 @@ final class FullPageCacheCoordinator
         }
 
         return false;
+    }
+
+    public function shouldBypassCachedResponseForClientCacheControl(): bool
+    {
+        return $this->clientCacheControlRequestsBypass()
+            || $this->clientPragmaRequestsNoCache();
+    }
+
+    private function shouldSkipCacheBuildForClientCacheControl(): bool
+    {
+        return $this->clientCacheControlRequestsNoStore();
+    }
+
+    private function clientCacheControlRequestsBypass(): bool
+    {
+        $cacheControl = $this->normalizedRequestHeader('HTTP_CACHE_CONTROL');
+        if ($cacheControl === '') {
+            return false;
+        }
+
+        foreach (\explode(',', $cacheControl) as $directive) {
+            $directive = \trim($directive);
+            if ($directive === 'no-cache'
+                || \str_starts_with($directive, 'no-cache=')
+                || $directive === 'no-store'
+                || \str_starts_with($directive, 'no-store=')
+                || \preg_match('/^max-age\s*=\s*0+$/', $directive) === 1
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function clientCacheControlRequestsNoStore(): bool
+    {
+        $cacheControl = $this->normalizedRequestHeader('HTTP_CACHE_CONTROL');
+        if ($cacheControl === '') {
+            return false;
+        }
+
+        foreach (\explode(',', $cacheControl) as $directive) {
+            $directive = \trim($directive);
+            if ($directive === 'no-store' || \str_starts_with($directive, 'no-store=')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function clientPragmaRequestsNoCache(): bool
+    {
+        $pragma = $this->normalizedRequestHeader('HTTP_PRAGMA');
+        if ($pragma === '') {
+            return false;
+        }
+
+        foreach (\explode(',', $pragma) as $directive) {
+            if (\trim($directive) === 'no-cache') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizedRequestHeader(string $serverKey): string
+    {
+        $value = WelineEnv::server($serverKey, '');
+        if (!\is_scalar($value)) {
+            return '';
+        }
+
+        return \strtolower(\trim((string)$value));
     }
 
     public function hasLoggedInFrontendSessionForCache(): bool
