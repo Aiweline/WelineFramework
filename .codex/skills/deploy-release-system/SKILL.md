@@ -33,3 +33,4 @@ php bin/w deploy:webhook:setup --rotate-path -y --base-url=https://example.com
 - Clear `ProcessUrlBefore::clearCache()` when config-driven paths change
 
 Split-repo (`分仓`) → `CI发布工程师-分仓发布`.
+Project core sync (`分项`) → `CI发布工程师-分项更新`.
