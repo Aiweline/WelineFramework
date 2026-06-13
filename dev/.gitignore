@@ -18,6 +18,11 @@
 !deploy/
 !deploy/**
 
+# 保留分项口令脚本
+!tools/
+!tools/fenxiang/
+!tools/fenxiang/**
+
 # 但排除 codex tasks 全目录（本地任务日志不入库）
 ai/codex/tasks/
 

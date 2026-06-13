@@ -13,6 +13,7 @@ namespace Weline\Framework\Extends;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 
 /**
  * 扩展注册表管理
@@ -148,7 +149,7 @@ class ExtendsRegistry
         $env = Env::getInstance();
 
         foreach (array_keys($registry) as $moduleName) {
-            if (!$env->getModuleStatus((string)$moduleName)) {
+            if (!RegistryModulePresence::isActivePresent((string)$moduleName, $env)) {
                 unset($registry[$moduleName]);
             }
         }
@@ -159,7 +160,7 @@ class ExtendsRegistry
             }
 
             foreach (array_keys($targetData['extended_by']) as $sourceModule) {
-                if (!$env->getModuleStatus((string)$sourceModule)) {
+                if (!RegistryModulePresence::isActivePresent((string)$sourceModule, $env)) {
                     unset($targetData['extended_by'][$sourceModule]);
                 }
             }

@@ -16,6 +16,7 @@ description: >-
 3. **访问密码**：后台 `webhook_secret` = Git 平台 Secret/密码。
 4. **架构**：`Git → Nginx → WLS → ModuleRouter(Router.php) → deploy/webhook/deploy → webhook.sh`。
 5. 分仓口令「分仓」→ `CI发布工程师-分仓发布`。
+6. 分项口令「分项」→ `CI发布工程师-分项更新`。
 
 ## ModuleRouter 与本模块（必读）
 

@@ -15,6 +15,7 @@ use Weline\Framework\Event\Console\Event\Data;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Debug\Printing;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Event extends \Weline\Framework\DataObject\DataObject
@@ -222,7 +223,11 @@ class Event extends \Weline\Framework\DataObject\DataObject
                 }
                 
                 // 按需实例化观察者
-                $observer = ObjectManager::getInstance($observerConfig['instance']);
+                $observerClass = $this->getUsableObserverClass($observerConfig);
+                if ($observerClass === null) {
+                    continue;
+                }
+                $observer = ObjectManager::getInstance($observerClass);
                 
                 if (!($observer instanceof ObserverInterface)) {
                     if (DEV) {
@@ -270,6 +275,30 @@ class Event extends \Weline\Framework\DataObject\DataObject
     /**
      * @DESC         |打印事件头部信息
      */
+    private function getUsableObserverClass(mixed $observerConfig): ?string
+    {
+        if (!is_array($observerConfig)) {
+            w_log_warning(__('事件 %{1} 跳过无效观察者配置。', [$this->getName()]), [], 'event_dispatch.log');
+            return null;
+        }
+
+        $instance = ltrim(trim((string)($observerConfig['instance'] ?? '')), '\\');
+        if ($instance === '') {
+            w_log_warning(__('事件 %{1} 跳过缺少 instance 的观察者配置。', [$this->getName()]), [], 'event_dispatch.log');
+            return null;
+        }
+
+        if (!RegistryModulePresence::classExists($instance)) {
+            w_log_warning(__('事件 %{1} 跳过不存在的观察者类：%{2}', [
+                $this->getName(),
+                $instance,
+            ]), [], 'event_dispatch.log');
+            return null;
+        }
+
+        return $instance;
+    }
+
     private function printEventHeader(): void
     {
         echo "\n";
