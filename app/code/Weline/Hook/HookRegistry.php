@@ -14,6 +14,7 @@ namespace Weline\Hook;
 use Weline\Framework\Hook\HookInterface;
 use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\System\File\Scan;
 
 /**
@@ -247,7 +248,7 @@ class HookRegistry
 
         foreach ($registry['hooks'] as $hookName => $hookInfo) {
             $ownerModule = $hookInfo['module'] ?? '';
-            if ($ownerModule !== '' && !$env->getModuleStatus($ownerModule)) {
+            if ($ownerModule !== '' && !RegistryModulePresence::isActivePresent((string)$ownerModule, $env)) {
                 unset($registry['hooks'][$hookName], $registry['hook_to_module'][$hookName]);
                 continue;
             }
@@ -257,7 +258,7 @@ class HookRegistry
             }
 
             foreach ($hookInfo['implementations'] as $moduleName => $_implementation) {
-                if (!$env->getModuleStatus((string)$moduleName)) {
+                if (!RegistryModulePresence::isActivePresent((string)$moduleName, $env)) {
                     unset($registry['hooks'][$hookName]['implementations'][$moduleName]);
                 }
             }

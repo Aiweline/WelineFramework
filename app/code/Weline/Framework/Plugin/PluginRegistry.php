@@ -13,6 +13,7 @@ namespace Weline\Framework\Plugin;
 
 use Weline\Framework\Plugin\Config\PluginXmlReader;
 use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 
 /**
  * 插件注册表管理
@@ -132,6 +133,7 @@ class PluginRegistry
         }
         
         // 2. 清除目标模块的旧数据
+        $this->purgeUnavailablePluginsFromRegistry($registry);
         $this->removeModulePlugins($registry, $moduleNames);
         
         // 3. 扫描目标模块的新数据
@@ -160,6 +162,28 @@ class PluginRegistry
      * @param array $moduleNames 要清除的模块名列表
      * @return void
      */
+    private function purgeUnavailablePluginsFromRegistry(array &$registry): void
+    {
+        foreach ($registry['plugins'] as $pluginKey => &$pluginInfo) {
+            if (!isset($pluginInfo['interceptors']) || !is_array($pluginInfo['interceptors'])) {
+                unset($registry['plugins'][$pluginKey]);
+                continue;
+            }
+
+            $pluginInfo['interceptors'] = array_values(array_filter(
+                $pluginInfo['interceptors'],
+                static fn($interceptor): bool => RegistryModulePresence::isActivePresent((string)($interceptor['module'] ?? ''))
+            ));
+
+            if (empty($pluginInfo['interceptors'])) {
+                unset($registry['plugins'][$pluginKey]);
+            }
+        }
+        unset($pluginInfo);
+
+        $this->rebuildClassToPlugins($registry);
+    }
+
     private function removeModulePlugins(array &$registry, array $moduleNames): void
     {
         foreach ($registry['plugins'] as $pluginKey => &$pluginInfo) {
@@ -197,6 +221,21 @@ class PluginRegistry
      * @param array $newRegistry 新注册表数据
      * @return void
      */
+    private function rebuildClassToPlugins(array &$registry): void
+    {
+        $registry['class_to_plugins'] = [];
+        foreach ($registry['plugins'] as $pluginKey => $pluginInfo) {
+            $className = (string)($pluginInfo['class'] ?? '');
+            if ($className === '') {
+                continue;
+            }
+            $registry['class_to_plugins'][$className] ??= [];
+            if (!in_array($pluginKey, $registry['class_to_plugins'][$className], true)) {
+                $registry['class_to_plugins'][$className][] = $pluginKey;
+            }
+        }
+    }
+
     private function mergePluginRegistry(array &$registry, array $newRegistry): void
     {
         // 合并 plugins
