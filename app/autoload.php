@@ -123,9 +123,8 @@ if (\is_file($autoloader)) {
     if (\is_file($localClassMapFile) && \method_exists($composerLoader, 'addClassMap')) {
         $localClassMap = @include $localClassMapFile;
         if (\is_array($localClassMap) && $localClassMap !== []) {
-            $generatedCodePath = BP . 'generated' . \DIRECTORY_SEPARATOR . 'code' . \DIRECTORY_SEPARATOR;
             foreach ($localClassMap as $className => $path) {
-                if (\str_starts_with($path, $generatedCodePath) && !\is_file($path)) {
+                if (!\is_string($path) || !\is_file($path)) {
                     unset($localClassMap[$className]);
                 }
             }
