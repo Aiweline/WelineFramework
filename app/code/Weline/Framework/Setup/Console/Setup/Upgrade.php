@@ -40,6 +40,7 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Framework\Router\Service\RouteUpdateService;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
@@ -218,6 +219,22 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * @return void
      * @throws Exception
      */
+    private function cleanupMissingModuleSourcesBeforeRegistryRefresh(): void
+    {
+        $modules = Env::getInstance()->getModuleList(true);
+        $missingModules = RegistryModulePresence::detectMissingSourceModules($modules);
+        if ($missingModules === []) {
+            return;
+        }
+
+        $this->printing->warning(__('检测到以下模块源目录已不存在，将在刷新注册表前移除：%{1}', [
+            implode(', ', $missingModules),
+        ]));
+        $this->cleanupMissingModuleAclResidues($missingModules);
+        $this->removeMissingModulesFromModulesFile($missingModules);
+        Env::getInstance()->reload();
+    }
+
     private function runComposerDump(): void
     {
         $this->printing->note(__('正在检查 composer 命令...'));
@@ -1536,6 +1553,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 扫描代码
         $this->printing->note($i . '、清理模板缓存', '系统');
         list($origin_vendor_modules, $dependencyModules) = Register::getOriginModulesData();
+        $this->cleanupMissingModuleSourcesBeforeRegistryRefresh();
         /**@var System $system */
         $system = ObjectManager::getInstance(System::class);
         foreach ($origin_vendor_modules as $modules) {

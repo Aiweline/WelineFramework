@@ -11,7 +11,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Event;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 
 /**
  * 事件注册表管理
@@ -194,13 +196,21 @@ class EventRegistry implements EventRegistryInterface
      */
     private function purgeInactiveModulesFromRegistry(array &$registry): void
     {
-        $env = \Weline\Framework\App\Env::getInstance();
+        $env = Env::getInstance();
 
         foreach ($registry['events'] as $eventName => $eventInfo) {
             $ownerModule = $eventInfo['module'] ?? '';
-            if ($ownerModule !== '' && !$env->getModuleStatus($ownerModule)) {
+            if ($ownerModule !== '' && !RegistryModulePresence::isActivePresent((string)$ownerModule, $env)) {
                 unset($registry['events'][$eventName], $registry['event_to_module'][$eventName]);
                 continue;
+            }
+
+            if (isset($eventInfo['modules']) && is_array($eventInfo['modules'])) {
+                foreach (array_keys($eventInfo['modules']) as $moduleName) {
+                    if (!RegistryModulePresence::isActivePresent((string)$moduleName, $env)) {
+                        unset($registry['events'][$eventName]['modules'][$moduleName]);
+                    }
+                }
             }
 
             if (!isset($eventInfo['observers']) || !is_array($eventInfo['observers'])) {
@@ -209,13 +219,13 @@ class EventRegistry implements EventRegistryInterface
 
             $registry['events'][$eventName]['observers'] = array_values(array_filter(
                 $eventInfo['observers'],
-                static fn($observer): bool => $env->getModuleStatus((string)($observer['module'] ?? ''))
+                fn($observer): bool => $this->isObserverConfigUsable($observer, $env)
             ));
         }
 
         foreach ($registry['dynamic_patterns'] as $pattern => $patternInfo) {
             $ownerModule = $patternInfo['module'] ?? '';
-            if ($ownerModule !== '' && !$env->getModuleStatus($ownerModule)) {
+            if ($ownerModule !== '' && !RegistryModulePresence::isActivePresent((string)$ownerModule, $env)) {
                 unset($registry['dynamic_patterns'][$pattern]);
                 continue;
             }
@@ -226,9 +236,32 @@ class EventRegistry implements EventRegistryInterface
 
             $registry['dynamic_patterns'][$pattern]['observers'] = array_values(array_filter(
                 $patternInfo['observers'],
-                static fn($observer): bool => $env->getModuleStatus((string)($observer['module'] ?? ''))
+                fn($observer): bool => $this->isObserverConfigUsable($observer, $env)
             ));
         }
+    }
+
+    private function isObserverConfigUsable(mixed $observer, Env $env): bool
+    {
+        if (!is_array($observer)) {
+            return false;
+        }
+
+        $moduleName = (string)($observer['module'] ?? '');
+        if (!RegistryModulePresence::isActivePresent($moduleName, $env)) {
+            return false;
+        }
+
+        $instance = (string)($observer['instance'] ?? '');
+        if (!RegistryModulePresence::classExists($instance)) {
+            w_log_warning(__('事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）', [
+                $instance,
+                $moduleName,
+            ]), [], 'event_registry.log');
+            return false;
+        }
+
+        return true;
     }
     
     /**
@@ -286,7 +319,7 @@ class EventRegistry implements EventRegistryInterface
             RegistryProgress::log('Event observer XML read started');
             $eventObserversList = $this->xmlReader->read();
             RegistryProgress::count('Event observer XML read', count($eventObserversList), 'config files');
-            $env = \Weline\Framework\App\Env::getInstance();
+            $env = Env::getInstance();
             $configIndex = 0;
             $totalConfigs = count($eventObserversList);
             
@@ -300,7 +333,7 @@ class EventRegistry implements EventRegistryInterface
                 }
                 
                 // 检查模块状态
-                if (!$env->getModuleStatus($moduleName)) {
+                if (!RegistryModulePresence::isActivePresent($moduleName, $env)) {
                     RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'skip inactive');
                     continue;
                 }
@@ -313,6 +346,9 @@ class EventRegistry implements EventRegistryInterface
                     foreach ($eventObservers as $observer) {
                         $observer['module'] = $moduleName;
                         $observer['module_status'] = true;
+                        if (!$this->isObserverConfigUsable($observer, $env)) {
+                            continue;
+                        }
                         $observersData[$eventName][] = $observer;
                     }
                 }
@@ -344,6 +380,8 @@ class EventRegistry implements EventRegistryInterface
      */
     private function mergeScannedDataIntoRegistry(array &$registry, array $scannedData, array $observersData): void
     {
+        $env = Env::getInstance();
+
         foreach ($scannedData as $moduleName => $events) {
             foreach ($events as $eventName => $eventInfo) {
                 // 检查是否是动态事件模式
@@ -432,6 +470,9 @@ class EventRegistry implements EventRegistryInterface
             if (isset($registry['events'][$eventName])) {
                 // 去重后添加
                 foreach ($observers as $observer) {
+                    if (!$this->isObserverConfigUsable($observer, $env)) {
+                        continue;
+                    }
                     $observerKey = ($observer['instance'] ?? '') . '::' . ($observer['name'] ?? '');
                     $isDuplicate = false;
                     foreach ($registry['events'][$eventName]['observers'] as $existingObserver) {
@@ -465,7 +506,7 @@ class EventRegistry implements EventRegistryInterface
             $eventObserversList = $xmlReader->read();
             RegistryProgress::count('Event observer XML read', count($eventObserversList), 'config files');
             
-            $env = \Weline\Framework\App\Env::getInstance();
+            $env = Env::getInstance();
             $moduleList = $env->getModuleList();
             // 首次安装时 modules.php 可能尚未生成，moduleList 为空，此时不过滤观察者，否则 register_installer 等观察者会全部被跳过，导致 Theme/I18n Handle 不存在
             $skipByStatus = !empty($moduleList);
@@ -480,7 +521,7 @@ class EventRegistry implements EventRegistryInterface
                 if (empty($moduleName)) {
                     continue;
                 }
-                if ($skipByStatus && !$env->getModuleStatus($moduleName)) {
+                if ($skipByStatus && !RegistryModulePresence::isActivePresent($moduleName, $env)) {
                     RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'skip inactive');
                     // 模块列表已存在时，跳过禁用的模块
                     continue;
@@ -681,13 +722,13 @@ class EventRegistry implements EventRegistryInterface
         // 扫描所有观察者
         $observersData ??= $this->xmlReader->read();
         
-        $env = \Weline\Framework\App\Env::getInstance();
+        $env = Env::getInstance();
         
         // 合并所有观察者到对应的事件中
         foreach ($observersData as $module_and_file => $eventObservers) {
             // 提取模块名并检查模块状态
             $moduleName = explode('::', $module_and_file)[0] ?? '';
-            if (empty($moduleName) || !$env->getModuleStatus($moduleName)) {
+            if (empty($moduleName) || !RegistryModulePresence::isActivePresent($moduleName, $env)) {
                 // 跳过禁用的模块
                 continue;
             }
