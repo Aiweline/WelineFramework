@@ -34,10 +34,13 @@ function Invoke-Checked {
     }
 
     Push-Location -LiteralPath $WorkingDirectory
+    $oldPreference = $ErrorActionPreference
     try {
+        $ErrorActionPreference = 'Continue'
         $output = & $FilePath @Arguments 2>&1
         $exitCode = $LASTEXITCODE
     } finally {
+        $ErrorActionPreference = $oldPreference
         Pop-Location
     }
 
@@ -69,10 +72,13 @@ function Get-GitOutput {
     )
 
     Push-Location -LiteralPath $Repo
+    $oldPreference = $ErrorActionPreference
     try {
+        $ErrorActionPreference = 'Continue'
         $output = & git @Arguments 2>&1
         $exitCode = $LASTEXITCODE
     } finally {
+        $ErrorActionPreference = $oldPreference
         Pop-Location
     }
 
