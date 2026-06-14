@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'PgsqlProjectPort.php';
+
 /**
  * PostgreSQL 安装完成后：根据 env DB_* 或项目级默认值检测/创建数据库，并更新 app/etc/env.php。
  * - 使用超管（默认 postgres）连接，创建 env 指定或自动生成的 DB_USERNAME/DB_DATABASE/DB_PASSWORD。
@@ -177,10 +179,17 @@ final class SetupPgsqlDatabase
         $database = $this->envValue('DB_DATABASE', (string)($existing['database'] ?? $this->buildProjectDatabaseName()));
         $username = $this->envValue('DB_USERNAME', (string)($existing['username'] ?? $database));
         $password = $this->envValue('DB_PASSWORD', (string)($existing['password'] ?? $this->generateProjectPassword()));
+        $defaultPort = $hasExistingDb
+            ? (string)($existing['hostport'] ?? $existing['port'] ?? '5432')
+            : (string)PgsqlProjectPort::preferredForProject($this->projectRoot);
+        $port = $this->envValue('DB_PORT', $defaultPort);
+        if (!$hasExistingDb && (int)$port === PgsqlProjectPort::RESERVED_DEFAULT) {
+            $port = (string)PgsqlProjectPort::preferredForProject($this->projectRoot);
+        }
 
         return [
             'host' => $hasExistingDb ? $this->envValue('DB_HOST', (string)($existing['hostname'] ?? '127.0.0.1')) : '127.0.0.1',
-            'port' => $this->envValue('DB_PORT', (string)($existing['hostport'] ?? $existing['port'] ?? '5432')),
+            'port' => $port,
             'database' => $database,
             'username' => $username,
             'password' => $password,
@@ -314,7 +323,10 @@ final class SetupPgsqlDatabase
             return;
         }
         $isMac = (PHP_OS_FAMILY === 'Darwin');
-        $port = $this->envValue('DB_PORT', '5432');
+        $port = $this->envValue('DB_PORT', (string)PgsqlProjectPort::preferredForProject($this->projectRoot));
+        if ((int)$port === PgsqlProjectPort::RESERVED_DEFAULT) {
+            $port = (string)PgsqlProjectPort::preferredForProject($this->projectRoot);
+        }
         echo "\n";
         echo "========================================\n";
         echo "  未配置 DB_* 时会自动生成项目级数据库，例如：" . $this->buildProjectDatabaseName() . "\n";
