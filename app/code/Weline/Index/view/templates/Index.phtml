@@ -697,10 +697,10 @@ $capabilities = [
                 <?php foreach ($quickLinks as $link): ?>
                     <a class="wf-link-card" href="<?= $escapeRaw($link['href']) ?>">
                         <span class="wf-link-card__tone wf-link-card__tone--<?= $escapeRaw($link['tone']) ?>" aria-hidden="true"></span>
-                        <span>
+                        <div>
                             <h3><?= $escape($link['label']) ?></h3>
                             <p><?= $escape($link['desc']) ?></p>
-                        </span>
+                        </div>
                         <span class="wf-link-card__cta"><?= $escape('打开') ?></span>
                     </a>
                 <?php endforeach; ?>
