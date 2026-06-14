@@ -24,4 +24,18 @@ final class HeaderLanguageSwitcherTemplateTest extends TestCase
         self::assertStringContainsString('$langNative !== \'\' && $langNative !== $langName', $content);
         self::assertStringContainsString('<span class="weline-choice-native" aria-hidden="true"><?= $escape($langNative) ?></span>', $content);
     }
+
+    public function testLanguageSwitcherFallsBackToCountryFlagSvgFromLocaleCode(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-language-switcher.phtml';
+
+        self::assertFileExists($path);
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('$countryCodeFromLocale', $content);
+        self::assertStringContainsString('str_replace(\'-\', \'_\', trim($localeCode))', $content);
+        self::assertStringContainsString('preg_match(\'/^[A-Z]{2}$/\', $part)', $content);
+        self::assertStringContainsString('$i18n->getCountryFlag($countryCode, 24, 18)', $content);
+        self::assertStringContainsString('<span class="weline-choice-flag-fallback"><?= $escape($lang[\'short\'] ?? \'\') ?></span>', $content);
+    }
 }
