@@ -665,6 +665,10 @@ final class SetupPgsqlDatabase
             }
         }
         if (@rename($tmp, $path)) {
+            clearstatcache(true, $path);
+            if (function_exists('opcache_invalidate')) {
+                @opcache_invalidate($path, true);
+            }
             return true;
         }
         @unlink($tmp);
