@@ -9,6 +9,8 @@ use Weline\Theme\Model\WelineTheme;
 
 class ThemeDirectoryResolver
 {
+    private const THEME_DEFAULT_MODULE = 'Weline_Theme';
+
     private array $themeChainCache = [];
     private array $areaDirectoriesCache = [];
 
@@ -97,24 +99,70 @@ class ThemeDirectoryResolver
         }
 
         $modules = Env::getInstance()->getModuleList();
-        $defaultPath = $modules['Weline_Theme']['base_path'] ?? '';
+        $defaultPath = $modules[self::THEME_DEFAULT_MODULE]['base_path'] ?? '';
         if (is_string($defaultPath) && $defaultPath !== '') {
             $defaultAreaPath = $this->normalizePath(rtrim($defaultPath, '\\/') . DS . 'view' . DS . 'theme' . DS . $area);
             if (!isset($seen[$defaultAreaPath]) && is_dir($defaultAreaPath)) {
+                $seen[$defaultAreaPath] = true;
                 $directories[] = [
                     'path' => $defaultAreaPath,
                     'area' => $area,
-                    'layer_key' => 'default:Weline_Theme',
+                    'layer_key' => 'default:' . self::THEME_DEFAULT_MODULE,
                     'layer_type' => 'default',
                     'theme_id' => 0,
-                    'theme_name' => 'Weline_Theme',
-                    'theme_path' => 'Weline_Theme',
+                    'theme_name' => self::THEME_DEFAULT_MODULE,
+                    'theme_path' => self::THEME_DEFAULT_MODULE,
+                    'module_name' => self::THEME_DEFAULT_MODULE,
+                    'module_path' => (string)($modules[self::THEME_DEFAULT_MODULE]['path'] ?? ''),
+                    'module_base_path' => $this->normalizePath($defaultPath),
                     'structure' => 'module_default',
                 ];
             }
         }
 
+        foreach ($this->getModuleThemeAreaDirectories($modules, $area, $seen) as $moduleDirectory) {
+            $directories[] = $moduleDirectory;
+        }
+
         $this->areaDirectoriesCache[$cacheKey] = $directories;
+
+        return $directories;
+    }
+
+    private function getModuleThemeAreaDirectories(array $modules, string $area, array &$seen): array
+    {
+        $directories = [];
+        foreach ($modules as $moduleName => $moduleInfo) {
+            $moduleName = (string)$moduleName;
+            if ($moduleName === self::THEME_DEFAULT_MODULE) {
+                continue;
+            }
+
+            $basePath = $moduleInfo['base_path'] ?? '';
+            if (!is_string($basePath) || $basePath === '') {
+                continue;
+            }
+
+            $themeAreaPath = $this->normalizePath(rtrim($basePath, '\\/') . DS . 'view' . DS . 'theme' . DS . $area);
+            if (isset($seen[$themeAreaPath]) || !is_dir($themeAreaPath)) {
+                continue;
+            }
+
+            $seen[$themeAreaPath] = true;
+            $directories[] = [
+                'path' => $themeAreaPath,
+                'area' => $area,
+                'layer_key' => 'module:' . $moduleName,
+                'layer_type' => 'module',
+                'theme_id' => 0,
+                'theme_name' => $moduleName,
+                'theme_path' => $moduleName,
+                'module_name' => $moduleName,
+                'module_path' => (string)($moduleInfo['path'] ?? ''),
+                'module_base_path' => $this->normalizePath($basePath),
+                'structure' => 'module_view_theme',
+            ];
+        }
 
         return $directories;
     }

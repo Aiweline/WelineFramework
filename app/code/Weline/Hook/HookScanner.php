@@ -257,6 +257,10 @@ class HookScanner
         $parts = explode('::', $hookName, 2);
         $prefix = $parts[0] ?? '';
 
+        if ($this->isLegacyShortHookName($hookName, $moduleName)) {
+            return true;
+        }
+
         // 检查前缀是否以模块名开头
         if (!str_starts_with($prefix, $moduleName)) {
             $errorMessage = sprintf(
@@ -297,5 +301,22 @@ class HookScanner
         }
 
         return true;
+    }
+
+    private function isLegacyShortHookName(string $hookName, string $moduleName): bool
+    {
+        $parts = explode('::', $hookName);
+        if (count($parts) < 2) {
+            return false;
+        }
+
+        $prefix = $parts[0] ?? '';
+        if ($prefix === '' || !preg_match('/^[a-z][a-z0-9_-]*$/', $prefix)) {
+            return false;
+        }
+
+        $moduleShortName = strtolower((string)preg_replace('/^.*_/', '', $moduleName));
+
+        return strtolower($prefix) === $moduleShortName;
     }
 }
