@@ -126,23 +126,13 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
 
         $layoutType = $eventData->getData('layoutType');
-        $request = ObjectManager::getInstance(Request::class);
-        $controller = $eventData->getData('controller');
-        $isBackendRequest = $this->isBackendRequest($request, $controller);
-        if (empty($layoutType) && $request && !$isBackendRequest) {
-            $layoutType = $this->pageTypeResolver->resolveLayoutType(
-                null,
-                $eventData->getData('controller'),
-                $request
-            );
-            if ($layoutType !== '') {
-                $eventData->setData('layoutType', $layoutType);
-            }
-        }
-        // 如果没有设置 layoutType，使用默认布局
         if (empty($layoutType)) {
             return;
         }
+
+        $request = ObjectManager::getInstance(Request::class);
+        $controller = $eventData->getData('controller');
+        $isBackendRequest = $this->isBackendRequest($request, $controller);
         $fileName = $eventData->getData('fileName');
         $contentTemplateFileName = $fileName;
         if ((string)$layoutType === 'account.auth') {
