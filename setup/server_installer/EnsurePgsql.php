@@ -142,7 +142,7 @@ final class EnsurePgsql
         if (!is_dir($pgsqlDir)) {
             @mkdir($pgsqlDir, 0755, true);
         }
-        $this->copyRecursive($found, $pgsqlDir);
+        $this->copyRecursive($found, $pgsqlDir, ['data']);
         return is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql.exe');
     }
 
@@ -326,7 +326,7 @@ final class EnsurePgsql
         if (!is_dir($pgsqlDir)) {
             @mkdir($pgsqlDir, 0755, true);
         }
-        $this->copyRecursive($psqlInExt, $pgsqlDir);
+        $this->copyRecursive($psqlInExt, $pgsqlDir, ['data']);
         $this->rmdirRecursive($extractRoot);
         return is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql.exe')
             || is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql');
@@ -372,13 +372,13 @@ final class EnsurePgsql
         if (!is_dir($pgsqlDir)) {
             @mkdir($pgsqlDir, 0755, true);
         }
-        $this->copyRecursive($psqlInZip, $pgsqlDir);
+        $this->copyRecursive($psqlInZip, $pgsqlDir, ['data']);
         $this->rmdirRecursive($extractRoot);
         return is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql.exe')
             || is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql');
     }
 
-    private function copyRecursive(string $src, string $dst): void
+    private function copyRecursive(string $src, string $dst, array $skipTopLevelNames = []): void
     {
         $dir = opendir($src);
         if ($dir === false) {
@@ -389,6 +389,9 @@ final class EnsurePgsql
         }
         while (($f = readdir($dir)) !== false) {
             if ($f === '.' || $f === '..') {
+                continue;
+            }
+            if (in_array($f, $skipTopLevelNames, true)) {
                 continue;
             }
             $s = $src . DIRECTORY_SEPARATOR . $f;
