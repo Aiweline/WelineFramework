@@ -39,8 +39,10 @@ $resolveProjectPhpBin = static function (string $root, string $phpDir): string {
 };
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsql.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsqlData.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsureComposer.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'PgsqlProjectOwnership.php';
 
 /** 配置 php.ini 并确保 extend/server/composer.phar 存在（已安装环境重跑 install 时也会补全） */
 $ensureLocalComposer = static function (string $root) use ($resolveProjectPhpBin): bool {
@@ -108,7 +110,163 @@ $isEnvPhpInstalled = static function (string $path): bool {
     return is_array($config) && isset($config['db']) && $config['db'] !== [];
 };
 
+$pgsqlOwnership = new PgsqlProjectOwnership($projectRoot);
+$ensureProjectPgsqlBinary = static function (?string $major = null) use ($projectRoot): bool {
+    $pgsqlBin = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'pgsql' . DIRECTORY_SEPARATOR . 'bin';
+    $pgCtl = (DIRECTORY_SEPARATOR === '\\') ? $pgsqlBin . DIRECTORY_SEPARATOR . 'pg_ctl.exe' : $pgsqlBin . DIRECTORY_SEPARATOR . 'pg_ctl';
+    if (is_file($pgCtl)) {
+        return true;
+    }
+    $env = (new EnvLoader($projectRoot))->load(true);
+    if ($major !== null && $major !== '') {
+        $env['INSTALL_PGSQL_VERSION'] = $major;
+    }
+    return (new EnsurePgsql($projectRoot))->ensure($env);
+};
+
+$ensureConfiguredDatabaseReady = static function () use ($projectRoot, $pgsqlOwnership, $ensureProjectPgsqlBinary): bool {
+    $target = $pgsqlOwnership->targetFromEnvPhp();
+    if ($target === null) {
+        fwrite(STDERR, "ERROR: app/etc/env.php exists but db.master is missing.\n");
+        return false;
+    }
+
+    $pgsqlOwnership->printTargetSummary($target, 'env.php db.master');
+    $classification = $pgsqlOwnership->classifyEnvTarget($target);
+    echo ($classification['message'] ?? '') . "\n";
+    if (($classification['error'] ?? false) === true) {
+        return false;
+    }
+
+    if (($classification['manageable'] ?? false) === true) {
+        $ensureData = new EnsurePgsqlData($projectRoot, false);
+        if (!$ensureData->hasProjectPgCtl()) {
+            $major = $ensureData->getDataMajorVersion();
+            if (!$ensureProjectPgsqlBinary($major)) {
+                fwrite(STDERR, "ERROR: PostgreSQL binary is missing and could not be installed/linked for project data.\n");
+                return false;
+            }
+        }
+        $preferredPort = (int)($target['port'] ?? 5432);
+        if (!$ensureData->ensure($preferredPort)) {
+            return false;
+        }
+        $resolvedPort = $ensureData->getConfiguredPort();
+        if ($resolvedPort !== null && (int)($target['port'] ?? 0) !== $resolvedPort) {
+            if (!$pgsqlOwnership->updateEnvPhpDbPort($resolvedPort)) {
+                return false;
+            }
+            $target['port'] = (string)$resolvedPort;
+        }
+        if (!$pgsqlOwnership->validateOwnershipMarkers($target)) {
+            return false;
+        }
+    }
+
+    return $pgsqlOwnership->verifyTargetConnection($target);
+};
+
+$initializeFirstInstallDatabase = static function () use ($projectRoot, $pgsqlOwnership, $ensureProjectPgsqlBinary): bool {
+    if (!$ensureProjectPgsqlBinary(null)) {
+        fwrite(STDERR, "ERROR: PostgreSQL binary install/link failed.\n");
+        return false;
+    }
+    if (!(new EnsurePgsqlData($projectRoot, true))->ensure()) {
+        return false;
+    }
+    $env = (new EnvLoader($projectRoot))->load(true);
+    $setupDb = new SetupPgsqlDatabase($projectRoot, $env);
+    if (!$setupDb->run()) {
+        return false;
+    }
+    $target = $pgsqlOwnership->targetFromEnvPhp();
+    $pgsqlOwnership->printTargetSummary($target, 'created db.master');
+    if ($target !== null && !$pgsqlOwnership->ensureOwnershipMarkers($target)) {
+        return false;
+    }
+    return true;
+};
+
 if ($isEnvPhpInstalled($envPhpFile)) {
+    if ($forceInstall) {
+        echo "app/etc/env.php already has db.master; -f will not overwrite database config. Delete env.php for a fresh install.\n";
+    }
+    if ($autoUpgrade) {
+        $env = (new EnvLoader($projectRoot))->load(true);
+        $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
+        $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
+        if (is_dir($phpDir)) {
+            try {
+                (new ConfigurePhpIni($projectRoot, $phpDir))->apply($env);
+                $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
+                (new EnsureComposer($projectRoot))->ensure($phpBin);
+                EnsureComposer::applyEnvCommand($projectRoot, $phpBin);
+            } catch (Throwable $e) {
+                fwrite(STDERR, "WARNING: php.ini/composer config failed: " . $e->getMessage() . "\n");
+            }
+        }
+
+        $run = function (string $cmd) use ($phpBin): int {
+            $full = $phpBin . ' ' . $cmd;
+            echo "Running command: {$full}\n";
+            passthru($full, $code);
+            return (int)$code;
+        };
+        $runWithUpgradeRetry = function (string $cmd, string $stage, string $setupLockPath, int $maxWaitSeconds = 120) use ($run): int {
+            $code = $run($cmd);
+            if ($code === 0 || !is_file($setupLockPath)) {
+                return $code;
+            }
+            $waitSeconds = max(0, $maxWaitSeconds);
+            $interval = 2;
+            while ($waitSeconds > 0 && is_file($setupLockPath)) {
+                echo "Waiting for setup:upgrade lock before retrying {$stage} ({$waitSeconds}s left)...\n";
+                sleep($interval);
+                $waitSeconds -= $interval;
+            }
+            return $run($cmd);
+        };
+
+        $pgsqlBin = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'pgsql' . DIRECTORY_SEPARATOR . 'bin';
+        if (is_dir($pgsqlBin) && strpos(getenv('PATH') ?: '', $pgsqlBin) === false) {
+            putenv('PATH=' . $pgsqlBin . (DIRECTORY_SEPARATOR === '\\' ? ';' : ':') . getenv('PATH'));
+        }
+
+        $dbReady = $pgsqlOwnership->withInstallLock($ensureConfiguredDatabaseReady);
+        if ($dbReady !== true) {
+            fwrite(STDERR, "ERROR: Database configured in env.php is not ready; setup:upgrade was not started.\n");
+            exit(1);
+        }
+
+        $installModeFlagDir = $projectRoot . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'process';
+        $installModeFlagFile = $installModeFlagDir . DIRECTORY_SEPARATOR . 'command_install_mode.flag';
+        $setupLockPath = $installModeFlagDir . DIRECTORY_SEPARATOR . 'setup_upgrade.lock';
+        is_dir($installModeFlagDir) || @mkdir($installModeFlagDir, 0755, true);
+        @file_put_contents($installModeFlagFile, date('Y-m-d H:i:s') . ' - install mode enabled');
+        echo "env.php is authoritative. Running setup:upgrade with the configured database target...\n";
+        $code = $runWithUpgradeRetry('bin/w setup:upgrade -y', '(1/2)', $setupLockPath);
+        if ($code !== 0) {
+            @unlink($installModeFlagFile);
+            exit(1);
+        }
+        $code = $runWithUpgradeRetry('bin/w setup:upgrade -y', '(2/2)', $setupLockPath);
+        @unlink($installModeFlagFile);
+        if ($code !== 0) {
+            exit(1);
+        }
+        $run('bin/w server:stop');
+        $run('bin/w server:start');
+        echo "setup:upgrade completed.\n";
+        exit(0);
+    }
+
+    $target = $pgsqlOwnership->targetFromEnvPhp();
+    $pgsqlOwnership->printTargetSummary($target, 'env.php db.master');
+    $classification = $pgsqlOwnership->classifyEnvTarget($target);
+    echo ($classification['message'] ?? '') . "\n";
+    echo "env.php db.master is authoritative. Re-run with -y to run setup:upgrade, or delete env.php for a fresh project-local install.\n";
+    exit(0);
+
     if (!$forceInstall) {
         if ($autoUpgrade) {
             // -y：系统已安装时直接执行 setup:upgrade，不询问、不断开（快捷路径，跳过 composer 等）
@@ -409,7 +567,22 @@ if (is_dir($pgsqlBin)) {
 }
 
 // 5a. 若 extend/server/pgsql 存在，确保 data 已初始化并启动（与 install.sh Linux 数据目录一致）
-(new EnsurePgsqlData($projectRoot))->ensure();
+$envTargetBeforeDbSetup = $pgsqlOwnership->targetFromEnvPhp();
+if ($envTargetBeforeDbSetup === null) {
+    $pgsqlPrepared = $pgsqlOwnership->withInstallLock(static function () use ($projectRoot, $ensureProjectPgsqlBinary): bool {
+        if (!$ensureProjectPgsqlBinary(null)) {
+            return false;
+        }
+        return (new EnsurePgsqlData($projectRoot, true))->ensure();
+    });
+    if ($pgsqlPrepared !== true) {
+        fwrite(STDERR, "ERROR: PostgreSQL project data preparation failed.\n");
+        exit(1);
+    }
+} else {
+    $pgsqlOwnership->printTargetSummary($envTargetBeforeDbSetup, 'env.php db.master');
+    echo "env.php db.master exists before database setup; local PostgreSQL init is skipped unless this project owns the data.\n";
+}
 $env = (new EnvLoader($projectRoot))->load(true);
 
 // 5a2. 数据库驱动自动安装：pdo_pgsql 未加载时执行 env:install pdo_pgsql -y，成功时重新执行本脚本（--from 5b）以便新进程加载扩展
@@ -429,9 +602,15 @@ if (!extension_loaded('pdo_pgsql')) {
 }
 
 // 5b. 每次运行都执行：根据 env DB_* 或项目级默认值同步 env.php 的 db，并视情况建库/校验连接
-echo "Step 5b: PostgreSQL database init (from env DB_* or generated project DB)...\n";
-$setupDb = new SetupPgsqlDatabase($projectRoot, $env);
-$step5bOk = $setupDb->run();
+// env.php is authoritative. Only first install may create database/user.
+$envTargetAtDbSetup = $pgsqlOwnership->targetFromEnvPhp();
+if ($envTargetAtDbSetup !== null) {
+    echo "Step 5b: Verifying database from env.php (no database/user creation)...\n";
+    $step5bOk = $pgsqlOwnership->withInstallLock($ensureConfiguredDatabaseReady);
+} else {
+    echo "Step 5b: First install PostgreSQL database init (project-local DB)...\n";
+    $step5bOk = $pgsqlOwnership->withInstallLock($initializeFirstInstallDatabase);
+}
 
 if (!$step5bOk && DIRECTORY_SEPARATOR === '\\' && is_dir($pgsqlBin)) {
     $libpq = $pgsqlBin . DIRECTORY_SEPARATOR . 'libpq.dll';
