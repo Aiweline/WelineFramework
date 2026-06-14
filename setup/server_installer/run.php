@@ -111,6 +111,7 @@ $isEnvPhpInstalled = static function (string $path): bool {
 };
 
 $pgsqlOwnership = new PgsqlProjectOwnership($projectRoot);
+$envPhpHadDbAtStart = $isEnvPhpInstalled($envPhpFile);
 $ensureProjectPgsqlBinary = static function (?string $major = null) use ($projectRoot): bool {
     $pgsqlBin = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'pgsql' . DIRECTORY_SEPARATOR . 'bin';
     $pgCtl = (DIRECTORY_SEPARATOR === '\\') ? $pgsqlBin . DIRECTORY_SEPARATOR . 'pg_ctl.exe' : $pgsqlBin . DIRECTORY_SEPARATOR . 'pg_ctl';
@@ -187,7 +188,7 @@ $initializeFirstInstallDatabase = static function () use ($projectRoot, $pgsqlOw
     return true;
 };
 
-if ($isEnvPhpInstalled($envPhpFile)) {
+if ($envPhpHadDbAtStart) {
     if ($forceInstall) {
         echo "app/etc/env.php already has db.master; -f will not overwrite database config. Delete env.php for a fresh install.\n";
     }
@@ -568,7 +569,7 @@ if (is_dir($pgsqlBin)) {
 
 // 5a. 若 extend/server/pgsql 存在，确保 data 已初始化并启动（与 install.sh Linux 数据目录一致）
 $envTargetBeforeDbSetup = $pgsqlOwnership->targetFromEnvPhp();
-if ($envTargetBeforeDbSetup === null) {
+if (!$envPhpHadDbAtStart) {
     $pgsqlPrepared = $pgsqlOwnership->withInstallLock(static function () use ($projectRoot, $ensureProjectPgsqlBinary): bool {
         if (!$ensureProjectPgsqlBinary(null)) {
             return false;
@@ -604,7 +605,7 @@ if (!extension_loaded('pdo_pgsql')) {
 // 5b. 每次运行都执行：根据 env DB_* 或项目级默认值同步 env.php 的 db，并视情况建库/校验连接
 // env.php is authoritative. Only first install may create database/user.
 $envTargetAtDbSetup = $pgsqlOwnership->targetFromEnvPhp();
-if ($envTargetAtDbSetup !== null) {
+if ($envPhpHadDbAtStart && $envTargetAtDbSetup !== null) {
     echo "Step 5b: Verifying database from env.php (no database/user creation)...\n";
     $step5bOk = $pgsqlOwnership->withInstallLock($ensureConfiguredDatabaseReady);
 } else {
