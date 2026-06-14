@@ -182,6 +182,32 @@ final class EnsurePgsqlData
         return null;
     }
 
+    private function buildPathEnv(string $pgBindir): string
+    {
+        $currentPath = getenv('PATH') ?: '';
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            return $pgBindir . ':' . ($currentPath !== '' ? $currentPath : '/usr/bin:/bin');
+        }
+
+        $parts = [$pgBindir];
+        if ($currentPath !== '') {
+            $parts[] = $currentPath;
+        }
+        $systemRoot = getenv('SystemRoot') ?: getenv('WINDIR') ?: 'C:\\Windows';
+        $parts[] = $systemRoot . '\\System32';
+        $parts[] = $systemRoot;
+        return implode(';', array_unique(array_filter($parts, static fn(string $path): bool => $path !== '')));
+    }
+
+    private function commandWithPath(string $binary, string $pathEnv, string $args): string
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $safePath = str_replace('"', '', $pathEnv);
+            return 'set "PATH=' . $safePath . '" && ' . escapeshellarg($binary) . $args;
+        }
+        return 'env PATH=' . escapeshellarg($pathEnv) . ' ' . escapeshellarg($binary) . $args;
+    }
+
     private function readConfPort(): ?int
     {
         $conf = $this->dataDir . DIRECTORY_SEPARATOR . 'postgresql.conf';
@@ -316,9 +342,12 @@ final class EnsurePgsqlData
                 @mkdir($this->dataDir, 0755, true);
             }
             $pgBindir = dirname($initdb);
-            $pathEnv = $pgBindir . ':' . (getenv('PATH') ?: '/usr/bin:/bin');
-            $cmd = 'env PATH=' . escapeshellarg($pathEnv) . ' ' . escapeshellarg($initdb)
-                . ' -D ' . escapeshellarg($this->dataDir) . ' -E UTF8 -U postgres';
+            $pathEnv = $this->buildPathEnv($pgBindir);
+            $cmd = $this->commandWithPath(
+                $initdb,
+                $pathEnv,
+                ' -D ' . escapeshellarg($this->dataDir) . ' -E UTF8 -U postgres'
+            );
             $out = [];
             exec($cmd . ' 2>&1', $out, $code);
             if ($code !== 0) {
@@ -343,9 +372,12 @@ final class EnsurePgsqlData
 
         $logFile = $this->dataDir . DIRECTORY_SEPARATOR . 'logfile';
         $pgBindir = dirname($pgCtl);
-        $pathEnv = $pgBindir . ':' . (getenv('PATH') ?: '/usr/bin:/bin');
-        $statusCmd = 'env PATH=' . escapeshellarg($pathEnv) . ' ' . escapeshellarg($pgCtl)
-            . ' -D ' . escapeshellarg($this->dataDir) . ' status 2>&1';
+        $pathEnv = $this->buildPathEnv($pgBindir);
+        $statusCmd = $this->commandWithPath(
+            $pgCtl,
+            $pathEnv,
+            ' -D ' . escapeshellarg($this->dataDir) . ' status 2>&1'
+        );
         $statusOut = [];
         exec($statusCmd, $statusOut);
         $statusStr = implode(' ', $statusOut);
@@ -370,9 +402,12 @@ final class EnsurePgsqlData
         echo "Step 5a: Starting PostgreSQL at {$this->dataDir}...\n";
         $socketArgs = PHP_OS_FAMILY === 'Linux' ? '-k ' . $this->dataDir . ' -p ' . $port : '-p ' . $port;
         $socketOpt = ' -o ' . escapeshellarg($socketArgs);
-        $startCmd = 'env PATH=' . escapeshellarg($pathEnv) . ' ' . escapeshellarg($pgCtl)
-            . ' -D ' . escapeshellarg($this->dataDir)
-            . ' -l ' . escapeshellarg($logFile) . ' start' . $socketOpt;
+        $startCmd = $this->commandWithPath(
+            $pgCtl,
+            $pathEnv,
+            ' -D ' . escapeshellarg($this->dataDir)
+                . ' -l ' . escapeshellarg($logFile) . ' start' . $socketOpt
+        );
         $startCode = -1;
         if (function_exists('passthru')) {
             passthru($startCmd . ' 2>&1', $startCode);
