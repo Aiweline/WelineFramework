@@ -11,12 +11,51 @@ final class EnsurePgsqlData
     private string $projectRoot;
     private string $pgsqlDir;
     private string $dataDir;
+    private bool $syncWelineEnv;
 
-    public function __construct(string $projectRoot)
+    public function __construct(string $projectRoot, bool $syncWelineEnv = true)
     {
         $this->projectRoot = $projectRoot;
         $this->pgsqlDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'pgsql';
         $this->dataDir = $this->pgsqlDir . DIRECTORY_SEPARATOR . 'data';
+        $this->syncWelineEnv = $syncWelineEnv;
+    }
+
+    public function getDataDir(): string
+    {
+        return $this->dataDir;
+    }
+
+    public function hasProjectPgCtl(): bool
+    {
+        $binDir = $this->pgsqlDir . DIRECTORY_SEPARATOR . 'bin';
+        $pgCtl = (DIRECTORY_SEPARATOR === '\\')
+            ? $binDir . DIRECTORY_SEPARATOR . 'pg_ctl.exe'
+            : $binDir . DIRECTORY_SEPARATOR . 'pg_ctl';
+        return is_file($pgCtl) && is_executable($pgCtl);
+    }
+
+    public function hasData(): bool
+    {
+        return is_file($this->dataDir . DIRECTORY_SEPARATOR . 'PG_VERSION');
+    }
+
+    public function getDataMajorVersion(): ?string
+    {
+        $path = $this->dataDir . DIRECTORY_SEPARATOR . 'PG_VERSION';
+        if (!is_file($path)) {
+            return null;
+        }
+        $version = trim((string)@file_get_contents($path));
+        if (preg_match('/^([0-9]+)/', $version, $m) === 1) {
+            return $m[1];
+        }
+        return null;
+    }
+
+    public function getConfiguredPort(): ?int
+    {
+        return $this->readConfPort();
     }
 
     /** 查找 pg_ctl 路径（Linux extend/bin 常为 /usr/bin 软链，不含 pg_ctl） */
@@ -116,6 +155,33 @@ final class EnsurePgsqlData
         return null;
     }
 
+    private function findPostgresBinary(?string $pgCtl = null): ?string
+    {
+        $sep = DIRECTORY_SEPARATOR;
+        $binDir = $pgCtl !== null ? dirname($pgCtl) : $this->pgsqlDir . $sep . 'bin';
+        $postgres = (DIRECTORY_SEPARATOR === '\\') ? $binDir . $sep . 'postgres.exe' : $binDir . $sep . 'postgres';
+        return is_file($postgres) && is_executable($postgres) ? $postgres : null;
+    }
+
+    private function readBinaryMajorVersion(?string $pgCtl = null): ?string
+    {
+        $postgres = $this->findPostgresBinary($pgCtl);
+        if ($postgres === null) {
+            return null;
+        }
+        $cmd = escapeshellarg($postgres) . ' --version 2>&1';
+        $out = [];
+        @exec($cmd, $out, $code);
+        if ($code !== 0) {
+            return null;
+        }
+        $line = implode(' ', $out);
+        if (preg_match('/\b([0-9]+)(?:\.[0-9]+)?\b/', $line, $m) === 1) {
+            return $m[1];
+        }
+        return null;
+    }
+
     private function readConfPort(): ?int
     {
         $conf = $this->dataDir . DIRECTORY_SEPARATOR . 'postgresql.conf';
@@ -167,15 +233,20 @@ final class EnsurePgsqlData
         return $port;
     }
 
-    private function resolveDesiredPort(): int
+    private function resolveDesiredPort(?int $preferredPort = null): int
     {
+        if ($preferredPort !== null && $this->isValidPort($preferredPort)) {
+            return $preferredPort;
+        }
         return $this->readEnvPort() ?? $this->readConfPort() ?? 5432;
     }
 
     private function syncPortConfig(int $port): void
     {
         $this->writePgPortConf($port);
-        $this->writeEnvPort($port);
+        if ($this->syncWelineEnv) {
+            $this->writeEnvPort($port);
+        }
         putenv('DB_PORT=' . $port);
     }
 
@@ -227,7 +298,7 @@ final class EnsurePgsqlData
      * 若 extend/server/pgsql/data 已初始化，确保集群正在运行。
      * 以当前用户运行，无需 postgres 系统用户或 sudo。
      */
-    public function ensure(): bool
+    public function ensure(?int $preferredPort = null): bool
     {
         $pgVersion = $this->dataDir . DIRECTORY_SEPARATOR . 'PG_VERSION';
         if (!is_file($pgVersion)) {
@@ -235,7 +306,7 @@ final class EnsurePgsqlData
             if ($initdb === null) {
                 return true; // 未初始化且无 initdb，跳过（或由 install.sh 处理）
             }
-            $desiredPort = $this->resolveDesiredPort();
+            $desiredPort = $this->resolveDesiredPort($preferredPort);
             $port = $this->findAvailablePort($desiredPort);
             if ($port !== $desiredPort) {
                 echo "  PostgreSQL port {$desiredPort} is in use; using project port {$port}.\n";
@@ -259,7 +330,15 @@ final class EnsurePgsqlData
 
         $pgCtl = $this->findPgCtl();
         if ($pgCtl === null) {
-            return true;
+            echo "  PostgreSQL data exists but pg_ctl was not found. Install/link the matching PostgreSQL major version before continuing.\n";
+            return false;
+        }
+
+        $dataMajor = $this->getDataMajorVersion();
+        $binaryMajor = $this->readBinaryMajorVersion($pgCtl);
+        if ($dataMajor !== null && $binaryMajor !== null && $dataMajor !== $binaryMajor) {
+            echo "  PostgreSQL major version mismatch: data={$dataMajor}, binary={$binaryMajor}. Use matching PostgreSQL or upgrade data manually.\n";
+            return false;
         }
 
         $logFile = $this->dataDir . DIRECTORY_SEPARATOR . 'logfile';
@@ -273,13 +352,15 @@ final class EnsurePgsqlData
         if (strpos($statusStr, 'running') !== false) {
             $port = $this->readConfPort();
             if ($port !== null) {
-                $this->writeEnvPort($port);
+                if ($this->syncWelineEnv) {
+                    $this->writeEnvPort($port);
+                }
                 putenv('DB_PORT=' . $port);
             }
             return true;
         }
 
-        $desiredPort = $this->resolveDesiredPort();
+        $desiredPort = $this->resolveDesiredPort($preferredPort);
         $port = $this->findAvailablePort($desiredPort);
         if ($port !== $desiredPort) {
             echo "  PostgreSQL port {$desiredPort} is in use; using project port {$port}.\n";

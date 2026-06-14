@@ -298,6 +298,11 @@ if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "${WELINE_AS_USE
   exec sudo -u "$WELINE_USER" env WELINE_AS_USER=1 PATH="$PATH" bash "$SCRIPT_DIR/install.bash" "${ORIG_ARGS[@]}"
 fi
 
+if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -un 2>/dev/null || true)" != "$WELINE_USER" ]]; then
+  echo "ERROR: Linux install must run as $WELINE_USER. Run as root so the script can switch to $WELINE_USER, or switch user first." >&2
+  exit 1
+fi
+
 # 确保 git 已安装（拉取代码时需要）；按平台自动安装
 ensure_git_installed() {
   if command -v git &>/dev/null; then
