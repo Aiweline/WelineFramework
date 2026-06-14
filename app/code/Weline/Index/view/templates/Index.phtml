@@ -88,6 +88,17 @@ $capabilities = [
             --wf-red: #c71d23;
             --wf-green: #14804a;
             --wf-ink: #101828;
+            --wf-brand-bg: #101828;
+            --wf-brand-text: #ffffff;
+            --wf-primary-bg: #101828;
+            --wf-primary-bg-hover: #243044;
+            --wf-primary-text: #ffffff;
+            --wf-secondary-bg: #ffffff;
+            --wf-secondary-bg-hover: #eff6ff;
+            --wf-secondary-text: #101828;
+            --wf-secondary-text-hover: #1d4ed8;
+            --wf-code-bg: #111827;
+            --wf-code-text: #e5e7eb;
             --wf-shadow: 0 18px 48px rgba(15, 23, 42, 0.10);
             --wf-radius: 8px;
             --wf-radius-sm: 6px;
@@ -154,8 +165,8 @@ $capabilities = [
             width: 38px;
             height: 38px;
             border-radius: var(--wf-radius-sm);
-            background: var(--wf-ink);
-            color: #ffffff;
+            background: var(--wf-brand-bg);
+            color: var(--wf-brand-text);
             font-family: Consolas, "JetBrains Mono", monospace;
             font-weight: 800;
         }
@@ -194,25 +205,26 @@ $capabilities = [
         }
 
         .wf-btn {
-            background: var(--wf-ink);
-            color: #ffffff;
+            background: var(--wf-primary-bg);
+            color: var(--wf-primary-text);
             box-shadow: 0 10px 24px rgba(16, 24, 40, 0.18);
         }
 
         .wf-btn:hover {
-            background: #243044;
+            background: var(--wf-primary-bg-hover);
         }
 
         .wf-btn--secondary {
-            background: #ffffff;
-            color: var(--wf-ink);
+            background: var(--wf-secondary-bg);
+            color: var(--wf-secondary-text);
             border-color: var(--wf-border);
             box-shadow: none;
         }
 
         .wf-btn--secondary:hover {
             border-color: rgba(37, 99, 235, 0.42);
-            color: var(--wf-blue);
+            background: var(--wf-secondary-bg-hover);
+            color: var(--wf-secondary-text-hover);
         }
 
         .wf-hero {
@@ -472,8 +484,8 @@ $capabilities = [
             padding: 10px 12px;
             overflow-x: auto;
             border-radius: var(--wf-radius-sm);
-            background: #111827;
-            color: #e5e7eb;
+            background: var(--wf-code-bg);
+            color: var(--wf-code-text);
             font-family: Consolas, "JetBrains Mono", monospace;
             font-size: 0.88rem;
             white-space: nowrap;
@@ -612,9 +624,23 @@ $capabilities = [
                 --wf-surface: #111827;
                 --wf-surface-soft: #1f2937;
                 --wf-text: #e5e7eb;
-                --wf-muted: #a7b0bf;
-                --wf-border: #273244;
+                --wf-muted: #cbd5e1;
+                --wf-border: #334155;
+                --wf-blue: #60a5fa;
+                --wf-red: #f87171;
+                --wf-green: #34d399;
                 --wf-ink: #f8fafc;
+                --wf-brand-bg: #2563eb;
+                --wf-brand-text: #ffffff;
+                --wf-primary-bg: #2563eb;
+                --wf-primary-bg-hover: #1d4ed8;
+                --wf-primary-text: #ffffff;
+                --wf-secondary-bg: #1f2937;
+                --wf-secondary-bg-hover: #273244;
+                --wf-secondary-text: #e5e7eb;
+                --wf-secondary-text-hover: #ffffff;
+                --wf-code-bg: #020617;
+                --wf-code-text: #f8fafc;
                 --wf-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
             }
 
@@ -637,9 +663,8 @@ $capabilities = [
                 background: linear-gradient(135deg, rgba(20, 128, 74, 0.18), rgba(37, 99, 235, 0.16)), var(--wf-surface);
             }
 
-            .wf-btn--secondary {
-                background: transparent;
-                color: var(--wf-ink);
+            .wf-btn {
+                box-shadow: 0 14px 30px rgba(37, 99, 235, 0.24);
             }
         }
     </style>
