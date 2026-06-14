@@ -379,9 +379,10 @@ final class EnsurePgsqlData
             ' -D ' . escapeshellarg($this->dataDir) . ' status 2>&1'
         );
         $statusOut = [];
-        exec($statusCmd, $statusOut);
+        $statusCode = -1;
+        exec($statusCmd, $statusOut, $statusCode);
         $statusStr = implode(' ', $statusOut);
-        if (strpos($statusStr, 'running') !== false) {
+        if ($statusCode === 0 || strpos($statusStr, 'running') !== false) {
             $port = $this->readConfPort();
             if ($port !== null) {
                 if ($this->syncWelineEnv) {
