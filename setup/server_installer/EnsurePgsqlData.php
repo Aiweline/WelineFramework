@@ -208,6 +208,49 @@ final class EnsurePgsqlData
         return 'env PATH=' . escapeshellarg($pathEnv) . ' ' . escapeshellarg($binary) . $args;
     }
 
+    private function isPgCtlRunning(string $pgCtl, string $pathEnv): bool
+    {
+        $statusCmd = $this->commandWithPath(
+            $pgCtl,
+            $pathEnv,
+            ' -D ' . escapeshellarg($this->dataDir) . ' status 2>&1'
+        );
+        $statusOut = [];
+        $statusCode = -1;
+        exec($statusCmd, $statusOut, $statusCode);
+        $statusStr = implode(' ', $statusOut);
+        return $statusCode === 0 || strpos($statusStr, 'running') !== false;
+    }
+
+    private function startPostgresWindows(string $pgCtl, string $pathEnv, string $logFile, int $port): bool
+    {
+        $postgres = $this->findPostgresBinary($pgCtl);
+        if ($postgres === null) {
+            echo "  PostgreSQL data exists but postgres.exe was not found.\n";
+            return false;
+        }
+
+        $safePath = str_replace('"', '', $pathEnv);
+        $cmd = 'cmd /C set "PATH=' . $safePath . '" && start "" /B ' . escapeshellarg($postgres)
+            . ' -D ' . escapeshellarg($this->dataDir)
+            . ' -p ' . (int)$port
+            . ' >> ' . escapeshellarg($logFile) . ' 2>&1';
+        $handle = @popen($cmd, 'r');
+        if (is_resource($handle)) {
+            @pclose($handle);
+        } else {
+            @exec($cmd . ' 2>&1');
+        }
+
+        for ($i = 0; $i < 60; $i++) {
+            if ($this->isPgCtlRunning($pgCtl, $pathEnv)) {
+                return true;
+            }
+            usleep(250000);
+        }
+        return false;
+    }
+
     private function readConfPort(): ?int
     {
         $conf = $this->dataDir . DIRECTORY_SEPARATOR . 'postgresql.conf';
@@ -373,16 +416,7 @@ final class EnsurePgsqlData
         $logFile = $this->dataDir . DIRECTORY_SEPARATOR . 'logfile';
         $pgBindir = dirname($pgCtl);
         $pathEnv = $this->buildPathEnv($pgBindir);
-        $statusCmd = $this->commandWithPath(
-            $pgCtl,
-            $pathEnv,
-            ' -D ' . escapeshellarg($this->dataDir) . ' status 2>&1'
-        );
-        $statusOut = [];
-        $statusCode = -1;
-        exec($statusCmd, $statusOut, $statusCode);
-        $statusStr = implode(' ', $statusOut);
-        if ($statusCode === 0 || strpos($statusStr, 'running') !== false) {
+        if ($this->isPgCtlRunning($pgCtl, $pathEnv)) {
             $port = $this->readConfPort();
             if ($port !== null) {
                 if ($this->syncWelineEnv) {
@@ -403,19 +437,24 @@ final class EnsurePgsqlData
         echo "Step 5a: Starting PostgreSQL at {$this->dataDir}...\n";
         $socketArgs = PHP_OS_FAMILY === 'Linux' ? '-k ' . $this->dataDir . ' -p ' . $port : '-p ' . $port;
         $socketOpt = ' -o ' . escapeshellarg($socketArgs);
-        $startCmd = $this->commandWithPath(
-            $pgCtl,
-            $pathEnv,
-            ' -D ' . escapeshellarg($this->dataDir)
-                . ' -l ' . escapeshellarg($logFile) . ' start' . $socketOpt
-        );
-        $startCode = -1;
-        if (function_exists('passthru')) {
-            passthru($startCmd . ' 2>&1', $startCode);
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $started = $this->startPostgresWindows($pgCtl, $pathEnv, $logFile, $port);
+            $startCode = $started ? 0 : 1;
         } else {
-            exec($startCmd . ' 2>&1', $startOut, $startCode);
-            if ($startCode !== 0) {
-                echo "  pg_ctl start failed: " . implode("\n", $startOut) . "\n";
+            $startCmd = $this->commandWithPath(
+                $pgCtl,
+                $pathEnv,
+                ' -D ' . escapeshellarg($this->dataDir)
+                    . ' -l ' . escapeshellarg($logFile) . ' start' . $socketOpt
+            );
+            $startCode = -1;
+            if (function_exists('passthru')) {
+                passthru($startCmd . ' 2>&1', $startCode);
+            } else {
+                exec($startCmd . ' 2>&1', $startOut, $startCode);
+                if ($startCode !== 0) {
+                    echo "  pg_ctl start failed: " . implode("\n", $startOut) . "\n";
+                }
             }
         }
         if ($startCode !== 0) {
