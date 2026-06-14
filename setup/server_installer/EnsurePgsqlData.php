@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'PgsqlProjectPort.php';
+
 /**
  * 确保 PostgreSQL 数据目录在 extend/server/pgsql/data 并已初始化、运行。
  * Linux: install.sh 负责 init；本类在 run.php 中用于 Windows（及 Linux 冷启动/reboot 后补齐启动）。
@@ -272,7 +274,7 @@ final class EnsurePgsqlData
 
     private function isValidPort(int $port): bool
     {
-        return $port > 0 && $port <= 65535;
+        return PgsqlProjectPort::isValid($port);
     }
 
     private function isPortInUse(int $port): bool
@@ -292,22 +294,27 @@ final class EnsurePgsqlData
 
     private function findAvailablePort(int $preferred): int
     {
-        $port = $this->isValidPort($preferred) ? $preferred : 5432;
-        while ($this->isPortInUse($port)) {
-            $port++;
-            if ($port > 65535) {
-                return 5432;
-            }
+        $port = PgsqlProjectPort::normalizeCandidate($preferred, $this->projectRoot);
+        if (!PgsqlProjectPort::isReservedDefault($port) && !$this->isPortInUse($port)) {
+            return $port;
         }
-        return $port;
+
+        $candidate = PgsqlProjectPort::preferredForProject($this->projectRoot);
+        $attempts = PgsqlProjectPort::MAX - PgsqlProjectPort::MIN + 1;
+        for ($i = 0; $i < $attempts; $i++) {
+            if (!PgsqlProjectPort::isReservedDefault($candidate) && !$this->isPortInUse($candidate)) {
+                return $candidate;
+            }
+            $candidate = PgsqlProjectPort::nextInProjectRange($candidate);
+        }
+
+        throw new RuntimeException('No available project PostgreSQL port found in ' . PgsqlProjectPort::MIN . '-' . PgsqlProjectPort::MAX . '.');
     }
 
     private function resolveDesiredPort(?int $preferredPort = null): int
     {
-        if ($preferredPort !== null && $this->isValidPort($preferredPort)) {
-            return $preferredPort;
-        }
-        return $this->readEnvPort() ?? $this->readConfPort() ?? 5432;
+        $candidate = $preferredPort ?? $this->readEnvPort() ?? $this->readConfPort();
+        return PgsqlProjectPort::normalizeCandidate($candidate, $this->projectRoot);
     }
 
     private function syncPortConfig(int $port): void
@@ -363,6 +370,26 @@ final class EnsurePgsqlData
         echo "  PostgreSQL port synced to " . basename($envFile) . ": {$port}\n";
     }
 
+    private function stopPostgres(string $pgCtl, string $pathEnv): bool
+    {
+        $stopCmd = $this->commandWithPath(
+            $pgCtl,
+            $pathEnv,
+            ' -D ' . escapeshellarg($this->dataDir) . ' stop -m fast 2>&1'
+        );
+        $out = [];
+        $code = -1;
+        exec($stopCmd, $out, $code);
+        for ($i = 0; $i < 40; $i++) {
+            if (!$this->isPgCtlRunning($pgCtl, $pathEnv)) {
+                return true;
+            }
+            usleep(250000);
+        }
+        echo "  PostgreSQL stop failed: " . implode("\n", $out) . "\n";
+        return false;
+    }
+
     /**
      * 若 extend/server/pgsql/data 已初始化，确保集群正在运行。
      * 以当前用户运行，无需 postgres 系统用户或 sudo。
@@ -416,18 +443,26 @@ final class EnsurePgsqlData
         $logFile = $this->dataDir . DIRECTORY_SEPARATOR . 'logfile';
         $pgBindir = dirname($pgCtl);
         $pathEnv = $this->buildPathEnv($pgBindir);
+        $desiredPort = $this->resolveDesiredPort($preferredPort);
         if ($this->isPgCtlRunning($pgCtl, $pathEnv)) {
             $port = $this->readConfPort();
-            if ($port !== null) {
+            if ($port !== null && $port === $desiredPort && !PgsqlProjectPort::isReservedDefault($port)) {
                 if ($this->syncWelineEnv) {
                     $this->writeEnvPort($port);
                 }
                 putenv('DB_PORT=' . $port);
+                return true;
             }
-            return true;
+            if ($port !== null) {
+                echo "  PostgreSQL project data is running on port {$port}; restarting on project port {$desiredPort}.\n";
+            } else {
+                echo "  PostgreSQL project data is running without a configured port; restarting on project port {$desiredPort}.\n";
+            }
+            if (!$this->stopPostgres($pgCtl, $pathEnv)) {
+                return false;
+            }
         }
 
-        $desiredPort = $this->resolveDesiredPort($preferredPort);
         $port = $this->findAvailablePort($desiredPort);
         if ($port !== $desiredPort) {
             echo "  PostgreSQL port {$desiredPort} is in use; using project port {$port}.\n";
