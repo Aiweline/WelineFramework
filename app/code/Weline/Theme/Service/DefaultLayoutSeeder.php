@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 
@@ -353,22 +354,10 @@ class DefaultLayoutSeeder
             return [];
         }
 
-        $themePath = rtrim((string)$theme->getPath(), '/\\');
-        if ($themePath === '') {
-            return [];
-        }
-
-        $layoutJson = $themePath . DS . 'frontend' . DS . 'layouts' . DS . $pageType . DS . 'default.layout.json';
-        if (!is_file($layoutJson)) {
-            return [];
-        }
-
-        $raw = file_get_contents($layoutJson);
-        if (!is_string($raw) || trim($raw) === '') {
-            return [];
-        }
-
-        $decoded = json_decode($raw, true);
+        /** @var ThemeResourceCatalog $resourceCatalog */
+        $resourceCatalog = ObjectManager::getInstance(ThemeResourceCatalog::class);
+        $layoutResource = $resourceCatalog->getLayoutResource('frontend', $theme, $pageType, 'default');
+        $decoded = $layoutResource['layout_info'] ?? null;
         if (!is_array($decoded)) {
             return [];
         }

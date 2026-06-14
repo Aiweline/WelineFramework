@@ -83,6 +83,12 @@ class ThemeResourceCatalog
                 'file' => $resource['relative_path'],
                 'path' => $resource['file_path'],
                 'logical_key' => $resource['logical_key'],
+                'layout_info' => $resource['layout_info'] ?? [],
+                'layout_info_path' => $resource['layout_info_path'] ?? '',
+                'layout_info_error' => $resource['layout_info_error'] ?? '',
+                'layer_type' => $resource['layer_type'] ?? '',
+                'layer_key' => $resource['layer_key'] ?? '',
+                'module_name' => $resource['module_name'] ?? '',
             ];
         }
 
@@ -94,6 +100,15 @@ class ThemeResourceCatalog
         }
 
         return $layouts;
+    }
+
+    public function getLayoutResource(string $area, ?WelineTheme $theme, string $layoutType, string $option = 'default'): ?array
+    {
+        $layoutType = $this->normalizeLogicalSegment($layoutType);
+        $option = $this->normalizeLogicalSegment($option);
+        $logicalKey = 'layouts/' . $layoutType . '/' . ($option === '' ? 'default' : $option);
+
+        return $this->getResources('layouts', $area, $theme)[$logicalKey] ?? null;
     }
 
     public function getPartials(string $area = 'frontend', ?WelineTheme $theme = null): array
@@ -239,6 +254,9 @@ class ThemeResourceCatalog
             'theme_path' => (string)($directory['theme_path'] ?? ''),
             'layer_key' => (string)($directory['layer_key'] ?? ''),
             'layer_type' => (string)($directory['layer_type'] ?? ''),
+            'module_name' => (string)($directory['module_name'] ?? ''),
+            'module_path' => (string)($directory['module_path'] ?? ''),
+            'module_base_path' => (string)($directory['module_base_path'] ?? ''),
             'structure' => (string)($directory['structure'] ?? ''),
             'meta' => $meta,
             'params' => $this->formatParams($parsed['params'] ?? []),
@@ -262,6 +280,10 @@ class ThemeResourceCatalog
         $resource['layout_type'] = $layoutType;
         $resource['option'] = $option;
         $resource['logical_key'] = "layouts/{$layoutType}/{$option}";
+        $layoutInfo = $this->loadAdjacentLayoutInfo((string)$resource['file_path']);
+        $resource['layout_info'] = $layoutInfo['data'];
+        $resource['layout_info_path'] = $layoutInfo['path'];
+        $resource['layout_info_error'] = $layoutInfo['error'];
         return $resource;
     }
 
@@ -328,6 +350,47 @@ class ThemeResourceCatalog
         $option = implode('/', $segments);
 
         return [$type, $option === '' ? 'default' : $option];
+    }
+
+    private function loadAdjacentLayoutInfo(string $filePath): array
+    {
+        $result = [
+            'data' => [],
+            'path' => '',
+            'error' => '',
+        ];
+
+        if (!str_ends_with(strtolower($filePath), '.phtml')) {
+            return $result;
+        }
+
+        $jsonPath = substr($filePath, 0, -6) . '.layout.json';
+        if (!is_file($jsonPath)) {
+            return $result;
+        }
+
+        $result['path'] = $jsonPath;
+        $raw = file_get_contents($jsonPath);
+        if (!is_string($raw) || trim($raw) === '') {
+            return $result;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            $result['error'] = json_last_error_msg();
+            return $result;
+        }
+
+        $result['data'] = $decoded;
+        return $result;
+    }
+
+    private function normalizeLogicalSegment(string $value): string
+    {
+        $value = str_replace('\\', '/', trim($value));
+        $segments = array_values(array_filter(explode('/', trim($value, '/')), static fn(string $segment): bool => $segment !== ''));
+
+        return implode('/', $segments);
     }
 
     private function extractWidgetMeta(string $content, string $fallbackCode): array
