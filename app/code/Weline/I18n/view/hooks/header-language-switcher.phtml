@@ -46,6 +46,17 @@ $shortLocaleCode = static function (string $localeCode): string {
 
     return $langDisplay !== '' ? $langDisplay : 'ZH';
 };
+$countryCodeFromLocale = static function (string $localeCode): string {
+    $parts = explode('_', str_replace('-', '_', trim($localeCode)));
+    for ($index = count($parts) - 1; $index >= 0; $index--) {
+        $part = strtoupper((string)($parts[$index] ?? ''));
+        if (strlen($part) === 2 && preg_match('/^[A-Z]{2}$/', $part)) {
+            return $part;
+        }
+    }
+
+    return '';
+};
 $sanitizeInlineFlagMarkup = static function (string $markup): string {
     if ($markup === '') {
         return '';
@@ -53,10 +64,23 @@ $sanitizeInlineFlagMarkup = static function (string $markup): string {
 
     return (string)preg_replace('/<\\?xml[^?]*\\?>/i', '', $markup);
 };
-$getLanguageFlag = static function (string $localeCode) use ($i18n, $sanitizeInlineFlagMarkup): string {
+$getLanguageFlag = static function (string $localeCode) use ($i18n, $sanitizeInlineFlagMarkup, $countryCodeFromLocale): string {
     try {
         $flag = (string)($i18n->getCountryFlagWithLocal($localeCode, 24, 18)['flag'] ?? '');
-        return $sanitizeInlineFlagMarkup($flag);
+        $flag = $sanitizeInlineFlagMarkup($flag);
+        if ($flag !== '') {
+            return $flag;
+        }
+    } catch (\Throwable) {
+    }
+
+    $countryCode = $countryCodeFromLocale($localeCode);
+    if ($countryCode === '') {
+        return '';
+    }
+
+    try {
+        return $sanitizeInlineFlagMarkup((string)$i18n->getCountryFlag($countryCode, 24, 18));
     } catch (\Throwable) {
         return '';
     }
