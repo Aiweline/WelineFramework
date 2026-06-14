@@ -33,6 +33,10 @@ theme/
 ## 核心约定
 
 - `layouts/`
+  - Layout discovery precedence is fixed: active `app/design` theme chain (supporting `frontend/`, `theme/frontend/`, and `view/theme/frontend/`) -> `Weline_Theme/view/theme` -> other modules' `view/theme` contribution directories.
+  - The first `layouts/{layoutType}/{option}` logical key wins. Module contributions can add new layouts but cannot override `Weline_Theme` defaults; `app/design` themes can override defaults.
+  - Adjacent `*.layout.json` files are discovered with the same precedence as their `.phtml` layout file and are used for default widget/slot configuration.
+  - Full developer guide: `app/code/Weline/Theme/doc/layout-discovery-guide.md`.
   - 路径规则是 `theme/{area}/layouts/{layoutType}/{option}.phtml`。
   - 控制器设置 `layoutType` 后，`ControllerFetchFileBefore` 会结合主题配置和预览 scope
     解析最终模板；`account.auth` 这类写法会把 `account` 识别为类型、`auth` 识别为选项。
