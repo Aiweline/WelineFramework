@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'PgsqlProjectPort.php';
+
 final class PgsqlProjectOwnership
 {
-    private const MARKER_VERSION = 1;
+    private const MARKER_VERSION = 2;
     private const MARKER_TABLE = 'weline_project_owner';
 
     private string $projectRoot;
@@ -226,6 +228,7 @@ final class PgsqlProjectOwnership
             $marker = $this->buildMarker($target);
         } else {
             $marker['updated_at'] = gmdate('c');
+            $marker['port'] = (string)($target['port'] ?? $marker['port'] ?? '');
             $marker['data_pg_major'] = $this->readDataMajorVersion() ?? ($marker['data_pg_major'] ?? '');
         }
 
@@ -265,6 +268,20 @@ final class PgsqlProjectOwnership
         if (($dbMarker['install_id'] ?? '') !== ($fileMarker['install_id'] ?? '')) {
             echo "PostgreSQL ownership check failed: file marker and database marker install_id mismatch.\n";
             return false;
+        }
+        $targetPort = (string)($target['port'] ?? '');
+        if (($fileMarker['marker_version'] ?? 0) !== self::MARKER_VERSION
+            || ($fileMarker['port'] ?? '') !== $targetPort
+            || ($fileMarker['data_pg_major'] ?? '') !== ($this->readDataMajorVersion() ?? '')
+        ) {
+            $fileMarker['marker_version'] = self::MARKER_VERSION;
+            $fileMarker['port'] = $targetPort;
+            $fileMarker['data_pg_major'] = $this->readDataMajorVersion() ?? ($fileMarker['data_pg_major'] ?? '');
+            $fileMarker['updated_at'] = gmdate('c');
+            if (!$this->writeDatabaseMarker($pdo, $fileMarker) || !$this->writeFileMarkerAtomic($fileMarker)) {
+                echo "PostgreSQL ownership check failed: marker port refresh failed.\n";
+                return false;
+            }
         }
         echo "PostgreSQL ownership check OK: install_id={$fileMarker['install_id']}.\n";
         return true;
@@ -403,6 +420,7 @@ final class PgsqlProjectOwnership
             'project_root_hash' => $this->projectRootHash(),
             'database' => (string)($target['database'] ?? ''),
             'username' => (string)($target['username'] ?? ''),
+            'port' => (string)($target['port'] ?? ''),
             'data_dir' => str_replace('\\', '/', $this->dataDir),
             'data_pg_major' => $this->readDataMajorVersion() ?? '',
             'created_at' => gmdate('c'),

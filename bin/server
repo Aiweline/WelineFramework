@@ -57,6 +57,8 @@ PGSQL_BIN="${PGSQL_DIR}/bin"
 PGSQL_DATA_DEFAULT="${PGSQL_DIR}/data"
 PGSQL_ENV_DEFAULT="${PROJECT_ROOT}/weline.env"
 PGSQL_OWNER_CLI="${PROJECT_ROOT}/setup/server_installer/pgsql_owner_cli.php"
+PGSQL_PROJECT_PORT_MIN=55432
+PGSQL_PROJECT_PORT_MAX=65535
 
 pgsql_normalize_path() {
   local path="$1"
@@ -230,6 +232,29 @@ pgsql_is_port_in_use() {
   return 1
 }
 
+pgsql_project_preferred_port() {
+  local range seed normalized hex
+  range=$((PGSQL_PROJECT_PORT_MAX - PGSQL_PROJECT_PORT_MIN + 1))
+  normalized="$(printf '%s' "${PROJECT_ROOT}" | tr '\\' '/' | tr '[:upper:]' '[:lower:]')"
+  if pgsql_command_exists sha256sum; then
+    hex="$(printf '%s' "$normalized" | sha256sum | awk '{print substr($1,1,8)}')"
+    seed=$((16#$hex))
+  else
+    seed="$(printf '%s' "$normalized" | cksum 2>/dev/null | awk '{print $1}')"
+  fi
+  [[ -z "$seed" ]] && seed=0
+  echo $((PGSQL_PROJECT_PORT_MIN + (seed % range)))
+}
+
+pgsql_normalize_project_port() {
+  local port="$1"
+  if [[ -z "$port" || ! "$port" =~ ^[0-9]+$ || "$port" -le 0 || "$port" -gt 65535 || "$port" -eq 5432 ]]; then
+    pgsql_project_preferred_port
+    return 0
+  fi
+  echo "$port"
+}
+
 pgsql_read_port_from_conf() {
   local data_dir="$1"
   local conf="${data_dir}/postgresql.conf"
@@ -257,7 +282,7 @@ pgsql_resolve_port_from_conf() {
     echo "$p"
     return 0
   fi
-  echo "5432"
+  pgsql_project_preferred_port
 }
 
 pgsql_write_port_conf() {
@@ -274,12 +299,25 @@ pgsql_write_port_conf() {
 
 pgsql_find_available_port() {
   local port="$1"
-  [[ -z "$port" || "$port" -le 0 || "$port" -gt 65535 ]] && port=5432
-  while pgsql_is_port_in_use "$port"; do
-    port=$((port + 1))
-    [[ "$port" -gt 65535 ]] && { echo "5432"; return 0; }
+  port="$(pgsql_normalize_project_port "$port")"
+  if [[ "$port" -ne 5432 ]] && ! pgsql_is_port_in_use "$port"; then
+    echo "$port"
+    return 0
+  fi
+
+  local candidate attempts i
+  candidate="$(pgsql_project_preferred_port)"
+  attempts=$((PGSQL_PROJECT_PORT_MAX - PGSQL_PROJECT_PORT_MIN + 1))
+  for ((i=0; i<attempts; i++)); do
+    if [[ "$candidate" -ne 5432 ]] && ! pgsql_is_port_in_use "$candidate"; then
+      echo "$candidate"
+      return 0
+    fi
+    candidate=$((candidate + 1))
+    [[ "$candidate" -gt "$PGSQL_PROJECT_PORT_MAX" ]] && candidate="$PGSQL_PROJECT_PORT_MIN"
   done
-  echo "$port"
+  echo "ERROR: no available project PostgreSQL port in ${PGSQL_PROJECT_PORT_MIN}-${PGSQL_PROJECT_PORT_MAX}" >&2
+  return 1
 }
 
 pgsql_select_project_port() {
@@ -289,10 +327,11 @@ pgsql_select_project_port() {
   if [[ -z "$configured" ]]; then
     configured="$(pgsql_read_port_from_conf "$data_dir" 2>/dev/null || true)"
   fi
-  [[ -z "$configured" ]] && configured=5432
+  [[ -z "$configured" ]] && configured="$(pgsql_project_preferred_port)"
+  configured="$(pgsql_normalize_project_port "$configured")"
 
   local port
-  port="$(pgsql_find_available_port "$configured")"
+  port="$(pgsql_find_available_port "$configured")" || return 1
   if [[ "$port" != "$configured" ]]; then
     echo "端口 ${configured} 已被占用，当前项目 PostgreSQL 改用端口 ${port}。" >&2
   fi
@@ -338,6 +377,26 @@ pgsql_start() {
     fi
 
     if "${pgctl}" -D "${data_dir}" status >/dev/null 2>&1; then
+      local running_port_pre desired_port_pre
+      running_port_pre="$(pgsql_read_port_from_conf "${data_dir}" 2>/dev/null || true)"
+      desired_port_pre="$(pgsql_read_port_from_env 2>/dev/null || true)"
+      [[ -z "$desired_port_pre" ]] && desired_port_pre="$running_port_pre"
+      desired_port_pre="$(pgsql_normalize_project_port "$desired_port_pre")"
+      if [[ -n "$running_port_pre" && "$running_port_pre" == "$desired_port_pre" && "$running_port_pre" != "5432" ]]; then
+        pgsql_sync_env_port "$running_port_pre"
+        echo "PostgreSQL is already running for this project: ${data_dir}"
+        "${pgctl}" -D "${data_dir}" status || true
+        return 0
+      fi
+      echo "Restarting project PostgreSQL from port ${running_port_pre:-unknown} to project port ${desired_port_pre}."
+      "${pgctl}" -D "${data_dir}" stop -m fast || true
+      if "${pgctl}" -D "${data_dir}" status >/dev/null 2>&1; then
+        echo "ERROR: project PostgreSQL is still running after stop; cannot change port safely." >&2
+        return 1
+      fi
+    fi
+
+    if "${pgctl}" -D "${data_dir}" status >/dev/null 2>&1; then
       local running_port
       running_port="$(pgsql_read_port_from_conf "${data_dir}" 2>/dev/null || true)"
       if [[ -n "$running_port" ]]; then
@@ -349,7 +408,7 @@ pgsql_start() {
     fi
 
     local port
-    port="$(pgsql_select_project_port "${data_dir}")"
+    port="$(pgsql_select_project_port "${data_dir}")" || return 1
 
     local logfile="${data_dir}/logfile"
     echo "启动 PostgreSQL（pg_ctl）：${data_dir}，端口：${port}"
