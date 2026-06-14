@@ -18,8 +18,9 @@
 | 版本提示文案 | 三种情况统一：① "matches required X" ② "Keeping existing" ③ "version check failed" |
 | weline.env | 读取 `INSTALL_PGSQL_VERSION`、`INSTALL_MYSQL_VERSION`、可选 `INSTALL_PHP_VERSION`；缺省 pgsql=16、mysql=8.0 |
 | 参数 | 支持 `--path-only`；组件名仅限 `php`、`pgsql`、`mysql` |
-| pgsql 与 env.php | 处理 pgsql 后：若 `app/etc/env.php` 已存在则**红色警告并询问**是否覆盖数据库配置；确认后写入 `db.master` 并输出账户/密码/数据库/主机及创建示例 |
-| pgsql 项目端口 | 每个项目的 `extend/server/pgsql/data` 必须使用独立端口；当配置端口被占用时，安装/启动流程自动选择 5433+ 并同步 `postgresql.conf` 与 `weline.env` |
+| pgsql 与 env.php | 首次无 `env.php db.master` 时才初始化项目本地 PostgreSQL、建库建用户并写入 `db.master`；一旦 `env.php` 已有数据库配置，安装脚本只跟随 `env.php`，不再用 `weline.env DB_*` 覆盖 |
+| pgsql 项目端口 | 每个项目的 `extend/server/pgsql/data` 必须使用独立端口；只有文件 marker 与数据库 marker 的 `install_id` 匹配时才允许自愈端口，并同步 `postgresql.conf` 与 `env.php` |
+| 外部/非本项目数据库 | `env.php` 指向外部主机或非当前项目本地库时，不安装、不初始化、不启动、不停止、不检查本地 pgsql，只按 `env.php` 尝试连接 |
 | weline.env 完整性 | **安装前**检查：若存在 weline.env，每行须为 `KEY=VALUE` 或 `#` 注释，否则红色警告并询问是否继续 |
 | 下载失败提示 | 下载 PHP 等失败时，提示「若下载失败请检查网络或 VPN 配置」 |
 | 安装后命令 | 先 `php -d opcache.enable=0 setup/server_installer/bootstrap_php_ini.php` 配置 php.ini（Windows 写入 `opcache.file_cache`），再 `php setup/server_installer/run.php`（composer、env:check、env:install、setup:upgrade×2、server:stop、server:start） |
@@ -31,6 +32,8 @@
 - [ ] PHP 已存在 + 版本符合的跳过逻辑与提示是否一致
 - [ ] weline.env 的 key 与默认值是否一致
 - [ ] 新增组件或参数时，两端是否都加了
-- [ ] pgsql 写入 env.php 与显示账户/密码逻辑是否一致（含 weline.env 中的 DB_*）
-- [ ] pgsql 端口冲突时是否同步更新 `postgresql.conf`、`weline.env` 和后续 `env.php` 写入
-- [ ] env.php 已存在时是否红色询问、weline.env 完整性是否安装前检查、下载失败是否提示网络/VPN、安装后是否执行 composer + setup:upgrade×2 + server:stop + server:start
+- [ ] 首次安装是否写入 `env.php db.master`、项目文件 marker 和数据库 marker
+- [ ] 已有 `env.php` 时是否打印无密码数据库目标摘要，并确认 `weline.env DB_*` 不覆盖 env.php
+- [ ] pgsql 端口冲突时是否只在当前项目归属匹配后同步更新 `postgresql.conf` 与 `env.php`
+- [ ] 外部/非本项目数据库是否跳过所有本地 pgsql 操作，只校验 env.php 连接
+- [ ] weline.env 完整性是否安装前检查、下载失败是否提示网络/VPN、安装后是否执行 composer + setup:upgrade×2 + server:stop + server:start

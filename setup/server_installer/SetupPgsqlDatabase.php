@@ -173,12 +173,13 @@ final class SetupPgsqlDatabase
     private function resolveDatabaseSettings(): array
     {
         $existing = $this->readExistingDbMaster();
+        $hasExistingDb = $existing !== [];
         $database = $this->envValue('DB_DATABASE', (string)($existing['database'] ?? $this->buildProjectDatabaseName()));
         $username = $this->envValue('DB_USERNAME', (string)($existing['username'] ?? $database));
         $password = $this->envValue('DB_PASSWORD', (string)($existing['password'] ?? $this->generateProjectPassword()));
 
         return [
-            'host' => $this->envValue('DB_HOST', (string)($existing['hostname'] ?? '127.0.0.1')),
+            'host' => $hasExistingDb ? $this->envValue('DB_HOST', (string)($existing['hostname'] ?? '127.0.0.1')) : '127.0.0.1',
             'port' => $this->envValue('DB_PORT', (string)($existing['hostport'] ?? $existing['port'] ?? '5432')),
             'database' => $database,
             'username' => $username,
@@ -637,9 +638,37 @@ final class SetupPgsqlDatabase
         }
 
         $php = '<?php return ' . var_export($config, true) . ';';
-        if (file_put_contents($envPath, $php) !== false) {
+        if ($this->writeAtomic($envPath, $php)) {
             echo "  Updated app/etc/env.php (db).\n";
         }
+    }
+
+    private function writeAtomic(string $path, string $content): bool
+    {
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        try {
+            $suffix = bin2hex(random_bytes(4));
+        } catch (\Throwable) {
+            $suffix = (string)getmypid();
+        }
+        $tmp = $path . '.tmp.' . $suffix;
+        if (@file_put_contents($tmp, $content, LOCK_EX) === false) {
+            return false;
+        }
+        if (is_file($path)) {
+            $perms = @fileperms($path);
+            if ($perms !== false) {
+                @chmod($tmp, $perms & 0777);
+            }
+        }
+        if (@rename($tmp, $path)) {
+            return true;
+        }
+        @unlink($tmp);
+        return false;
     }
 
     private function isInteractive(): bool
