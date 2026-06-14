@@ -28,8 +28,11 @@ final class EnsurePgsql
         $psqlExe = (DIRECTORY_SEPARATOR === '\\')
             ? $pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql.exe'
             : $pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql';
-        if (is_file($psqlExe)) {
+        if ($this->hasValidPgsqlInstall($pgsqlDir)) {
             return true;
+        }
+        if (is_file($psqlExe)) {
+            echo "PostgreSQL binary set is incomplete or invalid; reinstalling project PostgreSQL binaries...\n";
         }
 
         $version = trim($env['INSTALL_PGSQL_VERSION'] ?? '16');
@@ -143,7 +146,11 @@ final class EnsurePgsql
             @mkdir($pgsqlDir, 0755, true);
         }
         $this->copyRecursive($found, $pgsqlDir, ['data']);
-        return is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql.exe');
+        if (!$this->hasValidPgsqlInstall($pgsqlDir)) {
+            echo "Copied PostgreSQL from Program Files, but required binaries are invalid. Trying next source...\n";
+            return false;
+        }
+        return true;
     }
 
     private function findPgsqlInProgramFiles(): ?string
@@ -328,8 +335,7 @@ final class EnsurePgsql
         }
         $this->copyRecursive($psqlInExt, $pgsqlDir, ['data']);
         $this->rmdirRecursive($extractRoot);
-        return is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql.exe')
-            || is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql');
+        return $this->hasValidPgsqlInstall($pgsqlDir);
     }
 
     private function extractZipToPgsql(string $zipPath, string $pgsqlDir): bool
@@ -374,8 +380,7 @@ final class EnsurePgsql
         }
         $this->copyRecursive($psqlInZip, $pgsqlDir, ['data']);
         $this->rmdirRecursive($extractRoot);
-        return is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql.exe')
-            || is_file($pgsqlDir . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'psql');
+        return $this->hasValidPgsqlInstall($pgsqlDir);
     }
 
     private function copyRecursive(string $src, string $dst, array $skipTopLevelNames = []): void
@@ -399,10 +404,38 @@ final class EnsurePgsql
             if (is_dir($s)) {
                 $this->copyRecursive($s, $d);
             } else {
-                @copy($s, $d);
+                $this->copyFileWithSizeCheck($s, $d);
             }
         }
         closedir($dir);
+    }
+
+    private function copyFileWithSizeCheck(string $src, string $dst): void
+    {
+        @copy($src, $dst);
+        clearstatcache(true, $src);
+        clearstatcache(true, $dst);
+        $srcSize = is_file($src) ? @filesize($src) : false;
+        $dstSize = is_file($dst) ? @filesize($dst) : false;
+        if ($srcSize !== false && $srcSize > 0 && $dstSize === $srcSize) {
+            return;
+        }
+        @unlink($dst);
+        @copy($src, $dst);
+    }
+
+    private function hasValidPgsqlInstall(string $pgsqlDir): bool
+    {
+        $suffix = DIRECTORY_SEPARATOR === '\\' ? '.exe' : '';
+        $binDir = $pgsqlDir . DIRECTORY_SEPARATOR . 'bin';
+        foreach (['psql', 'initdb', 'postgres'] as $name) {
+            $path = $binDir . DIRECTORY_SEPARATOR . $name . $suffix;
+            clearstatcache(true, $path);
+            if (!is_file($path) || (int)@filesize($path) < 1024) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function rmdirRecursive(string $dir): void
