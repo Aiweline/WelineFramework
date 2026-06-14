@@ -68,7 +68,7 @@ git clone https://gitee.com/aiweline/WelineFramework.git weline && cd weline && 
 
 - 安装脚本会安装 PHP 到 `extend/server/php`、配置 php.ini（含 openssl/sockets 等）、执行 composer、环境检测与数据库初始化。
 - 支持参数：`-b <分支>` 指定克隆分支（缺省 master）；`--path-only` 仅写入 PATH；`php` / `pgsql` / `mysql` 指定安装组件；`-f` 强制重新安装（会清空已有数据）；`-y` 安装过程自动 yes 跳过所有确认。
-- 每个项目会使用自己的 `extend/server/pgsql/data`。当 PostgreSQL 默认端口 5432 已被其他项目占用时，安装/启动流程会自动选择 5433+ 并同步到 `weline.env`、`postgresql.conf` 和 `app/etc/env.php`。
+- 每个项目会使用自己的 `extend/server/pgsql/data`。首次安装项目本地 PostgreSQL 时不会默认使用 5432，而是按项目路径在高位端口范围内选择稳定端口，并同步到 `weline.env`、`postgresql.conf` 和 `app/etc/env.php`。已有 `env.php` 指向外部库或非当前项目本地库时，安装脚本跳过本地 PostgreSQL 操作，只按 `env.php` 连接。
 
 ---
 

@@ -1047,33 +1047,8 @@ install_pgsql_linux() {
   local os_id=""
   [[ -f /etc/os-release ]] && . /etc/os-release 2>/dev/null && os_id="${ID:-}"
 
-  # 先判断：系统已有 PostgreSQL 且 5432 可连接则直接用，不安装
-  local pg_port=5432
-  local pg_bin_check=""
-  pg_bin_check=$(command -v psql 2>/dev/null)
-  [[ -z "$pg_bin_check" ]] && [[ -x /usr/bin/psql ]] && pg_bin_check="/usr/bin/psql"
-  if [[ -n "$pg_bin_check" ]] && [[ -x "$pg_bin_check" ]]; then
-    if (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -qE ":${pg_port}([^0-9]|$)"; then
-      local pg_can_connect=0
-      for try_pass in "" "postgres" "weline"; do
-        if [[ -z "$try_pass" ]]; then
-          "$pg_bin_check" -h 127.0.0.1 -p "$pg_port" -d postgres -tAc "SELECT 1" 2>/dev/null | grep -q 1 && { pg_can_connect=1; break; }
-        else
-          PGPASSWORD="$try_pass" "$pg_bin_check" -h 127.0.0.1 -p "$pg_port" -U postgres -d postgres -tAc "SELECT 1" 2>/dev/null | grep -q 1 && { pg_can_connect=1; break; }
-        fi
-      done
-      if [[ "$pg_can_connect" -eq 1 ]]; then
-        echo "检测到系统已有 PostgreSQL（5432 可连接），直接使用，跳过安装：$pg_bin_check"
-        local pg_dir_check
-        pg_dir_check="$(dirname "$pg_bin_check")"
-        mkdir -p "$dest"
-        rm -rf "$dest/bin"
-        safe_ln_sf "$pg_dir_check" "$dest/bin"
-        add_to_path "$dest/bin"
-        return
-      fi
-    fi
-  fi
+  # Do not reuse a system PostgreSQL service on 5432. Project installs only link
+  # binaries and initialize extend/server/pgsql/data on a project-owned port.
 
   if [[ -f /etc/debian_version ]]; then
     echo "Installing PostgreSQL ${INSTALL_PGSQL_VERSION} (apt)..."
@@ -1163,10 +1138,22 @@ install_pgsql_linux() {
     return 1
   fi
 
-  run_privileged systemctl stop postgresql 2>/dev/null || run_privileged service postgresql stop 2>/dev/null || true
-  run_privileged systemctl disable postgresql 2>/dev/null || true
+  echo "Leaving any system PostgreSQL service untouched; project data will use its own port."
 
-  # 端口检测：5432 被占用时自动选用 5433、5434 等
+  # Project PostgreSQL ports deliberately avoid 5432.
+  project_preferred_pg_port() {
+    local min=55432 max=65535 range seed normalized hex
+    range=$((max - min + 1))
+    normalized="$(printf '%s' "$ROOT" | tr '\\' '/' | tr '[:upper:]' '[:lower:]')"
+    if command -v sha256sum >/dev/null 2>&1; then
+      hex="$(printf '%s' "$normalized" | sha256sum | awk '{print substr($1,1,8)}')"
+      seed=$((16#$hex))
+    else
+      seed="$(printf '%s' "$normalized" | cksum 2>/dev/null | awk '{print $1}')"
+    fi
+    [[ -z "$seed" ]] && seed=0
+    echo $((min + (seed % range)))
+  }
   is_port_in_use() {
     local p="$1"
     (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -qE ":${p}([^0-9]|$)" && return 0
@@ -1174,18 +1161,23 @@ install_pgsql_linux() {
     return 1
   }
   find_available_pg_port() {
-    local p=5432
-    while is_port_in_use "$p"; do
+    local min=55432 max=65535 p attempts i
+    p="$(project_preferred_pg_port)"
+    attempts=$((max - min + 1))
+    for ((i=0; i<attempts; i++)); do
+      if [[ "$p" -ne 5432 ]] && ! is_port_in_use "$p"; then
+        echo "$p"
+        return 0
+      fi
       p=$((p + 1))
-      [[ $p -gt 65535 ]] && { echo 5432; return; }
+      [[ "$p" -gt "$max" ]] && p="$min"
     done
-    echo "$p"
+    echo "ERROR: no available project PostgreSQL port in ${min}-${max}" >&2
+    return 1
   }
   local pg_port
-  pg_port=$(find_available_pg_port)
-  if [[ "$pg_port" != "5432" ]]; then
-    echo "端口 5432 已被占用，改用端口 $pg_port"
-  fi
+  pg_port=$(find_available_pg_port) || return 1
+  echo "Project PostgreSQL port: $pg_port"
   start_pg_with_retry() {
     local max_attempts=5
     local attempt=1
@@ -1221,7 +1213,11 @@ install_pgsql_linux() {
   update_pg_port_conf() {
     [[ -f "$pgsql_data/postgresql.conf" ]] || return
     grep -qE "^\s*port\s*=\s*$pg_port" "$pgsql_data/postgresql.conf" 2>/dev/null && return
-    sed -i.bak -E "s/^#?(port\s*=\s*)[0-9]+/\1$pg_port/" "$pgsql_data/postgresql.conf" 2>/dev/null || true
+    if grep -qE "^\s*#?\s*port\s*=" "$pgsql_data/postgresql.conf" 2>/dev/null; then
+      sed -i.bak -E "s/^#?\s*(port\s*=\s*)[0-9]+/\1$pg_port/" "$pgsql_data/postgresql.conf" 2>/dev/null || true
+    else
+      printf '\nport = %s\n' "$pg_port" >> "$pgsql_data/postgresql.conf"
+    fi
   }
   if [[ -f "$pgsql_data/PG_VERSION" ]]; then
     update_pg_port_conf
@@ -1240,24 +1236,53 @@ install_pgsql_linux() {
 
   echo "PostgreSQL installed and linked at $dest/bin -> $pg_dir, data at $pgsql_data"
   echo "  重启后需手动启动: pg_ctl -D $pgsql_data -l $pgsql_data/logfile start ${pg_ctl_opts[*]}"
-  if [[ "$pg_port" != "5432" ]]; then
-    if [[ -f "$ROOT/weline.env" ]]; then
-      if grep -qE '^DB_PORT=' "$ROOT/weline.env" 2>/dev/null; then
-        sed -i.bak -E "s/^DB_PORT=.*/DB_PORT=$pg_port/" "$ROOT/weline.env"
-      else
-        echo "DB_PORT=$pg_port" >> "$ROOT/weline.env"
-      fi
+  if [[ -f "$ROOT/weline.env" ]]; then
+    if grep -qE '^DB_PORT=' "$ROOT/weline.env" 2>/dev/null; then
+      sed -i.bak -E "s/^DB_PORT=.*/DB_PORT=$pg_port/" "$ROOT/weline.env"
     else
       echo "DB_PORT=$pg_port" >> "$ROOT/weline.env"
     fi
-    echo "  已写入 DB_PORT=$pg_port 到 weline.env（供 run.php 连接数据库）"
+  else
+    echo "DB_PORT=$pg_port" >> "$ROOT/weline.env"
   fi
+  echo "  已写入 DB_PORT=$pg_port 到 weline.env（供 run.php 连接数据库）"
   set -e
+}
+
+resolve_installer_php_bin() {
+  for candidate in "$SERVER_DIR/php/bin/php" "$SERVER_DIR/php/php" "$SERVER_DIR/php/bin/php.exe" "$SERVER_DIR/php/php.exe"; do
+    [[ -x "$candidate" ]] && { echo "$candidate"; return 0; }
+  done
+  command -v php 2>/dev/null || true
+}
+
+env_php_pgsql_management_status() {
+  local owner_cli="$ROOT/setup/server_installer/pgsql_owner_cli.php"
+  [[ -f "$owner_cli" ]] || return 0
+  local php_bin
+  php_bin="$(resolve_installer_php_bin)"
+  [[ -n "$php_bin" ]] || return 0
+  "$php_bin" "$owner_cli" server-can-manage
+  local rc=$?
+  if [[ "$rc" -eq 2 ]]; then
+    return 2
+  fi
+  return "$rc"
 }
 
 # ---- PostgreSQL ----（Linux：apt/dnf 自动安装并软链；Mac：Homebrew；初始化由 run.php Step 5b 完成）
 install_pgsql() {
   local dest="$SERVER_DIR/pgsql"
+  env_php_pgsql_management_status
+  local manage_rc=$?
+  if [[ "$manage_rc" -eq 2 ]]; then
+    echo "env.php is authoritative for another database target; skipping local PostgreSQL install/start."
+    return 0
+  fi
+  if [[ "$manage_rc" -ne 0 ]]; then
+    echo "ERROR: env.php PostgreSQL ownership check failed; local PostgreSQL install/start is not safe." >&2
+    return "$manage_rc"
+  fi
   if [[ -f "$dest/bin/psql" ]] || [[ -f "$dest/bin/postgres" ]]; then
     echo "PostgreSQL already present at $dest."
     add_to_path "$dest/bin"
