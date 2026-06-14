@@ -130,7 +130,41 @@ class I18n
 
     private function normalizeIntlDisplayLocale(string $locale): string
     {
-        return extension_loaded('intl') ? $locale : 'en';
+        $locale = $this->normalizeLocaleCode($locale);
+        return extension_loaded('intl') ? ($locale !== '' ? $locale : 'en') : 'en';
+    }
+
+    private function normalizeLocaleCode(string $localeCode): string
+    {
+        $localeCode = trim(str_replace('-', '_', $localeCode));
+        if ($localeCode === '') {
+            return '';
+        }
+
+        $parts = explode('_', $localeCode);
+        foreach ($parts as $index => $part) {
+            $part = trim((string)$part);
+            if ($part === '') {
+                unset($parts[$index]);
+                continue;
+            }
+
+            if ($index === 0) {
+                $parts[$index] = strtolower($part);
+                continue;
+            }
+
+            if (strlen($part) === 2 && preg_match('/^[a-zA-Z]{2}$/', $part) === 1) {
+                $parts[$index] = strtoupper($part);
+                continue;
+            }
+
+            if (strlen($part) === 4 && preg_match('/^[a-zA-Z]{4}$/', $part) === 1) {
+                $parts[$index] = ucfirst(strtolower($part));
+            }
+        }
+
+        return implode('_', array_values($parts));
     }
 
     private function getLocaleNameFromProvider(string $localeCode, string $displayLocale): string
@@ -421,20 +455,25 @@ class I18n
 
     public function getCountryFlagWithLocal(string $local_code = 'zh_Hans_CN', int $width = 24, int $height = 18): array
     {
-        $cache_key = 'getCountryFlagWithLocal' . $local_code . $width . $height;
+        $localeCode = $this->normalizeLocaleCode($local_code);
+        if ($localeCode === '') {
+            return [];
+        }
+
+        $cache_key = 'getCountryFlagWithLocal' . $localeCode . $width . $height;
         if ($data = $this->i18nCache->get($cache_key)) {
             if (is_array($data)) {
                 return $data;
             }
         }
 
-        $lang_locals = $this->getLocals($local_code);
-        $countryCode = $this->getCountryCodeFromLocale($local_code);
+        $lang_locals = $this->getLocals($localeCode);
+        $countryCode = $this->getCountryCodeFromLocale($localeCode);
         
         if ($countryCode) {
             $svg = $this->getCountryFlag($countryCode, $width, $height);
             if ($svg) {
-                $local = ['name' => $lang_locals[$local_code] ?? $local_code, 'flag' => $svg];
+                $local = ['name' => $lang_locals[$localeCode] ?? $localeCode, 'flag' => $svg];
                 $this->i18nCache->set($cache_key, $local, 0);
                 return $local;
             }
@@ -925,11 +964,14 @@ class I18n
 
     private function getCountryCodeFromLocale(string $locale): ?string
     {
-        $parts = explode('_', $locale);
-        $lastPart = end($parts);
-        if (strlen($lastPart) === 2 && strtoupper($lastPart) === $lastPart) {
-            return $lastPart;
+        $parts = explode('_', $this->normalizeLocaleCode($locale));
+        for ($index = count($parts) - 1; $index >= 1; $index--) {
+            $part = strtoupper((string)($parts[$index] ?? ''));
+            if (strlen($part) === 2 && preg_match('/^[A-Z]{2}$/', $part) === 1) {
+                return $part;
+            }
         }
+
         return null;
     }
 
