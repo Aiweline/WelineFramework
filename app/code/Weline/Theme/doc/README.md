@@ -643,3 +643,7 @@ class ThemeTest extends TestCase
 - 多浏览器支持
 - 移动端适配
 - 渐进增强 
+
+## Developer Guides
+
+- [Theme layout discovery and extension guide](./layout-discovery-guide.md): explains how modules add layouts, how `app/design` overrides layouts, how adjacent `*.layout.json` is discovered, and how to validate layout discovery.
