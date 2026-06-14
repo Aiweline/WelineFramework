@@ -45,6 +45,10 @@ final class PgsqlProjectOwnership
 
     public function readEnvPhpConfig(): array
     {
+        clearstatcache(true, $this->envPhpPath);
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($this->envPhpPath, true);
+        }
         if (!is_file($this->envPhpPath) || filesize($this->envPhpPath) < 10) {
             return [];
         }
@@ -547,6 +551,10 @@ final class PgsqlProjectOwnership
             }
         }
         if (@rename($tmp, $path)) {
+            clearstatcache(true, $path);
+            if (function_exists('opcache_invalidate')) {
+                @opcache_invalidate($path, true);
+            }
             return true;
         }
         @unlink($tmp);
