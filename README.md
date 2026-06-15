@@ -34,24 +34,34 @@ curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.s
 - `-f`：强制重新安装，**会清除已有数据，请谨慎操作**
 - `-y`：安装/升级过程中所有询问自动 yes，跳过确认提示
 
-**Windows：系统默认不能直接运行 .sh，可用下面两种方式之一。**
+**Windows：系统默认不能直接运行 .sh，可用下面几种方式之一。**
 
 - **方式一（推荐）**：安装 [Git for Windows](https://git-scm.com/download/win) 后，打开 **Git Bash**，执行上面同一条命令（`curl -fsSL ... | bash -s --`）。
 - **方式二**：在 **PowerShell** 中执行（默认 master 分支）：
 
 ```powershell
-curl.exe -L "https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.ps1" -o bootstrap.ps1; if ($LASTEXITCODE -eq 0) { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; & .\bootstrap.ps1 }
+iex (New-Object Net.WebClient).DownloadString('https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.ps1')
 ```
 
 若需指定分支（示例使用 dev；不指定时默认 master），请先下载再带参数运行：
-`curl.exe -L "https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.ps1" -o bootstrap.ps1; if ($LASTEXITCODE -eq 0) { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; & .\bootstrap.ps1 -Branch dev }`
+`Invoke-WebRequest -Uri "https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.ps1" -OutFile bootstrap.ps1; .\bootstrap.ps1 -Branch dev`
 
 - 支持参数说明同上，`-f` 强制重新安装、**数据会被清空**，`-y` 全部 yes 自动确认。
 
-- **方式三**：在 **CMD** 下无法直接运行 .sh/.ps1 时，使用 clone 后执行 bat：
+- **方式三**：在 **PowerShell** 下使用 clone 后执行 bat：
+
+```powershell
+git clone https://gitee.com/aiweline/WelineFramework.git weline
+Set-Location .\weline
+& .\bin\install.bat
+```
+
+- **方式四**：在 **CMD** 下使用 clone 后执行 bat：
 
 ```cmd
-git clone https://gitee.com/aiweline/WelineFramework.git weline && cd weline && bin\install.bat
+git clone https://gitee.com/aiweline/WelineFramework.git weline
+cd weline
+bin\install.bat
 ```
 
 ---
@@ -64,7 +74,7 @@ git clone https://gitee.com/aiweline/WelineFramework.git weline && cd weline && 
 | **bin/install** | **Linux/Mac/Git Bash 通用入口**：自动识别系统并执行对应安装。在项目根执行 `./bin/install`。 |
 | **bin/install.sh** | Linux/Mac 安装逻辑，一般通过 `./bin/install` 调用，也可直接 `./bin/install.sh`。 |
 | **bin/bootstrap.sh** | 一键引导（Linux/macOS/Git Bash）：克隆仓库并执行 install，用于 `curl \| bash`。 |
-| **bin/bootstrap.ps1** | 一键引导（Windows PowerShell）：克隆仓库并执行 install.bat，用于 `curl.exe` 下载后在当前 PowerShell 执行。 |
+| **bin/bootstrap.ps1** | 一键引导（Windows PowerShell）：克隆仓库并执行 install.bat，用于 `iex (DownloadString(...))`。 |
 
 - 安装脚本会安装 PHP 到 `extend/server/php`、配置 php.ini（含 openssl/sockets 等）、执行 composer、环境检测与数据库初始化。
 - 支持参数：`-b <分支>` 指定克隆分支（缺省 master）；`--path-only` 仅写入 PATH；`php` / `pgsql` / `mysql` 指定安装组件；`-f` 强制重新安装（会清空已有数据）；`-y` 安装过程自动 yes 跳过所有确认。
