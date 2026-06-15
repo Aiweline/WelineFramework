@@ -35,17 +35,6 @@ class Docs extends FrontendController
      */
     private ?string $lastError = null;
     
-    /**
-     * 缓存分类树原始数据，避免重复查询
-     */
-    private static ?array $cachedCatalogTree = null;
-    
-    /**
-     * 缓存清理后的分类树数据，避免重复处理
-     */
-    private static ?array $cachedCleanedCatalogTree = null;
-    private static array $cachedCleanedCatalogTreesByLocale = [];
-    
     public function __construct(
         Document $documentModel,
         Catalog $catalogModel
@@ -149,20 +138,13 @@ class Docs extends FrontendController
     public function tree()
     {
         try {
-            // 使用缓存的清理后的分类树，避免重复查询和处理
             $locale = $this->getRequestLocale();
-            if (!isset(self::$cachedCleanedCatalogTreesByLocale[$locale])) {
-                // 使用缓存的原始分类树，避免重复查询
-                if (self::$cachedCatalogTree === null) {
-                    self::$cachedCatalogTree = $this->catalogModel->clear()->getTree('pid');
-                }
-                $trees = self::$cachedCatalogTree;
-                
-                // 清理数据，只返回必要字段
-                self::$cachedCleanedCatalogTreesByLocale[$locale] = $this->cleanTreeData($trees, $locale);
-            }
-            
-            return $this->fetchJson(self::$cachedCleanedCatalogTreesByLocale[$locale]);
+            $trees = $this->filterTreeWithDocuments(
+                $this->loadCatalogTree(),
+                $this->getDocumentCategoryIdMap()
+            );
+
+            return $this->fetchJson($this->cleanTreeData($trees, $locale));
         } catch (\Exception $e) {
             return $this->fetchJson(['error' => $e->getMessage()], 500);
         }
@@ -226,12 +208,7 @@ class Docs extends FrontendController
     private function getCatalogIdsWithChildren(int $catalogId): array
     {
         $catalogIds = [$catalogId];
-        
-        // 使用缓存的分类树，避免每次查询所有分类
-        if (self::$cachedCatalogTree === null) {
-            self::$cachedCatalogTree = $this->catalogModel->clear()->getTree('pid');
-        }
-        $tree = self::$cachedCatalogTree;
+        $tree = $this->loadCatalogTree();
         
         // 如果树为空，直接返回当前分类ID
         if (empty($tree)) {
@@ -249,9 +226,63 @@ class Docs extends FrontendController
      */
     public function clearCatalogTreeCache(): void
     {
-        self::$cachedCatalogTree = null;
-        self::$cachedCleanedCatalogTree = null;
-        self::$cachedCleanedCatalogTreesByLocale = [];
+        // 分类树不再跨请求静态缓存；保留方法兼容旧调用。
+    }
+
+    private function loadCatalogTree(): array
+    {
+        return $this->catalogModel->clear()->getTree('pid');
+    }
+
+    private function getDocumentCategoryIdMap(): array
+    {
+        $rows = $this->documentModel->clear()
+            ->fields(Document::schema_fields_CATEGORY_ID)
+            ->where(Document::schema_fields_CATEGORY_ID, 0, '>')
+            ->group(Document::schema_fields_CATEGORY_ID)
+            ->select()
+            ->fetchArray();
+
+        $categoryIds = [];
+        foreach (($rows ?? []) as $row) {
+            $categoryId = (int)($row[Document::schema_fields_CATEGORY_ID] ?? 0);
+            if ($categoryId > 0) {
+                $categoryIds[$categoryId] = true;
+            }
+        }
+
+        return $categoryIds;
+    }
+
+    private function filterTreeWithDocuments(array $trees, array $documentCategoryIds): array
+    {
+        if ($trees === [] || $documentCategoryIds === []) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($trees as $tree) {
+            if (!is_array($tree)) {
+                continue;
+            }
+
+            $children = [];
+            if (isset($tree['nodes']) && is_array($tree['nodes'])) {
+                $children = $this->filterTreeWithDocuments($tree['nodes'], $documentCategoryIds);
+            }
+
+            $nodeId = (int)($tree['id'] ?? 0);
+            if (isset($documentCategoryIds[$nodeId]) || $children !== []) {
+                if ($children !== []) {
+                    $tree['nodes'] = $children;
+                } else {
+                    unset($tree['nodes']);
+                }
+                $result[] = $tree;
+            }
+        }
+
+        return $result;
     }
     
     /**
@@ -654,15 +685,16 @@ class Docs extends FrontendController
     private function searchCatalogs(string $keyword, int $limit = 50, ?string $locale = null): array
     {
         $locale = $locale ?: $this->getRequestLocale();
-        if (!isset(self::$cachedCleanedCatalogTreesByLocale[$locale])) {
-            if (self::$cachedCatalogTree === null) {
-                self::$cachedCatalogTree = $this->catalogModel->clear()->getTree('pid');
-            }
-            self::$cachedCleanedCatalogTreesByLocale[$locale] = $this->cleanTreeData(self::$cachedCatalogTree, $locale);
-        }
+        $tree = $this->cleanTreeData(
+            $this->filterTreeWithDocuments(
+                $this->loadCatalogTree(),
+                $this->getDocumentCategoryIdMap()
+            ),
+            $locale
+        );
 
         $matches = [];
-        $this->collectCatalogSearchMatches(self::$cachedCleanedCatalogTreesByLocale[$locale], $keyword, $matches, $limit);
+        $this->collectCatalogSearchMatches($tree, $keyword, $matches, $limit);
 
         return $matches;
     }

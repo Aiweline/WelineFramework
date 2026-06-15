@@ -212,7 +212,15 @@ class DocumentScanner
 
         // 导入当前目录下的文档
         foreach ($docFiles as $file) {
-            $this->upsertDocument($moduleName, $file['moduleRelative'], $file['path'], $file['name'], $parentCatId, $result);
+            $this->upsertDocument(
+                $moduleName,
+                $file['moduleRelative'],
+                $file['path'],
+                $file['name'],
+                $parentCatId,
+                $result,
+                $this->extractSortOrder($file['name'])
+            );
         }
 
         // 递归处理子目录
@@ -253,7 +261,15 @@ class DocumentScanner
         }
         $docFiles = $this->sortByPrefix($docFiles);
         foreach ($docFiles as $file) {
-            $this->upsertDocument($moduleName, $file['moduleRelative'], $file['path'], $file['name'], $catalogId, $result);
+            $this->upsertDocument(
+                $moduleName,
+                $file['moduleRelative'],
+                $file['path'],
+                $file['name'],
+                $catalogId,
+                $result,
+                $this->extractSortOrder($file['name'])
+            );
         }
     }
 
@@ -270,7 +286,15 @@ class DocumentScanner
      * @param int    $catalogId     所属分类 ID
      * @param array  &$result       统计累加
      */
-    private function upsertDocument(string $moduleName, string $filePath, string $diskPath, string $fileName, int $catalogId, array &$result): void
+    private function upsertDocument(
+        string $moduleName,
+        string $filePath,
+        string $diskPath,
+        string $fileName,
+        int $catalogId,
+        array &$result,
+        int $sortOrder = 999999
+    ): void
     {
         $docKey = $moduleName . '|' . $filePath;
         if (isset($this->seenDocumentKeys[$docKey])) {
@@ -326,8 +350,13 @@ class DocumentScanner
                         ->setFileName($fileName);
                     $needsSave = true;
                 }
+                if ((int)($existing->getSortOrder() ?? 0) !== $sortOrder) {
+                    $existing->setSortOrder($sortOrder);
+                    $needsSave = true;
+                }
                 if ($needsSave) {
                     $existing->save();
+                    $result['updated']++;
                 }
                 return;
             }
@@ -336,7 +365,8 @@ class DocumentScanner
                 ->setData(Document::schema_fields_summary, $summary)
                 ->setFileName($fileName)
                 ->setCategoryId((string)$catalogId)
-                ->setIsAutoImported(true);
+                ->setIsAutoImported(true)
+                ->setSortOrder($sortOrder);
             if ($this->documentSupportsField(Document::schema_fields_UPDATED_AT)) {
                 $existing->setData(Document::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
             }
@@ -357,7 +387,7 @@ class DocumentScanner
                 ->setFileName($fileName)
                 ->setCategoryId((string)$catalogId)
                 ->setIsAutoImported(true)
-                ->setSortOrder(0);
+                ->setSortOrder($sortOrder);
             if ($this->documentSupportsField(Document::schema_fields_UPDATED_AT)) {
                 $newDoc->setData(Document::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
             }
@@ -896,7 +926,7 @@ class DocumentScanner
      */
     private function extractDisplayName(string $name): string
     {
-        return preg_match('/^\d+-(.+)$/', $name, $m) ? $m[1] : $name;
+        return preg_match('/^\d+[-_](.+)$/', $name, $m) ? $m[1] : $name;
     }
 
     /**
@@ -904,7 +934,7 @@ class DocumentScanner
      */
     private function extractSortOrder(string $name): int
     {
-        return preg_match('/^(\d+)-/', $name, $m) ? (int)$m[1] : 999999;
+        return preg_match('/^(\d+)[-_]/', $name, $m) ? (int)$m[1] : 999999;
     }
 
     /**
@@ -922,7 +952,7 @@ class DocumentScanner
 
     private function extractTitle(string $content, string $fallback): string
     {
-        $fileName = pathinfo($fallback, PATHINFO_FILENAME);
+        $fileName = $this->extractDisplayName(pathinfo($fallback, PATHINFO_FILENAME));
         
         if (preg_match('/^#\s+(.+)$/m', $content, $m)) {
             $title = trim($m[1]);
