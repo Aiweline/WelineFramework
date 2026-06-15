@@ -90,7 +90,13 @@
             "input_price": 0.00,
             "output_price": 0.00,
             "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"],
+            "capabilities": ["image_generation", "image_output", "transparent_background"],
+            "config": {
+                "supports_transparent_background": true,
+                "transparent_background_parameter": "background",
+                "transparent_background_value": "transparent",
+                "transparent_output_format": "png"
+            },
             "is_active": 1,
             "is_default": 1
         },
