@@ -25,6 +25,7 @@ use Weline\Ai\Service\I18nIntegration;
 use Weline\Ai\Service\Provider\ProviderFactory;
 use Weline\Ai\Service\Provider\ImageGenerationProviderInterface;
 use Weline\Ai\Service\Provider\ImageGenerationResponseNormalizer;
+use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Ai\Service\Provider\AccountService;
 use Weline\Ai\Service\ConfigResolver;
 use Weline\Ai\Service\Skill\AdapterSkillResolver;
@@ -58,6 +59,16 @@ class AiService
      * 服务模式：PHP服务模式
      */
     public const MODE_PHP = 'php';
+
+    private const IDENTITY_ASSET_PROMPT_SUFFIX = "Generate one production-ready brand identity asset for a website logo or icon.\n"
+        . "The image must contain only the logo/icon subject.\n"
+        . "Do not render brand names, site names, initials, monograms, readable letters, pseudo text, slogans, labels, watermarks, UI text, or paragraph text.\n"
+        . "Do not render a photo scene, wall mockup, app tile, screenshot, browser frame, poster, card background, decorative background, gradient background, room background, product scene, or full illustration scene.\n"
+        . "The subject must be centered, clear, compact, and recognizable at small sizes.\n"
+        . "Prefer a transparent PNG with real alpha background when the selected model supports it.\n"
+        . "If real transparent PNG output is not supported by this model, generate the logo/icon on a clean, simple, high-contrast, removable background with the subject fully separated from the background.\n"
+        . "Do not fail the image request only because native transparent background is unavailable. Return the best clean isolated logo/icon image so the application can normalize it locally.\n"
+        . "Output must be suitable for automatic background removal, cropping, transparent padding, and final PNG normalization.";
 
     /**
      * @var AiModel
@@ -469,14 +480,39 @@ class AiService
         $this->applyResolvedConfigToModel($model, $resolvedConfig);
         $params['resolved_config'] = $resolvedConfig;
 
+        $intent = $this->prepareImageIdentityAssetIntent($prompt, $params, $model, $resolvedConfig);
+        $prompt = $intent['prompt'];
+        $params = $intent['params'];
+        $semanticMetadata = $intent['metadata'];
+
         $provider = $this->providerFactory->getProvider($model);
         if (!$provider instanceof ImageGenerationProviderInterface) {
             throw new Exception(__('模型 "%{1}" 的供应商未实现图片生成接口', [$model->getModelCode()]));
         }
 
-        return $this->normalizeImageGenerationResult(
-            $provider->generateImage($model, $prompt, $params),
-            $model
+        try {
+            $providerResult = $provider->generateImage($model, $prompt, $params);
+        } catch (\Throwable $throwable) {
+            if (
+                !empty($semanticMetadata['requested_transparent_background'])
+                && !empty($semanticMetadata['native_transparent_background'])
+                && $this->isNativeTransparencyUnsupportedError($throwable->getMessage())
+            ) {
+                $fallbackParams = $this->removeNativeTransparencyRequestParams(
+                    $params,
+                    $this->resolveTransparentBackgroundParameter($params, $params['resolved_config'] ?? [])
+                );
+                $semanticMetadata['native_transparent_background'] = false;
+                $semanticMetadata['native_transparency_error'] = $throwable->getMessage();
+                $providerResult = $provider->generateImage($model, $prompt, $fallbackParams);
+            } else {
+                throw $throwable;
+            }
+        }
+
+        return $this->applyImageGenerationSemanticMetadata(
+            $this->normalizeImageGenerationResult($providerResult, $model),
+            $semanticMetadata
         );
     }
 
@@ -725,6 +761,272 @@ class AiService
     private function normalizeImageGenerationResult(array $result, AiModel $model): array
     {
         return ImageGenerationResponseNormalizer::normalize($result, (string)$model->getModelCode());
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $resolvedConfig
+     * @return array{prompt:string,params:array<string,mixed>,metadata:array<string,mixed>}
+     */
+    private function prepareImageIdentityAssetIntent(string $prompt, array $params, AiModel $model, array $resolvedConfig): array
+    {
+        $requestedTransparent = $this->isTruthy($params['identity_transparent_png_required'] ?? null)
+            || $this->isTruthy($params['transparent_png_required'] ?? null)
+            || $this->isTruthy($params['requested_transparent_background'] ?? null);
+        $identityAsset = $requestedTransparent || $this->isTruthy($params['identity_asset'] ?? null);
+
+        if (!$identityAsset) {
+            return [
+                'prompt' => $prompt,
+                'params' => $params,
+                'metadata' => [],
+            ];
+        }
+
+        $role = $this->resolveIdentityAssetRole($params);
+        $nativeTransparency = $requestedTransparent
+            && $this->modelSupportsNativeTransparentBackground($model, $params, $resolvedConfig);
+
+        $hadOutputFormat = array_key_exists('output_format', $params);
+
+        $params['identity_asset'] = true;
+        $params['identity_asset_role'] = $role;
+        $params['requested_transparent_background'] = $requestedTransparent;
+
+        if ($requestedTransparent && $nativeTransparency) {
+            $backgroundParam = $this->resolveTransparentBackgroundParameter($params, $resolvedConfig);
+            $params[$backgroundParam] = $this->resolveTransparentBackgroundValue($params, $resolvedConfig);
+            $params['output_format'] = 'png';
+        } elseif ($requestedTransparent) {
+            $params = $this->removeNativeTransparencyRequestParams(
+                $params,
+                $this->resolveTransparentBackgroundParameter($params, $resolvedConfig)
+            );
+            if (!$hadOutputFormat) {
+                unset($params['output_format']);
+            }
+        }
+
+        return [
+            'prompt' => $this->appendIdentityAssetPromptRules($prompt),
+            'params' => $params,
+            'metadata' => [
+                'requested_transparent_background' => $requestedTransparent,
+                'native_transparent_background' => $nativeTransparency,
+                'output_format' => 'png',
+                'identity_asset' => true,
+                'identity_asset_role' => $role,
+                'native_transparency_error' => '',
+            ],
+        ];
+    }
+
+    private function appendIdentityAssetPromptRules(string $prompt): string
+    {
+        if (str_contains($prompt, 'Generate one production-ready brand identity asset for a website logo or icon.')) {
+            return $prompt;
+        }
+
+        return rtrim($prompt) . "\n\n" . self::IDENTITY_ASSET_PROMPT_SUFFIX;
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     */
+    private function resolveIdentityAssetRole(array $params): string
+    {
+        foreach (['identity_asset_role', 'asset_role', 'image_role', 'role', 'usage', 'purpose', 'slot', 'target', 'path', 'file_name'] as $key) {
+            if (!isset($params[$key]) || !is_scalar($params[$key])) {
+                continue;
+            }
+            $value = strtolower(trim((string)$params[$key]));
+            if ($value === '') {
+                continue;
+            }
+            if (str_contains($value, 'favicon') || str_contains($value, 'icon')) {
+                return 'icon';
+            }
+            if (str_contains($value, 'logo')) {
+                return 'logo';
+            }
+        }
+
+        return 'logo';
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $resolvedConfig
+     */
+    private function modelSupportsNativeTransparentBackground(AiModel $model, array $params, array $resolvedConfig): bool
+    {
+        foreach ([
+            $params['supports_transparent_background'] ?? null,
+            $params['native_transparent_background_supported'] ?? null,
+            $resolvedConfig['supports_transparent_background'] ?? null,
+            $resolvedConfig['native_transparent_background_supported'] ?? null,
+        ] as $value) {
+            if ($value !== null) {
+                return $this->isTruthy($value);
+            }
+        }
+
+        $capabilities = $model->getCapabilities();
+        foreach (['transparent_background', 'native_transparent_background', 'alpha_background'] as $capability) {
+            if (array_key_exists($capability, $capabilities)) {
+                return $this->isTruthy($capabilities[$capability]);
+            }
+            if (in_array($capability, $capabilities, true)) {
+                return true;
+            }
+        }
+
+        $vendorModel = $this->getVendorModelMetadata($model);
+        $vendorCapabilities = is_array($vendorModel['capabilities'] ?? null) ? $vendorModel['capabilities'] : [];
+        foreach (['transparent_background', 'native_transparent_background', 'alpha_background'] as $capability) {
+            if (array_key_exists($capability, $vendorCapabilities)) {
+                return $this->isTruthy($vendorCapabilities[$capability]);
+            }
+            if (in_array($capability, $vendorCapabilities, true)) {
+                return true;
+            }
+        }
+        $vendorConfig = is_array($vendorModel['config'] ?? null) ? $vendorModel['config'] : [];
+        foreach (['supports_transparent_background', 'native_transparent_background_supported'] as $key) {
+            if (array_key_exists($key, $vendorConfig)) {
+                return $this->isTruthy($vendorConfig[$key]);
+            }
+        }
+
+        $supplier = strtolower(trim($model->getSupplier()));
+        $modelCode = strtolower(trim($model->getModelCode()));
+        return $supplier === 'openai' && str_starts_with($modelCode, 'gpt-image-1');
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function getVendorModelMetadata(AiModel $model): array
+    {
+        $supplier = strtolower(trim($model->getSupplier()));
+        if ($supplier === '') {
+            return [];
+        }
+
+        try {
+            foreach (VendorConfigManager::getProviderModels($supplier) as $modelMeta) {
+                if (!is_array($modelMeta)) {
+                    continue;
+                }
+                if ((string)($modelMeta['code'] ?? '') === $model->getModelCode()) {
+                    return $modelMeta;
+                }
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $resolvedConfig
+     */
+    private function resolveTransparentBackgroundParameter(array $params, array $resolvedConfig): string
+    {
+        $param = trim((string)($params['transparent_background_parameter'] ?? $resolvedConfig['transparent_background_parameter'] ?? 'background'));
+        return $param !== '' ? $param : 'background';
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $resolvedConfig
+     */
+    private function resolveTransparentBackgroundValue(array $params, array $resolvedConfig): string
+    {
+        $value = trim((string)($params['transparent_background_value'] ?? $resolvedConfig['transparent_background_value'] ?? 'transparent'));
+        return $value !== '' ? $value : 'transparent';
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function removeNativeTransparencyRequestParams(array $params, ?string $backgroundParam = null): array
+    {
+        foreach (array_filter(['background', 'transparent_background', 'transparentBackground', $backgroundParam]) as $key) {
+            $params[$key] = '';
+        }
+        return $params;
+    }
+
+    private function isNativeTransparencyUnsupportedError(string $message): bool
+    {
+        $normalized = strtolower(trim($message));
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach ([
+            'transparent background unsupported',
+            'invalid background parameter',
+            'unsupported parameter',
+            'model does not support transparency',
+            'does not support transparency',
+            'does not support transparent',
+            'background is not supported',
+            'unrecognized request argument supplied: background',
+            'unknown parameter: background',
+        ] as $needle) {
+            if (str_contains($normalized, $needle)) {
+                return true;
+            }
+        }
+
+        return str_contains($normalized, 'background')
+            && (
+                str_contains($normalized, 'unsupported')
+                || str_contains($normalized, 'not support')
+                || str_contains($normalized, 'invalid')
+                || str_contains($normalized, 'unknown parameter')
+            );
+    }
+
+    /**
+     * @param array<string,mixed> $result
+     * @param array<string,mixed> $metadata
+     * @return array<string,mixed>
+     */
+    private function applyImageGenerationSemanticMetadata(array $result, array $metadata): array
+    {
+        if ($metadata === []) {
+            return $result;
+        }
+
+        foreach ($metadata as $key => $value) {
+            $result[$key] = $value;
+        }
+
+        $existing = is_array($result['metadata'] ?? null) ? $result['metadata'] : [];
+        $result['metadata'] = array_merge($existing, $metadata);
+
+        return $result;
+    }
+
+    private function isTruthy(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (float)$value !== 0.0;
+        }
+        if (!is_scalar($value)) {
+            return false;
+        }
+
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'y', 'on', 'required'], true);
     }
 
     /**
