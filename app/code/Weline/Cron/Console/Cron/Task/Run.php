@@ -141,10 +141,10 @@ class Run implements CommandInterface
                 $taskModel->setData($taskModel::schema_fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::schema_fields_MAX_NEXT_RUN_DATE, $cron->getNextRunDate('now', 3)->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::schema_fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
-                # ----------使用进程名检测任务进程是否在运行---------------
+                # ----------优先使用已记录 PID 检测，避免 Windows 每个任务都全表扫描进程---------------
 
-                # 使用进程名检查该进程是否在运行
-                $pid = Process::getPidByName($process_name);
+                $storedPid = (int) ($taskModel->getData($taskModel::schema_fields_PID) ?: 0);
+                $pid = $this->resolveRunningPid($taskModel, $process_name, (bool) $force, $storedPid);
                 if ($pid) {
                     $output = Process::getProcessOutput($process_name);
                     $taskModel->setData($taskModel::schema_fields_RUNTIME_ERROR, $output . __('进程已存在，请检查进程状态！进程名：%{1}', $process_name))
@@ -170,8 +170,9 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::schema_fields_RUNTIME_ERROR, $output . $msg)->save();
                     }
                     continue;
-                } elseif ($pid = ($taskModel->getData($taskModel::schema_fields_PID) ?: 0)) {
+                } elseif ($storedPid > 0) {
                     # -----------如果数据库存在PID,说明程序结束---------------
+                    $pid = $storedPid;
                     $msg = __('%{1} 程序ID:%{2} 已运行完毕!', [$process_name, $pid]);
                     $taskModel->setData($taskModel::schema_fields_RUN_TIMES, (int)$taskModel->getData($taskModel::schema_fields_RUN_TIMES) + 1);
                     # 设置程序运行数据
@@ -222,6 +223,20 @@ class Run implements CommandInterface
                 }
         }
 
+    }
+
+    private function resolveRunningPid(CronTask $taskModel, string $processName, bool $force, int $storedPid): int
+    {
+        if ($storedPid > 0) {
+            return Process::isProcessRunning($storedPid) ? $storedPid : 0;
+        }
+
+        $status = (string) ($taskModel->getData(CronTask::schema_fields_STATUS) ?? '');
+        if (!$force && !\in_array($status, [CronStatus::BLOCK->value, CronStatus::RUNNING->value], true)) {
+            return 0;
+        }
+
+        return Process::getPidByName($processName);
     }
 
     /**
