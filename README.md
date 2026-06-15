@@ -50,17 +50,23 @@ iex (New-Object Net.WebClient).DownloadString('https://gitee.com/aiweline/Weline
 
 - **方式三**：在 **PowerShell** 下使用 clone 后执行 bat：
 
+下面示例切换到 `dev` 分支；如果安装默认 `master` 分支，省略 `git checkout dev` 这一行。
+
 ```powershell
 git clone https://gitee.com/aiweline/WelineFramework.git weline
 Set-Location .\weline
+git checkout dev
 & .\bin\install.bat
 ```
 
 - **方式四**：在 **CMD** 下使用 clone 后执行 bat：
 
+下面示例切换到 `dev` 分支；如果安装默认 `master` 分支，省略 `git checkout dev` 这一行。
+
 ```cmd
 git clone https://gitee.com/aiweline/WelineFramework.git weline
 cd weline
+git checkout dev
 bin\install.bat
 ```
 
