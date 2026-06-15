@@ -20,10 +20,10 @@
 curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s --
 ```
 
-指定分支（如 server-opt）：在末尾加 `-b server-opt`：
+指定分支（示例使用 dev；不指定时默认 master）：在末尾加 `-b dev`：
 
 ```bash
-curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s -- -b server-opt
+curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s -- -b dev
 ```
 
 **参数说明**：
@@ -40,11 +40,11 @@ curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.s
 - **方式二**：在 **PowerShell** 中执行（默认 master 分支）：
 
 ```powershell
-iex (New-Object Net.WebClient).DownloadString('https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.ps1')
+curl.exe -L "https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.ps1" -o bootstrap.ps1; if ($LASTEXITCODE -eq 0) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap.ps1 }
 ```
 
-若需指定分支，请先下载再带参数运行：  
-`Invoke-WebRequest -Uri "https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.ps1" -OutFile bootstrap.ps1; .\bootstrap.ps1 -Branch server-opt`
+若需指定分支（示例使用 dev；不指定时默认 master），请先下载再带参数运行：
+`curl.exe -L "https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.ps1" -o bootstrap.ps1; if ($LASTEXITCODE -eq 0) { powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap.ps1 -Branch dev }`
 
 - 支持参数说明同上，`-f` 强制重新安装、**数据会被清空**，`-y` 全部 yes 自动确认。
 
@@ -64,7 +64,7 @@ git clone https://gitee.com/aiweline/WelineFramework.git weline && cd weline && 
 | **bin/install** | **Linux/Mac/Git Bash 通用入口**：自动识别系统并执行对应安装。在项目根执行 `./bin/install`。 |
 | **bin/install.sh** | Linux/Mac 安装逻辑，一般通过 `./bin/install` 调用，也可直接 `./bin/install.sh`。 |
 | **bin/bootstrap.sh** | 一键引导（Linux/macOS/Git Bash）：克隆仓库并执行 install，用于 `curl \| bash`。 |
-| **bin/bootstrap.ps1** | 一键引导（Windows PowerShell）：克隆仓库并执行 install.bat，用于 `iex (DownloadString(...))`。 |
+| **bin/bootstrap.ps1** | 一键引导（Windows PowerShell）：克隆仓库并执行 install.bat，用于 `curl.exe` 下载后执行。 |
 
 - 安装脚本会安装 PHP 到 `extend/server/php`、配置 php.ini（含 openssl/sockets 等）、执行 composer、环境检测与数据库初始化。
 - 支持参数：`-b <分支>` 指定克隆分支（缺省 master）；`--path-only` 仅写入 PATH；`php` / `pgsql` / `mysql` 指定安装组件；`-f` 强制重新安装（会清空已有数据）；`-y` 安装过程自动 yes 跳过所有确认。
