@@ -1,10 +1,10 @@
 ---
 name: fenxiang-update
 description: >-
-  Load ONLY when the user says passphrase 分项. Treat DEV-workspace as the WelineFramework
-  core repo: commit and push the current core branch, then run php bin/w core:update -b dev
-  in the configured Office site projects under E:\WelineFramework; after each successful site
-  update, reload WLS if it is running. Canonical skill:
+  Load ONLY when the user says passphrase 分项. Commit and push the current core repo
+  (default E:\WelineFramework\DEV-workspace), then run php bin/w core:update -b dev
+  in the configured child projects under E:\WelineFramework\Framework-Official; after each
+  successful site update, reload WLS if it is running. Canonical skill:
   dev/ai/skills/CI发布工程师-分项更新/SKILL.md
 ---
 
@@ -16,7 +16,7 @@ Codex alias for `CI发布工程师-分项更新`. **Do not run unless the user m
 
 `分项` means "sync core code by project":
 
-1. `E:\WelineFramework\DEV-workspace` is the core repository.
+1. `E:\WelineFramework\Framework-Official` contains the child site projects; the default core repository is `E:\WelineFramework\DEV-workspace`.
 2. Commit and push the current core branch online.
 3. Each configured site project updates its core code through `php bin/w core:update -b dev`.
 4. After a successful site update, run `php bin/w server:reload -n`; the command detects whether WLS is running and skips when there are no workers.
@@ -63,12 +63,13 @@ Skip WLS reload:
 
 ## Target sites
 
-- `E:\WelineFramework\Framework-Office-A2a-Site`
-- `E:\WelineFramework\Framework-Office-App-Site`
-- `E:\WelineFramework\Framework-Office-Bbs-Site`
-- `E:\WelineFramework\Framework-Office-Site`
-- `E:\WelineFramework\Framework-Office-Skill-Site`
-- `E:\WelineFramework\Framework-Office-WeShop-Site`
+- `E:\WelineFramework\Framework-Official\A2A`
+- `E:\WelineFramework\Framework-Official\App`
+- `E:\WelineFramework\Framework-Official\Bbs`
+- `E:\WelineFramework\Framework-Official\Official`
+- `E:\WelineFramework\Framework-Official\Skill`
+- `E:\WelineFramework\Framework-Official\Tools`
+- `E:\WelineFramework\Framework-Official\WeShop`
 
 The script resolves either `<site>\bin\w` or `<site>\weline\bin\w`.
 
