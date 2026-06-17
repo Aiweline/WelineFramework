@@ -159,6 +159,34 @@ function Resolve-SiteProjectRoot {
     return $null
 }
 
+function Test-WelineCommandOutputFailure {
+    param([object[]]$Output)
+
+    if ($null -eq $Output) {
+        return $false
+    }
+
+    $failureRegexes = @(
+        '\u6ca1\u6709\u627e\u5230\u5339\u914d\u7684\u547d\u4ee4',
+        '\u8bf7\u5148\u66f4\u65b0\u6a21\u5757',
+        'Command registry update failed',
+        'Fatal error',
+        'Parse error',
+        'Uncaught '
+    )
+
+    foreach ($line in $Output) {
+        $text = [string]$line
+        foreach ($pattern in $failureRegexes) {
+            if ($text -match $pattern) {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
 function Assert-NoSensitiveCoreChanges {
     param(
         [Parameter(Mandatory = $true)][string]$Repo,
@@ -265,15 +293,15 @@ foreach ($site in $Sites) {
     }
 
     $result = Invoke-Checked -WorkingDirectory $projectRoot -FilePath 'php' -Arguments @('bin/w', 'core:update', '-b', $Branch) -AllowFailure
-    if ($result.ExitCode -ne 0) {
-        $failures += "$projectRoot => exit $($result.ExitCode)"
+    if (($result.ExitCode -ne 0) -or (Test-WelineCommandOutputFailure -Output $result.Output)) {
+        $failures += "$projectRoot => core:update failed"
         continue
     }
 
     if (-not $SkipWlsReload) {
         $reload = Invoke-Checked -WorkingDirectory $projectRoot -FilePath 'php' -Arguments @('bin/w', 'server:reload', '-n') -AllowFailure
-        if ($reload.ExitCode -ne 0) {
-            $failures += "$projectRoot => WLS reload exit $($reload.ExitCode)"
+        if (($reload.ExitCode -ne 0) -or (Test-WelineCommandOutputFailure -Output $reload.Output)) {
+            $failures += "$projectRoot => WLS reload failed"
         }
     }
 }
