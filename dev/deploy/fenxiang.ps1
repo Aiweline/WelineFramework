@@ -18,6 +18,58 @@ function Write-Step {
     Write-Host "==> $Message"
 }
 
+function Set-FenxiangCommandPath {
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+
+    $systemRoot = if ([string]::IsNullOrWhiteSpace($env:SystemRoot)) { "C:\Windows" } else { $env:SystemRoot }
+    $phpCommand = Get-Command php -ErrorAction SilentlyContinue
+    $gitCommand = Get-Command git -ErrorAction SilentlyContinue
+    $candidates = @(
+        (Join-Path $systemRoot "System32"),
+        $systemRoot,
+        (Join-Path $systemRoot "System32\Wbem"),
+        (Join-Path $systemRoot "System32\WindowsPowerShell\v1.0"),
+        (Join-Path $systemRoot "System32\OpenSSH"),
+        "C:\Program Files\Git\cmd",
+        "C:\Program Files\Git\bin",
+        "C:\Program Files\Git\usr\bin",
+        (Join-Path $RepoRoot "extend\server\php"),
+        (Join-Path $RepoRoot "bin")
+    )
+
+    if ($phpCommand -and $phpCommand.Source) {
+        $candidates += Split-Path -Parent $phpCommand.Source
+    }
+    if ($gitCommand -and $gitCommand.Source) {
+        $candidates += Split-Path -Parent $gitCommand.Source
+    }
+
+    $seen = @{}
+    $normalized = @()
+    foreach ($candidate in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            continue
+        }
+        $full = [System.IO.Path]::GetFullPath($candidate).TrimEnd("\")
+        if (-not (Test-Path -LiteralPath $full -PathType Container)) {
+            continue
+        }
+        $key = $full.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) {
+            continue
+        }
+        $seen[$key] = $true
+        $normalized += $full
+    }
+
+    if ($normalized.Count -eq 0) {
+        throw "Unable to build a usable PATH for fenxiang commands."
+    }
+
+    $env:Path = $normalized -join ";"
+    Write-Host "Fenxiang command PATH normalized with $($normalized.Count) entries."
+}
+
 function Invoke-Checked {
     param(
         [string]$FilePath,
@@ -128,6 +180,8 @@ $repoFull = [System.IO.Path]::GetFullPath($RepoRoot)
 if (-not (Test-Path -LiteralPath (Join-Path $repoFull ".git") -PathType Container)) {
     throw "RepoRoot is not a git repository: $repoFull"
 }
+
+Set-FenxiangCommandPath -RepoRoot $repoFull
 
 $siteNames = @(
     "A2A",
