@@ -4,12 +4,13 @@ param(
     [string]$CommitMessage = '',
     [string[]]$IncludePaths = @(),
     [string[]]$Sites = @(
-        'E:\WelineFramework\Framework-Office-A2a-Site',
-        'E:\WelineFramework\Framework-Office-App-Site',
-        'E:\WelineFramework\Framework-Office-Bbs-Site',
-        'E:\WelineFramework\Framework-Office-Site',
-        'E:\WelineFramework\Framework-Office-Skill-Site',
-        'E:\WelineFramework\Framework-Office-WeShop-Site'
+        'E:\WelineFramework\Framework-Official\A2A',
+        'E:\WelineFramework\Framework-Official\App',
+        'E:\WelineFramework\Framework-Official\Bbs',
+        'E:\WelineFramework\Framework-Official\Official',
+        'E:\WelineFramework\Framework-Official\Skill',
+        'E:\WelineFramework\Framework-Official\Tools',
+        'E:\WelineFramework\Framework-Official\WeShop'
     ),
     [switch]$SkipCommit,
     [switch]$SkipPush,

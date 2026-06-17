@@ -1,6 +1,6 @@
 param(
     [string]$RepoRoot = "E:\WelineFramework\DEV-workspace",
-    [string]$SitesRoot = "E:\WelineFramework",
+    [string]$SitesRoot = "E:\WelineFramework\Framework-Official",
     [string]$UpdateBranch = "dev",
     [string[]]$Remotes = @("origin", "github"),
     [string]$CommitMessage = "",
@@ -130,12 +130,13 @@ if (-not (Test-Path -LiteralPath (Join-Path $repoFull ".git") -PathType Containe
 }
 
 $siteNames = @(
-    "Framework-Office-A2a-Site",
-    "Framework-Office-App-Site",
-    "Framework-Office-Bbs-Site",
-    "Framework-Office-Site",
-    "Framework-Office-Skill-Site",
-    "Framework-Office-WeShop-Site"
+    "A2A",
+    "App",
+    "Bbs",
+    "Official",
+    "Skill",
+    "Tools",
+    "WeShop"
 )
 
 $sites = foreach ($name in $siteNames) {
