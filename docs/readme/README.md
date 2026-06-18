@@ -1,11 +1,13 @@
 # WelineFramework Multilingual README Index
 
-The Simplified Chinese README remains the canonical developer entry: [../../README.md](../../README.md).
+The root README is the canonical English entry: [../../README.md](../../README.md).
+Simplified Chinese is maintained separately: [../../README.zh-CN.md](../../README.zh-CN.md).
 
 These localized README files provide concise developer onboarding for global users. They keep the same install commands, WLS wording, documentation links, and safety notes.
 
 | Language | File |
 |---|---|
+| Simplified Chinese | [README.zh-CN.md](../../README.zh-CN.md) |
 | English | [README.en.md](./README.en.md) |
 | Español | [README.es.md](./README.es.md) |
 | Français | [README.fr.md](./README.fr.md) |
@@ -35,5 +37,6 @@ These localized README files provide concise developer onboarding for global use
 ## Maintenance
 
 - Keep code blocks and command names identical across languages.
-- Use [../../README.md](../../README.md) as the source of truth when project behavior changes.
+- Use [../../README.md](../../README.md) as the English source of truth when project behavior changes.
+- Keep [../../README.zh-CN.md](../../README.zh-CN.md) aligned with the root README for Simplified Chinese readers.
 - Update this index when adding or removing localized README files.

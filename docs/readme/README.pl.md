@@ -1,6 +1,6 @@
 # WelineFramework
 
-[Języki](./README.md) | [简体中文](../../README.md)
+[Języki](./README.md) | [Chiński uproszczony](../../README.zh-CN.md)
 
 WelineFramework to framework PHP dla modułowych aplikacji webowych, systemów administracyjnych i scenariuszy commerce. Porządkuje moduły, routing, ORM, events/hooks, motywy, backend ACL, i18n, długodziałającą usługę WLS oraz narzędzia CLI, aby moduły biznesowe były rozszerzalne i łatwe w utrzymaniu.
 
