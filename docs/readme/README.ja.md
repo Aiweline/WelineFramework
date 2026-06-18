@@ -1,6 +1,6 @@
 # WelineFramework
 
-[言語](./README.md) | [简体中文](../../README.md)
+[言語](./README.md) | [簡体字中国語](../../README.zh-CN.md)
 
 WelineFramework は、モジュール型 Web アプリ、管理システム、コマース用途向けの PHP フレームワークです。モジュール、ルーティング、ORM、イベント/Hook、テーマ、バックエンド ACL、i18n、WLS 長時間稼働サービス、CLI ツールを整理し、ビジネスモジュールを拡張しやすく保守しやすくします。
 
