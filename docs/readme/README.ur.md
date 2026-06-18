@@ -1,6 +1,6 @@
 # WelineFramework
 
-[زبانیں](./README.md) | [简体中文](../../README.md)
+[زبانیں](./README.md) | [آسان چینی](../../README.zh-CN.md)
 
 WelineFramework ماڈیولر ویب ایپلی کیشنز، ایڈمن سسٹمز اور commerce scenarios کے لیے PHP framework ہے۔ یہ modules، routing، ORM، events/hooks، themes، backend ACL، i18n، WLS long-running service اور CLI tools کو منظم کرتا ہے تاکہ business modules قابل توسیع اور maintainable رہیں۔
 
