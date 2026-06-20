@@ -93,7 +93,7 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
     {
         $module = $this->request->getGet('module');
         $status = $this->request->getGet('status');
-        $search = $this->request->getGet('q');
+        $search = \trim((string)$this->request->getGet('q', ''));
         $id = $this->request->getGet('id');
         $bizKey = \trim((string)$this->request->getGet('biz_key', ''));
 
@@ -120,8 +120,12 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
         if ($module) {
             $queueListing->where('t.module_name', $module);
         }
-        if ($search) {
-            $queueListing->where("concat(main_table.name,main_table.content,main_table.result) like '%$search%'");
+        if ($search !== '') {
+            $queueListing->where(
+                'CONCAT(main_table.name,main_table.content,main_table.result)',
+                '%' . $search . '%',
+                'LIKE'
+            );
         }
         if ($id) {
             $queueListing->where('main_table.' . $queueListing::schema_fields_ID, $id);

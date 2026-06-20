@@ -226,6 +226,12 @@ let options = staticOptions || [];
 let selectedPath = []; // 选中的路径 [{value, label, level}]
 let isOpen = false;
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(text ?? '')));
+    return div.innerHTML;
+}
+
 // 加载数据
 function loadOptions() {
     if (options.length) {
@@ -301,8 +307,8 @@ function renderMenu(items, level, selectedValue) {
     menu.dataset.level = level;
     
     items.forEach(item => {
-        const val = item[valueField] || item.value;
-        const lbl = item[labelField] || item.label || item.name || val;
+        const val = String(item[valueField] || item.value || '');
+        const lbl = String(item[labelField] || item.label || item.name || val);
         const hasChildren = lazy || (item[childrenField] && item[childrenField].length) || (item.children && item.children.length);
         
         const el = document.createElement('div');
@@ -318,7 +324,7 @@ function renderMenu(items, level, selectedValue) {
         el.dataset.level = level;
         el.dataset.hasChildren = hasChildren ? '1' : '0';
         
-        el.innerHTML = '<span class="w-cascader-item-text">' + lbl + '</span>' +
+        el.innerHTML = '<span class="w-cascader-item-text">' + escapeHtml(lbl) + '</span>' +
             (hasChildren ? '<span class="w-cascader-item-arrow">&#9656;</span>' : '');
         
         el.addEventListener('click', function(e) {

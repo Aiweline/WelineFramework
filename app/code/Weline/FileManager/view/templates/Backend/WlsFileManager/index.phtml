@@ -1,0 +1,2722 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$context = $this->getData('wlsFileManagerContext');
+$context = is_array($context) ? $context : [];
+$roots = $this->getData('wlsFileManagerRoots');
+$roots = is_array($roots) ? array_values($roots) : [];
+$browse = $this->getData('wlsFileManagerBrowse');
+$browse = is_array($browse) ? $browse : [];
+$browseEntries = is_array($browse['entries'] ?? null) ? array_values($browse['entries']) : [];
+$preview = $this->getData('wlsFileManagerPreview');
+$preview = is_array($preview) ? $preview : ['active' => false];
+$capabilities = $this->getData('wlsFileManagerCapabilities');
+$capabilities = is_array($capabilities) ? array_values($capabilities) : [];
+$pathPolicyConfig = $this->getData('wlsFileManagerPathPolicy');
+$pathPolicyConfig = is_array($pathPolicyConfig) ? $pathPolicyConfig : [];
+$pathPolicyEnabledRoots = is_array($pathPolicyConfig['enabled_roots'] ?? null) ? array_values($pathPolicyConfig['enabled_roots']) : [];
+$pathPolicyAllowedRoots = is_array($pathPolicyConfig['allowed_roots'] ?? null) ? array_values($pathPolicyConfig['allowed_roots']) : [];
+$pathPolicyConfirmPhrase = trim((string)($pathPolicyConfig['confirm_phrase'] ?? 'SAVE_PATH_POLICY'));
+$pathPolicyResetConfirmPhrase = trim((string)($pathPolicyConfig['reset_confirm_phrase'] ?? 'RESET_PATH_POLICY'));
+$pathPolicySourceEnabled = !empty($pathPolicyConfig['source_edit_enabled']);
+$pathPolicySourceRoots = is_array($pathPolicyConfig['source_edit_roots'] ?? null) ? array_values($pathPolicyConfig['source_edit_roots']) : [];
+$pathPolicyAllowedSourceRoots = is_array($pathPolicyConfig['allowed_source_edit_roots'] ?? null) ? array_values($pathPolicyConfig['allowed_source_edit_roots']) : [];
+$pathPolicySourceExtensions = is_array($pathPolicyConfig['source_edit_extensions'] ?? null)
+    ? implode(', ', array_values($pathPolicyConfig['source_edit_extensions']))
+    : trim((string)($pathPolicyConfig['source_edit_extensions'] ?? ''));
+$escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$panelUrl = $this->getBackendUrl('server/backend/wls-panel');
+$projectAdminUrl = $this->getBackendUrl('admin');
+$marketplaceUrl = $this->getBackendUrl('server/backend/wls-panel/marketplace');
+$browseBaseUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager');
+$downloadBaseUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/download');
+$createDirectoryUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/create-directory');
+$saveTextUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/save-text');
+$sourceCreateUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-create');
+$sourceRenameUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-rename');
+$sourceTrashUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-trash');
+$sourceTrashQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-trash-queue');
+$uploadUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/upload');
+$renameUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/rename');
+$deleteUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/delete');
+$compressUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/compress');
+$compressQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/compress-queue');
+$trashQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-queue');
+$trashRestoreUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-restore');
+$trashPurgeUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-purge');
+$pathPolicySaveUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/path-policy-save');
+$pathPolicyResetUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/path-policy-reset');
+$formKey = (string)$this->getFormKeyValue();
+$notice = trim((string)$this->getData('wlsFileManagerNotice'));
+$error = trim((string)$this->getData('wlsFileManagerError'));
+$operationLogs = $this->getData('wlsFileManagerOperationLogs');
+$operationLogs = is_array($operationLogs) ? array_values($operationLogs) : [];
+$operationLogFilters = $this->getData('wlsFileManagerOperationLogFilters');
+$operationLogFilters = is_array($operationLogFilters) ? $operationLogFilters : [];
+$operationLogSummary = $this->getData('wlsFileManagerOperationLogSummary');
+$operationLogSummary = is_array($operationLogSummary) ? $operationLogSummary : [];
+$queueOperations = $this->getData('wlsFileManagerQueueOperations');
+$queueOperations = is_array($queueOperations) ? $queueOperations : [];
+$queueOperationItems = is_array($queueOperations['items'] ?? null) ? array_values($queueOperations['items']) : [];
+$queueOperationSummary = is_array($queueOperations['summary'] ?? null) ? $queueOperations['summary'] : [];
+$trashHistoryItems = is_array($queueOperations['trash_history'] ?? null) ? array_values($queueOperations['trash_history']) : [];
+$trashHistorySummary = is_array($queueOperations['trash_summary'] ?? null) ? $queueOperations['trash_summary'] : [];
+$domain = trim((string)($context['domain'] ?? ''));
+$projectId = trim((string)($context['project_id'] ?? ''));
+$projectType = trim((string)($context['project_type'] ?? ''));
+$operation = trim((string)($context['operation'] ?? ''));
+$projectName = trim((string)($context['project_name'] ?? ''));
+$projectLookup = trim((string)($context['project_lookup'] ?? 'local'));
+$projectPathAvailable = trim((string)($context['project_path_available'] ?? '0'));
+$pathPolicySummary = $projectLookup === 'found' && $projectPathAvailable === '1'
+    ? __('子项目 var/pub 受控写入')
+    : ($projectLookup === 'found' ? __('子项目路径待校验') : __('当前实例 var/pub 受控写入'));
+$selectedRootKey = trim((string)($browse['root_key'] ?? ''));
+$currentPath = trim((string)($browse['current_path'] ?? ''));
+$currentRelativePath = trim((string)($browse['relative_path'] ?? ''));
+$parentRelativePath = trim((string)($browse['parent_path'] ?? ''));
+$browseError = trim((string)($browse['error'] ?? ''));
+$selectedRoot = [];
+foreach ($roots as $root) {
+    if ((string)($root['key'] ?? '') === $selectedRootKey) {
+        $selectedRoot = $root;
+        break;
+    }
+}
+$policyRootCards = [];
+foreach ($roots as $root) {
+    $rootKey = trim((string)($root['key'] ?? ''));
+    if ($rootKey !== '' && in_array($rootKey, $pathPolicyAllowedRoots, true)) {
+        $policyRootCards[] = $root;
+    }
+}
+$policyRootKeys = array_map(static fn (array $root): string => trim((string)($root['key'] ?? '')), $policyRootCards);
+$visiblePathPolicyEnabledRoots = array_values(array_intersect($pathPolicyEnabledRoots, $policyRootKeys));
+$policySourceRootCards = [];
+foreach ($roots as $root) {
+    $rootKey = trim((string)($root['key'] ?? ''));
+    if ($rootKey !== '' && in_array($rootKey, $pathPolicyAllowedSourceRoots, true)) {
+        $policySourceRootCards[] = $root;
+    }
+}
+$policySourceRootKeys = array_map(static fn (array $root): string => trim((string)($root['key'] ?? '')), $policySourceRootCards);
+$visiblePathPolicySourceRoots = array_values(array_intersect($pathPolicySourceRoots, $policySourceRootKeys));
+$selectedRootWritable = !empty($selectedRoot['write_enabled']);
+$selectedSourceEditEnabled = !empty($selectedRoot['source_edit_enabled']);
+$selectedWriteExtensions = trim((string)($selectedRoot['write_extensions'] ?? ''));
+$selectedSourceEditExtensions = trim((string)($selectedRoot['source_edit_extensions'] ?? ''));
+$selectedUploadExtensions = trim((string)($selectedRoot['upload_extensions'] ?? ''));
+$previewCanEdit = !empty($preview['editable']);
+$previewSourceEdit = !empty($preview['source_edit']);
+$previewEditBlocker = trim((string)($preview['edit_blocker'] ?? ''));
+$saveTextRootKey = $previewCanEdit ? trim((string)($preview['edit_root_key'] ?? $selectedRootKey)) : $selectedRootKey;
+$saveTextRelativePath = $previewCanEdit ? trim((string)($preview['edit_relative_path'] ?? '')) : $currentRelativePath;
+$saveTextFileName = $previewCanEdit ? trim((string)($preview['edit_file_name'] ?? $preview['file_name'] ?? '')) : '';
+$saveTextContent = $previewCanEdit ? (string)($preview['content'] ?? '') : '';
+$saveTextWritable = $previewCanEdit || $selectedRootWritable;
+$saveTextConfirmPhrase = $previewSourceEdit
+    ? trim((string)($preview['edit_confirm_phrase'] ?? 'SAVE_SOURCE'))
+    : 'SAVE_TEXT';
+$logActionOptions = [
+    '' => __('All actions'),
+    'create_directory' => __('Create directory'),
+    'save_text' => __('Save text'),
+    'save_source' => __('Save source'),
+    'source_create' => __('Create source file'),
+    'source_rename' => __('Rename source file'),
+    'source_trash' => __('Trash source file'),
+    'source_trash_queue' => __('Queued source trash move'),
+    'upload_file' => __('Upload file'),
+    'rename_entry' => __('Rename entry'),
+    'delete_entry' => __('Delete entry'),
+    'delete_tree' => __('Delete directory tree'),
+    'compress_entry' => __('Compress entry'),
+    'compress_queue' => __('Queued compression'),
+    'trash_queue' => __('Queued trash move'),
+    'trash_restore' => __('Restore trash entry'),
+    'trash_purge' => __('Purge trash entry'),
+    'path_policy_save' => __('Save path policy'),
+    'path_policy_reset' => __('Reset path policy'),
+];
+$logResultOptions = [
+    '' => __('All results'),
+    'success' => __('Success'),
+    'denied' => __('Denied'),
+    'failed' => __('Failed'),
+];
+$logRootOptions = ['' => __('All roots')];
+foreach ($roots as $root) {
+    $rootKey = trim((string)($root['key'] ?? ''));
+    if ($rootKey !== '') {
+        $logRootOptions[$rootKey] = (string)($root['label'] ?? $rootKey);
+    }
+}
+$logRootOptions['policy'] = __('Policy');
+$buildBrowseUrl = static function (array $params) use ($browseBaseUrl, $operation, $projectId, $domain, $projectType): string {
+    $query = array_merge([
+        'operation' => $operation !== '' ? $operation : 'files.read',
+        'project_id' => $projectId,
+        'domain' => $domain,
+        'project_type' => $projectType,
+    ], $params);
+    $query = array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
+
+    return $browseBaseUrl . ($query !== [] ? '?' . http_build_query($query) : '');
+};
+$buildFileManagerAnchorUrl = static function (string $anchor) use ($buildBrowseUrl, $selectedRootKey, $currentRelativePath): string {
+    return $buildBrowseUrl([
+        'root' => $selectedRootKey,
+        'path' => $currentRelativePath,
+    ]) . '#' . ltrim($anchor, '#');
+};
+$buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $operation, $projectId, $domain, $projectType): string {
+    $query = array_merge([
+        'operation' => $operation !== '' ? $operation : 'files.read',
+        'project_id' => $projectId,
+        'domain' => $domain,
+        'project_type' => $projectType,
+    ], $params);
+    $query = array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
+
+    return $downloadBaseUrl . ($query !== [] ? '?' . http_build_query($query) : '');
+};
+?>
+
+<style>
+    .wls-file-manager-shell {
+        --wfm-bg: #edf5f8;
+        --wfm-panel: #ffffff;
+        --wfm-panel-soft: #f7fafc;
+        --wfm-text: #162231;
+        --wfm-muted: #5d6b7a;
+        --wfm-border: #d8e2ea;
+        --wfm-primary: #0277a8;
+        --wfm-primary-strong: #065d82;
+        --wfm-green: #0f8c62;
+        --wfm-amber: #b7791f;
+        --wfm-red: #b42318;
+        --wfm-shadow: 0 12px 28px rgba(22, 34, 49, .08);
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        background: var(--wfm-bg);
+        color: var(--wfm-text);
+        font-size: 14px;
+    }
+    body:has(.wls-file-manager-shell) {
+        margin: 0;
+        background: #101922;
+        font-size: 0;
+    }
+    body:has(.wls-file-manager-shell[data-theme="light"]) {
+        background: #edf5f8;
+    }
+    .wls-file-manager-fullscreen,
+    .wls-file-manager-fullscreen .backend-main-content {
+        background: var(--wfm-bg, #101922);
+    }
+    .wls-file-manager-shell[data-theme="dark"] {
+        --wfm-bg: #101922;
+        --wfm-panel: #172331;
+        --wfm-panel-soft: #1e2d3c;
+        --wfm-text: #edf5f8;
+        --wfm-muted: #9fb0bf;
+        --wfm-border: #2e4051;
+        --wfm-primary: #2aa6d6;
+        --wfm-primary-strong: #74c8e8;
+        --wfm-green: #42c78f;
+        --wfm-amber: #f3bd55;
+        --wfm-red: #ff8a7a;
+        --wfm-shadow: 0 18px 36px rgba(0, 0, 0, .24);
+    }
+    .wfm-sidebar {
+        background: #082336;
+        color: #dff3fb;
+        padding: 24px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .wfm-brand {
+        flex: 0 0 auto;
+        min-width: 150px;
+    }
+    .wfm-brand-kicker {
+        color: #5fc4e7;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .wfm-brand-title {
+        margin-top: 4px;
+        font-size: 22px;
+        line-height: 1.25;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .wfm-nav {
+        display: grid;
+        gap: 8px;
+    }
+    .wfm-nav a,
+    .wfm-theme-button,
+    .wfm-action {
+        border: 1px solid transparent;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 9px 12px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .wfm-nav a {
+        color: #dff3fb;
+    }
+    .wfm-nav a.is-active,
+    .wfm-nav a:hover {
+        background: rgba(42, 166, 214, .18);
+        border-color: rgba(95, 196, 231, .35);
+    }
+    .wfm-sidebar-spacer {
+        flex: 1;
+    }
+    .wfm-theme-button {
+        width: 100%;
+        justify-content: center;
+        color: #dff3fb;
+        background: rgba(255, 255, 255, .08);
+        border-color: rgba(255, 255, 255, .16);
+    }
+    .wfm-main {
+        min-width: 0;
+        padding: 28px;
+    }
+    .wfm-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .wfm-eyebrow {
+        margin: 0 0 6px;
+        color: var(--wfm-primary);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .wfm-title {
+        margin: 0;
+        color: var(--wfm-text) !important;
+        font-size: 30px;
+        line-height: 1.2;
+        font-weight: 850;
+    }
+    .wfm-subtitle {
+        margin: 8px 0 0;
+        color: var(--wfm-muted) !important;
+        max-width: 760px;
+        line-height: 1.6;
+    }
+    .wfm-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .wfm-action {
+        color: var(--wfm-primary-strong);
+        background: var(--wfm-panel);
+        border-color: var(--wfm-border);
+        box-shadow: var(--wfm-shadow);
+    }
+    .wfm-action.primary {
+        color: #fff;
+        background: var(--wfm-primary);
+        border-color: var(--wfm-primary);
+    }
+    .wfm-section {
+        margin-top: 18px;
+    }
+    .wfm-section-title {
+        margin: 0 0 12px;
+        color: var(--wfm-text) !important;
+        font-size: 16px;
+        font-weight: 800;
+    }
+    .wfm-context {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+    }
+    .wfm-context-item,
+    .wfm-card {
+        background: var(--wfm-panel);
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        box-shadow: var(--wfm-shadow);
+    }
+    .wfm-context-item {
+        padding: 14px 16px;
+        min-width: 0;
+    }
+    .wfm-context-label,
+    .wfm-card-label {
+        color: var(--wfm-muted) !important;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .wfm-context-value {
+        margin-top: 5px;
+        color: var(--wfm-text) !important;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+    .wfm-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .wfm-card {
+        padding: 18px;
+        min-width: 0;
+    }
+    .wfm-card-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    .wfm-card-title {
+        margin: 4px 0 0;
+        color: var(--wfm-text) !important;
+        font-size: 18px;
+        line-height: 1.35;
+        font-weight: 850;
+    }
+    .wfm-status {
+        border-radius: 999px;
+        padding: 4px 9px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+        background: rgba(183, 121, 31, .14);
+        color: var(--wfm-amber);
+    }
+    .wfm-status.ok {
+        background: rgba(15, 140, 98, .14);
+        color: var(--wfm-green);
+    }
+    .wfm-status.danger {
+        background: rgba(180, 35, 24, .12);
+        color: var(--wfm-red);
+    }
+    .wfm-path {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--wfm-panel-soft);
+        border: 1px solid var(--wfm-border);
+        color: var(--wfm-text);
+        font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+        font-size: 13px;
+        overflow-wrap: anywhere;
+    }
+    .wfm-description {
+        margin: 12px 0 0;
+        color: var(--wfm-muted) !important;
+        line-height: 1.6;
+    }
+    .wfm-capabilities {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .wfm-browser {
+        background: var(--wfm-panel);
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        box-shadow: var(--wfm-shadow);
+        overflow: hidden;
+    }
+    .wfm-browser-head,
+    .wfm-browser-current,
+    .wfm-browser-alert,
+    .wfm-browser-note {
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--wfm-border);
+    }
+    .wfm-browser-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+    }
+    .wfm-browser-head h3 {
+        margin: 0;
+        color: var(--wfm-text) !important;
+        font-size: 18px;
+        font-weight: 850;
+    }
+    .wfm-root-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+    }
+    .wfm-root-tabs a,
+    .wfm-entry-link,
+    .wfm-up-link {
+        color: var(--wfm-primary-strong);
+        text-decoration: none;
+        font-weight: 800;
+    }
+    .wfm-root-tabs a {
+        border: 1px solid var(--wfm-border);
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: var(--wfm-panel-soft);
+    }
+    .wfm-root-tabs a.is-active {
+        color: #fff;
+        background: var(--wfm-primary);
+        border-color: var(--wfm-primary);
+    }
+    .wfm-browser-current {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .wfm-browser-current code {
+        display: inline-block;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        color: var(--wfm-text);
+        background: var(--wfm-panel-soft);
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        padding: 8px 10px;
+    }
+    .wfm-browser-alert {
+        color: var(--wfm-amber);
+        background: rgba(183, 121, 31, .12);
+    }
+    .wfm-browser-alert.success {
+        color: var(--wfm-green);
+        background: rgba(15, 140, 98, .12);
+    }
+    .wfm-browser-table-wrap {
+        overflow-x: auto;
+    }
+    .wfm-browser-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 860px;
+    }
+    .wfm-browser-table th,
+    .wfm-browser-table td {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--wfm-border);
+        text-align: left;
+        vertical-align: top;
+    }
+    .wfm-browser-table th {
+        color: var(--wfm-muted) !important;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        background: var(--wfm-panel-soft);
+    }
+    .wfm-browser-table td {
+        color: var(--wfm-text) !important;
+    }
+    .wfm-entry-name {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    .wfm-entry-muted {
+        color: var(--wfm-muted) !important;
+    }
+    .wfm-entry-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+    .wfm-entry-action {
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel-soft);
+        color: var(--wfm-primary-strong);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 30px;
+        padding: 5px 9px;
+        font-size: 12px;
+        font-weight: 800;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .wfm-preview-panel {
+        margin: 16px 18px 0;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel-soft);
+        overflow: hidden;
+    }
+    .wfm-preview-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--wfm-border);
+    }
+    .wfm-preview-title {
+        margin: 0;
+        color: var(--wfm-text) !important;
+        font-size: 15px;
+        font-weight: 850;
+        overflow-wrap: anywhere;
+    }
+    .wfm-preview-meta {
+        color: var(--wfm-muted) !important;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        font-size: 12px;
+    }
+    .wfm-preview-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 0 16px 14px;
+    }
+    .wfm-preview-edit-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--wfm-primary);
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: #fff !important;
+        background: var(--wfm-primary);
+        font-size: 12px;
+        font-weight: 850;
+        text-decoration: none;
+    }
+    .wfm-preview-blocked {
+        color: var(--wfm-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .wfm-preview-code {
+        margin: 0;
+        max-height: 420px;
+        overflow: auto;
+        padding: 16px;
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+        font-size: 13px;
+        line-height: 1.65;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .wfm-preview-note {
+        padding: 12px 16px;
+        border-top: 1px solid var(--wfm-border);
+        color: var(--wfm-amber);
+        background: rgba(183, 121, 31, .12);
+    }
+    .wfm-card > .wfm-preview-note {
+        margin: 12px 0 0;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+    }
+    .wfm-browser-note {
+        color: var(--wfm-muted);
+    }
+    .wfm-write-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+        gap: 14px;
+    }
+    .wfm-write-body {
+        padding: 18px;
+    }
+    .wfm-policy-body {
+        padding: 18px;
+        display: grid;
+        gap: 16px;
+    }
+    .wfm-policy-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+    }
+    .wfm-policy-root-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wfm-policy-root {
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel-soft);
+        padding: 12px;
+    }
+    .wfm-policy-root .wfm-check {
+        align-items: center;
+    }
+    .wfm-policy-root-name {
+        display: block;
+        color: var(--wfm-text);
+        font-weight: 850;
+    }
+    .wfm-policy-root-path {
+        display: block;
+        margin-top: 5px;
+        color: var(--wfm-muted);
+        font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+    .wfm-source-policy {
+        border: 1px dashed var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel);
+        display: grid;
+        gap: 12px;
+        padding: 14px;
+    }
+    .wfm-policy-reset {
+        border: 1px solid rgba(180, 35, 24, .24);
+        border-radius: 8px;
+        background: rgba(180, 35, 24, .06);
+        padding: 14px;
+    }
+    .wfm-policy-reset-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .wfm-policy-reset-title {
+        margin: 0;
+        color: var(--wfm-text) !important;
+        font-size: 15px;
+        font-weight: 850;
+    }
+    .wfm-write-form {
+        display: grid;
+        gap: 12px;
+    }
+    .wfm-field {
+        display: grid;
+        gap: 6px;
+    }
+    .wfm-field label,
+    .wfm-check {
+        color: var(--wfm-text);
+        font-weight: 800;
+    }
+    .wfm-field input,
+    .wfm-field textarea {
+        width: 100%;
+        min-height: 40px;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel-soft);
+        color: var(--wfm-text);
+        padding: 9px 11px;
+        font: inherit;
+    }
+    .wfm-field textarea {
+        min-height: 132px;
+        resize: vertical;
+        font-family: Consolas, "SFMono-Regular", "Liberation Mono", monospace;
+        line-height: 1.5;
+    }
+    .wfm-editor-shell {
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel);
+        overflow: hidden;
+    }
+    .wfm-editor-toolbar,
+    .wfm-editor-footer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px;
+        background: var(--wfm-panel-soft);
+    }
+    .wfm-editor-toolbar {
+        border-bottom: 1px solid var(--wfm-border);
+    }
+    .wfm-editor-footer {
+        border-top: 1px solid var(--wfm-border);
+        color: var(--wfm-muted);
+        font-size: 12px;
+    }
+    .wfm-editor-tools,
+    .wfm-editor-actions,
+    .wfm-editor-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+    }
+    .wfm-editor-button,
+    .wfm-editor-select {
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel);
+        color: var(--wfm-text);
+        min-height: 34px;
+        padding: 7px 10px;
+        font: inherit;
+        font-weight: 800;
+    }
+    .wfm-editor-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+    }
+    .wfm-editor-button:hover,
+    .wfm-editor-button:focus-visible,
+    .wfm-editor-select:focus-visible {
+        border-color: var(--wfm-primary);
+        box-shadow: 0 0 0 3px rgba(42, 166, 214, .14);
+        outline: none;
+    }
+    .wfm-editor-button.is-active {
+        background: rgba(38, 182, 230, .16);
+        border-color: rgba(42, 166, 214, .42);
+        color: var(--wfm-primary-strong);
+    }
+    .wfm-editor-button:disabled {
+        cursor: not-allowed;
+        opacity: .55;
+    }
+    .wfm-editor-select-label,
+    .wfm-editor-dirty,
+    .wfm-editor-metric {
+        color: var(--wfm-muted);
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .wfm-editor-dirty.is-dirty {
+        color: var(--wfm-amber);
+    }
+    .wfm-field textarea.wfm-editor-textarea {
+        border: 0;
+        border-radius: 0;
+        background: var(--wfm-panel);
+        min-height: 300px;
+        padding: 14px;
+        line-height: 1.65;
+    }
+    .wfm-field textarea.wfm-editor-textarea.is-nowrap {
+        white-space: pre;
+        overflow: auto;
+        word-break: normal;
+    }
+    .wfm-editor-shell.is-over-limit {
+        border-color: rgba(180, 35, 24, .42);
+    }
+    .wfm-editor-shell.is-over-limit .wfm-editor-metric[data-wfm-editor-bytes-wrap] {
+        color: var(--wfm-red);
+    }
+    .wfm-field input[type="file"] {
+        display: flex;
+        align-items: center;
+        padding: 8px;
+        cursor: pointer;
+    }
+    .wfm-field input[type="file"]::file-selector-button {
+        border: 1px solid rgba(73, 214, 255, 0.45);
+        border-radius: 7px;
+        background: rgba(38, 182, 230, 0.18);
+        color: var(--wfm-text);
+        font: inherit;
+        font-weight: 800;
+        padding: 8px 12px;
+        margin-right: 12px;
+        cursor: pointer;
+    }
+    .wfm-field input[type="file"]:hover::file-selector-button,
+    .wfm-field input[type="file"]:focus-visible::file-selector-button {
+        filter: brightness(1.08);
+    }
+    .wfm-help {
+        color: var(--wfm-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .wfm-check {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        line-height: 1.45;
+    }
+    .wfm-check input {
+        margin-top: 3px;
+    }
+    .wfm-submit {
+        justify-content: center;
+        width: fit-content;
+        min-width: 140px;
+        border: 1px solid var(--wfm-primary);
+        border-radius: 8px;
+        background: var(--wfm-primary);
+        color: #fff;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 9px 12px;
+        font-weight: 800;
+    }
+    .wfm-submit.secondary {
+        color: var(--wfm-primary-strong);
+        background: var(--wfm-panel-soft);
+        border-color: var(--wfm-border);
+    }
+    .wfm-submit.danger {
+        background: var(--wfm-red);
+        border-color: var(--wfm-red);
+        color: #fff;
+    }
+    .wfm-submit:disabled {
+        opacity: .55;
+        cursor: not-allowed;
+    }
+    .wfm-inline-action-form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 6px;
+        align-items: flex-end;
+    }
+    .wfm-inline-action-form.is-danger {
+        padding: 8px;
+        border: 1px solid rgba(180, 35, 24, .22);
+        border-radius: 8px;
+        background: rgba(180, 35, 24, .04);
+    }
+    .wfm-inline-field {
+        display: grid;
+        gap: 4px;
+        flex: 1 1 170px;
+        min-width: 0;
+    }
+    .wfm-inline-field label {
+        color: var(--wfm-muted);
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .wfm-inline-field input {
+        width: 100%;
+        min-height: 34px;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel);
+        color: var(--wfm-text);
+        font: inherit;
+        font-size: 12px;
+        padding: 7px 9px;
+    }
+    .wfm-secondary-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 34px;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel);
+        color: var(--wfm-primary-strong);
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 850;
+        padding: 7px 10px;
+    }
+    .wfm-secondary-action:hover,
+    .wfm-secondary-action:focus-visible {
+        border-color: var(--wfm-primary);
+        background: var(--wfm-panel-soft);
+    }
+    .wfm-secondary-action.danger {
+        border-color: rgba(180, 35, 24, .38);
+        background: rgba(180, 35, 24, .08);
+        color: var(--wfm-red);
+    }
+    .wfm-secondary-action.danger:hover,
+    .wfm-secondary-action.danger:focus-visible {
+        border-color: var(--wfm-red);
+        background: rgba(180, 35, 24, .14);
+    }
+    .wfm-log-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .wfm-log-stat {
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel-soft);
+    }
+    .wfm-log-stat span {
+        display: block;
+        color: var(--wfm-muted);
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .wfm-log-stat strong {
+        display: block;
+        margin-top: 4px;
+        color: var(--wfm-text);
+        font-size: 22px;
+        line-height: 1.1;
+    }
+    .wfm-browser > .wfm-log-summary {
+        padding: 16px 18px 0;
+    }
+    .wfm-log-filters {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 14px;
+        padding: 14px;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel);
+    }
+    .wfm-log-filter-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wfm-log-filters select,
+    .wfm-log-filters input {
+        width: 100%;
+        min-height: 40px;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel-soft);
+        color: var(--wfm-text);
+        padding: 9px 11px;
+        font: inherit;
+    }
+    .wfm-log-filter-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+    }
+    .wfm-log-reset {
+        color: var(--wfm-primary-strong);
+        font-weight: 800;
+        text-decoration: none;
+    }
+    .wfm-log-reset:hover,
+    .wfm-log-reset:focus-visible {
+        text-decoration: underline;
+    }
+    .wfm-log-list {
+        display: grid;
+        gap: 10px;
+    }
+    .wfm-log-item {
+        display: grid;
+        gap: 5px;
+        padding: 12px;
+        border: 1px solid var(--wfm-border);
+        border-radius: 8px;
+        background: var(--wfm-panel-soft);
+    }
+    .wfm-log-item.is-denied {
+        border-color: rgba(183, 121, 31, .45);
+    }
+    .wfm-log-item.is-pending,
+    .wfm-log-item.is-running {
+        border-color: rgba(183, 121, 31, .45);
+    }
+    .wfm-log-item.is-done {
+        border-color: rgba(15, 140, 98, .45);
+    }
+    .wfm-log-item.is-failed {
+        border-color: rgba(180, 35, 24, .5);
+    }
+    .wfm-log-item.is-error {
+        border-color: rgba(180, 35, 24, .5);
+    }
+    .wfm-log-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        color: var(--wfm-muted);
+        font-size: 12px;
+    }
+    .wfm-log-title {
+        color: var(--wfm-text);
+        font-weight: 850;
+        overflow-wrap: anywhere;
+    }
+    .wfm-empty {
+        background: var(--wfm-panel);
+        border: 1px dashed var(--wfm-border);
+        border-radius: 8px;
+        color: var(--wfm-muted);
+        padding: 18px;
+    }
+    @media (max-width: 1100px) {
+        .wls-file-manager-shell {
+            grid-template-columns: 1fr;
+        }
+        .wfm-sidebar {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            flex-direction: row;
+            align-items: center;
+            overflow-x: auto;
+        }
+        .wfm-nav {
+            grid-auto-flow: column;
+            grid-auto-columns: max-content;
+        }
+        .wfm-sidebar-spacer {
+            display: none;
+        }
+        .wfm-theme-button {
+            width: auto;
+            white-space: nowrap;
+        }
+        .wfm-context,
+        .wfm-capabilities {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .wfm-browser-head {
+            display: grid;
+        }
+        .wfm-root-tabs {
+            justify-content: flex-start;
+        }
+    }
+    @media (max-width: 720px) {
+        .wfm-sidebar {
+            position: static;
+            align-items: stretch;
+            flex-wrap: wrap;
+            gap: 10px;
+            overflow-x: hidden;
+            padding: 18px;
+        }
+        .wfm-nav {
+            width: 100%;
+            grid-auto-flow: row;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-auto-columns: initial;
+        }
+        .wfm-nav a {
+            justify-content: center;
+            min-width: 0;
+            white-space: nowrap;
+        }
+        .wfm-editor-tools,
+        .wfm-editor-actions,
+        .wfm-editor-metrics {
+            width: 100%;
+            align-items: stretch;
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .wfm-editor-button,
+        .wfm-editor-select {
+            width: 100%;
+        }
+        .wfm-editor-select-label,
+        .wfm-editor-dirty {
+            white-space: normal;
+        }
+        .wfm-theme-button {
+            width: 100%;
+        }
+        .wfm-main {
+            padding: 18px;
+        }
+        .wfm-topbar {
+            display: grid;
+        }
+        .wfm-actions {
+            justify-content: flex-start;
+        }
+        .wfm-context,
+        .wfm-grid,
+        .wfm-capabilities,
+        .wfm-write-grid,
+        .wfm-policy-summary,
+        .wfm-policy-root-list,
+        .wfm-log-summary,
+        .wfm-log-filter-grid {
+            grid-template-columns: 1fr;
+        }
+        .wfm-title {
+            font-size: 24px;
+        }
+        .wfm-brand {
+            width: 100%;
+            min-width: 128px;
+        }
+    }
+</style>
+
+<div class="wls-file-manager-shell" data-wls-file-manager-shell data-theme="light">
+    <aside class="wfm-sidebar" aria-label="<?= $escapeHtml(__('WLS 文件管理器导航')) ?>">
+        <div class="wfm-brand">
+            <div class="wfm-brand-kicker"><?= $escapeHtml(__('WLS Panel Plugin')) ?></div>
+            <div class="wfm-brand-title"><?= $escapeHtml(__('文件管理器')) ?></div>
+        </div>
+        <nav class="wfm-nav">
+            <a href="<?= $escapeHtml($panelUrl) ?>">
+                <i class="mdi mdi-view-dashboard-outline"></i>
+                <span><?= $escapeHtml(__('WLS 面板')) ?></span>
+            </a>
+            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('roots')) ?>" class="is-active">
+                <i class="mdi mdi-folder-outline"></i>
+                <span><?= $escapeHtml(__('路径')) ?></span>
+            </a>
+            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('browser')) ?>">
+                <i class="mdi mdi-file-tree-outline"></i>
+                <span><?= $escapeHtml(__('浏览')) ?></span>
+            </a>
+            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('path-policy')) ?>">
+                <i class="mdi mdi-shield-edit-outline"></i>
+                <span><?= $escapeHtml(__('策略')) ?></span>
+            </a>
+            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('write-operations')) ?>">
+                <i class="mdi mdi-file-edit-outline"></i>
+                <span><?= $escapeHtml(__('写入')) ?></span>
+            </a>
+            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('queue-operations')) ?>">
+                <i class="mdi mdi-progress-clock"></i>
+                <span><?= $escapeHtml(__('队列')) ?></span>
+            </a>
+            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('operation-log')) ?>">
+                <i class="mdi mdi-clipboard-text-clock-outline"></i>
+                <span><?= $escapeHtml(__('日志')) ?></span>
+            </a>
+            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('capabilities')) ?>">
+                <i class="mdi mdi-puzzle-outline"></i>
+                <span><?= $escapeHtml(__('能力')) ?></span>
+            </a>
+            <a href="<?= $escapeHtml($marketplaceUrl) ?>">
+                <i class="mdi mdi-store-outline"></i>
+                <span><?= $escapeHtml(__('插件商城')) ?></span>
+            </a>
+        </nav>
+        <div class="wfm-sidebar-spacer"></div>
+        <button type="button" class="wfm-theme-button" data-wfm-theme-toggle aria-label="<?= $escapeHtml(__('切换明暗色')) ?>">
+            <i class="mdi mdi-theme-light-dark"></i>
+            <span data-wfm-theme-label><?= $escapeHtml(__('深色')) ?></span>
+        </button>
+    </aside>
+
+    <main class="wfm-main">
+        <header class="wfm-topbar">
+            <div>
+                <p class="wfm-eyebrow"><?= $escapeHtml(__('WLS 独立面板插件')) ?></p>
+                <h1 class="wfm-title"><?= $escapeHtml(__('WLS 文件管理器')) ?></h1>
+                <p class="wfm-subtitle">
+                    <?= $escapeHtml(__('当前版本提供目录浏览、文本预览、受限下载，以及 var/pub 根目录内的目录创建、小文本保存、受控上传、同目录重命名、删除、受限压缩和队列化大文件压缩。')) ?>
+                </p>
+            </div>
+            <div class="wfm-actions">
+                <a class="wfm-action" href="<?= $escapeHtml($projectAdminUrl) ?>">
+                    <i class="mdi mdi-open-in-new"></i>
+                    <span><?= $escapeHtml(__('项目后台')) ?></span>
+                </a>
+                <a class="wfm-action primary" href="<?= $escapeHtml($panelUrl) ?>">
+                    <i class="mdi mdi-arrow-left"></i>
+                    <span><?= $escapeHtml(__('返回 WLS')) ?></span>
+                </a>
+            </div>
+        </header>
+        <?php if ($notice !== ''): ?>
+            <div class="wfm-browser-alert success"><?= $escapeHtml($notice) ?></div>
+        <?php endif; ?>
+        <?php if ($error !== ''): ?>
+            <div class="wfm-browser-alert"><?= $escapeHtml($error) ?></div>
+        <?php endif; ?>
+
+        <section class="wfm-section" aria-labelledby="wfm-context-title">
+            <h2 class="wfm-section-title" id="wfm-context-title"><?= $escapeHtml(__('项目上下文')) ?></h2>
+            <div class="wfm-context">
+                <div class="wfm-context-item">
+                    <div class="wfm-context-label"><?= $escapeHtml(__('项目 ID')) ?></div>
+                    <div class="wfm-context-value"><?= $escapeHtml($projectId !== '' ? $projectId : __('当前项目')) ?></div>
+                </div>
+                <div class="wfm-context-item">
+                    <div class="wfm-context-label"><?= $escapeHtml(__('域名')) ?></div>
+                    <div class="wfm-context-value"><?= $escapeHtml($domain !== '' ? $domain : __('未指定')) ?></div>
+                </div>
+                <div class="wfm-context-item">
+                    <div class="wfm-context-label"><?= $escapeHtml(__('项目类型')) ?></div>
+                    <div class="wfm-context-value"><?= $escapeHtml($projectType !== '' ? $projectType : __('默认')) ?></div>
+                </div>
+                <div class="wfm-context-item">
+                    <div class="wfm-context-label"><?= $escapeHtml(__('入口能力')) ?></div>
+                    <div class="wfm-context-value"><?= $escapeHtml($operation !== '' ? $operation : 'files.read') ?></div>
+                </div>
+                <div class="wfm-context-item">
+                    <div class="wfm-context-label"><?= $escapeHtml(__('路径策略')) ?></div>
+                    <div class="wfm-context-value"><?= $escapeHtml($projectName !== '' ? $projectName . ' · ' . $pathPolicySummary : $pathPolicySummary) ?></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="wfm-section" id="roots" aria-labelledby="wfm-roots-title">
+            <h2 class="wfm-section-title" id="wfm-roots-title"><?= $escapeHtml(__('路径摘要')) ?></h2>
+            <?php if ($roots): ?>
+                <div class="wfm-grid">
+                    <?php foreach ($roots as $root): ?>
+                        <?php
+                        $statusTone = (string)($root['status_tone'] ?? '');
+                        $statusClass = $statusTone === 'ok' ? 'wfm-status ok' : 'wfm-status';
+                        ?>
+                        <article class="wfm-card">
+                            <div class="wfm-card-head">
+                                <div>
+                                    <div class="wfm-card-label"><?= $escapeHtml($root['mode'] ?? '') ?></div>
+                                    <h3 class="wfm-card-title"><?= $escapeHtml($root['label'] ?? '') ?></h3>
+                                </div>
+                                <span class="<?= $escapeHtml($statusClass) ?>"><?= $escapeHtml($root['status'] ?? '') ?></span>
+                            </div>
+                            <div class="wfm-path"><?= $escapeHtml($root['path'] ?? '') ?></div>
+                            <p class="wfm-description"><?= $escapeHtml($root['description'] ?? '') ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="wfm-empty"><?= $escapeHtml(__('暂无路径信息')) ?></div>
+            <?php endif; ?>
+        </section>
+
+        <section class="wfm-section" id="path-policy" aria-labelledby="wfm-path-policy-title">
+            <h2 class="wfm-section-title" id="wfm-path-policy-title"><?= $escapeHtml(__('路径策略')) ?></h2>
+            <div class="wfm-browser">
+                <div class="wfm-browser-head">
+                    <div>
+                        <h3><?= $escapeHtml(__('项目级写入根策略')) ?></h3>
+                        <p class="wfm-description">
+                            <?= $escapeHtml(__('保存后立即影响本页面所有受控写入动作；项目真实路径仍只在服务端解析，不通过 URL 或表单回传。')) ?>
+                        </p>
+                    </div>
+                    <span class="<?= !empty($pathPolicyConfig['has_policy']) ? 'wfm-status ok' : 'wfm-status' ?>">
+                        <?= $escapeHtml(!empty($pathPolicyConfig['has_policy']) ? __('已保存策略') : __('默认继承')) ?>
+                    </span>
+                </div>
+                <div class="wfm-policy-body">
+                    <div class="wfm-policy-summary" aria-label="<?= $escapeHtml(__('Path policy summary')) ?>">
+                        <div class="wfm-context-item">
+                            <div class="wfm-context-label"><?= $escapeHtml(__('策略键')) ?></div>
+                            <div class="wfm-context-value"><?= $escapeHtml($pathPolicyConfig['profile_key'] ?? 'local') ?></div>
+                        </div>
+                        <div class="wfm-context-item">
+                            <div class="wfm-context-label"><?= $escapeHtml(__('启用根')) ?></div>
+                            <div class="wfm-context-value">
+                                <?= $escapeHtml($visiblePathPolicyEnabledRoots ? implode(', ', $visiblePathPolicyEnabledRoots) : __('全部只读')) ?>
+                            </div>
+                        </div>
+                        <div class="wfm-context-item">
+                            <div class="wfm-context-label"><?= $escapeHtml(__('源码编辑')) ?></div>
+                            <div class="wfm-context-value">
+                                <?= $escapeHtml($pathPolicySourceEnabled && $visiblePathPolicySourceRoots ? implode(', ', $visiblePathPolicySourceRoots) : __('默认关闭')) ?>
+                            </div>
+                        </div>
+                        <div class="wfm-context-item">
+                            <div class="wfm-context-label"><?= $escapeHtml(__('更新时间')) ?></div>
+                            <div class="wfm-context-value"><?= $escapeHtml($pathPolicyConfig['updated_at'] ?? __('未保存')) ?></div>
+                        </div>
+                    </div>
+                    <form class="wfm-write-form" method="post" action="<?= $escapeHtml($pathPolicySaveUrl) ?>" data-wfm-path-policy-form>
+                        <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                        <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                        <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                        <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                        <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                        <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                        <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                        <?php if ($policyRootCards): ?>
+                            <div class="wfm-policy-root-list">
+                                <?php foreach ($policyRootCards as $root): ?>
+                                    <?php
+                                    $rootKey = trim((string)($root['key'] ?? ''));
+                                    $checked = in_array($rootKey, $pathPolicyEnabledRoots, true);
+                                    ?>
+                                    <div class="wfm-policy-root">
+                                        <label class="wfm-check">
+                                            <input type="checkbox" name="enabled_roots[]" value="<?= $escapeHtml($rootKey) ?>" <?= $checked ? 'checked' : '' ?>>
+                                            <span>
+                                                <span class="wfm-policy-root-name"><?= $escapeHtml($root['label'] ?? $rootKey) ?></span>
+                                                <span class="wfm-policy-root-path"><?= $escapeHtml($root['path'] ?? '') ?></span>
+                                                <span class="wfm-help"><?= $escapeHtml($root['policy_state'] ?? $root['mode'] ?? '') ?></span>
+                                            </span>
+                                        </label>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="wfm-empty"><?= $escapeHtml(__('当前上下文没有可配置的受控写入根。')) ?></div>
+                        <?php endif; ?>
+                        <div class="wfm-source-policy">
+                            <label class="wfm-check">
+                                <input type="checkbox" name="allow_source_edit" value="1" <?= $pathPolicySourceEnabled ? 'checked' : '' ?>>
+                                <span>
+                                    <?= $escapeHtml(__('允许源码编辑策略')) ?>
+                                    <span class="wfm-help">
+                                        <?= $escapeHtml(__('仅允许编辑已存在且小于 128 KB 的源码文件；新建、同目录改名和单文件回收需使用独立 SOURCE_CREATE_FILE / SOURCE_RENAME / SOURCE_TRASH 表单，不会开放上传、硬删除或队列操作。')) ?>
+                                    </span>
+                                </span>
+                            </label>
+                            <?php if ($pathPolicySourceExtensions !== ''): ?>
+                                <div class="wfm-help">
+                                    <?= $escapeHtml(__('源码扩展名')) ?>:
+                                    <?= $escapeHtml($pathPolicySourceExtensions) ?>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($policySourceRootCards): ?>
+                                <div class="wfm-policy-root-list">
+                                    <?php foreach ($policySourceRootCards as $root): ?>
+                                        <?php
+                                        $rootKey = trim((string)($root['key'] ?? ''));
+                                        $checked = $pathPolicySourceEnabled && in_array($rootKey, $pathPolicySourceRoots, true);
+                                        ?>
+                                        <div class="wfm-policy-root">
+                                            <label class="wfm-check">
+                                                <input type="checkbox" name="source_edit_roots[]" value="<?= $escapeHtml($rootKey) ?>" <?= $checked ? 'checked' : '' ?>>
+                                                <span>
+                                                    <span class="wfm-policy-root-name"><?= $escapeHtml($root['label'] ?? $rootKey) ?></span>
+                                                    <span class="wfm-policy-root-path"><?= $escapeHtml($root['path'] ?? '') ?></span>
+                                                    <span class="wfm-help"><?= $escapeHtml($root['source_policy_state'] ?? __('默认关闭')) ?></span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <div class="wfm-empty"><?= $escapeHtml(__('当前上下文没有可配置的源码根。')) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="wfm-field">
+                            <label for="wfm-path-policy-note"><?= $escapeHtml(__('策略备注')) ?></label>
+                            <textarea id="wfm-path-policy-note" name="policy_note" maxlength="240" rows="3" placeholder="<?= $escapeHtml(__('例如：仅允许子项目 var 写入，pub 由发布流程接管。')) ?>"><?= $escapeHtml($pathPolicyConfig['note'] ?? '') ?></textarea>
+                            <div class="wfm-help"><?= $escapeHtml(__('备注只用于面板审计说明，不参与路径计算。')) ?></div>
+                        </div>
+                        <label class="wfm-check">
+                            <input type="checkbox" name="confirm_path_policy" value="1">
+                            <span><?= $escapeHtml(__('我确认立即更新此项目的文件写入根策略。')) ?></span>
+                        </label>
+                        <div class="wfm-field">
+                            <label for="wfm-path-policy-confirm"><?= $escapeHtml(__('确认短语')) ?></label>
+                            <input id="wfm-path-policy-confirm" name="confirm_phrase" autocomplete="off" placeholder="<?= $escapeHtml($pathPolicyConfirmPhrase) ?>">
+                        </div>
+                        <button type="submit" class="wfm-submit" <?= $policyRootCards ? '' : 'disabled' ?>>
+                            <i class="mdi mdi-shield-check-outline"></i>
+                            <span><?= $escapeHtml(__('保存路径策略')) ?></span>
+                        </button>
+                    </form>
+                    <form class="wfm-write-form wfm-policy-reset" method="post" action="<?= $escapeHtml($pathPolicyResetUrl) ?>" data-wfm-path-policy-reset-form>
+                        <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                        <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                        <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                        <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                        <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                        <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                        <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                        <div class="wfm-policy-reset-head">
+                            <div>
+                                <h3 class="wfm-policy-reset-title"><?= $escapeHtml(__('恢复默认继承')) ?></h3>
+                                <p class="wfm-description">
+                                    <?= $escapeHtml(__('删除当前项目或域名的已保存策略，让写入根重新按面板默认规则计算。')) ?>
+                                </p>
+                            </div>
+                            <span class="<?= !empty($pathPolicyConfig['has_policy']) ? 'wfm-status danger' : 'wfm-status' ?>">
+                                <?= $escapeHtml(!empty($pathPolicyConfig['has_policy']) ? __('可恢复') : __('无需恢复')) ?>
+                            </span>
+                        </div>
+                        <label class="wfm-check">
+                            <input type="checkbox" name="confirm_path_policy_reset" value="1" <?= !empty($pathPolicyConfig['has_policy']) ? '' : 'disabled' ?>>
+                            <span><?= $escapeHtml(__('我确认删除当前项目或域名的已保存路径策略。')) ?></span>
+                        </label>
+                        <div class="wfm-field">
+                            <label for="wfm-path-policy-reset-confirm"><?= $escapeHtml(__('恢复确认短语')) ?></label>
+                            <input id="wfm-path-policy-reset-confirm" name="reset_confirm_phrase" autocomplete="off" placeholder="<?= $escapeHtml($pathPolicyResetConfirmPhrase) ?>" <?= !empty($pathPolicyConfig['has_policy']) ? '' : 'disabled' ?>>
+                        </div>
+                        <button type="submit" class="wfm-submit danger" <?= !empty($pathPolicyConfig['has_policy']) ? '' : 'disabled' ?>>
+                            <i class="mdi mdi-shield-refresh-outline"></i>
+                            <span><?= $escapeHtml(__('恢复默认策略')) ?></span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <section class="wfm-section" id="browser" aria-labelledby="wfm-browser-title">
+            <h2 class="wfm-section-title" id="wfm-browser-title"><?= $escapeHtml(__('目录浏览')) ?></h2>
+            <div class="wfm-browser" data-wfm-browser>
+                <div class="wfm-browser-head">
+                    <div>
+                        <h3><?= $escapeHtml(__('只读目录列表')) ?></h3>
+                        <p class="wfm-description"><?= $escapeHtml(__('目录浏览被限制在下列根目录内，越权路径会自动回到根目录。')) ?></p>
+                    </div>
+                    <div class="wfm-root-tabs" aria-label="<?= $escapeHtml(__('根目录')) ?>">
+                        <?php foreach ($roots as $root): ?>
+                            <?php
+                            $rootKey = (string)($root['key'] ?? '');
+                            $rootAvailable = ($root['status_tone'] ?? '') === 'ok';
+                            if ($rootKey === '' || !$rootAvailable) {
+                                continue;
+                            }
+                            $rootClass = $rootKey === $selectedRootKey ? 'is-active' : '';
+                            ?>
+                            <a class="<?= $escapeHtml($rootClass) ?>" href="<?= $escapeHtml($buildBrowseUrl(['root' => $rootKey, 'path' => ''])) ?>">
+                                <?= $escapeHtml($root['label'] ?? $rootKey) ?>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <div class="wfm-browser-current">
+                    <div>
+                        <span class="wfm-card-label"><?= $escapeHtml(__('当前目录')) ?></span>
+                        <code><?= $escapeHtml($currentPath !== '' ? $currentPath : '-') ?></code>
+                    </div>
+                    <?php if (!empty($browse['can_go_up'])): ?>
+                        <a class="wfm-up-link" href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $parentRelativePath])) ?>">
+                            <i class="mdi mdi-arrow-up-left"></i>
+                            <?= $escapeHtml(__('返回上级')) ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+                <?php if ($browseError !== ''): ?>
+                    <div class="wfm-browser-alert"><?= $escapeHtml($browseError) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($preview['active'])): ?>
+                    <?php $previewError = trim((string)($preview['error'] ?? '')); ?>
+                    <div class="wfm-preview-panel" data-wfm-preview-panel>
+                        <div class="wfm-preview-head">
+                            <div>
+                                <div class="wfm-card-label"><?= $escapeHtml(__('文件预览')) ?></div>
+                                <h3 class="wfm-preview-title"><?= $escapeHtml($preview['relative_path'] ?? __('未选择可预览文件。')) ?></h3>
+                            </div>
+                            <div class="wfm-preview-meta">
+                                <span><?= $escapeHtml($preview['size'] ?? '-') ?></span>
+                                <span><?= $escapeHtml($preview['modified'] ?? '-') ?></span>
+                                <span><?= $escapeHtml($preview['mime_type'] ?? '-') ?></span>
+                            </div>
+                        </div>
+                        <?php if ($previewError !== ''): ?>
+                            <div class="wfm-browser-alert"><?= $escapeHtml($previewError) ?></div>
+                        <?php else: ?>
+                            <div class="wfm-preview-actions">
+                                <?php if ($previewCanEdit): ?>
+                                    <a class="wfm-preview-edit-action" href="#wfm-save-text-card">
+                                        <i class="mdi mdi-file-edit-outline"></i>
+                                        <span><?= $escapeHtml(__('编辑此文本')) ?></span>
+                                    </a>
+                                <?php elseif ($previewEditBlocker !== ''): ?>
+                                    <span class="wfm-preview-blocked">
+                                        <?= $escapeHtml(__('当前预览文件不能直接编辑：%{1}', [$previewEditBlocker])) ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <pre class="wfm-preview-code"><code><?= $escapeHtml($preview['content'] ?? '') ?></code></pre>
+                            <?php if (!empty($preview['truncated'])): ?>
+                                <div class="wfm-preview-note"><?= $escapeHtml(__('预览内容已截断，仅显示前 64 KB。')) ?></div>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+                <?php if ($browseEntries): ?>
+                    <div class="wfm-browser-table-wrap">
+                        <table class="wfm-browser-table">
+                            <thead>
+                            <tr>
+                                <th><?= $escapeHtml(__('名称')) ?></th>
+                                <th><?= $escapeHtml(__('类型')) ?></th>
+                                <th><?= $escapeHtml(__('大小')) ?></th>
+                                <th><?= $escapeHtml(__('修改时间')) ?></th>
+                                <th><?= $escapeHtml(__('状态')) ?></th>
+                                <th><?= $escapeHtml(__('操作')) ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($browseEntries as $entry): ?>
+                                <?php
+                                $entryType = (string)($entry['type'] ?? '');
+                                $isDirectory = $entryType === 'directory';
+                                $entryName = (string)($entry['name'] ?? '');
+                                $entryRelativePath = (string)($entry['relative_path'] ?? '');
+                                ?>
+                                <tr data-wfm-entry data-wfm-entry-type="<?= $escapeHtml($entryType) ?>">
+                                    <td>
+                                        <div class="wfm-entry-name">
+                                            <i class="mdi <?= $isDirectory ? 'mdi-folder-outline' : 'mdi-file-outline' ?>"></i>
+                                            <span>
+                                                <?php if ($isDirectory): ?>
+                                                    <a class="wfm-entry-link" href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $entryRelativePath])) ?>">
+                                                        <?= $escapeHtml($entryName) ?>
+                                                    </a>
+                                                <?php else: ?>
+                                                    <span><?= $escapeHtml($entryName) ?></span>
+                                                <?php endif; ?>
+                                                <br>
+                                                <small class="wfm-entry-muted"><?= $escapeHtml($entryRelativePath !== '' ? $entryRelativePath : $entryName) ?></small>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td><?= $escapeHtml($isDirectory ? __('文件夹') : __('文件')) ?></td>
+                                    <td class="wfm-entry-muted"><?= $escapeHtml($entry['size'] ?? '-') ?></td>
+                                    <td class="wfm-entry-muted"><?= $escapeHtml($entry['modified'] ?? '-') ?></td>
+                                    <td><?= $escapeHtml(!empty($entry['readable']) ? __('可读') : __('不可读')) ?></td>
+                                    <td>
+                                        <?php if (!$isDirectory && !empty($entry['readable'])): ?>
+                                            <div class="wfm-entry-actions">
+                                                <?php if (!empty($entry['previewable'])): ?>
+                                                    <a class="wfm-entry-action" data-wfm-preview-link href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $currentRelativePath, 'preview' => $entryRelativePath])) ?>">
+                                                        <i class="mdi mdi-eye-outline"></i>
+                                                        <span><?= $escapeHtml(__('预览')) ?></span>
+                                                    </a>
+                                                <?php endif; ?>
+                                                <?php if (!empty($entry['downloadable'])): ?>
+                                                    <a class="wfm-entry-action" data-wfm-download-link href="<?= $escapeHtml($buildDownloadUrl(['root' => $selectedRootKey, 'file' => $entryRelativePath])) ?>">
+                                                        <i class="mdi mdi-download-outline"></i>
+                                                        <span><?= $escapeHtml(__('下载')) ?></span>
+                                                    </a>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php else: ?>
+                                            <span class="wfm-entry-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php if (!empty($browse['truncated'])): ?>
+                        <div class="wfm-browser-note"><?= $escapeHtml(__('已显示前 200 项，继续收窄目录查看剩余内容。')) ?></div>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <div class="wfm-empty"><?= $escapeHtml(__('此目录暂无可显示文件。')) ?></div>
+                <?php endif; ?>
+            </div>
+        </section>
+
+        <section class="wfm-section" id="write-operations" aria-labelledby="wfm-write-title">
+            <h2 class="wfm-section-title" id="wfm-write-title"><?= $escapeHtml(__('受控写入')) ?></h2>
+            <div class="wfm-browser">
+                <div class="wfm-browser-head">
+                    <div>
+                        <h3><?= $escapeHtml(__('第一阶段写入能力')) ?></h3>
+                        <p class="wfm-description">
+                            <?= $escapeHtml(__('Ordinary writes stay on var/pub roots. Source roots require source policy and dedicated source actions.')) ?>
+                        </p>
+                    </div>
+                    <span class="<?= ($selectedRootWritable || $selectedSourceEditEnabled) ? 'wfm-status ok' : 'wfm-status' ?>">
+                        <?= $escapeHtml($selectedSourceEditEnabled ? __('源码编辑可用') : ($selectedRootWritable ? __('当前根目录可写') : __('当前根目录只读'))) ?>
+                    </span>
+                </div>
+                <div class="wfm-browser-current">
+                    <div>
+                        <span class="wfm-card-label"><?= $escapeHtml(__('写入目录')) ?></span>
+                        <code><?= $escapeHtml($currentPath !== '' ? $currentPath : '-') ?></code>
+                    </div>
+                    <?php if ($selectedWriteExtensions !== ''): ?>
+                        <div class="wfm-help">
+                            <?= $escapeHtml(__('允许扩展名')) ?>:
+                            <?= $escapeHtml($selectedWriteExtensions) ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($selectedSourceEditEnabled && $selectedSourceEditExtensions !== ''): ?>
+                        <div class="wfm-help">
+                            <?= $escapeHtml(__('源码扩展名')) ?>:
+                            <?= $escapeHtml($selectedSourceEditExtensions) ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                <div class="wfm-write-grid wfm-write-body">
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Create directory')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('非破坏性')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($createDirectoryUrl) ?>" data-wfm-create-directory-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-directory-name"><?= $escapeHtml(__('目录名')) ?></label>
+                                <input id="wfm-directory-name" name="directory_name" maxlength="128" autocomplete="off" placeholder="release-notes">
+                                <div class="wfm-help"><?= $escapeHtml(__('仅允许字母、数字、点、下划线和短横线，且不能以点开头。')) ?></div>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('我确认在当前允许根目录内创建这个目录。')) ?></span>
+                            </label>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedRootWritable ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-folder-plus-outline"></i>
+                                <span><?= $escapeHtml(__('创建目录')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card" id="wfm-save-text-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml($previewSourceEdit ? __('保存源码') : __('保存小文本')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml($previewSourceEdit ? __('源码策略') : __('128 KB')) ?></span>
+                        </div>
+                        <?php if ($previewCanEdit): ?>
+                            <div class="wfm-preview-note">
+                                <?= $escapeHtml(__('已载入预览文件：%{1}', [$preview['relative_path'] ?? $saveTextFileName])) ?>
+                                <?= $escapeHtml($previewSourceEdit ? __('保存源码前仍需要勾选确认并输入 SAVE_SOURCE。') : __('保存前仍需要勾选确认并输入 SAVE_TEXT。')) ?>
+                            </div>
+                        <?php endif; ?>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($saveTextUrl) ?>" data-wfm-save-text-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($saveTextRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($saveTextRelativePath) ?>">
+                            <input type="hidden" name="source_edit" value="<?= $previewSourceEdit ? '1' : '0' ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-file-name"><?= $escapeHtml(__('文件名')) ?></label>
+                                <input id="wfm-file-name" name="file_name" maxlength="128" autocomplete="off" placeholder="notes.txt" value="<?= $escapeHtml($saveTextFileName) ?>">
+                                <?php if ($previewCanEdit): ?>
+                                    <div class="wfm-help">
+                                        <?= $escapeHtml(__('写入相对目录')) ?>:
+                                        <?= $escapeHtml($saveTextRelativePath !== '' ? $saveTextRelativePath : '/') ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="wfm-field">
+                                <label for="wfm-file-content"><?= $escapeHtml(__('文本内容')) ?></label>
+                                <div class="wfm-editor-shell"
+                                     data-wfm-editor-shell
+                                     data-label-clean="<?= $escapeHtml(__('未修改')) ?>"
+                                     data-label-dirty="<?= $escapeHtml(__('已修改')) ?>"
+                                     data-label-limit="<?= $escapeHtml(__('超过 128 KB')) ?>"
+                                     data-label-cursor="<?= $escapeHtml(__('光标')) ?>">
+                                    <div class="wfm-editor-toolbar" aria-label="<?= $escapeHtml(__('文本编辑器工具')) ?>">
+                                        <div class="wfm-editor-tools">
+                                            <button type="button"
+                                                    class="wfm-editor-button is-active"
+                                                    data-wfm-editor-wrap
+                                                    aria-pressed="true">
+                                                <i class="mdi mdi-format-text-wrapping-wrap"></i>
+                                                <span><?= $escapeHtml(__('自动换行')) ?></span>
+                                            </button>
+                                            <label class="wfm-editor-select-label" for="wfm-editor-font-size"><?= $escapeHtml(__('字号')) ?></label>
+                                            <select id="wfm-editor-font-size"
+                                                    class="wfm-editor-select"
+                                                    data-wfm-editor-font-size
+                                                    aria-label="<?= $escapeHtml(__('编辑器字号')) ?>">
+                                                <option value="13">13px</option>
+                                                <option value="14" selected>14px</option>
+                                                <option value="15">15px</option>
+                                                <option value="16">16px</option>
+                                            </select>
+                                        </div>
+                                        <div class="wfm-editor-actions">
+                                            <span class="wfm-editor-dirty" data-wfm-editor-dirty><?= $escapeHtml(__('未修改')) ?></span>
+                                            <button type="button"
+                                                    class="wfm-editor-button"
+                                                    data-wfm-editor-revert
+                                                    disabled>
+                                                <i class="mdi mdi-restore"></i>
+                                                <span><?= $escapeHtml(__('还原预览')) ?></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <textarea id="wfm-file-content"
+                                              class="wfm-editor-textarea"
+                                              name="file_content"
+                                              maxlength="131072"
+                                              spellcheck="false"
+                                              data-wfm-editor-textarea><?= $escapeHtml($saveTextContent) ?></textarea>
+                                    <div class="wfm-editor-footer" aria-live="polite">
+                                        <div class="wfm-editor-metrics">
+                                            <span class="wfm-editor-metric"><b data-wfm-editor-lines>1</b> <?= $escapeHtml(__('行')) ?></span>
+                                            <span class="wfm-editor-metric"><b data-wfm-editor-chars>0</b> <?= $escapeHtml(__('字符')) ?></span>
+                                            <span class="wfm-editor-metric" data-wfm-editor-bytes-wrap><b data-wfm-editor-bytes>0</b> <?= $escapeHtml(__('字节')) ?></span>
+                                        </div>
+                                        <span class="wfm-editor-metric" data-wfm-editor-position><?= $escapeHtml(__('光标')) ?> 1:1</span>
+                                    </div>
+                                </div>
+                                <div class="wfm-help">
+                                    <?= $escapeHtml($previewSourceEdit ? __('源码编辑仅允许保存已存在的 php、phtml、js、ts、vue、css、scss、html、xml、json、md 等小源码文件。') : __('只允许保存 txt、md、json、csv、xml、yaml、yml、ini、conf、log、css 等文本文件。')) ?>
+                                </div>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="overwrite_existing" value="1" <?= $previewCanEdit ? 'checked' : '' ?>>
+                                <span><?= $escapeHtml(__('如果文件已存在，允许覆盖。')) ?></span>
+                            </label>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('我确认这个写入目标位于当前允许根目录内。')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-confirm-phrase"><?= $escapeHtml(__('确认短语')) ?></label>
+                                <input id="wfm-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="<?= $escapeHtml($saveTextConfirmPhrase) ?>">
+                            </div>
+                            <button type="submit" class="wfm-submit" <?= $saveTextWritable ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-content-save-outline"></i>
+                                <span><?= $escapeHtml($previewSourceEdit ? __('保存源码') : __('保存文本')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Upload file')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('5 MB')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" enctype="multipart/form-data" action="<?= $escapeHtml($uploadUrl) ?>" data-wfm-upload-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-upload-file"><?= $escapeHtml(__('File')) ?></label>
+                                <input id="wfm-upload-file" type="file" name="upload_file">
+                                <?php if ($selectedUploadExtensions !== ''): ?>
+                                    <div class="wfm-help"><?= $escapeHtml(__('Allowed upload extensions')) ?>: <?= $escapeHtml($selectedUploadExtensions) ?></div>
+                                <?php endif; ?>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="overwrite_existing" value="1">
+                                <span><?= $escapeHtml(__('Allow overwrite when a file with the same name already exists.')) ?></span>
+                            </label>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this upload target is inside the current allowlisted root.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-upload-confirm-phrase"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-upload-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="UPLOAD_FILE">
+                            </div>
+                            <button type="submit" class="wfm-submit" <?= $selectedRootWritable ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-upload-outline"></i>
+                                <span><?= $escapeHtml(__('Upload file')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Rename entry')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('Same folder')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($renameUrl) ?>" data-wfm-rename-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-rename-entry-path"><?= $escapeHtml(__('Relative path')) ?></label>
+                                <input id="wfm-rename-entry-path" name="entry_path" maxlength="255" autocomplete="off" placeholder="<?= $escapeHtml($currentRelativePath !== '' ? $currentRelativePath . '/notes.txt' : 'notes.txt') ?>">
+                                <div class="wfm-help"><?= $escapeHtml(__('Use the relative path shown in the file list.')) ?></div>
+                            </div>
+                            <div class="wfm-field">
+                                <label for="wfm-new-name"><?= $escapeHtml(__('New name')) ?></label>
+                                <input id="wfm-new-name" name="new_name" maxlength="128" autocomplete="off" placeholder="notes-renamed.txt">
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this rename stays inside the same allowlisted folder.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-rename-confirm-phrase"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-rename-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="RENAME_ENTRY">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedRootWritable ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-form-textbox"></i>
+                                <span><?= $escapeHtml(__('Rename entry')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Compress entry')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('Bounded ZIP')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($compressUrl) ?>" data-wfm-compress-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-compress-entry-path"><?= $escapeHtml(__('Relative path')) ?></label>
+                                <input id="wfm-compress-entry-path" name="entry_path" maxlength="255" autocomplete="off" placeholder="<?= $escapeHtml($currentRelativePath !== '' ? $currentRelativePath . '/release' : 'release') ?>">
+                                <div class="wfm-help"><?= $escapeHtml(__('Compress a file or directory into a sibling ZIP archive.')) ?></div>
+                            </div>
+                            <div class="wfm-field">
+                                <label for="wfm-archive-name"><?= $escapeHtml(__('Archive name')) ?></label>
+                                <input id="wfm-archive-name" name="archive_name" maxlength="128" autocomplete="off" placeholder="release.zip">
+                                <div class="wfm-help"><?= $escapeHtml(__('Limits: 200 entries and 10 MB source data. Existing archives are not overwritten.')) ?></div>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this archive stays inside the same allowlisted folder.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-compress-confirm-phrase"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-compress-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="COMPRESS_ENTRY">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedRootWritable ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-archive-arrow-down-outline"></i>
+                                <span><?= $escapeHtml(__('Compress entry')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Delete entry')) ?></h3>
+                            <span class="wfm-status danger"><?= $escapeHtml(__('Bounded delete')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($deleteUrl) ?>" data-wfm-delete-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-delete-entry-path"><?= $escapeHtml(__('Relative path')) ?></label>
+                                <input id="wfm-delete-entry-path" name="entry_path" maxlength="255" autocomplete="off" placeholder="<?= $escapeHtml($currentRelativePath !== '' ? $currentRelativePath . '/notes.txt' : 'notes.txt') ?>">
+                                <div class="wfm-help"><?= $escapeHtml(__('Files and empty directories use DELETE_ENTRY. Non-empty directories require recursive mode, DELETE_TREE, and are limited to 100 entries and 10 MB.')) ?></div>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I understand this delete cannot be undone from the panel.')) ?></span>
+                            </label>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="delete_recursive" value="1">
+                                <span><?= $escapeHtml(__('Allow bounded recursive directory delete for this target.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-delete-confirm-phrase"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-delete-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="DELETE_ENTRY or DELETE_TREE">
+                            </div>
+                            <button type="submit" class="wfm-submit danger" <?= $selectedRootWritable ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-delete-outline"></i>
+                                <span><?= $escapeHtml(__('Delete entry')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="wfm-section" id="queue-operations" aria-labelledby="wfm-queue-title">
+            <h2 class="wfm-section-title" id="wfm-queue-title"><?= $escapeHtml(__('大文件队列')) ?></h2>
+            <div class="wfm-browser">
+                <div class="wfm-browser-head">
+                    <div>
+                        <h3><?= $escapeHtml(__('大文件队列')) ?></h3>
+                        <p class="wfm-description">
+                            <?= $escapeHtml(__('Large ZIP compression and recoverable trash moves are queued through Weline Queue so WLS requests stay responsive. Workers re-check root boundaries before writing or moving files.')) ?>
+                        </p>
+                    </div>
+                    <span class="<?= $selectedRootWritable ? 'wfm-status ok' : 'wfm-status' ?>">
+                        <?= $escapeHtml($selectedRootWritable ? __('当前根目录可入队') : __('当前根目录只读')) ?>
+                    </span>
+                </div>
+                <div class="wfm-log-summary" aria-label="<?= $escapeHtml(__('Queue Summary')) ?>">
+                    <div class="wfm-log-stat">
+                        <span><?= $escapeHtml(__('Shown')) ?></span>
+                        <strong><?= (int)($queueOperationSummary['shown'] ?? 0) ?></strong>
+                    </div>
+                    <div class="wfm-log-stat">
+                        <span><?= $escapeHtml(__('Pending')) ?></span>
+                        <strong><?= (int)($queueOperationSummary['pending'] ?? 0) ?></strong>
+                    </div>
+                    <div class="wfm-log-stat">
+                        <span><?= $escapeHtml(__('Running')) ?></span>
+                        <strong><?= (int)($queueOperationSummary['running'] ?? 0) ?></strong>
+                    </div>
+                    <div class="wfm-log-stat">
+                        <span><?= $escapeHtml(__('Done')) ?></span>
+                        <strong><?= (int)($queueOperationSummary['done'] ?? 0) ?></strong>
+                    </div>
+                    <div class="wfm-log-stat">
+                        <span><?= $escapeHtml(__('Error')) ?></span>
+                        <strong><?= (int)($queueOperationSummary['error'] ?? 0) ?></strong>
+                    </div>
+                    <div class="wfm-log-stat">
+                        <span><?= $escapeHtml(__('回收历史')) ?></span>
+                        <strong><?= (int)($trashHistorySummary['shown'] ?? 0) ?></strong>
+                    </div>
+                    <div class="wfm-log-stat">
+                        <span><?= $escapeHtml(__('可恢复回收')) ?></span>
+                        <strong><?= (int)($trashHistorySummary['available_restore'] ?? 0) ?></strong>
+                    </div>
+                    <div class="wfm-log-stat">
+                        <span><?= $escapeHtml(__('已永久清理')) ?></span>
+                        <strong><?= (int)($trashHistorySummary['purged'] ?? 0) ?></strong>
+                    </div>
+                </div>
+                <?php if (!empty($queueOperationSummary['message'])): ?>
+                    <div class="wfm-browser-alert">
+                        <?= $escapeHtml($this->getData('wlsFileManagerError') ?: __('Large-file queue status could not be loaded.')) ?>
+                    </div>
+                <?php endif; ?>
+                <div class="wfm-write-grid wfm-write-body">
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue ZIP compression')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('Async')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($compressQueueUrl) ?>" data-wfm-compress-queue-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-queue-compress-entry-path"><?= $escapeHtml(__('Relative path')) ?></label>
+                                <input id="wfm-queue-compress-entry-path" name="entry_path" maxlength="255" autocomplete="off" placeholder="<?= $escapeHtml($currentRelativePath !== '' ? $currentRelativePath . '/release' : 'release') ?>">
+                                <div class="wfm-help"><?= $escapeHtml(__('Use this for larger folders or files that should not be compressed inside a browser request.')) ?></div>
+                            </div>
+                            <div class="wfm-field">
+                                <label for="wfm-queue-archive-name"><?= $escapeHtml(__('Archive name')) ?></label>
+                                <input id="wfm-queue-archive-name" name="archive_name" maxlength="128" autocomplete="off" placeholder="release-large.zip">
+                                <div class="wfm-help"><?= $escapeHtml(__('Queued limits: 2000 entries and 512 MB source data. The worker refuses symlinks and path escapes.')) ?></div>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this queued archive should be written into the same allowlisted folder.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-queue-compress-confirm-phrase"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-queue-compress-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="QUEUE_COMPRESS">
+                            </div>
+                            <button type="submit" class="wfm-submit" <?= $selectedRootWritable ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-progress-clock"></i>
+                                <span><?= $escapeHtml(__('Create queue')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Create source file')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('Source policy')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceCreateUrl) ?>" data-wfm-source-create-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-source-create-name"><?= $escapeHtml(__('Source file name')) ?></label>
+                                <input id="wfm-source-create-name" name="source_file_name" maxlength="128" autocomplete="off" placeholder="component.php">
+                                <div class="wfm-help">
+                                    <?= $escapeHtml(__('Creates one new file in the current source-policy root. Directories, uploads, renames, deletes, and queue operations stay disabled for source roots.')) ?>
+                                </div>
+                            </div>
+                            <div class="wfm-field">
+                                <label for="wfm-source-create-content"><?= $escapeHtml(__('Initial content')) ?></label>
+                                <textarea id="wfm-source-create-content"
+                                          name="source_file_content"
+                                          maxlength="131072"
+                                          rows="7"
+                                          spellcheck="false"
+                                          placeholder="<?= $escapeHtml(__('Optional. Max 128 KB; binary content is rejected.')) ?>"></textarea>
+                                <?php if ($selectedSourceEditExtensions !== ''): ?>
+                                    <div class="wfm-help">
+                                        <?= $escapeHtml(__('Allowed source extensions')) ?>:
+                                        <?= $escapeHtml($selectedSourceEditExtensions) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this new source file belongs in the current source-policy root.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-source-create-confirm"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-source-create-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_CREATE_FILE">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-file-plus-outline"></i>
+                                <span><?= $escapeHtml(__('Create source file')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Rename source file')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('Source policy')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceRenameUrl) ?>" data-wfm-source-rename-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-source-rename-name"><?= $escapeHtml(__('Current source file name')) ?></label>
+                                <input id="wfm-source-rename-name" name="source_file_name" maxlength="128" autocomplete="off" placeholder="component.php">
+                                <div class="wfm-help">
+                                    <?= $escapeHtml(__('Renames one existing file in the current source-policy directory. Cross-folder moves, overwrites, deletes, uploads, and queue operations stay disabled for source roots.')) ?>
+                                </div>
+                            </div>
+                            <div class="wfm-field">
+                                <label for="wfm-source-rename-new-name"><?= $escapeHtml(__('New source file name')) ?></label>
+                                <input id="wfm-source-rename-new-name" name="source_new_name" maxlength="128" autocomplete="off" placeholder="component-renamed.php">
+                                <?php if ($selectedSourceEditExtensions !== ''): ?>
+                                    <div class="wfm-help">
+                                        <?= $escapeHtml(__('Allowed source extensions')) ?>:
+                                        <?= $escapeHtml($selectedSourceEditExtensions) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this rename stays inside the current source-policy root.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-source-rename-confirm"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-source-rename-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_RENAME">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-file-edit-outline"></i>
+                                <span><?= $escapeHtml(__('Rename source file')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Trash source file')) ?></h3>
+                            <span class="wfm-status warning"><?= $escapeHtml(__('Recoverable')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceTrashUrl) ?>" data-wfm-source-trash-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-source-trash-name"><?= $escapeHtml(__('Source file name')) ?></label>
+                                <input id="wfm-source-trash-name" name="source_file_name" maxlength="128" autocomplete="off" placeholder="component-old.php">
+                                <div class="wfm-help">
+                                    <?= $escapeHtml(__('Moves one existing source-policy file into the same root .wls-trash folder. Directories, hard delete, purge, and broad source queues stay disabled.')) ?>
+                                </div>
+                                <?php if ($selectedSourceEditExtensions !== ''): ?>
+                                    <div class="wfm-help">
+                                        <?= $escapeHtml(__('Allowed source extensions')) ?>:
+                                        <?= $escapeHtml($selectedSourceEditExtensions) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this source file should be moved into recoverable trash, not permanently deleted.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-source-trash-confirm"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-source-trash-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_TRASH">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-delete-clock-outline"></i>
+                                <span><?= $escapeHtml(__('Trash source file')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source trash')) ?></h3>
+                            <span class="wfm-status warning"><?= $escapeHtml(__('Source queue')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceTrashQueueUrl) ?>" data-wfm-source-trash-queue-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-source-trash-queue-name"><?= $escapeHtml(__('Source file name')) ?></label>
+                                <input id="wfm-source-trash-queue-name" name="source_file_name" maxlength="128" autocomplete="off" placeholder="component-old.php">
+                                <div class="wfm-help">
+                                    <?= $escapeHtml(__('Queues one existing source-policy file into recoverable .wls-trash. Single file only, max 128 KB; directories, purge, hard delete, upload, and broad source queues stay disabled.')) ?>
+                                </div>
+                                <?php if ($selectedSourceEditExtensions !== ''): ?>
+                                    <div class="wfm-help">
+                                        <?= $escapeHtml(__('Allowed source extensions')) ?>:
+                                        <?= $escapeHtml($selectedSourceEditExtensions) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this source file should be queued for recoverable trash, not permanently deleted.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-source-trash-queue-confirm"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-source-trash-queue-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_QUEUE_TRASH">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-progress-clock"></i>
+                                <span><?= $escapeHtml(__('Create source trash queue')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue recoverable trash')) ?></h3>
+                            <span class="wfm-status warning"><?= $escapeHtml(__('Recoverable')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($trashQueueUrl) ?>" data-wfm-trash-queue-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-queue-trash-entry-path"><?= $escapeHtml(__('Relative path')) ?></label>
+                                <input id="wfm-queue-trash-entry-path" name="entry_path" maxlength="255" autocomplete="off" placeholder="<?= $escapeHtml($currentRelativePath !== '' ? $currentRelativePath . '/old-cache' : 'old-cache') ?>">
+                                <div class="wfm-help"><?= $escapeHtml(__('Moves the target into the same root .wls-trash folder. Completed jobs can be restored from the recent queue list while the original path is still free.')) ?></div>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this target should be moved into recoverable trash, not permanently deleted.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-queue-trash-confirm-phrase"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-queue-trash-confirm-phrase" name="confirm_phrase" autocomplete="off" placeholder="QUEUE_TRASH">
+                            </div>
+                            <button type="submit" class="wfm-submit" <?= $selectedRootWritable ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-delete-clock-outline"></i>
+                                <span><?= $escapeHtml(__('Create recoverable queue')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Recent queue jobs')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('Latest 10')) ?></span>
+                        </div>
+                        <?php if ($queueOperationItems): ?>
+                            <div class="wfm-log-list">
+                                <?php foreach ($queueOperationItems as $queueItem): ?>
+                                    <?php $queueStatusClass = (string)preg_replace('/[^a-z_]/', '', (string)($queueItem['status_class'] ?? '')); ?>
+                                    <article class="wfm-log-item <?= $escapeHtml($queueStatusClass !== '' ? 'is-' . $queueStatusClass : '') ?>">
+                                        <div class="wfm-log-title">
+                                            #<?= $escapeHtml($queueItem['queue_id'] ?? '') ?> · <?= $escapeHtml($queueItem['operation_label'] ?? __('Queue operation')) ?> · <?= $escapeHtml($queueItem['status_label'] ?? '') ?>
+                                            <?php if (!empty($queueItem['target'])): ?>
+                                                · <?= $escapeHtml($queueItem['target']) ?>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="wfm-log-meta">
+                                            <?php if (!empty($queueItem['source'])): ?>
+                                                <span><?= $escapeHtml(__('Source')) ?>: <?= $escapeHtml($queueItem['source']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($queueItem['target'])): ?>
+                                                <span><?= $escapeHtml(__('Target')) ?>: <?= $escapeHtml($queueItem['target']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($queueItem['start_at'])): ?>
+                                                <span><?= $escapeHtml(__('Start')) ?>: <?= $escapeHtml($queueItem['start_at']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($queueItem['end_at'])): ?>
+                                                <span><?= $escapeHtml(__('End')) ?>: <?= $escapeHtml($queueItem['end_at']) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <?php if (!empty($queueItem['process'])): ?>
+                                            <div class="wfm-help"><?= $escapeHtml($queueItem['process']) ?></div>
+                                        <?php elseif (!empty($queueItem['result'])): ?>
+                                            <div class="wfm-help"><?= $escapeHtml($queueItem['result']) ?></div>
+                                        <?php endif; ?>
+                                        <?php if ((string)($queueItem['can_restore'] ?? '') === '1'): ?>
+                                            <form class="wfm-inline-action-form" method="post" action="<?= $escapeHtml($trashRestoreUrl) ?>" data-wfm-trash-restore-form>
+                                                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                                                <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                                                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                                                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                                                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                                                <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                                                <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                                                <input type="hidden" name="queue_id" value="<?= $escapeHtml($queueItem['queue_id'] ?? '') ?>">
+                                                <input type="hidden" name="confirm_write" value="1">
+                                                <input type="hidden" name="confirm_phrase" value="RESTORE_TRASH">
+                                                <button type="submit" class="wfm-secondary-action">
+                                                    <i class="mdi mdi-restore"></i>
+                                                    <span><?= $escapeHtml(__('Restore')) ?></span>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </article>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="wfm-empty"><?= $escapeHtml(__('No queued large-file operations yet.')) ?></div>
+                        <?php endif; ?>
+                    </article>
+                    <article class="wfm-card" data-wfm-trash-history>
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('回收历史')) ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml(__('Latest 30')) ?></span>
+                        </div>
+                        <p class="wfm-description">
+                            <?= $escapeHtml(__('Only queue-created trash entries are listed here. Restore remains available only while the original path is still free and the .wls-trash entry exists. Permanent purge requires explicit PURGE_TRASH confirmation.')) ?>
+                        </p>
+                        <?php if ($trashHistoryItems): ?>
+                            <div class="wfm-log-list">
+                                <?php foreach ($trashHistoryItems as $trashItem): ?>
+                                    <?php
+                                    $trashStatusClass = (string)preg_replace('/[^a-z_]/', '', (string)($trashItem['status_class'] ?? ''));
+                                    $restoreClass = trim((string)($trashItem['restore_state_class'] ?? ''));
+                                    $restoreBadgeClass = $restoreClass !== '' ? 'wfm-status ' . $restoreClass : 'wfm-status';
+                                    ?>
+                                    <article class="wfm-log-item <?= $escapeHtml($trashStatusClass !== '' ? 'is-' . $trashStatusClass : '') ?>">
+                                        <div class="wfm-log-title">
+                                            #<?= $escapeHtml($trashItem['queue_id'] ?? '') ?> · <?= $escapeHtml($trashItem['status_label'] ?? '') ?>
+                                        </div>
+                                        <div class="wfm-log-meta">
+                                            <?php if (!empty($trashItem['source'])): ?>
+                                                <span><?= $escapeHtml(__('Source')) ?>: <?= $escapeHtml($trashItem['source']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($trashItem['target'])): ?>
+                                                <span><?= $escapeHtml(__('Trash')) ?>: <?= $escapeHtml($trashItem['target']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($trashItem['end_at'])): ?>
+                                                <span><?= $escapeHtml(__('End')) ?>: <?= $escapeHtml($trashItem['end_at']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($trashItem['trash_purged_at'])): ?>
+                                                <span><?= $escapeHtml(__('Purged')) ?>: <?= $escapeHtml($trashItem['trash_purged_at']) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <?php if (!empty($trashItem['restore_state_label'])): ?>
+                                            <div>
+                                                <span class="<?= $escapeHtml($restoreBadgeClass) ?>"><?= $escapeHtml($trashItem['restore_state_label']) ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($trashItem['restore_reason'])): ?>
+                                            <div class="wfm-help"><?= $escapeHtml($trashItem['restore_reason']) ?></div>
+                                        <?php elseif (!empty($trashItem['process'])): ?>
+                                            <div class="wfm-help"><?= $escapeHtml($trashItem['process']) ?></div>
+                                        <?php endif; ?>
+                                        <?php if ((string)($trashItem['can_restore'] ?? '') === '1'): ?>
+                                            <form class="wfm-inline-action-form" method="post" action="<?= $escapeHtml($trashRestoreUrl) ?>" data-wfm-trash-restore-form>
+                                                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                                                <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                                                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                                                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                                                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                                                <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                                                <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                                                <input type="hidden" name="queue_id" value="<?= $escapeHtml($trashItem['queue_id'] ?? '') ?>">
+                                                <input type="hidden" name="confirm_write" value="1">
+                                                <input type="hidden" name="confirm_phrase" value="RESTORE_TRASH">
+                                                <button type="submit" class="wfm-secondary-action">
+                                                    <i class="mdi mdi-restore"></i>
+                                                    <span><?= $escapeHtml(__('Restore')) ?></span>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                        <?php if ((string)($trashItem['can_purge'] ?? '') === '1'): ?>
+                                            <form class="wfm-inline-action-form is-danger" method="post" action="<?= $escapeHtml($trashPurgeUrl) ?>" data-wfm-trash-purge-form>
+                                                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                                                <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                                                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                                                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                                                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                                                <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                                                <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                                                <input type="hidden" name="queue_id" value="<?= $escapeHtml($trashItem['queue_id'] ?? '') ?>">
+                                                <label class="wfm-check">
+                                                    <input type="checkbox" name="confirm_write" value="1">
+                                                    <span><?= $escapeHtml(__('我确认永久删除此回收条目。')) ?></span>
+                                                </label>
+                                                <div class="wfm-inline-field">
+                                                    <label><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                                    <input name="confirm_phrase" autocomplete="off" placeholder="PURGE_TRASH">
+                                                </div>
+                                                <button type="submit" class="wfm-secondary-action danger">
+                                                    <i class="mdi mdi-delete-forever-outline"></i>
+                                                    <span><?= $escapeHtml(__('永久清理')) ?></span>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </article>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="wfm-empty"><?= $escapeHtml(__('暂无可恢复回收历史。')) ?></div>
+                        <?php endif; ?>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="wfm-section" id="operation-log" aria-labelledby="wfm-log-title">
+            <h2 class="wfm-section-title" id="wfm-log-title"><?= $escapeHtml(__('Operation Logs')) ?></h2>
+            <div class="wfm-log-summary" aria-label="<?= $escapeHtml(__('Audit Summary')) ?>">
+                <div class="wfm-log-stat">
+                    <span><?= $escapeHtml(__('Scanned')) ?></span>
+                    <strong><?= (int)($operationLogSummary['scanned'] ?? 0) ?></strong>
+                </div>
+                <div class="wfm-log-stat">
+                    <span><?= $escapeHtml(__('Shown')) ?></span>
+                    <strong><?= (int)($operationLogSummary['shown'] ?? 0) ?></strong>
+                </div>
+                <div class="wfm-log-stat">
+                    <span><?= $escapeHtml(__('Success')) ?></span>
+                    <strong><?= (int)($operationLogSummary['success'] ?? 0) ?></strong>
+                </div>
+                <div class="wfm-log-stat">
+                    <span><?= $escapeHtml(__('Denied')) ?></span>
+                    <strong><?= (int)($operationLogSummary['denied'] ?? 0) ?></strong>
+                </div>
+                <div class="wfm-log-stat">
+                    <span><?= $escapeHtml(__('Failed')) ?></span>
+                    <strong><?= (int)($operationLogSummary['failed'] ?? 0) ?></strong>
+                </div>
+            </div>
+            <form class="wfm-log-filters" method="get" action="<?= $escapeHtml($browseBaseUrl) ?>#operation-log" aria-label="<?= $escapeHtml(__('Audit Filters')) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.read') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                <div class="wfm-log-filter-grid">
+                    <div class="wfm-field">
+                        <label for="wfm-log-action"><?= $escapeHtml(__('Action')) ?></label>
+                        <select id="wfm-log-action" name="log_action">
+                            <?php foreach ($logActionOptions as $optionValue => $optionLabel): ?>
+                                <option value="<?= $escapeHtml($optionValue) ?>" <?= (string)($operationLogFilters['action'] ?? '') === (string)$optionValue ? 'selected' : '' ?>>
+                                    <?= $escapeHtml($optionLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="wfm-field">
+                        <label for="wfm-log-result"><?= $escapeHtml(__('Result')) ?></label>
+                        <select id="wfm-log-result" name="log_result">
+                            <?php foreach ($logResultOptions as $optionValue => $optionLabel): ?>
+                                <option value="<?= $escapeHtml($optionValue) ?>" <?= (string)($operationLogFilters['result'] ?? '') === (string)$optionValue ? 'selected' : '' ?>>
+                                    <?= $escapeHtml($optionLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="wfm-field">
+                        <label for="wfm-log-root"><?= $escapeHtml(__('Root')) ?></label>
+                        <select id="wfm-log-root" name="log_root">
+                            <?php foreach ($logRootOptions as $optionValue => $optionLabel): ?>
+                                <option value="<?= $escapeHtml($optionValue) ?>" <?= (string)($operationLogFilters['root'] ?? '') === (string)$optionValue ? 'selected' : '' ?>>
+                                    <?= $escapeHtml($optionLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="wfm-field">
+                        <label for="wfm-log-query"><?= $escapeHtml(__('Keyword')) ?></label>
+                        <input id="wfm-log-query" name="log_query" maxlength="80" autocomplete="off" value="<?= $escapeHtml($operationLogFilters['query'] ?? '') ?>" placeholder="<?= $escapeHtml(__('Path, target, domain, or IP')) ?>">
+                    </div>
+                </div>
+                <div class="wfm-log-filter-actions">
+                    <button type="submit" class="wfm-submit secondary">
+                        <i class="mdi mdi-filter-outline"></i>
+                        <span><?= $escapeHtml(__('Filter Logs')) ?></span>
+                    </button>
+                    <a class="wfm-log-reset" href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $currentRelativePath])) ?>#operation-log">
+                        <?= $escapeHtml(__('Reset Filters')) ?>
+                    </a>
+                    <?php if (!empty($operationLogSummary['latest_time'])): ?>
+                        <span class="wfm-help"><?= $escapeHtml(__('Latest')) ?>: <?= $escapeHtml($operationLogSummary['latest_time']) ?></span>
+                    <?php endif; ?>
+                </div>
+            </form>
+            <?php if ($operationLogs): ?>
+                <div class="wfm-log-list">
+                    <?php foreach ($operationLogs as $log): ?>
+                        <?php $logResultClass = (string)preg_replace('/[^a-z_]/', '', (string)($log['result_code'] ?? '')); ?>
+                        <article class="wfm-log-item <?= $escapeHtml($logResultClass !== '' ? 'is-' . $logResultClass : '') ?>" data-wfm-log-result="<?= $escapeHtml($log['result_code'] ?? '') ?>">
+                            <div class="wfm-log-title">
+                                <?= $escapeHtml($log['action'] ?? '') ?> · <?= $escapeHtml($log['result'] ?? '') ?>
+                                <?php if (!empty($log['target'])): ?>
+                                    · <?= $escapeHtml($log['target']) ?>
+                                <?php endif; ?>
+                            </div>
+                            <div class="wfm-log-meta">
+                                <span><?= $escapeHtml($log['time'] ?? '') ?></span>
+                                <span><?= $escapeHtml(__('根目录')) ?>: <?= $escapeHtml($log['root'] ?? '') ?></span>
+                                <span><?= $escapeHtml(__('路径')) ?>: <?= $escapeHtml($log['relative_path'] ?? '-') ?></span>
+                                <?php if (!empty($log['domain'])): ?>
+                                    <span><?= $escapeHtml(__('域名')) ?>: <?= $escapeHtml($log['domain']) ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($log['ip'])): ?>
+                                    <span>IP: <?= $escapeHtml($log['ip']) ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <?php if (!empty($log['message'])): ?>
+                                <div class="wfm-help"><?= $escapeHtml($log['message']) ?></div>
+                            <?php endif; ?>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="wfm-empty">
+                    <?= $escapeHtml(!empty($operationLogSummary['filtered']) ? __('No matching file operation logs.') : __('暂无文件操作日志。')) ?>
+                </div>
+            <?php endif; ?>
+        </section>
+
+        <section class="wfm-section" id="capabilities" aria-labelledby="wfm-capabilities-title">
+            <h2 class="wfm-section-title" id="wfm-capabilities-title"><?= $escapeHtml(__('能力阶段')) ?></h2>
+            <div class="wfm-capabilities">
+                <?php foreach ($capabilities as $capability): ?>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml($capability['title'] ?? '') ?></h3>
+                            <span class="wfm-status"><?= $escapeHtml($capability['state'] ?? '') ?></span>
+                        </div>
+                        <p class="wfm-description"><?= $escapeHtml($capability['description'] ?? '') ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+    (function () {
+        var shell = document.querySelector('[data-wls-file-manager-shell]');
+        var toggle = document.querySelector('[data-wfm-theme-toggle]');
+        var label = document.querySelector('[data-wfm-theme-label]');
+        var storageKey = 'wls_panel_theme';
+
+        function applyTheme(theme) {
+            var nextTheme = theme === 'dark' ? 'dark' : 'light';
+            shell.setAttribute('data-theme', nextTheme);
+            if (label) {
+                label.textContent = nextTheme === 'dark'
+                    ? '<?= $escapeHtml(__('浅色')) ?>'
+                    : '<?= $escapeHtml(__('深色')) ?>';
+            }
+        }
+
+        if (!shell) {
+            return;
+        }
+
+        var savedTheme = 'light';
+        try {
+            savedTheme = localStorage.getItem(storageKey) || savedTheme;
+        } catch (error) {
+            savedTheme = 'light';
+        }
+        applyTheme(savedTheme);
+
+        if (toggle) {
+            toggle.addEventListener('click', function () {
+                var currentTheme = shell.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                var nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                try {
+                    localStorage.setItem(storageKey, nextTheme);
+                } catch (error) {
+                    return;
+                }
+                applyTheme(nextTheme);
+            });
+        }
+    })();
+
+    (function () {
+        var form = document.querySelector('[data-wfm-save-text-form]');
+        if (!form) {
+            return;
+        }
+
+        var shell = form.querySelector('[data-wfm-editor-shell]');
+        var textarea = form.querySelector('[data-wfm-editor-textarea]');
+        if (!shell || !textarea) {
+            return;
+        }
+
+        var wrapButton = form.querySelector('[data-wfm-editor-wrap]');
+        var fontSizeSelect = form.querySelector('[data-wfm-editor-font-size]');
+        var revertButton = form.querySelector('[data-wfm-editor-revert]');
+        var dirtyIndicator = form.querySelector('[data-wfm-editor-dirty]');
+        var lineCounter = form.querySelector('[data-wfm-editor-lines]');
+        var charCounter = form.querySelector('[data-wfm-editor-chars]');
+        var byteCounter = form.querySelector('[data-wfm-editor-bytes]');
+        var positionLabel = form.querySelector('[data-wfm-editor-position]');
+        var confirmPhraseInput = form.querySelector('input[name="confirm_phrase"]');
+        var confirmCheckbox = form.querySelector('input[name="confirm_write"]');
+        var submitButton = form.querySelector('button[type="submit"]');
+        var initialValue = textarea.value;
+        var maxBytes = parseInt(textarea.getAttribute('maxlength') || '131072', 10);
+        var cleanLabel = shell.getAttribute('data-label-clean') || 'Clean';
+        var dirtyLabel = shell.getAttribute('data-label-dirty') || 'Modified';
+        var limitLabel = shell.getAttribute('data-label-limit') || 'Over limit';
+        var cursorLabel = shell.getAttribute('data-label-cursor') || 'Cursor';
+
+        function byteLength(value) {
+            if (typeof Blob !== 'undefined') {
+                return new Blob([value]).size;
+            }
+            return value.length;
+        }
+
+        function cursorPosition(value, index) {
+            var before = value.slice(0, index).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            var parts = before.split('\n');
+            return {
+                line: parts.length,
+                column: (parts[parts.length - 1] || '').length + 1
+            };
+        }
+
+        function updateEditorState() {
+            var value = textarea.value;
+            var normalized = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            var lines = normalized === '' ? 1 : normalized.split('\n').length;
+            var chars = Array.from ? Array.from(value).length : value.length;
+            var bytes = byteLength(value);
+            var changed = value !== initialValue;
+            var overLimit = bytes > maxBytes;
+            var position = cursorPosition(value, textarea.selectionStart || 0);
+
+            if (lineCounter) {
+                lineCounter.textContent = String(lines);
+            }
+            if (charCounter) {
+                charCounter.textContent = String(chars);
+            }
+            if (byteCounter) {
+                byteCounter.textContent = String(bytes);
+            }
+            if (positionLabel) {
+                positionLabel.textContent = cursorLabel + ' ' + position.line + ':' + position.column;
+            }
+            if (dirtyIndicator) {
+                dirtyIndicator.textContent = overLimit ? limitLabel : (changed ? dirtyLabel : cleanLabel);
+                dirtyIndicator.classList.toggle('is-dirty', changed || overLimit);
+            }
+            if (revertButton) {
+                revertButton.disabled = !changed;
+            }
+            shell.classList.toggle('is-over-limit', overLimit);
+        }
+
+        if (wrapButton) {
+            wrapButton.addEventListener('click', function () {
+                var nextWrap = textarea.classList.toggle('is-nowrap') === false;
+                wrapButton.classList.toggle('is-active', nextWrap);
+                wrapButton.setAttribute('aria-pressed', nextWrap ? 'true' : 'false');
+                textarea.focus();
+            });
+        }
+
+        if (fontSizeSelect) {
+            fontSizeSelect.addEventListener('change', function () {
+                textarea.style.fontSize = fontSizeSelect.value + 'px';
+                textarea.focus();
+            });
+            textarea.style.fontSize = fontSizeSelect.value + 'px';
+        }
+
+        if (revertButton) {
+            revertButton.addEventListener('click', function () {
+                textarea.value = initialValue;
+                updateEditorState();
+                textarea.focus();
+            });
+        }
+
+        textarea.addEventListener('input', updateEditorState);
+        textarea.addEventListener('keyup', updateEditorState);
+        textarea.addEventListener('click', updateEditorState);
+        textarea.addEventListener('select', updateEditorState);
+        textarea.addEventListener('keydown', function (event) {
+            var key = String(event.key || '').toLowerCase();
+            if (key !== 's' || (!event.ctrlKey && !event.metaKey)) {
+                return;
+            }
+
+            event.preventDefault();
+            if (confirmCheckbox && !confirmCheckbox.checked) {
+                confirmCheckbox.focus();
+                return;
+            }
+            if (confirmPhraseInput && confirmPhraseInput.value.trim() === '') {
+                confirmPhraseInput.focus();
+                return;
+            }
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+                return;
+            }
+            if (submitButton) {
+                submitButton.click();
+            }
+        });
+
+        updateEditorState();
+    })();
+</script>

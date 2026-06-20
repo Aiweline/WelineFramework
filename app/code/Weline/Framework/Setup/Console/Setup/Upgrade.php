@@ -92,6 +92,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         'skip-background-optimize',
         'sync',
         'skip-classmap',
+        'skip-composer-dump',
         'y',
         'yes',
         '-y',
@@ -113,6 +114,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         '--skip-reflection-compile, --skip-reflect',
         '--skip-background-optimize, --sync',
         '--skip-classmap',
+        '--skip-composer-dump',
         '--yes, -y',
         '--help, -h',
     ];
@@ -274,7 +276,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $result = $system->exec($command);
             // 检查返回码
             $returnCode = $result['return_vars'] ?? -1;
-            if ($returnCode !== 0) {
+            if (!$this->composerDumpAutoloadSucceeded($result['output'] ?? [], (int)$returnCode)) {
                 $errorOutput = implode("\n", $result['output'] ?? []);
                 throw new Exception(__('composer dump-autoload 执行失败（返回码: %{1}）: %{2}', [$returnCode, $errorOutput]));
             }
@@ -318,7 +320,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $envComposerCommand = getenv('WELINE_COMPOSER_COMMAND');
         if (is_string($envComposerCommand) && trim($envComposerCommand) !== '') {
             exec($envComposerCommand . ' --version 2>&1', $envOutput, $envReturnCode);
-            if ($envReturnCode === 0) {
+            if ($this->composerVersionCheckPassed($envOutput, (int)$envReturnCode)) {
                 return $envComposerCommand;
             }
         }
@@ -333,7 +335,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
             $testCommand = $phpBinary . ' ' . escapeshellarg($serverPhar) . ' --version 2>&1';
             exec($testCommand, $serverOutput, $serverReturnCode);
-            if ($serverReturnCode === 0) {
+            if ($this->composerVersionCheckPassed($serverOutput, (int)$serverReturnCode)) {
                 return $phpBinary . ' ' . escapeshellarg($serverPhar);
             }
         }
@@ -352,7 +354,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             if (strpos($composerPath, 'composer') !== false) {
                 // 验证命令是否可用
                 exec($composerPath . ' --version 2>&1', $verifyOutput, $verifyReturnCode);
-                if ($verifyReturnCode === 0) {
+                if ($this->composerVersionCheckPassed($verifyOutput, (int)$verifyReturnCode)) {
                     return $composerPath;
                 }
             }
@@ -360,11 +362,40 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 3. 尝试直接使用 composer（可能在 PATH 中）
         exec('composer --version 2>&1', $output, $returnCode);
-        if ($returnCode === 0) {
+        if ($this->composerVersionCheckPassed($output, (int)$returnCode)) {
             return 'composer';
         }
         
         return null;
+    }
+
+    private function composerVersionCheckPassed(array $output, int $returnCode): bool
+    {
+        if ($returnCode === 0) {
+            return true;
+        }
+
+        return $this->composerOutputContains($output, 'Composer version');
+    }
+
+    private function composerDumpAutoloadSucceeded(array $output, int $returnCode): bool
+    {
+        if ($returnCode === 0) {
+            return true;
+        }
+
+        return $this->composerOutputContains($output, 'Generated autoload files');
+    }
+
+    private function composerOutputContains(array $output, string $needle): bool
+    {
+        foreach ($output as $line) {
+            if (stripos((string)$line, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     /**
@@ -561,13 +592,22 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->collectFrameworkRegistries(true, $argsModule);
 
         // 5. composer dump-autoload（刷新类映射，供后续模块升级与运行时加载）
-        $this->runComposerDump();
+        if ($this->shouldSkipComposerDump($args)) {
+            $this->printing->note(__('已跳过 composer dump-autoload（快速更新模式）'));
+        } else {
+            $this->runComposerDump();
+        }
 
         // 6. 环境依赖检测
         $this->checkEnvironmentDependencies($args);
 
         // 7. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
         $this->validateFrameworkRules();
+    }
+
+    private function shouldSkipComposerDump(array $args): bool
+    {
+        return isset($args['skip-composer-dump']) || isset($args['skip-classmap']);
     }
     
     /**
@@ -2889,7 +2929,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）'),
                 '--skip-background-optimize' => __('禁用后台优化任务，改为同步执行（等待缓存生成完成）'),
                 '--sync' => __('同上，--skip-background-optimize 的简写'),
-                '--skip-classmap' => __('跳过类映射缓存生成（classmap.php）。适用：未新增/删除 PHP 文件时可节省数秒'),
+                '--skip-classmap' => __('跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新'),
+                '--skip-composer-dump' => __('仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段'),
                 '-h, --help' => '显示帮助信息',
             ],
             [],
@@ -2905,6 +2946,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '升级指定模块的模型' => 'php bin/w setup:upgrade --model -m Weline_Demo',
                 '热更新 WLS 服务器（最快，< 1s）' => 'php bin/w setup:upgrade --hot',
                 __('跳过 classmap 生成（未新增/删除文件时）') => 'php bin/w setup:upgrade --skip-classmap',
+                __('跳过 composer dump-autoload') => 'php bin/w setup:upgrade --skip-composer-dump',
                 __('跳过反射编译（加快 s:up）') => 'php bin/w setup:upgrade --skip-reflection-compile',
                 __('同步执行优化（等待完成）') => 'php bin/w setup:upgrade --sync',
             ],

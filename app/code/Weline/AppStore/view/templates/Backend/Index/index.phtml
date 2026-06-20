@@ -17,6 +17,8 @@ $searchQuery = (string)($search_query ?? '');
 $pricingFilter = (string)($pricing_filter ?? '');
 $tagFilter = (string)($tag_filter ?? '');
 $surfaceFilter = (string)($surface_filter ?? '');
+$wlsPanelReturn = !empty($wls_panel_return);
+$wlsPanelUrl = (string)($wls_panel_url ?? '');
 $appUrl = static fn(array $module): string => $platformUrl . '/apps/' . rawurlencode((string)($module['slug'] ?? $module['module_id'] ?? ''));
 $moduleTags = static function (array $module): array {
     $tags = [];
@@ -48,9 +50,14 @@ $moduleSurfaces = static function (array $module, array $tags): array {
         }
     }
     foreach ($tags as $tag) {
-        $code = (string)($tag['code'] ?? '');
+        $code = strtolower(trim((string)($tag['code'] ?? '')));
         if (str_starts_with($code, 'surface.')) {
             $surfaces[substr($code, strlen('surface.'))] = true;
+        } elseif (str_starts_with($code, 'surface:')) {
+            $surface = substr($code, strlen('surface:'));
+            if ($surface !== '') {
+                $surfaces[$surface] = true;
+            }
         }
     }
     return array_keys($surfaces);
@@ -58,6 +65,11 @@ $moduleSurfaces = static function (array $module, array $tags): array {
 ?>
 <div class="appstore-backend-page">
     <div class="d-flex align-items-center justify-content-end flex-wrap gap-2 mb-3">
+        <?php if ($wlsPanelReturn && $wlsPanelUrl !== ''): ?>
+            <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($wlsPanelUrl, ENT_QUOTES, 'UTF-8') ?>">
+                <i class="bi bi-arrow-left me-1"></i><?= __('Back To WLS Panel') ?>
+            </a>
+        <?php endif; ?>
         <a class="btn btn-outline-primary" href="<?= htmlspecialchars($accountUrl, ENT_QUOTES, 'UTF-8') ?>">
             <i class="bi bi-person-check me-1"></i><?= __('账户授权') ?>
         </a>
@@ -111,6 +123,9 @@ $moduleSurfaces = static function (array $module, array $tags): array {
         <div class="card mb-3">
             <div class="card-body">
                 <form class="row g-2 align-items-end" id="appstore-search-form" method="get">
+                    <?php if ($wlsPanelReturn): ?>
+                        <input type="hidden" name="wls_panel_return" value="1">
+                    <?php endif; ?>
                     <div class="col-12 col-lg-4">
                         <label class="form-label small text-muted mb-1" for="appstore-search"><?= __('搜索应用、开发者或能力') ?></label>
                         <input class="form-control" id="appstore-search" name="q" type="search" value="<?= htmlspecialchars($searchQuery, ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('输入关键词后直接在结果里安装') ?>">
@@ -125,7 +140,7 @@ $moduleSurfaces = static function (array $module, array $tags): array {
                     </div>
                     <div class="col-12 col-lg-2">
                         <label class="form-label small text-muted mb-1" for="appstore-tag"><?= __('标签') ?></label>
-                        <input class="form-control" id="appstore-tag" name="tag" value="<?= htmlspecialchars($tagFilter, ENT_QUOTES, 'UTF-8') ?>" placeholder="capability.seo">
+                        <input class="form-control" id="appstore-tag" name="tag" value="<?= htmlspecialchars($tagFilter, ENT_QUOTES, 'UTF-8') ?>" placeholder="module:wls">
                     </div>
                     <div class="col-12 col-lg-2">
                         <label class="form-label small text-muted mb-1" for="appstore-surface"><?= __('Surface') ?></label>
@@ -211,6 +226,9 @@ $moduleSurfaces = static function (array $module, array $tags): array {
                             <?php elseif ($hasLicense): ?>
                                 <div class="d-flex flex-wrap gap-2">
                                     <form method="post" action="<?= htmlspecialchars($downloadAction, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?php if ($wlsPanelReturn): ?>
+                                            <input type="hidden" name="wls_panel_return" value="1">
+                                        <?php endif; ?>
                                         <input type="hidden" name="module_id" value="<?= (int)($module['module_id'] ?? 0) ?>">
                                         <input type="hidden" name="license_key" value="<?= htmlspecialchars((string)$module['license_key'], ENT_QUOTES, 'UTF-8') ?>">
                                         <input type="hidden" name="version" value="<?= htmlspecialchars($versionCode, ENT_QUOTES, 'UTF-8') ?>">
@@ -219,10 +237,14 @@ $moduleSurfaces = static function (array $module, array $tags): array {
                                         </button>
                                     </form>
                                     <?php
-                                    $authUrl = $authorizeInstallUrl . '?' . http_build_query([
+                                    $authParams = [
                                         'module_id' => (int)($module['module_id'] ?? 0),
                                         'version' => $versionCode,
-                                    ]);
+                                    ];
+                                    if ($wlsPanelReturn) {
+                                        $authParams['wls_panel_return'] = 1;
+                                    }
+                                    $authUrl = $authorizeInstallUrl . '?' . http_build_query($authParams);
                                     ?>
                                     <a class="btn btn-primary" href="<?= htmlspecialchars($authUrl, ENT_QUOTES, 'UTF-8') ?>">
                                         <i class="bi bi-shield-check me-1"></i><?= $isFree ? __('授权并安装') : __('安装授权') ?>

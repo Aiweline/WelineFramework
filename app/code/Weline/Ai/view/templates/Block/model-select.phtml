@@ -1,4 +1,13 @@
-<?php /** @var \Weline\Framework\View\Template $this */ ?>
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
+?>
 <div class="position-relative <?= htmlspecialchars($class ?? '') ?>" style="<?= htmlspecialchars($style ?? '') ?>">
     <button type="button" class="btn btn-outline-secondary w-100 text-start" id="<?= htmlspecialchars($id) ?>_trigger" style="height: 38px;">
         <span id="<?= htmlspecialchars($id) ?>_display"><?= !empty($display) ? htmlspecialchars($display) : '<lang>' . __('使用默认模型') . '</lang>' ?></span>
@@ -14,10 +23,10 @@
     <small class="text-muted d-block mt-1"><lang><?= __('提示：点击选择AI模型，输入关键词搜索（800ms防抖）') ?></lang></small>
 </div>
 <script>(function(){
-  const ep = <?= json_encode($api ?? '') ?>;
-  const id = <?= json_encode($id) ?>;
+  const ep = <?= json_encode($api ?? '', $jsonForScriptFlags) ?>;
+  const id = <?= json_encode($id, $jsonForScriptFlags) ?>;
   const limit = <?= (int)($limit ?? 50) ?>;
-  const serviceType = <?= json_encode($service_type ?? '') ?>;
+  const serviceType = <?= json_encode($service_type ?? '', $jsonForScriptFlags) ?>;
   const trigger = document.getElementById(id+"_trigger");
   const box = document.getElementById(id+"_container");
   const list = document.getElementById(id+"_list");
@@ -26,12 +35,26 @@
   const hidden = document.getElementById(id+"_code");
   const display = document.getElementById(id+"_display");
   let cache = null;
+  function renderStatus(className, text){
+    list.replaceChildren();
+    const row = document.createElement('div');
+    row.className = className;
+    row.textContent = text;
+    list.appendChild(row);
+  }
   function render(items){
-    if(!items||!items.length){ list.innerHTML = '<div class="p-2 text-muted">'+<?= json_encode(__('未找到匹配的模型')) ?>+'</div>'; return; }
-    list.innerHTML = items.slice(0,limit).map(function(m){
-      const txt = `${m.name} (${m.supplier}) - ${m.version}`;
-      return `<div class="p-2 border-bottom model-item" style="cursor:pointer" data-code="${m.code}" data-text="${txt}">${txt}</div>`;
-    }).join("");
+    if(!items||!items.length){ renderStatus('p-2 text-muted', <?= json_encode(__('未找到匹配的模型'), $jsonForScriptFlags) ?>); return; }
+    list.replaceChildren();
+    items.slice(0,limit).forEach(function(m){
+      const txt = `${m.name || ''} (${m.supplier || ''}) - ${m.version || ''}`;
+      const row = document.createElement('div');
+      row.className = 'p-2 border-bottom model-item';
+      row.style.cursor = 'pointer';
+      row.dataset.code = m.code == null ? '' : String(m.code);
+      row.dataset.text = txt;
+      row.textContent = txt;
+      list.appendChild(row);
+    });
     list.querySelectorAll('[data-code]').forEach(function(el){
       el.addEventListener('click', function(){
         hidden.value = this.dataset.code;
@@ -46,8 +69,9 @@
       });
     });
     if(hidden.value){
-      const act = list.querySelector(`.model-item[data-code="${hidden.value}"]`);
-      if(act) act.classList.add('active');
+      list.querySelectorAll('.model-item').forEach(function(el){
+        if(el.dataset.code === hidden.value) el.classList.add('active');
+      });
     }
   }
   function firstLoad(){
@@ -55,7 +79,7 @@
     var url = ep+'?limit='+limit;
     window.Weline.Api.get(url, { silent: true })
       .then(function(res){ var body = (res&&res.data)||res; loading.style.display='none'; cache=(body&&body.success)?(body.data||[]):[]; render(cache); })
-      .catch(()=>{ loading.style.display='none'; list.innerHTML='<div class="p-2 text-danger">'+<?= json_encode(__('加载失败')) ?>+'</div>'; });
+      .catch(()=>{ loading.style.display='none'; renderStatus('p-2 text-danger', <?= json_encode(__('加载失败'), $jsonForScriptFlags) ?>); });
   }
   const debounce=(fn,t)=>{let id=null;return (...a)=>{clearTimeout(id);id=setTimeout(()=>fn.apply(null,a),t);}};
   const doFilter = debounce(function(kw){ kw=(kw||'').toLowerCase().trim(); if(!kw){ render(cache||[]); return;} var u=ep+'?search='+encodeURIComponent(kw); window.Weline.Api.get(u, { silent: true }).then(function(res){ var body=(res&&res.data)||res; render((body&&body.success)?(body.data||[]):[]); }).catch(function(){ var data=(cache||[]).filter(function(m){ return (`${m.name} ${m.supplier} ${m.code} ${m.version}`).toLowerCase().includes(kw); }); render(data); }); },800);

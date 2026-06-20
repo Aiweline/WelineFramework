@@ -21,6 +21,8 @@ use Weline\Framework\Register\Register;
 class DocumentScanner
 {
     private const MODULE_DOC_ROOT_NAME = '模块文档';
+    private const CORE_DOC_MODULE_NAME = 'Weline_Framework';
+    private const CORE_DOC_ROOT_NAME = '核心';
     private const CLEANUP_BATCH_SIZE = 1000;
 
     private Document $documentModel;
@@ -118,16 +120,20 @@ class DocumentScanner
 
             $moduleResult = ['scanned' => 0, 'new' => 0, 'updated' => 0];
 
-            // 创建模块分类（挂在"模块文档"下）
-            $desc = $this->getModuleDescription($modulePath) ?: __('模块 %{name} 的开发文档', ['name' => $moduleName]);
-            $moduleCatalog = $this->ensureCatalog($moduleName, (int)$topCatalog->getId(), 1, $desc);
-            $this->seenCatalogIds[(int)$moduleCatalog->getId()] = true;
+            if ($this->isCoreDocumentModule($moduleName)) {
+                $this->scanCoreModuleDocuments($docPath, $moduleName, $modulePath, $moduleResult);
+            } else {
+                // 创建模块分类（挂在"模块文档"下）
+                $desc = $this->getModuleDescription($modulePath) ?: __('模块 %{name} 的开发文档', ['name' => $moduleName]);
+                $moduleCatalog = $this->ensureCatalog($moduleName, (int)$topCatalog->getId(), 1, $desc);
+                $this->seenCatalogIds[(int)$moduleCatalog->getId()] = true;
 
-            // 扫描 doc/ 目录
-            $this->scanDirectory($docPath, $moduleName, (int)$moduleCatalog->getId(), $moduleResult, '', 'doc');
+                // 扫描 doc/ 目录
+                $this->scanDirectory($docPath, $moduleName, (int)$moduleCatalog->getId(), $moduleResult, '', 'doc');
 
-            // 扫描模块根目录下的外部文档（README.md 等）
-            $this->scanRootDocuments($modulePath, $moduleName, (int)$moduleCatalog->getId(), $moduleResult);
+                // 扫描模块根目录下的外部文档（README.md 等）
+                $this->scanRootDocuments($modulePath, $moduleName, (int)$moduleCatalog->getId(), $moduleResult);
+            }
 
             $result['scanned'] += $moduleResult['scanned'];
             $result['new'] += $moduleResult['new'];
@@ -163,6 +169,7 @@ class DocumentScanner
      * @param string $relativePath  相对于 doc/ 的路径（用于构建子分类）
      * @param string $docPrefix     文件路径前缀（doc / view/doc）
      * @param int    $depth         当前目录深度（从 0 开始）
+     * @param ?int   $docCatalogId  当前目录文件写入的分类 ID；为空时使用父分类
      */
     private function scanDirectory(
         string $dirPath,
@@ -171,7 +178,8 @@ class DocumentScanner
         array  &$result,
         string $relativePath = '',
         string $docPrefix = 'doc',
-        int    $depth = 0
+        int    $depth = 0,
+        ?int   $docCatalogId = null
     ): void {
         // 支持最多 6 层深度，满足 hook/backend/layouts/login/ 等多层结构
         if (!is_dir($dirPath) || $depth > 6) {
@@ -211,13 +219,14 @@ class DocumentScanner
         $subDirs = $this->sortByPrefix($subDirs);
 
         // 导入当前目录下的文档
+        $currentDocCatalogId = $docCatalogId ?? $parentCatId;
         foreach ($docFiles as $file) {
             $this->upsertDocument(
                 $moduleName,
                 $file['moduleRelative'],
                 $file['path'],
                 $file['name'],
-                $parentCatId,
+                $currentDocCatalogId,
                 $result,
                 $this->extractSortOrder($file['name'])
             );
@@ -228,10 +237,22 @@ class DocumentScanner
             $displayName = $this->extractDisplayName($dir['name']);
             $sortOrder = $this->extractSortOrder($dir['name']);
             $parentLevel = $this->getCatalogLevel($parentCatId);
-            $subCatalog = $this->ensureCatalog($displayName, $parentCatId, $parentLevel + 1, '', $sortOrder);
+            $subCatalog = $this->ensureCatalog($displayName, $parentCatId, $parentLevel + 1, '', $sortOrder, $this->hasSortPrefix($dir['name']));
             $this->seenCatalogIds[(int)$subCatalog->getId()] = true;
             $this->scanDirectory($dir['path'], $moduleName, (int)$subCatalog->getId(), $result, $dir['relative'], $docPrefix, $depth + 1);
         }
+    }
+
+    private function scanCoreModuleDocuments(string $docPath, string $moduleName, string $modulePath, array &$result): int
+    {
+        $coreCatalog = $this->ensureCatalog(self::CORE_DOC_ROOT_NAME, 0, 1, 'WelineFramework 核心文档', 999999);
+        $coreCatalogId = (int)$coreCatalog->getId();
+        $this->seenCatalogIds[$coreCatalogId] = true;
+
+        $this->scanDirectory($docPath, $moduleName, 0, $result, '', 'doc', 0, $coreCatalogId);
+        $this->scanRootDocuments($modulePath, $moduleName, $coreCatalogId, $result);
+
+        return $coreCatalogId;
     }
 
     /**
@@ -423,7 +444,7 @@ class DocumentScanner
         return $this->documentFieldSupport[$field];
     }
 
-    private function ensureCatalog(string $name, int $pid, int $level = 1, string $description = '', int $position = 0): Catalog
+    private function ensureCatalog(string $name, int $pid, int $level = 1, string $description = '', int $position = 0, bool $hasExplicitPosition = false): Catalog
     {
         // 使用新实例查询，避免单例状态污染
         $queryModel = ObjectManager::make(Catalog::class);
@@ -446,7 +467,15 @@ class DocumentScanner
 
             // 更新 position（排序值）
             $currentPosition = (int)($catalog->getData(Catalog::schema_fields_position) ?? 0);
-            if ($position > 0 && $currentPosition !== $position) {
+            $incomingHasExplicitPosition = $hasExplicitPosition && $position < 999999;
+            $currentHasExplicitPosition = $currentPosition >= 0 && $currentPosition < 999999;
+            $shouldUpdatePosition = false;
+            if ($incomingHasExplicitPosition) {
+                $shouldUpdatePosition = $currentPosition !== $position;
+            } elseif (!$currentHasExplicitPosition && $position > 0 && $currentPosition !== $position) {
+                $shouldUpdatePosition = true;
+            }
+            if ($shouldUpdatePosition) {
                 $updateData[Catalog::schema_fields_position] = $position;
                 $needsUpdate = true;
             }
@@ -537,7 +566,8 @@ class DocumentScanner
             $sql = 'SELECT ' . $idField . ', ' . $moduleField . ', ' . $filePathField
                 . ' FROM ' . $documentTable
                 . ' WHERE ' . $idField . ' > ' . (int)$lastId
-                . ' AND ' . $categoryField . ' IN (' . $catalogList . ')'
+                . ' AND (' . $categoryField . ' IN (' . $catalogList . ')'
+                . ' OR ' . $moduleField . ' = ' . $pdo->quote(self::CORE_DOC_MODULE_NAME) . ')'
                 . ' AND ' . $autoField . ' = 1'
                 . ' ORDER BY ' . $idField . ' ASC'
                 . ' LIMIT ' . self::CLEANUP_BATCH_SIZE;
@@ -921,6 +951,11 @@ class DocumentScanner
         return in_array(strtolower(pathinfo($fileName, PATHINFO_EXTENSION)), ['md', 'markdown', 'txt']);
     }
 
+    private function isCoreDocumentModule(string $moduleName): bool
+    {
+        return $moduleName === self::CORE_DOC_MODULE_NAME;
+    }
+
     /**
      * 提取显示名称（去掉 {数字}- 前缀）
      */
@@ -935,6 +970,11 @@ class DocumentScanner
     private function extractSortOrder(string $name): int
     {
         return preg_match('/^(\d+)[-_]/', $name, $m) ? (int)$m[1] : 999999;
+    }
+
+    private function hasSortPrefix(string $name): bool
+    {
+        return preg_match('/^\d+[-_]/', $name) === 1;
     }
 
     /**
@@ -1059,8 +1099,21 @@ class DocumentScanner
         $result = ['scanned' => 0, 'new' => 0, 'updated' => 0];
 
         $topCatalog = $this->ensureCatalog('模块文档', 0, 0, '所有模块的开发文档', 999999);
+        $this->seenCatalogIds[(int)$topCatalog->getId()] = true;
+
+        if ($this->isCoreDocumentModule($moduleName)) {
+            $coreCatalogId = $this->scanCoreModuleDocuments($docPath, $moduleName, $modulePath, $result);
+            $scannedCatalogIds[] = $coreCatalogId;
+            foreach ($this->seenDocumentKeys as $key => $_) {
+                $scannedDocumentKeys[$key] = true;
+            }
+
+            return $result;
+        }
+
         $desc = $this->getModuleDescription($modulePath) ?: __('模块 %{name} 的开发文档', ['name' => $moduleName]);
         $moduleCatalog = $this->ensureCatalog($moduleName, (int)$topCatalog->getId(), 1, $desc);
+        $this->seenCatalogIds[(int)$moduleCatalog->getId()] = true;
         $scannedCatalogIds[] = (int)$moduleCatalog->getId();
 
         $this->scanDirectory($docPath, $moduleName, (int)$moduleCatalog->getId(), $result, '', 'doc');

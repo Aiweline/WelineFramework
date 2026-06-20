@@ -35,10 +35,12 @@ class Cookie
         $sameSite = $options['samesite'] ?? 'Lax';
         
         // 使用 HeaderCollector 收集 Cookie
+        $expires = $expire === 0 ? 0 : \time() + $expire;
+
         HeaderCollector::getInstance()->setCookie(
             $key,
             $value,
-            $expire > 0 ? \time() + $expire : 0,
+            $expires,
             $path,
             $domain,
             $secure,
@@ -62,6 +64,7 @@ class Cookie
     {
         \w_env_set("cookie.{$key}", null);
         self::set($key, '', -86400, $options);
+        \w_env_set("cookie.{$key}", null);
     }
 
     /**

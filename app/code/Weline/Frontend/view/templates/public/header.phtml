@@ -18,7 +18,7 @@ $layoutType = $this->getData('layoutType') ?: ($themeData['layoutType'] ?? null)
             <!-- Logo -->
             <div class="header-logo">
                 <a href="<?= $frontendUrl ?>" title="<?= __('首页') ?>">
-                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" data-logo-fallback>
                     <span class="logo-text" style="display: none;"><?= __('Weline') ?></span>
                 </a>
             </div>
@@ -193,4 +193,16 @@ $layoutType = $this->getData('layoutType') ?: ($themeData['layoutType'] ?? null)
         }
     }
     </style>
+    <script>
+    (function () {
+        document.querySelectorAll('[data-logo-fallback]').forEach(function (logo) {
+            logo.addEventListener('error', function () {
+                logo.style.display = 'none';
+                if (logo.nextElementSibling) {
+                    logo.nextElementSibling.style.display = 'inline-block';
+                }
+            });
+        });
+    })();
+    </script>
 <?php endif; ?>

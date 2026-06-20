@@ -51,7 +51,8 @@
             return window.BackendConfirm.show(message, options || {});
         }
 
-        return Promise.resolve(window.confirm(message));
+        console.warn('[Weline Cache Admin] BackendConfirm is unavailable; action cancelled.');
+        return Promise.resolve(false);
     }
 
     function requestJson(url, options) {
@@ -475,7 +476,7 @@
             return;
         }
 
-        var proceed = enabled ? Promise.resolve(true) : confirmAction(
+        var proceed = enabled ? Promise.resolve(enabled === true) : confirmAction(
             text('confirm_disable_selected', 'Disable the selected cache pools?'),
             {
                 title: text('title_disable_selected', 'Disable Selected'),

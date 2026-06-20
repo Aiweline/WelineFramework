@@ -330,7 +330,7 @@ use Weline\Framework\Event\EventsManager;
                     <button type="submit" class="btn btn-primary">
                         <i class="mdi mdi-content-save"></i> <?= __('保存参数') ?>
                     </button>
-                    <button type="button" class="btn btn-secondary" onclick="location.reload()">
+                    <button type="button" class="btn btn-secondary" data-component-reset>
                         <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
                     </button>
                 </div>
@@ -340,6 +340,13 @@ use Weline\Framework\Event\EventsManager;
             <!-- SweetAlert2 JS -->
             <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
             <script>
+                document.addEventListener('click', function(event) {
+                    const resetButton = event.target.closest('[data-component-reset]');
+                    if (resetButton) {
+                        window.location.reload();
+                    }
+                });
+
                 $(document).ready(function() {
                     $('#componentParamsForm').on('submit', function(e) {
                         e.preventDefault();

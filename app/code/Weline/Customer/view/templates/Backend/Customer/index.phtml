@@ -4,6 +4,30 @@
  */
 $customers = $customers ?? [];
 $customersJson = $customers_json ?? '[]';
+$jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
+    return htmlspecialchars(json_encode($value, $jsonForScriptFlags), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+};
+$customersPayload = [];
+if (is_string($customersJson)) {
+    try {
+        $decodedCustomers = json_decode($customersJson, true, 512, JSON_THROW_ON_ERROR);
+        $customersPayload = is_array($decodedCustomers) ? $decodedCustomers : [];
+    } catch (\JsonException) {
+        $customersPayload = [];
+    }
+} elseif (is_array($customersJson)) {
+    $customersPayload = $customersJson;
+}
+$customerText = [
+    'addCustomer' => (string)__('新增客户'),
+    'editCustomer' => (string)__('编辑客户'),
+    'operationSuccess' => (string)__('操作成功'),
+    'operationFailed' => (string)__('操作失败'),
+    'resetTokensConfirm' => (string)__('确定要重置该客户的令牌吗？此操作会强制该客户重新登录。'),
+    'deleteCustomerConfirm' => (string)__('确定要删除该客户吗？此操作不可撤销。'),
+    'close' => (string)__('关闭'),
+];
 $total = (int)($total ?? 0);
 $page = (int)($page ?? 1);
 $limit = (int)($limit ?? 20);
@@ -15,7 +39,7 @@ $keyword = $keyword ?? '';
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18"><?= __('前端客户') ?></h4>
-            <button type="button" class="btn btn-success btn-sm" onclick="window.WelineCustomerManager.openCreateModal()">
+            <button type="button" class="btn btn-success btn-sm" data-customer-action="create">
                 <i class="mdi mdi-account-plus me-2"></i><?= __('新增客户') ?>
             </button>
         </div>
@@ -129,16 +153,16 @@ $keyword = $keyword ?? '';
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <button type="button" class="btn btn-primary" onclick="window.WelineCustomerManager.openEditModal(<?= (int)$customer['user_id'] ?>)">
+                                            <button type="button" class="btn btn-primary" data-customer-action="edit" data-customer-id="<?= $jsonForHtmlAttr((int)$customer['user_id']) ?>">
                                                 <i class="mdi mdi-pencil"></i>
                                             </button>
-                                            <button type="button" class="btn btn-warning" onclick="window.WelineCustomerManager.openPasswordModal(<?= (int)$customer['user_id'] ?>)">
+                                            <button type="button" class="btn btn-warning" data-customer-action="password" data-customer-id="<?= $jsonForHtmlAttr((int)$customer['user_id']) ?>">
                                                 <i class="mdi mdi-lock-reset"></i>
                                             </button>
-                                            <button type="button" class="btn btn-info" onclick="window.WelineCustomerManager.resetTokens(<?= (int)$customer['user_id'] ?>)">
+                                            <button type="button" class="btn btn-info" data-customer-action="reset-tokens" data-customer-id="<?= $jsonForHtmlAttr((int)$customer['user_id']) ?>">
                                                 <i class="mdi mdi-refresh"></i>
                                             </button>
-                                            <button type="button" class="btn btn-danger" onclick="window.WelineCustomerManager.deleteCustomer(<?= (int)$customer['user_id'] ?>)">
+                                            <button type="button" class="btn btn-danger" data-customer-action="delete" data-customer-id="<?= $jsonForHtmlAttr((int)$customer['user_id']) ?>">
                                                 <i class="mdi mdi-delete"></i>
                                             </button>
                                         </div>
@@ -282,12 +306,13 @@ $keyword = $keyword ?? '';
 (function() {
     'use strict';
 
-    var CUSTOMERS = <?= $customersJson ?>;
-    var CUSTOMER_SAVE_URL = '<?= $this->getBackendUrl('customer/backend/customer/save') ?>';
-    var CUSTOMER_DETAIL_URL = '<?= $this->getBackendUrl('customer/backend/customer/detail') ?>';
-    var CUSTOMER_DELETE_URL = '<?= $this->getBackendUrl('customer/backend/customer/delete') ?>';
-    var CUSTOMER_RESET_TOKEN_URL = '<?= $this->getBackendUrl('customer/backend/customer/resetToken') ?>';
-    var CUSTOMER_RESET_PASSWORD_URL = '<?= $this->getBackendUrl('customer/backend/customer/resetPassword') ?>';
+    var CUSTOMERS = <?= json_encode($customersPayload, $jsonForScriptFlags) ?>;
+    var CUSTOMER_TEXT = <?= json_encode($customerText, $jsonForScriptFlags) ?>;
+    var CUSTOMER_SAVE_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/save'), $jsonForScriptFlags) ?>;
+    var CUSTOMER_DETAIL_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/detail'), $jsonForScriptFlags) ?>;
+    var CUSTOMER_DELETE_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/delete'), $jsonForScriptFlags) ?>;
+    var CUSTOMER_RESET_TOKEN_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/resetToken'), $jsonForScriptFlags) ?>;
+    var CUSTOMER_RESET_PASSWORD_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/resetPassword'), $jsonForScriptFlags) ?>;
 
     var customerModalInstance = null;
     var passwordModalInstance = null;
@@ -308,8 +333,15 @@ $keyword = $keyword ?? '';
         var alert = document.createElement('div');
         alert.className = 'alert alert-' + alertType + ' alert-dismissible fade show';
         alert.setAttribute('role', 'alert');
-        alert.innerHTML = '<span>' + message + '</span>' +
-            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+        var messageNode = document.createElement('span');
+        messageNode.textContent = String(message || CUSTOMER_TEXT.operationFailed);
+        var closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn-close';
+        closeButton.setAttribute('data-bs-dismiss', 'alert');
+        closeButton.setAttribute('aria-label', CUSTOMER_TEXT.close);
+        alert.appendChild(messageNode);
+        alert.appendChild(closeButton);
         container.appendChild(alert);
         setTimeout(function() {
             try {
@@ -321,21 +353,46 @@ $keyword = $keyword ?? '';
         }, 4000);
     }
 
+    function notify(type, message) {
+        var text = String(message || CUSTOMER_TEXT.operationFailed);
+        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+            window.BackendToast[type](text);
+            return;
+        }
+        showPageMessage(type, text);
+    }
+
+    function confirmAction(message) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(message);
+        }
+        notify('error', CUSTOMER_TEXT.operationFailed);
+        return Promise.resolve(false);
+    }
+
+    function normalizeCustomerId(value) {
+        return String(value == null ? '' : value).trim();
+    }
+
     function openCreateModal() {
         document.getElementById('customerForm').reset();
         document.getElementById('customer_id').value = '0';
         document.getElementById('customer_password_required').classList.remove('text-muted');
         document.getElementById('customer_is_sandbox').checked = false;
-        document.getElementById('customerModalTitle').textContent = '<?= __('新增客户') ?>';
+        document.getElementById('customerModalTitle').textContent = CUSTOMER_TEXT.addCustomer;
         customerModalInstance.show();
     }
 
     function openEditModal(userId) {
-        fetch(CUSTOMER_DETAIL_URL + '?user_id=' + userId)
+        userId = normalizeCustomerId(userId);
+        if (!userId) {
+            return;
+        }
+        fetch(CUSTOMER_DETAIL_URL + '?user_id=' + encodeURIComponent(userId))
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (!data.success) {
-                    showPageMessage('error', data.message || '<?= __('操作失败') ?>');
+                    notify('error', data.message || CUSTOMER_TEXT.operationFailed);
                     return;
                 }
                 var user = data.data.user;
@@ -346,11 +403,11 @@ $keyword = $keyword ?? '';
                 document.getElementById('customer_reset_attempts').checked = false;
                 document.getElementById('customer_is_sandbox').checked = !!user.is_sandbox;
                 document.getElementById('customer_password_required').classList.add('text-muted');
-                document.getElementById('customerModalTitle').textContent = '<?= __('编辑客户') ?>';
+                document.getElementById('customerModalTitle').textContent = CUSTOMER_TEXT.editCustomer;
                 customerModalInstance.show();
             })
             .catch(function() {
-                showPageMessage('error', '<?= __('操作失败') ?>');
+                notify('error', CUSTOMER_TEXT.operationFailed);
             });
     }
 
@@ -365,19 +422,23 @@ $keyword = $keyword ?? '';
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
-                    showPageMessage('success', data.message || '<?= __('操作成功') ?>');
+                    notify('success', data.message || CUSTOMER_TEXT.operationSuccess);
                     customerModalInstance.hide();
                     setTimeout(function() { location.reload(); }, 800);
                 } else {
-                    showPageMessage('error', data.message || '<?= __('操作失败') ?>');
+                    notify('error', data.message || CUSTOMER_TEXT.operationFailed);
                 }
             })
             .catch(function() {
-                showPageMessage('error', '<?= __('操作失败') ?>');
+                notify('error', CUSTOMER_TEXT.operationFailed);
             });
     }
 
     function openPasswordModal(userId) {
+        userId = normalizeCustomerId(userId);
+        if (!userId) {
+            return;
+        }
         document.getElementById('passwordForm').reset();
         document.getElementById('password_user_id').value = userId;
         document.getElementById('passwordResult').classList.add('d-none');
@@ -395,67 +456,79 @@ $keyword = $keyword ?? '';
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
-                    showPageMessage('success', data.message || '<?= __('操作成功') ?>');
+                    notify('success', data.message || CUSTOMER_TEXT.operationSuccess);
                     if (data.data && data.data.new_password) {
                         document.getElementById('passwordGenerated').textContent = data.data.new_password;
                         document.getElementById('passwordResult').classList.remove('d-none');
                     }
                     setTimeout(function() { location.reload(); }, 1000);
                 } else {
-                    showPageMessage('error', data.message || '<?= __('操作失败') ?>');
+                    notify('error', data.message || CUSTOMER_TEXT.operationFailed);
                 }
             })
             .catch(function() {
-                showPageMessage('error', '<?= __('操作失败') ?>');
+                notify('error', CUSTOMER_TEXT.operationFailed);
             });
     }
 
     function resetTokens(userId) {
-        if (!confirm('<?= __('确定要重置该客户的令牌吗？此操作会强制该客户重新登录。') ?>')) {
+        userId = normalizeCustomerId(userId);
+        if (!userId) {
             return;
         }
-        var formData = new FormData();
-        formData.append('user_id', userId);
-        fetch(CUSTOMER_RESET_TOKEN_URL, {
-            method: 'POST',
-            body: formData
-        })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
-                    showPageMessage('success', data.message || '<?= __('操作成功') ?>');
-                    setTimeout(function() { location.reload(); }, 800);
-                } else {
-                    showPageMessage('error', data.message || '<?= __('操作失败') ?>');
-                }
+        confirmAction(CUSTOMER_TEXT.resetTokensConfirm).then(function(confirmed) {
+            if (!confirmed) {
+                return;
+            }
+            var formData = new FormData();
+            formData.append('user_id', userId);
+            fetch(CUSTOMER_RESET_TOKEN_URL, {
+                method: 'POST',
+                body: formData
             })
-            .catch(function() {
-                showPageMessage('error', '<?= __('操作失败') ?>');
-            });
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        notify('success', data.message || CUSTOMER_TEXT.operationSuccess);
+                        setTimeout(function() { location.reload(); }, 800);
+                    } else {
+                        notify('error', data.message || CUSTOMER_TEXT.operationFailed);
+                    }
+                })
+                .catch(function() {
+                    notify('error', CUSTOMER_TEXT.operationFailed);
+                });
+        });
     }
 
     function deleteCustomer(userId) {
-        if (!confirm('<?= __('确定要删除该客户吗？此操作不可撤销。') ?>')) {
+        userId = normalizeCustomerId(userId);
+        if (!userId) {
             return;
         }
-        var formData = new FormData();
-        formData.append('user_id', userId);
-        fetch(CUSTOMER_DELETE_URL, {
-            method: 'POST',
-            body: formData
-        })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
-                    showPageMessage('success', data.message || '<?= __('操作成功') ?>');
-                    setTimeout(function() { location.reload(); }, 800);
-                } else {
-                    showPageMessage('error', data.message || '<?= __('操作失败') ?>');
-                }
+        confirmAction(CUSTOMER_TEXT.deleteCustomerConfirm).then(function(confirmed) {
+            if (!confirmed) {
+                return;
+            }
+            var formData = new FormData();
+            formData.append('user_id', userId);
+            fetch(CUSTOMER_DELETE_URL, {
+                method: 'POST',
+                body: formData
             })
-            .catch(function() {
-                showPageMessage('error', '<?= __('操作失败') ?>');
-            });
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (data.success) {
+                        notify('success', data.message || CUSTOMER_TEXT.operationSuccess);
+                        setTimeout(function() { location.reload(); }, 800);
+                    } else {
+                        notify('error', data.message || CUSTOMER_TEXT.operationFailed);
+                    }
+                })
+                .catch(function() {
+                    notify('error', CUSTOMER_TEXT.operationFailed);
+                });
+        });
     }
 
     function init() {
@@ -471,6 +544,29 @@ $keyword = $keyword ?? '';
         if (passwordForm) {
             passwordForm.addEventListener('submit', submitPasswordForm);
         }
+
+        document.addEventListener('click', function(event) {
+            var trigger = event.target.closest('[data-customer-action]');
+            if (!trigger) {
+                return;
+            }
+
+            event.preventDefault();
+            var action = String(trigger.getAttribute('data-customer-action') || '').trim();
+            var userId = normalizeCustomerId(trigger.getAttribute('data-customer-id'));
+
+            if (action === 'create') {
+                openCreateModal();
+            } else if (action === 'edit') {
+                openEditModal(userId);
+            } else if (action === 'password') {
+                openPasswordModal(userId);
+            } else if (action === 'reset-tokens') {
+                resetTokens(userId);
+            } else if (action === 'delete') {
+                deleteCustomer(userId);
+            }
+        });
     }
 
     if (document.readyState === 'loading') {

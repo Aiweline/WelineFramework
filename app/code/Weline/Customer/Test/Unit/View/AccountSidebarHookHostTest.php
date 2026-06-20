@@ -32,7 +32,9 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('function buildSidebarContentUrl(sectionName)', $content);
         $this->assertStringContainsString("'section=' + encodeURIComponent(sectionName)", $content);
         $this->assertStringContainsString('loadSidebarContent(targetId)', $content);
-        $this->assertStringContainsString("insertAdjacentHTML('beforeend', payload.html)", $content);
+        $this->assertStringContainsString('function sanitizeSidebarHtml(html)', $content);
+        $this->assertStringContainsString("insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html))", $content);
+        $this->assertStringNotContainsString('executeInsertedScripts', $content);
     }
 
     public function testSidebarTemplateKeepsCanonicalSidebarHookHost(): void

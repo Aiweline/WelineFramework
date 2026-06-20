@@ -72,7 +72,7 @@ $providerSelectOptionsJson = json_encode(array_values($providerSelectMap), JSON_
             <div class="form-text"><?= __('每行一个域名，支持批量输入多个域名。') ?></div>
         </div>
 
-        <button type="button" class="btn btn-primary w-100" onclick="checkDomainAvailability()">
+        <button type="button" class="btn btn-primary w-100" data-domain-purchase-action="check-availability">
             <i class="mdi mdi-magnify me-1"></i><?= __('检查可用性') ?>
         </button>
 
@@ -114,7 +114,7 @@ $providerSelectOptionsJson = json_encode(array_values($providerSelectMap), JSON_
                         <div>
                             <strong id="purchase-count-text"><?= __('0 个可用域名') ?></strong>
                         </div>
-                        <button type="button" class="btn btn-success" onclick="submitPurchase()">
+                        <button type="button" class="btn btn-success" data-domain-purchase-action="submit-purchase">
                             <i class="mdi mdi-cart-check me-1"></i><?= __('批量购买') ?>
                         </button>
                     </div>
@@ -599,11 +599,11 @@ function checkDomainAvailability() {
             availabilityResults = data.data || [];
             renderAvailabilityResults(availabilityResults);
         } else {
-            container.innerHTML = '<div class="alert alert-danger">' + (data.msg || '<?= __('检查失败') ?>') + '</div>';
+            container.innerHTML = '<div class="alert alert-danger">' + escapeHtml(data.msg || '<?= __('检查失败') ?>') + '</div>';
         }
     })
     .catch(function(err) {
-        container.innerHTML = '<div class="alert alert-danger"><?= __('请求失败') ?>: ' + err.message + '</div>';
+        container.innerHTML = '<div class="alert alert-danger"><?= __('请求失败') ?>: ' + escapeHtml((err && err.message) || '') + '</div>';
     });
 }
 
@@ -798,6 +798,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (accSel) {
         accSel.addEventListener('change', updatePurchaseExtraVisibility);
     }
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-domain-purchase-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        var action = trigger.getAttribute('data-domain-purchase-action');
+        if (action === 'check-availability') {
+            checkDomainAvailability();
+        } else if (action === 'submit-purchase') {
+            submitPurchase();
+        }
+    });
     updatePurchaseExtraVisibility();
     var dnsChoice = document.getElementById('purchase-dialog-dns-choice');
     var cdnChoice = document.getElementById('purchase-dialog-cdn-choice');

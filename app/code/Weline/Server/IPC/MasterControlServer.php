@@ -1074,6 +1074,24 @@ class MasterControlServer implements ControlPlaneServerInterface
     }
 
     /**
+     * @return int[] IPC client IDs that accepted the outbound message.
+     */
+    public function sendToRoleAndCollectTargets(string $role, string $message): array
+    {
+        $targets = [];
+        foreach ($this->clients as $clientId => $client) {
+            if ($client['role'] !== $role) {
+                continue;
+            }
+            if ($this->sendTo($clientId, $message)) {
+                $targets[] = (int)$clientId;
+            }
+        }
+
+        return $targets;
+    }
+
+    /**
      * 发送消息给指定 Worker ID 的客户端
      */
     public function sendToWorker(int $workerId, string $message): bool

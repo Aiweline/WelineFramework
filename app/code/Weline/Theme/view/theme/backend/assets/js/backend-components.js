@@ -49,6 +49,17 @@
                     max-width: 360px;
                 `;
                 document.body.appendChild(this.container);
+                this.container.addEventListener('click', (event) => {
+                    const closeButton = event.target.closest('[data-backend-toast-dismiss]');
+                    if (!closeButton || !this.container.contains(closeButton)) {
+                        return;
+                    }
+
+                    const toast = closeButton.closest('.backend-toast');
+                    if (toast) {
+                        toast.remove();
+                    }
+                });
             }
         },
         
@@ -109,7 +120,7 @@
             toast.innerHTML = `
                 <i class="mdi ${icons[type] || icons.info}" style="color: ${colors[type]}; font-size: 1.25rem; flex-shrink: 0;"></i>
                 <div style="flex: 1; color: var(--backend-color-text-primary, #212529); word-break: break-word;">${messageContent}</div>
-                <button style="background: none; border: none; cursor: pointer; color: var(--backend-color-text-tertiary, #adb5bd); font-size: 1.25rem; padding: 0; line-height: 1; flex-shrink: 0;" onclick="this.parentElement.remove()">
+                <button type="button" data-backend-toast-dismiss style="background: none; border: none; cursor: pointer; color: var(--backend-color-text-tertiary, #adb5bd); font-size: 1.25rem; padding: 0; line-height: 1; flex-shrink: 0;">
                     <i class="mdi mdi-close"></i>
                 </button>
             `;
@@ -164,8 +175,6 @@
     // ========================================
     const BackendConfirm = {
         show(message, options = {}) {
-            // TEMP: Auto-confirm for testing plan regeneration
-            return Promise.resolve(true);
             return new Promise((resolve) => {
                 const {
                     title = __('确认操作'),
@@ -236,7 +245,14 @@
                 document.body.appendChild(overlay);
                 document.body.style.overflow = 'hidden';
                 
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        close(false);
+                    }
+                };
+
                 const close = (result) => {
+                    document.removeEventListener('keydown', escHandler);
                     overlay.style.animation = 'backendFadeOut 0.2s ease';
                     setTimeout(() => {
                         overlay.remove();
@@ -251,12 +267,7 @@
                     if (e.target === overlay) close(false);
                 });
                 
-                document.addEventListener('keydown', function escHandler(e) {
-                    if (e.key === 'Escape') {
-                        document.removeEventListener('keydown', escHandler);
-                        close(false);
-                    }
-                });
+                document.addEventListener('keydown', escHandler);
             });
         },
         
@@ -368,7 +379,14 @@
                 inputEl.focus();
                 inputEl.select();
 
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        close(null);
+                    }
+                };
+
                 const close = (value) => {
+                    document.removeEventListener('keydown', escHandler);
                     overlay.style.animation = 'backendFadeOut 0.2s ease';
                     setTimeout(() => {
                         overlay.remove();
@@ -389,12 +407,7 @@
                     }
                 });
 
-                document.addEventListener('keydown', function escHandler(e) {
-                    if (e.key === 'Escape') {
-                        document.removeEventListener('keydown', escHandler);
-                        close(null);
-                    }
-                });
+                document.addEventListener('keydown', escHandler);
 
                 inputEl.addEventListener('focus', function() {
                     this.style.borderColor = 'var(--backend-color-primary, #556ee6)';

@@ -1,4 +1,6 @@
-﻿账户绑定,账户绑定
+﻿标签注册表同步失败,标签注册表同步失败
+标签注册表已同步,标签注册表已同步
+账户绑定,账户绑定
 缺少授权码,缺少授权码
 授权绑定失败：,授权绑定失败：
 无效的请求方法,无效的请求方法
@@ -60,6 +62,14 @@
 续订失败：,续订失败：
 应用下载完成,应用下载完成
 当应用市场模块下载完成后触发，用于安装前检查和下载日志处理。,当应用市场模块下载完成后触发，用于安装前检查和下载日志处理。
+"AppStore query provider unsupported operation: %{1}","AppStore 查询 Provider 不支持的操作：%{1}"
+"AppStore Queries","AppStore 查询"
+"Provides installed module marketplace metadata for other modules.",向其他模块提供已安装模块的商城元数据。
+"List installed modules with marketplace meta tags and surfaces.","列出带有商城 meta 标签和面向区域的已安装模块。"
+"Typed tag filter, for example module:wls","类型标签过滤，例如 module:wls"
+"Surface filter, for example backend or surface:backend","面向区域过滤，例如 backend 或 surface:backend"
+"Optional module name filter",可选模块名过滤
+"Locale used for localized marketplace meta","用于本地化商城 meta 的语言"
 子站应用商城，支持绑定官网账户、浏览下载模块、自动安装已购模块,子站应用商城，支持绑定官网账户、浏览下载模块、自动安装已购模块
 账户验证失败,账户验证失败
 账户绑定已更新,账户绑定已更新
@@ -81,6 +91,12 @@
 令牌格式无效,令牌格式无效
 令牌数据损坏,令牌数据损坏
 令牌解密失败,令牌解密失败
+"缺少平台模块 ID，无法刷新 Meta","缺少平台模块 ID，无法刷新 Meta"
+"请先绑定官网账户后刷新 Meta","请先绑定官网账户后刷新 Meta"
+"平台未返回有效 Meta","平台未返回有效 Meta"
+"Meta 已从平台刷新","Meta 已从平台刷新"
+请先绑定官网账户后同步标签注册表,请先绑定官网账户后同步标签注册表
+平台未返回有效标签注册表,平台未返回有效标签注册表
 下载响应数据不完整,下载响应数据不完整
 文件校验失败,文件校验失败
 下载失败,下载失败
@@ -91,6 +107,7 @@
 模块结构无效：缺少模块名,模块结构无效：缺少模块名
 "模块名格式无效，必须是 Vendor_Module 格式","模块名格式无效，必须是 Vendor_Module 格式"
 "Invalid app store package manifest.","Invalid app store package manifest."
+"模块 Marketplace Meta 校验失败：","模块 Marketplace Meta 校验失败："
 "Invalid app store package path:","Invalid app store package path:"
 "Invalid bundled source path:","Invalid bundled source path:"
 "App code path does not exist.","App code path does not exist."
@@ -145,6 +162,7 @@
 版本,版本
 当前终端,当前终端
 返回应用商城,返回应用商城
+"Back To WLS Panel","返回 WLS 面板"
 该应用已安装,该应用已安装
 当前终端已安装该应用，不需要重复执行安装授权。,当前终端已安装该应用，不需要重复执行安装授权。
 本地版本：,本地版本：
@@ -171,6 +189,8 @@
 全部价格,全部价格
 免费,免费
 付费,付费
+标签,标签
+Surface,Surface
 搜索,搜索
 免费应用授权后安装,免费应用授权后安装
 付费应用购买并授权后安装,付费应用购买并授权后安装
@@ -201,6 +221,10 @@
 卸载时间：,卸载时间：
 卸载结果记录：,卸载结果记录：
 更新检查不可用,更新检查不可用
+全部标签,全部标签
+"全部 Surface","全部 Surface"
+筛选,筛选
+清除筛选,清除筛选
 当前版本,当前版本
 平台最新版本,平台最新版本
 更新状态,更新状态

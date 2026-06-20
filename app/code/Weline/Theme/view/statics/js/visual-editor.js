@@ -1059,8 +1059,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function confirmVisualEditorAction(message) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(message, {
+                title: config.translations.discardTitle || 'Discard changes',
+                type: 'warning',
+                confirmText: config.translations.confirmText || 'Confirm',
+                cancelText: config.translations.cancelText || 'Cancel'
+            });
+        }
+
+        console.warn('[Weline Theme] BackendConfirm is unavailable; preview discard cancelled.');
+        return Promise.resolve(false);
+    }
+
     async function discardPreviewScope() {
-        if (!window.confirm(config.translations.discardConfirm || 'Discard current preview configuration changes?')) {
+        if (!(await confirmVisualEditorAction(config.translations.discardConfirm || 'Discard current preview configuration changes?'))) {
             return;
         }
 

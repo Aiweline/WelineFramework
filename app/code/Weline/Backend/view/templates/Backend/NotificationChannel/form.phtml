@@ -25,6 +25,13 @@ $currentTopics = [];
 if ($channel) {
     $currentTopics = $channel->getSubscribedTopics();
 }
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
 <div class="row">
@@ -60,7 +67,6 @@ if ($channel) {
                             <div class="mb-3">
                                 <label class="form-label"><lang>渠道类型</lang> <span class="text-danger">*</span></label>
                                 <select class="form-select" name="channel_code" id="channelCode" required
-                                        onchange="WelineChannelForm.onChannelCodeChange(this.value)"
                                         <?= $channel ? 'disabled' : '' ?>>
                                     <option value=""><lang>请选择</lang></option>
                                     <?php foreach ($adapter_options as $code => $name): ?>
@@ -169,10 +175,10 @@ if ($channel) {
                     <hr>
 
                     <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-primary" onclick="WelineChannelForm.save()">
+                        <button type="button" class="btn btn-primary" data-channel-form-action="save">
                             <i class="mdi mdi-content-save me-1"></i><lang>保存</lang>
                         </button>
-                        <button type="button" class="btn btn-outline-info" onclick="WelineChannelForm.test()">
+                        <button type="button" class="btn btn-outline-info" data-channel-form-action="test">
                             <i class="mdi mdi-send me-1"></i><lang>测试连接</lang>
                         </button>
                         <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="btn btn-secondary">
@@ -227,7 +233,17 @@ if ($channel) {
 (function() {
     'use strict';
 
-    var configFieldsData = <?= json_encode($config_fields, JSON_UNESCAPED_UNICODE) ?>;
+    var configFieldsData = <?= json_encode($config_fields, $jsonForScriptFlags) ?>;
+
+    function escapeHtml(value) {
+        var div = document.createElement('div');
+        div.textContent = value == null ? '' : String(value);
+        return div.innerHTML;
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
 
     var WelineChannelForm = {
         onChannelCodeChange: function(code) {
@@ -246,10 +262,10 @@ if ($channel) {
                 var requiredMark = field.required ? '<span class="text-danger">*</span>' : '';
 
                 html += '<div class="mb-3">';
-                html += '<label class="form-label">' + field.label + ' ' + requiredMark + '</label>';
+                html += '<label class="form-label">' + escapeHtml(field.label || '') + ' ' + requiredMark + '</label>';
                 html += '<input type="' + inputType + '" class="form-control" ';
-                html += 'name="channel_config[' + field.name + ']" ';
-                html += 'placeholder="' + (field.placeholder || '') + '" ' + required + '>';
+                html += 'name="channel_config[' + escapeAttr(field.name || '') + ']" ';
+                html += 'placeholder="' + escapeAttr(field.placeholder || '') + '" ' + required + '>';
                 html += '</div>';
             });
 
@@ -305,5 +321,29 @@ if ($channel) {
     };
 
     window.WelineChannelForm = WelineChannelForm;
+
+    var channelCode = document.getElementById('channelCode');
+    if (channelCode) {
+        channelCode.addEventListener('change', function(event) {
+            WelineChannelForm.onChannelCodeChange(event.target.value);
+        });
+    }
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-channel-form-action]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        if (trigger.getAttribute('data-channel-form-action') === 'save') {
+            WelineChannelForm.save();
+            return;
+        }
+
+        if (trigger.getAttribute('data-channel-form-action') === 'test') {
+            WelineChannelForm.test();
+        }
+    });
 })();
 </script>

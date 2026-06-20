@@ -6,6 +6,7 @@ namespace Weline\Acl\Service;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\StateManager;
@@ -18,6 +19,8 @@ class AclService implements AclServiceInterface
 
     /** 请求级缓存：路由是否受 ACL 保护，同请求内避免重复查库，WLS 下由 StateManager 重置 */
     private static array $routeProtectedCache = [];
+    /** @var array<string, array<int, string>> */
+    private static array $routeEquivalentPathsCache = [];
     /** 请求级缓存：角色 ACL 条目列表，同请求内避免重复查库，WLS 下由 StateManager 重置 */
     private static array $roleAclEntriesCache = [];
     private static bool $stateManagerRegistered = false;
@@ -47,6 +50,7 @@ class AclService implements AclServiceInterface
     public static function resetRequestCache(): void
     {
         self::$routeProtectedCache = [];
+        self::$routeEquivalentPathsCache = [];
         self::$roleAclEntriesCache = [];
     }
 
@@ -100,7 +104,7 @@ class AclService implements AclServiceInterface
 
     public function isRouteAllowedByEntries(array $entries, string $routePath, string $httpMethod, bool $enforceAccessMode = false): bool
     {
-        $routePath = trim($routePath, '/');
+        $routePath = self::normalizeRoutePath($routePath);
         $httpMethod = strtoupper($httpMethod);
         if ($routePath === '') {
             return false;
@@ -112,9 +116,10 @@ class AclService implements AclServiceInterface
             return false;
         }
 
+        $routeCandidates = array_flip($this->getEquivalentRoutePaths($routePath));
         foreach ($entries as $row) {
-            $route = trim((string)$this->entryValue($row, Acl::schema_fields_ROUTE, ''), '/');
-            if ($route === '' || $route !== $routePath) {
+            $route = self::normalizeRoutePath((string)$this->entryValue($row, Acl::schema_fields_ROUTE, ''));
+            if ($route === '' || !isset($routeCandidates[$route])) {
                 continue;
             }
             $method = strtoupper((string)$this->entryValue($row, Acl::schema_fields_METHOD, ''));
@@ -164,7 +169,7 @@ class AclService implements AclServiceInterface
      */
     public function isRouteProtected(string $routePath): bool
     {
-        $routePath = trim($routePath, '/');
+        $routePath = self::normalizeRoutePath($routePath);
         if ($routePath === '') {
             return false;
         }
@@ -181,12 +186,143 @@ class AclService implements AclServiceInterface
             ->limit(1)
             ->find()
             ->fetch();
+        $protected = (bool)$row->getId();
+        if (!$protected) {
+            $routeCandidates = array_values(array_diff($this->getEquivalentRoutePaths($routePath), [$routePath]));
+            if (!empty($routeCandidates)) {
+                /** @var Acl $freshAcl */
+                $freshAcl = ObjectManager::getInstance(Acl::class, [], false);
+                $row = $freshAcl
+                    ->where(Acl::schema_fields_ROUTE, $routeCandidates, 'in')
+                    ->limit(1)
+                    ->find()
+                    ->fetch();
+                $protected = (bool)$row->getId();
+            }
+        }
         if ($t0 > 0) {
             RequestLifecycleTrace::recordSpan('acl::AclService::isRouteProtected_db', (microtime(true) - $t0) * 1000, 'observer');
         }
-        $protected = (bool)$row->getId();
         self::$routeProtectedCache[$routePath] = $protected;
         return $protected;
+    }
+
+    /**
+     * Router generation can expose several URL aliases for one controller action.
+     * ACL is stored once per source_id, so every alias must share protection.
+     *
+     * @return array<int, string>
+     */
+    protected function getEquivalentRoutePaths(string $routePath): array
+    {
+        $routePath = self::normalizeRoutePath($routePath);
+        if ($routePath === '') {
+            return [];
+        }
+        self::registerStateManager();
+        if (isset(self::$routeEquivalentPathsCache[$routePath])) {
+            return self::$routeEquivalentPathsCache[$routePath];
+        }
+
+        $routes = $this->loadRouteRegistryEntries();
+        $paths = [$routePath => true];
+        $targets = [];
+        foreach ($routes as $routeKey => $routeData) {
+            if (self::normalizeRouteKeyPath((string)$routeKey) !== $routePath) {
+                continue;
+            }
+            $signature = $this->routeControllerSignature((string)$routeKey, $routeData);
+            if ($signature !== null) {
+                $targets[$signature] = true;
+            }
+        }
+
+        if (!empty($targets)) {
+            foreach ($routes as $routeKey => $routeData) {
+                $signature = $this->routeControllerSignature((string)$routeKey, $routeData);
+                if ($signature === null || !isset($targets[$signature])) {
+                    continue;
+                }
+                $candidate = self::normalizeRouteKeyPath((string)$routeKey);
+                if ($candidate !== '') {
+                    $paths[$candidate] = true;
+                }
+            }
+        }
+
+        $equivalentPaths = array_keys($paths);
+        self::$routeEquivalentPathsCache[$routePath] = $equivalentPaths;
+        return $equivalentPaths;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadRouteRegistryEntries(): array
+    {
+        $routes = [];
+        foreach ($this->getRouteRegistryFiles() as $routeFile) {
+            $routeFile = (string)$routeFile;
+            if ($routeFile === '' || !is_file($routeFile)) {
+                continue;
+            }
+            $loaded = require $routeFile;
+            if (is_array($loaded)) {
+                $routes += $loaded;
+            }
+        }
+        return $routes;
+    }
+
+    /**
+     * @return array<int|string, string>
+     */
+    protected function getRouteRegistryFiles(): array
+    {
+        $hasBasePath = defined('Weline\Framework\App\BP') || defined('BP');
+        $hasDirectorySeparator = defined('Weline\Framework\App\DS') || defined('DS');
+        if (!$hasBasePath || !$hasDirectorySeparator) {
+            return [];
+        }
+
+        return Env::router_files_PATH;
+    }
+
+    private static function normalizeRoutePath(string $routePath): string
+    {
+        return strtolower(trim($routePath, '/'));
+    }
+
+    private static function normalizeRouteKeyPath(string $routeKey): string
+    {
+        [$path] = explode('::', $routeKey, 2);
+        return self::normalizeRoutePath($path);
+    }
+
+    private function routeControllerSignature(string $routeKey, mixed $routeData): ?string
+    {
+        if (!is_array($routeData)) {
+            return null;
+        }
+
+        $classData = $routeData['class'] ?? ($routeData['rule']['class'] ?? null);
+        if (!is_array($classData)) {
+            return null;
+        }
+
+        $className = strtolower(trim((string)($classData['name'] ?? '')));
+        $methodName = strtolower(trim((string)($classData['method'] ?? '')));
+        if ($className === '' || $methodName === '') {
+            return null;
+        }
+
+        $httpMethod = strtoupper(trim((string)($classData['request_method'] ?? '')));
+        if ($httpMethod === '') {
+            [, $httpMethod] = array_pad(explode('::', $routeKey, 2), 2, '');
+            $httpMethod = strtoupper(trim($httpMethod));
+        }
+
+        return $className . "\0" . $methodName . "\0" . $httpMethod;
     }
 
     /**

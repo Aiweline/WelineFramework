@@ -57,7 +57,8 @@
             return notice.confirm(options);
         }
 
-        return Promise.resolve(window.confirm(options.message));
+        console.warn('[Weline Account] Notice confirmation is unavailable; logout cancelled.');
+        return Promise.resolve(false);
     }
 
     function bindLogoutLink(link, config) {

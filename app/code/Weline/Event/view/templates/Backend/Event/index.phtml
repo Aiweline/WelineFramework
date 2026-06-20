@@ -925,6 +925,12 @@ select.form-control-sm {
     const backendUrlPrefix = '<?= $backendUrlPrefix ?>';
     const eventsListContainer = document.querySelector('.events-list');
     const filterForm = document.querySelector('.filter-form');
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value == null ? '' : String(value);
+        return div.innerHTML;
+    }
     
     // 执行异步搜索
     function performSearch() {
@@ -969,12 +975,12 @@ select.form-control-sm {
                 const newUrl = window.location.pathname + '?' + params.toString();
                 window.history.pushState({path: newUrl}, '', newUrl);
             } else {
-                eventsListContainer.innerHTML = '<div class="alert alert-danger">' + (data.message || '搜索失败') + '</div>';
+                eventsListContainer.innerHTML = '<div class="alert alert-danger">' + escapeHtml(data.message || '搜索失败') + '</div>';
             }
         })
         .catch(function(error) {
             console.error('搜索失败:', error);
-            eventsListContainer.innerHTML = '<div class="alert alert-danger">搜索失败，请稍后重试。错误：' + error.message + '</div>';
+            eventsListContainer.innerHTML = '<div class="alert alert-danger">' + escapeHtml('搜索失败，请稍后重试。错误：' + (error && error.message ? error.message : '')) + '</div>';
         });
     }
     
@@ -1178,12 +1184,12 @@ select.form-control-sm {
                         offcanvasTitle.textContent = data.title;
                     }
                 } else {
-                    offcanvasBody.innerHTML = '<div class="alert alert-danger">' + (data.message || '加载失败') + '</div>';
+                    offcanvasBody.innerHTML = '<div class="alert alert-danger">' + escapeHtml(data.message || '加载失败') + '</div>';
                 }
             })
             .catch(function(error) {
                 console.error('加载详情失败:', error);
-                offcanvasBody.innerHTML = '<div class="alert alert-danger">加载详情失败，请稍后重试。错误：' + error.message + '</div>';
+                offcanvasBody.innerHTML = '<div class="alert alert-danger">' + escapeHtml('加载详情失败，请稍后重试。错误：' + (error && error.message ? error.message : '')) + '</div>';
             });
         });
     }

@@ -30,8 +30,6 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
     <link href='@static(Weline_Frontend::assets/css/icons.min.css)' rel='stylesheet' type='text/css'/>
     <!-- App Css-->
     <link href='@static(Weline_Frontend::assets/css/app.min.css)' id='app-style' rel='stylesheet' type='text/css'/>
-    <!-- Font Awesome图标库 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- 加载i18n.js以支持语言切换 -->
     <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
     <style>
@@ -64,7 +62,7 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
             width: 100%;
             min-height: 1px; /* 确保容器有最小高度 */
         }
-        
+
         /* 右上角语言选择器容器 - 固定定位 */
         .maintenance-header {
             position: fixed;
@@ -72,7 +70,7 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
             right: 40px;
             z-index: 9999; /* 保证在页面所有内容之上 */
         }
-        
+
         /* 语言选择器样式 - Bootstrap适配 */
         .maintenance-language-switcher {
             position: relative;
@@ -116,7 +114,7 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
             margin-top: 8px;
             z-index: 10000;
         }
-        
+
         @media (max-width: 768px) {
             .maintenance-header {
                 top: 10px;
@@ -184,7 +182,7 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
                             <a href="@url('/')" class='btn btn-primary'>
                                 <lang>返回首页重试</lang>
                             </a>
-                            <button type="button" class='btn btn-secondary ms-2' onclick="location.reload()">
+                            <button type="button" class='btn btn-secondary ms-2' data-maintenance-refresh>
                                 <lang>刷新</lang>
                             </button>
                         </div>
@@ -344,6 +342,11 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
                 return;
             }
             schedule(0);
+        });
+        document.querySelectorAll('[data-maintenance-refresh]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                window.location.reload();
+            });
         });
         schedule(initialDelay);
     })();

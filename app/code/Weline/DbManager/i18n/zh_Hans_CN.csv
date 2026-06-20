@@ -1,0 +1,288 @@
+﻿"WLS Database Manager","WLS Database Manager"
+"Invalid request method.","Invalid request method."
+"WLS reload was not completed.","WLS reload was not completed."
+"Project database profile save failed.","Project database profile save failed."
+"Database env apply failed.","数据库 env 应用失败。"
+"Database env rollback failed.","数据库 env 回滚失败。"
+"No enabled project database profile was found.","No enabled project database profile was found."
+"Database connection test failed.","Database connection test failed."
+"Database profile was not found.","Database profile was not found."
+Default,Default
+Configured,Configured
+Empty,Empty
+Ready,Ready
+"Needs attention","Needs attention"
+"Driver available","Driver available"
+"PDO driver is not available","PDO driver is not available"
+"Sandbox database config is available and may be used by the current runtime.","Sandbox database config is available and may be used by the current runtime."
+"Configuration is read from app/etc/env.php.","Configuration is read from app/etc/env.php."
+"No explicit database config was found; the framework fallback profile is shown.","No explicit database config was found; the framework fallback profile is shown."
+Profiles,Profiles
+Guard,Guard
+Writable,Writable
+Guarded,Guarded
+"Database profile is incomplete: %{1}","Database profile is incomplete: %{1}"
+"%{1} is not available for this runtime.","%{1} is not available for this runtime."
+"Database connection test passed.","Database connection test passed."
+"Project database profile saved.","Project database profile saved."
+"Project database profile saved and WLS reload was requested.","Project database profile saved and WLS reload was requested."
+"Database env applied and backup created.","数据库 env 已应用并创建备份。"
+"No database env changes were needed.","数据库 env 没有需要写入的变更。"
+"Database env restored from backup.","数据库 env 已从备份恢复。"
+"SQLite path is required.","SQLite path is required."
+"Database host, name, and username are required.","Database host, name, and username are required."
+"Secret fields cannot contain control characters.","Secret fields cannot contain control characters."
+"Database port must be between 1 and 65535.","数据库端口必须在 1 到 65535 之间。"
+"No Action Selected",未选择动作
+"Waiting for Input",等待输入
+"Database backup, restore, and migration planning currently require mysql or pgsql profile drivers.","数据库备份、恢复和迁移计划当前要求 mysql 或 pgsql Profile 驱动。"
+"Database name is required before building a backup, restore, or migration plan.",生成备份、恢复或迁移计划前需要数据库名称。
+"Database name must start with a letter or underscore and contain only letters, numbers, and underscores.",数据库名称必须以字母或下划线开头，且只能包含字母、数字和下划线。
+"This preview is using the selected env profile. Future execution should require an enabled Project Profile or an explicit source confirmation.","当前预览正在使用所选 env profile。未来执行时应要求启用的 Project Profile 或明确的来源确认。"
+"Restore planning requires a backup artifact name.",恢复计划需要备份产物名称。
+"Backup artifact must be a safe file name ending in .sql, .sql.gz, .dump, or .backup.","备份产物必须是安全文件名，并以 .sql、.sql.gz、.dump 或 .backup 结尾。"
+"Restore is destructive and must stay behind preflight, pre-restore backup, confirmation phrase, and audit logging before execution is enabled.",恢复是破坏性操作，启用执行前必须经过预检、恢复前备份、确认短语和审计记录。
+"Migration dry-run requires a target profile, branch, tag, or migration reference.","迁移 dry-run 需要目标 profile、分支、标签或迁移引用。"
+"Migration target may contain only letters, numbers, underscores, dots, colons, and dashes.",迁移目标只能包含字母、数字、下划线、点、冒号和短横线。
+"Migration dry-run is a planning surface only; it must not execute DDL, DML, or migration scripts.","迁移 dry-run 只是计划界面，不能执行 DDL、DML 或迁移脚本。"
+"Generated backup artifact name is not safe; adjust the database name or artifact label.",生成的备份产物名称不安全；请调整数据库名称或产物标签。
+Blocked,已阻断
+"Dry Run Only","仅 Dry Run"
+"No Profile","无 Profile"
+"Execution disabled in this slice",当前切片禁用执行
+"Backup Action",备份动作
+"Select a backup, restore, or migration dry-run action to build a guarded plan.","选择备份、恢复或迁移 dry-run 动作后生成受保护计划。"
+"The action is normalized before any future execution adapter can run.",未来执行适配器运行前，动作会先被规范化。
+"Profile Source","Profile 来源"
+"No database profile is available for this context.","当前上下文没有可用的数据库 Profile。"
+"Driver Support",驱动支持
+"Future adapters may map this driver to vendor backup, restore, and schema-diff commands.",未来适配器可以把该驱动映射为数据库厂商备份、恢复和结构差异命令。
+"This driver is not supported for database backup, restore, or migration planning.",此驱动不支持数据库备份、恢复或迁移计划。
+"Database Target",数据库目标
+"Used as the future dump, restore, or schema-diff database identifier.","作为未来 dump、恢复或结构差异的数据库标识符使用。"
+"A database name is required for this action.",此动作需要数据库名称。
+"Backup Scope",备份范围
+"Scope is captured for the future dump adapter.","该范围会记录给未来 dump 适配器使用。"
+"Scope is ignored unless the selected action is backup.",除备份动作外，此范围会被忽略。
+"Artifact Boundary","Artifact Boundary"
+"Future execution may only read or write artifacts inside var/backups/wls/db-manager/database.","未来执行只能在 var/backups/wls/db-manager/database 内读取或写入产物。"
+"Not required for migration dry-run planning.","迁移 dry-run 计划不需要。"
+"Migration Target",迁移目标
+"Used as the future target profile, branch, tag, or migration reference.","作为未来目标 profile、分支、标签或迁移引用使用。"
+"Not required for backup or restore planning.",备份或恢复计划不需要。
+"Execution Adapter",执行适配器
+Disabled,已禁用
+"No database dump, restore, migration, file write, SQL, or reload operation is executed by this slice.","当前切片不会执行数据库 dump、恢复、迁移、文件写入、SQL 或重载操作。"
+"Choose a database backup, restore, or migration dry-run action before future execution adapters are allowed to run.","先选择数据库备份、恢复或迁移 dry-run 动作，未来执行适配器才允许进入执行阶段。"
+"Reload the enabled Project Database Profile or explicitly confirmed source env profile.","Reload the enabled Project Database Profile or explicitly confirmed source env profile."
+"Verify driver support, database identifier safety, credential state, artifact name, and backup directory confinement.",验证驱动支持、数据库标识符安全性、凭据状态、产物名称和备份目录边界。
+"%{1} adapter builds a vendor dump command inside the adapter boundary and writes only to the WLS backup directory.","%{1} 适配器在适配器边界内生成数据库厂商 dump 命令，并且只写入 WLS 备份目录。"
+"Record artifact metadata, checksum, profile scope, operator intent, and backup result in the DbManager audit log.","在 DbManager 审计日志中记录产物元数据、校验和、Profile 范围、操作员意图和备份结果。"
+"Run a future verification probe without exposing passwords or writing outside the backup directory.",未来运行验证探针时不暴露密码，也不写入备份目录外部。
+"Resolve the selected artifact by server-side name lookup inside the WLS backup directory.","通过服务端名称查找，在 WLS 备份目录内解析所选产物。"
+"Create a fresh pre-restore backup and verify artifact metadata before destructive restore is allowed.",允许破坏性恢复前，先创建新的恢复前备份并验证产物元数据。
+"Require an explicit restore confirmation phrase and audit record before the future adapter can run.",未来适配器运行前，需要明确的恢复确认短语和审计记录。
+"%{1} adapter restores through an allowlisted command path and then runs verification queries.","%{1} 适配器通过白名单命令路径执行恢复，然后运行验证查询。"
+"Only after restore verification may a future slice offer optional WLS reload or project health checks.","只有恢复验证通过后，未来切片才可提供可选 WLS 重载或项目健康检查。"
+"Resolve source and target profiles without executing project migration scripts.","解析源和目标 Profile，但不执行项目迁移脚本。"
+"Build a schema/data drift report using adapter-owned inspection commands or safe framework metadata.",使用适配器自有检查命令或安全框架元数据生成结构/数据漂移报告。
+"Classify generated migration intent as additive, destructive, data-touching, or unsupported before any apply button exists.",在出现任何应用按钮前，先把迁移意图归类为追加、破坏性、触碰数据或不支持。
+"Require backup evidence, confirmation phrase, audit record, and rollback guidance before a later migration execution slice can run.",后续迁移执行切片运行前，需要备份证据、确认短语、审计记录和回滚指引。
+"Keep this dry-run path free of DDL, DML, dump writes, restore writes, and WLS reload side effects.","保持该 dry-run 路径不产生 DDL、DML、dump 写入、恢复写入和 WLS 重载副作用。"
+"Project Profile","Project Profile"
+"The enabled Project Profile is the preferred source for project-scoped operations.","已启用的 Project Profile 是项目级操作的优先来源。"
+"Selected env profile","所选 env profile"
+"The selected env profile is shown for preview, but future execution should require explicit confirmation.","所选 env profile 仅用于预览，未来执行应要求明确确认。"
+"Backup Database",备份数据库
+"Restore Database",恢复数据库
+"Migration Dry Run","迁移 Dry Run"
+"Schema Only",仅结构
+"Data Only",仅数据
+"Schema And Data",结构和数据
+"Confirm the database env apply operation before submitting.","提交前请确认数据库 env 应用操作。"
+"Type APPLY_DB_ENV to apply database env changes.","输入 APPLY_DB_ENV 以应用数据库 env 变更。"
+"Database env apply is not available.","数据库 env 应用当前不可用。"
+"Unable to read app/etc/env.php before applying database changes.","应用数据库变更前无法读取 app/etc/env.php。"
+"Unable to write database config into app/etc/env.php.","无法把数据库配置写入 app/etc/env.php。"
+"Confirm the database env rollback operation before submitting.","提交前请确认数据库 env 回滚操作。"
+"Type ROLLBACK_DB_ENV to restore the selected database env backup.","输入 ROLLBACK_DB_ENV 以恢复所选数据库 env 备份。"
+"The selected backup does not belong to the current env.php target.","所选备份不属于当前 env.php 目标。"
+"Unable to read the selected database env backup.","无法读取所选数据库 env 备份。"
+"Save a Project Database Profile before applying app/etc/env.php.","请先保存项目数据库配置，再应用 app/etc/env.php。"
+"Enable the Project Database Profile before applying app/etc/env.php.","请先启用项目数据库配置，再应用 app/etc/env.php。"
+"The selected slave database profile was not found in app/etc/env.php. Save or select an existing env slave before applying.","未在 app/etc/env.php 中找到所选 slave 数据库配置。请先选择已有 env slave 再应用。"
+Driver,Driver
+Host,Host
+Port,Port
+Database,Database
+"SQLite path","SQLite path"
+Username,Username
+Password,Password
+Prefix,Prefix
+Charset,Charset
+Collation,Collation
+"Persistent connection","Persistent connection"
+"Pre SQL","Pre SQL"
+"Configured (updated)","Configured (updated)"
+Enabled,Enabled
+"Only the current app/etc/env.php file can be managed by Database Manager.","Database Manager 只能管理当前 app/etc/env.php 文件。"
+"app/etc/env.php must be readable and writable before apply or rollback.","应用或回滚前，app/etc/env.php 必须可读写。"
+"Unable to create the Database Manager backup directory.","无法创建 Database Manager 备份目录。"
+"Unable to write the database env backup file.","无法写入数据库 env 备份文件。"
+"Unable to write the database env backup metadata.","无法写入数据库 env 备份元数据。"
+"The selected database env backup is not readable.","所选数据库 env 备份不可读。"
+"The selected backup is outside the Database Manager backup directory.","所选备份不在 Database Manager 备份目录内。"
+"The selected backup file is not a Database Manager env.php backup.","所选备份文件不是 Database Manager env.php 备份。"
+"The selected database env backup metadata is missing or invalid.","所选数据库 env 备份元数据缺失或无效。"
+"Unable to write app/etc/env.php from the selected backup.","无法使用所选备份写回 app/etc/env.php。"
+"Runtime reload skipped.",已跳过运行时重载。
+"Select a running WLS instance before requesting reload.","请求重载前请选择正在运行的 WLS 实例。"
+"WLS reload request failed.","WLS 重载请求失败。"
+"Database lifecycle actions currently require mysql or pgsql profile drivers.","数据库生命周期动作当前要求 mysql 或 pgsql Profile 驱动。"
+"Database name is required for this lifecycle action.",此生命周期动作需要数据库名称。
+"Username is required for this lifecycle action.",此生命周期动作需要用户名。
+"Username must start with a letter or underscore and contain only letters, numbers, underscores, dots, and dashes.",用户名必须以字母或下划线开头，且只能包含字母、数字、下划线、点和短横线。
+"Create user requires a password stored in the Project Profile or copied from the selected env profile.","创建用户需要 Project Profile 中已保存密码，或从所选 env profile 复制密码。"
+"No host was provided; a future MySQL adapter must choose a safe host scope before execution.","未提供主机范围；未来 MySQL 适配器执行前必须选择安全的 host 范围。"
+"Grant preview assumes the database and user already exist; future execution must verify both before applying privileges.",授权预览假设数据库和用户已存在；未来执行前必须验证二者后再授予权限。
+"Lifecycle Action",生命周期动作
+"Select an action to build a guarded DBA plan.","选择动作后生成受保护的 DBA 计划。"
+"A future adapter may map this driver to vendor-specific SQL.","未来适配器可以将该驱动映射为数据库厂商 SQL。"
+"This driver is not supported for lifecycle DBA actions.","此驱动不支持生命周期 DBA 动作。"
+"Used as the future database/schema identifier.","作为未来数据库或 schema 标识符使用。"
+"Not required for this action.",此动作不需要。
+"User Target",用户目标
+"Used as the future database user identifier.",作为未来数据库用户标识符使用。
+"Grant Scope",授权范围
+"Host scope is captured for future adapter verification.",主机范围已记录，供未来适配器验证。
+"Host scope is not selected in this dry run.","本次 dry run 未选择主机范围。"
+"No database, user, grant, backup, or reload operation is executed by this slice.",当前切片不会执行数据库、用户、授权、备份或重载操作。
+"Choose a lifecycle action and preview the plan before any future DBA adapter is allowed to run.","选择生命周期动作并预览计划后，未来 DBA 适配器才可进入执行阶段。"
+"Reload the enabled Project Database Profile and selected source env profile.","重新读取已启用的 Project Database Profile 和所选源 env profile。"
+"Verify driver support, identifier allowlists, credential state, and operator confirmation phrase.",验证驱动支持、标识符白名单、凭据状态和操作员确认短语。
+"%{1} adapter builds vendor-specific SQL with identifier quoting inside the adapter boundary.","%{1} 适配器在适配器边界内生成带标识符引用的数据库厂商 SQL。"
+"Execute only after a later slice adds allowlisted adapter execution, audit records, and rollback or verification hooks.",只有后续切片加入白名单适配器执行、审计记录以及回滚或验证钩子后才可执行。
+"Run a guarded connection test and optional WLS reload only after the database operation succeeds.","数据库操作成功后，再运行受保护的连接测试和可选 WLS 重载。"
+"Create Database",创建数据库
+"Create User",创建用户
+"Grant User",授权用户
+"Read Only",只读
+"Schema Owner","Schema Owner"
+"Read Write",读写
+"Panel Profile","Panel Profile"
+"Env default","Env default"
+"Confirm the database profile save before submitting.","Confirm the database profile save before submitting."
+"Select a target WLS instance before requesting reload.","Select a target WLS instance before requesting reload."
+"WLS runtime reload requested.","WLS runtime reload requested."
+"Type COPY_ENV_PASSWORD to copy the source env profile password.","请输入 COPY_ENV_PASSWORD 才能复制源 env profile 密码。"
+"Source env profile was not found.","未找到源 env profile。"
+"The selected source env profile has no password to copy.","选择的源 env profile 没有可复制的密码。"
+"OpenSSL extension is required before saving database passwords.","保存数据库密码前需要启用 OpenSSL 扩展。"
+"Database password encryption failed.",数据库密码加密失败。
+"Stored in Profile","已存入 Profile"
+"Only in source env profile","仅存在于源 env 配置"
+"Not configured",未配置
+"Project Profile secret",项目配置密文
+"Existing env password","沿用 env 密码"
+"Empty password",空密码
+"Existing slave","已有 slave"
+"Direct db","直接 db"
+Master/default,Master/default
+"WLS Standalone Backend","WLS Standalone Backend"
+"Database Manager","Database Manager"
+"Database manager navigation","Database manager navigation"
+Summary,Summary
+Lifecycle,生命周期
+"Backup Plan",备份计划
+"Env Apply","Env 应用"
+Test,Test
+Marketplace,Marketplace
+Dark,Dark
+"WLS Panel Plugin","WLS Panel Plugin"
+"Database profile readout and guarded connection checks for the selected WLS project context.","Database profile readout and guarded connection checks for the selected WLS project context."
+"WLS Panel","WLS Panel"
+"Project Admin","Project Admin"
+"Project Context","Project Context"
+Operation,Operation
+"Project ID","Project ID"
+Domain,Domain
+"Project Type","Project Type"
+"Database Profiles","Database Profiles"
+"Connection details are masked. Use Project Profile below to save a guarded database configuration for this WLS project.","Connection details are masked. Use Project Profile below to save a guarded database configuration for this WLS project."
+"No database profiles were found.","No database profiles were found."
+"Project Database Profile","Project Database Profile"
+"Save a database profile for the selected WLS project. Secrets are encrypted at rest, masked in the UI, and omitted from audit logs.","Save a database profile for the selected WLS project. Secrets are encrypted at rest, masked in the UI, and omitted from audit logs."
+"Enabled Profile","Enabled Profile"
+"Saved Disabled","Saved Disabled"
+Inherited,Inherited
+"Enable project database profile","Enable project database profile"
+"Confirm guarded save","Confirm guarded save"
+"Source profile","Source profile"
+"No env profile","No env profile"
+"Used as the inherited baseline before this project saves overrides.","Used as the inherited baseline before this project saves overrides."
+"Configured, leave blank to keep","Configured, leave blank to keep"
+"Not saved in Profile","Not saved in Profile"
+State,State
+"Copy source env password into Profile","复制源 env 密码到 Profile"
+"Copy confirmation",复制确认
+"Copies the selected source env profile password into this Project Profile without showing it.","将选择的源 env profile 密码复制到当前项目 Profile，全程不显示明文。"
+"Runtime action","Runtime action"
+"Save only","Save only"
+"Request WLS reload","Request WLS reload"
+"Target WLS instance","Target WLS instance"
+Description,Description
+"Optional operator note for this WLS project database profile.","Optional operator note for this WLS project database profile."
+"Clear stored password","Clear stored password"
+"Last runtime action","Last runtime action"
+"Runtime result","Runtime result"
+"Last test","Last test"
+"Test message","Test message"
+"Save Project Profile","Save Project Profile"
+"Recent Audit","Recent Audit"
+"Latest DbManager profile save and connection-test audit entries.","Latest DbManager profile save and connection-test audit entries."
+Time,Time
+Event,Event
+Scope,Scope
+"Database Lifecycle Plan",数据库生命周期计划
+"Preview create database, create user, or grant intent before any future DBA adapter is allowed to execute vendor-specific SQL.","在未来 DBA 适配器允许执行数据库方言 SQL 前，先预览创建数据库、创建用户或授权意图。"
+"Select Action",选择动作
+"Host Scope",主机范围
+"Grant Mode",授权模式
+Execution,执行
+"Preview Lifecycle Plan",预览生命周期计划
+"Run Lifecycle Action",执行生命周期动作
+"Execution Boundary",执行边界
+"A later adapter slice must provide allowlisted SQL generation, confirmation phrase, audit record, verification query, and rollback or cleanup guidance before execution can run.","后续适配器切片必须提供白名单 SQL 生成、确认短语、审计记录、验证查询以及回滚或清理指引后，才允许执行。"
+"Backup Restore And Migration Plan",备份恢复与迁移计划
+"Preview backup, destructive restore, or migration dry-run intent before any future adapter can write dump files, restore data, execute migrations, or reload WLS.","在未来适配器写入 dump 文件、恢复数据、执行迁移或重载 WLS 前，先预览备份、破坏性恢复或迁移 dry-run 意图。"
+"Backup Artifact",备份产物
+"Artifact Directory",产物目录
+"Preview Backup Plan",预览备份计划
+"Run Backup Restore Or Migration",执行备份恢复或迁移
+"A later adapter slice must provide confined artifact lookup, confirmation phrase, pre-restore backup, audit records, verification probes, and rollback guidance before execution can run.",后续适配器切片必须提供受限产物查找、确认短语、恢复前备份、审计记录、验证探针和回滚指引后，才允许执行。
+"Env Apply And Rollback","Env 应用与回滚"
+"Apply writes the enabled Project Database Profile into app/etc/env.php after creating a backup, then optional WLS reload can be requested.","应用会先创建备份，再把已启用的项目数据库配置写入 app/etc/env.php，并可选择请求 WLS 重载。"
+"Write Target",写入目标
+"Write Mode",写入模式
+"Profile Key",配置键
+"Password Source",密码来源
+"Latest Backup",最新备份
+"This apply updates only the existing slave profile shown above. It will not create, delete, or reorder slave entries.","本次应用只会更新上方显示的已有 slave 配置，不会创建、删除或重排 slave 条目。"
+"No database env changes are pending for this profile.","当前项目数据库配置没有待写入的 env 差异。"
+Field,Field
+"Current env.php","当前 env.php"
+"Apply only",仅应用
+"Confirmation Phrase",确认短语
+"I understand Database Manager will update app/etc/env.php after creating a backup.","我确认 Database Manager 会在创建备份后更新 app/etc/env.php。"
+"Apply env.php","应用 env.php"
+Backup,Backup
+"Restore only",仅恢复
+"I understand Database Manager will restore the selected app/etc/env.php backup.","我确认 Database Manager 会恢复所选 app/etc/env.php 备份。"
+"Rollback env.php","回滚 env.php"
+"Connection Test","Connection Test"
+"Runs a single POST-only SELECT 1 check and returns a sanitized result.","Runs a single POST-only SELECT 1 check and returns a sanitized result."
+"A database profile is required before testing.","A database profile is required before testing."
+Profile,Profile
+"Test Connection","Test Connection"
+"Missing fields: %{1}","Missing fields: %{1}"
+Light,Light

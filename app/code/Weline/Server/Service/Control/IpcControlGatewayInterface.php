@@ -50,6 +50,12 @@ interface IpcControlGatewayInterface
     public function reloadSslCert(string $instanceName = 'default', array $domains = []): array;
 
     /**
+     * @param array<int, array<string, mixed>> $routes
+     * @return array{success:bool,message:string,data:array}
+     */
+    public function proxyApply(string $instanceName = 'default', array $routes = [], float $timeout = 5.0): array;
+
+    /**
      * @return array{success:bool,message:string,data:array}
      */
     public function securityUnblock(string $instanceName = 'default', ?string $ip = null, bool $clearAll = false): array;
