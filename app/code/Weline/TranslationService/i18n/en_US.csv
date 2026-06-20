@@ -99,6 +99,9 @@ API接口地址，留空使用默认地址,"API endpoint address, leave blank to
 全不选,"Deselect All"
 保存,Save
 取消,Cancel
+确认操作,确认操作
+确定,Confirm
+确定要删除此渠道配置吗？,"Are you sure you want to delete this channel configuration?"
 翻译服务配置,"Translation Service Configuration"
 配置和管理翻译服务渠道，支持Google、百度、DeepL、Microsoft等主流翻译服务,"Configure and manage translation service channels, supporting mainstream translation services such as Google, Baidu, DeepL, Microsoft, etc."
 渠道列表,"Channel List"
@@ -113,13 +116,13 @@ API接口地址，留空使用默认地址,"API endpoint address, leave blank to
 否,No
 编辑,Edit
 测试,Test
-确定要删除此渠道配置吗？,"Are you sure you want to delete this channel configuration?"
 删除,Delete
 测试中...,Testing...
 测试成功,"Test Passed"
 未知错误,"Unknown error"
-确定,Confirm
 测试失败,"Test failed"
+确定要删除此记录吗？,"Are you sure you want to delete this record?"
+确定要删除选中的记录吗？,"Are you sure you want to delete the selected records?"
 翻译记录管理,"Translation Record Management"
 查看和管理翻译服务的使用记录和统计信息,"View and manage translation service usage records and statistics"
 总记录数,"Total Records"
@@ -153,11 +156,9 @@ ID,ID
 成本,Cost
 响应时间,"Response Time"
 创建时间,"Created At"
-确定要删除此记录吗？,"Are you sure you want to delete this record?"
 上一页,"Previous Page"
 下一页,"Next Page"
 提示,Prompt
-确定要删除选中的记录吗？,"Are you sure you want to delete the selected records?"
 翻译记录详情,"Translation Record Details"
 返回列表,"Back to List"
 记录ID,"Record ID"

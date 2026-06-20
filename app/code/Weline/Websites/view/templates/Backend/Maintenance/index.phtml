@@ -74,8 +74,10 @@ $maintenanceStatus = $maintenance_status ?? [];
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <button type="button" class="btn btn-sm btn-<?= $isMaintenance ? 'success' : 'warning' ?>" 
-                                                            onclick="toggleMaintenance(<?= $websiteId ?>, <?= $isMaintenance ? 'false' : 'true' ?>)">
+                                                    <button type="button" class="btn btn-sm btn-<?= $isMaintenance ? 'success' : 'warning' ?>"
+                                                            data-maintenance-action="toggle"
+                                                            data-website-id="<?= (int)$websiteId ?>"
+                                                            data-maintenance-enabled="<?= $isMaintenance ? '0' : '1' ?>">
                                                         <i class="mdi mdi-toggle-switch me-1"></i>
                                                         <?= $isMaintenance ? __('关闭维护模式') : __('开启维护模式') ?>
                                                     </button>
@@ -95,3 +97,23 @@ $maintenanceStatus = $maintenance_status ?? [];
                         </div>
                     </div>
                 </div>
+<script>
+(function() {
+    'use strict';
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-maintenance-action="toggle"]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        if (typeof window.toggleMaintenance !== 'function') {
+            return;
+        }
+        window.toggleMaintenance(
+            parseInt(trigger.getAttribute('data-website-id') || '0', 10) || 0,
+            trigger.getAttribute('data-maintenance-enabled') === '1'
+        );
+    });
+})();
+</script>

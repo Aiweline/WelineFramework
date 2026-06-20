@@ -2,9 +2,10 @@
 name: fenxiang-update
 description: >-
   Load ONLY when the user says passphrase 分项. Commit and push the current core repo
-  (default E:\WelineFramework\DEV-workspace), then run php bin/w core:update -b dev
+  (default E:\WelineFramework\DEV-workspace), then run php bin/w core:update -b <branch>
   in the configured child projects under E:\WelineFramework\Framework-Official; after each
-  successful site update, reload WLS if it is running. Canonical skill:
+  successful site update, reload WLS if it is running. If the user says only 分项, use dev;
+  if the user says 分项 <branch>, use that branch. Canonical skill:
   dev/ai/skills/CI发布工程师-分项更新/SKILL.md
 ---
 
@@ -17,9 +18,10 @@ Codex alias for `CI发布工程师-分项更新`. **Do not run unless the user m
 `分项` means "sync core code by project":
 
 1. `E:\WelineFramework\Framework-Official` contains the child site projects; the default core repository is `E:\WelineFramework\DEV-workspace`.
-2. Commit and push the current core branch online.
-3. Each configured site project updates its core code through `php bin/w core:update -b dev`.
-4. After a successful site update, run `php bin/w server:reload -n`; the command detects whether WLS is running and skips when there are no workers.
+2. Resolve the target branch from the passphrase: `分项` defaults to `dev`; `分项 <branch>` targets `<branch>`.
+3. Commit and push the current core branch online to the target branch.
+4. Each configured site project updates its core code through `php bin/w core:update -b <branch>`.
+5. After a successful site update, run `php bin/w server:reload -n`; the command detects whether WLS is running and skips when there are no workers.
 
 ## Canonical paths
 
@@ -37,10 +39,16 @@ From `E:\WelineFramework\DEV-workspace`:
 .\dev\tools\fenxiang\fenxiang-update.ps1
 ```
 
-With explicit commit message:
+Equivalent explicit dev branch:
 
 ```powershell
-.\dev\tools\fenxiang\fenxiang-update.ps1 -Branch dev -CommitMessage "core: 修复升级 registry stale 信息清理"
+.\dev\tools\fenxiang\fenxiang-update.ps1 dev
+```
+
+With explicit branch and commit message:
+
+```powershell
+.\dev\tools\fenxiang\fenxiang-update.ps1 master -CommitMessage "core: 修复升级 registry stale 信息清理"
 ```
 
 When unrelated local changes exist, restrict the commit:

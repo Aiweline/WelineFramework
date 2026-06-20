@@ -3071,20 +3071,15 @@ HTML;
 
     private function isAcceptedClientTlsHandshake($clientSocket): bool
     {
-        $peek = '';
-        $peekLen = @\socket_recv($clientSocket, $peek, 5, \MSG_PEEK);
+        $peek = $this->peekAcceptedClientBytes($clientSocket, 5, 0.02);
 
-        return $peekLen !== false
-            && $peekLen > 0
-            && $peek !== ''
-            && $this->isTlsHandshakePeek($peek);
+        return $this->isTlsHandshakePeek($peek);
     }
 
     private function tryServeAcmeHttp01Challenge($clientSocket, int $connId, string $clientIp): bool
     {
-        $peek = '';
-        $peekLen = @\socket_recv($clientSocket, $peek, 4096, \MSG_PEEK);
-        if ($peekLen === false || $peekLen <= 0 || $peek === '' || $this->isTlsHandshakePeek($peek)) {
+        $peek = $this->peekAcceptedClientBytes($clientSocket, 4096, 0.05);
+        if ($peek === '' || $this->isTlsHandshakePeek($peek)) {
             return false;
         }
 
@@ -3303,9 +3298,8 @@ HTML;
      */
     private function handlePlainHttpRedirect($clientSocket, int $connId, string $clientIp): bool
     {
-        $peek = '';
-        $peekLen = @\socket_recv($clientSocket, $peek, 8, \MSG_PEEK);
-        if ($peekLen === false || $peekLen <= 0 || $peek === '') {
+        $peek = $this->peekAcceptedClientBytes($clientSocket, 8, 0.05);
+        if ($peek === '') {
             return false;
         }
 
@@ -3315,17 +3309,7 @@ HTML;
             return false;
         }
 
-        $head = \strtoupper($peek);
-        $isPlainHttp = \str_starts_with($head, 'GET ')
-            || \str_starts_with($head, 'POST ')
-            || \str_starts_with($head, 'HEAD ')
-            || \str_starts_with($head, 'PUT ')
-            || \str_starts_with($head, 'PATCH ')
-            || \str_starts_with($head, 'DELETE ')
-            || \str_starts_with($head, 'OPTIONS ')
-            || \str_starts_with($head, 'TRACE ')
-            || \str_starts_with($head, 'CONNECT ');
-        if (!$isPlainHttp) {
+        if (!$this->isPlainHttpRequestPrefix($peek)) {
             return false;
         }
 
@@ -3353,6 +3337,49 @@ HTML;
 
         // 回退：内联返回 301
         return $this->sendInlineHttpRedirect($clientSocket, $connId, $clientIp);
+    }
+
+    private function peekAcceptedClientBytes($clientSocket, int $length, float $timeoutSec): string
+    {
+        $length = \max(1, $length);
+        $deadline = \microtime(true) + \max(0.0, $timeoutSec);
+
+        do {
+            $peek = '';
+            $peekLen = @\socket_recv($clientSocket, $peek, $length, \MSG_PEEK);
+            if ($peekLen !== false && $peekLen > 0 && $peek !== '') {
+                return $peek;
+            }
+
+            if (\microtime(true) >= $deadline) {
+                return '';
+            }
+
+            $read = [$clientSocket];
+            $write = $except = [];
+            $remainingUsec = (int)\max(1_000, \min(10_000, ($deadline - \microtime(true)) * 1_000_000));
+            @\socket_select($read, $write, $except, 0, $remainingUsec);
+        } while (\microtime(true) < $deadline);
+
+        return '';
+    }
+
+    private function isPlainHttpRequestPrefix(string $peek): bool
+    {
+        if ($peek === '') {
+            return false;
+        }
+
+        $head = \strtoupper($peek);
+        return \str_starts_with($head, 'GET ')
+            || \str_starts_with($head, 'POST ')
+            || \str_starts_with($head, 'HEAD ')
+            || \str_starts_with($head, 'PUT ')
+            || \str_starts_with($head, 'PATCH ')
+            || \str_starts_with($head, 'DELETE ')
+            || \str_starts_with($head, 'OPTIONS ')
+            || \str_starts_with($head, 'TRACE ')
+            || \str_starts_with($head, 'CONNECT ');
     }
 
     /**

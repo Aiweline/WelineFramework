@@ -1,6 +1,6 @@
 # Gitee Webhook 配置指南
 
-将 Gitee 仓库 Webhook 接到 `Weline_Deploy` 统一入口 `https://<域名>/deploy`。
+将 Gitee 仓库 Webhook 接到 `Weline_Deploy` 统一入口。实际地址由 `deploy:webhook:setup --base-url=https://<域名>` 输出，形如 `https://<域名>/~wh~...`。
 
 访问密码说明见 [`webhook-secret.md`](webhook-secret.md)；后台字段与 Nginx 见 [`backend-config.md`](backend-config.md)。
 
@@ -17,7 +17,7 @@ php bin/w deploy:webhook:setup --base-url=https://你的域名
 刷新密码（轮换后须同步更新 Gitee 页面密码）：
 
 ```bash
-php bin/w deploy:webhook:setup --force -y --url=https://你的域名/deploy
+php bin/w deploy:webhook:setup --force -y --base-url=https://你的域名
 ```
 
 ## 2. Gitee 页面配置
@@ -27,9 +27,9 @@ php bin/w deploy:webhook:setup --force -y --url=https://你的域名/deploy
 
 | 字段 | 值 |
 |------|-----|
-| URL | `https://你的域名/deploy` |
+| URL | 命令输出的 `https://你的域名/~wh~...` |
 | 密码 / Token | 与后台「Webhook 密钥」**完全相同** |
-| 触发事件 | `Push`（若需 Tag 发布，另勾选 `Tag Push` 并配置后台触发模式） |
+| 触发事件 | 默认发布模式为 Tag Push，请勾选 `Tag Push`；若后台明确选择分支或两者都生效，再勾选 `Push` |
 | 数据格式 | JSON |
 
 3. 保存并启用
@@ -46,9 +46,9 @@ Gitee 鉴权兼容：`X-Gitee-Token` 明文等于 `webhook_secret`，或带 `X-G
 ## 3. 验证
 
 ```bash
-curl -s 'https://你的域名/deploy?health=1'
+curl -s 'https://你的域名/~wh~...?health=1'
 
-curl -s -X POST 'https://你的域名/deploy' \
+curl -s -X POST 'https://你的域名/~wh~...' \
   -H 'Content-Type: application/json' \
   -H 'X-Gitee-Token: 你的webhook_secret' \
   --data '{"ref":"refs/heads/master"}'

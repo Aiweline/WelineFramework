@@ -96,9 +96,13 @@
 发送失败,"Senden fehlgeschlagen"
 发送失败，请稍后重试,发送失败，请稍后重试
 确定要接单此会话吗？,"Diese Sitzung annehmen?"
+确认接单,确认接单
+取消,Abbrechen
 分配失败,"Zuweisung fehlgeschlagen"
 分配失败，请稍后重试,分配失败，请稍后重试
 确定要关闭此会话吗？,"Diese Sitzung schließen?"
+确认关闭,确认关闭
+关闭,Schließen
 请选择一个会话开始聊天,"Wählen Sie eine Sitzung zum Chatten aus"
 关闭失败,"Schließen fehlgeschlagen"
 关闭失败，请稍后重试,关闭失败，请稍后重试
@@ -149,7 +153,6 @@ ID,ID
 客服可以接待的所有语言（勾选多个可接待全球客户）,"Alle unterstützten Sprachen"
 最大并发会话数,"Max. gleichzeitige Sitzungen"
 激活状态,"Aktiver Status"
-取消,Abbrechen
 保存,Speichern
 编辑客服,"Agent bearbeiten"
 提示,提示
@@ -202,7 +205,6 @@ English,English
 客服语言,Agentensprache
 创建时间,"Erstellt am"
 查看,Anzeigen
-关闭,Schließen
 返回列表,Zurück
 会话信息,Sitzungsinformationen
 客服ID,Agenten-ID

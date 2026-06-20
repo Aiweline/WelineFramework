@@ -313,7 +313,7 @@ class MetaManager implements TaglibInterface
             $filtersHtml = <<<HTML
 <div class="mb-3">
     <div class="card">
-        <div class="card-header py-2 d-flex justify-content-between align-items-center" style="cursor: pointer;" onclick="this.querySelector('.{$uniqueId}_filter_toggle_icon').classList.toggle('mdi-chevron-down'); this.querySelector('.{$uniqueId}_filter_toggle_icon').classList.toggle('mdi-chevron-up'); document.getElementById('{$uniqueId}-filter-body').classList.toggle('collapse');">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center" style="cursor: pointer;" data-meta-filter-toggle="{$uniqueId}-filter-body">
             <h6 class="mb-0"><i class="mdi mdi-filter-outline me-1"></i>筛选条件</h6>
             <div class="d-flex align-items-center gap-2">
                 <small class="text-muted" id="{$uniqueId}-loading-status"></small>
@@ -2123,6 +2123,22 @@ CSS;
             input.addEventListener('change', {$uniqueId}_onFilterChange);
         }
     });
+
+    const filterToggle = document.querySelector('[data-meta-filter-toggle="' + uniqueId + '-filter-body"]');
+    if (filterToggle) {
+        filterToggle.addEventListener('click', function() {
+            const filterIcon = filterToggle.querySelector('.' + uniqueId + '_filter_toggle_icon');
+            const filterBody = document.getElementById(uniqueId + '-filter-body');
+
+            if (filterIcon) {
+                filterIcon.classList.toggle('mdi-chevron-down');
+                filterIcon.classList.toggle('mdi-chevron-up');
+            }
+            if (filterBody) {
+                filterBody.classList.toggle('collapse');
+            }
+        });
+    }
 
     // 打开目录配置弹窗
     function {$uniqueId}_openDirConfig(node) {

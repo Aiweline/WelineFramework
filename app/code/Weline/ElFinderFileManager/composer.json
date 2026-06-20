@@ -5,7 +5,7 @@
   "type": "weline-module",
   "require": {
     "php": "^8.1",
-    "studio-42/elfinder": "^2.1.65",
+    "studio-42/elfinder": "^2.1.69",
     "weline/module-file-manager": "*"
   },
   "authors": [

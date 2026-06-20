@@ -5,7 +5,7 @@
 
 import { ClassicEditor } from '@ckeditor/ckeditor5-editor-classic';
 
-import { UploadAdapter } from '@ckeditor/ckeditor5-adapter-ckfinder';
+import { CKFinderUploadAdapter } from '@ckeditor/ckeditor5-adapter-ckfinder';
 import { Alignment } from '@ckeditor/ckeditor5-alignment';
 import { Autoformat } from '@ckeditor/ckeditor5-autoformat';
 import { Autosave } from '@ckeditor/ckeditor5-autosave';
@@ -26,13 +26,6 @@ import { FontBackgroundColor, FontColor, FontFamily, FontSize } from '@ckeditor/
 import { Heading, Title } from '@ckeditor/ckeditor5-heading';
 import { Highlight } from '@ckeditor/ckeditor5-highlight';
 import { HorizontalLine } from '@ckeditor/ckeditor5-horizontal-line';
-import { HtmlEmbed } from '@ckeditor/ckeditor5-html-embed';
-import {
-	DataFilter,
-	DataSchema,
-	GeneralHtmlSupport,
-	HtmlComment
-} from '@ckeditor/ckeditor5-html-support';
 import {
 	AutoImage,
 	ImageInline,
@@ -54,7 +47,6 @@ import { RemoveFormat } from '@ckeditor/ckeditor5-remove-format';
 import { StandardEditingMode } from '@ckeditor/ckeditor5-restricted-editing';
 import { SelectAll } from '@ckeditor/ckeditor5-select-all';
 import { ShowBlocks } from '@ckeditor/ckeditor5-show-blocks';
-import { SourceEditing } from '@ckeditor/ckeditor5-source-editing';
 import {
 	SpecialCharacters,
 	SpecialCharactersArrows,
@@ -64,7 +56,6 @@ import {
 	SpecialCharactersMathematical,
 	SpecialCharactersText
 } from '@ckeditor/ckeditor5-special-characters';
-import { Style } from '@ckeditor/ckeditor5-style';
 import {
 	Table,
 	TableCaption,
@@ -91,8 +82,6 @@ class Editor extends ClassicEditor {
 		Bold,
 		Code,
 		CodeBlock,
-		DataFilter,
-		DataSchema,
 		DocumentList,
 		DocumentListProperties,
 		Essentials,
@@ -101,12 +90,9 @@ class Editor extends ClassicEditor {
 		FontColor,
 		FontFamily,
 		FontSize,
-		GeneralHtmlSupport,
 		Heading,
 		Highlight,
 		HorizontalLine,
-		HtmlComment,
-		HtmlEmbed,
 		ImageInline,
 		ImageResize,
 		ImageStyle,
@@ -125,7 +111,6 @@ class Editor extends ClassicEditor {
 		RemoveFormat,
 		SelectAll,
 		ShowBlocks,
-		SourceEditing,
 		SpecialCharacters,
 		SpecialCharactersArrows,
 		SpecialCharactersCurrency,
@@ -135,7 +120,6 @@ class Editor extends ClassicEditor {
 		SpecialCharactersText,
 		StandardEditingMode,
 		Strikethrough,
-		Style,
 		Subscript,
 		Superscript,
 		Table,
@@ -149,7 +133,7 @@ class Editor extends ClassicEditor {
 		Title,
 		TodoDocumentList,
 		Underline,
-		UploadAdapter,
+		CKFinderUploadAdapter,
 		WordCount
 	];
 
@@ -184,8 +168,6 @@ class Editor extends ClassicEditor {
 				'mediaEmbed',
 				'codeBlock',
 				'showBlocks',
-				'htmlEmbed',
-				'sourceEditing',
 				'findAndReplace',
 				'selectAll',
 				'undo',
@@ -196,7 +178,6 @@ class Editor extends ClassicEditor {
 				'subscript',
 				'superscript',
 				'todoList',
-				'style',
 				'textPartLanguage'
 			]
 		},

@@ -16,6 +16,15 @@ $isActive = $this->getData('is_active');
 $backendBase = $this->getBackendUrl('shipping/backend/carrier');
 $createUrl = $this->getBackendUrl('shipping/backend/carrier/edit');
 $embed = $this->getData('embed') ?? false;
+$dialogJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$confirmMessages = [
+    'confirmTitle' => (string)__('确认操作'),
+    'confirmButton' => (string)__('确定'),
+    'cancelButton' => (string)__('取消'),
+    'disableCarrier' => (string)__('确定要禁用这个快递公司吗？'),
+    'enableCarrier' => (string)__('确定要启用这个快递公司吗？'),
+    'deleteCarrier' => (string)__('确定要删除这个快递公司吗？'),
+];
 ?>
 <?php if (empty($embed)): ?>
 <div class="row">
@@ -135,12 +144,12 @@ $embed = $this->getData('embed') ?? false;
                                                             <a href="<?= $this->getBackendUrl('shipping/backend/carrier/toggle?id=' . $carrier->getId()) ?>" 
                                                                class="btn btn-sm btn-<?= $carrier->getData(Carrier::fields_IS_ACTIVE) ? 'warning' : 'success' ?>" 
                                                                title="<?= $carrier->getData(Carrier::fields_IS_ACTIVE) ? __('禁用') : __('启用') ?>"
-                                                               onclick="return confirm('<?= $carrier->getData(Carrier::fields_IS_ACTIVE) ? __('确定要禁用这个快递公司吗？') : __('确定要启用这个快递公司吗？') ?>')">
+                                                               data-carrier-confirm="<?= $carrier->getData(Carrier::fields_IS_ACTIVE) ? 'disableCarrier' : 'enableCarrier' ?>">
                                                                 <i class="mdi mdi-<?= $carrier->getData(Carrier::fields_IS_ACTIVE) ? 'close' : 'check' ?>"></i>
                                                             </a>
                                                             <a href="<?= $this->getBackendUrl('shipping/backend/carrier/delete?id=' . $carrier->getId()) ?>" 
                                                                class="btn btn-sm btn-danger" title="<?= __('删除') ?>"
-                                                               onclick="return confirm('<?= __('确定要删除这个快递公司吗？') ?>')">
+                                                               data-carrier-confirm="deleteCarrier">
                                                                 <i class="mdi mdi-delete"></i>
                                                             </a>
                                                         </div>
@@ -182,3 +191,104 @@ $embed = $this->getData('embed') ?? false;
                         </div>
                     </div>
                 </div>
+<script>
+(function () {
+    'use strict';
+
+    const messages = <?= json_encode($confirmMessages, $dialogJsonFlags) ?>;
+
+    function showLocalChoice(message) {
+        return new Promise(function(resolve) {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:1055;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+            const dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.style.cssText = 'width:min(420px,100%);background:#fff;border-radius:8px;box-shadow:0 20px 60px rgba(15,23,42,.25);padding:24px;';
+
+            const title = document.createElement('h4');
+            title.textContent = messages.confirmTitle;
+            title.style.cssText = 'margin:0 0 12px;font-size:18px;';
+
+            const body = document.createElement('p');
+            body.textContent = message;
+            body.style.cssText = 'margin:0 0 20px;color:#475569;';
+
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+
+            const cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
+            cancelButton.className = 'btn btn-secondary';
+            cancelButton.textContent = messages.cancelButton;
+
+            const confirmButton = document.createElement('button');
+            confirmButton.type = 'button';
+            confirmButton.className = 'btn btn-primary';
+            confirmButton.textContent = messages.confirmButton;
+
+            function close(value) {
+                document.removeEventListener('keydown', onKeydown);
+                overlay.remove();
+                resolve(value);
+            }
+
+            function onKeydown(event) {
+                if (event.key === 'Escape') {
+                    close(false);
+                }
+            }
+
+            cancelButton.addEventListener('click', function() { close(false); });
+            confirmButton.addEventListener('click', function() { close(true); });
+            overlay.addEventListener('click', function(event) {
+                if (event.target === overlay) {
+                    close(false);
+                }
+            });
+
+            actions.append(cancelButton, confirmButton);
+            dialog.append(title, body, actions);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            document.addEventListener('keydown', onKeydown);
+            confirmButton.focus();
+        });
+    }
+
+    function showCarrierChoice(message) {
+        if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+            return Swal.fire({
+                icon: 'warning',
+                title: messages.confirmTitle,
+                text: message,
+                showCancelButton: true,
+                confirmButtonText: messages.confirmButton,
+                cancelButtonText: messages.cancelButton
+            }).then(function(result) {
+                return !!(result && result.isConfirmed);
+            });
+        }
+
+        return showLocalChoice(message);
+    }
+
+    document.querySelectorAll('[data-carrier-confirm]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            const key = link.getAttribute('data-carrier-confirm');
+            const message = messages[key];
+            if (!message) {
+                return;
+            }
+
+            event.preventDefault();
+            showCarrierChoice(message).then(function(confirmed) {
+                if (confirmed) {
+                    window.location.href = link.href;
+                }
+            });
+        });
+    });
+})();
+</script>

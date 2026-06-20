@@ -947,7 +947,7 @@ class Start extends CommandAbstract
             $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($windowMode);
             $listenHost = $this->resolveServerListenHost((string)$host);
             $this->traceStartupPhase($instanceName, 'save-instance:before');
-            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, $dispatcherEnabled, $workerPort, $httpRedirectPort, $windowMode, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), $publicHost);
+            $this->saveInstanceInfo($instanceName, $listenHost, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, $dispatcherEnabled, $workerPort, $httpRedirectPort, $windowMode, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions, (string) ($config['worker_memory_limit'] ?? '256M'), (string) ($config['dispatcher_memory_limit'] ?? ''), $publicHost, \is_array($config['gateway'] ?? null) ? $config['gateway'] : []);
             $this->traceStartupPhase($instanceName, 'save-instance:after');
         } finally {
             if ($workerPortAllocationLocked) {
@@ -1420,6 +1420,7 @@ class Start extends CommandAbstract
             'memory_server_port' => (int) ($data['memory_server_port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'memory_server_token_file_name' => (string) ($data['memory_server_token_file_name'] ?? 'memory_server.token'),
             'shared_state' => \is_array($data['shared_state'] ?? null) ? $data['shared_state'] : [],
+            'gateway' => \is_array($data['gateway'] ?? null) ? $data['gateway'] : [],
             'daemon' => (bool) ($data['daemon'] ?? true),
             'orchestrator_runtime_options' => $orchestratorRuntimeOptions,
         ];
@@ -3083,6 +3084,8 @@ class Start extends CommandAbstract
             $config['source'] = __('env.wls');
         }
 
+        $config = $this->applyGatewayTrafficModeTopology($config);
+
         // 如果 env 配置中的 host 是 127.0.0.1 或旧格式域名，恢复为项目唯一域名（避免多项目 SSL 证书冲突）
         $envHost = $config['host'] ?? '';
         if ($this->shouldUseDefaultHostFallback((string)$envHost)) {
@@ -3202,6 +3205,26 @@ class Start extends CommandAbstract
         $requestNoDaemon = (isset($args['no-daemon']) || isset($args['no_daemon']))
             && !(isset($args['r']) || isset($args['restart']));
         $config['daemon'] = !$requestNoDaemon;
+
+        $gatewayEnabledEnv = \getenv('WLS_GATEWAY_ENABLED');
+        $gatewayListenEnv = \getenv('WLS_GATEWAY_LISTEN');
+        if (($gatewayEnabledEnv !== false && \trim((string)$gatewayEnabledEnv) !== '')
+            || ($gatewayListenEnv !== false && \trim((string)$gatewayListenEnv) !== '')
+        ) {
+            $config['gateway'] = \is_array($config['gateway'] ?? null) ? $config['gateway'] : [];
+            if ($gatewayEnabledEnv !== false && \trim((string)$gatewayEnabledEnv) !== '') {
+                $config['gateway']['enabled'] = \in_array(
+                    \strtolower(\trim((string)$gatewayEnabledEnv)),
+                    ['1', 'true', 'yes', 'on'],
+                    true
+                );
+            }
+            if ($gatewayListenEnv !== false && \trim((string)$gatewayListenEnv) !== '') {
+                $config['gateway']['listen'] = \trim((string)$gatewayListenEnv);
+            }
+            $config['source'] = __('环境变量');
+            $hasCliOverride = true;
+        }
         
         // --no-ssl / --http-only：仅 HTTP，不启用 HTTPS（Windows 下可不装 event）
         if (isset($args['no-ssl']) || isset($args['no_ssl']) || isset($args['http-only'])) {
@@ -3293,6 +3316,34 @@ class Start extends CommandAbstract
         }
 
         $this->traceStartupPhase($instanceName, 'getServerConfig:done');
+
+        return $config;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function applyGatewayTrafficModeTopology(array $config): array
+    {
+        $topology = \strtolower(\trim((string)($config['topology'] ?? 'auto')));
+        if ($topology !== '' && $topology !== 'auto') {
+            return $config;
+        }
+
+        $gateway = \is_array($config['gateway'] ?? null) ? $config['gateway'] : [];
+        $trafficMode = (string)($gateway['traffic_mode'] ?? 'auto');
+        $envTrafficMode = \getenv('WLS_GATEWAY_TRAFFIC_MODE');
+        if ($envTrafficMode !== false && \trim((string)$envTrafficMode) !== '') {
+            $trafficMode = (string)$envTrafficMode;
+        }
+
+        $trafficMode = \strtolower(\trim(\str_replace('-', '_', $trafficMode)));
+        if ($trafficMode === 'direct_listen') {
+            $config['topology'] = 'direct';
+        } elseif ($trafficMode === 'passthrough') {
+            $config['topology'] = 'dispatcher';
+        }
 
         return $config;
     }
@@ -5665,7 +5716,7 @@ class Start extends CommandAbstract
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $windowMode = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = '', string $publicHost = ''): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $windowMode = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = [], string $workerMemoryLimit = '256M', string $dispatcherMemoryLimit = '', string $publicHost = '', array $gatewayRuntime = []): void
     {
         $instanceData = [
             'name' => $instanceName,
@@ -5715,6 +5766,7 @@ class Start extends CommandAbstract
             'memory_server_port' => (int) ($sharedStateRuntime['memory']['port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'memory_server_token_file_name' => (string) ($sharedStateRuntime['memory']['token_file_name'] ?? 'memory_server.token'),
             'shared_state' => $sharedStateRuntime,
+            'gateway' => $gatewayRuntime,
             // HTTP 重定向端口（HTTPS 模式下用于 HTTP→HTTPS 跳转）
             'http_redirect_port' => $httpRedirectPort,
             // Windows 窗口模式（与阻塞前台 Master 无关）

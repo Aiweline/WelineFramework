@@ -489,7 +489,7 @@ foreach ($routers as $module => $routes) {
             <h4 class="mb-sm-0"><?= __('路由管理') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
+                    <li class="breadcrumb-item"><span><?= __('系统') ?></span></li>
                     <li class="breadcrumb-item active"><?= __('路由管理') ?></li>
                 </ol>
             </div>
@@ -608,7 +608,7 @@ foreach ($routers as $module => $routes) {
     <?php else: ?>
     <?php foreach ($routers as $module => $routes): ?>
     <div class="weline-router-module-card" data-module="<?= htmlspecialchars($module) ?>">
-        <div class="weline-router-module-header" onclick="toggleModule(this)">
+        <div class="weline-router-module-header" data-router-module-toggle="1">
             <span class="weline-router-module-title">
                 <i class="mdi mdi-package-variant-closed"></i>
                 <?= htmlspecialchars($module) ?>
@@ -706,6 +706,12 @@ foreach ($routers as $module => $routes) {
         header.classList.toggle('collapsed');
         body.classList.toggle('collapsed');
     };
+
+    document.querySelectorAll('[data-router-module-toggle]').forEach(function(header) {
+        header.addEventListener('click', function() {
+            window.toggleModule(header);
+        });
+    });
     
     document.getElementById('expand-all').addEventListener('click', function() {
         document.querySelectorAll('.weline-router-module-header').forEach(function(header) {

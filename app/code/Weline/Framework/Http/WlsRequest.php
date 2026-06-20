@@ -202,6 +202,10 @@ class WlsRequest extends Request
      */
     private function parseRawHttp(string $rawData, array $serverInfo): void
     {
+        $this->parameterBag = null;
+        $this->fileBag = null;
+        $this->setObjectData([]);
+
         // 分离头部和正文
         $parts = \explode("\r\n\r\n", $rawData, 2);
         $headerSection = $parts[0] ?? '';
@@ -786,6 +790,22 @@ class WlsRequest extends Request
     public function getPostParams(): array
     {
         return $this->parsedPostParams;
+    }
+
+    public function getFiles(): array
+    {
+        $files = $this->parsedBodyPayload['files'] ?? [];
+        return \is_array($files) ? $files : [];
+    }
+
+    public function getFile(string $key = '')
+    {
+        $files = $this->getFiles();
+        if ($key === '') {
+            return $files;
+        }
+
+        return $files[$key] ?? null;
     }
     
     /**

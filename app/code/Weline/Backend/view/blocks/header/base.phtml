@@ -29,6 +29,13 @@ $env_model = \Weline\Framework\App\Env::system('deploy');
 $theme_path = str_replace('\\', '/', \Weline\Framework\App\Env::getInstance()->getTheme()['path']);
 $env_model_media_base_path_template = $host . (DEV ? '{module}/view/statics/{path}' : 'static/' . $theme_path . '/{module}/view/statics/{path}');
 $token = \Weline\Framework\Security\Token::create('csrf', 16, 600);
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 
 // 仅输出当前请求周期及 Theme 声明 JS 模块中实际用到的翻译
 $i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
@@ -92,7 +99,7 @@ endif;
         api_admin_area: '{{api_admin_area}}',
         url_host: '{{ url_host }}',
         base_router: '{{base_router}}',
-        i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
+        i18n: <?= json_encode($i18nWords, $jsonForScriptFlags) ?>,
         themeConfig: <?php
         ob_start();
         try {
@@ -101,7 +108,7 @@ endif;
             $tc = [];
         }
         ob_end_clean();
-        echo json_encode(is_array($tc) ? $tc : [], JSON_UNESCAPED_UNICODE) ?: '{}';
+        echo json_encode(is_array($tc) ? $tc : [], $jsonForScriptFlags) ?: '{}';
         ?>,
     }
     window.path = (path) => {

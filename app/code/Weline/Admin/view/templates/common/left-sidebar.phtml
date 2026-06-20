@@ -105,7 +105,7 @@ if ($dataLayout !== 'horizontal'):
                 <ul class="metismenu list-unstyled" id="side-menu">
                     <!-- 搜索菜单项（以菜单形式实现，折叠状态下hover展开） -->
                     <li class="menu-search-item" id="menu-search-item" data-source="menu-search">
-                        <a href="javascript: void(0);" class="has-arrow waves-effect" id="menu-search-link">
+                        <a href="#" role="button" class="has-arrow waves-effect" id="menu-search-link">
                             <i class="mdi mdi-magnify"></i>
                             <span><?php echo $adminPhrase('搜索菜单'); ?></span>
                         </a>
@@ -141,7 +141,7 @@ if ($dataLayout !== 'horizontal'):
                     if ($hasFrequentMenus):
                     ?>
                     <li class="menu-frequent-item" id="menu-frequent-item" data-source="menu-frequent">
-                        <a href="javascript: void(0);" class="has-arrow waves-effect" id="menu-frequent-link">
+                        <a href="#" role="button" class="has-arrow waves-effect" id="menu-frequent-link">
                             <i class="mdi mdi-star-outline"></i>
                             <span><?php echo __('常用菜单'); ?></span>
                         </a>
@@ -1784,8 +1784,9 @@ if ($dataLayout !== 'horizontal'):
             $mainMenu.find('ul.sub-menu').removeClass('mm-show').attr('aria-expanded', 'false');
 
             $mainMenuLinks.each(function() {
+                var menuHref = this.getAttribute('href') || '';
                 var menuUrl = this.href;
-                if (!menuUrl || menuUrl === '#' || menuUrl.indexOf('javascript:') === 0) return;
+                if (!menuUrl || !menuHref || menuHref === '#' || menuHref.charAt(0) === '#') return;
 
                 var score = calculatePathMatchScore(pageUrl, menuUrl);
                 if (score === Number.MAX_SAFE_INTEGER) {
@@ -2190,7 +2191,7 @@ if ($dataLayout !== 'horizontal'):
                 e.preventDefault();
                 var $link = items[idx].$item.find('a').first();
                 var href = $link.attr('href');
-                if (href && href !== 'javascript: void(0);') window.location.href = href;
+                if (href && href !== '#' && href.charAt(0) !== '#') window.location.href = href;
                 else $link.trigger('click');
             }
         }

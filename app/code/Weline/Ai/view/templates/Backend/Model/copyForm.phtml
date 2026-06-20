@@ -209,7 +209,7 @@ $isIframe = $this->request->getGet('isIframe');
 
                 <!-- 操作按钮 -->
                 <div class="d-flex justify-content-end gap-2">
-                    <button type="button" class="btn btn-secondary" onclick="window.parent.bootstrap.Offcanvas.getInstance(window.frameElement.closest('.offcanvas')).hide()">
+                    <button type="button" class="btn btn-secondary" data-ai-model-copy-action="close">
                         <i class="mdi mdi-close"></i> <?= __('取消') ?>
                     </button>
                     <button type="submit" class="btn btn-primary">
@@ -228,6 +228,28 @@ $isIframe = $this->request->getGet('isIframe');
 <script>
 (function() {
     'use strict';
+
+    function closeCopyOffcanvas() {
+        var frame = window.frameElement;
+        var offcanvas = frame ? frame.closest('.offcanvas') : null;
+        var instance = window.parent && window.parent.bootstrap && offcanvas
+            ? window.parent.bootstrap.Offcanvas.getInstance(offcanvas)
+            : null;
+        if (instance) {
+            instance.hide();
+        }
+    }
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-ai-model-copy-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        if (trigger.getAttribute('data-ai-model-copy-action') === 'close') {
+            closeCopyOffcanvas();
+        }
+    });
     
     document.getElementById('copy-form').addEventListener('submit', function(e) {
         e.preventDefault();

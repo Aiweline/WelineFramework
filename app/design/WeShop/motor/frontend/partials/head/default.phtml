@@ -80,6 +80,13 @@ if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
     $currentCurrency = $defaultCurrency;
 }
 $siteName = $this->getData('site_name') ?? __('Weline Framework');
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 
 $envConfig = [
     'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
@@ -118,7 +125,7 @@ $themeConfigPayload = [
     ],
 ];
 
-$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, $jsonForScriptFlags));
 $this->setData('envConfig', $envConfig);
 ?>
 <!-- Theme配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
@@ -127,7 +134,7 @@ $this->setData('envConfig', $envConfig);
         if (!window.__WelineThemeConfig) {
             window.__WelineThemeConfig = {};
         }
-        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        const themeConfig = <?= json_encode($themeConfigPayload, $jsonForScriptFlags) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
         const textDirection = themeConfig.htmlDir === 'rtl' || themeConfig.textDirection === 'rtl' ? 'rtl' : 'ltr';
         document.documentElement.setAttribute('dir', textDirection);

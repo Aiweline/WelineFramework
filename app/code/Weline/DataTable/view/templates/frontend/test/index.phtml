@@ -20,8 +20,8 @@
             <p>Frontend-safe DataTable demos backed by explicit whitelist-only REST routes.</p>
         </div>
         <div class="dt-demo-buttons">
-            <button type="button" class="btn btn-primary" data-testid="demo-init" onclick="demoBootstrap('init-data')">Init Demo Data</button>
-            <button type="button" class="btn btn-outline-danger" data-testid="demo-clear" onclick="demoBootstrap('clear-data')">Clear Demo Data</button>
+            <button type="button" class="btn btn-primary" data-testid="demo-init" data-datatable-test-action="demo-bootstrap" data-demo-action="init-data">Init Demo Data</button>
+            <button type="button" class="btn btn-outline-danger" data-testid="demo-clear" data-datatable-test-action="demo-bootstrap" data-demo-action="clear-data">Clear Demo Data</button>
         </div>
         <div id="demo-status" class="dt-demo-status" data-testid="demo-status"></div>
     </section>
@@ -82,4 +82,14 @@
             status.textContent = error.message || 'Request failed';
         }
     }
+
+    document.addEventListener('click', function (event) {
+        const trigger = event.target.closest('[data-datatable-test-action="demo-bootstrap"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        demoBootstrap(trigger.getAttribute('data-demo-action') || '');
+    });
 </script>

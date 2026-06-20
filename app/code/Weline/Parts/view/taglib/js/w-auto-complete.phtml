@@ -41,7 +41,7 @@
             let invalid_class = autocompleteInput.attr('w-invalid-class') ?? 'is-invalid';
             let valid_class = autocompleteInput.attr('w-valid-class') ?? 'is-valid';
             if (!url) {
-                confirm('w-auto-complete @lang{element w-url is missing.}')
+                console.error('w-auto-complete @lang{element w-url is missing.}', autocompleteInput.get(0))
                 return
             }
             const requestSuggestions = function (term) {

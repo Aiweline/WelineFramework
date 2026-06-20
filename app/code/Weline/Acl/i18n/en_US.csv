@@ -188,6 +188,7 @@ IP地址,"IP address"
 搜索IP地址或描述,"Search IP address or description"
 禁用,Disable
 "例如：192.168.1.1 或 192.168.1.0/24","For example: 192.168.1.1 or 192.168.1.0/24"
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
 编辑ID：,"Edit ID:"
 操作失败,"Operation failed"
 确定要切换状态吗？,"Are you sure you want to toggle the status?"

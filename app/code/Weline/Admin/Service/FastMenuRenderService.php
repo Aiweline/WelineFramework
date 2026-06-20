@@ -59,7 +59,7 @@ final class FastMenuRenderService extends MenuRenderService
 
         $html = "<li data-source=\"{$sourceId}\">";
         if ($hasNodes) {
-            $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"has-arrow waves-effect\">";
+            $html .= "<a href=\"#\" role=\"button\" data-source=\"{$sourceId}\" class=\"has-arrow waves-effect\" aria-expanded=\"false\">";
         } else {
             $menuUrl = htmlspecialchars($this->formatMenuUrl($menu));
             $html .= "<a href=\"{$menuUrl}\" data-source=\"{$sourceId}\" class=\"waves-effect\">";

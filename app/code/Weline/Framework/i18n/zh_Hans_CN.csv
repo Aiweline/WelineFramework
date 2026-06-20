@@ -87,6 +87,11 @@ SQL调试输出,SQL调试输出
 未开启代码美化工具。,未开启代码美化工具。
 成功关闭随机静态文件版本号！,成功关闭随机静态文件版本号！
 成功开启随机静态文件版本号！,成功开启随机静态文件版本号！
+"已注册的 QueryProvider（%{1} 个）","已注册的 QueryProvider（%{1} 个）"
+Provider：%{1}（%{2}）,Provider：%{1}（%{2}）
+名称：%{1},名称：%{1}
+说明：%{1},说明：%{1}
+Operation：%{1}.%{2},Operation：%{1}.%{2}
 "Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}","Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}"
 开始预编译反射元数据与编译型工厂...,开始预编译反射元数据与编译型工厂...
 没有找到活跃的模块,没有找到活跃的模块
@@ -540,11 +545,15 @@ SQL调试输出,SQL调试输出
 "✖ 事件注册表重建失败：事件名冲突","✖ 事件注册表重建失败：事件名冲突"
 重建失败：%{1},重建失败：%{1}
 观察者必须继承于：,观察者必须继承于：
+"事件 %{1} 跳过无效观察者配置。","事件 %{1} 跳过无效观察者配置。"
+"事件 %{1} 跳过缺少 instance 的观察者配置。","事件 %{1} 跳过缺少 instance 的观察者配置。"
+"事件 %{1} 跳过不存在的观察者类：%{2}","事件 %{1} 跳过不存在的观察者类：%{2}"
 "Event Name: %{1}","Event Name: %{1}"
 "Class Name","Class Name"
 "Start Time","Start Time"
 "End Time","End Time"
 Duration,Duration
+事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）,事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）
 "收集模块观察者失败: %{1}","收集模块观察者失败: %{1}"
 应用运行前,应用运行前
 应用运行前，你可以在这里做一些初始化操作。,应用运行前，你可以在这里做一些初始化操作。
@@ -751,6 +760,9 @@ ACL分发,ACL分发
 "✓ 扩展注册表已重建完成。","✓ 扩展注册表已重建完成。"
 位置：generated/extends.php,位置：generated/extends.php
 "✖ 写入扩展注册表失败。","✖ 写入扩展注册表失败。"
+"query_help 不支持的操作：%{1}","query_help 不支持的操作：%{1}"
+"query_help provider 操作需要参数 provider 或 module","query_help provider 操作需要参数 provider 或 module"
+"query_help operation 操作需要参数 provider 与 operation","query_help operation 操作需要参数 provider 与 operation"
 "Git 工具：按路径定位提交、从历史移除路径，或透传 git rebase。","Git 工具：按路径定位提交、从历史移除路径，或透传 git rebase。"
 "Git 仓库工作目录，默认为项目根目录 BP","Git 仓库工作目录，默认为项目根目录 BP"
 "remove 子命令：指定要重写的分支/标签/ref（可多次传入），例如 --ref=master --ref=refs/remotes/origin/dev","remove 子命令：指定要重写的分支/标签/ref（可多次传入），例如 --ref=master --ref=refs/remotes/origin/dev"
@@ -938,6 +950,8 @@ dev=true,dev=true
 注册表已更新完成。,注册表已更新完成。
 已根据禁用模块更新后台菜单状态。,已根据禁用模块更新后台菜单状态。
 菜单更新失败：%{1}，请手动执行后台菜单收集命令,菜单更新失败：%{1}，请手动执行后台菜单收集命令
+不存在的模块：,不存在的模块：
+"Marketplace Meta 校验失败：","Marketplace Meta 校验失败："
 错误：此命令只能在开发模式下运行！,错误：此命令只能在开发模式下运行！
 当前部署模式：%{1},当前部署模式：%{1}
 请使用以下命令切换到开发模式：,请使用以下命令切换到开发模式：
@@ -1225,11 +1239,16 @@ HTTP方法,HTTP方法
 "SSE 请求被终止。","SSE 请求被终止。"
 "SSE 请求失败。","SSE 请求失败。"
 "参数 provider 不能为空","参数 provider 不能为空"
-"参数 operation 不能为空","参数 operation 不能为空"
 查询被拒绝,查询被拒绝
-"introspect 参数 what 必须为 providers、operations 或 operation，当前：%{1}","introspect 参数 what 必须为 providers、operations 或 operation，当前：%{1}"
-"introspect what=operations 时，参数 provider 必填","introspect what=operations 时，参数 provider 必填"
+"该 operation 未暴露给前端：%{1}.%{2}","该 operation 未暴露给前端：%{1}.%{2}"
+"introspect 参数 what 必须为 providers、operations、operation、provider 或 modules，当前：%{1}","introspect 参数 what 必须为 providers、operations、operation、provider 或 modules，当前：%{1}"
+"introspect what=provider 时，参数 provider 或 module 必填","introspect what=provider 时，参数 provider 或 module 必填"
 "未找到 provider：%{1}","未找到 provider：%{1}"
+"模块 %{1} 对应多个 provider，请指定其一：%{2}","模块 %{1} 对应多个 provider，请指定其一：%{2}"
+"未找到 provider 或模块：%{1}。相似项：%{2}","未找到 provider 或模块：%{1}。相似项：%{2}"
+"未找到 provider 或模块：%{1}","未找到 provider 或模块：%{1}"
+"该 provider 没有暴露给前端的 operation：%{1}","该 provider 没有暴露给前端的 operation：%{1}"
+"introspect what=operations 时，参数 provider 必填","introspect what=operations 时，参数 provider 必填"
 "introspect what=operation 时，参数 provider 和 operation 必填","introspect what=operation 时，参数 provider 和 operation 必填"
 "provider %{1} 中未找到 operation：%{2}","provider %{1} 中未找到 operation：%{2}"
 "缺少 operation 参数","缺少 operation 参数"
@@ -1265,13 +1284,16 @@ HTTP方法,HTTP方法
 "- PSR-4 映射缓存: %{1} 个命名空间","- PSR-4 映射缓存: %{1} 个命名空间"
 "后台优化任务失败: %{1}","后台优化任务失败: %{1}"
 后台执行优化缓存生成（类映射、PSR-4、反射编译）,后台执行优化缓存生成（类映射、PSR-4、反射编译）
+跳过类映射缓存生成,跳过类映射缓存生成
 跳过反射元数据编译,跳过反射元数据编译
 手动执行,手动执行
+跳过类映射,跳过类映射
 跳过反射编译,跳过反射编译
 "已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}","已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}"
 "清理异常卸载模块 ACL/菜单残留失败：%{1}","清理异常卸载模块 ACL/菜单残留失败：%{1}"
 "已从 modules.php 中移除以下异常卸载的模块：%{1}","已从 modules.php 中移除以下异常卸载的模块：%{1}"
 "从 modules.php 移除异常模块时失败：%{1}","从 modules.php 移除异常模块时失败：%{1}"
+检测到以下模块源目录已不存在，将在刷新注册表前移除：%{1},检测到以下模块源目录已不存在，将在刷新注册表前移除：%{1}
 "正在检查 composer 命令...","正在检查 composer 命令..."
 "未找到 composer 命令！请确保 composer 已安装并添加到系统 PATH 中。","未找到 composer 命令！请确保 composer 已安装并添加到系统 PATH 中。"
 "找到 composer 命令: %{1}","找到 composer 命令: %{1}"
@@ -1293,6 +1315,7 @@ HTTP方法,HTTP方法
 获取升级锁失败：%{1},获取升级锁失败：%{1}
 已启用延迟注册表更新模式（批量优化）,已启用延迟注册表更新模式（批量优化）
 正在准备系统环境...,正在准备系统环境...
+"已跳过 composer dump-autoload（快速更新模式）","已跳过 composer dump-autoload（快速更新模式）"
 已跳过环境依赖检测,已跳过环境依赖检测
 正在检测环境依赖...,正在检测环境依赖...
 "✓ 环境依赖检测通过","✓ 环境依赖检测通过"
@@ -1443,10 +1466,12 @@ HTTP方法,HTTP方法
 "跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）","跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）"
 禁用后台优化任务，改为同步执行（等待缓存生成完成）,禁用后台优化任务，改为同步执行（等待缓存生成完成）
 "同上，--skip-background-optimize 的简写","同上，--skip-background-optimize 的简写"
-"跳过类映射缓存生成（classmap.php）。适用：未新增/删除 PHP 文件时可节省数秒","跳过类映射缓存生成（classmap.php）。适用：未新增/删除 PHP 文件时可节省数秒"
+"跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新","跳过 composer dump-autoload 与类映射缓存生成。适用：未变更 Composer 依赖/自动加载配置的快速更新"
+"仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段","仅跳过 composer dump-autoload。适用：Composer 子进程不可用但需要执行 setup 阶段"
 "仅运行 schema_diff 阶段（测试声明式表）","仅运行 schema_diff 阶段（测试声明式表）"
 "仅运行 framework_db_bootstrap 阶段","仅运行 framework_db_bootstrap 阶段"
 "跳过 classmap 生成（未新增/删除文件时）","跳过 classmap 生成（未新增/删除文件时）"
+"跳过 composer dump-autoload","跳过 composer dump-autoload"
 "跳过反射编译（加快 s:up）","跳过反射编译（加快 s:up）"
 同步执行优化（等待完成）,同步执行优化（等待完成）
 "env.php 中数据库配置有效，直接执行安装...","env.php 中数据库配置有效，直接执行安装..."
@@ -1913,6 +1938,8 @@ KEY,KEY
 安装中...,安装中...
 请求失败,请求失败
 "确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。","确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。"
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
+操作失败,操作失败
 异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2},异常：你指定的模板文件所在的模块不存在！模块：%{1}，所使用的模板：%{2}
 资源不存在：%{1}，模组：%{2},资源不存在：%{1}，模组：%{2}
 资源不存在：%{1},资源不存在：%{1}

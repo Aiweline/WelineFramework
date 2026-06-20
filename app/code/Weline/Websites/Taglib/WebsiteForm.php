@@ -83,7 +83,8 @@ class WebsiteForm implements TaglibInterface
             $formAction = $attributes['form_action'] ?? 'null';
             $showSaveBtn = $attributes['show_save_btn'] ?? 'true';
             $saveBtnText = $attributes['save_btn_text'] ?? "'保存'";
-            $cancelUrl = $attributes['cancel_url'] ?? "'javascript:history.back()'";
+            $cancelUrl = $attributes['cancel_url'] ?? "''";
+            $hasCancelUrl = array_key_exists('cancel_url', $attributes);
 
             // 解析所有属性
             $code = \Weline\Taglib\Taglib::attributes($attributes);
@@ -351,9 +352,26 @@ class WebsiteForm implements TaglibInterface
             // 操作按钮
             if ($showSaveBtn === 'true' || $showSaveBtn === '1') {
                 $html[] = '  <div class="d-flex justify-content-between mt-4 pt-2">';
-                $html[] = '    <a href="<?= $cancelUrl ?>" class="btn btn-secondary"><lang>取消</lang></a>';
+                if ($hasCancelUrl) {
+                    $html[] = '    <a href="<?= htmlspecialchars((string)$cancelUrl, ENT_QUOTES, \'UTF-8\') ?>" class="btn btn-secondary"><lang>取消</lang></a>';
+                } else {
+                    $html[] = '    <button type="button" class="btn btn-secondary" data-website-form-action="history-back"><lang>取消</lang></button>';
+                }
                 $html[] = '    <button type="submit" class="btn btn-primary"><?= $saveBtnText ?></button>';
                 $html[] = '  </div>';
+            }
+
+            if (!$hasCancelUrl) {
+                $html[] = '<script>';
+                $html[] = '(function(){';
+                $html[] = '  document.addEventListener("click", function(event) {';
+                $html[] = '    var trigger = event.target.closest("[data-website-form-action]");';
+                $html[] = '    if (!trigger || trigger.getAttribute("data-website-form-action") !== "history-back") { return; }';
+                $html[] = '    event.preventDefault();';
+                $html[] = '    window.history.back();';
+                $html[] = '  });';
+                $html[] = '})();';
+                $html[] = '</script>';
             }
 
             $html[] = '</div>';

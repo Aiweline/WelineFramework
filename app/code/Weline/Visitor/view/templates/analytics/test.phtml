@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -154,7 +154,7 @@
                 </select>
                 <input type="date" id="business-startDate" placeholder="开始日期 (可选)">
                 <input type="date" id="business-endDate" placeholder="结束日期 (可选)">
-                <button class="btn" onclick="testBusinessValue()">测试</button>
+                <button class="btn" data-visitor-test-action="test-business-value">测试</button>
             </div>
             <div id="business-result" class="result" style="display:none;"></div>
         </div>
@@ -169,7 +169,7 @@
                     <option value="30">30分钟</option>
                 </select>
                 <input type="number" id="dashboard-hours" placeholder="最近N小时" value="24" min="1" max="168">
-                <button class="btn" onclick="testDashboard()">测试</button>
+                <button class="btn" data-visitor-test-action="test-dashboard">测试</button>
             </div>
             <div id="dashboard-result" class="result" style="display:none;"></div>
         </div>
@@ -184,7 +184,7 @@
                     <option value="30">30分钟</option>
                 </select>
                 <input type="number" id="change-hours" placeholder="最近N小时" value="24" min="1" max="168">
-                <button class="btn" onclick="testChangePercentage()">测试</button>
+                <button class="btn" data-visitor-test-action="test-change-percentage">测试</button>
             </div>
             <div id="change-result" class="result" style="display:none;"></div>
         </div>
@@ -195,7 +195,7 @@
             <div class="test-form">
                 <input type="text" id="daily-websiteId" placeholder="站点ID (可选)" value="">
                 <input type="number" id="daily-days" placeholder="最近N天" value="7" min="1" max="30">
-                <button class="btn" onclick="testDailyComparison()">测试</button>
+                <button class="btn" data-visitor-test-action="test-daily-comparison">测试</button>
             </div>
             <div id="daily-result" class="result" style="display:none;"></div>
         </div>
@@ -211,7 +211,7 @@
                     <option value="A">变体A</option>
                     <option value="B">变体B</option>
                 </select>
-                <button class="btn" onclick="testAbTest()">测试</button>
+                <button class="btn" data-visitor-test-action="test-abtest">测试</button>
             </div>
             <div id="abtest-result" class="result" style="display:none;"></div>
         </div>
@@ -244,6 +244,26 @@
         }
 
         const baseUrl = getBaseUrl();
+
+        document.addEventListener('click', function(event) {
+            const trigger = event.target.closest('[data-visitor-test-action]');
+            if (!trigger) {
+                return;
+            }
+
+            event.preventDefault();
+            const actions = {
+                'test-business-value': testBusinessValue,
+                'test-dashboard': testDashboard,
+                'test-change-percentage': testChangePercentage,
+                'test-daily-comparison': testDailyComparison,
+                'test-abtest': testAbTest
+            };
+            const action = actions[trigger.getAttribute('data-visitor-test-action')];
+            if (typeof action === 'function') {
+                action();
+            }
+        });
         const apiBase = 'worker:visitor.analytics';
         let visitorApiPromise = null;
         function getVisitorApi() {

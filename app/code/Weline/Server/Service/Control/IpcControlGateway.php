@@ -121,6 +121,20 @@ class IpcControlGateway implements IpcControlGatewayInterface
         return $this->command($instanceName, ControlMessage::ACTION_SSL_CERT_RELOAD, '', $payload, Timeouts::CONTROL_CMD_DEFAULT_READ_SEC);
     }
 
+    /**
+     * @param array<int, array<string, mixed>> $routes
+     */
+    public function proxyApply(string $instanceName = 'default', array $routes = [], float $timeout = 5.0): array
+    {
+        return $this->command(
+            $instanceName,
+            ControlMessage::ACTION_PROXY_APPLY,
+            '',
+            ['routes' => \array_values($routes)],
+            $timeout
+        );
+    }
+
     public function securityUnblock(string $instanceName = 'default', ?string $ip = null, bool $clearAll = false): array
     {
         $payload = ['clear_all' => $clearAll];

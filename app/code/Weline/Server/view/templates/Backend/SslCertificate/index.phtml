@@ -18,7 +18,7 @@ $stats = $stats ?? [];
             <?= __('SSL 证书管理') ?>
         </h4>
         <div>
-            <button type="button" class="btn btn-outline-secondary me-2" onclick="syncDomains()">
+            <button type="button" class="btn btn-outline-secondary me-2" data-ssl-action="sync-domains">
                 <i class="bi bi-arrow-repeat me-1"></i>
                 <?= __('同步域名') ?>
             </button>
@@ -99,13 +99,13 @@ $stats = $stats ?? [];
             <span class="ssl-cert-batch-count">
                 <?= __('已选择') ?> <strong id="sslCertSelectedCount">0</strong> <?= __('项') ?>
             </span>
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="SslCertBatch.batchRenew()">
+            <button type="button" class="btn btn-sm btn-outline-primary" data-ssl-action="batch-renew">
                 <i class="bi bi-arrow-repeat me-1"></i><?= __('批量续签') ?>
             </button>
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="SslCertBatch.batchDelete()">
+            <button type="button" class="btn btn-sm btn-outline-danger" data-ssl-action="batch-delete">
                 <i class="bi bi-trash me-1"></i><?= __('批量删除') ?>
             </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="SslCertBatch.clearSelection()">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-ssl-action="clear-selection">
                 <i class="bi bi-x-lg me-1"></i><?= __('取消选择') ?>
             </button>
         </div>
@@ -130,7 +130,7 @@ $stats = $stats ?? [];
                             <tr>
                                 <th style="width:40px;">
                                     <input class="form-check-input" type="checkbox" id="sslCertSelectAll"
-                                           onchange="SslCertBatch.toggleAll(this.checked)">
+                                           data-ssl-change="toggle-all">
                                 </th>
                                 <th><?= __('域名') ?></th>
                                 <th><?= __('状态') ?></th>
@@ -159,6 +159,7 @@ $stats = $stats ?? [];
                                 $expiryStatus = $cert['_expiry_status'] ?? 'unknown';
                                 $daysLeft = $cert['_days_left'] ?? null;
                                 $isProtectedDomain = \in_array(\strtolower($domain), ['localhost', '127.0.0.1', '::1', '0.0.0.0'], true);
+                                $domainAttr = htmlspecialchars($domain, ENT_QUOTES, 'UTF-8');
 
                                 $statusBadge = match ($status) {
                                     'active' => 'bg-success',
@@ -178,9 +179,9 @@ $stats = $stats ?? [];
                                 <tr>
                                     <td>
                                         <input class="form-check-input ssl-cert-row-check" type="checkbox"
-                                               data-domain="<?= htmlspecialchars($domain) ?>"
+                                               data-domain="<?= $domainAttr ?>"
                                                data-protected="<?= $isProtectedDomain ? '1' : '0' ?>"
-                                               onchange="SslCertBatch.updateSelection()">
+                                               data-ssl-change="update-selection">
                                     </td>
                                     <td>
                                         <strong><?= htmlspecialchars($domain) ?></strong>
@@ -197,7 +198,8 @@ $stats = $stats ?? [];
                                                    id="https_<?= md5($domain) ?>"
                                                    <?= $httpsEnabled ? 'checked' : '' ?>
                                                    <?= $status !== 'active' ? 'disabled' : '' ?>
-                                                   onchange="toggleHttps('<?= htmlspecialchars($domain) ?>', this.checked)">
+                                                   data-ssl-change="toggle-https"
+                                                   data-domain="<?= $domainAttr ?>">
                                         </div>
                                     </td>
                                     <td>
@@ -206,7 +208,9 @@ $stats = $stats ?? [];
                                                    id="force_https_<?= $certId ?>"
                                                    <?= $forceHttps ? 'checked' : '' ?>
                                                    <?= $status !== 'active' ? 'disabled' : '' ?>
-                                                   onchange="updateCertPolicy(<?= $certId ?>, 'force_https', this.checked)">
+                                                   data-ssl-change="update-policy"
+                                                   data-cert-id="<?= $certId ?>"
+                                                   data-field="force_https">
                                         </div>
                                     </td>
                                     <td>
@@ -215,7 +219,9 @@ $stats = $stats ?? [];
                                                    id="force_www_<?= $certId ?>"
                                                    <?= $forceRootToWww ? 'checked' : '' ?>
                                                    <?= $status !== 'active' ? 'disabled' : '' ?>
-                                                   onchange="updateCertPolicy(<?= $certId ?>, 'force_root_to_www', this.checked)">
+                                                   data-ssl-change="update-policy"
+                                                   data-cert-id="<?= $certId ?>"
+                                                   data-field="force_root_to_www">
                                         </div>
                                     </td>
                                     <td>
@@ -248,20 +254,25 @@ $stats = $stats ?? [];
                                     <td class="text-end">
                                         <div class="btn-group btn-group-sm">
                                             <?php if ($status === 'pending' || $status === 'error'): ?>
-                                                <button type="button" class="btn btn-outline-primary" 
-                                                        onclick="requestCertificate('<?= htmlspecialchars($domain) ?>')">
+                                                <button type="button" class="btn btn-outline-primary"
+                                                        data-ssl-action="request-certificate"
+                                                        data-domain="<?= $domainAttr ?>">
                                                     <i class="bi bi-download"></i> <?= __('申请') ?>
                                                 </button>
                                             <?php else: ?>
-                                                <button type="button" class="btn btn-outline-primary" 
-                                                        onclick="renewCertificate('<?= htmlspecialchars($domain) ?>')">
+                                                <button type="button" class="btn btn-outline-primary"
+                                                        data-ssl-action="renew-certificate"
+                                                        data-domain="<?= $domainAttr ?>">
                                                     <i class="bi bi-arrow-repeat"></i> <?= __('续签') ?>
                                                 </button>
                                             <?php endif; ?>
                                             <button type="button" class="btn btn-outline-danger<?= $isProtectedDomain ? ' disabled' : '' ?>" 
                                                     title="<?= $isProtectedDomain ? __('本地域名证书不允许删除') : __('删除') ?>"
                                                     <?= $isProtectedDomain ? 'disabled' : '' ?>
-                                                    <?= $isProtectedDomain ? '' : 'onclick="deleteCertificate(\'' . htmlspecialchars($domain, ENT_QUOTES) . '\')"' ?>>
+                                                    <?php if (!$isProtectedDomain): ?>
+                                                        data-ssl-action="delete-certificate"
+                                                        data-domain="<?= $domainAttr ?>"
+                                                    <?php endif; ?>>
                                                 <i class="bi bi-trash me-1"></i><?= __('删除') ?>
                                             </button>
                                         </div>
@@ -345,7 +356,7 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" onclick="submitRequest()">
+                <button type="button" class="btn btn-primary" data-ssl-action="submit-request">
                     <i class="bi bi-download me-1"></i><?= __('申请证书') ?>
                 </button>
             </div>
@@ -377,6 +388,66 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
     'use strict';
 
     var baseUrl = '<?= $this->getBackendUrl('*/backend/ssl-certificate/') ?>';
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-ssl-action]');
+        if (!trigger) return;
+
+        var action = trigger.getAttribute('data-ssl-action');
+        if (action === 'sync-domains') {
+            window.syncDomains();
+            return;
+        }
+        if (action === 'batch-renew') {
+            SslCertBatch.batchRenew();
+            return;
+        }
+        if (action === 'batch-delete') {
+            SslCertBatch.batchDelete();
+            return;
+        }
+        if (action === 'clear-selection') {
+            SslCertBatch.clearSelection();
+            return;
+        }
+        if (action === 'request-certificate') {
+            window.requestCertificate(trigger.getAttribute('data-domain') || '');
+            return;
+        }
+        if (action === 'renew-certificate') {
+            window.renewCertificate(trigger.getAttribute('data-domain') || '');
+            return;
+        }
+        if (action === 'delete-certificate') {
+            window.deleteCertificate(trigger.getAttribute('data-domain') || '');
+            return;
+        }
+        if (action === 'submit-request') {
+            window.submitRequest();
+        }
+    });
+
+    document.addEventListener('change', function(event) {
+        var target = event.target;
+        var action = target.getAttribute('data-ssl-change');
+        if (!action) return;
+
+        if (action === 'toggle-all') {
+            SslCertBatch.toggleAll(target.checked);
+            return;
+        }
+        if (action === 'update-selection') {
+            SslCertBatch.updateSelection();
+            return;
+        }
+        if (action === 'toggle-https') {
+            window.toggleHttps(target.getAttribute('data-domain') || '', target.checked);
+            return;
+        }
+        if (action === 'update-policy') {
+            window.updateCertPolicy(Number(target.getAttribute('data-cert-id') || 0), target.getAttribute('data-field') || '', target.checked);
+        }
+    });
 
     function getSelectedProvider() {
         var select = document.querySelector('#requestForm select[name="provider"]');

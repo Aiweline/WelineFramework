@@ -381,6 +381,12 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 变量格式错误,"Variable Format Error"
 无法创建备份文件,"Unable to create backup file"
 保存失败,"Save Failed"
+主题区域无效：%{area},"Invalid theme area: %{area}"
+色系标识无效：%{value},"Invalid color palette identifier: %{value}"
+色系文件名无效：%{file},"Invalid color palette file name: %{file}"
+CSS变量名无效：%{name},"Invalid CSS variable name: %{name}"
+CSS颜色值无效：%{name},"Invalid CSS color value: %{name}"
+CSS变量配置无效,"Invalid CSS variable configuration"
 请选择色盘,"Please select a color palette"
 色盘选择已保存,"Palette selection saved"
 "已保存 %{count} 个变量","Saved %{count} variables"
@@ -575,12 +581,19 @@ Default,Default
 扫描当前主题中指定类型的布局选项,"Scan layout options of the specified type in the current theme"
 "默认 frontend","Default frontend"
 "列出 Theme 虚拟布局选项","列出 Theme 虚拟布局选项"
+"检查 Theme 虚拟布局是否存在","检查 Theme 虚拟布局是否存在"
+"读取 Theme 虚拟布局当前可编辑源码","读取 Theme 虚拟布局当前可编辑源码"
+"列出 Theme 虚拟布局源码/发布版本","列出 Theme 虚拟布局源码/发布版本"
 "保存 Theme 虚拟布局源码版本","保存 Theme 虚拟布局源码版本"
 "回滚 Theme 虚拟布局发布版本","回滚 Theme 虚拟布局发布版本"
 "解析当前有效 Theme 虚拟布局运行时信息","解析当前有效 Theme 虚拟布局运行时信息"
+"清理 Theme 运行时布局缓存","清理 Theme 运行时布局缓存"
 "保存 Theme 布局选择","保存 Theme 布局选择"
 "删除 Theme 布局选择并恢复继承","删除 Theme 布局选择并恢复继承"
 "解析 Theme 布局选择及来源","解析 Theme 布局选择及来源"
+列出产品/分类布局选择版本,列出产品/分类布局选择版本
+预检产品/分类布局选择版本是否可回滚,预检产品/分类布局选择版本是否可回滚
+回滚产品/分类布局选择版本,回滚产品/分类布局选择版本
 "Theme editor signed backend request bridge","Theme editor signed backend request bridge"
 同步后台亮色/暗色模式,同步后台亮色/暗色模式
 "light 或 dark","light 或 dark"
@@ -898,6 +911,11 @@ CMS页面,"CMS Page"
 "LayoutAssetsGenerator: 已更新内容模板编译文件 - %{1}","LayoutAssetsGenerator: Updated content template build file - %{1}"
 "LayoutAssetsGenerator: 更新内容模板编译文件失败 - %{1}","LayoutAssetsGenerator: Failed to update content template compilation file - %{1}"
 "LayoutAssetsGenerator: 更新编译文件失败 - %{1}","LayoutAssetsGenerator: Failed to update build file - %{1}"
+网络错误，请重试,"Network error, please try again"
+确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。,确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。
+确认发布,确认发布
+取消,Cancel
+发布预览,发布预览
 主题异常：,"Theme exception:"
 "父主题：%{1} 不存在！","Parent topic: %{1} does not exist!"
 "主题名 ""%{1}"" 已被模块 ""%{2}"" 占用，跳过安装","Theme name ""%{1}"" has been occupied by the module ""%{2}"", skipping the installation"
@@ -968,11 +986,14 @@ CMS页面,"CMS Page"
 "Browser screenshot failed. Exit code: %{1}. Output: %{2}","Browser screenshot failed. Exit code: %{1}. Output: %{2}"
 "`proc_open` is required to run the screenshot command safely.","`proc_open` is required to run the screenshot command safely."
 "Unable to start the Chrome screenshot process.","Unable to start the Chrome screenshot process."
+布局选项不存在或不允许用于当前对象,布局选项不存在或不允许用于当前对象
 保存布局选择,保存布局选择
 删除布局选择并恢复继承,删除布局选择并恢复继承
+回滚布局选择版本,回滚布局选择版本
 布局源码不能为空,布局源码不能为空
 默认布局不能作为虚拟布局覆盖,默认布局不能作为虚拟布局覆盖
 "布局模板只能保存页面骨架、slot、hook 和样式，不能包含前端业务交互脚本或直接请求","布局模板只能保存页面骨架、slot、hook 和样式，不能包含前端业务交互脚本或直接请求"
+虚拟布局版本保存成功，但发布失败，当前已发布版本保持不变,虚拟布局版本保存成功，但发布失败，当前已发布版本保持不变
 回滚虚拟布局版本,回滚虚拟布局版本
 请选择,"Please select"
 暂无数据,"No data"
@@ -1060,13 +1081,13 @@ CMS页面,"CMS Page"
 参数保存失败,"Failed to save parameters"
 配置色系,"Configure color scheme"
 点击色盘选择色系，点击齿轮图标配置色系变量,"Click the color wheel to select a color scheme, then click the gear icon to configure color scheme variables."
-提示,Prompt
 请先选择主题,"Please select a theme first"
+加载弹窗失败,"Failed to load popup"
+网络错误,"Network error"
+提示,Prompt
 确定,Confirm
 配置色系变量,"Configure color scheme variables"
 正在加载色盘变量...,"Loading palette variables..."
-加载弹窗失败,"Failed to load popup"
-网络错误,"Network error"
 参数,Parameters
 配置进度,"Configuration Progress"
 "点击""配置参数""按钮编辑组件的参数值","Click the ""Configure Parameters"" button to edit the parameter values of the component"
@@ -1119,7 +1140,6 @@ CMS页面,"CMS Page"
 该目录下没有可用的变量文件,"No variable files available in this directory"
 该目录下没有可用的配置项,"No configuration items available in this directory"
 正在读取颜色变量...,"Reading color variables..."
-取消,Cancel
 保存配置,"Save Configuration"
 未找到颜色变量,"Color variable not found"
 输入目录描述信息（可选）,"Enter directory description (optional)"
@@ -1174,6 +1194,10 @@ Scope,Scope
 扫描变量文件,"Scan variable files"
 变量数量：,"Number of Variables:"
 已配置：,Configured:
+确认操作,"Confirm Action"
+确定要扫描变量文件吗？这将更新Meta数据库中的变量信息。,确定要扫描变量文件吗？这将更新Meta数据库中的变量信息。
+开始扫描,开始扫描
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
 扫描完成,"Scan complete"
 扫描失败,"Scan failed"
 主题：,Theme:
@@ -1368,7 +1392,6 @@ Banner,Banner
 删除,Delete
 点击配置此部件,"Click to configure this widget"
 无模板,"No template"
-确认操作,"Confirm Action"
 输入,Input
 发送通知失败,"Failed to send notification"
 立即重试,"Retry now"
@@ -1384,7 +1407,6 @@ Banner,Banner
 后台Logo,"Background Logo"
 我的账户,"My Account"
 提交中...,Submitting...
-网络错误，请重试,"Network error, please try again"
 已选择,Chosen
 项,Item
 取消选择,"Cancel Selection"

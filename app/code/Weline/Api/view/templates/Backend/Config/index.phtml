@@ -210,7 +210,9 @@ document.getElementById('api-config-form').addEventListener('submit', function(e
     })
     .catch(error => {
         console.error('保存配置失败:', error);
-        alert('保存配置失败，请重试');
+        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+            window.BackendToast.error('<?= __('保存配置失败，请重试') ?>');
+        }
     });
 });
 </script>

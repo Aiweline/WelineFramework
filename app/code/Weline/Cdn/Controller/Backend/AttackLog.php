@@ -47,8 +47,11 @@ class AttackLog extends BackendController
 
         // 搜索过滤（域名、IP）
         if (!empty($search)) {
-            $query->where('domain', 'like', "%{$search}%")
-                ->orWhere('attacker_ip', 'like', "%{$search}%");
+            $searchPattern = "%{$search}%";
+            $query->where([
+                [AttackLogModel::schema_fields_DOMAIN, 'LIKE', $searchPattern, 'OR'],
+                [AttackLogModel::schema_fields_ATTACKER_IP, 'LIKE', $searchPattern],
+            ]);
         }
 
         // 状态过滤
@@ -63,10 +66,10 @@ class AttackLog extends BackendController
 
         // 日期范围过滤
         if (!empty($dateFrom)) {
-            $query->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $dateFrom . ' 00:00:00');
+            $query->where(AttackLogModel::schema_fields_CREATED_AT, $dateFrom . ' 00:00:00', '>=');
         }
         if (!empty($dateTo)) {
-            $query->where(AttackLogModel::schema_fields_CREATED_AT, '<=', $dateTo . ' 23:59:59');
+            $query->where(AttackLogModel::schema_fields_CREATED_AT, $dateTo . ' 23:59:59', '<=');
         }
 
         // 按创建时间倒序
@@ -242,8 +245,9 @@ class AttackLog extends BackendController
             $cutoff = \date('Y-m-d H:i:s', \strtotime("-{$days} days"));
             
             $result = $this->getLogModel()->reset()
-                ->where(AttackLogModel::schema_fields_CREATED_AT, '<', $cutoff)
-                ->delete();
+                ->where(AttackLogModel::schema_fields_CREATED_AT, $cutoff, '<')
+                ->delete()
+                ->fetch();
             
             return $this->fetchJson([
                 'success' => true,
@@ -277,10 +281,10 @@ class AttackLog extends BackendController
             $query->where(AttackLogModel::schema_fields_ATTACK_TYPE, $attackType);
         }
         if (!empty($dateFrom)) {
-            $query->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $dateFrom . ' 00:00:00');
+            $query->where(AttackLogModel::schema_fields_CREATED_AT, $dateFrom . ' 00:00:00', '>=');
         }
         if (!empty($dateTo)) {
-            $query->where(AttackLogModel::schema_fields_CREATED_AT, '<=', $dateTo . ' 23:59:59');
+            $query->where(AttackLogModel::schema_fields_CREATED_AT, $dateTo . ' 23:59:59', '<=');
         }
 
         $query->order(AttackLogModel::schema_fields_CREATED_AT, 'DESC');
@@ -345,7 +349,7 @@ class AttackLog extends BackendController
         // 今日攻击数
         $today = \date('Y-m-d');
         $todayCount = $model->reset()
-            ->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $today . ' 00:00:00')
+            ->where(AttackLogModel::schema_fields_CREATED_AT, $today . ' 00:00:00', '>=')
             ->count();
 
         // 活跃攻击数
@@ -356,13 +360,13 @@ class AttackLog extends BackendController
         // 本周攻击数
         $weekStart = \date('Y-m-d', \strtotime('monday this week'));
         $weekCount = $model->reset()
-            ->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $weekStart . ' 00:00:00')
+            ->where(AttackLogModel::schema_fields_CREATED_AT, $weekStart . ' 00:00:00', '>=')
             ->count();
 
         // 本月攻击数
         $monthStart = \date('Y-m-01');
         $monthCount = $model->reset()
-            ->where(AttackLogModel::schema_fields_CREATED_AT, '>=', $monthStart . ' 00:00:00')
+            ->where(AttackLogModel::schema_fields_CREATED_AT, $monthStart . ' 00:00:00', '>=')
             ->count();
 
         return [

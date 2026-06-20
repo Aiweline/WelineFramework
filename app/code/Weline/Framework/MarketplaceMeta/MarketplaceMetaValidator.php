@@ -63,12 +63,12 @@ class MarketplaceMetaValidator
                 $strict ? $errors[] = 'meta_invalid_tag_item' : $warnings[] = 'meta_invalid_tag_item';
                 continue;
             }
-            $code = trim((string)($tag['code'] ?? ''));
+            $code = MarketplaceTag::normalizeCode((string)($tag['code'] ?? ''));
             if ($code === '') {
                 $strict ? $errors[] = 'meta_tag_missing_code' : $warnings[] = 'meta_tag_missing_code';
                 continue;
             }
-            if (!preg_match('/^[a-z0-9_.-]+$/', $code)) {
+            if (!MarketplaceTag::isValidCode($code)) {
                 $strict ? $errors[] = 'meta_tag_invalid_code' : $warnings[] = 'meta_tag_invalid_code';
             }
             if ($strict && $sourceLocale !== '') {

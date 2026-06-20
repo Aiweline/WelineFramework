@@ -23,7 +23,7 @@ $keyword = $keyword ?? '';
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18"><lang>IP白名单</lang></h4>
-            <button type="button" class="btn btn-primary" onclick="showAddModal()">
+            <button type="button" class="btn btn-primary" data-ip-whitelist-action="add">
                 <i class="mdi mdi-plus me-2"></i><lang>添加IP</lang>
             </button>
         </div>
@@ -103,14 +103,22 @@ $keyword = $keyword ?? '';
                                 </td>
                                 <td><?= $itemData['created_at'] ?? '-' ?></td>
                                 <td>
-                                    <button type="button" class="btn btn-sm btn-primary" onclick="editItem(<?= $itemId ?>)">
+                                    <button type="button"
+                                            class="btn btn-sm btn-primary"
+                                            data-ip-whitelist-action="edit"
+                                            data-item-id="<?= $itemId ?>">
                                         <i class="mdi mdi-pencil me-1"></i><lang>编辑</lang>
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-<?= $isActive ? 'warning' : 'success' ?>" 
-                                            onclick="toggleStatus(<?= $itemId ?>, <?= $isActive ?>)">
+                                    <button type="button" class="btn btn-sm btn-<?= $isActive ? 'warning' : 'success' ?>"
+                                            data-ip-whitelist-action="toggle"
+                                            data-item-id="<?= $itemId ?>"
+                                            data-current-status="<?= $isActive ? 1 : 0 ?>">
                                         <i class="mdi mdi-toggle-switch me-1"></i><?= $isActive ? __('禁用') : __('启用') ?>
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteItem(<?= $itemId ?>)">
+                                    <button type="button"
+                                            class="btn btn-sm btn-danger"
+                                            data-ip-whitelist-action="delete"
+                                            data-item-id="<?= $itemId ?>">
                                         <i class="mdi mdi-delete me-1"></i><lang>删除</lang>
                                     </button>
                                 </td>
@@ -181,7 +189,7 @@ $keyword = $keyword ?? '';
                 <h5 class="modal-title" id="modalTitle"><lang>添加IP白名单</lang></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="ipWhitelistForm" onsubmit="saveItem(event)">
+            <form id="ipWhitelistForm" data-ip-whitelist-form="1">
                 <div class="modal-body">
                     <input type="hidden" id="item_id" name="id" value="0">
                     <div class="mb-3">
@@ -215,6 +223,19 @@ $keyword = $keyword ?? '';
 <script>
 (function() {
     'use strict';
+
+    function confirmAction(message) {
+        var confirmApi = window.BackendConfirm || window.AdminConfirm;
+        if (confirmApi && typeof confirmApi.show === 'function') {
+            return confirmApi.show(message);
+        }
+
+        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+            window.BackendToast.error('<?= __('确认组件不可用，请刷新页面后重试') ?>');
+        }
+
+        return Promise.resolve(false);
+    }
     
     window.showAddModal = function() {
         document.getElementById('modalTitle').textContent = '<?= __('添加IP白名单') ?>';
@@ -259,7 +280,7 @@ $keyword = $keyword ?? '';
     };
     
     window.toggleStatus = function(id, currentStatus) {
-        AdminConfirm.show('<?= __('确定要切换状态吗？') ?>').then(function(confirmed) {
+        confirmAction('<?= __('确定要切换状态吗？') ?>').then(function(confirmed) {
             if (!confirmed) return;
             
             var formData = new FormData();
@@ -286,7 +307,7 @@ $keyword = $keyword ?? '';
     };
     
     window.deleteItem = function(id) {
-        AdminConfirm.show('<?= __('确定要删除这条记录吗？') ?>').then(function(confirmed) {
+        confirmAction('<?= __('确定要删除这条记录吗？') ?>').then(function(confirmed) {
             if (!confirmed) return;
             
             var formData = new FormData();
@@ -311,5 +332,39 @@ $keyword = $keyword ?? '';
             });
         });
     };
+
+    document.addEventListener('click', function(event) {
+        var target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        var actionBtn = target.closest('[data-ip-whitelist-action]');
+        if (!actionBtn) {
+            return;
+        }
+
+        event.preventDefault();
+        var id = actionBtn.dataset.itemId || '0';
+        switch (actionBtn.dataset.ipWhitelistAction) {
+            case 'add':
+                window.showAddModal();
+                break;
+            case 'edit':
+                window.editItem(id);
+                break;
+            case 'toggle':
+                window.toggleStatus(id, actionBtn.dataset.currentStatus === '1' ? 1 : 0);
+                break;
+            case 'delete':
+                window.deleteItem(id);
+                break;
+        }
+    });
+
+    var form = document.querySelector('[data-ip-whitelist-form]');
+    if (form) {
+        form.addEventListener('submit', window.saveItem);
+    }
 })();
 </script>

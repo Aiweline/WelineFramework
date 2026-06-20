@@ -1,6 +1,6 @@
 # GitHub Webhook 配置指南
 
-将 GitHub 仓库 Webhook 接到 `Weline_Deploy` 统一入口 `https://<域名>/deploy`。
+将 GitHub 仓库 Webhook 接到 `Weline_Deploy` 统一入口。实际地址由 `deploy:webhook:setup --base-url=https://<域名>` 输出，形如 `https://<域名>/~wh~...`。
 
 访问密码说明见 [`webhook-secret.md`](webhook-secret.md)；后台字段与 Nginx 见 [`backend-config.md`](backend-config.md)。
 
@@ -17,7 +17,7 @@ php bin/w deploy:webhook:setup --base-url=https://你的域名
 刷新密码（轮换后须同步更新 GitHub Secret）：
 
 ```bash
-php bin/w deploy:webhook:setup --force -y --url=https://你的域名/deploy
+php bin/w deploy:webhook:setup --force -y --base-url=https://你的域名
 ```
 
 ## 2. GitHub 页面配置
@@ -27,7 +27,7 @@ php bin/w deploy:webhook:setup --force -y --url=https://你的域名/deploy
 
 | 字段 | 值 |
 |------|-----|
-| Payload URL | `https://你的域名/deploy` |
+| Payload URL | 命令输出的 `https://你的域名/~wh~...` |
 | Content type | `application/json` |
 | Secret | 与后台「Webhook 密钥」**完全相同** |
 | Events | `Just the push event` |
@@ -46,9 +46,9 @@ GitHub 使用 `X-Hub-Signature-256`（HMAC-SHA256），密钥为 `webhook_secret
 ## 3. 验证
 
 ```bash
-curl -s 'https://你的域名/deploy?health=1'
+curl -s 'https://你的域名/~wh~...?health=1'
 
-curl -s -X POST 'https://你的域名/deploy' \
+curl -s -X POST 'https://你的域名/~wh~...' \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer 你的webhook_secret' \
   --data '{"ref":"refs/heads/main"}'
@@ -63,7 +63,7 @@ body='{"ref":"refs/heads/main"}'
 secret='你的webhook_secret'
 sig='sha256='$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" -hex | awk '{print $2}')
 
-curl -s -X POST 'https://你的域名/deploy' \
+curl -s -X POST 'https://你的域名/~wh~...' \
   -H 'Content-Type: application/json' \
   -H "X-Hub-Signature-256: $sig" \
   --data "$body"

@@ -1,5 +1,7 @@
 # WelineFramework
 
+![WelineFramework cover](../assets/readme/weline-framework-cover.vi.png)
+
 [Ngôn ngữ](./README.md) | [Tiếng Trung giản thể](../../README.zh-CN.md)
 
 WelineFramework là framework PHP cho ứng dụng web dạng mô-đun, hệ thống quản trị và các kịch bản thương mại. Nó tổ chức module, routing, ORM, event/hook, theme, backend ACL, i18n, dịch vụ chạy dài WLS và công cụ CLI để các module nghiệp vụ dễ mở rộng và bảo trì.

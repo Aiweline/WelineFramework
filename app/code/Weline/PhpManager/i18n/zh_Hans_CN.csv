@@ -1,0 +1,195 @@
+﻿"WLS PHP Manager","WLS PHP Manager"
+"Invalid request method.","Invalid request method."
+"WLS reload was not completed.","WLS reload was not completed."
+"Project PHP profile save failed.","Project PHP profile save failed."
+"php.ini apply failed.","php.ini apply failed."
+"php.ini rollback failed.","php.ini rollback failed."
+"Runtime PHP","Runtime PHP"
+Extensions,Extensions
+Loaded,Loaded
+"Project Profile","项目 Profile"
+Saved,Saved
+Inherited,继承
+Enabled,Enabled
+Disabled,Disabled
+"Project PHP profile saved.","Project PHP profile saved."
+"Project PHP profile saved and WLS reload was requested.","Project PHP profile saved and WLS reload was requested."
+"php.ini applied and backup created.","php.ini applied and backup created."
+"No php.ini changes were needed.","No php.ini changes were needed."
+"php.ini restored from backup.","php.ini restored from backup."
+"PHP path fields contain unsafe characters.","PHP path fields contain unsafe characters."
+"PHP max execution time must be between 0 and 86400 seconds.","PHP max execution time must be between 0 and 86400 seconds."
+"PHP timezone contains unsafe characters.","PHP timezone contains unsafe characters."
+"PHP list values may contain only letters, numbers, dot, dash, or underscore.","PHP list values may contain only letters, numbers, dot, dash, or underscore."
+"Select an extension action before previewing.",预览前请选择扩展动作。
+"Extension names may contain only letters, numbers, dot, dash, or underscore.",扩展名称只能包含字母、数字、点、横线或下划线。
+"Enter an extension name before previewing.",预览前请输入扩展名称。
+"The selected extension is already loaded in the current runtime.",所选扩展已在当前运行态加载。
+"The selected extension is not loaded in the current runtime.",所选扩展未在当前运行态加载。
+"Core PHP extensions cannot be removed by WLS PHP Manager.","WLS PHP Manager 不允许移除 PHP 核心扩展。"
+"This extension is listed in the selected Project Profile required extensions.","此扩展已列入所选项目 Profile 的必需扩展。"
+"Not Loaded",未加载
+"Required by Profile","Profile 必需"
+"Not Required by Profile","Profile 未要求"
+"Execution disabled in this slice",本切片禁用执行
+"Install Extension",安装扩展
+"Remove Extension",移除扩展
+"No Action Selected",未选择动作
+"Dry-run Only",仅预演
+Blocked,已阻止
+"Waiting for Input",等待输入
+"Extension Name",扩展名称
+Missing,缺失
+"Only safe extension identifiers are accepted.",只接受安全的扩展标识。
+"Runtime State",运行态状态
+"Project Profile Requirement","项目 Profile 要求"
+Required,必需
+"Not Required",非必需
+"Removing it may make the Project Profile unsatisfied.","移除后可能导致项目 Profile 不满足要求。"
+"No Project Profile dependency detected.","未检测到项目 Profile 依赖。"
+"Core Extension Guard",核心扩展保护
+Protected,受保护
+"Not Protected",未受保护
+"Core extensions are never removable from this panel.",此面板永远不允许移除核心扩展。
+"No core-extension block was triggered.",未触发核心扩展阻止。
+"Execution Adapter",执行适配器
+"Not Installed",未安装
+"This slice only previews the future adapter plan and never runs package commands.",本切片只预览未来适配器计划，不执行包管理命令。
+"Choose install or remove and enter an extension name to preview the lifecycle plan.",选择安装或移除并输入扩展名称后预览生命周期计划。
+install,安装
+remove,移除
+"Resolve the selected project PHP Profile and current runtime extension state.","解析所选项目 PHP Profile 与当前运行态扩展状态。"
+"Select a future platform adapter for the current operating system.",为当前操作系统选择未来的平台适配器。
+"Map the extension to an allowlisted %{1} operation.","将扩展映射到白名单 %{1} 操作。"
+"Preview php.ini and runtime reload effects before any write.","在任何写入前预览 php.ini 与运行时重载影响。"
+"Require explicit operator confirmation in a later execution slice.",在后续执行切片中要求操作员显式确认。
+"Save a Project PHP Profile before applying php.ini.","Save a Project PHP Profile before applying php.ini."
+"Enable the Project PHP Profile before applying php.ini.","Enable the Project PHP Profile before applying php.ini."
+"No php.ini directives are configured in this Project PHP Profile.","No php.ini directives are configured in this Project PHP Profile."
+"Unable to read the target php.ini file.","Unable to read the target php.ini file."
+"Confirm the php.ini apply operation before submitting.","Confirm the php.ini apply operation before submitting."
+"Type APPLY_PHP_INI to apply php.ini changes.","Type APPLY_PHP_INI to apply php.ini changes."
+"php.ini apply is not available.","php.ini apply is not available."
+"Unable to read php.ini before applying changes.","Unable to read php.ini before applying changes."
+"Confirm the php.ini rollback operation before submitting.","Confirm the php.ini rollback operation before submitting."
+"Type ROLLBACK_PHP_INI to restore the selected backup.","Type ROLLBACK_PHP_INI to restore the selected backup."
+"Unable to read the selected php.ini backup.","Unable to read the selected php.ini backup."
+"No loaded php.ini path is available.","No loaded php.ini path is available."
+"Only .ini files can be managed by PHP Manager.","Only .ini files can be managed by PHP Manager."
+"The target php.ini file does not exist.","The target php.ini file does not exist."
+"The target php.ini file must exist before apply.","The target php.ini file must exist before apply."
+"The target php.ini file must be readable and writable.","The target php.ini file must be readable and writable."
+"This slice can only manage bundled project php.ini files under extend/server/php or WLS PHP Manager sandbox paths.","This slice can only manage bundled project php.ini files under extend/server/php or WLS PHP Manager sandbox paths."
+"Unable to create the PHP Manager backup directory.","Unable to create the PHP Manager backup directory."
+"Unable to write the php.ini backup file.","Unable to write the php.ini backup file."
+"Unable to write the php.ini backup metadata.","Unable to write the php.ini backup metadata."
+"Unable to write the target php.ini file.","Unable to write the target php.ini file."
+"The selected php.ini backup is not readable.","The selected php.ini backup is not readable."
+"The selected backup is outside the PHP Manager backup directory.","The selected backup is outside the PHP Manager backup directory."
+"The selected backup file is not a PHP Manager php.ini backup.","The selected backup file is not a PHP Manager php.ini backup."
+"The selected php.ini backup metadata is missing or invalid.","The selected php.ini backup metadata is missing or invalid."
+"Runtime reload skipped.","Runtime reload skipped."
+"Select a running WLS instance before requesting reload.","Select a running WLS instance before requesting reload."
+"WLS reload request failed.","WLS reload request failed."
+"Panel Profile","Panel Profile"
+"Current Runtime",当前运行态
+"Confirm the PHP profile save before submitting.","Confirm the PHP profile save before submitting."
+"PHP Binary","PHP 可执行文件"
+"php.ini Path","php.ini 路径"
+"Memory Limit",内存限制
+"Max Execution Time",最大执行时间
+"Upload Max Filesize",最大上传文件
+"Post Max Size","POST 最大大小"
+Timezone,时区
+"Disabled Functions",禁用函数
+"Profile Aligned","Profile 已对齐"
+"Profile Override","Profile 覆盖"
+Satisfied,已满足
+"Missing Extension",扩展缺失
+"Required Extensions",必需扩展
+"Loaded: %{1}",已加载：%{1}
+Dark,Dark
+Light,Light
+"WLS Standalone Backend","WLS Standalone Backend"
+"PHP Manager","PHP Manager"
+"WLS PHP Manager navigation","WLS PHP Manager navigation"
+Summary,Summary
+Runtime,运行态
+Inheritance,Inheritance
+php.ini,php.ini
+Audit,Audit
+"WLS Panel Plugin","WLS Panel Plugin"
+"PHP runtime readout, guarded project profile storage, reversible php.ini apply, and WLS reload controls for managed projects.","PHP runtime readout, guarded project profile storage, reversible php.ini apply, and WLS reload controls for managed projects."
+"WLS Panel","WLS Panel"
+"Project Admin","Project Admin"
+"Project Context","Project Context"
+"Safe project context is passed from the WLS Panel. Project paths are not exposed in plugin URLs.","Safe project context is passed from the WLS Panel. Project paths are not exposed in plugin URLs."
+Operation,Operation
+"Project ID","Project ID"
+Domain,Domain
+"Project Type","Project Type"
+"Current PHP Runtime","Current PHP Runtime"
+"This is the PHP process currently serving the WLS Panel. Runtime changes require explicit php.ini apply and optional WLS reload.","This is the PHP process currently serving the WLS Panel. Runtime changes require explicit php.ini apply and optional WLS reload."
+Version,Version
+SAPI,SAPI
+"Loaded php.ini","Loaded php.ini"
+"Upload Max","Upload Max"
+"Post Max","Post Max"
+"PHP Profile Inheritance Map","PHP 配置继承地图"
+"Compare current runtime values with the selected project Profile before applying php.ini or requesting WLS reload.","在应用 php.ini 或请求 WLS 重载前，对比当前运行态与所选项目 Profile 的取值。"
+"Total Checks",检查项
+Overrides,覆盖
+Attention,需关注
+Setting,配置项
+"Profile / Effective","Profile / 生效值"
+Profile:,Profile：
+"Project PHP Profile","Project PHP Profile"
+"Save project-specific PHP configuration. The php.ini section previews exactly what will be written before apply.","Save project-specific PHP configuration. The php.ini section previews exactly what will be written before apply."
+"Runtime Action","Runtime Action"
+"Save only","Save only"
+"Request WLS reload","Request WLS reload"
+"Runtime Instance","Runtime Instance"
+"Enable this PHP Profile for the selected WLS project.","Enable this PHP Profile for the selected WLS project."
+Description,Description
+"I understand this saves a project PHP profile and may request a WLS reload when selected.","I understand this saves a project PHP profile and may request a WLS reload when selected."
+"Current source:","Current source:"
+"Save Project Profile","Save Project Profile"
+"php.ini Apply Plan","php.ini Apply Plan"
+"Apply writes only a WLS-managed directive block, creates a backup first, and can be rolled back from the latest PHP Manager backup.","Apply writes only a WLS-managed directive block, creates a backup first, and can be rolled back from the latest PHP Manager backup."
+"Target php.ini","Target php.ini"
+"Change Count","Change Count"
+"Managed Block","Managed Block"
+Present,Present
+"Not Present","Not Present"
+"Latest Backup","Latest Backup"
+"No php.ini directive changes are pending for this profile.","No php.ini directive changes are pending for this profile."
+Directive,Directive
+Current,Current
+Profile,Profile
+"Apply only","Apply only"
+"Apply and request WLS reload","Apply and request WLS reload"
+"Confirmation Phrase","Confirmation Phrase"
+"I understand PHP Manager will write the managed block to the selected php.ini after creating a backup.","I understand PHP Manager will write the managed block to the selected php.ini after creating a backup."
+"Apply php.ini","Apply php.ini"
+"Rollback Backup","Rollback Backup"
+"Rollback only","Rollback only"
+"Rollback and request WLS reload","Rollback and request WLS reload"
+"I understand PHP Manager will restore the selected php.ini backup.","I understand PHP Manager will restore the selected php.ini backup."
+"Rollback php.ini","Rollback php.ini"
+"Extension Lifecycle Plan",扩展生命周期计划
+"Preview install or remove intent before any future platform adapter is allowed to run. This slice never executes package commands.",在允许未来平台适配器运行前预览安装或移除意图。本切片不会执行包管理命令。
+"Extension Action",扩展动作
+"Select Action",选择动作
+"Plan State",计划状态
+"Preview Extension Plan",预览扩展计划
+Action,动作
+Extension,扩展
+Execution,执行
+"Run Extension Action",执行扩展动作
+"Execution Boundary",执行边界
+"A later adapter slice must provide an allowlisted command plan, confirmation phrase, audit record, and WLS reload binding before this action can run.","后续适配器切片必须提供白名单命令计划、确认口令、审计记录和 WLS 重载绑定后，才能运行此动作。"
+"Loaded Extensions","Loaded Extensions"
+"Recent Audit","Recent Audit"
+"No PHP profile audit records yet.","No PHP profile audit records yet."
+Marketplace,Marketplace
+"Open WLS Marketplace","Open WLS Marketplace"

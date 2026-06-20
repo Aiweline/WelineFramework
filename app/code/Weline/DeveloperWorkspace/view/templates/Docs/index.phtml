@@ -1556,7 +1556,7 @@ try {
                 <h2><?=__('文档分类')?></h2>
                 <p><?=__('选择分类查看文档')?></p>
                 <div class="sidebar-controls">
-                    <button class="sidebar-toggle" onclick="toggleSidebar()" title="收起/展开分类树">
+                    <button class="sidebar-toggle" data-doc-toggle-sidebar title="收起/展开分类树">
                         <span>◀</span>
                     </button>
                 </div>
@@ -1616,7 +1616,7 @@ try {
                         </div>
                         <div class="doc-i18n-item">
                             <label><?=__('货币')?>:</label>
-                            <select id="doc-currency-select" class="doc-i18n-select" onchange="switchDocCurrency(this.value)">
+                            <select id="doc-currency-select" class="doc-i18n-select">
                                 <?php 
                                 $availableCurrencies = $this->getData('availableCurrencies') ?? [
                                     ['code' => 'CNY', 'name' => '人民币'],
@@ -1633,12 +1633,12 @@ try {
                         </div>
                     </div>
                     <?php if ($document && $document->getId()): ?>
-                    <a href="javascript:void(0)" class="document-back-button" onclick="backToDocumentList()" id="document-back-button">
+                    <a href="#" class="document-back-button" data-doc-back-list id="document-back-button">
                         <span>←</span>
                         <span><?=__('返回文档列表')?></span>
                     </a>
                     <?php else: ?>
-                    <a href="javascript:void(0)" class="document-back-button hidden" onclick="backToDocumentList()" id="document-back-button">
+                    <a href="#" class="document-back-button hidden" data-doc-back-list id="document-back-button">
                         <span>←</span>
                         <span><?=__('返回文档列表')?></span>
                     </a>
@@ -1651,7 +1651,7 @@ try {
                         <span>📡</span>
                         <span><?=__('API文档')?></span>
                     </a>
-                    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+                    <button class="theme-toggle" data-doc-toggle-theme title="切换主题">
                         <span id="theme-icon">🌙</span>
                     </button>
                 </div>
@@ -1672,11 +1672,11 @@ try {
                         <div class="document-body" id="initial-document-body">
                             <?= htmlspecialchars($document->getDecodeContent() ?? '') ?>
                         </div>
-                        <button class="document-toc-toggle" onclick="toggleDocumentToc()" title="显示/隐藏目录">📑</button>
+                        <button class="document-toc-toggle" data-doc-toggle-toc title="显示/隐藏目录">📑</button>
                         <div class="document-toc" id="document-toc">
                             <div class="document-toc-header">
                                 <span>目录</span>
-                                <span class="document-toc-close" onclick="toggleDocumentToc()">×</span>
+                                <span class="document-toc-close" data-doc-toggle-toc>×</span>
                             </div>
                             <ul class="document-toc-list" id="document-toc-list"></ul>
                         </div>
@@ -1696,7 +1696,7 @@ try {
                                         });
                                         const rawContent = docBody.textContent || docBody.innerText || '';
                                         if (rawContent.trim()) {
-                                            docBody.innerHTML = marked.parse(rawContent);
+                                            docBody.innerHTML = sanitizeRenderedHtml(marked.parse(rawContent));
                                             // Markdown 渲染完成后，生成目录并定位锚点
                                             setTimeout(() => {
                                                 if (typeof generateDocumentToc === 'function') {
@@ -1728,7 +1728,7 @@ try {
                     <!-- 显示文档列表 -->
                     <div class="document-list">
                         <?php foreach ($documents as $doc): ?>
-                            <div class="document-item" onclick="loadDocument(<?= $doc->getId() ?>)">
+                            <div class="document-item" data-doc-id="<?= htmlspecialchars((string)$doc->getId()) ?>">
                                 <h3><?= htmlspecialchars($doc->getTitle() ?? '') ?></h3>
                                 <?php if ($doc->getData('summary')): ?>
                                     <p><?= htmlspecialchars($doc->getData('summary')) ?></p>
@@ -1991,7 +1991,7 @@ try {
                     .then(response => response.json())
                     .then(data => {
                         if (data.error) {
-                            $('#catalog-tree').html('<div class="empty-state"><div class="empty-state-text">' + data.error + '</div></div>');
+                            $('#catalog-tree').html('<div class="empty-state"><div class="empty-state-text">' + escapeHtml(data.error) + '</div></div>');
                             return;
                         }
                         
@@ -2091,6 +2091,50 @@ try {
 
                 return node;
             }
+
+            function centerElementInScrollContainer(container, element, behavior = 'smooth') {
+                if (!container || !element) {
+                    return;
+                }
+
+                const target = element.querySelector('.jstree-anchor') || element;
+                const containerRect = container.getBoundingClientRect();
+                const targetRect = target.getBoundingClientRect();
+                if (!containerRect.height || !targetRect.height) {
+                    return;
+                }
+
+                const offsetToCenter = (targetRect.top - containerRect.top)
+                    - (containerRect.height / 2)
+                    + (targetRect.height / 2);
+                const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+                const nextScrollTop = Math.max(0, Math.min(maxScrollTop, container.scrollTop + offsetToCenter));
+
+                container.scrollTo({
+                    top: nextScrollTop,
+                    behavior: behavior
+                });
+            }
+
+            function centerCatalogTreeNode(catalogId, behavior = 'smooth') {
+                if (!catalogId || !catalogTree || !catalogTree.jstree) {
+                    return;
+                }
+
+                const run = function() {
+                    const container = document.getElementById('catalog-tree');
+                    const treeInstance = catalogTree.jstree(true);
+                    const nodeElement = treeInstance.get_node(catalogId.toString(), true);
+                    centerElementInScrollContainer(
+                        container,
+                        nodeElement && nodeElement.length ? nodeElement[0] : null,
+                        behavior
+                    );
+                };
+
+                window.requestAnimationFrame(run);
+                window.setTimeout(run, 220);
+            }
             
             // 选中分类
             // @param catalogId 分类ID
@@ -2118,10 +2162,7 @@ try {
                     
                     // 滚动到可见区域（可选）
                     if (scrollToView) {
-                        const nodeElement = treeInstance.get_node(catalogId.toString(), true);
-                        if (nodeElement && nodeElement.length) {
-                            nodeElement[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
+                        centerCatalogTreeNode(catalogId);
                     }
                     
                     currentCatalogId = catalogId;
@@ -2150,6 +2191,12 @@ try {
             // @param catalogId 分类ID
             // @param highlightDocId 需要高亮显示的文档ID（可选）
             function loadDocuments(catalogId, highlightDocId = null) {
+                const safeCatalogId = normalizeNumericId(catalogId);
+                const safeHighlightDocId = normalizeNumericId(highlightDocId);
+                if (!safeCatalogId) {
+                    return;
+                }
+
                 // 隐藏返回文档列表按钮
                 const backButton = document.getElementById('document-back-button');
                 if (backButton) {
@@ -2159,12 +2206,12 @@ try {
                 const contentBody = document.getElementById('content-body');
                 contentBody.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 10px;">加载中...</p></div>';
                 
-                fetch(appendDocLocale(`${baseUrl}/docs/documents?catalog_id=${catalogId}`))
+                fetch(appendDocLocale(`${baseUrl}/docs/documents?catalog_id=${safeCatalogId}`))
                     .then(response => response.json())
                     .then(data => {
                         if (data.error) {
                             contentBody.innerHTML = 
-                                '<div class="empty-state"><div class="empty-state-text">' + data.error + '</div></div>';
+                                '<div class="empty-state"><div class="empty-state-text">' + escapeHtml(data.error) + '</div></div>';
                             return;
                         }
                         
@@ -2176,10 +2223,15 @@ try {
                         
                         let html = '<div class="document-list">';
                         data.forEach(doc => {
-                            const isHighlight = highlightDocId && doc.id == highlightDocId;
+                            const docId = normalizeNumericId(doc.id);
+                            if (!docId) {
+                                return;
+                            }
+
+                            const isHighlight = safeHighlightDocId && docId === safeHighlightDocId;
                             const highlightClass = isHighlight ? ' highlight' : '';
                             html += `
-                                <div class="document-item${highlightClass}" data-doc-id="${doc.id}" onclick="loadDocument(${doc.id})">
+                                <div class="document-item${highlightClass}" data-doc-id="${docId}">
                                     <h3>${escapeHtml(doc.title)}</h3>
                                     ${doc.summary ? '<p>' + escapeHtml(doc.summary) + '</p>' : ''}
                                     <div class="document-meta">
@@ -2192,9 +2244,9 @@ try {
                         contentBody.innerHTML = html;
                         
                         // 如果需要高亮显示某个文档，滚动到该位置
-                        if (highlightDocId) {
+                        if (safeHighlightDocId) {
                             setTimeout(() => {
-                                const targetItem = contentBody.querySelector(`[data-doc-id="${highlightDocId}"]`);
+                                const targetItem = contentBody.querySelector(`[data-doc-id="${safeHighlightDocId}"]`);
                                 if (targetItem) {
                                     targetItem.scrollIntoView({ 
                                         behavior: 'smooth', 
@@ -2263,15 +2315,20 @@ try {
             
             // 加载文档详情
             window.loadDocument = function(documentId) {
+                const safeDocumentId = normalizeNumericId(documentId);
+                if (!safeDocumentId) {
+                    return;
+                }
+
                 const contentBody = document.getElementById('content-body');
                 contentBody.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 10px;">加载中...</p></div>';
                 
-                fetch(appendDocLocale(`${baseUrl}/docs/document?id=${documentId}`))
+                fetch(appendDocLocale(`${baseUrl}/docs/document?id=${safeDocumentId}`))
                     .then(response => response.json())
                     .then(data => {
                         if (data.error) {
                             contentBody.innerHTML = 
-                                '<div class="empty-state"><div class="empty-state-text">' + data.error + '</div></div>';
+                                '<div class="empty-state"><div class="empty-state-text">' + escapeHtml(data.error) + '</div></div>';
                             return;
                         }
                         
@@ -2294,11 +2351,11 @@ try {
                                 </div>
                                 <div class="document-body">${processedContent}</div>
                             </div>
-                            <button class="document-toc-toggle" onclick="toggleDocumentToc()" title="显示/隐藏目录">📑</button>
+                            <button class="document-toc-toggle" data-doc-toggle-toc title="显示/隐藏目录">📑</button>
                             <div class="document-toc" id="document-toc">
                                 <div class="document-toc-header">
                                     <span>目录</span>
-                                    <span class="document-toc-close" onclick="toggleDocumentToc()">×</span>
+                                    <span class="document-toc-close" data-doc-toggle-toc>×</span>
                                 </div>
                                 <ul class="document-toc-list" id="document-toc-list"></ul>
                             </div>
@@ -2310,13 +2367,13 @@ try {
                         
                         // 更新URL（不刷新页面）
                         const url = new URL(window.location);
-                        url.searchParams.set('id', documentId);
+                        url.searchParams.set('id', safeDocumentId);
                         // 保留 hash（锚点）
                         if (window.location.hash) {
                             url.hash = window.location.hash;
                         }
                         window.history.pushState({}, '', url);
-                        currentDocumentId = documentId;
+                        currentDocumentId = safeDocumentId;
                         
                         // 文档加载完成后，选中对应的分类（不刷新右边界面的内容）
                         if (data.category_id && data.category_id != currentCatalogId) {
@@ -2331,6 +2388,7 @@ try {
                         } else if (data.category_id) {
                             // 如果分类ID相同，只更新变量
                             currentCatalogId = data.category_id;
+                            centerCatalogTreeNode(data.category_id, 'auto');
                             // 延迟定位锚点，确保文档内容已渲染
                             setTimeout(() => {
                                 scrollToAnchor();
@@ -2394,7 +2452,7 @@ try {
                     .then(data => {
                         if (data.error) {
                             contentBody.innerHTML = 
-                                '<div class="empty-state"><div class="empty-state-text">' + data.error + '</div></div>';
+                                '<div class="empty-state"><div class="empty-state-text">' + escapeHtml(data.error) + '</div></div>';
                             return;
                         }
 
@@ -2411,8 +2469,13 @@ try {
                         if (catalogs.length > 0) {
                             html += '<div class="search-section-title">目录匹配</div>';
                             catalogs.forEach(catalog => {
+                                const catalogId = normalizeNumericId(catalog.id);
+                                if (!catalogId) {
+                                    return;
+                                }
+
                                 html += `
-                                <div class="document-item catalog-result" onclick="locateCatalog(${catalog.id})">
+                                <div class="document-item catalog-result" data-catalog-id="${catalogId}">
                                     <h3>${escapeHtml(catalog.name)}</h3>
                                     ${catalog.path ? '<div class="catalog-result-path">' + escapeHtml(catalog.path) + '</div>' : ''}
                                     ${catalog.description ? '<p>' + escapeHtml(catalog.description) + '</p>' : ''}
@@ -2429,8 +2492,13 @@ try {
                         }
 
                         documents.forEach(doc => {
+                            const docId = normalizeNumericId(doc.id);
+                            if (!docId) {
+                                return;
+                            }
+
                             html += `
-                                <div class="document-item" onclick="loadDocument(${doc.id})">
+                                <div class="document-item" data-doc-id="${docId}">
                                     <h3>${escapeHtml(doc.title)}</h3>
                                     ${doc.summary ? '<p>' + escapeHtml(doc.summary) + '</p>' : ''}
                                     <div class="document-meta">
@@ -2455,6 +2523,101 @@ try {
                 const div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
+            }
+
+            function normalizeNumericId(value) {
+                const id = Number.parseInt(value, 10);
+                return Number.isSafeInteger(id) && id > 0 ? id : 0;
+            }
+
+            const docCurrencySelect = document.getElementById('doc-currency-select');
+            if (docCurrencySelect) {
+                docCurrencySelect.addEventListener('change', function(event) {
+                    switchDocCurrency(event.target.value);
+                });
+            }
+
+            document.addEventListener('click', function(event) {
+                if (event.target.closest('[data-doc-toggle-sidebar]')) {
+                    event.preventDefault();
+                    toggleSidebar();
+                    return;
+                }
+
+                if (event.target.closest('[data-doc-back-list]')) {
+                    event.preventDefault();
+                    backToDocumentList();
+                    return;
+                }
+
+                if (event.target.closest('[data-doc-toggle-theme]')) {
+                    event.preventDefault();
+                    toggleTheme();
+                    return;
+                }
+
+                if (event.target.closest('[data-doc-toggle-toc]')) {
+                    event.preventDefault();
+                    toggleDocumentToc();
+                    return;
+                }
+
+                const catalogItem = event.target.closest('[data-catalog-id]');
+                if (catalogItem) {
+                    event.preventDefault();
+                    locateCatalog(catalogItem.getAttribute('data-catalog-id'));
+                    return;
+                }
+
+                const documentItem = event.target.closest('[data-doc-id]');
+                if (documentItem) {
+                    const documentId = normalizeNumericId(documentItem.getAttribute('data-doc-id'));
+                    if (documentId) {
+                        event.preventDefault();
+                        loadDocument(documentId);
+                    }
+                }
+            });
+
+            function sanitizeRenderedHtml(html) {
+                if (!html) {
+                    return '';
+                }
+
+                const template = document.createElement('template');
+                template.innerHTML = String(html);
+                const blockedTags = 'script,style,link,meta,iframe,frame,frameset,object,embed,base,form,input,button,textarea,select,option';
+                template.content.querySelectorAll(blockedTags).forEach(node => node.remove());
+                const uriAttributes = new Set(['href', 'src', 'xlink:href', 'action', 'formaction', 'poster']);
+                const allowedDataImage = /^data:image\/(?:png|gif|jpe?g|webp|bmp);base64,/i;
+
+                template.content.querySelectorAll('*').forEach(element => {
+                    Array.from(element.attributes).forEach(attribute => {
+                        const name = attribute.name.toLowerCase();
+                        const value = String(attribute.value || '').trim();
+                        const compactValue = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+
+                        if (name.startsWith('on') || name === 'srcdoc' || name === 'style') {
+                            element.removeAttribute(attribute.name);
+                            return;
+                        }
+
+                        if (uriAttributes.has(name)) {
+                            const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(value);
+                            const allowedScheme = /^(https?:|mailto:|tel:|ftp:)/i.test(value);
+                            const allowedData = allowedDataImage.test(value);
+                            const blockedScheme = compactValue.startsWith('javascript:')
+                                || compactValue.startsWith('vbscript:')
+                                || (compactValue.startsWith('data:') && !allowedData);
+
+                            if (blockedScheme || (hasScheme && !allowedScheme && !allowedData)) {
+                                element.removeAttribute(attribute.name);
+                            }
+                        }
+                    });
+                });
+
+                return template.innerHTML;
             }
             
             // 生成文档目录导航（暴露到全局作用域）
@@ -2516,10 +2679,10 @@ try {
                     const a = document.createElement('a');
                     a.href = '#' + encodeURIComponent(id);
                     a.textContent = text;
-                    a.onclick = function(e) {
+                    a.addEventListener('click', function(e) {
                         e.preventDefault();
                         scrollToHeading(id);
-                    };
+                    });
                     
                     li.appendChild(a);
                     tocList.appendChild(li);
@@ -2735,7 +2898,7 @@ try {
                         });
                         
                         // 渲染 Markdown 为 HTML
-                        return marked.parse(content);
+                        return sanitizeRenderedHtml(marked.parse(content));
                     } catch (e) {
                         console.error('Markdown 渲染失败:', e);
                         // 如果渲染失败，返回原始内容（HTML 转义）

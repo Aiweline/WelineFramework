@@ -350,7 +350,7 @@ class LayoutSlotRenderer implements ObserverInterface
 ">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <strong style="color: #856404;">组件警告</strong>
-        <button onclick="this.parentElement.parentElement.remove()" style="
+        <button id="btnDismissOrphanWarning" type="button" style="
             background: none;
             border: none;
             font-size: 18px;
@@ -377,10 +377,10 @@ HTML;
             padding: 6px 12px;
             cursor: pointer;
             font-size: 13px;
-        " onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">
+        ">
             删除这些组件
         </button>
-        <button onclick="document.getElementById('orphan-widgets-warning').remove()" style="
+        <button id="btnDismissOrphanLater" type="button" style="
             flex: 1;
             background: #6c757d;
             color: white;
@@ -389,7 +389,7 @@ HTML;
             padding: 6px 12px;
             cursor: pointer;
             font-size: 13px;
-        " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+        ">
             稍后处理
         </button>
     </div>
@@ -406,7 +406,7 @@ HTML;
                 padding: 6px 12px;
                 cursor: pointer;
                 font-size: 12px;
-            " onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">
+            ">
                 确认删除
             </button>
             <button id="btnConfirmNo" style="
@@ -418,7 +418,7 @@ HTML;
                 padding: 6px 12px;
                 cursor: pointer;
                 font-size: 12px;
-            " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
+            ">
                 取消
             </button>
         </div>
@@ -432,7 +432,24 @@ HTML;
     const orphanActions = document.getElementById('orphan-actions');
     const btnConfirmYes = document.getElementById('btnConfirmYes');
     const btnConfirmNo = document.getElementById('btnConfirmNo');
+    const btnDismissOrphanWarning = document.getElementById('btnDismissOrphanWarning');
+    const btnDismissOrphanLater = document.getElementById('btnDismissOrphanLater');
     const deleteStatus = document.getElementById('delete-status');
+    const warningPanel = document.getElementById('orphan-widgets-warning');
+
+    function dismissWarningPanel() {
+        if (warningPanel) {
+            warningPanel.remove();
+        }
+    }
+
+    if (btnDismissOrphanWarning) {
+        btnDismissOrphanWarning.addEventListener('click', dismissWarningPanel);
+    }
+
+    if (btnDismissOrphanLater) {
+        btnDismissOrphanLater.addEventListener('click', dismissWarningPanel);
+    }
     
     // 鐐瑰嚮鍒犻櫎鎸夐挳 - 鏄剧ず纭娑堟伅
     if (btnConfirmDelete) {
@@ -783,6 +800,14 @@ HTML;
         // API URL锛堜笌 index.phtml 涓?data-api-* 涓€鑷达級
         $exitPreviewUrl = $this->url->getBackendUrl('theme/backend/theme-editor/exit-preview');
         $publishAndExitUrl = $this->url->getBackendUrl('theme/backend/theme-editor/publish-and-exit');
+        $previewMessageJsonFlags = \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT;
+        $previewExitFailedJson = \json_encode((string)__('退出预览失败'), $previewMessageJsonFlags) ?: '"退出预览失败"';
+        $previewPublishFailedJson = \json_encode((string)__('发布失败'), $previewMessageJsonFlags) ?: '"发布失败"';
+        $previewNetworkErrorJson = \json_encode((string)__('网络错误，请重试'), $previewMessageJsonFlags) ?: '"网络错误，请重试"';
+        $previewConfirmPublishJson = \json_encode((string)__('确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。'), $previewMessageJsonFlags) ?: '"确认发布当前预览内容并退出？发布后，所有访客将看到最新更改。"';
+        $previewConfirmOkJson = \json_encode((string)__('确认发布'), $previewMessageJsonFlags) ?: '"确认发布"';
+        $previewConfirmCancelJson = \json_encode((string)__('取消'), $previewMessageJsonFlags) ?: '"取消"';
+        $previewConfirmTitleJson = \json_encode((string)__('发布预览'), $previewMessageJsonFlags) ?: '"发布预览"';
         
         // 娴獥 HTML 鍜屽唴鑱旀牱寮?鑴氭湰
         $floatHtml = <<<HTML
@@ -828,8 +853,7 @@ HTML;
             font-weight: 500;
             transition: all 0.2s;
             width: 100%;
-        " onmouseover="this.style.background='#fff';this.style.transform='translateY(-1px)'" 
-           onmouseout="this.style.background='rgba(255,255,255,0.95)';this.style.transform='translateY(0)'">
+        ">
             退出预览
         </button>
         <button id="weline-preview-publish-btn" style="
@@ -843,8 +867,7 @@ HTML;
             font-weight: 500;
             transition: all 0.2s;
             width: 100%;
-        " onmouseover="this.style.background='rgba(255,255,255,0.3)'" 
-           onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+        ">
             发布并退出
         </button>
     </div>
@@ -868,6 +891,120 @@ HTML;
     var editorUrl = '{$editorUrl}';
     var exitUrl = '{$exitPreviewUrl}';
     var publishUrl = '{$publishAndExitUrl}';
+    var previewMessages = {
+        exitFailed: {$previewExitFailedJson},
+        publishFailed: {$previewPublishFailedJson},
+        networkError: {$previewNetworkErrorJson},
+        confirmPublish: {$previewConfirmPublishJson},
+        confirmOk: {$previewConfirmOkJson},
+        confirmCancel: {$previewConfirmCancelJson},
+        confirmTitle: {$previewConfirmTitleJson}
+    };
+
+    function showPreviewMessage(message, type) {
+        var finalType = type === 'success' || type === 'warning' || type === 'info' ? type : 'error';
+        var finalMessage = String(message || '');
+        if (window.BackendToast && typeof window.BackendToast[finalType] === 'function') {
+            window.BackendToast[finalType](finalMessage);
+            return;
+        }
+
+        var toast = document.createElement('div');
+        toast.setAttribute('role', 'status');
+        toast.textContent = finalMessage;
+        toast.style.cssText = [
+            'position:fixed',
+            'right:20px',
+            'bottom:100px',
+            'z-index:2147483647',
+            'max-width:320px',
+            'padding:12px 16px',
+            'border-radius:8px',
+            'box-shadow:0 8px 24px rgba(15,23,42,0.2)',
+            'background:' + (finalType === 'success' ? '#059669' : finalType === 'warning' ? '#d97706' : finalType === 'info' ? '#2563eb' : '#dc2626'),
+            'color:#fff',
+            'font:500 13px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif'
+        ].join(';');
+        document.body.appendChild(toast);
+        window.setTimeout(function() {
+            toast.remove();
+        }, 3800);
+    }
+
+    function confirmPreviewAction(message) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(message);
+        }
+
+        return new Promise(function(resolve) {
+            var overlay = document.createElement('div');
+            overlay.style.cssText = [
+                'position:fixed',
+                'inset:0',
+                'z-index:2147483647',
+                'display:flex',
+                'align-items:center',
+                'justify-content:center',
+                'background:rgba(15,23,42,0.45)',
+                'padding:20px'
+            ].join(';');
+
+            var dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.style.cssText = [
+                'width:min(420px,100%)',
+                'border-radius:10px',
+                'background:#fff',
+                'box-shadow:0 24px 60px rgba(15,23,42,0.3)',
+                'padding:20px',
+                'font:14px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif',
+                'color:#0f172a'
+            ].join(';');
+
+            var title = document.createElement('h3');
+            title.textContent = previewMessages.confirmTitle;
+            title.style.cssText = 'margin:0 0 10px;font-size:18px;line-height:1.3;';
+            var body = document.createElement('p');
+            body.textContent = String(message || '');
+            body.style.cssText = 'margin:0 0 18px;color:#475569;';
+
+            var actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+
+            var cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.textContent = previewMessages.confirmCancel;
+            cancelBtn.style.cssText = 'padding:8px 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;cursor:pointer;';
+
+            var okBtn = document.createElement('button');
+            okBtn.type = 'button';
+            okBtn.textContent = previewMessages.confirmOk;
+            okBtn.style.cssText = 'padding:8px 14px;border:1px solid #2563eb;border-radius:8px;background:#2563eb;color:#fff;cursor:pointer;';
+
+            function close(value) {
+                overlay.remove();
+                resolve(value);
+            }
+
+            cancelBtn.addEventListener('click', function() { close(false); });
+            okBtn.addEventListener('click', function() { close(true); });
+            overlay.addEventListener('click', function(event) {
+                if (event.target === overlay) {
+                    close(false);
+                }
+            });
+
+            actions.appendChild(cancelBtn);
+            actions.appendChild(okBtn);
+            dialog.appendChild(title);
+            dialog.appendChild(body);
+            dialog.appendChild(actions);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            okBtn.focus();
+        });
+    }
     
     // 鎷栧姩鍔熻兘
     var isDragging = false;
@@ -944,13 +1081,13 @@ HTML;
                 localStorage.removeItem('weline_preview_float_pos');
                 window.location.href = editorUrl;
             } else {
-                alert(data.message || '退出预览失败');
+                showPreviewMessage(data.message || previewMessages.exitFailed, 'error');
                 exitBtn.disabled = false;
                 exitBtn.textContent = '退出预览';
             }
         })
         .catch(function(err) {
-            alert('网络错误，请重试');
+            showPreviewMessage(previewMessages.networkError, 'error');
             exitBtn.disabled = false;
             exitBtn.textContent = '退出预览';
         });
@@ -958,9 +1095,10 @@ HTML;
     
     // 鍙戝竷骞堕€€鍑烘寜閽?
     publishBtn.addEventListener('click', function() {
-        if (!confirm('确认发布当前预览内容并退出？\\n\\n发布后，所有访客将看到最新更改。')) {
-            return;
-        }
+        confirmPreviewAction(previewMessages.confirmPublish).then(function(confirmed) {
+            if (!confirmed) {
+                return;
+            }
         
         publishBtn.disabled = true;
         publishBtn.textContent = '发布中...';
@@ -982,15 +1120,16 @@ HTML;
                 // 璺宠浆鍒板墠鍙伴椤碉紙闈為瑙堟ā寮忥級
                 window.location.href = data.redirect_url || '/';
             } else {
-                alert(data.message || '发布失败');
+                showPreviewMessage(data.message || previewMessages.publishFailed, 'error');
                 publishBtn.disabled = false;
                 publishBtn.textContent = '发布并退出';
             }
         })
         .catch(function(err) {
-            alert('网络错误，请重试');
+            showPreviewMessage(previewMessages.networkError, 'error');
             publishBtn.disabled = false;
             publishBtn.textContent = '发布并退出';
+        });
         });
     });
 })();

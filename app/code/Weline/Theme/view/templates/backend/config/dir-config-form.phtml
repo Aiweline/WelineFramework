@@ -9,6 +9,13 @@
 /** @var array $options */
 /** @var int|null $meta_id */
 /** @var string|null $meta_identify */
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 <form id="dir-config-form">
     <?php if ($meta_id): ?>
@@ -507,7 +514,7 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-                showError('<?= __('网络错误') ?>', modal);
+                showError(<?= json_encode((string)__('网络错误'), $jsonForScriptFlags) ?>, modal);
             });
         }
         
@@ -691,7 +698,11 @@
         // 显示错误
         function showError(message, modal) {
             var modalBody = modal.querySelector('.modal-body');
-            modalBody.innerHTML = '<div class="alert alert-danger">' + message + '</div>';
+            var alert = document.createElement('div');
+            alert.className = 'alert alert-danger';
+            alert.textContent = String(message || '');
+            modalBody.innerHTML = '';
+            modalBody.appendChild(alert);
         }
     })();
     </script>

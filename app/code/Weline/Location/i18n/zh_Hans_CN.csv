@@ -33,9 +33,18 @@ China,China
 "Select delivery address","Select delivery address"
 "Auto detect","Auto detect"
 "Manual select","Manual select"
-Close,Close
-Locating...,Locating...
 "Enter delivery address, format: Province/City/District","Enter delivery address, format: Province/City/District"
+Province/City/District,Province/City/District
+Save,Save
+Cancel,Cancel
+Close,Close
+"Weline API is not available.","Weline API is not available."
+"Geo module is not available.","Geo module is not available."
+"Address lookup failed.","Address lookup failed."
+"Location detection failed.","Location detection failed."
+Locating...,Locating...
+"Please enter a delivery address.","Please enter a delivery address."
+"Delivery address saved.","Delivery address saved."
 "浏览器不支持Geolocation API","浏览器不支持Geolocation API"
 用户拒绝了定位权限,用户拒绝了定位权限
 位置信息不可用,位置信息不可用

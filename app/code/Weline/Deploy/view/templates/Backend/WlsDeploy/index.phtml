@@ -1,0 +1,1624 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$context = $this->getData('wlsDeployContext');
+$context = is_array($context) ? $context : [];
+$settings = $this->getData('wlsDeploySettings');
+$settings = is_array($settings) ? $settings : [];
+$runtime = $this->getData('wlsDeployRuntime');
+$runtime = is_array($runtime) ? $runtime : [];
+$records = $this->getData('wlsDeployRecords');
+$records = is_array($records) ? array_values($records) : [];
+$historyScope = $this->getData('wlsDeployHistoryScope');
+$historyScope = is_array($historyScope) ? $historyScope : [];
+$historyScopeLabel = trim((string)($historyScope['label'] ?? __('全局发布记录')));
+$historyScopeDetail = trim((string)($historyScope['detail'] ?? ''));
+$historyScopeScoped = !empty($historyScope['is_scoped']);
+$historyError = trim((string)($this->getData('wlsDeployHistoryError') ?? ''));
+$capabilities = $this->getData('wlsDeployCapabilities');
+$capabilities = is_array($capabilities) ? array_values($capabilities) : [];
+$profile = $this->getData('wlsDeployProfile');
+$profile = is_array($profile) ? $profile : [];
+$preflight = $this->getData('wlsDeployPreflight');
+$preflight = is_array($preflight) ? $preflight : [];
+$preflightStatus = trim((string)($preflight['status'] ?? 'warning'));
+$preflightLabel = trim((string)($preflight['label'] ?? __('需要确认')));
+$preflightChecks = $preflight['checks'] ?? [];
+$preflightChecks = is_array($preflightChecks) ? array_values($preflightChecks) : [];
+$commandPolicy = $this->getData('wlsDeployCommandPolicy');
+$commandPolicy = is_array($commandPolicy) ? $commandPolicy : [];
+$composerExamples = array_values((array)($commandPolicy['composer_examples'] ?? []));
+$postDeployExamples = array_values((array)($commandPolicy['post_deploy_examples'] ?? []));
+$rollbackExamples = array_values((array)($commandPolicy['rollback_examples'] ?? []));
+$blockedCommandHint = (string)($commandPolicy['blocked_hint'] ?? '');
+$rollbackHint = (string)($commandPolicy['rollback_hint'] ?? '');
+$profileSaveUrl = (string)($this->getData('wlsDeployProfileSaveUrl') ?: '');
+$preflightRunUrl = (string)($this->getData('wlsDeployPreflightRunUrl') ?: '');
+$webhookReplayUrl = (string)($this->getData('wlsDeployWebhookReplayUrl') ?: '');
+$manualPlanUrl = (string)($this->getData('wlsDeployManualPlanUrl') ?: '');
+$rollbackRunUrl = (string)($this->getData('wlsDeployRollbackRunUrl') ?: '');
+$webhookReplay = $this->getData('wlsDeployWebhookReplay');
+$webhookReplay = is_array($webhookReplay) ? $webhookReplay : [];
+$webhookReplayStatus = trim((string)($webhookReplay['status'] ?? 'idle'));
+$webhookReplayTone = trim((string)($webhookReplay['tone'] ?? 'muted'));
+$webhookReplayClass = $webhookReplayTone === 'ok' ? 'is-ok' : ($webhookReplayTone === 'warning' ? 'is-warning' : ($webhookReplayTone === 'danger' ? 'is-danger' : ''));
+$webhookReplayReason = trim((string)($webhookReplay['reason'] ?? ''));
+$manualPlan = $this->getData('wlsDeployManualPlan');
+$manualPlan = is_array($manualPlan) ? $manualPlan : [];
+$manualPlanStatus = trim((string)($manualPlan['status'] ?? 'idle'));
+$manualPlanTone = trim((string)($manualPlan['tone'] ?? 'muted'));
+$manualPlanClass = $manualPlanTone === 'ok' ? 'is-ok' : ($manualPlanTone === 'warning' ? 'is-warning' : ($manualPlanTone === 'danger' ? 'is-danger' : ''));
+$manualPlanReason = trim((string)($manualPlan['reason'] ?? ''));
+$manualPlanSteps = $manualPlan['steps'] ?? [];
+$manualPlanSteps = is_array($manualPlanSteps) ? array_values($manualPlanSteps) : [];
+$rollbackResult = $this->getData('wlsDeployRollbackResult');
+$rollbackResult = is_array($rollbackResult) ? $rollbackResult : [];
+$notice = trim((string)($this->getData('wlsDeployNotice') ?? ''));
+$error = trim((string)($this->getData('wlsDeployError') ?? ''));
+$escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$profileValue = static fn (string $key, mixed $default = ''): string => htmlspecialchars((string)($profile[$key] ?? $default), ENT_QUOTES, 'UTF-8');
+$profileChecked = static fn (string $key): string => !empty($profile[$key]) ? 'checked' : '';
+$selected = static fn (string $value, mixed $current): string => $value === (string)$current ? 'selected' : '';
+$profileWebhookSecretConfigured = !empty($profile['webhook_secret_configured']);
+$profileWebhookSecretPlaceholder = $profileWebhookSecretConfigured
+    ? (string)__('已配置，留空表示保留当前项目密钥')
+    : (string)__('未配置，可填写当前项目独立密钥');
+$webhookSecretSource = trim((string)($settings['webhook_secret_source'] ?? 'global')) === 'project'
+    ? (string)__('项目密钥')
+    : (string)__('全局密钥');
+$panelUrl = $this->getBackendUrl('server/backend/wls-panel');
+$projectAdminUrl = $this->getBackendUrl('admin');
+$deployConfigUrl = $this->getBackendUrl('deploy/backend/config');
+$deployReleaseUrl = $this->getBackendUrl('deploy/backend/release');
+$marketplaceUrl = $this->getBackendUrl('server/backend/wls-panel/marketplace');
+$domain = trim((string)($context['domain'] ?? ''));
+$projectId = trim((string)($context['project_id'] ?? ''));
+$projectType = trim((string)($context['project_type'] ?? ''));
+$operation = trim((string)($context['operation'] ?? ''));
+$deployPanelUrl = $this->getBackendUrl('deploy/backend/wls-deploy');
+$buildDeployAnchorUrl = static function (string $anchor) use ($deployPanelUrl, $operation, $projectId, $domain, $projectType): string {
+    $query = array_filter([
+        'operation' => $operation,
+        'project_id' => $projectId,
+        'domain' => $domain,
+        'project_type' => $projectType,
+    ], static fn (mixed $value): bool => $value !== null && $value !== '');
+
+    return $deployPanelUrl . ($query !== [] ? '?' . http_build_query($query) : '') . '#' . ltrim($anchor, '#');
+};
+$runtimeVersion = trim((string)($runtime['deploy_version'] ?? ''));
+$runtimeRefType = trim((string)($runtime['git_ref_type'] ?? ''));
+$runtimeRef = trim((string)($runtime['git_ref'] ?? ''));
+$runtimeTag = trim((string)($runtime['git_tag'] ?? ''));
+$runtimeBranch = trim((string)($runtime['git_branch'] ?? ''));
+$runtimeCommit = trim((string)($runtime['git_commit'] ?? ''));
+$runtimeDeployedAt = (int)($runtime['deployed_at'] ?? 0);
+$configured = static fn (bool $state): string => $state ? (string)__('已配置') : (string)__('未配置');
+$projectRepoUrl = (string)($settings['project_repo_url'] ?? '');
+$projectBranch = (string)($settings['project_branch'] ?? '');
+$projectRemote = (string)($settings['project_remote'] ?? 'origin');
+$deployRoot = (string)($settings['deploy_root'] ?? '');
+$gitUpdateMode = (string)($settings['git_update_mode'] ?? 'reset');
+$webhookPath = (string)($settings['webhook_path'] ?? '');
+$webhookTagPrefix = (string)($settings['webhook_tag_prefix'] ?? '');
+$webhookBranch = (string)($settings['webhook_branch'] ?? '');
+$rollbackRef = trim((string)($profile['rollback_ref'] ?? ''));
+$rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty($profile['has_profile']) && !empty($profile['enabled']);
+?>
+
+<style>
+    .wls-deploy-shell {
+        --wdep-bg: #edf5f8;
+        --wdep-panel: #ffffff;
+        --wdep-panel-soft: #f7fafc;
+        --wdep-text: #162231;
+        --wdep-muted: #5d6b7a;
+        --wdep-border: #d8e2ea;
+        --wdep-primary: #0277a8;
+        --wdep-primary-strong: #065d82;
+        --wdep-ok: #0f8c62;
+        --wdep-warning: #b7791f;
+        --wdep-danger: #c2412d;
+        --wdep-shadow: 0 12px 28px rgba(22, 34, 49, .08);
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        background: var(--wdep-bg);
+        color: var(--wdep-text);
+        font-size: 14px;
+        line-height: 1.55;
+    }
+    body:has(.wls-deploy-shell) {
+        margin: 0;
+        background: #101922;
+        font-size: 0;
+    }
+    body:has(.wls-deploy-shell[data-theme="light"]) {
+        background: #edf5f8;
+    }
+    .wls-deploy-fullscreen,
+    .wls-deploy-fullscreen .backend-main-content {
+        min-height: 100vh;
+        background: var(--wdep-bg, #101922);
+    }
+    .wls-deploy-shell[data-theme="dark"] {
+        --wdep-bg: #101922;
+        --wdep-panel: #172331;
+        --wdep-panel-soft: #1e2d3c;
+        --wdep-text: #edf5f8;
+        --wdep-muted: #9fb0bf;
+        --wdep-border: #2e4051;
+        --wdep-primary: #2aa6d6;
+        --wdep-primary-strong: #74c8e8;
+        --wdep-ok: #42c78f;
+        --wdep-warning: #f3bd55;
+        --wdep-danger: #ff8d7f;
+        --wdep-shadow: 0 18px 36px rgba(0, 0, 0, .24);
+    }
+    .wdep-sidebar {
+        grid-column: 1;
+        grid-row: 1;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow-y: auto;
+        background: #082336;
+        color: #dff3fb;
+        padding: 24px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .wdep-brand-kicker {
+        color: #5fc4e7;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .wdep-brand-title {
+        margin-top: 4px;
+        font-size: 22px;
+        line-height: 1.25;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .wdep-nav {
+        display: grid;
+        gap: 8px;
+    }
+    .wdep-nav a,
+    .wdep-theme-button,
+    .wdep-action {
+        border: 1px solid transparent;
+        border-radius: 8px;
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+        color: inherit;
+        text-decoration: none;
+        background: rgba(255, 255, 255, .05);
+        transition: background .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+    }
+    .wdep-nav a:hover,
+    .wdep-theme-button:hover,
+    .wdep-action:hover {
+        background: rgba(95, 196, 231, .14);
+        border-color: rgba(95, 196, 231, .36);
+        color: #ffffff;
+        text-decoration: none;
+    }
+    .wdep-nav a.is-active {
+        background: rgba(95, 196, 231, .22);
+        border-color: rgba(95, 196, 231, .45);
+        color: #ffffff;
+    }
+    .wdep-sidebar-spacer {
+        flex: 1 1 auto;
+    }
+    .wdep-theme-button {
+        width: 100%;
+        cursor: pointer;
+        font: inherit;
+    }
+    .wdep-main {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+        min-height: 100vh;
+        padding: 28px 32px 42px;
+    }
+    .wdep-topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+    }
+    .wdep-kicker {
+        margin: 0 0 4px;
+        color: var(--wdep-primary);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0;
+        text-transform: uppercase;
+    }
+    .wdep-title {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1.2;
+        font-weight: 820;
+        color: var(--wdep-text);
+    }
+    .wdep-subtitle {
+        margin: 8px 0 0;
+        max-width: 760px;
+        color: var(--wdep-muted);
+    }
+    .wdep-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .wdep-action {
+        background: var(--wdep-panel);
+        color: var(--wdep-text);
+        border-color: var(--wdep-border);
+        box-shadow: 0 8px 20px rgba(22, 34, 49, .05);
+        white-space: nowrap;
+    }
+    .wdep-action.is-primary {
+        background: var(--wdep-primary);
+        border-color: var(--wdep-primary);
+        color: #ffffff;
+    }
+    .wdep-action.is-primary:hover {
+        background: var(--wdep-primary-strong);
+        color: #ffffff;
+    }
+    .wdep-section {
+        margin-top: 18px;
+    }
+    .wdep-section-title {
+        margin: 0 0 12px;
+        color: var(--wdep-text);
+        font-size: 16px;
+        font-weight: 760;
+    }
+    .wdep-alert {
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel);
+        color: var(--wdep-text);
+    }
+    .wdep-alert.is-ok {
+        border-color: color-mix(in srgb, var(--wdep-ok) 38%, var(--wdep-border));
+        color: var(--wdep-ok);
+    }
+    .wdep-alert.is-danger {
+        border-color: color-mix(in srgb, var(--wdep-danger) 38%, var(--wdep-border));
+        color: var(--wdep-danger);
+    }
+    .wdep-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .wdep-grid.is-three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .wdep-grid.is-two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .wdep-card,
+    .wdep-panel {
+        min-width: 0;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel);
+        box-shadow: var(--wdep-shadow);
+    }
+    .wdep-card {
+        padding: 16px;
+    }
+    .wdep-card-label {
+        margin: 0 0 8px;
+        color: var(--wdep-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .wdep-card-value {
+        margin: 0;
+        color: var(--wdep-text);
+        font-size: 19px;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+    .wdep-card-note {
+        margin: 8px 0 0;
+        color: var(--wdep-muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+    .wdep-panel {
+        overflow: hidden;
+    }
+    .wdep-panel-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--wdep-border);
+        background: var(--wdep-panel-soft);
+    }
+    .wdep-panel-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 780;
+    }
+    .wdep-panel-subtitle {
+        margin: 4px 0 0;
+        color: var(--wdep-muted);
+        font-size: 13px;
+    }
+    .wdep-panel-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .wdep-panel-body {
+        padding: 16px 18px 18px;
+    }
+    .wdep-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .wdep-summary-item {
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+    }
+    .wdep-summary-label {
+        margin: 0 0 6px;
+        color: var(--wdep-muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .wdep-summary-value {
+        margin: 0;
+        color: var(--wdep-text);
+        font-weight: 720;
+        overflow-wrap: anywhere;
+    }
+    .wdep-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 4px 9px;
+        border: 1px solid var(--wdep-border);
+        color: var(--wdep-muted);
+        background: var(--wdep-panel-soft);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .wdep-pill.is-ok {
+        border-color: color-mix(in srgb, var(--wdep-ok) 45%, transparent);
+        color: var(--wdep-ok);
+    }
+    .wdep-pill.is-warning {
+        border-color: color-mix(in srgb, var(--wdep-warning) 45%, transparent);
+        color: var(--wdep-warning);
+    }
+    .wdep-pill.is-danger {
+        border-color: color-mix(in srgb, var(--wdep-danger) 45%, transparent);
+        color: var(--wdep-danger);
+    }
+    .wdep-capability {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 152px;
+    }
+    .wdep-capability-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+    }
+    .wdep-description {
+        margin: 0;
+        color: var(--wdep-muted);
+    }
+    .wdep-release-list {
+        display: grid;
+        gap: 10px;
+    }
+    .wdep-release-row {
+        display: grid;
+        grid-template-columns: minmax(130px, .8fr) minmax(150px, 1fr) minmax(120px, .8fr) minmax(90px, auto);
+        gap: 12px;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+    }
+    .wdep-release-main {
+        min-width: 0;
+    }
+    .wdep-release-title {
+        margin: 0 0 4px;
+        font-weight: 760;
+        overflow-wrap: anywhere;
+    }
+    .wdep-release-meta {
+        margin: 0;
+        color: var(--wdep-muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+    .wdep-empty {
+        padding: 18px;
+        border: 1px dashed var(--wdep-border);
+        border-radius: 8px;
+        color: var(--wdep-muted);
+        background: var(--wdep-panel-soft);
+    }
+    .wdep-code {
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+    .wdep-form {
+        display: grid;
+        gap: 16px;
+    }
+    .wdep-form-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .wdep-field {
+        min-width: 0;
+        display: grid;
+        gap: 7px;
+    }
+    .wdep-field.is-wide {
+        grid-column: span 2;
+    }
+    .wdep-field.is-full {
+        grid-column: 1 / -1;
+    }
+    .wdep-field label {
+        color: var(--wdep-muted);
+        font-size: 12px;
+        font-weight: 760;
+    }
+    .wdep-field-help {
+        margin: 0;
+        color: var(--wdep-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .wdep-field input,
+    .wdep-field select,
+    .wdep-field textarea {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+        color: var(--wdep-text);
+        padding: 9px 11px;
+        font: inherit;
+        outline: none;
+        box-sizing: border-box;
+    }
+    .wdep-field textarea {
+        min-height: 82px;
+        resize: vertical;
+    }
+    .wdep-field input:focus,
+    .wdep-field select:focus,
+    .wdep-field textarea:focus {
+        border-color: var(--wdep-primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--wdep-primary) 16%, transparent);
+    }
+    .wdep-check-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .wdep-check {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 12px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+        color: var(--wdep-text);
+        font-weight: 720;
+    }
+    .wdep-check input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--wdep-primary);
+    }
+    .wdep-form-note {
+        margin: 0;
+        color: var(--wdep-muted);
+        font-size: 12px;
+    }
+    .wdep-command-policy {
+        grid-column: 1 / -1;
+        border: 1px dashed var(--wdep-border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--wdep-panel-soft);
+        color: var(--wdep-muted);
+        font-size: 12px;
+    }
+    .wdep-command-policy p {
+        margin: 0 0 8px;
+    }
+    .wdep-command-policy ul {
+        display: grid;
+        gap: 4px;
+        margin: 0 0 8px;
+        padding-left: 18px;
+    }
+    .wdep-command-policy code {
+        color: var(--wdep-text);
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        overflow-wrap: anywhere;
+    }
+    .wdep-preflight-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .wdep-preflight-check {
+        min-width: 0;
+        display: grid;
+        gap: 8px;
+        padding: 13px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+    }
+    .wdep-preflight-check.is-ok {
+        border-color: color-mix(in srgb, var(--wdep-ok) 36%, var(--wdep-border));
+    }
+    .wdep-preflight-check.is-warning {
+        border-color: color-mix(in srgb, var(--wdep-warning) 42%, var(--wdep-border));
+    }
+    .wdep-preflight-check.is-danger {
+        border-color: color-mix(in srgb, var(--wdep-danger) 42%, var(--wdep-border));
+    }
+    .wdep-preflight-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .wdep-preflight-title {
+        margin: 0;
+        color: var(--wdep-text);
+        font-weight: 780;
+    }
+    .wdep-preflight-detail {
+        margin: 0;
+        color: var(--wdep-muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+    .wdep-rollback-box {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, auto);
+        gap: 14px;
+        align-items: start;
+        padding: 13px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+    }
+    .wdep-rollback-form {
+        display: grid;
+        gap: 10px;
+        justify-items: end;
+    }
+    .wdep-rollback-result {
+        margin-top: 12px;
+    }
+    .wdep-replay-form {
+        display: grid;
+        gap: 12px;
+    }
+    .wdep-replay-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+    }
+    .wdep-replay-samples {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .wdep-sample-button {
+        min-height: 34px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+        color: var(--wdep-text);
+        padding: 7px 10px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 720;
+        cursor: pointer;
+    }
+    .wdep-sample-button:hover {
+        border-color: var(--wdep-primary);
+        color: var(--wdep-primary);
+    }
+    .wdep-replay-result {
+        margin-top: 14px;
+    }
+    .wdep-form-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 2px;
+    }
+    .wdep-button {
+        min-height: 42px;
+        border: 1px solid var(--wdep-primary);
+        border-radius: 8px;
+        background: var(--wdep-primary);
+        color: #ffffff;
+        padding: 10px 14px;
+        font: inherit;
+        font-weight: 760;
+        cursor: pointer;
+    }
+    .wdep-button:hover {
+        background: var(--wdep-primary-strong);
+        border-color: var(--wdep-primary-strong);
+    }
+    .wdep-button.is-danger {
+        border-color: var(--wdep-danger);
+        background: var(--wdep-danger);
+    }
+    .wdep-button.is-danger:hover {
+        border-color: var(--wdep-danger);
+        background: var(--wdep-danger);
+        filter: brightness(.94);
+    }
+    .wdep-button:disabled {
+        cursor: not-allowed;
+        opacity: .55;
+    }
+    .wdep-manual-release-gate {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        color: var(--wdep-muted);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+    .wdep-manual-release-gate input {
+        margin-top: 3px;
+    }
+    @media (max-width: 1180px) {
+        .wdep-grid,
+        .wdep-grid.is-three {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .wdep-form-grid,
+        .wdep-check-grid,
+        .wdep-preflight-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .wdep-release-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 900px) {
+        .wls-deploy-shell {
+            display: block;
+        }
+        .wdep-sidebar {
+            position: relative;
+            height: auto;
+            overflow: visible;
+            padding: 18px;
+        }
+        .wdep-nav {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .wdep-sidebar-spacer {
+            display: none;
+        }
+        .wdep-theme-button {
+            width: auto;
+        }
+        .wdep-main {
+            min-height: 0;
+            padding: 20px 18px 32px;
+        }
+        .wdep-topbar {
+            display: grid;
+        }
+        .wdep-actions {
+            justify-content: flex-start;
+        }
+        .wdep-grid,
+        .wdep-grid.is-three,
+        .wdep-grid.is-two,
+        .wdep-summary,
+        .wdep-form-grid,
+        .wdep-check-grid,
+        .wdep-preflight-grid,
+        .wdep-rollback-box,
+        .wdep-replay-row {
+            grid-template-columns: 1fr;
+        }
+        .wdep-rollback-form {
+            justify-items: stretch;
+        }
+        .wdep-field.is-wide {
+            grid-column: 1 / -1;
+        }
+        .wdep-form-footer {
+            align-items: stretch;
+            flex-direction: column;
+        }
+    }
+    @media (max-width: 520px) {
+        .wdep-nav {
+            grid-template-columns: 1fr;
+        }
+        .wdep-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .wdep-action {
+            justify-content: center;
+            width: 100%;
+        }
+        .wdep-release-row {
+            grid-template-columns: 1fr;
+        }
+        .wdep-title {
+            font-size: 24px;
+        }
+    }
+</style>
+
+<div class="wls-deploy-shell" data-wls-deploy-shell data-theme="light">
+    <aside class="wdep-sidebar" aria-label="<?= $escapeHtml(__('WLS 部署导航')) ?>">
+        <div class="wdep-brand">
+            <div class="wdep-brand-kicker"><?= $escapeHtml(__('WLS 插件面板')) ?></div>
+            <div class="wdep-brand-title"><?= $escapeHtml(__('部署发布')) ?></div>
+        </div>
+        <nav class="wdep-nav" aria-label="<?= $escapeHtml(__('部署发布菜单')) ?>">
+            <a class="is-active" href="<?= $escapeHtml($buildDeployAnchorUrl('overview')) ?>"><i class="mdi mdi-view-dashboard-outline"></i><?= $escapeHtml(__('总览')) ?></a>
+            <a href="<?= $escapeHtml($buildDeployAnchorUrl('configuration')) ?>"><i class="mdi mdi-tune-variant"></i><?= $escapeHtml(__('配置摘要')) ?></a>
+            <a href="<?= $escapeHtml($buildDeployAnchorUrl('project-profile')) ?>"><i class="mdi mdi-clipboard-edit-outline"></i><?= $escapeHtml(__('项目 Profile')) ?></a>
+            <a href="<?= $escapeHtml($buildDeployAnchorUrl('preflight')) ?>"><i class="mdi mdi-shield-check-outline"></i><?= $escapeHtml(__('发布预检')) ?></a>
+            <a href="<?= $escapeHtml($buildDeployAnchorUrl('webhook-replay')) ?>"><i class="mdi mdi-replay"></i><?= $escapeHtml(__('Webhook 回放')) ?></a>
+            <a href="<?= $escapeHtml($buildDeployAnchorUrl('releases')) ?>"><i class="mdi mdi-history"></i><?= $escapeHtml(__('发布记录')) ?></a>
+            <a href="<?= $escapeHtml($marketplaceUrl) ?>"><i class="mdi mdi-store-outline"></i><?= $escapeHtml(__('插件商城')) ?></a>
+            <a href="<?= $escapeHtml($buildDeployAnchorUrl('manual-release-plan')) ?>"><i class="mdi mdi-clipboard-list-outline"></i><?= $escapeHtml(__('Manual Plan')) ?></a>
+        </nav>
+        <div class="wdep-sidebar-spacer"></div>
+        <button type="button" class="wdep-theme-button" data-wdep-theme-toggle aria-label="<?= $escapeHtml(__('切换明暗色')) ?>">
+            <i class="mdi mdi-theme-light-dark"></i>
+            <span data-wdep-theme-label><?= $escapeHtml(__('深色')) ?></span>
+        </button>
+        <a class="wdep-action" href="<?= $escapeHtml($panelUrl) ?>">
+            <i class="mdi mdi-arrow-left"></i>
+            <?= $escapeHtml(__('返回 WLS Panel')) ?>
+        </a>
+    </aside>
+
+    <main class="wdep-main">
+        <header class="wdep-topbar" id="overview">
+            <div>
+                <p class="wdep-kicker"><?= $escapeHtml(__('WLS 独立插件')) ?></p>
+                <h1 class="wdep-title"><?= $escapeHtml(__('WLS 部署发布')) ?></h1>
+                <p class="wdep-subtitle">
+                    <?= $escapeHtml(__('集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。')) ?>
+                </p>
+            </div>
+            <div class="wdep-actions">
+                <a class="wdep-action is-primary" href="<?= $escapeHtml($deployConfigUrl) ?>">
+                    <i class="mdi mdi-cog-outline"></i>
+                    <?= $escapeHtml(__('打开 Deploy 配置')) ?>
+                </a>
+                <a class="wdep-action" href="<?= $escapeHtml($deployReleaseUrl) ?>">
+                    <i class="mdi mdi-format-list-bulleted"></i>
+                    <?= $escapeHtml(__('完整发布历史')) ?>
+                </a>
+                <a class="wdep-action" href="<?= $escapeHtml($projectAdminUrl) ?>">
+                    <i class="mdi mdi-application-cog-outline"></i>
+                    <?= $escapeHtml(__('项目后台')) ?>
+                </a>
+            </div>
+        </header>
+
+        <?php if ($notice !== '' || $error !== ''): ?>
+            <div class="wdep-alert <?= $error !== '' ? 'is-danger' : 'is-ok' ?>">
+                <?= $escapeHtml($error !== '' ? $error : $notice) ?>
+            </div>
+        <?php endif; ?>
+
+        <section class="wdep-section" aria-labelledby="wdep-context-title">
+            <h2 class="wdep-section-title" id="wdep-context-title"><?= $escapeHtml(__('项目上下文')) ?></h2>
+            <div class="wdep-grid">
+                <article class="wdep-card">
+                    <p class="wdep-card-label"><?= $escapeHtml(__('项目')) ?></p>
+                    <p class="wdep-card-value"><?= $escapeHtml($projectId !== '' ? $projectId : __('当前 WLS')) ?></p>
+                    <p class="wdep-card-note"><?= $escapeHtml($projectType !== '' ? $projectType : __('本机面板')) ?></p>
+                </article>
+                <article class="wdep-card">
+                    <p class="wdep-card-label"><?= $escapeHtml(__('域名')) ?></p>
+                    <p class="wdep-card-value"><?= $escapeHtml($domain !== '' ? $domain : __('未指定')) ?></p>
+                    <p class="wdep-card-note"><?= $escapeHtml(__('由项目卡片安全透传')) ?></p>
+                </article>
+                <article class="wdep-card">
+                    <p class="wdep-card-label"><?= $escapeHtml(__('操作')) ?></p>
+                    <p class="wdep-card-value"><?= $escapeHtml($operation !== '' ? $operation : 'deploy.tag') ?></p>
+                    <p class="wdep-card-note"><?= $escapeHtml(__('来自 WLS capability 链接')) ?></p>
+                </article>
+                <article class="wdep-card">
+                    <p class="wdep-card-label"><?= $escapeHtml(__('触发策略')) ?></p>
+                    <p class="wdep-card-value"><?= $escapeHtml($settings['deploy_trigger_mode_label'] ?? __('仅 Tag Push')) ?></p>
+                    <p class="wdep-card-note"><?= $escapeHtml(__('默认保守发布策略')) ?></p>
+                </article>
+            </div>
+        </section>
+
+        <section class="wdep-section" aria-labelledby="wdep-profile-title" id="project-profile">
+            <article class="wdep-panel">
+                <div class="wdep-panel-header">
+                    <div>
+                        <h2 class="wdep-panel-title" id="wdep-profile-title"><?= $escapeHtml(__('项目发布 Profile')) ?></h2>
+                        <p class="wdep-panel-subtitle">
+                            <?= $escapeHtml(__('为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。')) ?>
+                        </p>
+                    </div>
+                    <span class="wdep-pill <?= !empty($profile['has_profile']) ? 'is-ok' : '' ?>">
+                        <?= $escapeHtml(!empty($profile['has_profile']) ? __('项目 Profile') : __('继承全局')) ?>
+                    </span>
+                </div>
+                <div class="wdep-panel-body">
+                    <form class="wdep-form" method="post" action="<?= $escapeHtml($profileSaveUrl) ?>">
+                        <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
+                        <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                        <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                        <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                        <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+
+                        <div class="wdep-check-grid">
+                            <label class="wdep-check">
+                                <input type="hidden" name="enabled" value="0">
+                                <input type="checkbox" name="enabled" value="1" <?= $profileChecked('enabled') ?>>
+                                <span><?= $escapeHtml(__('启用项目 Profile')) ?></span>
+                            </label>
+                            <label class="wdep-check">
+                                <input type="hidden" name="backup_before_deploy" value="0">
+                                <input type="checkbox" name="backup_before_deploy" value="1" <?= $profileChecked('backup_before_deploy') ?>>
+                                <span><?= $escapeHtml(__('发布前备份')) ?></span>
+                            </label>
+                            <label class="wdep-check">
+                                <input type="hidden" name="run_composer_install" value="0">
+                                <input type="checkbox" name="run_composer_install" value="1" <?= $profileChecked('run_composer_install') ?>>
+                                <span><?= $escapeHtml(__('运行 Composer')) ?></span>
+                            </label>
+                        </div>
+
+                        <div class="wdep-form-grid">
+                            <div class="wdep-field is-wide">
+                                <label for="wdep-profile-repo"><?= $escapeHtml(__('项目仓库地址')) ?></label>
+                                <input id="wdep-profile-repo" type="text" name="project_repo_url" value="<?= $profileValue('project_repo_url') ?>" placeholder="https://gitee.com/org/project.git">
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-branch"><?= $escapeHtml(__('项目分支')) ?></label>
+                                <input id="wdep-profile-branch" type="text" name="project_branch" value="<?= $profileValue('project_branch') ?>" placeholder="master">
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-remote"><?= $escapeHtml(__('Git Remote 名称')) ?></label>
+                                <input id="wdep-profile-remote" type="text" name="project_remote" value="<?= $profileValue('project_remote', 'origin') ?>" placeholder="origin">
+                            </div>
+                            <div class="wdep-field is-wide">
+                                <label for="wdep-profile-root"><?= $escapeHtml(__('部署根目录')) ?></label>
+                                <input id="wdep-profile-root" type="text" name="deploy_root" value="<?= $profileValue('deploy_root') ?>" placeholder="/www/wwwroot/weline">
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-trigger"><?= $escapeHtml(__('触发模式')) ?></label>
+                                <select id="wdep-profile-trigger" name="deploy_trigger_mode">
+                                    <option value="tag" <?= $selected('tag', $profile['deploy_trigger_mode'] ?? 'tag') ?>><?= $escapeHtml(__('仅 Tag Push')) ?></option>
+                                    <option value="branch" <?= $selected('branch', $profile['deploy_trigger_mode'] ?? '') ?>><?= $escapeHtml(__('仅分支 Push')) ?></option>
+                                    <option value="both" <?= $selected('both', $profile['deploy_trigger_mode'] ?? '') ?>><?= $escapeHtml(__('分支 + Tag 都生效')) ?></option>
+                                </select>
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-tag-prefix"><?= $escapeHtml(__('Tag 前缀')) ?></label>
+                                <input id="wdep-profile-tag-prefix" type="text" name="webhook_tag_prefix" value="<?= $profileValue('webhook_tag_prefix') ?>" placeholder="<?= $escapeHtml(__('例如 v')) ?>">
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-webhook-branch"><?= $escapeHtml(__('Webhook 分支过滤')) ?></label>
+                                <input id="wdep-profile-webhook-branch" type="text" name="webhook_branch" value="<?= $profileValue('webhook_branch') ?>" placeholder="master">
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-webhook-secret"><?= $escapeHtml(__('项目 Webhook 密钥')) ?></label>
+                                <input id="wdep-profile-webhook-secret" type="password" name="webhook_secret" value="" placeholder="<?= $escapeHtml($profileWebhookSecretPlaceholder) ?>" autocomplete="new-password">
+                                <p class="wdep-field-help">
+                                    <?= $escapeHtml(__('当前验签来源')) ?>: <?= $escapeHtml($webhookSecretSource) ?>
+                                </p>
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-git-mode"><?= $escapeHtml(__('Git 更新模式')) ?></label>
+                                <select id="wdep-profile-git-mode" name="git_update_mode">
+                                    <option value="reset" <?= $selected('reset', $profile['git_update_mode'] ?? 'reset') ?>>reset</option>
+                                    <option value="pull_ff_only" <?= $selected('pull_ff_only', $profile['git_update_mode'] ?? '') ?>>pull_ff_only</option>
+                                </select>
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-composer"><?= $escapeHtml(__('Composer 命令')) ?></label>
+                                <input id="wdep-profile-composer" type="text" name="composer_command" value="<?= $profileValue('composer_command') ?>" placeholder="composer install --no-dev">
+                            </div>
+                            <div class="wdep-field is-wide">
+                                <label for="wdep-profile-post-command"><?= $escapeHtml(__('部署后命令')) ?></label>
+                                <input id="wdep-profile-post-command" type="text" name="post_deploy_command" value="<?= $profileValue('post_deploy_command') ?>" placeholder="php bin/w setup:upgrade --route && php bin/w server:reload -r">
+                            </div>
+                            <div class="wdep-command-policy" aria-label="<?= $escapeHtml(__('命令白名单')) ?>">
+                                <p><strong><?= $escapeHtml(__('命令白名单')) ?></strong></p>
+                                <?php if (!empty($composerExamples)): ?>
+                                    <p><?= $escapeHtml(__('Composer 示例')) ?></p>
+                                    <ul>
+                                        <?php foreach ($composerExamples as $example): ?>
+                                            <li><code><?= $escapeHtml($example) ?></code></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+                                <?php if (!empty($postDeployExamples)): ?>
+                                    <p><?= $escapeHtml(__('部署后命令示例')) ?></p>
+                                    <ul>
+                                        <?php foreach ($postDeployExamples as $example): ?>
+                                            <li><code><?= $escapeHtml($example) ?></code></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+                                <?php if ($blockedCommandHint !== ''): ?>
+                                    <p><?= $escapeHtml($blockedCommandHint) ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <div class="wdep-field">
+                                <label for="wdep-profile-rollback"><?= $escapeHtml(__('回滚参考')) ?></label>
+                                <input id="wdep-profile-rollback" type="text" name="rollback_ref" value="<?= $profileValue('rollback_ref') ?>" placeholder="last-stable">
+                                <?php if ($rollbackHint !== ''): ?>
+                                    <p class="wdep-field-help"><?= $escapeHtml($rollbackHint) ?></p>
+                                <?php endif; ?>
+                                <?php if ($rollbackExamples): ?>
+                                    <p class="wdep-field-help">
+                                        <?= $escapeHtml(__('回滚示例')) ?>:
+                                        <span class="wdep-code"><?= $escapeHtml(implode(' / ', $rollbackExamples)) ?></span>
+                                    </p>
+                                <?php endif; ?>
+                            </div>
+                            <div class="wdep-field is-full">
+                                <label for="wdep-profile-description"><?= $escapeHtml(__('说明')) ?></label>
+                                <textarea id="wdep-profile-description" name="description" placeholder="<?= $escapeHtml(__('记录该项目发布注意事项')) ?>"><?= $profileValue('description') ?></textarea>
+                            </div>
+                        </div>
+
+                        <div class="wdep-form-footer">
+                            <p class="wdep-form-note">
+                                <?= $escapeHtml(__('发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。')) ?>
+                            </p>
+                            <button type="submit" class="wdep-button">
+                                <?= $escapeHtml(__('保存 Profile')) ?>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </article>
+        </section>
+
+        <section class="wdep-section" aria-labelledby="wdep-preflight-title" id="preflight" data-wls-deploy-preflight data-wls-deploy-preflight-status="<?= $escapeHtml($preflightStatus) ?>">
+            <article class="wdep-panel">
+                <div class="wdep-panel-header">
+                    <div>
+                        <h2 class="wdep-panel-title" id="wdep-preflight-title"><?= $escapeHtml(__('发布预检')) ?></h2>
+                        <p class="wdep-panel-subtitle">
+                            <?= $escapeHtml(__('仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。')) ?>
+                        </p>
+                    </div>
+                    <div class="wdep-panel-actions">
+                        <span class="wdep-pill <?= $preflightStatus === 'ok' ? 'is-ok' : ($preflightStatus === 'danger' ? 'is-danger' : 'is-warning') ?>">
+                            <?= $escapeHtml($preflightLabel) ?>
+                        </span>
+                        <form method="post" action="<?= $escapeHtml($preflightRunUrl) ?>" data-wls-deploy-preflight-form>
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <button type="submit" class="wdep-button" data-wls-deploy-preflight-run>
+                                <?= $escapeHtml(__('执行预检')) ?>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                <div class="wdep-panel-body">
+                    <?php if ($preflightChecks): ?>
+                        <div class="wdep-preflight-grid">
+                            <?php foreach ($preflightChecks as $check): ?>
+                                <?php
+                                $checkState = trim((string)($check['state'] ?? 'warning'));
+                                $checkClass = $checkState === 'ok' ? 'is-ok' : ($checkState === 'danger' ? 'is-danger' : 'is-warning');
+                                ?>
+                                <div class="wdep-preflight-check <?= $checkClass ?>" data-wls-deploy-preflight-check="<?= $escapeHtml($check['key'] ?? '') ?>" data-state="<?= $escapeHtml($checkState) ?>">
+                                    <div class="wdep-preflight-head">
+                                        <p class="wdep-preflight-title"><?= $escapeHtml($check['title'] ?? '') ?></p>
+                                        <span class="wdep-pill <?= $checkClass ?>"><?= $escapeHtml($check['label'] ?? '') ?></span>
+                                    </div>
+                                    <p class="wdep-preflight-detail"><?= $escapeHtml($check['detail'] ?? '') ?></p>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="wdep-empty"><?= $escapeHtml(__('暂无预检结果。')) ?></div>
+                    <?php endif; ?>
+
+                    <div class="wdep-rollback-box" data-wls-deploy-rollback data-ready="<?= $rollbackReady ? '1' : '0' ?>">
+                        <div>
+                            <p class="wdep-preflight-title"><?= $escapeHtml(__('Rollback Action')) ?></p>
+                            <p class="wdep-preflight-detail">
+                                <?= $escapeHtml(__('Only the saved Profile rollback reference is used, and it runs inside the selected project context.')) ?>
+                                <span class="wdep-code"><?= $escapeHtml($rollbackRef !== '' ? $rollbackRef : __('Not configured')) ?></span>
+                            </p>
+                            <?php if (!empty($rollbackResult['has_result'])): ?>
+                                <div class="wdep-summary wdep-rollback-result" data-wls-deploy-rollback-result>
+                                    <div class="wdep-summary-item">
+                                        <p class="wdep-summary-label"><?= $escapeHtml(__('Rollback Version')) ?></p>
+                                        <p class="wdep-summary-value wdep-code"><?= $escapeHtml($rollbackResult['version'] ?? '-') ?></p>
+                                    </div>
+                                    <div class="wdep-summary-item">
+                                        <p class="wdep-summary-label"><?= $escapeHtml(__('Release ID')) ?></p>
+                                        <p class="wdep-summary-value wdep-code"><?= $escapeHtml($rollbackResult['release_id'] ?? '-') ?></p>
+                                    </div>
+                                    <div class="wdep-summary-item">
+                                        <p class="wdep-summary-label"><?= $escapeHtml(__('Ref')) ?></p>
+                                        <p class="wdep-summary-value wdep-code"><?= $escapeHtml($rollbackResult['ref'] ?? '-') ?></p>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <form class="wdep-rollback-form" method="post" action="<?= $escapeHtml($rollbackRunUrl) ?>" data-wls-deploy-rollback-form>
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <label class="wdep-check">
+                                <input type="checkbox" name="confirm_rollback" value="1" data-wls-deploy-rollback-confirm>
+                                <span><?= $escapeHtml(__('Confirm rollback in the selected project context')) ?></span>
+                            </label>
+                            <button type="submit" class="wdep-button" data-wls-deploy-rollback-run <?= $rollbackReady ? '' : 'disabled' ?>>
+                                <?= $escapeHtml(__('Run Rollback')) ?>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <section class="wdep-section" aria-labelledby="wdep-webhook-replay-title" id="webhook-replay" data-wls-webhook-replay data-wls-webhook-replay-status="<?= $escapeHtml($webhookReplayStatus) ?>">
+            <article class="wdep-panel">
+                <div class="wdep-panel-header">
+                    <div>
+                        <h2 class="wdep-panel-title" id="wdep-webhook-replay-title"><?= $escapeHtml(__('Webhook 回放预检')) ?></h2>
+                        <p class="wdep-panel-subtitle">
+                            <?= $escapeHtml(__('输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。')) ?>
+                        </p>
+                    </div>
+                    <span class="wdep-pill <?= $webhookReplayClass ?>">
+                        <?= $escapeHtml($webhookReplay['status_label'] ?? __('待回放')) ?>
+                    </span>
+                </div>
+                <div class="wdep-panel-body">
+                    <form class="wdep-replay-form" method="post" action="<?= $escapeHtml($webhookReplayUrl) ?>" data-wls-webhook-replay-form>
+                        <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
+                        <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                        <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                        <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                        <div class="wdep-replay-row">
+                            <div class="wdep-field">
+                                <label for="wdep-webhook-ref"><?= $escapeHtml(__('Webhook Ref')) ?></label>
+                                <input id="wdep-webhook-ref" type="text" name="webhook_ref" value="<?= $escapeHtml($webhookReplay['ref'] ?? '') ?>" placeholder="refs/tags/v1.0.0" data-wls-webhook-replay-ref>
+                            </div>
+                            <button type="submit" class="wdep-button" data-wls-webhook-replay-run>
+                                <?= $escapeHtml(__('回放预检')) ?>
+                            </button>
+                        </div>
+                        <div class="wdep-replay-samples" aria-label="<?= $escapeHtml(__('回放示例')) ?>">
+                            <button type="button" class="wdep-sample-button" data-wls-webhook-replay-sample="<?= $escapeHtml($webhookReplay['sample_tag_ref'] ?? 'refs/tags/v1.0.0') ?>">
+                                <?= $escapeHtml(__('Tag 示例')) ?> · <span class="wdep-code"><?= $escapeHtml($webhookReplay['sample_tag_ref'] ?? 'refs/tags/v1.0.0') ?></span>
+                            </button>
+                            <button type="button" class="wdep-sample-button" data-wls-webhook-replay-sample="<?= $escapeHtml($webhookReplay['sample_branch_ref'] ?? 'refs/heads/main') ?>">
+                                <?= $escapeHtml(__('分支示例')) ?> · <span class="wdep-code"><?= $escapeHtml($webhookReplay['sample_branch_ref'] ?? 'refs/heads/main') ?></span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <?php if (!empty($webhookReplay['has_result'])): ?>
+                        <div class="wdep-summary wdep-replay-result" data-wls-webhook-replay-result data-status="<?= $escapeHtml($webhookReplayStatus) ?>" data-reason="<?= $escapeHtml($webhookReplayReason) ?>">
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('判断结果')) ?></p>
+                                <p class="wdep-summary-value">
+                                    <span class="wdep-pill <?= $webhookReplayClass ?>"><?= $escapeHtml($webhookReplay['status_label'] ?? '') ?></span>
+                                </p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Ref')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($webhookReplay['ref'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('类型')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml($webhookReplay['type'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('发布版本')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($webhookReplay['version'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Git Checkout')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($webhookReplay['checkout'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('原因')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml($webhookReplay['reason_label'] ?? '-') ?></p>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="wdep-empty wdep-replay-result">
+                            <?= $escapeHtml(__('还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。')) ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </article>
+        </section>
+
+        <section class="wdep-section" aria-labelledby="wdep-manual-plan-title" id="manual-release-plan" data-wls-manual-plan data-wls-manual-plan-status="<?= $escapeHtml($manualPlanStatus) ?>">
+            <article class="wdep-panel">
+                <div class="wdep-panel-header">
+                    <div>
+                        <h2 class="wdep-panel-title" id="wdep-manual-plan-title"><?= $escapeHtml(__('Manual Release Plan')) ?></h2>
+                        <p class="wdep-panel-subtitle">
+                            <?= $escapeHtml(__('Preview the exact project-scoped release path, then run it only after explicit confirmation. The server re-checks preflight and trigger policy before execution.')) ?>
+                        </p>
+                    </div>
+                    <span class="wdep-pill <?= $manualPlanClass ?>">
+                        <?= $escapeHtml($manualPlan['status_label'] ?? __('Waiting for ref')) ?>
+                    </span>
+                </div>
+                <div class="wdep-panel-body">
+                    <form class="wdep-replay-form" method="post" action="<?= $escapeHtml($manualPlanUrl) ?>" data-wls-manual-plan-form>
+                        <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
+                        <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                        <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                        <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                        <div class="wdep-replay-row">
+                            <div class="wdep-field">
+                                <label for="wdep-manual-ref"><?= $escapeHtml(__('Manual release ref')) ?></label>
+                                <input id="wdep-manual-ref" type="text" name="manual_ref" value="<?= $escapeHtml($manualPlan['ref'] ?? '') ?>" placeholder="refs/tags/v1.0.0" data-wls-manual-plan-ref>
+                                <p class="wdep-field-help"><?= $escapeHtml(__('Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred.')) ?></p>
+                            </div>
+                            <button type="submit" class="wdep-button" data-wls-manual-plan-run>
+                                <?= $escapeHtml(__('Build Plan')) ?>
+                            </button>
+                        </div>
+                        <div class="wdep-replay-samples" aria-label="<?= $escapeHtml(__('Manual release examples')) ?>">
+                            <button type="button" class="wdep-sample-button" data-wls-manual-plan-sample="<?= $escapeHtml($manualPlan['sample_tag_ref'] ?? 'refs/tags/v1.0.0') ?>">
+                                <?= $escapeHtml(__('Tag sample')) ?> <span class="wdep-code"><?= $escapeHtml($manualPlan['sample_tag_ref'] ?? 'refs/tags/v1.0.0') ?></span>
+                            </button>
+                            <button type="button" class="wdep-sample-button" data-wls-manual-plan-sample="<?= $escapeHtml($manualPlan['sample_branch_ref'] ?? 'refs/heads/main') ?>">
+                                <?= $escapeHtml(__('Branch sample')) ?> <span class="wdep-code"><?= $escapeHtml($manualPlan['sample_branch_ref'] ?? 'refs/heads/main') ?></span>
+                            </button>
+                        </div>
+                        <div class="wdep-form-footer">
+                            <label class="wdep-manual-release-gate">
+                                <input type="checkbox" name="confirm_manual_release" value="1" data-wls-manual-release-confirm>
+                                <span><?= $escapeHtml(__('I understand this will run Git, write release metadata, record history, and reload WLS for the selected project context.')) ?></span>
+                            </label>
+                            <button
+                                type="submit"
+                                class="wdep-button is-danger"
+                                name="manual_action"
+                                value="run_release"
+                                data-wls-manual-release-run
+                                data-release-blocked="<?= $escapeHtml($preflightStatus === 'danger' || $manualPlanUrl === '' ? '1' : '0') ?>"
+                                disabled
+                            >
+                                <?= $escapeHtml(__('Run Release')) ?>
+                            </button>
+                        </div>
+                    </form>
+
+                    <?php if (!empty($manualPlan['has_result'])): ?>
+                        <div class="wdep-summary wdep-replay-result" data-wls-manual-plan-result data-status="<?= $escapeHtml($manualPlanStatus) ?>" data-reason="<?= $escapeHtml($manualPlanReason) ?>">
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Plan status')) ?></p>
+                                <p class="wdep-summary-value">
+                                    <span class="wdep-pill <?= $manualPlanClass ?>"><?= $escapeHtml($manualPlan['status_label'] ?? '') ?></span>
+                                </p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Ref')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($manualPlan['ref'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Type')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml($manualPlan['type'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Deploy version')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($manualPlan['version'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Git checkout')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($manualPlan['checkout'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Profile')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($manualPlan['profile_key'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Deploy root')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($manualPlan['deploy_root'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Remote / mode')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml(($manualPlan['remote'] ?? '-') . ' / ' . ($manualPlan['update_mode'] ?? '-')) ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Backup')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml($manualPlan['backup_label'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Composer')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($manualPlan['composer_label'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Post deploy')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($manualPlan['post_deploy_label'] ?? '-') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Reason')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml($manualPlan['reason_label'] ?? '-') ?></p>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="wdep-empty wdep-replay-result">
+                            <?= $escapeHtml(__('No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy.')) ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($manualPlanSteps): ?>
+                        <div class="wdep-preflight-grid wdep-replay-result" data-wls-manual-plan-steps>
+                            <?php foreach ($manualPlanSteps as $index => $step): ?>
+                                <div class="wdep-preflight-check <?= $manualPlanStatus === 'ready' ? 'is-ok' : 'is-warning' ?>">
+                                    <div class="wdep-preflight-head">
+                                        <p class="wdep-preflight-title"><?= $escapeHtml(((int)$index + 1) . '. ' . ($step['title'] ?? '')) ?></p>
+                                        <span class="wdep-pill <?= $manualPlanStatus === 'ready' ? 'is-ok' : 'is-warning' ?>"><?= $escapeHtml($manualPlanStatus === 'ready' ? __('planned') : __('pending')) ?></span>
+                                    </div>
+                                    <p class="wdep-preflight-detail"><?= $escapeHtml($step['detail'] ?? '') ?></p>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </article>
+        </section>
+
+        <section class="wdep-section" aria-labelledby="wdep-config-title" id="configuration">
+            <div class="wdep-grid is-two">
+                <article class="wdep-panel">
+                    <div class="wdep-panel-header">
+                        <div>
+                            <h2 class="wdep-panel-title" id="wdep-config-title"><?= $escapeHtml(__('配置摘要')) ?></h2>
+                            <p class="wdep-panel-subtitle"><?= $escapeHtml(__('敏感字段只显示是否配置，不显示原值。')) ?></p>
+                        </div>
+                        <span class="wdep-pill <?= !empty($settings['webhook_path_configured']) ? 'is-ok' : 'is-warning' ?>">
+                            <?= $escapeHtml(!empty($settings['webhook_path_configured']) ? __('Webhook 已生成') : __('Webhook 待生成')) ?>
+                        </span>
+                    </div>
+                    <div class="wdep-panel-body">
+                        <div class="wdep-summary">
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('仓库地址')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($projectRepoUrl !== '' ? $projectRepoUrl : __('未配置')) ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('分支 / Remote')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml(($projectBranch !== '' ? $projectBranch : __('未指定')) . ' / ' . ($projectRemote !== '' ? $projectRemote : 'origin')) ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('部署根目录')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($deployRoot !== '' ? $deployRoot : __('未配置')) ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Git 更新模式')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml($gitUpdateMode !== '' ? $gitUpdateMode : 'reset') ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Webhook 路径')) ?></p>
+                                <p class="wdep-summary-value wdep-code"><?= $escapeHtml($webhookPath !== '' ? $webhookPath : __('未生成')) ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('Tag 前缀 / 分支过滤')) ?></p>
+                                <p class="wdep-summary-value"><?= $escapeHtml(($webhookTagPrefix !== '' ? $webhookTagPrefix : __('全部 Tag')) . ' / ' . ($webhookBranch !== '' ? $webhookBranch : __('全部分支'))) ?></p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('密钥状态')) ?></p>
+                                <p class="wdep-summary-value">
+                                    <?= $escapeHtml(__('Webhook')) ?>: <?= $escapeHtml($configured(!empty($settings['webhook_secret_configured']))) ?>,
+                                    <?= $escapeHtml(__('仓库 Token')) ?>: <?= $escapeHtml($configured(!empty($settings['project_token_configured']))) ?>
+                                </p>
+                            </div>
+                            <div class="wdep-summary-item">
+                                <p class="wdep-summary-label"><?= $escapeHtml(__('后置能力')) ?></p>
+                                <p class="wdep-summary-value">
+                                    <?= $escapeHtml(__('Composer')) ?>: <?= $escapeHtml(!empty($settings['run_composer_install']) ? __('启用') : __('关闭')) ?>,
+                                    <?= $escapeHtml(__('命令')) ?>: <?= $escapeHtml(!empty($settings['post_deploy_command_configured']) ? __('已配置') : __('未配置')) ?>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="wdep-panel">
+                    <div class="wdep-panel-header">
+                        <div>
+                            <h2 class="wdep-panel-title"><?= $escapeHtml(__('当前运行版本')) ?></h2>
+                            <p class="wdep-panel-subtitle"><?= $escapeHtml(__('读取 var/deploy/current.json，不触发发布动作。')) ?></p>
+                        </div>
+                        <span class="wdep-pill <?= $runtimeVersion !== '' ? 'is-ok' : 'is-warning' ?>">
+                            <?= $escapeHtml($runtimeVersion !== '' ? __('已发布') : __('暂无版本')) ?>
+                        </span>
+                    </div>
+                    <div class="wdep-panel-body">
+                        <?php if ($runtimeVersion !== ''): ?>
+                            <div class="wdep-summary">
+                                <div class="wdep-summary-item">
+                                    <p class="wdep-summary-label"><?= $escapeHtml(__('版本')) ?></p>
+                                    <p class="wdep-summary-value wdep-code"><?= $escapeHtml($runtimeVersion) ?></p>
+                                </div>
+                                <div class="wdep-summary-item">
+                                    <p class="wdep-summary-label"><?= $escapeHtml(__('引用')) ?></p>
+                                    <p class="wdep-summary-value"><?= $escapeHtml(($runtimeRefType ?: '-') . ' / ' . ($runtimeTag ?: ($runtimeBranch ?: $runtimeRef ?: '-'))) ?></p>
+                                </div>
+                                <div class="wdep-summary-item">
+                                    <p class="wdep-summary-label"><?= $escapeHtml(__('提交')) ?></p>
+                                    <p class="wdep-summary-value wdep-code"><?= $escapeHtml($runtimeCommit !== '' ? substr($runtimeCommit, 0, 12) : '-') ?></p>
+                                </div>
+                                <div class="wdep-summary-item">
+                                    <p class="wdep-summary-label"><?= $escapeHtml(__('发布时间')) ?></p>
+                                    <p class="wdep-summary-value"><?= $escapeHtml($runtimeDeployedAt > 0 ? date('Y-m-d H:i:s', $runtimeDeployedAt) : '-') ?></p>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <div class="wdep-empty"><?= $escapeHtml(__('尚未发布过；完成一次 deploy:release 或合法 Tag Webhook 后会在这里显示当前版本。')) ?></div>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="wdep-section" aria-labelledby="wdep-cap-title">
+            <h2 class="wdep-section-title" id="wdep-cap-title"><?= $escapeHtml(__('能力阶段')) ?></h2>
+            <div class="wdep-grid">
+                <?php foreach ($capabilities as $capability): ?>
+                    <?php $tone = (string)($capability['tone'] ?? 'muted'); ?>
+                    <article class="wdep-card wdep-capability">
+                        <div class="wdep-capability-head">
+                            <h3 class="wdep-panel-title"><?= $escapeHtml($capability['title'] ?? '') ?></h3>
+                            <span class="wdep-pill <?= $tone === 'ok' ? 'is-ok' : ($tone === 'warning' ? 'is-warning' : '') ?>">
+                                <?= $escapeHtml($capability['state'] ?? '') ?>
+                            </span>
+                        </div>
+                        <p class="wdep-description"><?= $escapeHtml($capability['description'] ?? '') ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <section class="wdep-section" aria-labelledby="wdep-release-title" id="releases">
+            <article class="wdep-panel">
+                <div class="wdep-panel-header">
+                    <div>
+                        <h2 class="wdep-panel-title" id="wdep-release-title"><?= $escapeHtml($historyScopeLabel) ?></h2>
+                        <p class="wdep-panel-subtitle">
+                            <?= $escapeHtml($historyScopeScoped
+                                ? __('仅显示当前 WLS 项目最近 12 条发布历史，失败记录保留错误摘要。')
+                                : __('显示 WLS 主项目最近 12 条发布历史，失败记录保留错误摘要。')) ?>
+                            <?php if ($historyScopeDetail !== ''): ?>
+                                <span class="wdep-code"><?= $escapeHtml($historyScopeDetail) ?></span>
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                    <a class="wdep-action" href="<?= $escapeHtml($deployReleaseUrl) ?>">
+                        <i class="mdi mdi-open-in-new"></i>
+                        <?= $escapeHtml(__('查看完整列表')) ?>
+                    </a>
+                </div>
+                <div class="wdep-panel-body">
+                    <?php if ($historyError !== ''): ?>
+                        <div class="wdep-empty">
+                            <?= $escapeHtml(__('发布历史暂不可用：%{1}', [$historyError])) ?>
+                        </div>
+                    <?php elseif ($records): ?>
+                        <div class="wdep-release-list">
+                            <?php foreach ($records as $record): ?>
+                                <?php
+                                $statusTone = (string)($record['status_tone'] ?? 'muted');
+                                $statusClass = $statusTone === 'ok' ? 'is-ok' : ($statusTone === 'warning' ? 'is-warning' : ($statusTone === 'danger' ? 'is-danger' : ''));
+                                $recordScope = trim((string)($record['project_id'] ?? ''));
+                                if ($recordScope === '') {
+                                    $recordScope = trim((string)($record['domain'] ?? ''));
+                                }
+                                if ($recordScope === '') {
+                                    $recordScope = trim((string)($record['profile_key'] ?? ''));
+                                }
+                                $recordType = trim((string)($record['project_type'] ?? ''));
+                                ?>
+                                <article class="wdep-release-row">
+                                    <div class="wdep-release-main">
+                                        <p class="wdep-release-title wdep-code"><?= $escapeHtml($record['deploy_version'] ?: $record['release_id']) ?></p>
+                                        <p class="wdep-release-meta"><?= $escapeHtml($record['started_at'] ?: '-') ?></p>
+                                    </div>
+                                    <div class="wdep-release-main">
+                                        <p class="wdep-release-title"><?= $escapeHtml(($record['git_ref_type'] ?: '-') . ' / ' . ($record['git_tag'] ?: ($record['git_branch'] ?: $record['git_ref'] ?: '-'))) ?></p>
+                                        <p class="wdep-release-meta">
+                                            <?= $escapeHtml(__('触发') . ': ' . ($record['trigger_type'] ?: '-')) ?>
+                                            <?php if ($recordScope !== ''): ?>
+                                                <?= $escapeHtml(' / ' . __('项目') . ': ' . $recordScope . ($recordType !== '' ? ' · ' . $recordType : '')) ?>
+                                            <?php endif; ?>
+                                        </p>
+                                    </div>
+                                    <div class="wdep-release-main">
+                                        <p class="wdep-release-title wdep-code"><?= $escapeHtml($record['git_commit_short'] ?: '-') ?></p>
+                                        <p class="wdep-release-meta"><?= $escapeHtml($record['duration'] ?: __('耗时未知')) ?></p>
+                                    </div>
+                                    <div>
+                                        <span class="wdep-pill <?= $statusClass ?>"><?= $escapeHtml($record['status_label'] ?? '') ?></span>
+                                        <?php if (!empty($record['is_current'])): ?>
+                                            <span class="wdep-pill is-ok"><?= $escapeHtml(__('当前')) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if (!empty($record['error_message'])): ?>
+                                        <div class="wdep-release-main" style="grid-column: 1 / -1;">
+                                            <p class="wdep-release-meta"><?= $escapeHtml($record['error_message']) ?></p>
+                                        </div>
+                                    <?php endif; ?>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="wdep-empty">
+                            <?= $escapeHtml($historyScopeScoped
+                                ? __('当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。')
+                                : __('暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。')) ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </article>
+        </section>
+    </main>
+</div>
+
+<script>
+    (function () {
+        var shell = document.querySelector('[data-wls-deploy-shell]');
+        var toggle = document.querySelector('[data-wdep-theme-toggle]');
+        var label = document.querySelector('[data-wdep-theme-label]');
+        var storageKey = 'wls_panel_theme';
+
+        if (!shell) {
+            return;
+        }
+
+        function applyTheme(theme) {
+            var nextTheme = theme === 'dark' ? 'dark' : 'light';
+            shell.setAttribute('data-theme', nextTheme);
+            document.documentElement.style.colorScheme = nextTheme;
+            if (label) {
+                label.textContent = nextTheme === 'dark'
+                    ? '<?= $escapeHtml(__('浅色')) ?>'
+                    : '<?= $escapeHtml(__('深色')) ?>';
+            }
+        }
+
+        var savedTheme = 'light';
+        try {
+            savedTheme = localStorage.getItem(storageKey) || savedTheme;
+        } catch (error) {
+            savedTheme = 'light';
+        }
+        applyTheme(savedTheme);
+
+        if (toggle) {
+            toggle.addEventListener('click', function () {
+                var currentTheme = shell.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                var nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                try {
+                    localStorage.setItem(storageKey, nextTheme);
+                } catch (error) {
+                    return;
+                }
+                applyTheme(nextTheme);
+            });
+        }
+
+        var replayInput = document.querySelector('[data-wls-webhook-replay-ref]');
+        document.querySelectorAll('[data-wls-webhook-replay-sample]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                if (!replayInput) {
+                    return;
+                }
+                replayInput.value = button.getAttribute('data-wls-webhook-replay-sample') || '';
+                replayInput.focus();
+            });
+        });
+
+        var manualPlanInput = document.querySelector('[data-wls-manual-plan-ref]');
+        var manualReleaseConfirm = document.querySelector('[data-wls-manual-release-confirm]');
+        var manualReleaseRun = document.querySelector('[data-wls-manual-release-run]');
+        var syncManualReleaseButton = function () {
+            if (!manualReleaseRun) {
+                return;
+            }
+            var blocked = manualReleaseRun.getAttribute('data-release-blocked') === '1';
+            var hasRef = manualPlanInput && manualPlanInput.value.trim() !== '';
+            var confirmed = manualReleaseConfirm && manualReleaseConfirm.checked;
+            manualReleaseRun.disabled = blocked || !hasRef || !confirmed;
+        };
+        if (manualPlanInput) {
+            manualPlanInput.addEventListener('input', syncManualReleaseButton);
+        }
+        if (manualReleaseConfirm) {
+            manualReleaseConfirm.addEventListener('change', syncManualReleaseButton);
+        }
+        syncManualReleaseButton();
+        document.querySelectorAll('[data-wls-manual-plan-sample]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                if (!manualPlanInput) {
+                    return;
+                }
+                manualPlanInput.value = button.getAttribute('data-wls-manual-plan-sample') || '';
+                manualPlanInput.focus();
+                syncManualReleaseButton();
+            });
+        });
+    })();
+</script>

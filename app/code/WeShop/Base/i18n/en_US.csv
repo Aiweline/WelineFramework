@@ -1,8 +1,0 @@
-﻿"Theme compatibility warning","Theme compatibility warning"
-"Theme compatibility warning: template %{layout_type}/%{layout_option} in theme %{theme} is missing %{count} required hook or slot hosts. Please extend the inherited layout instead of deleting default hooks or slots.","Theme compatibility warning: template %{layout_type}/%{layout_option} in theme %{theme} is missing %{count} required hook or slot hosts. Please extend the inherited layout instead of deleting default hooks or slots."
-"Missing hosts","Missing hosts"
-"Preview compatibility notice","Preview compatibility notice"
-"Please extend the inherited layout instead of deleting default hooks or slots.","Please extend the inherited layout instead of deleting default hooks or slots."
-聚焦,Focus
-展示,Display
-全部展示,"Show All"

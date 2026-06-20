@@ -442,4 +442,144 @@ A: 使用分片上传功能，设置合适的 `chunk_size` 和 `max_size` 参数
 A: 对于图片文件，生成缩略图；对于文档文件，使用在线预览服务。
 
 ### Q: 如何防止文件被恶意上传？
-A: 启用文件扫描功能，验证文件类型和内容，限制上传目录权限。 
+A: 启用文件扫描功能，验证文件类型和内容，限制上传目录权限。
+
+# WLS Panel Integration
+
+`Weline_FileManager` is also the first bundled WLS Panel plugin slice.
+
+- Plugin meta lives in `etc/marketplace/meta.json`.
+- Required WLS discovery tags: `module:wls` and
+  `custom:wls-file-manager`.
+- Additional typed tags: `feature:file-manager`,
+  `capability:files-read`, `capability:files-write`,
+  `capability:files-policy`, and `system:true`.
+- WLS panel entry route:
+  `weline_filemanager/backend/wls-file-manager`.
+- Current implementation is a standalone shell with guarded directory browsing
+  plus controlled file operations. It exposes these allowlisted roots:
+  active project root, optional host panel root, module directory, runtime
+  directory, public directory, and when a WLS managed project context is
+  resolved, child project `var` and `pub` roots.
+- Project context is resolved server-side through
+  `w_query('server', 'wlsPanelProject', ...)`; the file manager does not depend
+  directly on `Weline_Server` services or receive raw `project_path` in URLs.
+- Browser requests accept `root` and relative `path`; paths are resolved through
+  `realpath()` and must remain inside the selected root. Invalid or escaping
+  paths return to the selected root.
+- The browser lists directories first, then files, with name, type, size,
+  modified time, readable status, preview availability, and download
+  availability.
+- Text preview is enabled for common text/config/code formats and reads at most
+  the first 64 KB. Binary-looking content and unsupported types are rejected
+  with an in-panel error state.
+- Download is enabled for readable files inside the selected allowlisted root
+  and is capped at 20 MB per request. Download responses use framework response
+  headers so the behavior works under WLS instead of relying on raw `header()`
+  or `readfile()`.
+- Controlled write is enabled only for the current panel `var`/`pub` roots or,
+  when project context resolves successfully, child project `project_var` and
+  `project_pub` roots. The active `project`, `local_project`, and `app_code`
+  roots remain read-only in this slice.
+- Directory creation requires the `Weline_FileManager::wls_file_manager_write`
+  ACL and a confirmation checkbox.
+- Small text saves require the same ACL, a confirmation checkbox, and the
+  `SAVE_TEXT` confirmation phrase. Content is capped at 128 KB, binary null
+  bytes are rejected, and only safe text extensions such as `txt`, `md`,
+  `json`, `csv`, `xml`, `yaml`, `yml`, `ini`, `conf`, `log`, and `css` are
+  allowed.
+- Text preview can now flow into the guarded save form when the previewed file
+  is under a writable root, is not truncated, is writable on disk, and uses the
+  same safe save extension allowlist.
+- Source-code editing has a separate opt-in path policy. When the current
+  project/domain policy enables source editing for `project`, `local_project`,
+  or `app_code`, already existing small source files can enter a guarded
+  `SAVE_SOURCE` form. Enabled source roots can also create one new small source
+  file with the dedicated `SOURCE_CREATE_FILE` confirmation phrase when the
+  target directory already exists, the file does not already exist, and the
+  file name/extension passes the source allowlist. Enabled source roots can
+  also rename one existing allowlisted source file inside the current directory
+  with the dedicated `SOURCE_RENAME` confirmation phrase, and can move one
+  existing allowlisted source file into the same-root `.wls-trash` recoverable
+  folder with the dedicated `SOURCE_TRASH` confirmation phrase. Source paths
+  still never enable source upload, hard delete, recursive delete, purge, or
+  queue operations,
+  reject symlinks, forbid overwrites/path escapes, require disk writability,
+  cap content at 128 KB, and protect `.env`, `app/etc/env.php`, lock files,
+  `.git`, `.wls-trash`, `generated`, `vendor`, `node_modules`, and `var`
+  segments.
+- Upload requires the same ACL, a confirmation checkbox, and the `UPLOAD_FILE`
+  confirmation phrase. Uploads are capped at 5 MB and allow only safe text,
+  document, archive, and web-asset extensions. Executable PHP/shell-style
+  extensions remain blocked.
+- Rename requires the same ACL, a confirmation checkbox, and the
+  `RENAME_ENTRY` confirmation phrase. The current slice only supports
+  same-folder rename inside the selected writable root.
+- Delete requires the same ACL and confirmation checkbox. Files and empty
+  directories require the `DELETE_ENTRY` confirmation phrase.
+- Non-empty directory delete is available only through bounded recursive mode:
+  operators must explicitly enable recursive delete, type `DELETE_TREE`, stay
+  inside the selected writable root, avoid symbolic links, and fit within the
+  100-entry / 10 MB scan limit. The controller scans the tree before deleting
+  from leaf nodes upward.
+- Compress requires the same ACL, a confirmation checkbox, and the
+  `COMPRESS_ENTRY` confirmation phrase. The current slice creates a sibling
+  `.zip` archive beside the selected file or directory, rejects root-directory
+  compression and symbolic links, caps sources at 200 entries and 10 MB, never
+  overwrites an existing archive, and removes partial ZIP files on failure.
+- Queued compression is available for larger ZIP work through
+  `Weline\FileManager\Queue\WlsFileManagerLargeOperationQueue`. The panel
+  requires the same write ACL, a confirmation checkbox, and the
+  `QUEUE_COMPRESS` phrase, then creates a `Weline_Queue` task through
+  `w_query('queue', 'create', ...)`. The worker re-checks root boundaries,
+  refuses symbolic links/path escapes, caps sources at 2000 entries and
+  512 MB, never overwrites an existing archive, and stores recent queue status
+  in the standalone shell.
+- Recoverable queued trash is available through the same large-operation queue
+  worker. The panel requires the write ACL, confirmation checkbox, and
+  `QUEUE_TRASH`; the worker re-checks the selected root, rejects symlinks,
+  caps sources at 2000 entries and 512 MB, and moves the selected file or
+  directory into the same-root `.wls-trash` folder. Completed trash jobs expose
+  a Restore action in the recent queue list while the original path is still
+  free; restore uses only the server-side queue payload plus `queue_id`, not a
+  raw browser-submitted absolute path.
+- The first richer restore-history slice is available in the same queue
+  section. The panel now queries a wider queue window, keeps the general recent
+  queue list compact, and renders a dedicated recoverable trash history showing
+  up to 30 `trash_entry` jobs with restore availability, waiting/failed states,
+  target-exists blockers, and missing-trash reasons. Restore still posts only
+  `queue_id` plus the standard `RESTORE_TRASH` confirmation.
+- The first permanent purge slice is available from the recoverable trash
+  history. Purge is POST-only, requires the write ACL, a confirmation checkbox,
+  and the `PURGE_TRASH` phrase, then reloads the queue payload by `queue_id`
+  and deletes only the recorded `.wls-trash` entry after service-layer
+  root-boundary, symlink, entry-count, and byte-limit checks. Successful purge
+  updates the queue content with `trash_purged_at` so the history can
+  distinguish intentionally purged entries from missing trash files.
+- Operation attempts are appended to `var/log/wls_file_manager_operations.log`
+  as JSON lines. The standalone plugin page scans the latest 200 entries,
+  renders summary counters for scanned/shown/success/denied/failed events, and
+  filters the latest operation list by action, result, root, and keyword.
+- Project-level path policy editing is now available in the standalone plugin
+  shell. The policy form saves only safe context (`project_id`, `domain`,
+  `project_type`) plus enabled write-root keys to
+  `var/wls-panel/file-manager-path-policy.json`; it never posts raw
+  `project_path` values back to the browser. Saved policies immediately narrow
+  all guarded write actions because `rootCards()` applies the policy before
+  create/save/upload/rename/delete/compress resolution.
+- The same path-policy section can reset the current project/domain policy
+  after the operator confirms `RESET_PATH_POLICY`. Reset removes that saved
+  context entry and returns controlled roots to the default inherited policy
+  immediately.
+- Safe-text editor ergonomics are now covered for the existing guarded
+  `SAVE_TEXT` path: the panel shows wrap/font controls, dirty state, line/
+  character/byte/cursor metrics, a safe revert action, and mobile-safe toolbar
+  wrapping while still requiring the existing confirmation checkbox and phrase.
+- Broader source-tree write policy remains layered; the current source-code
+  capability is intentionally limited to existing small-file `SAVE_SOURCE`
+  edits, single-file `SOURCE_CREATE_FILE` creation, and same-directory
+  `SOURCE_RENAME` plus single-file recoverable `SOURCE_TRASH` under explicitly
+  enabled source roots. Source queue operations remain future slices. The queue-backed destructive
+  path for ordinary writable roots is recoverable by default, has a dedicated
+  restore-history view, and now includes explicit permanent purge for
+  queue-created trash entries only.

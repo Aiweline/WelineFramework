@@ -1124,7 +1124,7 @@ html.dark .auth-form__select {
                         window.location.href = (resp.redirect || '/customer/account');
                     }, 800);
                 } else {
-                    handleLoginError((resp && resp.message) || '<lang>登录失败，请检查用户名和密码</lang>');
+                    handleLoginError((resp && resp.message) || <?= json_encode((string)__('登录失败，请检查用户名和密码'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                 }
             })
             .catch(function(error) {
@@ -1133,7 +1133,7 @@ html.dark .auth-form__select {
                 var errorMsg = (parsedErr && parsedErr.message) ||
                     (errData && typeof errData === 'object' && (errData.message || errData.msg)) ||
                     (error && error.message) ||
-                    '<lang>登录请求失败，请稍后重试</lang>';
+                    <?= json_encode((string)__('登录请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
                 handleLoginError(errorMsg);
             });
         });
@@ -1143,7 +1143,7 @@ html.dark .auth-form__select {
             errEl.removeAttribute('hidden');
             var errText = document.getElementById('errorText');
             if (errText) {
-                errText.innerHTML = message;
+                errText.textContent = message;
             }
 
             var rect = errEl.getBoundingClientRect();

@@ -27,8 +27,6 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
     <link href='@static(Weline_Admin::assets/css/icons.min.css)' rel='stylesheet' type='text/css'/>
     <!-- App Css-->
     <link href='@static(Weline_Admin::assets/css/app.min.css)' id='app-style' rel='stylesheet' type='text/css'/>
-    <!-- Font Awesome图标库 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- 加载i18n.js以支持语言切换 -->
     <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
     <style>
@@ -181,7 +179,7 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
                             <a href="@url('/')" class='btn btn-primary'>
                                 <lang>返回首页重试</lang>
                             </a>
-                            <button type="button" class='btn btn-secondary ms-2' onclick="location.reload()">
+                            <button type="button" class='btn btn-secondary ms-2' data-maintenance-reload="1">
                                 <lang>刷新</lang>
                             </button>
                         </div>
@@ -265,6 +263,23 @@ $maintenanceHtmlLang = str_replace('_', '-', $maintenanceLang);
 <script src="@static(Weline_Admin::assets/libs/metismenu/metisMenu.min.js)"></script>
 <script src="@static(Weline_Admin::assets/libs/simplebar/simplebar.min.js)"></script>
 <script src="@static(Weline_Admin::assets/libs/node-waves/waves.min.js)"></script>
+<script>
+(function() {
+    'use strict';
+
+    document.addEventListener('click', function(event) {
+        var target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        if (target.closest('[data-maintenance-reload]')) {
+            event.preventDefault();
+            window.location.reload();
+        }
+    });
+})();
+</script>
 
 </body>
 </html>

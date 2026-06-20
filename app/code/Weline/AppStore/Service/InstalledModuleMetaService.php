@@ -10,6 +10,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\MarketplaceMeta\MarketplaceMetaI18nSubmitter;
 use Weline\Framework\MarketplaceMeta\MarketplaceMetaReader;
+use Weline\Framework\MarketplaceMeta\MarketplaceTag;
 
 class InstalledModuleMetaService
 {
@@ -189,7 +190,7 @@ class InstalledModuleMetaService
             if (!is_array($tag)) {
                 continue;
             }
-            $code = (string)($tag['code'] ?? '');
+            $code = MarketplaceTag::normalizeCode((string)($tag['code'] ?? ''));
             if ($code === '') {
                 continue;
             }
@@ -197,7 +198,7 @@ class InstalledModuleMetaService
             $label = $this->tagLabel($tag, $code, $locale, $sourceLocale, $registry);
             $result[] = [
                 'code' => $code,
-                'type' => (string)($tag['type'] ?? ''),
+                'type' => MarketplaceTag::normalizeType((string)($tag['type'] ?? '')) ?: MarketplaceTag::typeFromCode($code),
                 'primary' => !empty($tag['primary']),
                 'label' => $label,
                 'seo_slug' => $this->tagSeoSlug($tag, $code, $registry),
@@ -215,13 +216,17 @@ class InstalledModuleMetaService
         $marketplaceMeta = is_array($apiSnapshot['marketplace_meta'] ?? null) ? $apiSnapshot['marketplace_meta'] : [];
         $tags = is_array($apiSnapshot['tags'] ?? null) ? $apiSnapshot['tags'] : [];
         $resolved = is_array($apiSnapshot['tags_resolved'] ?? null) ? $apiSnapshot['tags_resolved'] : [];
+        if ($tags === [] && is_array($marketplaceMeta['tags'] ?? null)) {
+            $tags = $marketplaceMeta['tags'];
+        }
         if ($marketplaceMeta === [] && $tags === [] && $resolved === []) {
             return [];
         }
 
         $sourceLocale = (string)($marketplaceMeta['source_locale'] ?? $marketplaceMeta['i18n']['source_locale'] ?? 'zh_Hans_CN');
-        if ($tags === [] && isset($resolved[$sourceLocale]) && is_array($resolved[$sourceLocale])) {
-            $tags = $resolved[$sourceLocale];
+        $resolvedByLocale = $this->normalizeResolvedTags($resolved, $sourceLocale);
+        if ($tags === [] && isset($resolvedByLocale[$sourceLocale])) {
+            $tags = $resolvedByLocale[$sourceLocale];
         }
 
         foreach ($tags as &$tag) {
@@ -232,12 +237,20 @@ class InstalledModuleMetaService
                 $tag = [];
                 continue;
             }
-            foreach ($resolved as $locale => $items) {
-                if (!is_array($items)) {
-                    continue;
-                }
+            $code = MarketplaceTag::normalizeCode((string)($tag['code'] ?? $tag['tag_code'] ?? ''));
+            if ($code === '') {
+                $tag = [];
+                continue;
+            }
+            $tag['code'] = $code;
+            $tag['type'] = MarketplaceTag::normalizeType((string)($tag['type'] ?? '')) ?: MarketplaceTag::typeFromCode($code);
+            foreach ($resolvedByLocale as $locale => $items) {
                 foreach ($items as $item) {
-                    if (is_array($item) && ($item['code'] ?? '') === ($tag['code'] ?? '') && !empty($item['label'])) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $itemCode = MarketplaceTag::normalizeCode((string)($item['code'] ?? $item['tag_code'] ?? ''));
+                    if ($itemCode === $code && !empty($item['label'])) {
                         $tag['labels'][$locale] = (string)$item['label'];
                     }
                 }
@@ -265,6 +278,39 @@ class InstalledModuleMetaService
             'surfaces' => is_array($marketplaceMeta['surfaces'] ?? null) ? $marketplaceMeta['surfaces'] : [],
             'seo' => is_array($marketplaceMeta['seo'] ?? null) ? $marketplaceMeta['seo'] : [],
         ];
+    }
+
+    /**
+     * @return array<string, array<int, array<string, mixed>>>
+     */
+    private function normalizeResolvedTags(array $resolved, string $sourceLocale): array
+    {
+        if ($resolved === []) {
+            return [];
+        }
+
+        $first = reset($resolved);
+        if (is_array($first) && (array_key_exists('code', $first) || array_key_exists('tag_code', $first))) {
+            return [$sourceLocale => array_values(array_filter($resolved, 'is_array'))];
+        }
+
+        $result = [];
+        foreach ($resolved as $locale => $items) {
+            if (!is_array($items)) {
+                continue;
+            }
+            $locale = trim((string)$locale);
+            if ($locale === '') {
+                $locale = $sourceLocale;
+            }
+            if (array_key_exists('code', $items) || array_key_exists('tag_code', $items)) {
+                $result[$locale] = [$items];
+                continue;
+            }
+            $result[$locale] = array_values(array_filter($items, 'is_array'));
+        }
+
+        return $result;
     }
 
     /**
@@ -315,7 +361,7 @@ class InstalledModuleMetaService
      */
     private function platformTagRegistry(): array
     {
-        $registry = $this->defaultTagRegistry();
+        $registry = array_replace($this->defaultTagRegistry(), $this->wlsPanelTagRegistry());
         if (!is_file(self::TAG_CACHE_FILE)) {
             return $registry;
         }
@@ -325,7 +371,12 @@ class InstalledModuleMetaService
             if (!is_array($tag) || empty($tag['code'])) {
                 continue;
             }
-            $registry[(string)$tag['code']] = $tag;
+            $code = MarketplaceTag::normalizeCode((string)$tag['code']);
+            if ($code === '') {
+                continue;
+            }
+            $tag['code'] = $code;
+            $registry[$code] = $tag;
         }
 
         return $registry;
@@ -352,6 +403,29 @@ class InstalledModuleMetaService
     }
 
     /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function wlsPanelTagRegistry(): array
+    {
+        return [
+            'module:wls' => ['code' => 'module:wls', 'label' => 'WLS Panel', 'seo_slug' => 'wls-panel'],
+            'custom:wls-file-manager' => ['code' => 'custom:wls-file-manager', 'label' => 'WLS File Manager', 'seo_slug' => 'wls-file-manager'],
+            'custom:wls-deploy' => ['code' => 'custom:wls-deploy', 'label' => 'WLS Deploy', 'seo_slug' => 'wls-deploy'],
+            'custom:wls-php-manager' => ['code' => 'custom:wls-php-manager', 'label' => 'WLS PHP Manager', 'seo_slug' => 'wls-php-manager'],
+            'custom:wls-database-manager' => ['code' => 'custom:wls-database-manager', 'label' => 'WLS Database Manager', 'seo_slug' => 'wls-database-manager'],
+            'category:server-tools' => ['code' => 'category:server-tools', 'label' => 'Server Tools', 'seo_slug' => 'server-tools'],
+            'feature:file-manager' => ['code' => 'feature:file-manager', 'label' => 'File Manager', 'seo_slug' => 'file-manager'],
+            'feature:tag-deploy' => ['code' => 'feature:tag-deploy', 'label' => 'Tag Deploy', 'seo_slug' => 'tag-deploy'],
+            'feature:php-config' => ['code' => 'feature:php-config', 'label' => 'PHP Config', 'seo_slug' => 'php-config'],
+            'feature:database-profile' => ['code' => 'feature:database-profile', 'label' => 'Database Profile', 'seo_slug' => 'database-profile'],
+            'capability:files-read' => ['code' => 'capability:files-read', 'label' => 'Files Read', 'seo_slug' => 'files-read'],
+            'capability:files-write' => ['code' => 'capability:files-write', 'label' => 'Files Write', 'seo_slug' => 'files-write'],
+            'system:true' => ['code' => 'system:true', 'label' => 'System Module', 'seo_slug' => 'system-module'],
+            'system:false' => ['code' => 'system:false', 'label' => 'Third-party Module', 'seo_slug' => 'third-party-module'],
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $tag
      * @param array<string, array<string, mixed>> $registry
      */
@@ -371,8 +445,7 @@ class InstalledModuleMetaService
             return (string)__((string)$registry[$code]['label']);
         }
 
-        $last = (string)preg_replace('/^.*[._]/', '', $code);
-        return ucwords(str_replace(['-', '_'], ' ', $last));
+        return MarketplaceTag::humanLabel($code);
     }
 
     /**
@@ -387,7 +460,7 @@ class InstalledModuleMetaService
             return $slug;
         }
 
-        return str_replace(['.', '_'], '-', $code);
+        return MarketplaceTag::seoSlug($code);
     }
 
     /**
@@ -406,9 +479,9 @@ class InstalledModuleMetaService
             if (!is_array($tag)) {
                 continue;
             }
-            $code = (string)($tag['code'] ?? '');
-            if (str_starts_with($code, 'surface.')) {
-                $surfaces[substr($code, strlen('surface.'))] = true;
+            $surface = MarketplaceTag::surfaceFromCode((string)($tag['code'] ?? ''));
+            if ($surface !== '') {
+                $surfaces[$surface] = true;
             }
         }
 
@@ -422,7 +495,10 @@ class InstalledModuleMetaService
             if (!is_array($tag) || empty($tag['code'])) {
                 continue;
             }
-            $code = (string)$tag['code'];
+            $code = MarketplaceTag::normalizeCode((string)$tag['code']);
+            if ($code === '') {
+                continue;
+            }
             if ($fallback === '') {
                 $fallback = $code;
             }

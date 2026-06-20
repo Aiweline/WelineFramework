@@ -123,13 +123,27 @@ new Swiper('.swiper-container', {
 
 
 // Contact Form
+function renderFormMessage(targetId, type, message) {
+  var target = document.getElementById(targetId);
+  if (!target) {
+    return;
+  }
+
+  target.textContent = "";
+
+  var messageNode = document.createElement("div");
+  messageNode.className = "alert alert-" + type;
+  messageNode.textContent = String(message || "");
+  target.appendChild(messageNode);
+}
+
 function validateForm() {
   var name = document.forms["myForm"]["name"].value;
   var email = document.forms["myForm"]["email"].value;
   var subject = document.forms["myForm"]["subject"].value;
   var comments = document.forms["myForm"]["comments"].value;
   document.getElementById("error-msg").style.opacity = 0;
-  document.getElementById('error-msg').innerHTML = "";
+  document.getElementById('error-msg').textContent = "";
   if (name == "" || name == null) {
       document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*请输入称呼*</div>";
       fadeIn();
@@ -152,7 +166,7 @@ function validateForm() {
   }
 
   if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-      document.getElementById('error-msg').innerHTML = "<div class='alert alert-danger'>Contact service is unavailable.</div>";
+      renderFormMessage('error-msg', 'danger', "Contact service is unavailable.");
       fadeIn();
       return false;
   }
@@ -168,18 +182,18 @@ function validateForm() {
       })
       .then(function (data) {
           if (data && data.success) {
-              document.getElementById("simple-msg").innerHTML = data.message || "Message sent.";
+              document.getElementById("simple-msg").textContent = data.message || "Message sent.";
               document.forms["myForm"]["name"].value = "";
               document.forms["myForm"]["email"].value = "";
               document.forms["myForm"]["subject"].value = "";
               document.forms["myForm"]["comments"].value = "";
               return;
           }
-          document.getElementById('error-msg').innerHTML = "<div class='alert alert-danger'>" + ((data && data.message) || "Message send failed.") + "</div>";
+          renderFormMessage('error-msg', 'danger', (data && data.message) || "Message send failed.");
           fadeIn();
       })
       .catch(function (error) {
-          document.getElementById('error-msg').innerHTML = "<div class='alert alert-danger'>" + (error && error.message ? error.message : "Message send failed.") + "</div>";
+          renderFormMessage('error-msg', 'danger', error && error.message ? error.message : "Message send failed.");
           fadeIn();
       });
   return false;

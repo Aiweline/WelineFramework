@@ -1,3 +1,9 @@
+<?php
+$previewWidth = filter_var($this->getData('width'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 4096]]);
+$previewHeight = filter_var($this->getData('height'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 4096]]);
+$previewWidth = $previewWidth === false ? 50 : $previewWidth;
+$previewHeight = $previewHeight === false ? 50 : $previewHeight;
+?>
 <!-- 图片预览 -->
 <style media="screen">
     .file-target-preview {
@@ -13,8 +19,8 @@
         display: block;
         position: relative;
         float: left;
-        width: <?= $this->getData('width') ?? 50 ?>px;
-        height: <?= $this->getData('height') ?? 50 ?>px;
+        width: <?= $previewWidth ?>px;
+        height: <?= $previewHeight ?>px;
         border: 1px solid #CCC;
     }
 
@@ -55,7 +61,7 @@
 <div id="{{target}}-preview" class="file-target-preview">
     <foreach name="value_items" key="k">
         <div class="drag-item" draggable="true">
-            <div class="close" onclick="delSelectedImage(event)">x</div>
+            <div class="close" role="button" tabindex="0">x</div>
             <img data-src="{{v.path}}" src="{{v.url}}" alt="{{v.pathInfo.name}}"
                  title="{{v.pathInfo.name}}({{v.pathInfo.size}})"
                  class="drag-pic img-responsive"
@@ -95,15 +101,27 @@
 
     function addSelectedImage(event) {
         var node = document.getElementById('{{target}}-preview')
-        var wrapper = document.createElement('div');
-        wrapper.innerHTML = `
-        <div class="drag-item" draggable="true">
-            <div class="close" onclick="delSelectedImage(event)">x</div>
-            <img data-src="" src="" alt="" class="drag-pic img-responsive" draggable="false" data-file="">
-        </div>
-`;
-        var html = wrapper.firstChild;
-        node.appendChild(html)
+        var item = document.createElement('div');
+        item.className = 'drag-item';
+        item.draggable = true;
+
+        var close = document.createElement('div');
+        close.className = 'close';
+        close.setAttribute('role', 'button');
+        close.setAttribute('tabindex', '0');
+        close.textContent = 'x';
+
+        var img = document.createElement('img');
+        img.setAttribute('data-src', '');
+        img.src = '';
+        img.alt = '';
+        img.className = 'drag-pic img-responsive';
+        img.draggable = false;
+        img.setAttribute('data-file', '');
+
+        item.appendChild(close);
+        item.appendChild(img);
+        node.appendChild(item)
     }
 
     function delSelectedImage(event) {
@@ -136,18 +154,30 @@
 
     flushSelectedImage()
 
+    $('#{{target}}-preview').on('click', '.close', delSelectedImage)
+    $('#{{target}}-preview').on('keydown', '.close', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            delSelectedImage(event)
+        }
+    })
+
     $('#{{target}}-preview').on('click', 'img', function () {
-        let src = $(this).attr('data-src');
+        let src = String($(this).attr('data-src') || '');
         let isSvg = src.toLowerCase().endsWith('.svg');
         let fullSrc = isSvg ? '/pub/media/' + src : '/media/image/' + src;
         let zoomModal = $('#{{target}}-zoom-modal');
         let zoomPreviewImageBody = $('#{{target}}-zoom-preview-image-body');
         zoomPreviewImageBody.empty();
+        let previewImage = document.createElement('img');
+        previewImage.src = fullSrc;
+        previewImage.className = 'img-fluid';
+        previewImage.alt = '';
         if (isSvg) {
-            zoomPreviewImageBody.append(`<img src="${fullSrc}" class="img-fluid" style="background: #fff; padding: 20px;" alt="">`);
-        } else {
-            zoomPreviewImageBody.append(`<img src="${fullSrc}" class="img-fluid" alt="">`);
+            previewImage.style.background = '#fff';
+            previewImage.style.padding = '20px';
         }
+        zoomPreviewImageBody.append(previewImage);
         zoomModal.modal('show');
     })
 </script>

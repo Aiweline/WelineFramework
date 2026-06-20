@@ -14,6 +14,31 @@
     function q(root, sel) { return root.querySelector(sel); }
     function qa(root, sel) { return root.querySelectorAll(sel); }
 
+    function normalizeIconClassName(value) {
+        value = (value || '').trim().replace(/\s+/g, ' ');
+        if (!value) return '';
+        var tokens = value.split(' ');
+        if (tokens.length > 8) return '';
+        for (var i = 0; i < tokens.length; i++) {
+            if (!/^[A-Za-z0-9_-]{1,64}$/.test(tokens[i])) return '';
+        }
+        return tokens.join(' ');
+    }
+
+    function renderIconPreview(previewDisplay, value) {
+        if (!previewDisplay) return;
+        while (previewDisplay.firstChild) {
+            previewDisplay.removeChild(previewDisplay.firstChild);
+        }
+        var icon = doc.createElement('i');
+        var className = normalizeIconClassName(value);
+        var tokens = className ? className.split(' ') : ['w-param-placeholder-icon'];
+        tokens.forEach(function (token) {
+            icon.classList.add(token);
+        });
+        previewDisplay.appendChild(icon);
+    }
+
     function initForms(root) {
         root = root || doc;
         var forms = [];
@@ -490,11 +515,9 @@
             var clearBtn = q(wrapper, '.w-param-icon-clear');
 
             function setValue(val) {
-                val = (val || '').trim();
+                val = normalizeIconClassName(val);
                 if (hiddenInput) hiddenInput.value = val;
-                if (previewDisplay) {
-                    previewDisplay.innerHTML = val ? '<i class="' + val.replace(/"/g, '&quot;') + '"></i>' : '<i class="w-param-placeholder-icon"></i>';
-                }
+                renderIconPreview(previewDisplay, val);
                 if (panel) panel.style.display = 'none';
             }
             if (trigger && panel) {

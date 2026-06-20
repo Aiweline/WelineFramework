@@ -47,6 +47,8 @@
         debug: false,
         modulesBaseUrl: '',
         modulesConfigUrl: '',
+        allowedRemoteModuleOrigins: [],
+        allowDevRemoteModuleScripts: false,
         assetVersion: 'dev',
         modulesConfig: null,
         api: {},
@@ -61,6 +63,77 @@
     };
 
     const runtimeConfig = {};
+
+    function isSafeCssVariableName(varName) {
+        return typeof varName === 'string' && /^--[A-Za-z0-9_-]+$/.test(varName.trim());
+    }
+
+    function isSafeCssVariableValue(value) {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return false;
+        }
+
+        const normalizedValue = String(value).trim();
+        if (!normalizedValue || normalizedValue.length > 1024) {
+            return false;
+        }
+
+        if (/[\x00-\x1F\x7F]/.test(normalizedValue)) {
+            return false;
+        }
+
+        if (/[;{}<>\\]/.test(normalizedValue)) {
+            return false;
+        }
+
+        return !(/\/\*|\*\/|@import\b|url\s*\(|expression\s*\(|javascript\s*:|data\s*:/i.test(normalizedValue));
+    }
+
+    function getAllowedRemoteModuleOrigins() {
+        const origins = runtimeConfig.allowedRemoteModuleOrigins || runtimeConfig.remoteModuleScriptOrigins || [];
+        const list = Array.isArray(origins) ? origins : [origins];
+        return list
+            .map(origin => {
+                try {
+                    return new URL(String(origin), window.location.href).origin;
+                } catch (error) {
+                    return '';
+                }
+            })
+            .filter(Boolean);
+    }
+
+    function normalizeModuleScriptUrl(url) {
+        if (typeof url !== 'string' || !url.trim()) {
+            return '';
+        }
+
+        let parsedUrl;
+        try {
+            parsedUrl = new URL(url.trim(), window.location.href);
+        } catch (error) {
+            return '';
+        }
+
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            return '';
+        }
+
+        if (parsedUrl.origin === window.location.origin) {
+            return parsedUrl.href;
+        }
+
+        const allowedOrigins = getAllowedRemoteModuleOrigins();
+        if (allowedOrigins.includes(parsedUrl.origin)) {
+            return parsedUrl.href;
+        }
+
+        if (isDev && runtimeConfig.allowDevRemoteModuleScripts === true) {
+            return parsedUrl.href;
+        }
+
+        return '';
+    }
 
     function deepMerge(target, source) {
         if (!source || typeof source !== 'object') {
@@ -575,9 +648,9 @@
          * @returns {string} 实际URL
          */
         static resolve(modulePath) {
-            // 已经是完整URL，直接返回
+            // 完整 URL 只做规范化；真正加载前会统一校验 same-origin / 白名单。
             if (modulePath.startsWith('http://') || modulePath.startsWith('https://')) {
-                return modulePath;
+                return normalizeModuleScriptUrl(modulePath);
             }
 
             // 已经是绝对路径，直接返回
@@ -689,7 +762,17 @@
                 // 异步加载模块配置文件（不阻塞）
                 const script = document.createElement('script');
                 // 自动获取模块配置 URL
-                const modulesConfigUrl = this.getModulesConfigUrl();
+                const modulesConfigUrl = normalizeModuleScriptUrl(this.getModulesConfigUrl());
+                if (!modulesConfigUrl) {
+                    this.config = { modules: {}, moduleAliases: {} };
+                    this.loaded = true;
+                    this.loading = null;
+                    if (isDev) {
+                        console.warn('[Weline] 模块配置脚本被拒绝：仅允许相对路径、同源 URL 或显式白名单远程源');
+                    }
+                    resolve(this.config);
+                    return;
+                }
                 script.src = modulesConfigUrl;
                 script.async = true; // 异步加载，不阻塞
 
@@ -783,13 +866,21 @@
 
         loadScript(url, forceFresh = false) {
             return new Promise((resolve, reject) => {
-                const existingScript = document.querySelector(`script[src="${url}"]`);
+                const safeUrl = normalizeModuleScriptUrl(url);
+                if (!safeUrl) {
+                    reject(new Error(`[Weline] 脚本加载被拒绝: ${url}`));
+                    return;
+                }
+
+                const scriptUrl = this.getScriptUrl(safeUrl);
+                const existingScript = Array.prototype.some.call(document.scripts, function (script) {
+                    return script.src === safeUrl || script.src === scriptUrl;
+                });
                 if (existingScript && !forceFresh) {
                     resolve();
                     return;
                 }
 
-                const scriptUrl = this.getScriptUrl(url);
                 const script = document.createElement('script');
                 script.src = scriptUrl;
                 script.async = true;
@@ -2106,7 +2197,12 @@
                     .getPropertyValue(varName).trim();
             },
             setVariable: function (varName, value) {
-                document.documentElement.style.setProperty(varName, value);
+                if (!isSafeCssVariableName(varName) || !isSafeCssVariableValue(value)) {
+                    return false;
+                }
+
+                document.documentElement.style.setProperty(varName.trim(), String(value).trim());
+                return true;
             }
         },
 

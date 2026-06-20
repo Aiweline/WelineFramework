@@ -655,6 +655,9 @@ class MasterProcess
         if (isset($this->config['supervisor']) && \is_array($this->config['supervisor'])) {
             $wls['supervisor'] = \array_merge(\is_array($wls['supervisor'] ?? null) ? $wls['supervisor'] : [], $this->config['supervisor']);
         }
+        if (isset($this->config['gateway']) && \is_array($this->config['gateway'])) {
+            $wls['gateway'] = \array_merge(\is_array($wls['gateway'] ?? null) ? $wls['gateway'] : [], $this->config['gateway']);
+        }
         if (isset($this->config['runtime_strategy']) || isset($this->config['topology'])) {
             $wls['runtime'] = \array_merge(\is_array($wls['runtime'] ?? null) ? $wls['runtime'] : [], [
                 'strategy' => (string)($this->config['runtime_strategy'] ?? ($wls['runtime']['strategy'] ?? 'auto')),
@@ -1077,6 +1080,7 @@ class MasterProcess
             'dispatcher_enabled',
             'worker_port',
             'worker_base_port',
+            'gateway',
             'http_redirect_port',
             'started_by',
             'started_at',

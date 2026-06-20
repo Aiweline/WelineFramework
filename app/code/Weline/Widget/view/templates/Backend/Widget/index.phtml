@@ -11,6 +11,13 @@ $search = $this->getData('search') ?? '';
 $totalWidgetCount = count($allWidgets, COUNT_RECURSIVE) - count($allWidgets);
 $totalTypeCount = count($allWidgets);
 $totalModuleCount = count($modules);
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 <style>
     .widget-admin-toolbar .form-control,
@@ -32,7 +39,7 @@ $totalModuleCount = count($modules);
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item">
-                                        <a href="javascript: void(0);"><?= $breadcrumb_parent ?? __('内容管理') ?></a>
+                                        <span><?= $breadcrumb_parent ?? __('内容管理') ?></span>
                                     </li>
                                     <li class="breadcrumb-item active"><?= $breadcrumb_current ?? __('部件管理') ?></li>
                                 </ol>
@@ -45,7 +52,7 @@ $totalModuleCount = count($modules);
 (function () {
     'use strict';
 
-    var WIDGET_DETAIL_URL = '<?= $this->getBackendUrl('widget/backend/widget/detail') ?>';
+    var WIDGET_DETAIL_URL = <?= json_encode($this->getBackendUrl('widget/backend/widget/detail'), $jsonForScriptFlags) ?>;
 
     function escapeHtml(str) {
         if (str === null || str === undefined) return '';
@@ -158,6 +165,20 @@ $totalModuleCount = count($modules);
                 }
             });
     };
+
+    if (!window.__widgetDetailActionsBound) {
+        window.__widgetDetailActionsBound = true;
+        document.addEventListener('click', function (event) {
+            var trigger = event.target.closest('[data-widget-detail-trigger]');
+            if (!trigger) return;
+
+            event.preventDefault();
+            window.viewWidgetDetail(
+                trigger.getAttribute('data-widget-type') || '',
+                trigger.getAttribute('data-widget-name') || ''
+            );
+        });
+    }
 })();
 </js:part>
 
@@ -287,8 +308,11 @@ $totalModuleCount = count($modules);
                                                             <td><?= htmlspecialchars($widget['description'] ?? '') ?></td>
                                                             <td><?= htmlspecialchars($widget['version'] ?? '1.0.0') ?></td>
                                                             <td>
-                                                                <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                                        onclick="viewWidgetDetail('<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($name) ?>')">
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-outline-primary"
+                                                                        data-widget-detail-trigger
+                                                                        data-widget-type="<?= htmlspecialchars((string)$type, ENT_QUOTES, 'UTF-8') ?>"
+                                                                        data-widget-name="<?= htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') ?>">
                                                                     <i class="ri-eye-line"></i> <?= __('详情') ?>
                                                                 </button>
                                                             </td>

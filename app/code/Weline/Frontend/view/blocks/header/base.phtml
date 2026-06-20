@@ -24,6 +24,13 @@ if($area === 'frontend') {
 }
 $api_area = \Weline\Framework\App\Env::getInstance()->getConfig('api');
 $api_admin_area = \Weline\Framework\App\Env::getInstance()->getConfig('api_admin');
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 
 // 仅输出当前请求周期及 Theme 声明 JS 模块中实际用到的翻译
 $i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
@@ -83,8 +90,8 @@ endif;
         api_host: '{{api_host}}',
         api_area: '{{api_area}}',
         base_router: '{{base_router}}',
-        i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
-        themeConfig: <?=json_encode($themeConfig->getThemeConfig()) ?? '{}';?>,
+        i18n: <?= json_encode($i18nWords, $jsonForScriptFlags) ?>,
+        themeConfig: <?= json_encode($themeConfig->getThemeConfig(), $jsonForScriptFlags) ?: '{}'; ?>,
     }
     window.path = (path) => {
         path = path.replace('*', '{{base_router}}')

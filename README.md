@@ -1,6 +1,6 @@
 # WelineFramework
 
-![WelineFramework logo](./app/code/Weline/Admin/view/statics/assets/images/logo-weline-default.svg)
+![WelineFramework cover](./docs/assets/readme/weline-framework-cover.en.png)
 
 **Build modular PHP business systems with clear module boundaries, generated routes, attribute-driven ORM, theme extensibility, and WLS long-running services.**
 

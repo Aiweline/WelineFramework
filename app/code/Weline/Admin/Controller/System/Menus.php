@@ -15,6 +15,7 @@ use Weline\Admin\Controller\BaseController;
 use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Service\ResourceTreeServiceInterface;
+use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -62,6 +63,7 @@ class Menus extends BaseController
         return $this->fetch();
     }
 
+    #[AclAttribute('Weline_Admin::system_menu_delete', '删除菜单', 'mdi mdi-delete-outline', '删除后台菜单资源', 'Weline_Admin::system_menu_manager', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postDelete()
     {
         try {
@@ -91,6 +93,7 @@ class Menus extends BaseController
         }
     }
 
+    #[AclAttribute('Weline_Admin::system_menu_save', '保存菜单', 'mdi mdi-content-save-outline', '新增或更新后台菜单资源', 'Weline_Admin::system_menu_manager', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postSave()
     {
         try {
@@ -196,6 +199,7 @@ class Menus extends BaseController
     /**
      * 更新菜单排序
      */
+    #[AclAttribute('Weline_Admin::system_menu_update_order', '更新菜单排序', 'mdi mdi-sort', '更新后台菜单排序', 'Weline_Admin::system_menu_manager', accessMode: Acl::ACCESS_MODE_EDIT)]
     public function postUpdateOrder()
     {
         try {
@@ -225,6 +229,7 @@ class Menus extends BaseController
     /**
      * 获取菜单详情（用于编辑）
      */
+    #[AclAttribute('Weline_Admin::system_menu_detail', '查看菜单详情', 'mdi mdi-eye-outline', '查看后台菜单资源详情', 'Weline_Admin::system_menu_manager', accessMode: Acl::ACCESS_MODE_READ)]
     public function getDetail()
     {
         try {

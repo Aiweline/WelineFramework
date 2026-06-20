@@ -11,6 +11,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Console\Server\Hosts\Add as HostsAddCommand;
 use Weline\Server\Model\AttackLog;
 use Weline\Server\Model\SslCertificate as CertModel;
+use Weline\Server\Model\WlsPanelProject;
 use Weline\Server\Service\Control\BackendStatusService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
@@ -20,6 +21,7 @@ use Weline\Server\Service\HostsFileManager;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\OptimizationGuideService;
 use Weline\Server\Service\SslCertificateService;
+use Weline\Server\Service\WlsPanelProjectRegistryService;
 
 /**
  * Weline Server 统一查询器
@@ -75,6 +77,7 @@ class ServerQueryProvider implements QueryProviderInterface
             'memoryPersist' => $this->memoryPersist(),
             'memoryGc' => $this->memoryGc($params),
             'attackStats' => $this->attackStats($params),
+            'wlsPanelProject' => $this->wlsPanelProject($params),
             'setHealthAllowCookie' => $this->setHealthAllowCookie(),
             'optimizationData' => $this->optimizationData(),
             'listCertificates' => $this->listCertificates(),
@@ -235,6 +238,20 @@ class ServerQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load WLS attack stats',
+                ],
+                [
+                    'name' => 'wlsPanelProject',
+                    'description' => __('Resolve a WLS Panel managed project for plugin context'),
+                    'frontend' => false,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'project_id', 'type' => 'int', 'required' => false, 'description' => __('Managed project ID')],
+                        ['name' => 'domain', 'type' => 'string', 'required' => false, 'description' => __('Managed project domain')],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Resolve WLS Panel project context',
                 ],
                 [
                     'name' => 'setHealthAllowCookie',
@@ -708,6 +725,81 @@ class ServerQueryProvider implements QueryProviderInterface
             'success' => true,
             'data' => $this->attackLog()->getStatistics($instance, $days),
         ];
+    }
+
+    private function wlsPanelProject(array $params): array
+    {
+        if (!$this->isBackendLoggedIn()) {
+            return ['success' => false, 'found' => false, 'message' => __('请先登录后台'), 'project' => []];
+        }
+
+        $projectId = (int)($params['project_id'] ?? $params['id'] ?? 0);
+        $domain = \strtolower(\trim((string)($params['domain'] ?? '')));
+        if ($projectId <= 0 && $domain === '') {
+            return [
+                'success' => true,
+                'found' => false,
+                'message' => (string)__('Managed project context is empty.'),
+                'project' => [],
+            ];
+        }
+
+        try {
+            /** @var WlsPanelProjectRegistryService $registry */
+            $registry = ObjectManager::getInstance(WlsPanelProjectRegistryService::class);
+            if ($projectId > 0) {
+                $project = $registry->loadProject($projectId);
+            } else {
+                /** @var WlsPanelProject $project */
+                $project = ObjectManager::getInstance(WlsPanelProject::class, [], false);
+                $project = $project->loadByDomain($domain);
+            }
+
+            if (!$project->getData(WlsPanelProject::schema_fields_ID)) {
+                return [
+                    'success' => true,
+                    'found' => false,
+                    'message' => (string)__('Managed project was not found.'),
+                    'project' => [],
+                ];
+            }
+
+            $data = $project->getData();
+            $card = $registry->projectToCard($data);
+            $projectPath = \trim((string)($data[WlsPanelProject::schema_fields_PROJECT_PATH] ?? ''));
+            $realPath = $projectPath !== '' ? \realpath($projectPath) : false;
+            $pathReal = \is_string($realPath) ? \str_replace('\\', '/', $realPath) : '';
+
+            return [
+                'success' => true,
+                'found' => true,
+                'message' => (string)__('Managed project context resolved.'),
+                'project' => [
+                    'id' => (int)($data[WlsPanelProject::schema_fields_ID] ?? 0),
+                    'name' => (string)($data[WlsPanelProject::schema_fields_NAME] ?? ''),
+                    'domain' => (string)($data[WlsPanelProject::schema_fields_DOMAIN] ?? ''),
+                    'status' => (string)($data[WlsPanelProject::schema_fields_STATUS] ?? ''),
+                    'admin_url' => (string)($data[WlsPanelProject::schema_fields_ADMIN_URL] ?? ''),
+                    'panel_url' => (string)($data[WlsPanelProject::schema_fields_PANEL_URL] ?? ''),
+                    'project_path' => $projectPath,
+                    'path_real' => $pathReal,
+                    'path_available' => $pathReal !== '' && \is_dir($pathReal),
+                    'php_profile' => (string)($data[WlsPanelProject::schema_fields_PHP_PROFILE] ?? ''),
+                    'database_profile' => (string)($data[WlsPanelProject::schema_fields_DATABASE_PROFILE] ?? ''),
+                    'gateway_enabled' => (int)($data[WlsPanelProject::schema_fields_GATEWAY_ENABLED] ?? 0),
+                    'backend' => (string)($card['backend'] ?? ''),
+                    'admin' => (string)($card['admin'] ?? ''),
+                    'panel' => (string)($card['panel'] ?? ''),
+                ],
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'found' => false,
+                'message' => $throwable->getMessage(),
+                'project' => [],
+            ];
+        }
     }
 
     private function setHealthAllowCookie(): array

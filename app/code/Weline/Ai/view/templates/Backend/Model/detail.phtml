@@ -119,7 +119,7 @@
     
     <div class="card mb-3">
         <div class="card-body text-center">
-            <button type="button" class="btn btn-primary" onclick="testConnection()">
+            <button type="button" class="btn btn-primary" data-ai-model-detail-action="test-connection">
                 <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
             </button>
         </div>
@@ -165,10 +165,11 @@
 (function() {
     'use strict';
 
-    window.testConnection = function() {
+    window.testConnection = function(button) {
         BackendConfirm.show('<?= __('确定要测试此模型的连接吗？') ?>').then(function(confirmed) {
             if (!confirmed) return;
-        var btn = event.target.closest('button');
+        var btn = button;
+        if (!btn) return;
         btn.disabled = true;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
 
@@ -255,5 +256,16 @@
         });
         });
     };
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-ai-model-detail-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        if (trigger.getAttribute('data-ai-model-detail-action') === 'test-connection') {
+            window.testConnection(trigger);
+        }
+    });
 })();
 </script>

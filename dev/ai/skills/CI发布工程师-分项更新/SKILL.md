@@ -2,8 +2,9 @@
 name: CI发布工程师-分项更新
 description: >-
   口令「分项」触发：当前核心仓（默认 E:\WelineFramework\DEV-workspace）先提交并推送当前核心分支，
-  再让 E:\WelineFramework\Framework-Official 下指定子项目执行 php bin/w core:update -b dev 同步最新核心代码；
+  再让 E:\WelineFramework\Framework-Official 下指定子项目执行 php bin/w core:update -b <branch> 同步最新核心代码；
   若站点 WLS 正在运行，更新后执行 server:reload。
+  用户只说「分项」时默认分支为 dev；用户说「分项 <分支>」时按指定分支处理。
   仅在用户明确说出口令「分项」时加载；不得因“子项”“分项目”“同步站点”等相近词自动触发。
   Keywords: 分项, fenxiang, core update, site core sync, update:core, core:update.
 version: 1.0.0
@@ -15,7 +16,7 @@ version: 1.0.0
 
 **分项 = 分项目同步核心代码。**
 
-`E:\WelineFramework\Framework-Official` 是分项子项目容器，里面的 `A2A`、`App`、`Bbs`、`Official`、`Skill`、`Tools`、`WeShop` 各自通过 `weline\bin\w` 运行。核心仓默认是 `E:\WelineFramework\DEV-workspace`，也可通过脚本 `-CoreRepo` 显式指定；当核心修复完成后，口令「分项」用于把当前核心分支推送到线上，再通知各子项目通过 `core:update` 拉取最新核心代码。
+`E:\WelineFramework\Framework-Official` 是分项子项目容器，里面的 `A2A`、`App`、`Bbs`、`Official`、`Skill`、`Tools`、`WeShop` 各自通过 `weline\bin\w` 运行。核心仓默认是 `E:\WelineFramework\DEV-workspace`，也可通过脚本 `-CoreRepo` 显式指定；当核心修复完成后，口令「分项」用于把当前核心分支推送到线上，再通知各子项目通过 `core:update` 拉取指定分支的最新核心代码。
 
 ## 全平台入口
 
@@ -29,6 +30,12 @@ version: 1.0.0
 ## 口令与范围
 
 **仅当用户消息包含口令 `分项` 时**，才加载并执行本技能。
+
+分支解析规则：
+
+- 用户只说 `分项`：目标分支为 `dev`。
+- 用户说 `分项 <分支名>`，例如 `分项 master`、`分项 release/1.2`：目标分支为用户给出的 `<分支名>`。
+- 执行脚本时必须把解析出的分支传给 `-Branch`，或作为第一个位置参数传入；不要继续把 `dev` 写死。
 
 默认范围为 `E:\WelineFramework\Framework-Official` 内固定 7 个子项目：
 
@@ -47,17 +54,17 @@ version: 1.0.0
 ## 执行语义
 
 1. 确认核心仓是 git 仓库，默认 `E:\WelineFramework\DEV-workspace`，或用户通过 `-CoreRepo` 指定的仓库。
-2. 确认当前核心分支与目标更新分支一致；默认目标分支为 `dev`。
+2. 确认当前核心分支与目标更新分支一致；默认目标分支为 `dev`，若用户在 `分项` 后提供分支名则使用该分支。
 3. 检查核心仓待提交文件，拒绝提交 `.env`、`app/etc/env.php`、私钥、证书等敏感文件。
 4. 若核心仓有变更：
    - `git add -A`
    - `git diff --cached --check`
    - `git commit -m "core: 分项同步核心更新"`（可按任务改更具体提交信息）
 5. 推送当前 HEAD 到线上：
-   - `git push origin HEAD:dev`
-   - 若存在 `github` remote，再执行 `git push github HEAD:dev`
+   - `git push origin HEAD:<branch>`
+   - 若存在 `github` remote，再执行 `git push github HEAD:<branch>`
 6. 对每个站点项目执行：
-   - `php bin/w core:update -b dev`
+   - `php bin/w core:update -b <branch>`
 7. 每个站点更新成功后执行：
    - `php bin/w server:reload -n`
    - `server:reload` 自身会检测运行实例；有 WLS Worker 时发送重载，没有运行实例时只提示并跳过，不启动新 WLS。
@@ -71,10 +78,16 @@ version: 1.0.0
 .\dev\tools\fenxiang\fenxiang-update.ps1
 ```
 
-显式指定分支或提交信息：
+显式指定分支（第一个位置参数）：
 
 ```powershell
-.\dev\tools\fenxiang\fenxiang-update.ps1 -Branch dev -CommitMessage "core: 修复升级 registry stale 信息清理"
+.\dev\tools\fenxiang\fenxiang-update.ps1 master
+```
+
+显式指定分支和提交信息：
+
+```powershell
+.\dev\tools\fenxiang\fenxiang-update.ps1 release/1.2 -CommitMessage "core: 修复升级 registry stale 信息清理"
 ```
 
 工作区有无关改动时，只提交指定核心路径：
@@ -104,8 +117,8 @@ version: 1.0.0
 ## 强制约束
 
 - 无口令 `分项` 不得执行本技能。
-- 默认分支是 `dev`；如果当前分支不是 `dev`，停止并说明，除非用户明确指定其他分支。
-- 不要手工拷贝核心文件到站点；站点必须通过 `php bin/w core:update -b dev` 更新。
+- 默认分支是 `dev`；如果用户说 `分项 <分支名>`，必须使用该分支；如果当前核心分支与目标分支不一致，停止并说明。
+- 不要手工拷贝核心文件到站点；站点必须通过 `php bin/w core:update -b <branch>` 更新。
 - 不要修改站点项目级模块目录作为分项的一部分；`core:update` 只维护核心范围。
 - 提交前必须检查敏感文件，禁止提交 token、密钥、环境配置。
 - 若工作区存在无关改动，必须使用 `-IncludePaths` 限定本次提交范围，禁止把用户或其他任务改动混入分项提交。
@@ -120,6 +133,6 @@ version: 1.0.0
 
 - 核心仓分支、commit SHA、推送 remote 结果。
 - 每个站点实际项目根目录。
-- 每个站点 `php bin/w core:update -b dev` 的 PASS/FAIL。
+- 每个站点 `php bin/w core:update -b <branch>` 的 PASS/FAIL。
 - 每个站点 WLS reload 的 PASS/FAIL/SKIP。
 - 未更新或失败站点的下一步阻塞原因。

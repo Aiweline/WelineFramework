@@ -563,7 +563,7 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
     }
 
     function showRegisterError(clientError, message, focusEl) {
-        clientError.innerHTML = message;
+        clientError.textContent = message;
         clientError.hidden = false;
         clientError.classList.add('auth-form__error--shake');
         if (focusEl && typeof focusEl.focus === 'function') {
@@ -692,9 +692,9 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
                     }
                     setRegisterLoading(form, false);
                     if (!data || !data.message) {
-                        data = Object.assign({}, data || {}, { message: 'Registration failed, please try again later.' });
+                        data = Object.assign({}, data || {}, { message: <?= json_encode((string)__('注册失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> });
                     }
-                    showRegisterError(clientError, (data && data.message) || '<lang>娉ㄥ唽澶辫触锛岃绋嶅悗閲嶈瘯</lang>', null);
+                    showRegisterError(clientError, (data && data.message) || <?= json_encode((string)__('注册失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, null);
                 })
                 .catch(function(error) {
                     if (error && error.message === 'Weline.Api is unavailable.') {
@@ -704,9 +704,9 @@ $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
 
                     setRegisterLoading(form, false);
                     if (!error || !error.message) {
-                        error = new Error('Registration request failed, please try again later.');
+                        error = new Error(<?= json_encode((string)__('注册请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                     }
-                    showRegisterError(clientError, (error && error.message) || '<lang>娉ㄥ唽璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯</lang>', null);
+                    showRegisterError(clientError, (error && error.message) || <?= json_encode((string)__('注册请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, null);
                 });
         });
     });

@@ -1333,48 +1333,31 @@
                 }
             });
             // 在 iframe 中注入 JavaScript 代码
-            iframeWindow.document.write(`
-                <!DOCTYPE html>
-                <html lang="zh-CN">
-                <head>
-                    <meta charset="UTF-8">
-                    <title><lang>Pixel沙箱环境</lang></title>
-                </head>
-                <body>
-                    <script type="text/javascript">
-                        window.parent.postMessage('sandboxListen', '*');
-                        window.addEventListener('message', function(event) {
-                            window.WelinePixel.initData = event.data;
-                            if(window.WelinePixel.initData.eventName !== 'click') {
-                                if(window.WelinePixel.env_model === 'dev') {
-                                    console.log('@lang{系统级别事件}', window.WelinePixel.initData);
-                                }
-                                window.WelinePixel.send();
-                            }
-                            if(window.WelinePixel.env_model === 'dev') {
-                                console.log('@lang{自定义事件}', window.WelinePixel.initData);
-                            }
-                            
-                            var __welinePixelCustomCode = '';
-                            try {
-                                __welinePixelCustomCode = String(window.parent && window.parent.__WelinePixelCustomCode || '');
-                            } catch (e) {
-                            }
-                            if (__welinePixelCustomCode) {
-                                try {
-                                    (new Function(__welinePixelCustomCode)).call(window);
-                                } catch (e) {
-                                    if (window.parent && window.parent.console && typeof window.parent.console.warn === 'function') {
-                                        window.parent.console.warn('Weline Pixel custom code failed', e);
-                                    }
-                                }
-                            }
+            var iframeDocument = iframe.contentDocument || iframeWindow.document;
+            iframeDocument.body.textContent = '';
 
-                        });
-                    <\/script>
-                </body>
-                </html>
-            `);
+            var title = iframeDocument.createElement('title');
+            title.textContent = 'Pixel sandbox';
+            iframeDocument.head.appendChild(title);
+
+            var sandboxScript = iframeDocument.createElement('script');
+            sandboxScript.type = 'text/javascript';
+            sandboxScript.textContent = [
+                "window.parent.postMessage('sandboxListen', '*');",
+                "window.addEventListener('message', function(event) {",
+                "    window.WelinePixel.initData = event.data;",
+                "    if(window.WelinePixel.initData.eventName !== 'click') {",
+                "        if(window.WelinePixel.env_model === 'dev') {",
+                "            console.log('@lang{系统级别事件}', window.WelinePixel.initData);",
+                "        }",
+                "        window.WelinePixel.send();",
+                "    }",
+                "    if(window.WelinePixel.env_model === 'dev') {",
+                "        console.log('@lang{自定义事件}', window.WelinePixel.initData);",
+                "    }",
+                "});"
+            ].join('\n');
+            iframeDocument.body.appendChild(sandboxScript);
         };
 
         iframe.src = 'about:blank';

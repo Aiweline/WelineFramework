@@ -48,6 +48,19 @@
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
+function renderPushResult(resultDiv, type, message) {
+    if (!resultDiv) {
+        return;
+    }
+    while (resultDiv.firstChild) {
+        resultDiv.removeChild(resultDiv.firstChild);
+    }
+    var alert = document.createElement('div');
+    alert.className = 'alert alert-' + type;
+    alert.textContent = message == null ? '' : String(message);
+    resultDiv.appendChild(alert);
+}
+
 document.getElementById('push-form').addEventListener('submit', function(e) {
     e.preventDefault();
     
@@ -80,9 +93,9 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
         resultDiv.style.display = 'block';
         
         if (data.success) {
-            resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+            renderPushResult(resultDiv, 'success', data.message);
         } else {
-            resultDiv.innerHTML = '<div class="alert alert-danger">' + data.message + '</div>';
+            renderPushResult(resultDiv, 'danger', data.message);
         }
     })
     .catch(error => {
@@ -100,4 +113,3 @@ document.getElementById('push-form').addEventListener('submit', function(e) {
     });
 });
 </script>
-

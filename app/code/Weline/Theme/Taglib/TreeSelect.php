@@ -222,6 +222,21 @@ let options = staticOptions || [];
 let selectedValues = multiple ? [] : null;
 let isOpen = false;
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(text ?? '')));
+    return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function findNodeByValue(value) {
+    const target = String(value ?? '');
+    return Array.from(treeContainer.querySelectorAll('.w-tree-select-node')).find(node => node.dataset.value === target) || null;
+}
+
 // 加载数据
 function loadOptions() {
     if (options.length) {
@@ -273,8 +288,8 @@ function renderNodes(nodes, level) {
     
     let html = '';
     nodes.forEach(node => {
-        const val = node[valueField] || node.value;
-        const lbl = node[labelField] || node.label || node.name || val;
+        const val = String(node[valueField] || node.value || '');
+        const lbl = String(node[labelField] || node.label || node.name || val);
         const children = node[childrenField] || node.children || [];
         const hasChildren = children.length > 0;
         
@@ -285,7 +300,7 @@ function renderNodes(nodes, level) {
         const expandedClass = defaultExpandAll ? 'expanded' : '';
         const selectedClass = isSelected ? 'selected' : '';
         
-        html += '<div class="w-tree-select-node ' + expandedClass + ' ' + selectedClass + '" data-value="' + val + '" data-label="' + lbl + '">';
+        html += '<div class="w-tree-select-node ' + expandedClass + ' ' + selectedClass + '" data-value="' + escapeAttr(val) + '" data-label="' + escapeAttr(lbl) + '">';
         html += '<div class="w-tree-select-node-content">';
         
         // 展开图标
@@ -302,7 +317,7 @@ function renderNodes(nodes, level) {
         }
         
         // 标签
-        html += '<span class="w-tree-select-node-label">' + lbl + '</span>';
+        html += '<span class="w-tree-select-node-label">' + escapeHtml(lbl) + '</span>';
         html += '</div>';
         
         // 子节点
@@ -447,12 +462,12 @@ function updateUI() {
             // 渲染标签
             const labels = [];
             selectedValues.forEach(val => {
-                const node = treeContainer.querySelector('.w-tree-select-node[data-value="' + val + '"]');
+                const node = findNodeByValue(val);
                 if (node) labels.push(node.dataset.label);
             });
             
             tagsContainer.innerHTML = labels.map((lbl, idx) => {
-                return '<span class="w-tree-select-tag">' + lbl + 
+                return '<span class="w-tree-select-tag">' + escapeHtml(lbl) +
                     '<span class="w-tree-select-tag-remove" data-index="' + idx + '">&times;</span></span>';
             }).join('');
             
@@ -464,7 +479,7 @@ function updateUI() {
                     const val = selectedValues[idx];
                     selectedValues.splice(idx, 1);
                     
-                    const node = treeContainer.querySelector('.w-tree-select-node[data-value="' + val + '"]');
+                    const node = findNodeByValue(val);
                     if (node) {
                         node.classList.remove('selected');
                         const cb = node.querySelector('.w-tree-select-node-checkbox');
@@ -487,7 +502,7 @@ function updateUI() {
         // 单选模式
         if (selectedValues) {
             container.classList.add('has-value');
-            const node = treeContainer.querySelector('.w-tree-select-node[data-value="' + selectedValues + '"]');
+            const node = findNodeByValue(selectedValues);
             display.textContent = node ? node.dataset.label : selectedValues;
             hidden.value = selectedValues;
         } else {

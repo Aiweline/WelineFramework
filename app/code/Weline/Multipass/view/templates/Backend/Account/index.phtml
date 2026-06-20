@@ -243,21 +243,44 @@ $userType = $this->getData('user_type') ?? 'backend';
             return;
         }
         
+        function escapeHtml(value) {
+            var div = document.createElement('div');
+            div.textContent = value === null || value === undefined ? '' : String(value);
+            return div.innerHTML;
+        }
+
+        function escapeAttr(value) {
+            return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function safeImageUrl(value) {
+            if (!value) {
+                return '';
+            }
+
+            try {
+                var url = new URL(String(value), window.location.origin);
+                return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+            } catch (e) {
+                return '';
+            }
+        }
+
         var html = '';
         users.forEach(function(user) {
-            var username = (user.username || user.user_id || '').toString().replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            var email = (user.email || '').toString().replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            var avatar = (user.avatar || '').toString().replace(/"/g, '&quot;');
+            var username = (user.username || user.user_id || '').toString();
+            var email = (user.email || '').toString();
+            var avatar = safeImageUrl(user.avatar || '');
             var userId = user.user_id || user.id;
             var firstLetter = username ? username.charAt(0).toUpperCase() : '?';
             
-            html += '<div class="weline-multipass-user-card" data-user-id="' + userId + '" data-username="' + username + '" data-email="' + email + '">' +
+            html += '<div class="weline-multipass-user-card" data-user-id="' + escapeAttr(userId) + '" data-username="' + escapeAttr(username) + '" data-email="' + escapeAttr(email) + '">' +
                 '<div class="d-flex align-items-center">' +
-                (avatar ? '<img src="' + avatar + '" class="rounded-circle me-2" width="40" height="40" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' : '') +
-                '<div class="rounded-circle bg-primary text-white me-2 d-flex align-items-center justify-content-center" style="width:40px;height:40px;' + (avatar ? 'display:none;' : '') + '">' + firstLetter + '</div>' +
+                (avatar ? '<img src="' + escapeAttr(avatar) + '" class="rounded-circle me-2" width="40" height="40" data-avatar-fallback>' : '') +
+                '<div class="rounded-circle bg-primary text-white me-2 d-flex align-items-center justify-content-center" style="width:40px;height:40px;' + (avatar ? 'display:none;' : '') + '">' + escapeHtml(firstLetter) + '</div>' +
                 '<div class="flex-grow-1">' +
-                '<div class="fw-bold">' + username + '</div>' +
-                (email ? '<div class="text-muted small">' + email + '</div>' : '') +
+                '<div class="fw-bold">' + escapeHtml(username) + '</div>' +
+                (email ? '<div class="text-muted small">' + escapeHtml(email) + '</div>' : '') +
                 '</div>' +
                 '<i class="mdi mdi-check-circle text-primary" style="display:none;"></i>' +
                 '</div>' +
@@ -270,6 +293,15 @@ $userType = $this->getData('user_type') ?? 'backend';
         document.querySelectorAll('.weline-multipass-user-card').forEach(function(card) {
             card.addEventListener('click', function() {
                 selectUser(this);
+            });
+        });
+
+        document.querySelectorAll('[data-avatar-fallback]').forEach(function(avatarImage) {
+            avatarImage.addEventListener('error', function() {
+                avatarImage.style.display = 'none';
+                if (avatarImage.nextElementSibling) {
+                    avatarImage.nextElementSibling.style.display = 'flex';
+                }
             });
         });
     }

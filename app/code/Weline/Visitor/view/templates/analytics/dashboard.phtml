@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>像素数据大屏展示</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="@static(Weline_Admin::assets/libs/chart.js/Chart.min.js)"></script>
     <script>
         window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
             modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
@@ -199,7 +199,7 @@
                 <option value="24" selected>最近24小时</option>
                 <option value="48">最近48小时</option>
             </select>
-            <button onclick="refreshData()" style="padding: 8px 20px; background: #667eea; border: none; border-radius: 5px; color: #fff; cursor: pointer;">刷新</button>
+            <button data-visitor-dashboard-refresh style="padding: 8px 20px; background: #667eea; border: none; border-radius: 5px; color: #fff; cursor: pointer;">刷新</button>
         </div>
     </div>
 
@@ -228,6 +228,12 @@
         }
 
         const baseUrl = getBaseUrl();
+        document.addEventListener('click', function(event) {
+            if (event.target.closest('[data-visitor-dashboard-refresh]')) {
+                event.preventDefault();
+                refreshData();
+            }
+        });
         const apiBase = 'worker:visitor.analytics';
         let visitorApiPromise = null;
         function getVisitorApi() {

@@ -3,6 +3,13 @@
  * 会话管理页面
  */
 $sessions = $this->getData('sessions') ?? [];
+$jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$htmlAttr = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$sessionText = [
+    'closeConfirm' => (string)__('确定要关闭此会话吗？'),
+    'closeSuccess' => (string)__('会话已关闭'),
+    'closeFailed' => (string)__('关闭失败'),
+];
 ?>
 <div class="customer-service-session">
     <div class="page-header">
@@ -10,7 +17,7 @@ $sessions = $this->getData('sessions') ?? [];
     </div>
     
     <div class="session-filters">
-        <select id="status-filter" class="form-control" onchange="filterSessions()">
+        <select id="status-filter" class="form-control">
             <option value=""><?= __('全部状态') ?></option>
             <option value="waiting"><?= __('等待中') ?></option>
             <option value="active"><?= __('进行中') ?></option>
@@ -66,11 +73,11 @@ $sessions = $this->getData('sessions') ?? [];
                             <td><?= $session['message_count'] ?? 0 ?></td>
                             <td><?= $session['created_at'] ?></td>
                             <td>
-                                <a href="<?= $this->getBackendUrl('customerservice/backend/session/view', ['session_id' => $session['session_id']]) ?>" class="btn btn-sm btn-primary">
+                                <a href="<?= $htmlAttr($this->getBackendUrl('customerservice/backend/session/view', ['session_id' => $session['session_id']])) ?>" class="btn btn-sm btn-primary">
                                     <?= __('查看') ?>
                                 </a>
                                 <?php if ($session['status'] !== 'closed'): ?>
-                                    <button class="btn btn-sm btn-danger" onclick="closeSession(<?= $session['session_id'] ?>)">
+                                    <button class="btn btn-sm btn-danger" data-session-action="close" data-session-id="<?= $htmlAttr($session['session_id'] ?? '') ?>">
                                         <?= __('关闭') ?>
                                     </button>
                                 <?php endif; ?>
@@ -84,6 +91,33 @@ $sessions = $this->getData('sessions') ?? [];
 </div>
 
 <script>
+const customerServiceSessionText = <?= json_encode($sessionText, $jsonForScriptFlags) ?>;
+const customerServiceSessionCloseUrl = <?= json_encode($this->getBackendUrl('customerservice/backend/session/close'), $jsonForScriptFlags) ?>;
+
+function showSessionToast(type, message) {
+    const text = String(message || customerServiceSessionText.closeFailed);
+    if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+        window.BackendToast[type](text);
+        return;
+    }
+    const logger = type === 'error' ? 'error' : 'log';
+    if (window.console && typeof window.console[logger] === 'function') {
+        window.console[logger](text);
+    }
+}
+
+function confirmSessionAction(message) {
+    if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+        return window.BackendConfirm.show(message);
+    }
+    showSessionToast('error', customerServiceSessionText.closeFailed);
+    return Promise.resolve(false);
+}
+
+function normalizeSessionId(value) {
+    return String(value == null ? '' : value).trim();
+}
+
 function filterSessions() {
     const status = document.getElementById('status-filter').value;
     const url = new URL(window.location.href);
@@ -96,26 +130,50 @@ function filterSessions() {
 }
 
 function closeSession(sessionId) {
-    if (!confirm('<?= __('确定要关闭此会话吗？') ?>')) {
+    sessionId = normalizeSessionId(sessionId);
+    if (!sessionId) {
         return;
     }
-    
-    var url = '<?= $this->getBackendUrl("customerservice/backend/session/close") ?>';
-    var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ session_id: sessionId }) };
-    window.Weline.Api.request(url, opts)
-    .then(function(res) {
-        var data = (res && res.data) !== undefined ? res.data : res;
-        if (data.success) {
-            alert('<?= __('会话已关闭') ?>');
-            location.reload();
-        } else {
-            alert(data.message || '<?= __('关闭失败') ?>');
+    confirmSessionAction(customerServiceSessionText.closeConfirm).then(function(confirmed) {
+        if (!confirmed) {
+            return;
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('<?= __('关闭失败') ?>');
+
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ session_id: sessionId }) };
+        window.Weline.Api.request(customerServiceSessionCloseUrl, opts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
+            if (data.success) {
+                showSessionToast('success', customerServiceSessionText.closeSuccess);
+                setTimeout(function() { location.reload(); }, 800);
+            } else {
+                showSessionToast('error', data.message || customerServiceSessionText.closeFailed);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showSessionToast('error', customerServiceSessionText.closeFailed);
+        });
     });
 }
+
+document.addEventListener('change', function(event) {
+    if (event.target && event.target.id === 'status-filter') {
+        filterSessions();
+    }
+});
+
+document.addEventListener('click', function(event) {
+    const trigger = event.target.closest('[data-session-action]');
+    if (!trigger) {
+        return;
+    }
+
+    event.preventDefault();
+    const action = String(trigger.getAttribute('data-session-action') || '').trim();
+    if (action === 'close') {
+        closeSession(trigger.getAttribute('data-session-id'));
+    }
+});
 </script>
 

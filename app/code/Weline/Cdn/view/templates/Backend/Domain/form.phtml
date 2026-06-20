@@ -10,6 +10,13 @@ $adapters = $this->getData('adapters') ?: [];
 $websites = $this->getData('websites') ?: [];
 $accounts = $this->getData('accounts') ?: [];
 $isEdit = $domain && $domain->getId() ? true : false;
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
 <!-- 消息提示 -->
@@ -134,7 +141,7 @@ $isEdit = $domain && $domain->getId() ? true : false;
     'use strict';
     
     var indexUrl = '<?= $this->getBackendUrl('*/backend/domain/index') ?>';
-    var accountsByAdapter = <?= json_encode($accounts, JSON_UNESCAPED_UNICODE) ?>;
+    var accountsByAdapter = <?= json_encode($accounts, $jsonForScriptFlags) ?>;
     var currentDomainAccountId = <?= $domain && $domain->getData('account_id') ? (int)$domain->getData('account_id') : 'null' ?>;
     
     var domainForm = document.getElementById('domainForm');

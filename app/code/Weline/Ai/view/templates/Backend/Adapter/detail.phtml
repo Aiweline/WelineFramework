@@ -194,12 +194,12 @@
             <lang>返回列表</lang>
         </a>
         <?php if ($adapter->getData('is_active')): ?>
-            <button type="button" class="btn btn-warning" onclick="WelineAdapter.toggleStatus(<?= $adapter->getId() ?>)">
+            <button type="button" class="btn btn-warning" data-adapter-action="toggle-status" data-adapter-id="<?= (int)$adapter->getId() ?>">
                 <i class="mdi mdi-power me-1"></i>
                 <lang>禁用</lang>
             </button>
         <?php else: ?>
-            <button type="button" class="btn btn-success" onclick="WelineAdapter.toggleStatus(<?= $adapter->getId() ?>)">
+            <button type="button" class="btn btn-success" data-adapter-action="toggle-status" data-adapter-id="<?= (int)$adapter->getId() ?>">
                 <i class="mdi mdi-power me-1"></i>
                 <lang>启用</lang>
             </button>
@@ -217,6 +217,20 @@
     'use strict';
     
     var WelineAdapter = {
+        confirmAction: function(message, onConfirm) {
+            if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+                window.BackendConfirm.show(message).then(function(confirmed) {
+                    if (confirmed) {
+                        onConfirm();
+                    }
+                });
+                return;
+            }
+            if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+                window.BackendToast.error('<?= __('确认组件不可用，请刷新页面后重试。') ?>');
+            }
+        },
+
         toggleStatus: function(id) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -232,10 +246,9 @@
                     }
                 });
             } else {
-                if (!confirm('<?= __('确定要切换适配器状态吗？') ?>')) {
-                    return;
-                }
-                WelineAdapter.performToggleStatus(id);
+                WelineAdapter.confirmAction('<?= __('确定要切换适配器状态吗？') ?>', function() {
+                    WelineAdapter.performToggleStatus(id);
+                });
             }
         },
         
@@ -287,5 +300,16 @@
     };
     
     window.WelineAdapter = WelineAdapter;
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-adapter-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        if (trigger.getAttribute('data-adapter-action') === 'toggle-status') {
+            WelineAdapter.toggleStatus(parseInt(trigger.getAttribute('data-adapter-id') || '0', 10) || 0);
+        }
+    });
 })();
 </script>

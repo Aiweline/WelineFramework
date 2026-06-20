@@ -498,7 +498,7 @@ class MenuRenderService
                 
                 $html .= "<li data-source=\"{$sourceId}\" class=\"{$liClass}\">";
                 if ($hasNodes) {
-                    $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"{$aClass}\">";
+                    $html .= "<a href=\"#\" role=\"button\" data-source=\"{$sourceId}\" class=\"{$aClass}\" aria-expanded=\"{$ariaExpanded}\">";
                 } else {
                     $menuUrl = htmlspecialchars($menuUrl);
                     $html .= "<a href=\"{$menuUrl}\" data-source=\"{$sourceId}\" class=\"{$aClass}\">";
@@ -585,7 +585,7 @@ class MenuRenderService
                 } else {
                     // 没有路由的菜单项，渲染为不可点击的展示项
                     $html .= "<li data-source=\"{$sourceId}\" class=\"\">";
-                    $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"waves-effect disabled\" style=\"cursor: default;\">";
+                    $html .= "<a href=\"#\" role=\"button\" data-source=\"{$sourceId}\" class=\"waves-effect disabled\" aria-disabled=\"true\" tabindex=\"-1\" style=\"cursor: default;\">";
                     $html .= "<i class=\"{$icon}\"></i>";
                     $html .= "<span>{$title}</span>";
                     $html .= "</a>";
@@ -600,7 +600,7 @@ class MenuRenderService
                 $ariaExpanded = $hasActiveChild ? 'true' : 'false';
                 
                 $html .= "<li data-source=\"{$sourceId}\" class=\"{$liClass}\">";
-                $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"{$aClass}\">";
+                $html .= "<a href=\"#\" role=\"button\" data-source=\"{$sourceId}\" class=\"{$aClass}\" aria-expanded=\"{$ariaExpanded}\">";
                 $html .= "<i class=\"{$icon}\"></i>";
                 $html .= "<span>{$title}</span>";
                 $html .= "</a>";

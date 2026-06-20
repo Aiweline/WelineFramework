@@ -127,7 +127,10 @@ $getEventTypeBadgeClass = function ($eventType) {
                                 <td><?= htmlspecialchars($logData['message'] ?? '-') ?></td>
                                 <td><?= $logData['created_at'] ?? '-' ?></td>
                                 <td>
-                                    <button type="button" class="btn btn-sm btn-info" onclick="viewDetails(<?= $logData['log_id'] ?? $logData['id'] ?? 0 ?>)">
+                                    <button type="button"
+                                            class="btn btn-sm btn-info"
+                                            data-security-log-details="1"
+                                            data-log-id="<?= $logData['log_id'] ?? $logData['id'] ?? 0 ?>">
                                         <lang>查看详情</lang>
                                     </button>
                                 </td>
@@ -197,6 +200,21 @@ $getEventTypeBadgeClass = function ($eventType) {
     window.viewDetails = function(logId) {
         BackendToast.info('<?= __('查看日志ID：') ?>' + logId);
     };
+
+    document.addEventListener('click', function(event) {
+        var target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        var detailsBtn = target.closest('[data-security-log-details]');
+        if (!detailsBtn) {
+            return;
+        }
+
+        event.preventDefault();
+        window.viewDetails(detailsBtn.dataset.logId || '0');
+    });
 })();
 </script>
 

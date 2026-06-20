@@ -150,7 +150,7 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
                         </a>
                     </div>
                 </div>
-                <button type="button" class="btn btn-link text-muted" onclick="location.reload()" title="<?= __('刷新') ?>">
+                <button type="button" class="btn btn-link text-muted" data-meta-refresh title="<?= __('刷新') ?>">
                     <i class="mdi mdi-refresh"></i>
                 </button>
             </div>
@@ -378,6 +378,12 @@ $createUrl = $this->getBackendUrl('meta/backend/meta/edit');
     var copyBtn = document.getElementById('copyMetaJson');
     var currentJson = '{}';
     var metaModal;
+
+    document.querySelectorAll('[data-meta-refresh]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            window.location.reload();
+        });
+    });
 
     var ensureModal = function() {
         if (!metaModal) {

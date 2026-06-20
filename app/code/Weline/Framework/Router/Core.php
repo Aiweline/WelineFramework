@@ -805,6 +805,10 @@ class Core
         $url = $this->normalizeRouterUrlPathSegments($url);
         $is_api_admin = $this->request_area === \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND;
 
+        if (!$is_api_admin && $this->isExternalBinQueryApiUrl($url)) {
+            return $this->routeExternalBinQueryApi();
+        }
+
         if (!$is_api_admin && $this->isFrontendQueryBinApiUrl($url)) {
             return $this->routeFrontendQueryBinApi();
         }
@@ -854,6 +858,35 @@ class Core
         return $normalized === 'framework/query-bin'
             || $normalized === 'api/framework/query-bin'
             || ($prefixedQueryBin !== '' && $normalized === $prefixedQueryBin);
+    }
+
+    private function isExternalBinQueryApiUrl(string $url): bool
+    {
+        $normalized = \strtolower(\trim($url, '/'));
+        $restFrontendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/'));
+        $prefixedBinQuery = $restFrontendPrefix !== '' ? $restFrontendPrefix . '/bin/query' : '';
+
+        return $normalized === 'bin/query'
+            || ($prefixedBinQuery !== '' && $normalized === $prefixedBinQuery);
+    }
+
+    private function routeExternalBinQueryApi()
+    {
+        $this->router = [
+            'module' => Env::MODULE_FRAMEWORK,
+            'module_path' => Env::framework_code_path,
+            'router' => 'framework',
+            'class' => [
+                'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_REST_FRONTEND,
+                'name' => \Weline\Framework\Controller\Api\BinQuery::class,
+                'controller_name' => 'BinQuery',
+                'method' => 'postIndex',
+                'request_method' => 'POST',
+            ],
+            'type' => 'api',
+        ];
+
+        return $this->route();
     }
 
     private function routeFrontendQueryBinApi()
@@ -1134,6 +1167,9 @@ class Core
     {
         $url = $this->normalizeRouterUrlPathSegments($url);
         $is_pc_admin = $this->request_area === \Weline\Framework\Controller\Data\DataInterface::type_pc_BACKEND;
+        if (!$is_pc_admin && $this->isExternalBinQueryApiUrl($url)) {
+            return $this->routeExternalBinQueryApi();
+        }
         // 检测api路由区域
         if ($is_pc_admin) {
             $router_filepath = Env::path_BACKEND_PC_ROUTER_FILE;

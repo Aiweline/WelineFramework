@@ -501,7 +501,7 @@ $moduleCount = count($moduleSet);
             <h4 class='mb-sm-0'><?= __('插件管理') ?></h4>
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><?= __('系统') ?></a></li>
+                    <li class='breadcrumb-item'><span><?= __('系统') ?></span></li>
                     <li class='breadcrumb-item active'><?= __('插件管理') ?></li>
                 </ol>
             </div>
@@ -629,7 +629,7 @@ $moduleCount = count($moduleSet);
     }
     ?>
     <div class="weline-plugin-file-card" data-file="<?= htmlspecialchars(strtolower($file)) ?>">
-        <div class="weline-plugin-file-header" onclick="togglePluginFile(this)">
+        <div class="weline-plugin-file-header" data-plugin-file-toggle="1">
             <span class="weline-plugin-file-title">
                 <i class="mdi mdi-file-code-outline"></i>
                 <?= htmlspecialchars($file) ?>
@@ -715,6 +715,12 @@ $moduleCount = count($moduleSet);
         header.classList.toggle('collapsed');
         body.classList.toggle('collapsed');
     };
+
+    document.querySelectorAll('[data-plugin-file-toggle]').forEach(function(header) {
+        header.addEventListener('click', function() {
+            window.togglePluginFile(header);
+        });
+    });
     
     document.getElementById('expand-all').addEventListener('click', function() {
         document.querySelectorAll('.weline-plugin-file-header').forEach(function(header) {

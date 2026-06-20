@@ -22,6 +22,7 @@ set "ENV_FILE_ARG="
 
 REM Parse args (avoid for %%a in () when %* is empty - causes ") was unexpected" in cmd)
 set "FORCE_INSTALL="
+set "AUTO_YES="
 if "%~1"=="" (
   set "DO_PHP=1"
   set "DO_PGSQL=1"
@@ -30,6 +31,8 @@ if "%~1"=="" (
     if "%%a"=="--path-only" set "PATH_ONLY=1"
     if "%%a"=="-f" set "FORCE_INSTALL=1"
     if "%%a"=="--force" set "FORCE_INSTALL=1"
+    if "%%a"=="-y" set "AUTO_YES=1"
+    if "%%a"=="--yes" set "AUTO_YES=1"
     if "%%a"=="php"   set "DO_PHP=1"
     if "%%a"=="pgsql" set "DO_PGSQL=1"
     if "%%a"=="mysql" set "DO_MYSQL=1"
@@ -299,6 +302,7 @@ if exist "%PHP_DIR%\php.exe" if exist "%ROOT%\setup\server_installer\bootstrap_p
 )
 set "RUN_ARGS="
 if defined FORCE_INSTALL set "RUN_ARGS=-f"
+if defined AUTO_YES set "RUN_ARGS=%RUN_ARGS% -y"
 if exist "%PHP_DIR%\php.installer.ini" (
   if defined ENV_FILE_ARG (
     call :cecho Gray "Running: %PHP_EXE% -c %PHP_DIR%\php.installer.ini setup\server_installer\run.php %RUN_ARGS% --env-file %ENV_FILE_ARG%"

@@ -93,6 +93,13 @@ if ($realProducts !== []) {
 
 $widgetKey = (string)($this->getData('_widget_instance_key') ?? ($titleSource . '|' . $limit . '|' . $columns . '|' . $layout));
 $widgetId = 'related-products-' . substr(sha1($widgetKey), 0, 12);
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
 <div class="widget-related-products widget-products" id="<?= $widgetId ?>" style="width:100%;max-width:var(--layout-max-width,1600px);margin:0 auto;padding:0 var(--spacing-4,1.5rem);box-sizing:border-box;">
@@ -180,16 +187,16 @@ $widgetId = 'related-products-' . substr(sha1($widgetKey), 0, 12);
 
 <script>
 (function () {
-    var widget = document.getElementById(<?= json_encode($widgetId, JSON_UNESCAPED_SLASHES) ?>);
+    var widget = document.getElementById(<?= json_encode($widgetId, $jsonForScriptFlags) ?>);
     if (!widget || widget.dataset.wishlistActionsBound === '1') {
         return;
     }
     widget.dataset.wishlistActionsBound = '1';
 
     var texts = {
-        added: <?= json_encode((string)__('已加入收藏'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
-        failed: <?= json_encode((string)__('加入收藏失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
-        login: <?= json_encode((string)__('请先登录'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+        added: <?= json_encode((string)__('已加入收藏'), $jsonForScriptFlags) ?>,
+        failed: <?= json_encode((string)__('加入收藏失败，请稍后重试'), $jsonForScriptFlags) ?>,
+        login: <?= json_encode((string)__('请先登录'), $jsonForScriptFlags) ?>
     };
 
     function showNotice(message, type) {

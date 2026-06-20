@@ -37,6 +37,24 @@ if (empty($providerConfig) && !empty($config)) {
 }
 $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
 $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
+$escapeHtml = static function ($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+};
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT;
+$jsonForTextareaFlags = JSON_PRETTY_PRINT | $jsonForScriptFlags;
+$modelConfigJson = json_encode($model ? $model->getConfig() : new \stdClass(), $jsonForScriptFlags);
+if (!is_string($modelConfigJson)) {
+    $modelConfigJson = '{}';
+}
+$modelCodeJsFallback = json_encode($model ? (string)$model->getData('model_code') : '', $jsonForScriptFlags);
+if (!is_string($modelCodeJsFallback)) {
+    $modelCodeJsFallback = '""';
+}
 ?>
 
 <style>
@@ -169,18 +187,18 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
 
             <!-- 隐藏字段 -->
             <?php if ($isEdit): ?>
-            <input type="hidden" name="id" value="<?= $model->getId() ?>" />
+            <input type="hidden" name="id" value="<?= $escapeHtml($model->getId()) ?>" />
             <?php endif; ?>
 
             <?= $this->getFormKey($this->getUrl('*/backend/model/save')) ?>
             <input type="hidden"
                    id="token_price_input"
                    name="token_price_input"
-                   value="<?= htmlspecialchars((string)($model ? $model->getData('token_price_input') : '0')) ?>">
+                   value="<?= $escapeHtml($model ? $model->getData('token_price_input') : '0') ?>">
             <input type="hidden"
                    id="token_price_output"
                    name="token_price_output"
-                   value="<?= htmlspecialchars((string)($model ? $model->getData('token_price_output') : '0')) ?>">
+                   value="<?= $escapeHtml($model ? $model->getData('token_price_output') : '0') ?>">
 
             <!-- 使用网格布局 -->
             <div class="row g-2">
@@ -276,9 +294,9 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                         <?php if ($isReadonly): ?>
                                             <input type="text"
                                                    class="form-control"
-                                                   value="<?= htmlspecialchars((string)$model->getData('supplier')) ?>"
+                                                   value="<?= $escapeHtml($model->getData('supplier')) ?>"
                                                    readonly>
-                                            <input type="hidden" name="supplier" value="<?= htmlspecialchars((string)$model->getData('supplier')) ?>">
+                                            <input type="hidden" name="supplier" value="<?= $escapeHtml($model->getData('supplier')) ?>">
                                         <?php else:
                                             $providerOptionsStr = $this->getData('providerOptionsStr') ?? '';
                                             $supplierValue = $model ? (string)$model->getData('supplier') : '';
@@ -333,7 +351,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                                class="form-control"
                                                id="model_code"
                                                name="model_code"
-                                               value="<?= $model ? $model->getData('model_code') : '' ?>"
+                                               value="<?= $escapeHtml($model ? $model->getData('model_code') : '') ?>"
                                                required
                                                <?= $isEdit && !$model->getData('is_copy') ? 'readonly' : '' ?>
                                                placeholder="<?= __('例如：gpt-3.5-turbo') ?>">
@@ -361,7 +379,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                                class="form-control"
                                                id="provider_model_code"
                                                name="provider_model_code"
-                                               value="<?= htmlspecialchars($providerModelCode) ?>"
+                                               value="<?= $escapeHtml($providerModelCode) ?>"
                                                placeholder="<?= __('留空默认使用模型代码') ?>">
                                         <div class="form-text">
                                             <?= __('用于映射供应商真实模型 code，切换供应商时会按此值做支持校验') ?>
@@ -393,7 +411,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                                class="form-control"
                                                id="name"
                                                name="name"
-                                               value="<?= $model ? $model->getData('name') : '' ?>"
+                                               value="<?= $escapeHtml($model ? $model->getData('name') : '') ?>"
                                                required
                                                placeholder="<?= __('例如：GPT-3.5 Turbo') ?>">
                                         <div class="form-text"><?= __('模型的显示名称') ?></div>
@@ -410,7 +428,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                                                class="form-control"
                                                id="version"
                                                name="version"
-                                               value="<?= $model ? $model->getData('version') : '1.0' ?>"
+                                               value="<?= $escapeHtml($model ? $model->getData('version') : '1.0') ?>"
                                                required
                                                placeholder="<?= __('例如：1.0') ?>">
                                         <div class="form-text"><?= __('模型的版本号') ?></div>
@@ -450,7 +468,7 @@ $modelPresetsJson = $this->getData('modelPresetsJson') ?: '[]';
                 <!-- 提供商配置卡片 -->
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header" style="cursor: pointer;" onclick="window.WelineAiModelEdit.toggleProviderConfig()">
+                        <div class="card-header" style="cursor: pointer;" data-ai-model-edit-action="toggle-provider-config">
                             <h6 class="mb-0">
                                 <i class="bi bi-chevron-right" id="providerConfigIcon" style="transition: transform 0.3s;"></i>
                                 <i class="bi bi-gear me-2"></i><?= __('提供商配置') ?> <small class="text-muted">(<?= __('可选') ?>)</small>
@@ -485,18 +503,22 @@ if (empty($displayConfig) && !empty($config)) {
 }
 
 if (!empty($displayConfig)) {
+    $providerConfigText = '';
     if (is_array($displayConfig)) {
-        echo json_encode($displayConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $encoded = json_encode($displayConfig, $jsonForTextareaFlags);
+        $providerConfigText = is_string($encoded) ? $encoded : '';
     } else if (is_string($displayConfig)) {
         $decoded = json_decode($displayConfig, true);
         if (json_last_error() === JSON_ERROR_NONE) {
-            echo json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $encoded = json_encode($decoded, $jsonForTextareaFlags);
+            $providerConfigText = is_string($encoded) ? $encoded : '';
         } else {
-            echo $displayConfig;
+            $providerConfigText = $displayConfig;
         }
     } else {
-        echo $displayConfig;
+        $providerConfigText = (string)$displayConfig;
     }
+    echo $escapeHtml($providerConfigText);
 }
 ?></textarea>
                                 <div class="form-text">
@@ -529,7 +551,7 @@ if (!empty($displayConfig)) {
                                        class="form-control"
                                        id="max_tokens"
                                        name="max_tokens"
-                                       value="<?= $maxTokens ?>"
+                                       value="<?= $escapeHtml($maxTokens) ?>"
                                        min="1"
                                        max="384000"
                                        placeholder="推荐: 4096 (适合大多数场景)">
@@ -552,7 +574,7 @@ if (!empty($displayConfig)) {
                                        class="form-control"
                                        id="cost_per_token"
                                        name="cost_per_token"
-                                       value="<?= $costPerToken ?>"
+                                       value="<?= $escapeHtml($costPerToken) ?>"
                                        step="0.000001"
                                        min="0"
                                        placeholder="<?= __('按供应商官方价格自动填充') ?>">
@@ -587,7 +609,7 @@ if (!empty($displayConfig)) {
                                        max="2"
                                        step="0.1"
                                        value="0.7"
-                                       oninput="document.getElementById('tempValue').textContent = this.value">
+                                       data-range-output="tempValue">
                                 <div class="form-text">
                                     <?= __('控制输出随机性 (0.0 - 2.0)') ?>
                                     <span class="text-muted">· 推荐: 0.7 (平衡模式) | 精确: 0.0-0.3 | 创造: 1.0-2.0</span>
@@ -608,7 +630,7 @@ if (!empty($displayConfig)) {
                                        max="1"
                                        step="0.05"
                                        value="1"
-                                       oninput="document.getElementById('topPValue').textContent = this.value">
+                                       data-range-output="topPValue">
                                 <div class="form-text">
                                     <?= __('核采样参数 (0.0 - 1.0)') ?>
                                     <span class="text-muted">· 推荐: 1.0 (标准设置)</span>
@@ -645,9 +667,9 @@ if (!empty($displayConfig)) {
                                        class="form-control"
                                        id="config_timeout"
                                        name="config[timeout]"
-                                       value="<?= $timeout ?>"
+                                       value="<?= $escapeHtml($timeout) ?>"
                                        min="0"
-                                   placeholder="<?= (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>">
+                                    placeholder="<?= (string)\Weline\Ai\Service\Provider\ProviderTimeoutPolicy::DEFAULT_REQUEST_TIMEOUT ?>">
                                 <div class="form-text">
                                 <?= __('API请求超时时间，0表示不限制，默认900秒') ?>
                                 </div>
@@ -794,7 +816,7 @@ if (!empty($displayConfig)) {
 (function() {
     'use strict';
 
-    var modelConfig = <?= $model ? json_encode($model->getConfig()) : '{}' ?>;
+    var modelConfig = <?= $modelConfigJson ?>;
     var commonModelPresets = <?= $modelPresetsJson ?>;
     var quickRemoteModelOptions = [];
 
@@ -840,6 +862,144 @@ if (!empty($displayConfig)) {
             if (badge) {
                 badge.textContent = value;
             }
+        },
+
+        createElement: function(tag, className, text) {
+            var element = document.createElement(tag);
+            if (className) {
+                element.className = className;
+            }
+            if (text !== undefined && text !== null) {
+                element.textContent = String(text);
+            }
+            return element;
+        },
+
+        appendLabeledText: function(container, label, value, code) {
+            container.appendChild(this.createElement('small', 'text-muted', label));
+            var valueNode = this.createElement(code ? 'code' : 'span', '', value);
+            container.appendChild(valueNode);
+            container.appendChild(document.createElement('br'));
+        },
+
+        normalizeImageUrl: function(image) {
+            var url = image && image.url ? String(image.url).trim() : '';
+            if (url) {
+                var lower = url.replace(/[\r\n\t ]/g, '').toLowerCase();
+                if (/^(https?:\/\/|\/|\.\/|\.\.\/)/.test(url) && !/^(javascript:|data:|vbscript:)/.test(lower)) {
+                    return url;
+                }
+                return '';
+            }
+            var mime = image && image.mime_type ? String(image.mime_type).toLowerCase() : 'image/png';
+            if (!/^(image\/png|image\/jpeg|image\/webp|image\/gif)$/.test(mime)) {
+                mime = 'image/png';
+            }
+            var b64 = image && image.b64_json ? String(image.b64_json).replace(/\s+/g, '') : '';
+            if (!b64 || !/^[a-zA-Z0-9+/=]+$/.test(b64)) {
+                return '';
+            }
+            return 'data:' + mime + ';base64,' + b64;
+        },
+
+        appendTestImages: function(container, result) {
+            var images = Array.isArray(result && result.images) ? result.images : [];
+            if (!images.length) {
+                return;
+            }
+            var row = this.createElement('div', 'row g-2 mt-2');
+            images.forEach(function(image) {
+                var src = window.WelineAiModelEdit.normalizeImageUrl(image);
+                if (!src) {
+                    return;
+                }
+                var col = window.WelineAiModelEdit.createElement('div', 'col-6');
+                var link = document.createElement('a');
+                link.href = src;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                var img = document.createElement('img');
+                img.src = src;
+                img.alt = '';
+                img.className = 'img-fluid rounded border';
+                img.style.maxHeight = '220px';
+                img.style.width = '100%';
+                img.style.objectFit = 'contain';
+                img.style.background = '#fff';
+                link.appendChild(img);
+                col.appendChild(link);
+                row.appendChild(col);
+            });
+            if (row.childNodes.length) {
+                container.appendChild(row);
+            }
+        },
+
+        appendTestCard: function(container, title, result, showAccount) {
+            var tested = !!(result && result.tested);
+            var success = !!(result && result.success);
+            var alertClass = success ? 'success' : (tested ? 'danger' : 'secondary');
+            var col = this.createElement('div', 'col-12');
+            var alert = this.createElement('div', 'alert alert-' + alertClass + ' py-1 px-2 mb-2');
+            var titleNode = this.createElement('small', 'fw-bold', title);
+            var badge = this.createElement(
+                'span',
+                'badge bg-' + (tested ? (success ? 'success' : 'danger') : 'secondary'),
+                tested ? (success ? '<?= addslashes(__('成功')) ?>' : '<?= addslashes(__('失败')) ?>') : '<?= addslashes(__('未测')) ?>'
+            );
+
+            alert.appendChild(titleNode);
+            alert.appendChild(document.createTextNode(' '));
+            alert.appendChild(badge);
+
+            if (showAccount && result && result.account_name) {
+                alert.appendChild(document.createTextNode(' '));
+                alert.appendChild(this.createElement('span', 'badge bg-info', result.account_name));
+            }
+            alert.appendChild(document.createElement('br'));
+
+            if (tested) {
+                this.appendLabeledText(alert, '<?= addslashes(__('耗时：')) ?>', String(result && result.duration ? result.duration : 0) + ' ms', true);
+                alert.appendChild(this.createElement('small', 'text-muted', '<?= addslashes(__('消息：')) ?>'));
+                alert.appendChild(document.createTextNode(String(result && result.message ? result.message : '')));
+                this.appendTestImages(alert, result || {});
+            }
+
+            col.appendChild(alert);
+            container.appendChild(col);
+        },
+
+        renderTestResults: function(resultContent, data) {
+            resultContent.textContent = '';
+            if (data && data.data && data.data.results) {
+                var row = this.createElement('div', 'row g-2');
+                var results = data.data.results;
+                this.appendTestCard(row, '<?= addslashes(__('自配置')) ?>', results.self_config || {}, false);
+                this.appendTestCard(row, '<?= addslashes(__('供应商账户')) ?>', results.provider_account || {}, true);
+                resultContent.appendChild(row);
+                return;
+            }
+
+            var success = !!(data && data.success);
+            var alert = this.createElement('div', 'alert alert-' + (success ? 'success' : 'danger') + ' py-1 px-2 mb-2');
+            var small = this.createElement('small');
+            small.appendChild(this.createElement('strong', '', success ? '<?= addslashes(__('成功!')) ?>' : '<?= addslashes(__('失败!')) ?>'));
+            small.appendChild(document.createTextNode(' ' + String(data && data.message ? data.message : '')));
+            alert.appendChild(small);
+            if (success) {
+                this.appendTestImages(alert, data || {});
+            }
+            resultContent.appendChild(alert);
+        },
+
+        renderTestError: function(resultContent, message) {
+            resultContent.textContent = '';
+            var alert = this.createElement('div', 'alert alert-danger py-1 px-2');
+            var small = this.createElement('small');
+            small.appendChild(this.createElement('strong', '', '<?= addslashes(__('网络错误!')) ?>'));
+            small.appendChild(document.createTextNode(' ' + String(message || '')));
+            alert.appendChild(small);
+            resultContent.appendChild(alert);
         },
 
         applyPreset: function(preset) {
@@ -1243,6 +1403,29 @@ if (!empty($displayConfig)) {
             this.initPresetSelector();
             this.initForm();
             this.initTestPanel();
+            this.initSafeEventBindings();
+        },
+
+        initSafeEventBindings: function() {
+            document.addEventListener('click', function(event) {
+                var trigger = event.target.closest('[data-ai-model-edit-action]');
+                if (!trigger) {
+                    return;
+                }
+                event.preventDefault();
+                if (trigger.getAttribute('data-ai-model-edit-action') === 'toggle-provider-config') {
+                    window.WelineAiModelEdit.toggleProviderConfig();
+                }
+            });
+
+            document.querySelectorAll('[data-range-output]').forEach(function(input) {
+                input.addEventListener('input', function() {
+                    var output = document.getElementById(input.getAttribute('data-range-output') || '');
+                    if (output) {
+                        output.textContent = input.value;
+                    }
+                });
+            });
         },
 
         initAccountSelect: function() {
@@ -1358,7 +1541,7 @@ if (!empty($displayConfig)) {
                             Swal.fire({
                                 icon: 'error',
                                 title: '<?= __('保存失败') ?>',
-                                html: (data.message || '<?= __('未知错误') ?>'),
+                                text: (data.message || '<?= __('未知错误') ?>'),
                                 confirmButtonText: '<?= __('确定') ?>'
                             });
                         }
@@ -1369,7 +1552,7 @@ if (!empty($displayConfig)) {
                         Swal.fire({
                             icon: 'error',
                             title: '<?= __('保存失败') ?>',
-                            html: '<?= __('请稍后重试') ?>',
+                            text: '<?= __('请稍后重试') ?>',
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     }
@@ -1405,7 +1588,7 @@ if (!empty($displayConfig)) {
                     var prompt = document.getElementById('test_prompt').value.trim();
                     var modelCodeInput = document.getElementById('model_code');
                     var testModelSelect = document.getElementById('test_model_code_select');
-                    var modelCode = modelCodeInput ? modelCodeInput.value : '<?= $model ? addslashes($model->getData('model_code')) : '' ?>';
+                    var modelCode = modelCodeInput ? modelCodeInput.value : <?= $modelCodeJsFallback ?>;
                     if (testModelSelect && testModelSelect.value) {
                         modelCode = testModelSelect.value;
                     }
@@ -1462,42 +1645,12 @@ if (!empty($displayConfig)) {
 
                         var resultDiv = document.getElementById('testResult');
                         var resultContent = document.getElementById('testResultContent');
-                        var renderTestImages = function(result) {
-                            var images = Array.isArray(result.images) ? result.images : [];
-                            if (!images.length) {
-                                return '';
-                            }
-                            var escapeAttr = function(value) {
-                                return String(value || '')
-                                    .replace(/&/g, '&amp;')
-                                    .replace(/"/g, '&quot;')
-                                    .replace(/</g, '&lt;')
-                                    .replace(/>/g, '&gt;');
-                            };
-                            var items = images.map(function(image) {
-                                var src = image.url || (image.b64_json ? ('data:' + (image.mime_type || 'image/png') + ';base64,' + image.b64_json) : '');
-                                if (!src) {
-                                    return '';
-                                }
-                                src = escapeAttr(src);
-                                return '<div class="col-6"><a href="' + src + '" target="_blank" rel="noopener"><img src="' + src + '" class="img-fluid rounded border" style="max-height: 220px; width: 100%; object-fit: contain; background: #fff;"></a></div>';
-                            }).join('');
-                            return items ? '<div class="row g-2 mt-2">' + items + '</div>' : '';
-                        };
 
+                        window.WelineAiModelEdit.renderTestResults(resultContent, data || {});
                         if (data && data.data && data.data.results) {
-                            var r = data.data.results;
-                            var s = r.self_config || {};
-                            var p = r.provider_account || {};
-                            var sBadge = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-                            var pBadge = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-                            resultContent.innerHTML = '<div class="row g-2"><div class="col-12"><div class="alert alert-' + (s.success ? 'success' : (s.tested ? 'danger' : 'secondary')) + ' py-1 px-2 mb-2"><small class="fw-bold">自配置</small> ' + sBadge + '<br>' + (s.tested ? ('<small class="text-muted">耗时：</small><code>' + (s.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (s.message || '') + renderTestImages(s) + '</div>') : '') + '</div><div class="col-12"><div class="alert alert-' + (p.success ? 'success' : (p.tested ? 'danger' : 'secondary')) + ' py-1 px-2 mb-2"><small class="fw-bold">供应商账户</small> ' + pBadge + (p.account_name ? ' <span class="badge bg-info">' + p.account_name + '</span>' : '') + '<br>' + (p.tested ? ('<small class="text-muted">耗时：</small><code>' + (p.duration || 0) + ' ms</code><br><small class="text-muted">消息：</small>' + (p.message || '') + renderTestImages(p) + '</div>') : '') + '</div></div>';
                             try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
-                        } else if (data.success) {
-                            resultContent.innerHTML = '<div class="alert alert-success py-1 px-2 mb-2"><small><strong>成功!</strong> ' + data.message + '</small>' + renderTestImages(data) + '</div>';
+                        } else if (data && data.success) {
                             try { if (window.parent && window.parent !== window) { window.parent.location.reload(); } } catch (e) {}
-                        } else {
-                            resultContent.innerHTML = '<div class="alert alert-danger py-1 px-2 mb-2"><small><strong>失败!</strong> ' + data.message + '</small></div>';
                         }
 
                         resultDiv.style.display = 'block';
@@ -1510,7 +1663,7 @@ if (!empty($displayConfig)) {
                         var resultDiv = document.getElementById('testResult');
                         var resultContent = document.getElementById('testResultContent');
 
-                        resultContent.innerHTML = '<div class="alert alert-danger py-1 px-2"><small><strong>网络错误!</strong> ' + error.message + '</small></div>';
+                        window.WelineAiModelEdit.renderTestError(resultContent, error ? error.message : '');
 
                         resultDiv.style.display = 'block';
                     });

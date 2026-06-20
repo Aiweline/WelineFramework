@@ -146,8 +146,8 @@ HTML;
         <w:field name="name" width="200">#{{name}}</w:field>
         <w:field name="status" width="100">#{{status}}</w:field>
         <w:field name="actions" width="150">
-            <button class="btn btn-sm btn-primary" onclick="editRow({{id}})">编辑</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteRow({{id}})">删除</button>
+            <button class="btn btn-sm btn-primary" data-row-action="edit" data-row-id="{{id}}">编辑</button>
+            <button class="btn btn-sm btn-danger" data-row-action="delete" data-row-id="{{id}}">删除</button>
         </w:field>
     </w:t-body>
 </w:d-table>

@@ -39,6 +39,7 @@
     function initAccountIndex() {
         var accountConfig = readAccountConfig();
         var i18nAccount = mergeI18n(accountConfig.i18n);
+        var sidebarContentReady = true;
         var accountApiPromise = null;
 
         function welineDecodeHtmlEntities(message) {
@@ -138,16 +139,82 @@
         var sidebarContentMount = document.querySelector('[data-account-sidebar-content-mount]');
         var loadedSidebarSections = Object.create(null);
         var sidebarContentLoading = Object.create(null);
+        var loadedSidebarScripts = Object.create(null);
 
-        function executeInsertedScripts(container) {
-            Array.prototype.slice.call(container.querySelectorAll('script')).forEach(function(oldScript) {
+        function isSafeSidebarAssetUrl(rawValue, extension) {
+            var value = String(rawValue || '').trim();
+            var compactValue = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+            if (
+                compactValue.indexOf('javascript:') === 0 ||
+                compactValue.indexOf('vbscript:') === 0 ||
+                compactValue.indexOf('data:') === 0 ||
+                compactValue.indexOf('//') === 0
+            ) {
+                return false;
+            }
+
+            try {
+                var url = new URL(value, window.location.href);
+                return url.origin === window.location.origin && url.pathname.toLowerCase().indexOf(extension, url.pathname.length - extension.length) !== -1;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function loadTrustedSidebarScripts(html) {
+            var template = document.createElement('template');
+            template.innerHTML = String(html || '');
+
+            Array.prototype.slice.call(template.content.querySelectorAll('script[src]')).forEach(function(scriptNode) {
+                var src = scriptNode.getAttribute('src') || '';
+                if (!isSafeSidebarAssetUrl(src, '.js') || loadedSidebarScripts[src]) {
+                    return;
+                }
+
+                loadedSidebarScripts[src] = true;
                 var script = document.createElement('script');
-                Array.prototype.slice.call(oldScript.attributes).forEach(function(attribute) {
-                    script.setAttribute(attribute.name, attribute.value);
-                });
-                script.text = oldScript.textContent || '';
-                oldScript.parentNode.replaceChild(script, oldScript);
+                script.src = src;
+                script.defer = true;
+                document.head.appendChild(script);
             });
+        }
+
+        function sanitizeSidebarHtml(html) {
+            var template = document.createElement('template');
+            template.innerHTML = String(html || '');
+
+            template.content.querySelectorAll('script, style, meta, iframe, frame, frameset, object, embed, base').forEach(function(node) {
+                node.remove();
+            });
+            template.content.querySelectorAll('link').forEach(function(node) {
+                var rel = String(node.getAttribute('rel') || '').toLowerCase();
+                var href = node.getAttribute('href') || '';
+                if (rel !== 'stylesheet' || !isSafeSidebarAssetUrl(href, '.css')) {
+                    node.remove();
+                }
+            });
+
+            template.content.querySelectorAll('*').forEach(function(node) {
+                Array.prototype.slice.call(node.attributes).forEach(function(attribute) {
+                    var name = String(attribute.name || '').toLowerCase();
+                    var compactValue = String(attribute.value || '').trim().replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+
+                    if (name.indexOf('on') === 0 || name === 'srcdoc' || name === 'style') {
+                        node.removeAttribute(attribute.name);
+                        return;
+                    }
+
+                    if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction' || name === 'poster') && (
+                        compactValue.indexOf('javascript:') === 0 ||
+                        compactValue.indexOf('vbscript:') === 0 ||
+                        (compactValue.indexOf('data:') === 0 && compactValue.indexOf('data:image/') !== 0)
+                    )) {
+                        node.removeAttribute(attribute.name);
+                    }
+                });
+            });
+
+            return template.innerHTML;
         }
 
         function buildSidebarContentUrl(sectionName) {
@@ -162,11 +229,11 @@
 
         function loadSidebarContent(sectionName) {
             if (!sidebarContentMount || !sectionName) {
-                return Promise.resolve(true);
+                return Promise.resolve(sidebarContentReady);
             }
 
             if (loadedSidebarSections[sectionName]) {
-                return Promise.resolve(true);
+                return Promise.resolve(sidebarContentReady);
             }
 
             if (sidebarContentLoading[sectionName]) {
@@ -201,8 +268,8 @@
                 }
 
                 if (payload.html) {
-                    sidebarContentMount.insertAdjacentHTML('beforeend', payload.html);
-                    executeInsertedScripts(sidebarContentMount);
+                    loadTrustedSidebarScripts(payload.html);
+                    sidebarContentMount.insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html));
                 }
 
                 loadedSidebarSections[sectionName] = true;

@@ -116,6 +116,7 @@ API模块配置,"API module configuration"
 建议值：2592000秒（30天）。范围：86400-31536000秒,"Recommended value: 2592000 seconds (30 days). Range: 86400-31536000 seconds"
 保存配置,"Save Configuration"
 返回,Back
+保存配置失败，请重试,保存配置失败，请重试
 API集成,"API integration"
 API用户,"API users"
 启用用户,"Enable user"

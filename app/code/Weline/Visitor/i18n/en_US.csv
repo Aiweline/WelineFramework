@@ -53,7 +53,7 @@
 获取实时数据成功,"Successfully got real-time data"
 获取实时数据失败：%{1},"Failed to get real-time data: %{1}"
 访客像素标签,"Visitor pixel tag"
-"在渲染访客像素标签时触发，允许其他模块自定义像素代码。可以通过修改 pixel_code 字段来设置像素代码。","Triggered when rendering the visitor pixel tag, allowing other modules to customize the pixel code. The pixel code can be set by modifying the pixel_code field."
+"在渲染访客像素标签时触发，允许其他模块控制像素启停和名称。出于安全原因，不执行 pixel_code 自定义脚本。","在渲染访客像素标签时触发，允许其他模块控制像素启停和名称。出于安全原因，不执行 pixel_code 自定义脚本。"
 "Visitor Query","Visitor Query"
 "Provides frontend visitor tracking operations through the worker channel.","Provides frontend visitor tracking operations through the worker channel."
 "Track storefront visitor pixel events.","Track storefront visitor pixel events."

@@ -194,6 +194,16 @@ let cache = null;
 let activeIndex = -1;
 let isOpen = false;
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(text ?? '')));
+    return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 // 防抖函数
 const debounce = (fn, delay) => {
     let timer = null;
@@ -212,10 +222,10 @@ function renderOptions(items) {
     
     const currentValue = hidden.value;
     list.innerHTML = items.slice(0, limit).map((item, idx) => {
-        const val = item[valueField] || item.value || '';
-        const lbl = item[labelField] || item.label || item.name || val;
+        const val = String(item[valueField] || item.value || '');
+        const lbl = String(item[labelField] || item.label || item.name || val);
         const selectedClass = val == currentValue ? 'selected' : '';
-        return '<div class="w-search-select-item ' + selectedClass + '" data-value="' + val + '" data-label="' + lbl + '" data-index="' + idx + '">' + lbl + '</div>';
+        return '<div class="w-search-select-item ' + selectedClass + '" data-value="' + escapeAttr(val) + '" data-label="' + escapeAttr(lbl) + '" data-index="' + idx + '">' + escapeHtml(lbl) + '</div>';
     }).join('');
     
     // 绑定点击事件
