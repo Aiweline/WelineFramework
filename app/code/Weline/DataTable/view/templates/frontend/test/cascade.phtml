@@ -27,7 +27,7 @@
     </div>
 
     <div class="dt-demo-actions">
-        <button type="button" class="btn btn-outline-primary" data-testid="cascade-refresh" onclick="refreshCascadeTables()"><?= __('Refresh Tables') ?></button>
+        <button type="button" class="btn btn-outline-primary" data-testid="cascade-refresh" data-datatable-test-action="refresh-cascade"><?= __('Refresh Tables') ?></button>
     </div>
 
     <div class="dt-demo-layout">
@@ -92,4 +92,14 @@
             }
         });
     }
+
+    document.addEventListener('click', function (event) {
+        const trigger = event.target.closest('[data-datatable-test-action="refresh-cascade"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        refreshCascadeTables();
+    });
 </script>

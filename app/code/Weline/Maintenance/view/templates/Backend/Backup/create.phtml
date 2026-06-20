@@ -28,7 +28,7 @@
             <div class="card-body">
                 <h4 class="card-title mb-4"><lang>备份设置</lang></h4>
                 
-                <form id="backupForm" onsubmit="MaintenanceBackup.createBackup(event)">
+                <form id="backupForm">
                     <div class="mb-3">
                         <label class="form-label"><lang>备份类型</lang></label>
                         <select class="form-select" id="backup_type" name="type" required>
@@ -98,5 +98,10 @@
             submitBtn.innerHTML = originalText;
         });
     };
+
+    var backupForm = document.getElementById('backupForm');
+    if (backupForm) {
+        backupForm.addEventListener('submit', MaintenanceBackup.createBackup);
+    }
 })();
 </script>

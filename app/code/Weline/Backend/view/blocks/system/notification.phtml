@@ -34,10 +34,10 @@ $unreadCount = $block->getUnreadCount();
                 </div>
                 <div class="col-auto">
                     <?php if ($unreadCount > 0): ?>
-                    <a href="javascript:void(0)" class="small weline-notification-mark-all" 
-                       onclick="WelineNotification.markAllRead()">
+                    <button type="button" class="small weline-notification-mark-all"
+                            data-notification-action="mark-all-read">
                         <?= __('全部已读') ?>
-                    </a>
+                    </button>
                     <?php endif; ?>
                 </div>
             </div>
@@ -413,6 +413,7 @@ $unreadCount = $block->getUnreadCount();
 }
 
 .weline-notification-mark-all {
+    border: 0;
     padding: 4px 10px;
     font-size: 0.75rem;
     font-weight: 500;
@@ -421,6 +422,7 @@ $unreadCount = $block->getUnreadCount();
     border-radius: var(--backend-border-radius-sm, 4px);
     text-decoration: none;
     transition: all 0.2s ease;
+    cursor: pointer;
 }
 
 .weline-notification-mark-all:hover {
@@ -462,5 +464,15 @@ $unreadCount = $block->getUnreadCount();
     };
 
     window.WelineNotification = WelineNotification;
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-notification-action="mark-all-read"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        WelineNotification.markAllRead();
+    });
 })();
 </script>

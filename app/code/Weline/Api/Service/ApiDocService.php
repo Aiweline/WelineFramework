@@ -96,7 +96,7 @@ class ApiDocService
         if (!empty($frontendWorkerApis)) {
             $apis['Frontend Worker API'] = $frontendWorkerApis;
         }
-        
+
         // 缓存结果（开发环境1小时，生产环境24小时）
         $cacheTime = (defined('DEV') && DEV) ? 3600 : 86400;
         $this->cache->set($cacheKey, $apis, $cacheTime);
@@ -339,6 +339,45 @@ class ApiDocService
         }
         return 'v1'; // 默认版本
     }
+
+    /**
+     * Build the REST controller path from namespace segments after the version.
+     *
+     * Route registration keeps nested API namespaces in the URL, for example
+     * Api\Rest\V1\Backend\Auth -> backend/auth. The docs must mirror that
+     * shape so generated examples resolve to registered routes.
+     */
+    private function extractControllerPathFromNamespace(string $className, string $version): string
+    {
+        $segments = explode('\\', trim($className, '\\'));
+        $versionSegment = strtolower($version);
+        $versionIndex = null;
+
+        foreach ($segments as $index => $segment) {
+            if (strtolower($segment) === $versionSegment && strtolower((string)($segments[$index - 1] ?? '')) === 'rest') {
+                $versionIndex = $index;
+                break;
+            }
+        }
+
+        $controllerSegments = $versionIndex === null
+            ? [end($segments) ?: $className]
+            : array_slice($segments, $versionIndex + 1);
+
+        if ($controllerSegments === []) {
+            $controllerSegments = [end($segments) ?: $className];
+        }
+
+        return implode('/', array_map([$this, 'toRoutePathSegment'], $controllerSegments));
+    }
+
+    private function toRoutePathSegment(string $segment): string
+    {
+        $segment = preg_replace('/([a-z0-9])([A-Z])/', '$1-$2', $segment) ?? $segment;
+        $segment = preg_replace('/([A-Z]+)([A-Z][a-z])/', '$1-$2', $segment) ?? $segment;
+
+        return strtolower(trim($segment, '-'));
+    }
     
     /**
      * 提取路由信息
@@ -370,15 +409,11 @@ class ApiDocService
         
         // 构建路由路径
         $version = $this->extractVersionFromNamespace($reflection->getName());
-        $className = $reflection->getShortName();
         $methodName = $method->getName();
-        
-        // 转换为kebab-case（控制器名）
-        $controllerPath = strtolower(preg_replace('/([A-Z])/', '-$1', $className));
-        $controllerPath = trim($controllerPath, '-');
+        $controllerPath = $this->extractControllerPathFromNamespace($reflection->getName(), $version);
         
         // 转换为kebab-case（方法名）
-        $methodPath = strtolower(preg_replace('/([A-Z])/', '-$1', $methodName));
+        $methodPath = $this->toRoutePathSegment($methodName);
         // 移除HTTP方法前缀（如 get-, post-, put-, delete-）
         $methodPath = preg_replace('/^(get|post|put|delete|patch)-/', '', $methodPath);
         $methodPath = trim($methodPath, '-');
@@ -808,8 +843,16 @@ class ApiDocService
                         'cost' => (int)($operationDescriptor['cost'] ?? 1),
                         'cache_ttl' => (int)($operationDescriptor['cache_ttl'] ?? 0),
                         'auth' => (string)($operationDescriptor['auth'] ?? ''),
-                        'sample_params' => $this->buildFrontendWorkerSampleParams($operationDescriptor['params'] ?? []),
-                        'code' => $this->buildFrontendWorkerExampleCode($provider, $operation, $operationDescriptor['params'] ?? []),
+                        'sample_params' => $this->buildFrontendWorkerSampleParams($operationDescriptor['params'] ?? [], [
+                            'provider' => $provider,
+                            'operation' => $operation,
+                            'module' => (string)($providerDescriptor['module'] ?? ''),
+                        ]),
+                        'code' => $this->buildFrontendWorkerExampleCode($provider, $operation, $operationDescriptor['params'] ?? [], [
+                            'provider' => $provider,
+                            'operation' => $operation,
+                            'module' => (string)($providerDescriptor['module'] ?? ''),
+                        ]),
                     ],
                     'frontend_worker' => true,
                     'worker' => [
@@ -832,9 +875,12 @@ class ApiDocService
      * @param mixed $paramsDescriptor
      * @return array<int, array<string, mixed>>
      */
-    private function buildFrontendWorkerExampleCode(string $provider, string $operation, mixed $paramsDescriptor): string
+    private function buildFrontendWorkerExampleCode(string $provider, string $operation, mixed $paramsDescriptor, array $sampleContext = []): string
     {
-        $sampleParams = $this->buildFrontendWorkerSampleParams($paramsDescriptor);
+        $sampleParams = $this->buildFrontendWorkerSampleParams($paramsDescriptor, $sampleContext ?: [
+            'provider' => $provider,
+            'operation' => $operation,
+        ]);
         $jsonFlags = \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT;
         $payload = \json_encode($sampleParams, $jsonFlags);
         if (!\is_string($payload) || $payload === '[]') {
@@ -853,7 +899,7 @@ class ApiDocService
      * @param mixed $paramsDescriptor
      * @return array<string, mixed>
      */
-    private function buildFrontendWorkerSampleParams(mixed $paramsDescriptor): array
+    private function buildFrontendWorkerSampleParams(mixed $paramsDescriptor, array $sampleContext = []): array
     {
         if (!\is_array($paramsDescriptor)) {
             return [];
@@ -868,7 +914,7 @@ class ApiDocService
             if ($name === '') {
                 continue;
             }
-            $params[$name] = $this->sampleFrontendWorkerParamValue($name, $rule);
+            $params[$name] = $this->sampleFrontendWorkerParamValue($name, $rule, $sampleContext);
         }
 
         return $params;
@@ -877,9 +923,26 @@ class ApiDocService
     /**
      * @param array<string, mixed> $rule
      */
-    private function sampleFrontendWorkerParamValue(string $name, array $rule): mixed
+    private function sampleFrontendWorkerParamValue(string $name, array $rule, array $sampleContext = []): mixed
     {
+        if (\array_key_exists('example', $rule)) {
+            return $rule['example'];
+        }
+        if (\array_key_exists('default', $rule)) {
+            return $rule['default'];
+        }
+
         $lowerName = \strtolower($name);
+        if ($lowerName === 'provider') {
+            return (string)($sampleContext['provider'] ?? 'query_help');
+        }
+        if ($lowerName === 'operation') {
+            return (string)($sampleContext['operation'] ?? 'providers');
+        }
+        if ($lowerName === 'module') {
+            $module = (string)($sampleContext['module'] ?? '');
+            return ($module !== '' && $module !== 'Frontend Worker API') ? $module : 'Weline_Framework';
+        }
         if (\str_contains($lowerName, 'email')) {
             return 'customer@example.com';
         }

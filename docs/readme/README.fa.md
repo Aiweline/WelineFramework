@@ -1,5 +1,7 @@
 # WelineFramework
 
+![WelineFramework cover](../assets/readme/weline-framework-cover.fa.png)
+
 [زبان‌ها](./README.md) | [چینی ساده](../../README.zh-CN.md)
 
 WelineFramework یک فریم‌ورک PHP برای برنامه‌های وب ماژولار، سیستم‌های مدیریتی و سناریوهای تجارت است. این پروژه ماژول‌ها، routing، ORM، events/hooks، themeها، backend ACL، i18n، سرویس بلندمدت WLS و ابزارهای CLI را سازمان‌دهی می‌کند تا ماژول‌های کسب‌وکار قابل توسعه و قابل نگهداری بمانند.

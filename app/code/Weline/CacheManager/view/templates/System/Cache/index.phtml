@@ -99,6 +99,10 @@ $config = [
         'title_force_flush_all' => (string)__('强制清理全部缓存'),
     ],
 ];
+$cachePageConfigJson = \json_encode(
+    $config,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+) ?: '{}';
 ?>
 
 <link rel="stylesheet" href="<?= $this->getStaticUrl('Weline_CacheManager/system/cache-admin.css') ?>">
@@ -110,7 +114,7 @@ $config = [
                 <h4 class="mb-sm-0"><?= __('缓存管理') ?></h4>
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript:void(0);"><?= __('系统') ?></a></li>
+                        <li class="breadcrumb-item"><span><?= __('系统') ?></span></li>
                         <li class="breadcrumb-item active"><?= __('缓存管理') ?></li>
                     </ol>
                 </div>
@@ -379,5 +383,5 @@ $config = [
     </div>
 </div>
 
-<script id="weline-cache-page-config" type="application/json"><?= \json_encode($config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
+<script id="weline-cache-page-config" type="application/json"><?= $cachePageConfigJson ?></script>
 <script src="<?= $this->getStaticUrl('Weline_CacheManager/system/cache-admin.js') ?>"></script>

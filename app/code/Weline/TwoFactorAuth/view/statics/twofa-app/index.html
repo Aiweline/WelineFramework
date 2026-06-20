@@ -39,12 +39,12 @@
         </main>
 
         <!-- 添加按钮 -->
-        <button class="fab" onclick="showAddModal()" title="添加账户">
+        <button class="fab" type="button" data-twofa-action="show-add-modal" title="添加账户">
             <span>+</span>
         </button>
 
         <!-- 导出按钮 -->
-        <button class="fab-secondary" onclick="exportAccounts()" title="导出备份">
+        <button class="fab-secondary" type="button" data-twofa-action="export-accounts" title="导出备份">
             <span>💾</span>
         </button>
 
@@ -56,18 +56,18 @@
 
     <!-- 添加账户模态框 -->
     <div class="modal" id="addModal">
-        <div class="modal-overlay" onclick="closeAddModal()"></div>
+        <div class="modal-overlay" data-twofa-action="close-add-modal"></div>
         <div class="modal-content">
             <div class="modal-header">
                 <h2>添加账户</h2>
-                <button class="close-btn" onclick="closeAddModal()">×</button>
+                <button class="close-btn" type="button" data-twofa-action="close-add-modal">×</button>
             </div>
 
             <div class="modal-body">
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('manual')">手动输入</button>
-                    <button class="tab-btn" onclick="switchTab('scan')">扫描二维码</button>
-                    <button class="tab-btn" onclick="switchTab('import')">导入备份</button>
+                    <button class="tab-btn active" type="button" data-twofa-action="switch-tab" data-tab="manual">手动输入</button>
+                    <button class="tab-btn" type="button" data-twofa-action="switch-tab" data-tab="scan">扫描二维码</button>
+                    <button class="tab-btn" type="button" data-twofa-action="switch-tab" data-tab="import">导入备份</button>
                 </div>
 
                 <!-- 手动输入表单 -->
@@ -105,8 +105,8 @@
                                 先用手机对二维码截图，然后上传图片自动识别
                             </p>
                             <input type="file" id="qrImageFile" accept="image/*" style="display: none;"
-                                onchange="handleQRImageUpload(event)">
-                            <button class="btn btn-primary" onclick="document.getElementById('qrImageFile').click()">
+                                data-twofa-change="handle-qr-image-upload">
+                            <button class="btn btn-primary" type="button" data-twofa-action="trigger-file-input" data-target-input="qrImageFile">
                                 📁 选择二维码图片
                             </button>
 
@@ -129,7 +129,7 @@
                             <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
                                 使用设备摄像头直接扫描二维码（需要摄像头权限）
                             </p>
-                            <button class="btn btn-secondary" onclick="startCameraScanning()">
+                            <button class="btn btn-secondary" type="button" data-twofa-action="start-camera-scanning">
                                 启动摄像头扫描
                             </button>
 
@@ -137,7 +137,7 @@
                             <div id="cameraPreview" style="display: none; margin-top: 15px;">
                                 <video id="qrVideo" style="width: 100%; max-width: 400px; border-radius: 8px;"></video>
                                 <div style="margin-top: 10px;">
-                                    <button class="btn btn-danger" onclick="stopCameraScanning()">停止扫描</button>
+                                    <button class="btn btn-danger" type="button" data-twofa-action="stop-camera-scanning">停止扫描</button>
                                 </div>
                             </div>
                         </div>
@@ -156,8 +156,8 @@
                     <div class="form-group">
                         <label>选择备份文件</label>
                         <input type="file" id="importFile" accept=".json,.txt" style="display: none;"
-                            onchange="handleFileSelect(event)">
-                        <button class="btn btn-primary" onclick="document.getElementById('importFile').click()">
+                            data-twofa-change="handle-file-select">
+                        <button class="btn btn-primary" type="button" data-twofa-action="trigger-file-input" data-target-input="importFile">
                             📁 选择文件
                         </button>
                         <div id="fileName" style="margin-top: 10px; color: #666; font-size: 14px;"></div>
@@ -177,9 +177,9 @@
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeAddModal()">取消</button>
-                <button class="btn btn-primary" id="addBtn" onclick="addAccount()">添加</button>
-                <button class="btn btn-primary" id="importBtn" onclick="importAccounts()"
+                <button class="btn btn-secondary" type="button" data-twofa-action="close-add-modal">取消</button>
+                <button class="btn btn-primary" id="addBtn" type="button" data-twofa-action="add-account">添加</button>
+                <button class="btn btn-primary" id="importBtn" type="button" data-twofa-action="import-accounts"
                     style="display: none;">导入</button>
             </div>
         </div>
@@ -190,7 +190,7 @@
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
                 <h2 data-i18n="edit_confirm_title">✅ 账户已添加，请确认信息</h2>
-                <button class="close-btn" onclick="closeEditConfirmModal(true)">×</button>
+                <button class="close-btn" type="button" data-twofa-action="close-edit-confirm-modal" data-abandon="true">×</button>
             </div>
 
             <div class="modal-body">
@@ -236,7 +236,7 @@
                     <strong data-i18n="recovery_codes_title">🔑 恢复码（请妥善保存）</strong>
                     <div id="recoveryCodesList" style="margin-top: 10px; font-family: monospace; font-size: 13px;">
                     </div>
-                    <button class="btn btn-sm" onclick="copyRecoveryCodes()" style="margin-top: 10px;"
+                    <button class="btn btn-sm" type="button" data-twofa-action="copy-recovery-codes" style="margin-top: 10px;"
                         data-i18n="copy_recovery_codes">
                         📋 复制所有恢复码
                     </button>
@@ -258,10 +258,10 @@
             </div>
 
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeEditConfirmModal(false)" data-i18n="btn_cancel_edit">
+                <button class="btn btn-secondary" type="button" data-twofa-action="close-edit-confirm-modal" data-abandon="false" data-i18n="btn_cancel_edit">
                     取消修改
                 </button>
-                <button class="btn btn-primary" onclick="saveEditedAccount()" data-i18n="btn_save_confirm">
+                <button class="btn btn-primary" type="button" data-twofa-action="save-edited-account" data-i18n="btn_save_confirm">
                     确认保存
                 </button>
             </div>
@@ -272,7 +272,7 @@
     <div class="toast" id="toast"></div>
 
     <!-- jsQR 二维码解析库 -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="jsQR.min.js"></script>
     <script src="qr-scanner.min.js"></script>
     <script src="app.js"></script>
     <script>

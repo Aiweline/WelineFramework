@@ -109,6 +109,57 @@ final class MarketplaceMetaReaderTest extends TestCase
         }
     }
 
+    public function testStrictPackageMetaAcceptsTypedColonTags(): void
+    {
+        $root = $this->makePackageDir();
+        $moduleDir = $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Acme' . DIRECTORY_SEPARATOR . 'WlsFileManager';
+        $this->writeMeta($moduleDir, [
+            'schema_version' => 1,
+            'module_name' => 'Acme_WlsFileManager',
+            'i18n' => [
+                'source_locale' => 'zh_Hans_CN',
+                'locales' => [
+                    'zh_Hans_CN' => [
+                        'display_name' => 'WLS File Manager',
+                    ],
+                ],
+            ],
+            'tags' => [
+                [
+                    'code' => 'module:wls',
+                    'label' => [
+                        'zh_Hans_CN' => 'WLS Panel',
+                    ],
+                ],
+                [
+                    'code' => 'custom:wls-file-manager',
+                    'label' => [
+                        'zh_Hans_CN' => 'WLS File Manager',
+                    ],
+                ],
+                [
+                    'code' => 'system:false',
+                    'label' => [
+                        'zh_Hans_CN' => 'Third-party Module',
+                    ],
+                ],
+            ],
+        ]);
+
+        try {
+            $result = (new MarketplaceMetaReader())->readFromPackageDir($root, $moduleDir, [], 'Acme_WlsFileManager', true);
+
+            self::assertSame('module:wls', $result['meta']['tags'][0]['code'] ?? '');
+            self::assertSame('module', $result['meta']['tags'][0]['type'] ?? '');
+            self::assertSame('custom:wls-file-manager', $result['meta']['tags'][1]['code'] ?? '');
+            self::assertSame('custom', $result['meta']['tags'][1]['type'] ?? '');
+            self::assertSame('system:false', $result['meta']['tags'][2]['code'] ?? '');
+            self::assertSame('system', $result['meta']['tags'][2]['type'] ?? '');
+        } finally {
+            $this->removeDirectory($root);
+        }
+    }
+
     public function testDeclaredHashMismatchStillBlocks(): void
     {
         $root = $this->makePackageDir();

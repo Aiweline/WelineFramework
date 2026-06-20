@@ -3735,6 +3735,111 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
     }
 
+    public function testStringFalseMaintenanceConfigDoesNotCreateStickyStartupMaintenance(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+
+        $context = new ServiceContext(
+            instanceName: 'ai-u-maint-string-false',
+            epoch: 15,
+            controlPort: 37986,
+            masterPid: 424247,
+            host: '127.0.0.1',
+            mainPort: 18093,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            windowMode: false,
+            envConfig: [
+                'system' => [
+                    'maintenance' => 'false',
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 28188,
+            workerPort: 28188,
+        );
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->invokePrivateWithArgs($orchestrator, 'autoStartMaintenanceMode', [$context]);
+
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceMode'));
+        self::assertFalse($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-string-false',
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 201,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-string-false-1',
+            port: 28189,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 401,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 2,
+            epoch: $context->epoch,
+            launchId: 'worker-string-false-2',
+            port: 28190,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 402,
+        ));
+
+        self::assertTrue($orchestrator->checkAndDisableMaintenanceIfReady());
+        self::assertFalse($this->readPrivateBool($orchestrator, 'maintenanceMode'));
+        self::assertFalse($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
+
+        $workerRouteMessages = [];
+        foreach ($mockControl->sent as $entry) {
+            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
+            if (!\is_array($decoded)) {
+                continue;
+            }
+            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_ROUTE_TABLE
+                && ($decoded['role'] ?? ControlMessage::ROLE_WORKER) === ControlMessage::ROLE_WORKER) {
+                $workerRouteMessages[] = $decoded;
+            }
+        }
+
+        self::assertCount(1, $workerRouteMessages);
+        self::assertSame([28189, 28190], $workerRouteMessages[0]['ports'] ?? null);
+    }
+
     public function testConfiguredMaintenanceDoesNotAutoDisableWhenAllWorkersBecomeReady(): void
     {
         $orchestrator = new ServiceOrchestrator();

@@ -6,6 +6,13 @@
  *
  * @var \Weline\Framework\View\Template $this
  */
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 <style>
 .document-card {
@@ -590,13 +597,76 @@
     };
 
     var catalogTree = null;
-    var currentCategoryId = <?=json_encode($this->getData('selectedCategoryId') ?? '')?>;
+    var currentCategoryId = <?= json_encode($this->getData('selectedCategoryId') ?? '', $jsonForScriptFlags) ?>;
     var documentAdminUrls = {
         list: '<?= $this->getBackendUrl('dev/tool/admin/document/list') ?>',
         view: '<?= $this->getBackendUrl('dev/tool/admin/document/view') ?>',
         edit: '<?= $this->getBackendUrl('dev/tool/admin/document/edit') ?>',
         delete: '<?= $this->getBackendUrl('dev/tool/admin/document/delete') ?>'
     };
+
+    function centerElementInScrollContainer(container, element, behavior) {
+        if (!container || !element) {
+            return;
+        }
+
+        var target = element.querySelector('.jstree-anchor') || element;
+        var containerRect = container.getBoundingClientRect();
+        var targetRect = target.getBoundingClientRect();
+        if (!containerRect.height || !targetRect.height) {
+            return;
+        }
+
+        var offsetToCenter = (targetRect.top - containerRect.top)
+            - (containerRect.height / 2)
+            + (targetRect.height / 2);
+        var maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        var nextScrollTop = Math.max(0, Math.min(maxScrollTop, container.scrollTop + offsetToCenter));
+
+        container.scrollTo({
+            top: nextScrollTop,
+            behavior: behavior || 'smooth'
+        });
+    }
+
+    function openCatalogAncestors(categoryId) {
+        if (!categoryId || !catalogTree || !catalogTree.jstree) {
+            return;
+        }
+
+        var treeInstance = catalogTree.jstree(true);
+        var node = treeInstance.get_node(categoryId.toString());
+        if (!node) {
+            return;
+        }
+
+        (node.parents || [])
+            .filter(function(parentId) { return parentId && parentId !== '#'; })
+            .reverse()
+            .forEach(function(parentId) {
+                treeInstance.open_node(parentId);
+            });
+    }
+
+    function centerCatalogTreeNode(categoryId, behavior) {
+        if (!categoryId || !catalogTree || !catalogTree.jstree) {
+            return;
+        }
+
+        var run = function() {
+            var container = document.getElementById('catalog-tree-container');
+            var treeInstance = catalogTree.jstree(true);
+            var nodeElement = treeInstance.get_node(categoryId.toString(), true);
+            centerElementInScrollContainer(
+                container,
+                nodeElement && nodeElement.length ? nodeElement[0] : null,
+                behavior || 'smooth'
+            );
+        };
+
+        window.requestAnimationFrame(run);
+        window.setTimeout(run, 220);
+    }
     
     function initCatalogTree() {
         try {
@@ -605,7 +675,7 @@
                 return;
             }
             
-            var catalogs = <?=json_encode($this->getData('catalogs') ?? [])?>;
+            var catalogs = <?= json_encode($this->getData('catalogs') ?? [], $jsonForScriptFlags) ?>;
             var treeData = [];
             
             treeData.push({
@@ -636,12 +706,15 @@
                 'plugins': []
             }).on('ready.jstree', function() {
                 if (currentCategoryId) {
+                    openCatalogAncestors(currentCategoryId);
                     catalogTree.jstree('select_node', currentCategoryId.toString());
+                    centerCatalogTreeNode(currentCategoryId, 'auto');
                 } else {
                     catalogTree.jstree('select_node', '');
                 }
             }).on('select_node.jstree', function(e, data) {
                 var categoryId = data.node.id;
+                centerCatalogTreeNode(categoryId);
                 loadDocumentsByCategory(categoryId);
             });
         } catch (error) {

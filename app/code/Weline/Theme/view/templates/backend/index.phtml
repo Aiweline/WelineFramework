@@ -29,7 +29,7 @@ foreach ($themes as $themeItem) {
             <h4 class="mb-sm-0"><?= __('主题管理') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript:void(0);"><?= __('系统') ?></a></li>
+                    <li class="breadcrumb-item"><button type="button" class="btn btn-link p-0 border-0 align-baseline text-decoration-none breadcrumb-static-button" aria-disabled="true"><?= __('系统') ?></button></li>
                     <li class="breadcrumb-item active"><?= __('主题管理') ?></li>
                 </ol>
             </div>
@@ -142,7 +142,7 @@ foreach ($themes as $themeItem) {
                             <img src="<?= $hasPreview ? $previewImageSrc : '' ?>"
                                  alt="<?= __('主题预览') ?>"
                                  class="theme-preview-image<?= $hasPreview ? '' : ' d-none' ?>"
-                                 onerror="this.classList.add('d-none');var p=this.parentNode.querySelector('.theme-preview-placeholder');if(p){p.classList.remove('d-none');}">
+                                 data-fallback-target=".theme-preview-placeholder">
                             <div class="theme-preview-placeholder<?= $hasPreview ? ' d-none' : '' ?>">
                                 <i class="mdi mdi-image-outline theme-icon-placeholder"></i>
                                 <span class="text-muted small"><?= __('暂无预览图') ?></span>
@@ -776,6 +776,34 @@ foreach ($themes as $themeItem) {
         }
     }
 
+    function showThemePreviewPlaceholder(image, placeholder) {
+        if (!image) {
+            return;
+        }
+
+        const targetSelector = image.getAttribute('data-fallback-target') || '.theme-preview-placeholder';
+        const target = placeholder || (image.parentNode ? image.parentNode.querySelector(targetSelector) : null);
+        image.classList.add('d-none');
+        if (target) {
+            target.classList.remove('d-none');
+        }
+    }
+
+    function bindThemePreviewImageFallback(image, placeholder) {
+        if (!image || image.dataset.fallbackBound === '1') {
+            return;
+        }
+
+        image.dataset.fallbackBound = '1';
+        image.addEventListener('error', function() {
+            showThemePreviewPlaceholder(image, placeholder);
+        });
+    }
+
+    document.querySelectorAll('.theme-preview-image[data-fallback-target]').forEach(function(image) {
+        bindThemePreviewImageFallback(image);
+    });
+
     function updateThemeCardPreview(card, imageUrl) {
         if (!card || !imageUrl) {
             return;
@@ -789,13 +817,11 @@ foreach ($themes as $themeItem) {
             image = document.createElement('img');
             image.alt = '<?= __('主题预览') ?>';
             image.className = 'theme-preview-image';
-            image.onerror = function() {
-                this.classList.add('d-none');
-                if (placeholder) {
-                    placeholder.classList.remove('d-none');
-                }
-            };
+            image.setAttribute('data-fallback-target', '.theme-preview-placeholder');
+            bindThemePreviewImageFallback(image, placeholder);
             preview.insertBefore(image, preview.firstChild);
+        } else {
+            bindThemePreviewImageFallback(image, placeholder);
         }
 
         if (image) {
@@ -1405,6 +1431,34 @@ foreach ($themes as $themeItem) {
         }
     }
 
+    function showThemePreviewPlaceholder(image, placeholder) {
+        if (!image) {
+            return;
+        }
+
+        const targetSelector = image.getAttribute('data-fallback-target') || '.theme-preview-placeholder';
+        const target = placeholder || (image.parentNode ? image.parentNode.querySelector(targetSelector) : null);
+        image.classList.add('d-none');
+        if (target) {
+            target.classList.remove('d-none');
+        }
+    }
+
+    function bindThemePreviewImageFallback(image, placeholder) {
+        if (!image || image.dataset.fallbackBound === '1') {
+            return;
+        }
+
+        image.dataset.fallbackBound = '1';
+        image.addEventListener('error', function() {
+            showThemePreviewPlaceholder(image, placeholder);
+        });
+    }
+
+    document.querySelectorAll('.theme-preview-image[data-fallback-target]').forEach(function(image) {
+        bindThemePreviewImageFallback(image);
+    });
+
     function updateThemeCardPreview(card, imageUrl) {
         if (!card || !imageUrl) {
             return;
@@ -1418,13 +1472,11 @@ foreach ($themes as $themeItem) {
             image = document.createElement('img');
             image.alt = '<?= __('主题预览') ?>';
             image.className = 'theme-preview-image';
-            image.onerror = function() {
-                this.classList.add('d-none');
-                if (placeholder) {
-                    placeholder.classList.remove('d-none');
-                }
-            };
+            image.setAttribute('data-fallback-target', '.theme-preview-placeholder');
+            bindThemePreviewImageFallback(image, placeholder);
             preview.insertBefore(image, preview.firstChild);
+        } else {
+            bindThemePreviewImageFallback(image, placeholder);
         }
 
         if (image) {

@@ -11,6 +11,8 @@ declare(strict_types=1);
 namespace Weline\Server\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Acl\Model\Acl as AclModel;
+use Weline\Framework\Acl\Acl;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\OptimizationGuideService;
 use Weline\Server\Service\Control\BackendStatusService;
@@ -57,11 +59,12 @@ class ServerManager extends BackendController
     }
 
     /**
-     * ServerManager 数据接口允许本机直连，避免后台页内 AJAX 因登录态抖动被 302 拦截。
+     * ServerManager 只读数据接口允许本机直连，避免后台页内 AJAX 因登录态抖动被 302 拦截。
+     * 破坏性操作必须继续走后台登录与方法级 ACL。
      */
     protected function loginCheck(): void
     {
-        if ($this->isLocalDataApiRoute() && $this->validateLocalAccess()) {
+        if ($this->isLocalReadOnlyDataApiRoute() && $this->validateLocalAccess()) {
             return;
         }
         parent::loginCheck();
@@ -106,7 +109,14 @@ class ServerManager extends BackendController
             ];
         }
         
-        $instance = (string)$this->request->getGet('instance', 'default');
+        $instance = $this->getValidatedInstance((string)$this->request->getGet('instance', 'default'));
+        if ($instance === null) {
+            \http_response_code(400);
+            return [
+                'success' => false,
+                'error' => __('实例名称不合法'),
+            ];
+        }
         $statusDto = $this->statusService->getStatusDto($instance, true);
         return [
             'success' => true,
@@ -131,25 +141,17 @@ class ServerManager extends BackendController
         return OptimizationGuideService::isLocalAccess();
     }
 
-    private function isLocalDataApiRoute(): bool
+    private function isLocalReadOnlyDataApiRoute(): bool
     {
+        if (!$this->request->isGet()) {
+            return false;
+        }
         $path = \trim((string)$this->request->getRouteUrlPath(), '/');
         if (!\str_starts_with($path, 'server/backend/server-manager/')) {
             return false;
         }
         $apiActions = [
             'status',
-            'session-list',
-            'session-detail',
-            'session-destroy',
-            'session-persist',
-            'session-gc',
-            'memory-namespaces',
-            'memory-namespace-detail',
-            'memory-namespace-clear',
-            'memory-key-delete',
-            'memory-persist',
-            'memory-gc',
         ];
         foreach ($apiActions as $action) {
             if (\str_ends_with($path, '/' . $action)) {
@@ -162,10 +164,14 @@ class ServerManager extends BackendController
     /**
      * API: 启动服务器
      */
+    #[Acl('Weline_Server::server_manager_start', '启动 Weline Server', 'mdi-play', '启动 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postStart(): array
     {
-        $instance = (string)$this->request->getPost('instance', 'default');
-        $workers = (int)$this->request->getPost('workers', 0);
+        $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
+        if ($instance === null) {
+            return $this->invalidInputResponse(__('实例名称不合法'));
+        }
+        $workers = $this->getValidatedInt((string)$this->request->getPost('workers', '0'), 0, 256, 0);
 
         $result = $this->ipcGateway->startInstance($instance, $workers);
         return [
@@ -178,9 +184,13 @@ class ServerManager extends BackendController
     /**
      * API: 停止服务器
      */
+    #[Acl('Weline_Server::server_manager_stop', '停止 Weline Server', 'mdi-stop', '停止 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postStop(): array
     {
-        $instance = (string)$this->request->getPost('instance', 'default');
+        $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
+        if ($instance === null) {
+            return $this->invalidInputResponse(__('实例名称不合法'));
+        }
         $result = $this->ipcGateway->command($instance, ControlMessage::ACTION_STOP, '', [], 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
@@ -193,9 +203,13 @@ class ServerManager extends BackendController
     /**
      * API: 重启服务器
      */
+    #[Acl('Weline_Server::server_manager_restart', '重启 Weline Server', 'mdi-restart', '强制重启 Weline Server 实例', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postRestart(): array
     {
-        $instance = (string)$this->request->getPost('instance', 'default');
+        $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
+        if ($instance === null) {
+            return $this->invalidInputResponse(__('实例名称不合法'));
+        }
         $result = $this->broadcastControlDispatchService->reloadAsync($instance, ControlMessage::RELOAD_TYPE_FORCE, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
@@ -204,9 +218,13 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_reload', '热重载 Weline Server', 'mdi-refresh', '热重载 Weline Server 代码', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postReload(): array
     {
-        $instance = (string)$this->request->getPost('instance', 'default');
+        $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
+        if ($instance === null) {
+            return $this->invalidInputResponse(__('实例名称不合法'));
+        }
         $result = $this->broadcastControlDispatchService->reloadAsync($instance, ControlMessage::RELOAD_TYPE_CODE, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
@@ -215,9 +233,13 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_maintenance', '切换 Weline Server 维护模式', 'mdi-tools', '启用 Weline Server 维护模式', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postMaintenanceEnable(): array
     {
-        $instance = (string)$this->request->getPost('instance', 'default');
+        $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
+        if ($instance === null) {
+            return $this->invalidInputResponse(__('实例名称不合法'));
+        }
         $result = $this->ipcGateway->setMaintenanceMode($instance, true, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
@@ -226,9 +248,13 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_maintenance', '切换 Weline Server 维护模式', 'mdi-tools', '禁用 Weline Server 维护模式', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postMaintenanceDisable(): array
     {
-        $instance = (string)$this->request->getPost('instance', 'default');
+        $instance = $this->getValidatedInstance((string)$this->request->getPost('instance', 'default'));
+        if ($instance === null) {
+            return $this->invalidInputResponse(__('实例名称不合法'));
+        }
         $result = $this->ipcGateway->setMaintenanceMode($instance, false, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
@@ -237,9 +263,10 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_session_read', '查看 Weline Server Session', 'mdi-list-box-outline', '查看 Weline Server Session 列表', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_READ)]
     public function getSessionList(): array
     {
-        $limit = (int)$this->request->getGet('limit', 50);
+        $limit = $this->getValidatedInt((string)$this->request->getGet('limit', '50'), 1, 500, 50);
         return [
             'success' => true,
             'message' => (string)__('Session 列表加载完成'),
@@ -247,13 +274,14 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_session_read', '查看 Weline Server Session', 'mdi-list-box-outline', '查看 Weline Server Session 详情', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_READ)]
     public function getSessionDetail(): array
     {
-        $sessionId = (string)$this->request->getGet('session_id', '');
-        if ($sessionId === '') {
+        $sessionId = $this->getValidatedOpaqueKey((string)$this->request->getGet('session_id', ''), 128);
+        if ($sessionId === null) {
             return [
                 'success' => false,
-                'message' => (string)__('缺少 Session ID 参数'),
+                'message' => (string)__('Session ID 参数不合法'),
                 'data' => [],
             ];
         }
@@ -265,13 +293,14 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_session_destroy', '销毁 Weline Server Session', 'mdi-delete-outline', '销毁指定 Weline Server Session', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postSessionDestroy(): array
     {
-        $sessionId = (string)$this->request->getPost('session_id', '');
-        if ($sessionId === '') {
+        $sessionId = $this->getValidatedOpaqueKey((string)$this->request->getPost('session_id', ''), 128);
+        if ($sessionId === null) {
             return [
                 'success' => false,
-                'message' => (string)__('缺少 Session ID'),
+                'message' => (string)__('Session ID 不合法'),
             ];
         }
         $ok = $this->sharedStateAdminService->destroySession($sessionId);
@@ -283,6 +312,7 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_session_persist', '持久化 Weline Server Session', 'mdi-content-save-outline', '持久化 Weline Server Session 数据', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postSessionPersist(): array
     {
         $ok = $this->sharedStateAdminService->persistSession();
@@ -294,9 +324,10 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_session_gc', '回收 Weline Server Session', 'mdi-delete-sweep-outline', '执行 Weline Server Session 垃圾回收', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postSessionGc(): array
     {
-        $maxLifetime = (int)$this->request->getPost('max_lifetime', 3600);
+        $maxLifetime = $this->getValidatedInt((string)$this->request->getPost('max_lifetime', '3600'), 60, 2592000, 3600);
         $ok = $this->sharedStateAdminService->gcSession($maxLifetime);
         return [
             'success' => $ok,
@@ -306,9 +337,10 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_memory_read', '查看 Weline Server 内存服务', 'mdi-database-eye-outline', '查看 Weline Server 内存命名空间', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_READ)]
     public function getMemoryNamespaces(): array
     {
-        $limit = (int)$this->request->getGet('limit', 200);
+        $limit = $this->getValidatedInt((string)$this->request->getGet('limit', '200'), 1, 1000, 200);
         return [
             'success' => true,
             'message' => (string)__('内存命名空间加载完成'),
@@ -316,14 +348,15 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_memory_read', '查看 Weline Server 内存服务', 'mdi-database-eye-outline', '查看 Weline Server 内存命名空间详情', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_READ)]
     public function getMemoryNamespaceDetail(): array
     {
-        $namespace = (string)$this->request->getGet('namespace', '');
-        $limit = (int)$this->request->getGet('limit', 100);
-        if ($namespace === '') {
+        $namespace = $this->getValidatedOpaqueKey((string)$this->request->getGet('namespace', ''), 160);
+        $limit = $this->getValidatedInt((string)$this->request->getGet('limit', '100'), 1, 1000, 100);
+        if ($namespace === null) {
             return [
                 'success' => false,
-                'message' => (string)__('缺少命名空间参数'),
+                'message' => (string)__('命名空间参数不合法'),
                 'data' => [],
             ];
         }
@@ -334,13 +367,14 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_memory_clear', '清理 Weline Server 内存命名空间', 'mdi-broom', '清理 Weline Server 内存命名空间', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postMemoryNamespaceClear(): array
     {
-        $namespace = (string)$this->request->getPost('namespace', '');
-        if ($namespace === '') {
+        $namespace = $this->getValidatedOpaqueKey((string)$this->request->getPost('namespace', ''), 160);
+        if ($namespace === null) {
             return [
                 'success' => false,
-                'message' => (string)__('缺少命名空间参数'),
+                'message' => (string)__('命名空间参数不合法'),
             ];
         }
         $ok = $this->sharedStateAdminService->clearMemoryNamespace($namespace);
@@ -352,14 +386,15 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_memory_key_delete', '删除 Weline Server 内存键', 'mdi-key-remove-outline', '删除 Weline Server 内存服务键', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postMemoryKeyDelete(): array
     {
-        $namespace = (string)$this->request->getPost('namespace', '');
-        $key = (string)$this->request->getPost('key', '');
-        if ($namespace === '' || $key === '') {
+        $namespace = $this->getValidatedOpaqueKey((string)$this->request->getPost('namespace', ''), 160);
+        $key = $this->getValidatedOpaqueKey((string)$this->request->getPost('key', ''), 255);
+        if ($namespace === null || $key === null) {
             return [
                 'success' => false,
-                'message' => (string)__('缺少命名空间或键名参数'),
+                'message' => (string)__('命名空间或键名参数不合法'),
             ];
         }
         $ok = $this->sharedStateAdminService->deleteMemoryKey($namespace, $key);
@@ -371,6 +406,7 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_memory_persist', '持久化 Weline Server 内存服务', 'mdi-content-save-outline', '持久化 Weline Server 内存服务数据', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postMemoryPersist(): array
     {
         $ok = $this->sharedStateAdminService->persistMemory();
@@ -382,9 +418,10 @@ class ServerManager extends BackendController
         ];
     }
 
+    #[Acl('Weline_Server::server_manager_memory_gc', '回收 Weline Server 内存服务', 'mdi-delete-sweep-outline', '执行 Weline Server 内存服务垃圾回收', 'Weline_Backend::system_service_group', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function postMemoryGc(): array
     {
-        $maxLifetime = (int)$this->request->getPost('max_lifetime', 3600);
+        $maxLifetime = $this->getValidatedInt((string)$this->request->getPost('max_lifetime', '3600'), 60, 2592000, 3600);
         $ok = $this->sharedStateAdminService->gcMemory($maxLifetime);
         if ($ok) {
             return [
@@ -410,6 +447,57 @@ class ServerManager extends BackendController
         return [
             'success' => false,
             'message' => (string)__('内存服务垃圾回收执行失败，请检查 Memory Service 连接状态') . $detail,
+        ];
+    }
+
+    private function getValidatedInstance(string $raw): ?string
+    {
+        $instance = \trim($raw);
+        if ($instance === '') {
+            $instance = 'default';
+        }
+        if (\strlen($instance) > 80 || !\preg_match('/^[A-Za-z0-9_.:-]+$/', $instance)) {
+            return null;
+        }
+        if (\str_contains($instance, '..')) {
+            return null;
+        }
+        return $instance;
+    }
+
+    private function getValidatedInt(string $raw, int $min, int $max, int $default): int
+    {
+        $value = \trim($raw);
+        if ($value === '' || !\preg_match('/^-?\d+$/', $value)) {
+            return $default;
+        }
+        $number = (int)$value;
+        return \max($min, \min($max, $number));
+    }
+
+    private function getValidatedOpaqueKey(string $raw, int $maxLength): ?string
+    {
+        $value = \trim($raw);
+        if ($value === '' || \strlen($value) > $maxLength) {
+            return null;
+        }
+        if (\preg_match('/[\x00-\x1F\x7F]/', $value)) {
+            return null;
+        }
+        if (\str_contains($value, '..')
+            || \strpbrk($value, "\\/|;&`$<>") !== false
+        ) {
+            return null;
+        }
+        return $value;
+    }
+
+    private function invalidInputResponse(string $message): array
+    {
+        \http_response_code(400);
+        return [
+            'success' => false,
+            'message' => (string)$message,
         ];
     }
 

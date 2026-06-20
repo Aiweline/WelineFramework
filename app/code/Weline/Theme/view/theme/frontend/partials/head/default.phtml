@@ -23,6 +23,7 @@ $baseUrl = $this->request->getBaseUrl();
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $htmlDir = (string)($this->getData('htmlDir') ?: 'ltr');
 $htmlDir = $htmlDir === 'rtl' ? 'rtl' : 'ltr';
+$jsonEncodeFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 $currentCurrency = \w_env('user.currency', 'CNY');
 $defaultLang = \w_env('website.language', '') ?: \Weline\Framework\App\Env::get('locale', \Weline\Framework\App\Env::get('lang', 'zh_Hans_CN')) ?: 'zh_Hans_CN';
 $defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
@@ -102,7 +103,7 @@ $themeConfigPayload = [
     ],
 ];
 
-$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, $jsonEncodeFlags));
 ?>
 <base href="<?= htmlspecialchars($frontendBaseUrl, ENT_QUOTES, 'UTF-8') ?>">
 
@@ -480,7 +481,7 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
             window.__WelineThemeConfig = {};
         }
 
-        var themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        var themeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFlags) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
 
         if (themeConfig.api) {
@@ -497,6 +498,31 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
             window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
         }
 
+        function isSafeCssVariableName(varName) {
+            return typeof varName === 'string' && /^--[A-Za-z0-9_-]+$/.test(varName.trim());
+        }
+
+        function isSafeCssVariableValue(value) {
+            if (typeof value !== 'string' && typeof value !== 'number') {
+                return false;
+            }
+
+            var normalizedValue = String(value).trim();
+            if (!normalizedValue || normalizedValue.length > 1024) {
+                return false;
+            }
+
+            if (/[\x00-\x1F\x7F]/.test(normalizedValue)) {
+                return false;
+            }
+
+            if (/[;{}<>\\]/.test(normalizedValue)) {
+                return false;
+            }
+
+            return !(/\/\*|\*\/|@import\b|url\s*\(|expression\s*\(|javascript\s*:|data\s*:/i.test(normalizedValue));
+        }
+
         window.addEventListener('message', function(event) {
             if (!event.data || event.data.type !== 'WELINE_THEME_UPDATE') {
                 return;
@@ -505,7 +531,12 @@ if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
             var cssVars = event.data.cssVars || {};
             var root = document.documentElement;
             Object.keys(cssVars).forEach(function(varName) {
-                root.style.setProperty(varName, cssVars[varName]);
+                var value = cssVars[varName];
+                if (!isSafeCssVariableName(varName) || !isSafeCssVariableValue(value)) {
+                    return;
+                }
+
+                root.style.setProperty(varName.trim(), String(value).trim());
             });
         });
     })();

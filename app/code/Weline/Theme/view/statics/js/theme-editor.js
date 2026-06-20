@@ -890,7 +890,7 @@
         config.apiFrontendLayoutPreview = container.dataset.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
         config.apiSaveCompiledLayout = container.dataset.apiSaveCompiledLayout || `${config.apiBase}/save-compiled-layout`;
-        
+
         // 版本控制 API 端点
         config.apiVersions = container.dataset.apiVersions || `${config.apiBase}/versions`;
         config.apiSaveVersion = container.dataset.apiSaveVersion || `${config.apiBase}/save-version`;
@@ -899,7 +899,7 @@
         config.apiPublishVersion = container.dataset.apiPublishVersion || `${config.apiBase}/publish-version`;
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
         config.apiRenameVersion = container.dataset.apiRenameVersion || `${config.apiBase}/rename-version`;
-        
+
         // 前端预览 API 端点
         config.apiStartPreview = container.dataset.apiStartPreview || `${config.apiBase}/start-preview`;
         config.apiExitPreview = container.dataset.apiExitPreview || `${config.apiBase}/exit-preview`;
@@ -1160,6 +1160,50 @@
             if (module && code) openComponentPreviewModal(module, code, name);
         });
 
+        document.addEventListener('click', function(e) {
+            const clearImageBtn = e.target.closest('[data-config-image-clear]');
+            if (clearImageBtn) {
+                e.preventDefault();
+                const fieldId = clearImageBtn.getAttribute('data-target') || '';
+                const field = fieldId ? document.getElementById(fieldId) : null;
+                if (field) {
+                    field.value = '';
+                }
+                clearImageBtn.closest('.image-preview-container')?.remove();
+                return;
+            }
+
+            const groupTitle = e.target.closest('[data-config-group-toggle]');
+            if (groupTitle) {
+                groupTitle.closest('.config-group')?.classList.toggle('collapsed');
+                return;
+            }
+
+            const slotInfoItem = e.target.closest('.slot-info-item[data-slot-id]');
+            if (slotInfoItem) {
+                e.preventDefault();
+                scrollToSlot(slotInfoItem.getAttribute('data-slot-id') || '');
+                return;
+            }
+
+            const versionButton = e.target.closest('[data-version-action][data-version-id]');
+            if (versionButton) {
+                e.preventDefault();
+                const versionId = parseInt(versionButton.getAttribute('data-version-id') || '', 10);
+                if (!Number.isFinite(versionId) || versionId <= 0) {
+                    return;
+                }
+                const action = versionButton.getAttribute('data-version-action');
+                if (action === 'preview') {
+                    previewVersion(versionId);
+                } else if (action === 'switch') {
+                    switchToVersion(versionId);
+                } else if (action === 'delete') {
+                    deleteVersion(versionId);
+                }
+            }
+        });
+
         // 部件分组折叠/展开
         document.querySelectorAll('.widget-group-header').forEach(header => {
             header.addEventListener('click', function(e) {
@@ -1205,7 +1249,7 @@
             const areaDescription = e.target.closest('.area-description');
             const slotPlaceholder = e.target.closest('.slot-placeholder-large');
             const previewArea = e.target.closest('.preview-area');
-            
+
             // 如果点击的是区域标签、区域描述、占位符、或非部件列表的区域空白处
             if (areaLabel || areaDescription || slotPlaceholder || (previewArea && !e.target.closest('.preview-widget-item'))) {
                 // 点击区域标签或区域空白处（排除已有部件）
@@ -1215,7 +1259,7 @@
                     return;
                 }
             }
-            
+
             // 点击空白区域时，取消选中 slot 并恢复部件顺序
             const slotElement = e.target.closest('.container-slot, [data-wslot], .preview-area');
             if (!slotElement && !e.target.closest('.widget-item')) {
@@ -1257,7 +1301,7 @@
 
         // 预览按钮
         elements.btnPreview?.addEventListener('click', openPreview);
-        
+
         // 前端预览按钮
         elements.btnFrontendPreview?.addEventListener('click', openFrontendPreview);
 
@@ -1268,7 +1312,7 @@
                 if (e.target.id === 'widgetConfigForm') saveWidgetConfig(e.target);
             }
         });
-        
+
         // 左侧配置面板 i18n 事件委托（覆盖 renderConfigForm 生成的表单）
         if (elements.configContent) {
             elements.configContent.addEventListener('click', async function(e) {
@@ -1380,7 +1424,7 @@
                 }
             }
         });
-        
+
         // 配置面板删除按钮（事件委托）
         document.addEventListener('click', function(e) {
             const deleteBtn = e.target.closest('.btn-delete-config');
@@ -1389,7 +1433,7 @@
                 const layoutId = deleteBtn.dataset.layoutId;
                 if (!layoutId) return;
                 // 尝试从结构面板获取 slotId
-                const structureItem = document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`);
+                const structureItem = document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
                 const slotId = structureItem?.closest('[data-slot]')?.dataset.slot || undefined;
                 handleWidgetDelete(layoutId, slotId);
             }
@@ -1409,7 +1453,7 @@
             elements.previewFrame.addEventListener('error', function(e) {
                 console.error('[ThemeEditor] Iframe error:', e);
             });
-            
+
             elements.previewFrame.addEventListener('load', function() {
                 if (elements.previewLoading) {
                     elements.previewLoading.classList.add('hidden');
@@ -1420,13 +1464,13 @@
 
                 // 设置 iframe 内链接拦截，使链接跳转到预览模式
                 setupIframeLinkInterception();
-                
+
                 // 初始化部件 hover 操作按钮（多档延迟以兼容异步渲染的布局）
                 setTimeout(() => initWidgetHoverActions(), 100);
                 setTimeout(() => initWidgetHoverActions(), 400);
                 setTimeout(() => initWidgetHoverActions(), 1200);
             });
-            
+
             // 添加超时机制：如果 5 秒后仍未加载完成，强制隐藏加载状态
             setTimeout(function() {
                 if (elements.previewLoading && !elements.previewLoading.classList.contains('hidden')) {
@@ -1562,7 +1606,7 @@
             url.searchParams.set('widget_module', widgetModule);
             url.searchParams.set('widget_code', widgetCode);
             const data = await apiJson(url.toString());
-            const html = (data && data.html) ? String(data.html) : '';
+            const html = (data && data.html) ? sanitizeHtmlForEditorPreview(data.html) : '';
             if (html.trim() !== '') {
                 canvas.innerHTML = html;
                 canvas.dataset.previewLoaded = '1';
@@ -1580,7 +1624,7 @@
             return;
         }
         canvas.innerHTML = '';
-        const html = (previewHtml ?? '').toString().trim();
+        const html = sanitizeHtmlForEditorPreview(previewHtml).trim();
         if (!html) {
             return;
         }
@@ -1683,27 +1727,27 @@
      */
     function inferAreaFromSlotId(slotId) {
         if (!slotId) return 'content';
-        
+
         // 已知的 header 子插槽
         const headerSlots = ['logo', 'search', 'user-area', 'navigation', 'header-search', 'account', 'mini-cart-icon', 'language-switcher', 'currency-switcher', 'cart-icon'];
-        
+
         // 已知的 footer 子插槽
         const footerSlots = ['footer-social', 'footer-links', 'footer-copyright', 'footer-payment', 'footer-newsletter'];
-        
+
         // 精确匹配
         if (slotId === 'header') return 'header';
         if (slotId === 'footer') return 'footer';
         if (slotId === 'content') return 'content';
-        
+
         // 检查是否是 header 子插槽
         if (headerSlots.includes(slotId)) return 'header';
-        
+
         // 检查是否是 footer 子插槽（包括前缀匹配）
         if (footerSlots.includes(slotId) || slotId.startsWith('footer-')) return 'footer';
-        
+
         // 检查是否以 header- 开头
         if (slotId.startsWith('header-')) return 'header';
-        
+
         // 默认归属于 content 区域
         return 'content';
     }
@@ -1763,17 +1807,17 @@
         console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', normalizedSlot.area, 'resolved areaCode:', areaCode);
 
         applySlotWidgetRecommendations(normalizedSlot);
-        
+
         // 滚动到高亮的部件（延迟以等待DOM更新）
         scrollToHighlightedWidgets();
-        
+
         // 更新左侧配置面板，显示插槽信息
         renderSlotInfoPanel(slot);
-        
+
         // 显示提示
         showToast(`已选中插槽: ${slot.name}`, 'info');
     }
-    
+
     /**
      * 渲染插槽信息到配置面板
      * - 如果插槽内有部件，显示所有部件的配置（可折叠）
@@ -1781,12 +1825,12 @@
      */
     async function renderSlotInfoPanel(slot) {
         if (!elements.configContent) return;
-        
+
         const slotName = slot.name || slot.id || '未命名插槽';
         const slotId = slot.id || '';
         const rawAccept = slot.accept;
         const acceptCodes = Array.isArray(rawAccept) ? rawAccept : (typeof rawAccept === 'string' ? rawAccept.split(',').map(s => s.trim()).filter(Boolean) : []);
-        
+
         // 显示加载状态
         elements.configContent.innerHTML = `
             <div class="slot-loading text-center py-4">
@@ -1794,11 +1838,11 @@
                 <p class="mt-2 text-muted">加载插槽配置...</p>
             </div>
         `;
-        
+
         // 查找插槽内的部件
         // 支持多种选择器：area-widgets、container-slot、data-wslot
         const widgetsInSlot = findWidgetsInSlot(slotId);
-        
+
         if (widgetsInSlot.length > 0) {
             // 有部件，加载并显示所有部件的配置
             await renderSlotWidgetsConfig(slot, widgetsInSlot);
@@ -1807,14 +1851,14 @@
             renderSlotEmptyState(slot);
         }
     }
-    
+
     /**
      * 查找插槽内的部件元素
      * 注意：部件在 iframe 内，需要从 iframe 的 document 中查找
      */
     function findWidgetsInSlot(slotId) {
         const widgets = [];
-        
+
         // 获取 iframe 的 document
         let iframeDoc = null;
         try {
@@ -1826,25 +1870,25 @@
         } catch (e) {
             console.warn('无法访问 iframe document:', e);
         }
-        
+
         if (!iframeDoc) {
             console.log('findWidgetsInSlot: iframe document 不可用');
             return widgets;
         }
-        
+
         // 尝试多种选择器查找部件
         // 1. 查找 widget-wrapper 容器内的部件（SlotRendererService 渲染的）
         // 2. 查找原有标记的部件元素
         const selectors = [
-            `[data-wslot="${slotId}"] .widget-wrapper`,
-            `[data-wslot="${slotId}"] [data-layout-id]`,
-            `.area-widgets[data-area="${slotId}"] .preview-widget-item`,
-            `.area-widgets[data-area="${slotId}"] [data-layout-id]`,
-            `.${slotId}-slot-widgets .preview-widget-item`,
-            `.container-slot[data-slot="${slotId}"] .preview-widget-item`,
-            `.area-slot[data-slot="${slotId}"] .preview-widget-item`,
+            `${dataAttributeSelector('data-wslot', slotId)} .widget-wrapper`,
+            `${dataAttributeSelector('data-wslot', slotId)} [data-layout-id]`,
+            `.area-widgets${dataAttributeSelector('data-area', slotId)} .preview-widget-item`,
+            `.area-widgets${dataAttributeSelector('data-area', slotId)} [data-layout-id]`,
+            `.${cssIdentifier(slotId)}-slot-widgets .preview-widget-item`,
+            `.container-slot${dataAttributeSelector('data-slot', slotId)} .preview-widget-item`,
+            `.area-slot${dataAttributeSelector('data-slot', slotId)} .preview-widget-item`,
         ];
-        
+
         for (const selector of selectors) {
             try {
                 const found = iframeDoc.querySelectorAll(selector);
@@ -1857,17 +1901,17 @@
                 console.warn('选择器查询失败:', selector, e);
             }
         }
-        
+
         // 如果没找到，尝试直接查找该 slot 容器
         if (widgets.length === 0) {
             try {
-                const slotContainer = iframeDoc.querySelector(`[data-wslot="${slotId}"]`);
-                
+                const slotContainer = iframeDoc.querySelector(dataAttributeSelector('data-wslot', slotId));
+
                 if (slotContainer) {
                     console.log(`findWidgetsInSlot: 找到 slot 容器，检查内部内容...`);
                     // 检查容器内是否有任何带 data-layout-id 或 widget 相关类名的元素
                     const innerWidgets = slotContainer.querySelectorAll('[data-layout-id], .widget-wrapper, .widget-content');
-                    
+
                     if (innerWidgets.length > 0) {
                         innerWidgets.forEach(el => widgets.push(el));
                     }
@@ -1876,18 +1920,18 @@
                 console.warn('slot 容器查询失败:', e);
             }
         }
-        
+
         console.log(`findWidgetsInSlot(${slotId}): 找到 ${widgets.length} 个部件`);
         return widgets;
     }
-    
+
     /**
      * 渲染插槽内所有部件的配置（可折叠手风琴）
      */
     async function renderSlotWidgetsConfig(slot, widgetElements) {
         const slotName = slot.name || slot.id || '未命名插槽';
         const slotId = slot.id || '';
-        
+
         // 收集部件信息（从 iframe 内的元素读取 data 属性）
         const widgetsData = [];
         for (const el of widgetElements) {
@@ -1899,13 +1943,13 @@
                     dataSource = wrapper;
                 }
             }
-            
+
             const layoutId = dataSource.dataset?.layoutId || dataSource.getAttribute?.('data-layout-id');
             const widgetCode = dataSource.dataset?.widgetCode || dataSource.getAttribute?.('data-widget-code');
             const widgetModule = dataSource.dataset?.widgetModule || dataSource.getAttribute?.('data-widget-module');
             const widgetType = dataSource.dataset?.widgetType || dataSource.getAttribute?.('data-widget-type');
             const widgetName = dataSource.dataset?.widgetName || dataSource.getAttribute?.('data-widget-name') || widgetCode || '未知部件';
-            
+
             // 只添加有 layoutId 的部件
             if (layoutId) {
                 widgetsData.push({
@@ -1918,21 +1962,21 @@
                 });
             }
         }
-        
+
         // 如果没有可识别的部件，显示空状态
         if (widgetsData.length === 0) {
             console.log('renderSlotWidgetsConfig: 没有找到可识别的部件，显示空状态');
             renderSlotEmptyState(slot);
             return;
         }
-        
+
         // 构建手风琴 HTML
         let accordionHtml = '';
         for (let i = 0; i < widgetsData.length; i++) {
             const widget = widgetsData[i];
             const isFirst = i === 0;
             const collapseId = `widgetConfig_${widget.layoutId || i}`;
-            
+
             // 类型图标映射
             const typeIcons = {
                 'header': 'ri-layout-top-line',
@@ -1950,11 +1994,11 @@
                 'container': 'ri-layout-grid-line',
             };
             const icon = typeIcons[widget.widgetType] || 'ri-widgets-line';
-            
+
             accordionHtml += `
                 <div class="slot-widget-accordion-item" data-layout-id="${widget.layoutId}">
-                    <div class="slot-widget-header ${isFirst ? '' : 'collapsed'}" 
-                         data-bs-toggle="collapse" 
+                    <div class="slot-widget-header ${isFirst ? '' : 'collapsed'}"
+                         data-bs-toggle="collapse"
                          data-bs-target="#${collapseId}"
                          aria-expanded="${isFirst ? 'true' : 'false'}">
                         <div class="widget-header-left">
@@ -1974,7 +2018,7 @@
                 </div>
             `;
         }
-        
+
         const html = `
             <div class="slot-config-panel">
                 <div class="slot-config-header">
@@ -1986,11 +2030,11 @@
                         <span class="widget-count-badge">${widgetsData.length} 个部件</span>
                     </div>
                 </div>
-                
+
                 <div class="slot-widgets-accordion">
                     ${accordionHtml}
                 </div>
-                
+
                 <div class="slot-add-more">
                     <button type="button" class="btn btn-sm btn-outline-primary w-100">
                         ${iconSvg('add')} 继续添加部件
@@ -1998,16 +2042,16 @@
                 </div>
             </div>
         `;
-        
+
         elements.configContent.innerHTML = html;
-        
+
         // 为每个部件加载配置表单
         for (const widget of widgetsData) {
             if (widget.layoutId) {
                 loadWidgetConfigForAccordion(widget.layoutId);
             }
         }
-        
+
         // 绑定手风琴头部点击事件（加载配置）
         document.querySelectorAll('.slot-widget-header').forEach(header => {
             header.addEventListener('click', function() {
@@ -2019,7 +2063,7 @@
             });
         });
     }
-    
+
     /**
      * 加载部件配置到手风琴面板
      */
@@ -2252,27 +2296,27 @@
     }
 
     async function loadWidgetConfigForAccordion(layoutId) {
-        const configBody = document.querySelector(`.slot-widget-body[data-layout-id="${layoutId}"]`);
+        const configBody = document.querySelector(`.slot-widget-body${dataLayoutIdSelector(layoutId)}`);
         if (!configBody) return;
-        
+
         // 如果已加载，跳过
         if (!configBody.querySelector('.widget-config-loading')) return;
-        
+
         try {
             const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}`;
             const result = await apiJson(apiUrl);
-            
+
             if (result.success && result.data) {
                 const widgetData = result.data;
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
-                
+
                 // 生成配置表单
                 const formHtml = await generateWidgetConfigForm(layoutId, params, widgetConfig);
                 const searchPlaceholder = (typeof __ !== 'undefined' ? __('搜索配置项') : '搜索配置项');
                 const searchWrap = '<div class="w-param-search-wrap mb-2"><input type="text" class="w-param-search form-control form-control-sm" placeholder="' + searchPlaceholder + '" autocomplete="off"></div>';
                 configBody.innerHTML = searchWrap + formHtml;
-                
+
                 // 绑定表单事件（手风琴 + 配置搜索）
                 bindAccordionFormEvents(configBody);
                 bindParamSearch(configBody);
@@ -2289,7 +2333,7 @@
             </div>`;
         }
     }
-    
+
     /**
      * 生成部件配置表单 HTML
      * 优先使用后端 API 渲染，失败时回退到前端渲染
@@ -2301,7 +2345,7 @@
                 <p>该部件无可配置项</p>
             </div>`;
         }
-        
+
         // 尝试使用后端 API 渲染
         try {
             const html = await apiText(config.apiParamRenderForm || '/theme/backend/widget/paramrender/form', {
@@ -2322,11 +2366,11 @@
         } catch (err) {
             console.debug?.('[ThemeEditor] Backend form render failed, using fallback:', err);
         }
-        
+
         // 回退到前端渲染
         return generateWidgetConfigFormFallback(layoutId, params, formConfig);
     }
-    
+
     /**
      * 前端回退渲染方法
      */
@@ -2335,7 +2379,7 @@
         const basicFields = {};
         const styleFields = {};
         const linkFields = {};
-        
+
         for (const [key, param] of Object.entries(params)) {
             if (key.includes('style') || key.includes('size') || key.includes('color') || key.includes('align') || key.includes('gap')) {
                 styleFields[key] = param;
@@ -2345,7 +2389,7 @@
                 basicFields[key] = param;
             }
         }
-        
+
         // 生成字段HTML的辅助函数
         const normalizeArrayFieldValue = (value, fallback = []) => {
             if (Array.isArray(value)) {
@@ -2493,8 +2537,9 @@
             } else if (type === 'media_image') {
                 html += renderFallbackMediaImageField(inputId, fieldKey, value, fieldParam);
             } else if (type === 'image' || type === 'image_picker') {
+                const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
                 html += `<div class="array-image-field${value ? ' has-image' : ''}">
-                    <div class="array-image-preview">${value ? `<img src="${escapedValue}" alt="">` : iconSvg('image')}</div>
+                    <div class="array-image-preview">${safeImageUrl ? `<img src="${safeImageUrl}" alt="">` : iconSvg('image')}</div>
                     <input type="text" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" placeholder="图片URL">
                 </div>`;
             } else {
@@ -2552,53 +2597,61 @@
             const translatable = isFieldTranslatable(param);
             const fieldId = `config_${layoutId}_${key}`;
             const fieldClass = translatable ? 'config-field translatable-field' : 'config-field';
-            
-            let fieldHtml = `<div class="${fieldClass}" data-field-key="${key}" data-translatable="${translatable}">`;
-            
+            const safeKey = escapeHtml(key);
+            const safeLayoutId = escapeHtml(layoutId || '');
+            const safeFieldId = escapeHtml(fieldId);
+            const safeLabel = escapeHtml(label);
+            const safeDescription = escapeHtml(description);
+            const safeValue = escapeHtml(value ?? '');
+            const safeScalarValue = escapeHtml(scalarValue);
+
+            let fieldHtml = `<div class="${fieldClass}" data-field-key="${safeKey}" data-translatable="${translatable}">`;
+
             // 字段头部：标签 + 多语言按钮
             fieldHtml += `<div class="config-field-header">
-                <label class="config-label" for="${fieldId}">${label}</label>
-                ${translatable ? `<button type="button" class="btn-i18n-edit" data-field="${key}" data-layout-id="${layoutId}" title="编辑多语言">
+                <label class="config-label" for="${safeFieldId}">${safeLabel}</label>
+                ${translatable ? `<button type="button" class="btn-i18n-edit" data-field="${safeKey}" data-layout-id="${safeLayoutId}" title="编辑多语言">
                     <i class="ri-translate-2"></i>
                     <span>多语言</span>
                 </button>` : ''}
             </div>`;
-            
+
             // 输入控件
             fieldHtml += `<div class="config-field-input">`;
             if (isBooleanParamType(semanticType)) {
                 fieldHtml += renderBooleanSelect(fieldId, key, key, value, false, param);
             } else if (type === 'select' && param.options) {
-                fieldHtml += `<select class="form-select" id="${fieldId}" name="${key}">`;
+                fieldHtml += `<select class="form-select" id="${safeFieldId}" name="${safeKey}">`;
                 for (const [optVal, optLabel] of Object.entries(param.options)) {
-                    fieldHtml += `<option value="${optVal}" ${value == optVal ? 'selected' : ''}>${optLabel}</option>`;
+                    fieldHtml += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(optLabel)}</option>`;
                 }
                 fieldHtml += `</select>`;
             } else if (type === 'textarea' || type === 'html') {
-                fieldHtml += `<textarea class="form-control" id="${fieldId}" name="${key}" rows="3">${value}</textarea>`;
+                fieldHtml += `<textarea class="form-control" id="${safeFieldId}" name="${safeKey}" rows="3">${safeValue}</textarea>`;
             } else if (type === 'number') {
-                fieldHtml += `<input type="number" class="form-control" id="${fieldId}" name="${key}" value="${value}" min="${param.min || ''}" max="${param.max || ''}">`;
+                fieldHtml += `<input type="number" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" min="${escapeHtml(param.min || '')}" max="${escapeHtml(param.max || '')}">`;
             } else if (type === 'color') {
                 fieldHtml += `<div class="color-picker-wrapper">
-                    <input type="color" class="form-control-color" id="${fieldId}_picker" value="${value || '#000000'}">
-                    <input type="text" class="form-control" id="${fieldId}" name="${key}" value="${value || '#000000'}" placeholder="#000000">
+                    <input type="color" class="form-control-color" id="${safeFieldId}_picker" value="${escapeHtml(value || '#000000')}">
+                    <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${escapeHtml(value || '#000000')}" placeholder="#000000">
                 </div>`;
             } else if (type === 'url') {
                 fieldHtml += `<div class="input-with-icon">
                     <i class="ri-link"></i>
-                    <input type="url" class="form-control" id="${fieldId}" name="${key}" value="${value}" placeholder="https://">
+                    <input type="url" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="https://">
                 </div>`;
             } else if (type === 'image') {
+                const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
                 fieldHtml += `<div class="image-picker-wrapper">
                     <div class="image-preview-container${value ? ' has-image' : ''}">
-                        <div class="image-preview" id="${fieldId}_preview">
-                            ${value ? `<img src="${value}" alt="预览">` : `<div class="image-placeholder">${iconSvg('image')}<span>点击选择图片</span></div>`}
+                        <div class="image-preview" id="${safeFieldId}_preview">
+                            ${safeImageUrl ? `<img src="${safeImageUrl}" alt="预览">` : `<div class="image-placeholder">${iconSvg('image')}<span>点击选择图片</span></div>`}
                         </div>
                     </div>
                     <div class="image-url-input">
                         <div class="input-group">
                             <span class="input-group-text"><i class="ri-link"></i></span>
-                            <input type="text" class="form-control" id="${fieldId}" name="${key}" value="${value || ''}" placeholder="图片URL">
+                            <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="图片URL">
                         </div>
                     </div>
                 </div>`;
@@ -2608,79 +2661,79 @@
                 const step = param.step || 1;
                 fieldHtml += `<div class="range-slider-wrapper">
                     <div class="range-slider-container">
-                        <input type="range" class="form-range" id="${fieldId}_slider" min="${min}" max="${max}" step="${step}" value="${value || min}">
+                        <input type="range" class="form-range" id="${safeFieldId}_slider" min="${escapeHtml(min)}" max="${escapeHtml(max)}" step="${escapeHtml(step)}" value="${escapeHtml(value || min)}">
                     </div>
                     <div class="range-value-display">
-                        <input type="number" class="form-control range-value-input" id="${fieldId}" name="${key}" min="${min}" max="${max}" step="${step}" value="${value || min}">
+                        <input type="number" class="form-control range-value-input" id="${safeFieldId}" name="${safeKey}" min="${escapeHtml(min)}" max="${escapeHtml(max)}" step="${escapeHtml(step)}" value="${escapeHtml(value || min)}">
                     </div>
                 </div>`;
             } else if (type === 'datetime' || type === 'date' || type === 'time') {
                 const inputType = type === 'date' ? 'date' : (type === 'time' ? 'time' : 'datetime-local');
                 fieldHtml += `<div class="input-group">
                     <span class="input-group-text">${iconSvg('calendar')}</span>
-                    <input type="${inputType}" class="form-control" id="${fieldId}" name="${key}" value="${value || ''}">
+                    <input type="${inputType}" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}">
                 </div>`;
             } else if (isArrayField) {
                 const arrayItemsHtml = arrayValue.length > 0
                     ? arrayValue.map((item, index) => renderFallbackArrayItem(fieldId, key, item, index, arrayItemSchema)).join('')
                     : '<div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>';
                 const templateHtml = renderFallbackArrayItem(fieldId, key, {}, '__INDEX__', arrayItemSchema);
-                fieldHtml += `<div class="array-editor-wrapper" data-field-id="${fieldId}" data-max-items="${escapeHtml(param.max_items || param.maxItems || '')}">
-                    <div class="array-items-container" id="${fieldId}_items">
+                fieldHtml += `<div class="array-editor-wrapper" data-field-id="${safeFieldId}" data-max-items="${escapeHtml(param.max_items || param.maxItems || '')}">
+                    <div class="array-items-container" id="${safeFieldId}_items">
                         ${arrayItemsHtml}
                     </div>
                     <div class="array-actions">
-                        <button type="button" class="btn btn-outline-primary btn-add-array-item" data-target="${fieldId}">
+                        <button type="button" class="btn btn-outline-primary btn-add-array-item" data-target="${safeFieldId}">
                             ${iconSvg('add')} 添加项目
                         </button>
                     </div>
                     <template>${templateHtml}</template>
-                    <input type="hidden" id="${fieldId}" name="${key}" value='${escapeHtml(JSON.stringify(arrayValue))}'>
+                    <input type="hidden" id="${safeFieldId}" name="${safeKey}" value='${escapeHtml(JSON.stringify(arrayValue))}'>
                 </div>`;
             } else if (type === 'icon') {
                 fieldHtml += `<div class="icon-picker-wrapper">
                     <div class="icon-preview">
-                        <span class="icon-preview-display">${value ? `<i class="${value}"></i>` : (iconSvg('add') || '<span class="te-icon placeholder-icon"></span>')}</span>
-                        <button type="button" class="btn btn-sm btn-outline-primary btn-icon-picker" data-target="${fieldId}">
+                        <span class="icon-preview-display">${value ? `<i class="${escapeHtml(value)}"></i>` : (iconSvg('add') || '<span class="te-icon placeholder-icon"></span>')}</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary btn-icon-picker" data-target="${safeFieldId}">
                             ${iconSvg('apps')} 选择图标
                         </button>
                     </div>
-                    <input type="hidden" id="${fieldId}" name="${key}" value="${value || ''}">
+                    <input type="hidden" id="${safeFieldId}" name="${safeKey}" value="${safeValue}">
                 </div>`;
             } else {
-                fieldHtml += `<input type="text" class="form-control" id="${fieldId}" name="${key}" value="${scalarValue}">`;
+                fieldHtml += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeScalarValue}">`;
             }
             fieldHtml += `</div>`;
-            
+
             // 多语言编辑区（统一空容器，由 fetchInstalledLocales 动态填充）
             if (translatable) {
-                fieldHtml += `<div class="w-param-i18n-panel i18n-edit-panel" id="i18n_panel_${layoutId}_${key}" data-field="${key}" data-layout-id="${layoutId}" style="display:none;">
+                fieldHtml += `<div class="w-param-i18n-panel i18n-edit-panel" id="i18n_panel_${safeLayoutId}_${safeKey}" data-field="${safeKey}" data-layout-id="${safeLayoutId}" style="display:none;">
                     <div class="w-param-i18n-header i18n-panel-header">
                         <span>${iconSvg('global')} 多语言配置</span>
-                        <button type="button" class="btn-i18n-close" data-close-i18n data-field="${key}">${iconSvg('close')}</button>
+                        <button type="button" class="btn-i18n-close" data-close-i18n data-field="${safeKey}">${iconSvg('close')}</button>
                     </div>
                     <div class="w-param-i18n-body i18n-panel-body"></div>
                     <div class="w-param-i18n-footer i18n-panel-footer">
-                        <button type="button" class="btn btn-sm btn-outline-secondary btn-ai-i18n" data-ai-i18n data-field="${key}" data-layout-id="${layoutId}">
+                        <button type="button" class="btn btn-sm btn-outline-secondary btn-ai-i18n" data-ai-i18n data-field="${safeKey}" data-layout-id="${safeLayoutId}">
                             AI翻译
                         </button>
-                        <button type="button" class="btn btn-sm btn-primary btn-save-i18n" data-save-i18n data-field="${key}" data-layout-id="${layoutId}">
+                        <button type="button" class="btn btn-sm btn-primary btn-save-i18n" data-save-i18n data-field="${safeKey}" data-layout-id="${safeLayoutId}">
                             ${iconSvg('save')} 保存多语言
                         </button>
                     </div>
                 </div>`;
             }
-            
+
             if (description) {
-                fieldHtml += `<div class="config-field-description">${iconSvg('info')} ${description}</div>`;
+                fieldHtml += `<div class="config-field-description">${iconSvg('info')} ${safeDescription}</div>`;
             }
             fieldHtml += `</div>`;
             return fieldHtml;
         };
-        
+
         // 生成分组HTML
         let groupsHtml = '';
-        
+
         if (Object.keys(basicFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(basicFields)) {
@@ -2697,7 +2750,7 @@
                 </div>
             `;
         }
-        
+
         if (Object.keys(styleFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(styleFields)) {
@@ -2714,7 +2767,7 @@
                 </div>
             `;
         }
-        
+
         if (Object.keys(linkFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(linkFields)) {
@@ -2731,22 +2784,22 @@
                 </div>
             `;
         }
-        
+
         return `
-            <form class="widget-accordion-config-form w-param-form" data-layout-id="${layoutId}">
+            <form class="widget-accordion-config-form w-param-form" data-layout-id="${escapeHtml(layoutId)}">
                 ${groupsHtml}
                 <div class="config-actions">
                     <button type="submit" class="btn btn-primary">
                         ${iconSvg('save')} 保存配置
                     </button>
-                    <button type="button" class="btn btn-outline-danger btn-delete-widget" data-layout-id="${layoutId}">
+                    <button type="button" class="btn btn-outline-danger btn-delete-widget" data-layout-id="${escapeHtml(layoutId)}">
                         ${iconSvg('delete')} 删除
                     </button>
                 </div>
             </form>
         `;
     }
-    
+
     function initWidgetParamPickers(container) {
         if (!container) {
             return;
@@ -2825,13 +2878,13 @@
                 return;
             }
         });
-        
+
         // 颜色选择器同步
         container.querySelectorAll('.color-picker-wrapper').forEach(wrapper => {
             const picker = wrapper.querySelector('.form-control-color');
             const text = wrapper.querySelector('.form-control');
             const transparentBtn = wrapper.querySelector('.btn-transparent');
-            
+
             if (picker && text) {
                 picker.addEventListener('input', () => {
                     text.value = picker.value;
@@ -2846,7 +2899,7 @@
                     }
                 });
             }
-            
+
             // 透明按钮
             if (transparentBtn) {
                 transparentBtn.addEventListener('click', function() {
@@ -2863,7 +2916,7 @@
                     }
                 });
             }
-            
+
             // 预设颜色按钮
             wrapper.querySelectorAll('.color-preset-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -2880,21 +2933,21 @@
                 });
             });
         });
-        
+
         // 范围滑块同步
         container.querySelectorAll('.range-slider-wrapper').forEach(wrapper => {
             const slider = wrapper.querySelector('.form-range');
             const input = wrapper.querySelector('.range-value-input');
             const label = wrapper.querySelector('.range-value-label');
             const hidden = wrapper.querySelector('input[type="hidden"]');
-            
+
             if (slider && (input || label || hidden)) {
                 slider.addEventListener('input', function() {
                     if (input) input.value = this.value;
                     if (label) label.textContent = this.value;
                     if (hidden) hidden.value = this.value;
                 });
-                
+
                 if (input) {
                     input.addEventListener('input', function() {
                         slider.value = this.value;
@@ -2902,7 +2955,7 @@
                 }
             }
         });
-        
+
         // 图标选择器
         container.querySelectorAll('.icon-picker-wrapper').forEach(wrapper => {
             const pickerBtn = wrapper.querySelector('.btn-icon-picker');
@@ -2910,13 +2963,13 @@
             const panel = wrapper.querySelector('.icon-picker-panel');
             const preview = wrapper.querySelector('.icon-preview-display');
             const hidden = wrapper.querySelector('input[type="hidden"]');
-            
+
             if (pickerBtn && panel) {
                 pickerBtn.addEventListener('click', function() {
                     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
                 });
             }
-            
+
             if (clearBtn && hidden && preview) {
                 clearBtn.addEventListener('click', function() {
                     hidden.value = '';
@@ -2924,7 +2977,7 @@
                     this.style.display = 'none';
                 });
             }
-            
+
             // 图标项点击
             wrapper.querySelectorAll('.icon-picker-item').forEach(item => {
                 item.addEventListener('click', function() {
@@ -2933,13 +2986,13 @@
                     if (preview) preview.innerHTML = `<i class="${icon}"></i>`;
                     if (panel) panel.style.display = 'none';
                     if (clearBtn) clearBtn.style.display = 'inline-block';
-                    
+
                     // 更新选中状态
                     wrapper.querySelectorAll('.icon-picker-item').forEach(i => i.classList.remove('selected'));
                     this.classList.add('selected');
                 });
             });
-            
+
             // 搜索过滤
             const searchInput = panel?.querySelector('.icon-picker-search input');
             if (searchInput) {
@@ -2951,7 +3004,7 @@
                     });
                 });
             }
-            
+
             // 自定义图标输入
             const customInput = panel?.querySelector('.icon-picker-custom input');
             const applyBtn = panel?.querySelector('.btn-apply-custom');
@@ -2967,7 +3020,7 @@
                 });
             }
         });
-        
+
         // 图片选择器
         container.querySelectorAll('.image-picker-wrapper').forEach(wrapper => {
             const urlInput = wrapper.querySelector('.image-url-input input');
@@ -2975,21 +3028,25 @@
             const clearBtn = wrapper.querySelector('.btn-clear-image');
             const uploadBtn = wrapper.querySelector('.btn-upload-image');
             const fileInput = wrapper.querySelector('.image-file-input');
-            
+
             // URL 输入变化时更新预览
             if (urlInput && preview) {
                 urlInput.addEventListener('input', function() {
                     const url = this.value.trim();
                     if (url) {
-                        preview.innerHTML = `<img src="${url}" alt="预览" onerror="this.parentElement.innerHTML='<div class="image-placeholder"><span>图片加载失败</span></div>'">`;
-                        preview.closest('.image-preview-container')?.classList.add('has-image');
+                        if (renderSafeImagePreview(preview, url)) {
+                            preview.closest('.image-preview-container')?.classList.add('has-image');
+                        } else {
+                            preview.innerHTML = '<div class="image-placeholder">' + (iconSvg('image') || '') + '<span>点击选择图片</span></div>';
+                            preview.closest('.image-preview-container')?.classList.remove('has-image');
+                        }
                     } else {
                         preview.innerHTML = '<div class="image-placeholder">' + (iconSvg('image') || '') + '<span>点击选择图片</span></div>';
                         preview.closest('.image-preview-container')?.classList.remove('has-image');
                     }
                 });
             }
-            
+
             // 清除按钮
             if (clearBtn && urlInput && preview) {
                 clearBtn.addEventListener('click', function() {
@@ -2998,7 +3055,7 @@
                     preview.closest('.image-preview-container')?.classList.remove('has-image');
                 });
             }
-            
+
             // 上传按钮
             if (uploadBtn && fileInput) {
                 uploadBtn.addEventListener('click', () => fileInput.click());
@@ -3008,8 +3065,7 @@
                         // TODO: 实现文件上传逻辑
                         const reader = new FileReader();
                         reader.onload = function(e) {
-                            if (preview) {
-                                preview.innerHTML = `<img src="${e.target.result}" alt="预览">`;
+                            if (preview && renderSafeImagePreview(preview, e.target.result)) {
                                 preview.closest('.image-preview-container')?.classList.add('has-image');
                             }
                         };
@@ -3018,14 +3074,14 @@
                 });
             }
         });
-        
+
         // 数组编辑器
         container.querySelectorAll('.array-editor-wrapper').forEach(wrapper => {
             const addBtn = wrapper.querySelector('.btn-add-array-item');
             const itemsContainer = wrapper.querySelector('.array-items-container');
             const hiddenInput = wrapper.querySelector('input[type="hidden"]');
             const template = wrapper.querySelector('template');
-            
+
             // 更新隐藏字段值
             const updateHiddenValue = () => {
                 if (!hiddenInput || !itemsContainer) return;
@@ -3051,21 +3107,21 @@
                 hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
                 hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
             };
-            
+
             // 添加项目
             if (addBtn) {
                 addBtn.addEventListener('click', function() {
                     const maxItems = parseInt(wrapper.dataset.maxItems) || Infinity;
                     const currentCount = itemsContainer?.querySelectorAll('.array-item').length || 0;
-                    
+
                     if (currentCount >= maxItems) {
                         showToast('已达到最大项目数', 'warning');
                         return;
                     }
-                    
+
                     // 移除空状态
                     itemsContainer?.querySelector('.array-empty-state')?.remove();
-                    
+
                     // 添加新项
                     if (template) {
                         const html = template.innerHTML.replace(/__INDEX__/g, Date.now().toString());
@@ -3087,7 +3143,7 @@
                         `;
                         itemsContainer?.insertAdjacentHTML('beforeend', itemHtml);
                     }
-                    
+
                     // 绑定新项的事件
                     const newItem = itemsContainer?.querySelector('.array-item:last-child');
                     if (newItem) {
@@ -3095,17 +3151,17 @@
                         bindArrayItemEvents(newItem, updateHiddenValue);
                         initWidgetParamPickers(newItem);
                     }
-                    
+
                     updateHiddenValue();
                 });
             }
-            
+
             // 绑定现有项的事件
             itemsContainer?.querySelectorAll('.array-item').forEach(item => {
                 bindArrayItemEvents(item, updateHiddenValue);
             });
         });
-        
+
         // 日期时间快捷按钮
         container.querySelectorAll('.datetime-shortcuts button').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -3113,10 +3169,10 @@
                 const targetId = this.dataset.target;
                 const input = document.getElementById(targetId);
                 if (!input) return;
-                
+
                 const now = new Date();
                 let newDate;
-                
+
                 switch (action) {
                     case 'today':
                         newDate = now;
@@ -3128,7 +3184,7 @@
                         newDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
                         break;
                 }
-                
+
                 if (newDate) {
                     if (input.type === 'date') {
                         input.value = newDate.toISOString().split('T')[0];
@@ -3138,7 +3194,7 @@
                 }
             });
         });
-        
+
         // 清除日期时间按钮
         container.querySelectorAll('.btn-clear-datetime').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -3147,7 +3203,7 @@
                 if (input) input.value = '';
             });
         });
-        
+
         // URL 测试按钮
         container.querySelectorAll('.btn-test-url').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -3158,7 +3214,7 @@
                 }
             });
         });
-        
+
         // URL 快捷链接
         container.querySelectorAll('.url-suggestion-btn').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -3168,7 +3224,7 @@
                 if (input) input.value = url;
             });
         });
-        
+
         // 多行文本自动调整高度
         container.querySelectorAll('textarea.auto-resize').forEach(textarea => {
             const adjustHeight = () => {
@@ -3178,34 +3234,34 @@
             textarea.addEventListener('input', adjustHeight);
             adjustHeight();
         });
-        
+
         // 文本域字符计数
         container.querySelectorAll('.textarea-counter').forEach(counter => {
             const wrapper = counter.closest('.textarea-wrapper');
             const textarea = wrapper?.querySelector('textarea');
             const currentCount = counter.querySelector('.current-count');
-            
+
             if (textarea && currentCount) {
                 textarea.addEventListener('input', function() {
                     currentCount.textContent = this.value.length;
                 });
             }
         });
-        
+
         // 保存按钮
         container.querySelectorAll('.w-param-form').forEach(form => {
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 const layoutId = this.dataset.layoutId;
                 const configData = collectWidgetConfigData(this);
-                
+
                 try {
                     const result = await apiJson(config.apiUpdateConfig, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ layout_id: layoutId, config: configData })
                     });
-                    
+
                     if (result.success) {
                         showToast('配置已保存', 'success');
                         // 更新预览
@@ -3220,12 +3276,12 @@
                 }
             });
         });
-        
+
         // 删除按钮
         container.querySelectorAll('.w-param-btn-delete-widget, .btn-delete-widget').forEach(btn => {
             btn.addEventListener('click', async function() {
                 const layoutId = this.dataset.layoutId;
-                
+
                 const confirmed = await showCustomConfirm(
                     '确认删除部件？',
                     '删除后插槽将恢复为原始内容。',
@@ -3233,13 +3289,13 @@
                     '取消'
                 );
                 if (!confirmed) return;
-                
+
                 // 从 iframe 获取 slot_id 和 area
                 let slotIdFb = '', areaFb = 'content';
                 try {
                     const iframe = elements.previewFrame;
                     if (iframe && iframe.contentDocument) {
-                        const wEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                        const wEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                         if (wEl) {
                             slotIdFb = wEl.getAttribute('data-slot-id') || wEl.closest('[data-wslot]')?.getAttribute('data-wslot') || wEl.closest('[data-slot]')?.getAttribute('data-slot') || '';
                             if (wEl.closest('header, [data-wslot-position="header"], .site-header')) areaFb = 'header';
@@ -3247,7 +3303,7 @@
                         }
                     }
                 } catch (e) {}
-                
+
                 try {
                     const result = await apiJson(config.apiDeleteWidget, {
                         method: 'POST',
@@ -3261,21 +3317,21 @@
                             layout_option: state.layoutOption || 'default'
                         })
                     });
-                    
+
                     if (result.success) {
                         showToast('部件已删除', 'success');
-                        
+
                         // 恢复iframe预览区的原始内容
                         const iframe = elements.previewFrame;
                         if (iframe && iframe.contentDocument) {
-                            const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                            const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                             if (widgetEl) {
                                 const slot = widgetEl.closest('[data-wslot], [data-slot]');
                                 const actualSlotId = slot?.getAttribute('data-wslot') || slot?.getAttribute('data-slot');
-                                
+
                                 // 移除部件元素
                                 widgetEl.remove();
-                                
+
                                 // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
                                 if (slot && !slot.querySelector('[data-layout-id]')) {
                                     if (result.has_original && result.original_html) {
@@ -3302,14 +3358,14 @@
                                 }
                             }
                         }
-                        
+
                         // 从配置面板手风琴移除
                         const accordionItem = this.closest('.slot-widget-accordion-item');
                         accordionItem?.remove();
-                        
+
                         // 从结构视图移除
-                        document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`)?.remove();
-                        
+                        document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`)?.remove();
+
                         // 关闭配置面板
                         elements.configPanel.classList.remove('show');
                     } else {
@@ -3375,7 +3431,7 @@
             });
         });
     }
-    
+
     /**
      * 绑定数组项事件
      */
@@ -3451,22 +3507,22 @@
                 const minItems = parseInt(wrapper?.dataset?.minItems) || 0;
                 const itemsContainer = wrapper?.querySelector(isParamArray ? '.w-param-array-items' : '.array-items-container');
                 const currentCount = itemsContainer?.querySelectorAll(itemSelector).length || 0;
-                
+
                 if (currentCount <= minItems) {
                     showToast(`至少需要 ${minItems} 个项目`, 'warning');
                     return;
                 }
-                
+
                 item.remove();
-                
+
                 if (currentCount - 1 === 0 && itemsContainer) {
                     itemsContainer.innerHTML = emptyHtml;
                 }
-                
+
                 updateCallback?.();
             });
         }
-        
+
         // 输入变化
         item.querySelectorAll('input, select, textarea').forEach(input => {
             const handleArrayItemChange = () => {
@@ -3496,7 +3552,7 @@
                 }
             });
         });
-        
+
         // 拖拽排序（简单实现）
         const handle = item.querySelector('.array-item-handle, .w-param-array-handle');
         if (handle) {
@@ -3505,30 +3561,30 @@
                 e.preventDefault();
                 const itemsContainer = item.closest('.array-items-container') || item.closest('.w-param-array-items');
                 if (!itemsContainer) return;
-                
+
                 const itemSelector = item.classList.contains('w-param-array-item') ? '.w-param-array-item' : '.array-item';
                 const items = Array.from(itemsContainer.querySelectorAll(itemSelector));
                 const startIndex = items.indexOf(item);
                 let currentIndex = startIndex;
-                
+
                 const onMouseMove = (e) => {
                     // 简单的拖拽指示
                     item.style.opacity = '0.5';
                 };
-                
+
                 const onMouseUp = () => {
                     item.style.opacity = '';
                     document.removeEventListener('mousemove', onMouseMove);
                     document.removeEventListener('mouseup', onMouseUp);
                     updateCallback?.();
                 };
-                
+
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
             });
         }
     }
-    
+
     /**
      * 渲染插槽空状态
      */
@@ -3542,7 +3598,7 @@
             : (typeof rawAccept === 'string' ? rawAccept.split(',').map(s => s.trim()).filter(Boolean) : []);
         const isExclusive = slot.exclusive === true || isExclusiveSlot(slotId, '');
         const isMultiple = slot.multiple === true;
-        
+
         // 插槽模式标签
         let modeBadge = '';
         if (isExclusive) {
@@ -3550,17 +3606,17 @@
         } else if (isMultiple) {
             modeBadge = '<span class="badge bg-info"><i class="ri-stack-line"></i> 可多个部件</span>';
         }
-        
+
         // 生成接受的部件列表 HTML
         let acceptHtml = '';
         if (acceptCodes.length === 0 || acceptCodes.includes('*')) {
             acceptHtml = '<span class="badge bg-success">接受所有部件</span>';
         } else {
-            acceptHtml = acceptCodes.map(code => 
+            acceptHtml = acceptCodes.map(code =>
                 `<span class="badge bg-primary me-1 mb-1">${code}</span>`
             ).join('');
         }
-        
+
         const html = `
             <div class="slot-empty-panel">
                 <div class="slot-empty-header">
@@ -3573,7 +3629,7 @@
                         ${modeBadge ? `<div class="mt-1">${modeBadge}</div>` : ''}
                     </div>
                 </div>
-                
+
                 <div class="slot-empty-state">
                     <div class="empty-icon">
                         <i class="ri-inbox-2-line"></i>
@@ -3581,14 +3637,14 @@
                     <h6>该插槽暂无部件</h6>
                     <p class="text-muted">此区域目前显示的是原生 HTML 内容</p>
                 </div>
-                
+
                 <div class="slot-accept-info">
                     <label><i class="ri-checkbox-circle-line"></i> 可接受的部件：</label>
                     <div class="slot-accept-list">
                         ${acceptHtml}
                     </div>
                 </div>
-                
+
                 <div class="slot-action-hint">
                     <div class="action-hint-box">
                         <i class="ri-drag-drop-line"></i>
@@ -3598,7 +3654,7 @@
                 </div>
             </div>
         `;
-        
+
         elements.configContent.innerHTML = html;
     }
 
@@ -3862,6 +3918,14 @@
         return dataAttributeSelector('data-layout-id', layoutId);
     }
 
+    function cssIdentifier(value) {
+        const stringValue = String(value || '');
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(stringValue);
+        }
+        return stringValue.replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+    }
+
     function firstNonEmptyValue(...values) {
         for (const value of values) {
             if (value === null || value === undefined) {
@@ -4092,7 +4156,7 @@
                     totalHidden++;
                     return;
                 }
-                
+
                 const isMatch = slotAcceptsWidgetCodes(
                     normalizedAccept,
                     normalizedReject,
@@ -4123,7 +4187,7 @@
         }
 
         return totalMatched;
-        
+
     }
 
     /**
@@ -4134,24 +4198,24 @@
         setTimeout(() => {
             const widgetPanelContent = document.querySelector('#widgetPanel .panel-content');
             if (!widgetPanelContent) return;
-            
+
             // 找到第一个高亮的部件
             const firstHighlighted = widgetPanelContent.querySelector('.widget-item.highlighted');
-            
+
             if (firstHighlighted) {
                 // 获取部件所在的组
                 const widgetGroup = firstHighlighted.closest('.widget-group');
-                
+
                 if (widgetGroup) {
                     // 计算滚动位置（组的顶部位置 - 一些间距）
                     const groupTop = widgetGroup.offsetTop;
                     const scrollOffset = Math.max(0, groupTop - 20);
-                    
-                    widgetPanelContent.scrollTo({ 
-                        top: scrollOffset, 
-                        behavior: 'smooth' 
+
+                    widgetPanelContent.scrollTo({
+                        top: scrollOffset,
+                        behavior: 'smooth'
                     });
-                    
+
                     console.log('[scrollToHighlightedWidgets] Scrolled to highlighted widget in group:', widgetGroup.dataset.type);
                 }
             } else {
@@ -4168,7 +4232,7 @@
     function saveWidgetOrder() {
         state.originalWidgetOrder.clear();
         state.originalGroupOrder = [];
-        
+
         const widgetList = elements.widgetList;
         if (!widgetList) return;
 
@@ -4183,7 +4247,7 @@
         allGroups.forEach((group, groupIndex) => {
             const groupContent = group.querySelector('.widget-group-content');
             if (!groupContent) return;
-            
+
             const widgets = Array.from(groupContent.querySelectorAll('.widget-item'));
             const order = widgets.map(widget => widget.getAttribute('data-widget-code'));
             state.originalWidgetOrder.set(groupIndex, order);
@@ -4213,7 +4277,7 @@
         if (state.originalGroupOrder.length > 0) {
             const allGroups = Array.from(widgetList.querySelectorAll('.widget-group'));
             const groupMap = new Map();
-            
+
             // 创建分组映射（按 data-type）
             allGroups.forEach(group => {
                 const groupType = group.getAttribute('data-type') || '';
@@ -4769,7 +4833,7 @@
             const result = await fetchWidgetsData();
 
             if (result.success) {
-                
+
                 // 查找匹配的部件
                 let widgetMeta = null;
                 for (const type in result.data) {
@@ -4797,7 +4861,7 @@
 
     /**
      * 渲染单个表单字段
-     * 
+     *
      * 支持的类型：
      * - string: 文本输入
      * - number: 数字输入（支持 min/max/step）
@@ -4825,25 +4889,30 @@
         const description = param.description || '';
         const placeholder = param.placeholder || '';
         const options = param.options || {};
+        const fieldId = `config_${key}`;
+        const safeKey = escapeHtml(key);
+        const safeFieldId = escapeHtml(fieldId);
+        const safeFieldIdJs = escapeJsString(fieldId);
+        const safeValue = escapeHtml(value);
 
         let html = `<div class="form-group mb-3" data-field-type="${escapeHtml(type)}">`;
-        html += `<label for="config_${key}" class="form-label">${escapeHtml(label)}`;
+        html += `<label for="${safeFieldId}" class="form-label">${escapeHtml(label)}`;
         if (required) html += ' <span class="text-danger">*</span>';
         html += `</label>`;
 
         if (type === 'string' || type === 'text') {
-            html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+            html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
         } else if (type === 'number') {
-            const min = param.min !== undefined ? `min="${param.min}"` : '';
-            const max = param.max !== undefined ? `max="${param.max}"` : '';
-            const step = param.step !== undefined ? `step="${param.step}"` : '';
-            html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${min} ${max} ${step} ${required ? 'required' : ''}>`;
+            const min = param.min !== undefined ? `min="${escapeHtml(param.min)}"` : '';
+            const max = param.max !== undefined ? `max="${escapeHtml(param.max)}"` : '';
+            const step = param.step !== undefined ? `step="${escapeHtml(param.step)}"` : '';
+            html += `<input type="number" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${min} ${max} ${step} ${required ? 'required' : ''}>`;
         } else if (isBooleanParamType(semanticType)) {
             html += renderBooleanSelect(`config_${key}`, key, key, value, required, param);
         } else if (type === 'select') {
-            html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
+            html += `<select class="form-select" id="${safeFieldId}" name="${safeKey}" ${required ? 'required' : ''}>
                 <option value="">-- 请选择 --</option>`;
             for (const optVal in options) {
                 html += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
@@ -4851,7 +4920,7 @@
             html += `</select>`;
         } else if (type === 'multiselect') {
             const selectedValues = Array.isArray(value) ? value : (value ? String(value).split(',') : []);
-            html += `<select class="form-select" id="config_${key}" name="${key}[]" multiple ${required ? 'required' : ''} style="min-height: 120px;">`;
+            html += `<select class="form-select" id="${safeFieldId}" name="${safeKey}[]" multiple ${required ? 'required' : ''} style="min-height: 120px;">`;
             for (const optVal in options) {
                 const isSelected = selectedValues.includes(String(optVal));
                 html += `<option value="${escapeHtml(optVal)}" ${isSelected ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
@@ -4859,62 +4928,64 @@
             html += `</select>`;
             html += `<small class="form-text text-muted">按住 Ctrl/Cmd 可多选</small>`;
         } else if (type === 'url') {
-            html += `<input type="url" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>`;
+            html += `<input type="url" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>`;
         } else if (type === 'image' || type === 'image_picker') {
+            const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
             html += `<div class="input-group">
-                <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片URL">
-                <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}">
+                <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="图片URL">
+                <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="${safeFieldId}">
                     ${iconSvg('image')} 选择
                 </button>
             </div>`;
-            if (value) {
+            if (safeImageUrl) {
                 html += `<div class="mt-2 image-preview-container">
-                    <img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 100px;">
-                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="document.getElementById('config_${key}').value='';this.parentElement.remove();">
+                    <img src="${safeImageUrl}" class="img-thumbnail" style="max-height: 100px;">
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-config-image-clear data-target="${safeFieldId}">
                         ${iconSvg('delete')}
                     </button>
                 </div>`;
             }
         } else if (type === 'file') {
             html += `<div class="input-group">
-                <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="文件路径">
-                <button type="button" class="btn btn-outline-secondary btn-select-file" data-target="config_${key}" data-accept="${escapeHtml(param.accept || '*')}">
+                <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="文件路径">
+                <button type="button" class="btn btn-outline-secondary btn-select-file" data-target="${safeFieldId}" data-accept="${escapeHtml(param.accept || '*')}">
                     ${iconSvg('folder')} 浏览
                 </button>
             </div>`;
         } else if (type === 'color') {
             html += `<div class="input-group">
-                <input type="color" class="form-control form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}" style="width: 50px;">
-                <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000">
+                <input type="color" class="form-control form-control-color" id="${safeFieldId}_picker" value="${escapeHtml(value || '#000000')}" style="width: 50px;">
+                <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="#000000">
             </div>`;
         } else if (type === 'textarea') {
-            html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="${param.rows || 4}" 
-                     placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+            html += `<textarea class="form-control" id="${safeFieldId}" name="${safeKey}" rows="${escapeHtml(param.rows || 4)}"
+                     placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${safeValue}</textarea>`;
         } else if (type === 'rich_text') {
-            html += `<textarea class="form-control rich-text-editor" id="config_${key}" name="${key}" rows="${param.rows || 6}" 
-                     placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+            html += `<textarea class="form-control rich-text-editor" id="${safeFieldId}" name="${safeKey}" rows="${escapeHtml(param.rows || 6)}"
+                     placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${safeValue}</textarea>`;
             html += `<small class="form-text text-muted">支持 HTML 格式</small>`;
         } else if (type === 'date') {
-            html += `<input type="date" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+            html += `<input type="date" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" ${required ? 'required' : ''}>`;
         } else if (type === 'datetime') {
-            html += `<input type="datetime-local" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+            html += `<input type="datetime-local" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" ${required ? 'required' : ''}>`;
         } else if (type === 'eav_select') {
             // EAV 属性选择器
             const entityCode = param.entity_code || 'product';
-            html += `<select class="form-select eav-attribute-select" id="config_${key}" name="${key}" 
-                     data-entity-code="${escapeHtml(entityCode)}" ${required ? 'required' : ''}>
+            const safeEntityCode = escapeHtml(entityCode);
+            html += `<select class="form-select eav-attribute-select" id="${safeFieldId}" name="${safeKey}"
+                     data-entity-code="${safeEntityCode}" ${required ? 'required' : ''}>
                 <option value="">-- 加载中... --</option>
             </select>`;
             // 延迟加载 EAV 属性
             html += `<script>
                 (function() {
-                    const select = document.getElementById('config_${key}');
+                    const select = document.getElementById('${escapeHtml(safeFieldIdJs)}');
                     if (!select) return;
                     (window.ThemeEditor && window.ThemeEditor.apiJson
-                        ? window.ThemeEditor.apiJson('/weline/eav/api/options/attributes?entity_code=${escapeHtml(entityCode)}', { silent: true })
+                        ? window.ThemeEditor.apiJson('/weline/eav/api/options/attributes?entity_code=${encodeURIComponent(entityCode)}', { silent: true })
                         : Promise.reject(new Error('ThemeEditor API is not available')))
                         .then(r => (r && typeof r.json === 'function') ? r.json() : ((r && r.data) || r))
                         .then(data => {
@@ -4924,7 +4995,7 @@
                                     const opt = document.createElement('option');
                                     opt.value = attr.code;
                                     opt.textContent = attr.name + ' (' + attr.code + ')';
-                                    if ('${escapeHtml(value)}' === attr.code) opt.selected = true;
+                                    if ('${escapeHtml(escapeJsString(value))}' === attr.code) opt.selected = true;
                                     select.appendChild(opt);
                                 });
                             }
@@ -4939,24 +5010,26 @@
             const entityCode = param.entity_code || 'product';
             const attributeCode = param.attribute_code || '';
             const multiple = param.multiple || false;
-            html += `<select class="form-select eav-options-select" id="config_${key}" name="${key}${multiple ? '[]' : ''}" 
-                     data-entity-code="${escapeHtml(entityCode)}" data-attribute-code="${escapeHtml(attributeCode)}" 
+            const safeEntityCode = escapeHtml(entityCode);
+            const safeAttributeCode = escapeHtml(attributeCode);
+            html += `<select class="form-select eav-options-select" id="${safeFieldId}" name="${safeKey}${multiple ? '[]' : ''}"
+                     data-entity-code="${safeEntityCode}" data-attribute-code="${safeAttributeCode}"
                      ${multiple ? 'multiple style="min-height: 120px;"' : ''} ${required ? 'required' : ''}>
                 <option value="">-- 加载中... --</option>
             </select>`;
             if (attributeCode) {
                 html += `<script>
                     (function() {
-                        const select = document.getElementById('config_${key}');
+                        const select = document.getElementById('${escapeHtml(safeFieldIdJs)}');
                         if (!select) return;
                         (window.ThemeEditor && window.ThemeEditor.apiJson
-                            ? window.ThemeEditor.apiJson('/weline/eav/api/options?entity_code=${escapeHtml(entityCode)}&attribute_code=${escapeHtml(attributeCode)}', { silent: true })
+                            ? window.ThemeEditor.apiJson('/weline/eav/api/options?entity_code=${encodeURIComponent(entityCode)}&attribute_code=${encodeURIComponent(attributeCode)}', { silent: true })
                             : Promise.reject(new Error('ThemeEditor API is not available')))
                             .then(r => (r && typeof r.json === 'function') ? r.json() : ((r && r.data) || r))
                             .then(data => {
                                 if (data.success && data.data.options) {
                                     select.innerHTML = '<option value="">-- 请选择 --</option>';
-                                    const currentValues = ${multiple ? JSON.stringify(Array.isArray(value) ? value : (value ? String(value).split(',') : [])) : `['${escapeHtml(value)}']`};
+                                    const currentValues = ${multiple ? jsonForScript(Array.isArray(value) ? value : (value ? String(value).split(',') : [])) : jsonForScript([value])};
                                     data.data.options.forEach(opt => {
                                         const option = document.createElement('option');
                                         option.value = opt.id;
@@ -4973,32 +5046,34 @@
                 </script>`;
             }
         } else if (type === 'checkbox_group') {
-            html += `<div class="checkbox-group" id="config_${key}_group">`;
+            html += `<div class="checkbox-group" id="${safeFieldId}_group">`;
             const selectedValues = Array.isArray(value) ? value : (value ? String(value).split(',') : []);
             for (const optVal in options) {
                 const isChecked = selectedValues.includes(String(optVal));
+                const safeOptId = `${safeFieldId}_${escapeHtml(optVal)}`;
                 html += `<div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="config_${key}_${escapeHtml(optVal)}" 
-                           name="${key}[]" value="${escapeHtml(optVal)}" ${isChecked ? 'checked' : ''}>
-                    <label class="form-check-label" for="config_${key}_${escapeHtml(optVal)}">${escapeHtml(options[optVal])}</label>
+                    <input type="checkbox" class="form-check-input" id="${safeOptId}"
+                           name="${safeKey}[]" value="${escapeHtml(optVal)}" ${isChecked ? 'checked' : ''}>
+                    <label class="form-check-label" for="${safeOptId}">${escapeHtml(options[optVal])}</label>
                 </div>`;
             }
             html += `</div>`;
         } else if (type === 'radio') {
-            html += `<div class="radio-group" id="config_${key}_group">`;
+            html += `<div class="radio-group" id="${safeFieldId}_group">`;
             for (const optVal in options) {
                 const isChecked = String(value) === String(optVal);
+                const safeOptId = `${safeFieldId}_${escapeHtml(optVal)}`;
                 html += `<div class="form-check">
-                    <input type="radio" class="form-check-input" id="config_${key}_${escapeHtml(optVal)}" 
-                           name="${key}" value="${escapeHtml(optVal)}" ${isChecked ? 'checked' : ''}>
-                    <label class="form-check-label" for="config_${key}_${escapeHtml(optVal)}">${escapeHtml(options[optVal])}</label>
+                    <input type="radio" class="form-check-input" id="${safeOptId}"
+                           name="${safeKey}" value="${escapeHtml(optVal)}" ${isChecked ? 'checked' : ''}>
+                    <label class="form-check-label" for="${safeOptId}">${escapeHtml(options[optVal])}</label>
                 </div>`;
             }
             html += `</div>`;
         } else {
             // 默认为文本输入
-            html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+            html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" ${required ? 'required' : ''}>`;
         }
 
         if (description) {
@@ -5025,8 +5100,8 @@
 
         if (modalBody) {
             const params = widgetMeta.params || {};
-            let formHtml = `<form id="modalConfigForm" data-layout-id="${layoutId}" data-widget-code="${widgetMeta.code}" data-widget-module="${widgetMeta.module || ''}">`;
-            
+            let formHtml = `<form id="modalConfigForm" data-layout-id="${escapeHtml(layoutId)}" data-widget-code="${escapeHtml(widgetMeta.code || '')}" data-widget-module="${escapeHtml(widgetMeta.module || '')}">`;
+
             // 添加预览区域
             formHtml += `
                 <div class="config-preview-area mb-3">
@@ -5091,7 +5166,7 @@
 
     /**
      * 更新模态框中的实时预览
-     * 
+     *
      * @deprecated T012: 实时预览已移除，改为保存后刷新。
      *             此函数保留但不再被调用，预览通过 saveConfigFromModal 返回的 preview_html 更新。
      */
@@ -5103,7 +5178,7 @@
 
     /**
      * 保存模态框配置
-     * 
+     *
      * T012: 配置保存后使用返回的 preview_html 更新预览，不再使用实时 API
      */
     async function saveConfigFromModal(form, widgetMeta) {
@@ -5127,21 +5202,21 @@
 
             if (result.success) {
                 showToast('配置已保存', 'success');
-                
+
                 // T012: 使用返回的 preview_html 更新预览，不再触发 layout-preview 请求
                 if (result.preview_html) {
                     const previewBox = document.getElementById('modalWidgetPreview');
                     if (previewBox) {
-                        previewBox.innerHTML = result.preview_html;
+                        previewBox.innerHTML = sanitizeHtmlForEditorPreview(result.preview_html);
                     }
-                    
+
                     // 更新 iframe 中对应部件的预览（如果存在）
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);
                 }
-                
+
                 // 关闭模态框
                 hideEditorModal(document.getElementById('widgetConfigModal'));
-                
+
                 // 注意：不再调用 refreshPreview()，已通过 preview_html 更新
             } else {
                 // T015: 保存失败时保持当前预览，仅显示错误提示
@@ -5157,10 +5232,10 @@
 
     /**
      * 更新 iframe 中指定部件的预览 HTML
-     * 
+     *
      * T012: 使用服务端返回的 preview_html 替换 iframe 中对应部件
      * 改进: 添加重试逻辑和 fallback 到完整刷新
-     * 
+     *
      * @param {string|number} layoutId 部件布局ID
      * @param {string} previewHtml 预览HTML内容
      * @param {boolean} isNewWidget 是否为新添加的部件（默认false）
@@ -5168,6 +5243,7 @@
      */
     function updateWidgetPreviewInIframe(layoutId, previewHtml, isNewWidget = false, targetSlotId = null) {
         const iframe = elements.previewFrame;
+        const safePreviewHtml = sanitizeHtmlForEditorPreview(previewHtml);
         if (!iframe) {
             console.warn('[ThemeEditor] iframe not found, triggering full refresh');
             loadLayoutPreview();
@@ -5195,8 +5271,8 @@
                     return;
                 }
 
-                const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
-                
+                const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
+
                 if (widgetEl) {
                     // 找到部件，更新其内容
                     let contentEl = widgetEl.querySelector('.widget-content');
@@ -5213,10 +5289,10 @@
                         contentEl.className = 'widget-content';
                         widgetEl.appendChild(contentEl);
                     }
-                    contentEl.innerHTML = previewHtml;
+                    contentEl.innerHTML = safePreviewHtml;
                     activateWidgetPreviewArrayItem(layoutId, state.previewArrayItemIndexByLayout[String(layoutId)]);
                     console.log(`[ThemeEditor] Widget ${layoutId} preview updated successfully`);
-                    
+
                     // 高亮更新的部件（短暂视觉反馈）
                     widgetEl.classList.add('widget-updated');
                     setTimeout(() => widgetEl.classList.remove('widget-updated'), 1000);
@@ -5224,36 +5300,37 @@
                     // 新部件 - 尝试在对应插槽中插入（优先使用调用方传入的 targetSlotId，避免依赖全局 state 导致插入到错误区域）
                     const slotId = targetSlotId || state.selectedSlot?.id || state.draggingWidget?.slot;
                     let slotEl = null;
-                    
+
                     if (slotId) {
                         // 尝试多种方式查找插槽
-                        slotEl = iframe.contentDocument.querySelector(`[data-wslot="${slotId}"]`) ||
-                                 iframe.contentDocument.querySelector(`[data-slot="${slotId}"]`) ||
-                                 iframe.contentDocument.querySelector(`.slot-${slotId}`) ||
-                                 iframe.contentDocument.querySelector(`#slot-${slotId}`);
+                        const safeSlotId = cssIdentifier(slotId);
+                        slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
+                                 iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId)) ||
+                                 iframe.contentDocument.querySelector(`.slot-${safeSlotId}`) ||
+                                 iframe.contentDocument.querySelector(`#slot-${safeSlotId}`);
                     }
-                    
+
                     if (slotEl) {
                         // 确保 iframe 中有样式
                         injectStylesIntoIframe();
-                        
+
                         // 找到插槽，插入新部件
                         const wrapper = iframe.contentDocument.createElement('div');
                         wrapper.setAttribute('data-layout-id', layoutId);
                         wrapper.setAttribute('data-slot-id', slotId);
                         wrapper.classList.add('widget-wrapper', 'widget-new');
                         wrapper.style.position = 'relative';
-                        
+
                         // 判断是否独占（从 DOM 属性或 isExclusiveSlot 判断）
-                        const isExclusive = slotEl.getAttribute('data-wslot-exclusive') === 'true' 
+                        const isExclusive = slotEl.getAttribute('data-wslot-exclusive') === 'true'
                             || isExclusiveSlot(slotId, state.draggingWidget?.code || '');
-                        
+
                         // 生成操作按钮
                         const actionsHtml = generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, true, true);
-                        
+
                         // 组装部件内容
-                        wrapper.innerHTML = actionsHtml + '<div class="widget-content">' + previewHtml + '</div>';
-                        
+                        wrapper.innerHTML = actionsHtml + '<div class="widget-content">' + safePreviewHtml + '</div>';
+
                         // 整块区域插槽（footer/header）：模板中整块 <footer>/<header> 带 data-wslot，
                         // 若按独占清空会抹掉全部底部/顶部内容，导致“整块变白”。只追加到内部容器，绝不清空整块。
                         const isContainerSlot = slotId === 'footer' || slotId === 'header' ||
@@ -5271,18 +5348,18 @@
                             widgetContainer.querySelectorAll('.slot-placeholder').forEach(p => p.remove());
                             widgetContainer.appendChild(wrapper);
                         }
-                        
+
                         // 绑定按钮事件（如果还没有绑定）
                         if (!iframe.contentDocument.body._widgetActionsInitialized) {
                             bindWidgetActionEvents(iframe.contentDocument);
                             iframe.contentDocument.body._widgetActionsInitialized = true;
                         }
-                        
+
                         console.log(`[ThemeEditor] New widget ${layoutId} inserted into slot ${slotId} with hover actions`);
 
                         // 为新插入的部件启用 draggable（委托已绑在 body 上，无需再绑事件）
                         setDraggableOnSlotWidgets(iframe.contentDocument);
-                        
+
                         // 高亮新部件
                         setTimeout(() => wrapper.classList.remove('widget-new'), 1500);
                     } else {
@@ -5304,13 +5381,13 @@
             } catch (err) {
                 // iframe 跨域或其他错误
                 console.warn('[ThemeEditor] Error updating iframe:', err.message);
-                
+
                 retryCount++;
                 if (retryCount < maxRetries) {
                     setTimeout(tryUpdate, retryDelay);
                     return;
                 }
-                
+
                 // 重试超限，触发完整刷新
                 console.warn('[ThemeEditor] iframe update failed after retries, triggering full refresh');
                 loadLayoutPreview();
@@ -5399,19 +5476,19 @@
      */
     function getSlotInfo(slotEl) {
         if (!slotEl) return { exclusive: false, multiple: true, max: -1, currentCount: 0 };
-        
+
         const exclusiveAttr = slotEl.dataset.wslotExclusive || slotEl.dataset.slotExclusive || slotEl.dataset.exclusive;
         const multipleAttr = slotEl.dataset.wslotMultiple || slotEl.dataset.slotMultiple || slotEl.dataset.multiple;
         const maxAttr = slotEl.dataset.wslotMax || slotEl.dataset.slotMax;
         const slotId = slotEl.dataset.wslot || slotEl.dataset.slot;
-        
+
         const exclusive = exclusiveAttr === 'true';
         const multiple = multipleAttr !== 'false'; // 默认允许多个
         const max = maxAttr ? parseInt(maxAttr, 10) : -1; // -1 表示无限制
-        
+
         // 如果 exclusive 为 true，max 固定为 1
         const effectiveMax = exclusive ? 1 : max;
-        
+
         // 统计当前已有部件数量
         let currentCount = 0;
         if (slotEl.classList.contains('preview-area') || slotEl.classList.contains('area-slot')) {
@@ -5429,7 +5506,7 @@
                 currentCount = slotEl.querySelectorAll('.preview-widget-item, .widget-wrapper[data-layout-id]').length;
             }
         }
-        
+
         return {
             slotId,
             exclusive,
@@ -5449,7 +5526,7 @@
     function getInsertionIndex(container, mouseY) {
         const items = container.querySelectorAll('.preview-widget-item');
         if (items.length === 0) return 0;
-        
+
         for (let i = 0; i < items.length; i++) {
             const rect = items[i].getBoundingClientRect();
             const midY = rect.top + rect.height / 2;
@@ -5468,27 +5545,27 @@
     function showInsertionIndicator(container, mouseY) {
         // 先移除旧的指示器
         removeInsertionIndicators(container);
-        
+
         const items = container.querySelectorAll('.preview-widget-item');
         if (items.length === 0) {
             // 空容器：显示整体高亮
             container.classList.add('drag-insert-empty');
             return;
         }
-        
+
         const insertIndex = getInsertionIndex(container, mouseY);
-        
+
         // 创建指示器
         const indicator = document.createElement('div');
         indicator.className = 'drag-insert-indicator';
         indicator.innerHTML = '<span class="drag-insert-dot"></span><span class="drag-insert-line"></span><span class="drag-insert-dot"></span>';
-        
+
         if (insertIndex < items.length) {
             items[insertIndex].before(indicator);
         } else {
             container.appendChild(indicator);
         }
-        
+
         // 保存插入索引
         state.dragInsertIndex = insertIndex;
     }
@@ -5514,7 +5591,7 @@
     function showSlotHint(slotEl, text, type) {
         // 避免重复
         slotEl.querySelectorAll('.drag-slot-hint').forEach(el => el.remove());
-        
+
         const hint = document.createElement('div');
         hint.className = `drag-slot-hint drag-slot-hint-${type}`;
         hint.textContent = text;
@@ -5779,7 +5856,7 @@
         document.querySelectorAll('.container-slot, [data-wslot]').forEach(slot => {
             slot.classList.remove('drag-over', 'drag-invalid', 'drag-allowed', 'drag-replace');
         });
-        
+
         // 移除所有插入位置指示器和提示
         removeInsertionIndicators();
     }
@@ -5791,13 +5868,13 @@
     function handleDragOver(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const area = this.classList.contains('preview-area') ? this : this.closest('.preview-area');
         if (!area) return;
-        
+
         const areaCode = area.dataset.area;
         if (!areaCode) return;
-        
+
         const widgetData = state.draggingWidget;
         if (!widgetData) {
             e.dataTransfer.dropEffect = 'none';
@@ -5805,7 +5882,7 @@
             area.classList.remove('drag-over');
             return;
         }
-        
+
         // 检查是否允许放置
         const allowed = isAllowedArea(widgetData.position, areaCode, widgetData.type);
         if (!allowed) {
@@ -5815,10 +5892,10 @@
             removeInsertionIndicators(area);
             return;
         }
-        
+
         // 获取插槽信息（exclusive / max / currentCount）
         const info = getSlotInfo(area);
-        
+
         // 独占插槽：显示替换提示
         if (info.exclusive && info.currentCount > 0) {
             e.dataTransfer.dropEffect = 'copy';
@@ -5828,7 +5905,7 @@
             showSlotHint(area, '松开替换现有部件', 'replace');
             return;
         }
-        
+
         // 已满插槽：阻止放置
         if (info.isFull) {
             e.dataTransfer.dropEffect = 'none';
@@ -5838,12 +5915,12 @@
             showSlotHint(area, `已满（${info.currentCount}/${info.max}）`, 'full');
             return;
         }
-        
+
         // 多部件区域：显示插入位置指示器
         e.dataTransfer.dropEffect = 'copy';
         area.classList.add('drag-over');
         area.classList.remove('drag-invalid', 'drag-replace');
-        
+
         const widgetsContainer = area.querySelector('.area-widgets');
         if (widgetsContainer) {
             showInsertionIndicator(widgetsContainer, e.clientY);
@@ -5925,16 +6002,16 @@
     function handleSlotDragOver(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const slot = resolveSlotElement(this);
         if (!slot) return;
-        
+
         const widgetData = state.draggingWidget;
         if (!widgetData) {
             e.dataTransfer.dropEffect = 'none';
             return;
         }
-        
+
         // accept / reject 检查（委托 isSlotAccepted）
         if (!isSlotAccepted(slot, widgetData)) {
             e.dataTransfer.dropEffect = 'none';
@@ -5943,10 +6020,10 @@
             removeInsertionIndicators(slot);
             return;
         }
-        
+
         // 获取插槽容量信息
         const info = getSlotInfo(slot);
-        
+
         // 独占插槽：有部件时显示替换提示
         if (info.exclusive && info.currentCount > 0) {
             e.dataTransfer.dropEffect = 'copy';
@@ -5956,7 +6033,7 @@
             showSlotHint(slot, '松开替换现有部件', 'replace');
             return;
         }
-        
+
         // 已满：阻止放置
         if (info.isFull) {
             e.dataTransfer.dropEffect = 'none';
@@ -5966,12 +6043,12 @@
             showSlotHint(slot, `已满（${info.currentCount}/${info.max}）`, 'full');
             return;
         }
-        
+
         // 多部件插槽：显示插入位置指示器
         e.dataTransfer.dropEffect = 'copy';
         slot.classList.add('drag-over');
         slot.classList.remove('drag-invalid', 'drag-replace');
-        
+
         // 在插槽的部件容器中显示插入指示器
         const widgetsContainer = slot.querySelector('.slot-widgets') || slot;
         showInsertionIndicator(widgetsContainer, e.clientY);
@@ -6065,7 +6142,7 @@
     /**
      * 添加部件到结构视图面板
      * 在保存成功后更新左侧结构视图，无需刷新页面
-     * 
+     *
      * @param {string} area 区域代码
      * @param {string} slotId 插槽ID
      * @param {object} widgetData 部件数据
@@ -6089,19 +6166,25 @@
             'content': 'ri-file-text-line',
             'container': 'ri-layout-grid-line',
         };
-        
+
         const icon = typeIcons[widgetData.type] || 'ri-widgets-line';
         const widgetName = widgetData.name || widgetData.code;
-        
+        const widgetDomId = `widget_${String(layoutId || '').replace(/[^\w:-]/g, '_')}`;
+        const safeLayoutId = escapeHtml(layoutId || '');
+        const safeSlotId = escapeHtml(slotId || '');
+        const safeWidgetCode = escapeHtml(widgetData.code || '');
+        const safeWidgetModule = escapeHtml(widgetData.module || '');
+        const safeWidgetType = escapeHtml(widgetData.type || '');
+
         // 创建部件项 HTML
         const widgetHtml = `
-            <div class="preview-widget-item widget-new" 
-                 id="widget_${layoutId}"
-                 data-layout-id="${layoutId}"
-                 data-slot-id="${escapeHtml(slotId || '')}"
-                 data-widget-code="${escapeHtml(widgetData.code)}"
-                 data-widget-module="${escapeHtml(widgetData.module || '')}"
-                 data-widget-type="${escapeHtml(widgetData.type || '')}"
+            <div class="preview-widget-item widget-new"
+                 id="${escapeHtml(widgetDomId)}"
+                 data-layout-id="${safeLayoutId}"
+                 data-slot-id="${safeSlotId}"
+                 data-widget-code="${safeWidgetCode}"
+                 data-widget-module="${safeWidgetModule}"
+                 data-widget-type="${safeWidgetType}"
                  data-config='{}'>
                 <div class="widget-header">
                     <span class="widget-name">
@@ -6122,64 +6205,64 @@
                 </div>
             </div>
         `;
-        
+
         // 查找目标容器 - 简化后的三区域布局
         let targetContainer = null;
-        
+
         // 根据区域查找对应的容器
         const areaContainerMap = {
             'header': '.header-slot-widgets',
             'content': '.content-slot-widgets',
             'footer': '.footer-slot-widgets',
         };
-        
+
         // 优先使用区域映射
         if (areaContainerMap[area]) {
             targetContainer = document.querySelector(areaContainerMap[area]);
         }
-        
+
         // 如果没找到，尝试查找通用的 area-widgets 容器
         if (!targetContainer) {
-            targetContainer = document.querySelector(`.area-widgets[data-area="${area}"]`);
+            targetContainer = document.querySelector(`.area-widgets${dataAttributeSelector('data-area', area)}`);
         }
-        
+
         // 如果还是没有，查找旧版插槽容器（兼容性）
         if (!targetContainer && slotId) {
-            targetContainer = document.querySelector(`.slot-widgets[data-slot="${slotId}"]`);
+            targetContainer = document.querySelector(`.slot-widgets${dataAttributeSelector('data-slot', slotId)}`);
         }
-        
+
         if (!targetContainer) {
             console.warn(`[ThemeEditor] Structure view container not found for area: ${area}, slot: ${slotId}`);
             return;
         }
-        
+
         // 如果是独占模式，先清空容器中的现有部件
         if (exclusive) {
             const existingWidgets = targetContainer.querySelectorAll('.preview-widget-item');
             existingWidgets.forEach(el => el.remove());
         }
-        
+
         // 移除占位符（如果存在）
         const placeholder = targetContainer.querySelector('.slot-placeholder, .content-slot-placeholder, .slot-placeholder-large');
         if (placeholder) {
             placeholder.remove();
         }
-        
+
         // 插入新部件
         targetContainer.insertAdjacentHTML('beforeend', widgetHtml);
-        
+
         // 添加视觉反馈动画
-        const newWidget = targetContainer.querySelector(`#widget_${layoutId}`);
+        const newWidget = targetContainer.querySelector(dataLayoutIdSelector(layoutId));
         if (newWidget) {
             // 短暂延迟后移除 widget-new 类（动画效果）
             setTimeout(() => {
                 newWidget.classList.remove('widget-new');
             }, 1500);
-            
+
             // 滚动到新部件
             newWidget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
-        
+
         console.log(`[ThemeEditor] Widget added to structure view: ${widgetName} in ${area}/${slotId || 'default'}`);
     }
 
@@ -6187,7 +6270,7 @@
      * 获取插槽内下一个排序值
      */
     function getNextSlotSortOrder(slotId) {
-        const slotWidgets = document.querySelector(`.slot-widgets[data-slot="${slotId}"]`);
+        const slotWidgets = document.querySelector(`.slot-widgets${dataAttributeSelector('data-slot', slotId)}`);
         if (!slotWidgets) return 0;
         return slotWidgets.querySelectorAll('.preview-widget-item').length;
     }
@@ -6200,7 +6283,7 @@
         const widgetData = state.draggingWidget;
         const widgetType = widgetData ? widgetData.type : null;
         console.log('highlightAllowedAreas - positions:', positions, 'type:', widgetType, 'widget:', widgetData);
-        
+
         // 区域互斥规则：每个区域不接受哪些类型的部件
         // content 区域不接受 header 和 footer 类型
         // header 区域不接受 footer 类型
@@ -6210,7 +6293,7 @@
             'header': ['footer'],                  // header 区域排除 footer 类型
             'footer': ['header'],                  // footer 区域排除 header 类型
         };
-        
+
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
         // 注意：container 类型部件应严格按其 position 属性过滤
         const typeToAreasMap = {
@@ -6234,7 +6317,7 @@
             'content': ['content', 'left_sidebar', 'right_sidebar'],
             'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
-        
+
         // 位置到区域的映射（与后端 POSITION_TO_AREA_MAP 保持一致）
         const positionToAreaMap = {
             'header': ['header'],
@@ -6291,7 +6374,7 @@
             // 去重
             allowedAreas = [...new Set(allowedAreas)];
         }
-        
+
         // 应用区域互斥规则：过滤掉类型被拒绝的区域
         if (widgetType) {
             allowedAreas = allowedAreas.filter(area => {
@@ -6320,7 +6403,7 @@
         // 高亮匹配的容器内插槽（支持新旧两种属性标记）
         if (widgetData) {
             const widgetCodes = collectWidgetSupportCodes(widgetData);
-            
+
             // 查找所有插槽（包括新旧两种标记方式）
             document.querySelectorAll('.container-slot, [data-wslot]').forEach(slot => {
                 // 获取插槽ID（兼容新旧属性）
@@ -6329,9 +6412,9 @@
                 const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
                 const acceptCodes = normalizeCodeList(acceptAttr);
                 const rejectCodes = normalizeCodeList(slot.dataset.wslotReject || '');
-                
+
                 const matches = slotAcceptsWidgetCodes(acceptCodes, rejectCodes, slotId, widgetCodes);
-                
+
                 if (matches) {
                     slot.classList.add('drag-allowed');
                     slot.classList.remove('drag-invalid');
@@ -6362,7 +6445,7 @@
      */
     function isAllowedArea(positions, areaCode, widgetType = null) {
         console.log('isAllowedArea - positions:', positions, 'areaCode:', areaCode, 'type:', widgetType);
-        
+
         // 区域互斥规则：每个区域不接受哪些类型的部件
         // content 区域不接受 header 和 footer 类型
         // header 区域不接受 footer 类型
@@ -6372,7 +6455,7 @@
             'header': ['footer'],                  // header 区域排除 footer 类型
             'footer': ['header'],                  // footer 区域排除 header 类型
         };
-        
+
         // 检查部件类型是否被当前区域拒绝
         if (widgetType && areaExclusiveTypes[areaCode]) {
             if (areaExclusiveTypes[areaCode].includes(widgetType)) {
@@ -6380,7 +6463,7 @@
                 return false;
             }
         }
-        
+
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
         // 注意：container 类型部件应严格按其 position 属性过滤
         const typeToAreasMap = {
@@ -6404,7 +6487,7 @@
             'content': ['content', 'left_sidebar', 'right_sidebar'],
             'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
-        
+
         // 如果没有 position 限制，根据 type 推断
         if (!positions || !Array.isArray(positions) || positions.length === 0) {
             if (widgetType && typeToAreasMap[widgetType]) {
@@ -6452,7 +6535,7 @@
         allowedAreas = [...new Set(allowedAreas)]; // 去重
 
         console.log('isAllowedArea - allowedAreas:', allowedAreas, 'target:', areaCode);
-        
+
         const result = allowedAreas.includes(areaCode);
         console.log('isAllowedArea - result:', result);
         return result;
@@ -6474,12 +6557,12 @@
 
     /**
      * 判断插槽是否为独占类型（兜底逻辑）
-     * 
+     *
      * 优先从插槽 DOM 的 data-wslot-exclusive="true" 判断，
      * 此函数仅作为 DOM 属性不可用时的兜底。
-     * 
+     *
      * 独占插槽：同一插槽只能有一个部件，新部件会替换旧部件。
-     * 
+     *
      * 与模板保持一致：
      * - exclusive=true 的插槽：header, logo, search, navigation, footer,
      *   footer-social, footer-copyright, widget-hero, list-grid, list-pagination
@@ -6558,10 +6641,12 @@
      * @returns {string} 操作按钮 HTML
      */
     function generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, isFirst = true, isLast = true) {
-        let html = `<div class="widget-hover-actions" data-layout-id="${layoutId}">`;
-        
+        const safeLayoutId = escapeHtml(layoutId || '');
+        const safeSlotId = escapeHtml(slotId || '');
+        let html = `<div class="widget-hover-actions" data-layout-id="${safeLayoutId}">`;
+
         // 嵌套距离：信息、上级、下级（仅这三者按栈下标；替换/删除/移动仍用最外层）
-        html += `<button class="btn-widget-info" title="信息" data-action="info" data-layout-id="${layoutId}">
+        html += `<button class="btn-widget-info" title="信息" data-action="info" data-layout-id="${safeLayoutId}">
                     ${WIDGET_ACTION_ICONS.info}
                  </button>`;
         html += `<button class="btn-penetrate-up" title="上级" data-action="penetrate-up" style="display:none;">
@@ -6570,36 +6655,36 @@
         html += `<button class="btn-penetrate-down" title="下穿" data-action="penetrate-down" style="display:none;">
                     ${WIDGET_ACTION_ICONS.penetrateDown}
                  </button>`;
-        html += `<button class="btn-widget-ai-edit" title="AI编辑" data-action="ai-edit" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+        html += `<button class="btn-widget-ai-edit" title="AI编辑" data-action="ai-edit" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiEdit}
                  </button>`;
-        html += `<button class="btn-widget-ai-rebuild" title="AI重建" data-action="ai-rebuild" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+        html += `<button class="btn-widget-ai-rebuild" title="AI重建" data-action="ai-rebuild" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiRebuild}
                  </button>`;
-        html += `<button class="btn-widget-ai-image" title="AI图片资源重新生成" data-action="ai-image" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+        html += `<button class="btn-widget-ai-image" title="AI图片资源重新生成" data-action="ai-image" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiImage}
                  </button>`;
-        
+
         // 替换按钮 - 所有部件都有
-        html += `<button class="btn-widget-replace" title="替换部件" data-action="replace" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+        html += `<button class="btn-widget-replace" title="替换部件" data-action="replace" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.replace}
                  </button>`;
-        
+
         // 删除按钮 - 所有部件都有
-        html += `<button class="btn-widget-delete" title="删除部件" data-action="delete" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+        html += `<button class="btn-widget-delete" title="删除部件" data-action="delete" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.delete}
                  </button>`;
-        
+
         // 非独占部件显示上下移动按钮
         if (!isExclusive) {
-            html += `<button class="btn-widget-move-up" title="上移" data-action="move-up" data-layout-id="${layoutId}" ${isFirst ? 'disabled' : ''}>
+            html += `<button class="btn-widget-move-up" title="上移" data-action="move-up" data-layout-id="${safeLayoutId}" ${isFirst ? 'disabled' : ''}>
                         ${WIDGET_ACTION_ICONS.moveUp}
                      </button>`;
-            html += `<button class="btn-widget-move-down" title="下移" data-action="move-down" data-layout-id="${layoutId}" ${isLast ? 'disabled' : ''}>
+            html += `<button class="btn-widget-move-down" title="下移" data-action="move-down" data-layout-id="${safeLayoutId}" ${isLast ? 'disabled' : ''}>
                         ${WIDGET_ACTION_ICONS.moveDown}
                      </button>`;
         }
-        
+
         html += '</div>';
         return html;
     }
@@ -6640,8 +6725,8 @@
         const idx = state.nestIndex;
         if (!stack.length || idx < 0 || idx >= stack.length) return;
         const layoutId = stack[idx];
-        const wrapper = doc.querySelector(`.widget-wrapper[data-layout-id="${layoutId}"]`) ||
-            doc.querySelector(`[data-layout-id="${layoutId}"]`);
+        const wrapper = doc.querySelector(`.widget-wrapper${dataLayoutIdSelector(layoutId)}`) ||
+            doc.querySelector(dataLayoutIdSelector(layoutId));
         if (wrapper) {
             wrapper.classList.add('show-actions');
         }
@@ -6672,14 +6757,14 @@
     function injectStylesIntoIframe() {
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
-        
+
         const iframeDoc = iframe.contentDocument;
-        
+
         // 检查是否已注入
         if (iframeDoc.getElementById('widget-hover-styles')) {
             return;
         }
-        
+
         const style = iframeDoc.createElement('style');
         style.id = 'widget-hover-styles';
         style.textContent = `
@@ -6817,7 +6902,7 @@
             }
         `;
         iframeDoc.head.appendChild(style);
-        
+
         // 同时注入 Remix Icon 如果不存在（使用本地资源，禁止外网 CDN）
         if (!iframeDoc.querySelector('link[href*="remixicon"]')) {
             const link = iframeDoc.createElement('link');
@@ -6829,7 +6914,7 @@
                 iframeDoc.head.appendChild(link);
             }
         }
-        
+
         console.log('[ThemeEditor] Styles injected into iframe');
     }
 
@@ -6841,12 +6926,12 @@
         if (!iframe || !iframe.contentDocument) {
             return;
         }
-        
+
         // 先注入样式
         injectStylesIntoIframe();
-        
+
         const iframeDoc = iframe.contentDocument;
-        
+
         // 查找所有部件包装器（服务端输出 .widget-wrapper[data-layout-id]；无 class 时用 [data-layout-id] 且无父级同属性避免重复）
         let widgetWrappers = Array.from(iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id]'));
         if (widgetWrappers.length === 0) {
@@ -6855,47 +6940,47 @@
                 return !parent || !parent.closest('[data-layout-id]');
             });
         }
-        
+
         widgetWrappers.forEach((wrapper) => {
             const layoutId = wrapper.getAttribute('data-layout-id');
             const slotId = wrapper.getAttribute('data-slot-id') ||
                            wrapper.closest('[data-wslot]')?.getAttribute('data-wslot') ||
                            wrapper.closest('[data-slot]')?.getAttribute('data-slot') || '';
             const isExclusive = isExclusiveSlot(slotId, '');
-            
+
             // 检查是否已有操作按钮
             if (wrapper.querySelector('.widget-hover-actions')) return;
-            
+
             // 确保是 relative 定位
             if (getComputedStyle(wrapper).position === 'static') {
                 wrapper.style.position = 'relative';
             }
             wrapper.classList.add('widget-wrapper');
-            
+
             // 计算同层部件位置
             const siblings = wrapper.parentElement?.querySelectorAll('[data-layout-id]') || [];
             const siblingArray = Array.from(siblings);
             const currentIndex = siblingArray.indexOf(wrapper);
             const isFirst = currentIndex === 0;
             const isLast = currentIndex === siblingArray.length - 1;
-            
+
             // 添加操作按钮
             const actionsHtml = generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, isFirst, isLast);
             wrapper.insertAdjacentHTML('afterbegin', actionsHtml);
         });
-        
+
         // 绑定按钮事件
         bindWidgetActionEvents(iframeDoc);
-        
+
         // 嵌套距离：mousemove 用 elementsFromPoint 更新栈，按 nestIndex 决定在哪一层显示操作条
         bindPenetrateStateEvents(iframeDoc);
-        
+
         // 绑定 slot 点击事件（选中 slot 后过滤部件并滚动）
         bindSlotClickEvents(iframeDoc);
-        
+
         // 初始化拖拽排序
         initWidgetSortable();
-        
+
         console.log('[ThemeEditor] Widget hover actions initialized,', widgetWrappers.length, 'widgets processed');
     }
 
@@ -6906,7 +6991,7 @@
         if (!doc || !doc.body) return;
         if (doc.body._penetrateStateBound) return;
         doc.body._penetrateStateBound = true;
-        
+
         doc.body.addEventListener('mousemove', function(e) {
             state.lastHoverPoint = { x: e.clientX, y: e.clientY };
             const stack = getWidgetStackAtPoint(doc, e.clientX, e.clientY);
@@ -6921,7 +7006,7 @@
             }
             setShowActionsByNest();
         });
-        
+
         doc.body.addEventListener('mouseleave', function() {
             state.nestStack = [];
             state.nestIndex = 0;
@@ -6937,18 +7022,18 @@
         // 防止重复绑定 — 每个 iframe document 只绑定一次
         if (doc.body._widgetActionsEventsBound) return;
         doc.body._widgetActionsEventsBound = true;
-        
+
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
             const button = e.target.closest('.widget-hover-actions button');
-            
+
             // 立即阻止事件传播（在检查之前）
             if (e.target.closest('.widget-hover-actions')) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
             }
-            
+
             if (!button) {
                 if (handleIframeWidgetElementClick(e.target)) {
                     e.preventDefault();
@@ -6957,14 +7042,14 @@
                 }
                 return;
             }
-            
+
             console.log('[ThemeEditor] Widget action button clicked:', button.dataset.action);
-            
+
             const action = button.dataset.action;
             const bar = button.closest('.widget-hover-actions');
             const layoutId = bar ? bar.dataset.layoutId : button.dataset.layoutId;
             const slotId = button.dataset.slotId;
-            
+
             switch (action) {
                 case 'info': {
                     const effectiveLayoutId = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
@@ -7361,34 +7446,34 @@
      */
     function bindSlotClickEvents(doc) {
         if (!doc || !doc.body) return;
-        
+
         // 防止重复绑定 — 每个 iframe document 只绑定一次
         if (doc.body._slotClickEventsBound) return;
         doc.body._slotClickEventsBound = true;
-        
+
         // 使用事件委托，监听所有 slot 的点击
         doc.body.addEventListener('click', function(e) {
             // 操作按钮点击始终跳过
             if (e.target.closest('.widget-hover-actions')) {
                 return;
             }
-            
+
             // 查找点击的 slot 元素（支持多种标记方式）
-            const slotEl = e.target.closest('[data-slot]') || 
+            const slotEl = e.target.closest('[data-slot]') ||
                           e.target.closest('[data-wslot]') ||
                           e.target.closest('.content-slot');
-            
+
             if (!slotEl) return;
-            
+
             // 如果点击的是 widget-wrapper 内的子插槽，优先处理子插槽选择
             // 只有点击 widget-wrapper 但没有命中子插槽时才跳过
             const inWidgetWrapper = e.target.closest('.widget-wrapper') || e.target.closest('[data-layout-id]');
             if (inWidgetWrapper && !e.target.closest('[data-wslot]') && !e.target.closest('[data-slot]')) {
                 return;
             }
-            
+
             // 获取 slot 信息
-            const slotId = slotEl.getAttribute('data-slot') || 
+            const slotId = slotEl.getAttribute('data-slot') ||
                           slotEl.getAttribute('data-wslot') || '';
             const slotName = slotEl.getAttribute('data-name') ||
                             slotEl.getAttribute('data-wslot-name') ||
@@ -7397,15 +7482,15 @@
             const acceptAttr = slotEl.getAttribute('data-accept') ||
                               slotEl.getAttribute('data-wslot-accept') || '*';
             const rejectAttr = slotEl.getAttribute('data-wslot-reject') || '';
-            
+
             if (!slotId) return;
-            
+
             // 读取 slot 的 position 属性（区域定位）
-            const positionAttr = slotEl.getAttribute('data-wslot-position') || 
+            const positionAttr = slotEl.getAttribute('data-wslot-position') ||
                                 slotEl.getAttribute('data-position') || '';
-            
+
             console.log('[ThemeEditor] Slot clicked in iframe:', slotId, 'accept:', acceptAttr, 'position:', positionAttr);
-            
+
             // 构造 slot 信息，area 优先使用 position 属性
             const slotInfo = {
                 id: slotId,
@@ -7418,18 +7503,18 @@
                 multiple: slotEl.getAttribute('data-wslot-multiple') !== 'false',
                 area: positionAttr || ''  // 使用 position 作为区域
             };
-            
+
             // 调用 slot 选中处理函数（这会过滤部件并滚动）
             handleSlotSelected(slotInfo);
-            
+
             // 高亮被点击的 slot
             doc.querySelectorAll('[data-slot], [data-wslot], .content-slot').forEach(el => {
                 el.classList.remove('slot-selected');
             });
             slotEl.classList.add('slot-selected');
-            
+
         }, false);
-        
+
         console.log('[ThemeEditor] Slot click events bound in iframe');
     }
 
@@ -7438,43 +7523,43 @@
      */
     function handleWidgetReplace(layoutId, slotId) {
         console.log('[ThemeEditor] Replace widget:', layoutId, 'in slot:', slotId);
-        
+
         // 选中对应的插槽
         if (slotId) {
             // 构造插槽信息并触发选中
-            const slotInfo = { 
-                id: slotId, 
+            const slotInfo = {
+                id: slotId,
                 name: slotId,
                 accept: '*'  // 默认接受所有部件，后续可通过插槽配置获取
             };
-            
+
             // 尝试从 iframe 获取插槽的 accept 属性
             const iframe = elements.previewFrame;
             if (iframe && iframe.contentDocument) {
-                const slotEl = iframe.contentDocument.querySelector(`[data-wslot="${slotId}"]`) ||
-                               iframe.contentDocument.querySelector(`[data-slot="${slotId}"]`);
+                const slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
+                               iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId));
                 if (slotEl) {
-                    slotInfo.accept = slotEl.getAttribute('data-wslot-accept') || 
+                    slotInfo.accept = slotEl.getAttribute('data-wslot-accept') ||
                                       slotEl.getAttribute('data-accept') || '*';
                     slotInfo.reject = slotEl.getAttribute('data-wslot-reject') || '';
-                    slotInfo.name = slotEl.getAttribute('data-wslot-name') || 
+                    slotInfo.name = slotEl.getAttribute('data-wslot-name') ||
                                     slotEl.getAttribute('data-name') || slotId;
                 }
             }
-            
+
             // 使用现有的插槽选中处理函数
             handleSlotSelected(slotInfo);
         }
-        
+
         // 滚动部件面板到顶部
         const widgetPanel = document.querySelector('.editor-widget-panel .widget-list');
         if (widgetPanel) {
             widgetPanel.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        
+
         // 高亮显示符合的部件
         highlightCompatibleWidgets(slotId);
-        
+
         showToast('请从右侧选择新部件进行替换', 'info');
     }
 
@@ -7486,7 +7571,7 @@
         document.querySelectorAll('.widget-item.highlight').forEach(el => {
             el.classList.remove('highlight');
         });
-        
+
         // 如果有选中的插槽信息
         if (state.selectedSlot && state.selectedSlot.accept) {
             document.querySelectorAll('.widget-item').forEach(item => {
@@ -7512,7 +7597,7 @@
      */
     async function handleWidgetDelete(layoutId, slotId) {
         console.log('[ThemeEditor] Delete widget:', layoutId, 'in slot:', slotId);
-        
+
         // 确认删除 - 使用自定义对话框
         const confirmed = await showCustomConfirm(
             '确认删除部件？',
@@ -7520,17 +7605,17 @@
             '确认删除',
             '取消'
         );
-        
+
         if (!confirmed) {
             return;
         }
-        
+
         // 从 iframe DOM 推断 area（header/footer/content）
         let area = 'content';
         try {
             const iframe = elements.previewFrame;
             if (iframe && iframe.contentDocument) {
-                const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                 if (widgetEl) {
                     // 检查是否在 header/footer 区域
                     if (widgetEl.closest('header, [data-wslot-position="header"], .site-header')) {
@@ -7541,7 +7626,7 @@
                 }
             }
         } catch (e) { /* iframe access error */ }
-        
+
         try {
             // 调用删除 API - 传递 slot_id 和 area 作为后端 fallback
             const result = await apiJson(config.apiDeleteWidget, {
@@ -7559,21 +7644,21 @@
                     layout_option: state.layoutOption || 'default'
                 })
             });
-            
+
             if (result.success) {
                 // 从 iframe 中移除部件并恢复原始内容
                 const iframe = elements.previewFrame;
                 if (iframe && iframe.contentDocument) {
-                    const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                    const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                     if (widgetEl) {
                         const slot = widgetEl.closest('[data-wslot], [data-slot]');
                         const actualSlotId = slot?.getAttribute('data-wslot') || slot?.getAttribute('data-slot');
-                        
+
                         // 移除部件元素
                         widgetEl.remove();
-                        
+
                         const remainingWidgets = slot ? slot.querySelector('[data-layout-id]') : null;
-                        
+
                         // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
                         if (slot && !remainingWidgets) {
                             if (result.has_original && result.original_html) {
@@ -7599,15 +7684,15 @@
                         }
                     }
                 }
-                
+
                 // 从结构视图中移除
-                const structureItem = document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`);
+                const structureItem = document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
                 if (structureItem) {
                     structureItem.remove();
                 }
-                
+
                 showToast('部件已删除', 'success');
-                
+
                 // 更新同层部件的移动按钮状态（如果有的话）
                 if (slotId) {
                     updateSiblingMoveButtons(slotId);
@@ -7630,7 +7715,7 @@
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
 
-        const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+        const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
         if (!widgetEl) return;
 
         const prevWidget = widgetEl.previousElementSibling;
@@ -7657,7 +7742,7 @@
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
 
-        const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+        const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
         if (!widgetEl) return;
 
         const nextWidget = widgetEl.nextElementSibling;
@@ -7729,20 +7814,20 @@
     function updateSiblingMoveButtons(slotId) {
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
-        
+
         // 找到插槽
-        let slotEl = iframe.contentDocument.querySelector(`[data-wslot="${slotId}"]`) ||
-                     iframe.contentDocument.querySelector(`[data-slot="${slotId}"]`);
-        
+        let slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
+                     iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId));
+
         if (!slotEl) return;
-        
+
         // 获取插槽内所有部件
         const widgets = slotEl.querySelectorAll('[data-layout-id]');
-        
+
         widgets.forEach((widget, index) => {
             const upBtn = widget.querySelector('.btn-widget-move-up');
             const downBtn = widget.querySelector('.btn-widget-move-down');
-            
+
             if (upBtn) {
                 upBtn.disabled = (index === 0);
             }
@@ -7930,8 +8015,8 @@
         if (!iframe || !iframe.contentDocument || !slotId) return false;
 
         const iframeDoc = iframe.contentDocument;
-        const slotEl = iframeDoc.querySelector(`[data-wslot="${slotId}"]`) ||
-                       iframeDoc.querySelector(`[data-slot="${slotId}"]`);
+        const slotEl = iframeDoc.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
+                       iframeDoc.querySelector(dataAttributeSelector('data-slot', slotId));
         if (!slotEl) return false;
 
         // 找到装部件的容器：取第一个带 data-layout-id 的节点的 parentNode
@@ -8010,7 +8095,7 @@
      * 获取下一个排序值
      */
     function getNextSortOrder(area) {
-        const areaWidgets = document.querySelector(`.area-widgets[data-area="${area}"]`);
+        const areaWidgets = document.querySelector(`.area-widgets${dataAttributeSelector('data-area', area)}`);
         if (!areaWidgets) return 0;
         return areaWidgets.querySelectorAll('.preview-widget-item').length;
     }
@@ -8082,10 +8167,10 @@
                 </div>
             </div>
         `;
-        
+
         // 打开模态框
         showEditorModal(modal);
-        
+
         // 加载配置
         await loadWidgetConfigForModal(widgetElement, modalBody);
     }
@@ -8101,6 +8186,14 @@
         const responsiveViewport = document.getElementById('componentPreviewViewportResponsive');
         const responsiveInput = document.getElementById('componentPreviewResponsiveWidth');
         const responsiveLabel = document.getElementById('componentPreviewResponsiveWidthLabel');
+        const renderPreviewError = function(el, message) {
+            if (!el) return;
+            el.innerHTML = '';
+            const error = document.createElement('div');
+            error.className = 'widget-preview-error';
+            error.textContent = message || (typeof __ !== 'undefined' ? __('加载失败') : '加载失败');
+            el.appendChild(error);
+        };
 
         if (!modal || !inners.length) return;
 
@@ -8115,11 +8208,17 @@
             url.searchParams.set('widget_module', widgetModule);
             url.searchParams.set('widget_code', widgetCode);
             const data = await apiJson(url.toString());
-            const html = (data && data.html) ? data.html : (data.success === false ? '<div class="widget-preview-error">' + (data.message || '') + '</div>' : '');
-            inners.forEach(el => { el.innerHTML = html; });
+            if (data && data.html) {
+                const html = sanitizeHtmlForEditorPreview(data.html);
+                inners.forEach(el => { el.innerHTML = html; });
+            } else if (data && data.success === false) {
+                inners.forEach(el => renderPreviewError(el, data.message || ''));
+            } else {
+                inners.forEach(el => { el.innerHTML = ''; });
+            }
         } catch (err) {
             const errMsg = err && err.message ? err.message : String(err);
-            inners.forEach(el => { el.innerHTML = '<div class="widget-preview-error">' + (errMsg || '加载失败') + '</div>'; });
+            inners.forEach(el => renderPreviewError(el, errMsg || ''));
         }
         loadingEl?.classList.remove('visible');
 
@@ -8129,7 +8228,7 @@
                 responsiveViewport.style.width = w + 'px';
                 responsiveLabel.textContent = w + 'px';
             };
-            responsiveInput.oninput = updateResponsiveWidth;
+            responsiveInput.addEventListener('input', updateResponsiveWidth);
             updateResponsiveWidth();
         }
     }
@@ -8404,6 +8503,8 @@
         const widgetName = widget.meta?.name || widget.widget_code;
         const widgetDesc = widget.meta?.description || '';
         const savedConfig = widget.config || {};
+        const safeLayoutId = escapeHtml(widget.layout_id || '');
+        const safeWidgetElementId = widgetElement ? escapeHtml('widget_' + widget.layout_id) : '';
 
         let html = `
             <div class="widget-config-panel">
@@ -8418,7 +8519,7 @@
                         </div>
                     </div>
                 </div>
-                <form class="config-form" id="widgetConfigFormModal" data-layout-id="${widget.layout_id}" data-widget-element-id="${widgetElement ? 'widget_' + widget.layout_id : ''}">
+                <form class="config-form" id="widgetConfigFormModal" data-layout-id="${safeLayoutId}" data-widget-element-id="${safeWidgetElementId}">
         `;
 
         if (Object.keys(params).length === 0) {
@@ -8439,9 +8540,12 @@
                 const placeholder = param.placeholder || '';
                 const options = param.options || {};
                 const translatable = isFieldTranslatable(param);
+                const safeKey = escapeHtml(key);
+                const safeFieldId = escapeHtml(`config_${key}`);
+                const safeValue = escapeHtml(value);
 
                 html += `<div class="config-field${translatable ? ' translatable-field' : ''}">`;
-                html += `<label class="config-label" for="config_${key}">`;
+                html += `<label class="config-label" for="${safeFieldId}">`;
                 html += escapeHtml(label);
                 if (required) html += ' <span class="required-mark">*</span>';
                 if (translatable) html += ' <i class="ri-translate-2 translatable-icon" title="支持多语言"></i>';
@@ -8449,15 +8553,15 @@
                 html += `<div class="config-field-input">`;
 
                 if (type === 'string') {
-                    html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                    html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                             value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
                 } else if (type === 'number') {
-                    html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                    html += `<input type="number" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                             value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
                 } else if (isBooleanParamType(semanticType)) {
                     html += renderBooleanSelect(`config_${key}`, key, key, value, required, param);
                 } else if (type === 'select') {
-                    html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
+                    html += `<select class="form-select" id="${safeFieldId}" name="${safeKey}" ${required ? 'required' : ''}>
                         <option value="">-- 请选择 --</option>`;
                     for (const optVal in options) {
                         html += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
@@ -8466,30 +8570,31 @@
                 } else if (type === 'url') {
                     html += `<div class="input-with-icon">
                         <i class="ri-link"></i>
-                        <input type="url" class="form-control" id="config_${key}" name="${key}" 
-                               value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
+                        <input type="url" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                               value="${safeValue}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
                     </div>`;
                 } else if (type === 'image') {
+                    const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
                     html += `<div class="input-group">
-                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片 URL 或上传">
-                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}" title="选择图片">
+                        <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="图片 URL 或上传">
+                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="${safeFieldId}" title="选择图片">
                             ${iconSvg('image')}
                         </button>
                     </div>`;
-                    if (value) {
-                        html += `<div class="mt-2"><img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
+                    if (safeImageUrl) {
+                        html += `<div class="mt-2"><img src="${safeImageUrl}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
                     }
                 } else if (type === 'color') {
                     html += `<div class="color-picker-wrapper">
-                        <input type="color" class="form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}">
-                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000" style="font-family: monospace;">
+                        <input type="color" class="form-control-color" id="${safeFieldId}_picker" value="${escapeHtml(value || '#000000')}">
+                        <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="#000000" style="font-family: monospace;">
                     </div>`;
                 } else if (type === 'textarea') {
-                    html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="4" 
-                             placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+                    html += `<textarea class="form-control" id="${safeFieldId}" name="${safeKey}" rows="4"
+                             placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${safeValue}</textarea>`;
                 } else {
-                    html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+                    html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                             value="${safeValue}" ${required ? 'required' : ''}>`;
                 }
 
                 html += `</div>`; // .config-field-input
@@ -8513,7 +8618,7 @@
         `;
 
         modalBody.innerHTML = html;
-        
+
         // 实时保存：任意修改后防抖保存，不关闭模态框
         const form = document.getElementById('widgetConfigFormModal');
         if (form) {
@@ -8530,7 +8635,7 @@
             form.addEventListener('input', scheduleAutoSave);
             form.addEventListener('change', scheduleAutoSave);
         }
-        
+
         // 绑定颜色选择器同步
         modalBody.querySelectorAll('.form-control-color').forEach(colorPicker => {
             colorPicker.addEventListener('input', function() {
@@ -8676,7 +8781,7 @@
                 if (!groups[groupName]) groups[groupName] = [];
                 groups[groupName].push({ key, ...param });
             }
-            
+
             const groupIcons = {
                 '基础配置': 'ri-settings-3-line',
                 '样式': 'ri-palette-line',
@@ -8684,22 +8789,22 @@
                 '数据': 'ri-database-2-line',
                 '高级': 'ri-code-s-slash-line',
             };
-            
+
             for (const groupName in groups) {
                 const groupFields = groups[groupName];
                 const groupIcon = groupIcons[groupName] || 'ri-folder-settings-line';
                 const isSingleGroup = Object.keys(groups).length === 1;
-                
+
                 // 单分组不显示分组标题，直接展示字段
                 if (!isSingleGroup) {
                     html += `<div class="config-group">
-                        <h5 class="config-group-title" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <h5 class="config-group-title" data-config-group-toggle>
                             <i class="${groupIcon}"></i> ${escapeHtml(groupName)}
                             ${iconSvg('arrowDown')}
                         </h5>
                         <div class="config-fields">`;
                 }
-                
+
                 for (const field of groupFields) {
                     const key = field.key;
                     const type = getParamUiType(field);
@@ -8712,9 +8817,12 @@
                     const placeholder = field.placeholder || '';
                     const options = field.options || {};
                     const translatable = isFieldTranslatable(field);
-                    
+                    const safeKey = escapeHtml(key);
+                    const safeFieldId = escapeHtml(`config_${key}`);
+                    const safeValue = escapeHtml(value);
+
                     html += `<div class="config-field${translatable ? ' translatable-field' : ''}">`;
-                    html += `<label class="config-label" for="config_${key}">`;
+                    html += `<label class="config-label" for="${safeFieldId}">`;
                     html += escapeHtml(label);
                     if (required) html += ' <span class="required-mark">*</span>';
                     if (translatable) html += ' <i class="ri-translate-2 translatable-icon" title="支持多语言"></i>';
@@ -8722,15 +8830,15 @@
                     html += `<div class="config-field-input">`;
 
                     if (type === 'string') {
-                        html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                                 value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                        html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                                 value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
                     } else if (type === 'number') {
-                        html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
-                                 value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                        html += `<input type="number" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                                 value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
                     } else if (isBooleanParamType(semanticType)) {
                         html += renderBooleanSelect(`config_${key}`, key, key, value, required, field);
                     } else if (type === 'select') {
-                        html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
+                        html += `<select class="form-select" id="${safeFieldId}" name="${safeKey}" ${required ? 'required' : ''}>
                             <option value="">-- 请选择 --</option>`;
                         for (const optVal in options) {
                             html += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
@@ -8739,30 +8847,31 @@
                     } else if (type === 'url') {
                         html += `<div class="input-with-icon">
                             <i class="ri-link"></i>
-                            <input type="url" class="form-control" id="config_${key}" name="${key}" 
-                                   value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
+                            <input type="url" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                                   value="${safeValue}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
                         </div>`;
                     } else if (type === 'image') {
+                        const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
                         html += `<div class="input-group">
-                            <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片 URL 或上传">
-                            <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}" title="选择图片">
+                            <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="图片 URL 或上传">
+                            <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="${safeFieldId}" title="选择图片">
                                 ${iconSvg('image')}
                             </button>
                         </div>`;
-                        if (value) {
-                            html += `<div class="mt-2"><img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
+                        if (safeImageUrl) {
+                            html += `<div class="mt-2"><img src="${safeImageUrl}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
                         }
                     } else if (type === 'color') {
                         html += `<div class="color-picker-wrapper">
-                            <input type="color" class="form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}">
-                            <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000" style="font-family: monospace;">
+                            <input type="color" class="form-control-color" id="${safeFieldId}_picker" value="${escapeHtml(value || '#000000')}">
+                            <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="#000000" style="font-family: monospace;">
                         </div>`;
                     } else if (type === 'textarea') {
-                        html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="4" 
-                                 placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+                        html += `<textarea class="form-control" id="${safeFieldId}" name="${safeKey}" rows="4"
+                                 placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${safeValue}</textarea>`;
                     } else {
-                        html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                                 value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+                        html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                                 value="${safeValue}" ${required ? 'required' : ''}>`;
                     }
 
                     html += `</div>`; // .config-field-input
@@ -8773,7 +8882,7 @@
 
                     html += `</div>`; // .config-field
                 }
-                
+
                 if (!isSingleGroup) {
                     html += `</div></div>`; // .config-fields, .config-group
                 }
@@ -8791,7 +8900,7 @@
         `;
 
         elements.configContent.innerHTML = html;
-        
+
         // 动态填充语言切换器
         const langSwitcher = document.getElementById('configLangSwitcher');
         if (langSwitcher) {
@@ -8841,16 +8950,44 @@
         if (!body || body.children.length > 0) return;
 
         const locales = await fetchInstalledLocales();
-        const fieldKey = panel.dataset.field;
+        const fieldKey = panel.dataset.field || '';
         const p = 'w-param-';
-        let html = '';
+        const fragment = document.createDocumentFragment();
         for (const loc of locales) {
-            html += `<div class="${p}i18n-row">`;
-            html += `<label class="${p}i18n-label">${loc.flag ? '<span class="lang-flag-svg">' + loc.flag + '</span> ' : ''}${escapeHtml(loc.code)}</label>`;
-            html += `<input type="text" class="${p}input i18n-input" data-locale="${escapeHtml(loc.code)}" data-field="${escapeHtml(fieldKey)}" placeholder="${escapeHtml(loc.name)}">`;
-            html += `</div>`;
+            const row = document.createElement('div');
+            row.className = `${p}i18n-row`;
+
+            const label = document.createElement('label');
+            label.className = `${p}i18n-label`;
+            const rawFlag = String(loc.flag || '').trim().replace(/<\?xml[^?]*\?>/i, '');
+            if (rawFlag) {
+                const flag = document.createElement('span');
+                flag.className = 'lang-flag-svg';
+                const safeFlagHtml = /^<svg[\s\S]*<\/svg>\s*$/i.test(rawFlag)
+                    ? sanitizeHtmlForEditorPreview(rawFlag)
+                    : '';
+                if (safeFlagHtml && /^<svg[\s\S]*<\/svg>\s*$/i.test(safeFlagHtml.trim())) {
+                    flag.innerHTML = safeFlagHtml;
+                } else {
+                    flag.textContent = rawFlag;
+                }
+                label.appendChild(flag);
+                label.appendChild(document.createTextNode(' '));
+            }
+            label.appendChild(document.createTextNode(String(loc.code || '')));
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = `${p}input i18n-input`;
+            input.dataset.locale = String(loc.code || '');
+            input.dataset.field = fieldKey;
+            input.placeholder = String(loc.name || '');
+
+            row.appendChild(label);
+            row.appendChild(input);
+            fragment.appendChild(row);
         }
-        body.innerHTML = html;
+        body.replaceChildren(fragment);
     }
 
     /**
@@ -9100,7 +9237,7 @@
             showToast('保存失败', 'error');
         }
     }
-    
+
     /**
      * 重新加载部件配置（支持多语言）
      * @param {string} layoutId 布局ID
@@ -9108,21 +9245,21 @@
      */
     async function reloadWidgetConfigWithLocale(layoutId, locale) {
         if (!layoutId) return;
-        
+
         try {
-            const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}${locale ? '&locale=' + locale : ''}`;
+            const apiUrl = `${config.apiBase}/widget-config?layout_id=${encodeURIComponent(layoutId)}${locale ? '&locale=' + encodeURIComponent(locale) : ''}`;
             const result = await apiJson(apiUrl);
-            
+
             if (result.success && result.data) {
                 const widgetData = result.data;
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
-                
+
                 // 更新表单中的值
                 const form = document.getElementById('widgetConfigForm');
                 if (form) {
                     for (const [key, value] of Object.entries(widgetConfig)) {
-                        const input = form.querySelector(`[name="${key}"]`);
+                        const input = form.querySelector(dataAttributeSelector('name', key));
                         if (input) {
                             if (input.type === 'checkbox') {
                                 input.checked = !!value;
@@ -9132,7 +9269,7 @@
                         }
                     }
                 }
-                
+
                 showToast(locale ? `已切换到 ${locale} 语言` : '已切换到默认语言', 'success');
             } else {
                 showToast('加载配置失败', 'error');
@@ -9142,7 +9279,7 @@
             showToast('加载配置失败', 'error');
         }
     }
-    
+
     /**
      * 保存部件配置（支持多语言）
      * @param {number} layoutId 布局ID
@@ -9163,7 +9300,7 @@
                     locale: locale
                 })
             });
-            
+
             if (result.success) {
                 showToast(result.message || '配置已保存', 'success');
                 return true;
@@ -9177,7 +9314,7 @@
             return false;
         }
     }
-    
+
     /**
      * 收集表单配置，保留数组字段与多选字段的结构。
      */
@@ -9357,7 +9494,7 @@
         try {
             const iframe = elements.previewFrame;
             if (iframe && iframe.contentDocument) {
-                const iframeWidget = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                const iframeWidget = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                 if (iframeWidget) {
                     if (iframeWidget.closest('header, [data-wslot-position="header"], .site-header')) {
                         areaFromEl = 'header';
@@ -9388,13 +9525,13 @@
                 // 从 iframe 中移除部件并恢复原始内容
                 const iframe = elements.previewFrame;
                 if (iframe && iframe.contentDocument) {
-                    const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                    const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                     if (widgetEl) {
                         const slot = widgetEl.closest('[data-wslot], [data-slot]');
-                        
+
                         // 移除部件元素
                         widgetEl.remove();
-                        
+
                         // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
                         if (slot && !slot.querySelector('[data-layout-id]')) {
                             if (result.has_original && result.original_html) {
@@ -9419,7 +9556,7 @@
                         }
                     }
                 }
-                
+
                 // 从结构视图移除
                 widgetElement.remove();
                 showToast('部件已删除', 'success');
@@ -9441,7 +9578,7 @@
         if (!iframe || !iframe.contentDocument) return;
 
         try {
-            const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+            const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
             if (widgetEl) {
                 widgetEl.remove();
             }
@@ -9584,7 +9721,7 @@
 
     /**
      * 打开新窗口预览（草稿预览）
-     * 
+     *
      * 使用 preview_mode=1 参数，让前台以草稿模式渲染
      * 用户可以在新窗口中预览未发布的更改
      */
@@ -9598,10 +9735,10 @@
         // 可以额外添加 status 参数来明确指定版本
         window.open(buildLayoutPreviewUrl(), '_blank');
     }
-    
+
     /**
      * 打开前端真实 URL 预览
-     * 
+     *
      * 生成预览 Token 并跳转到真实的前端页面
      * 预览模式下会显示可拖动的退出预览浮窗
      */
@@ -9642,7 +9779,7 @@
             showToast('启动预览失败', 'error');
         }
     }
-    
+
     /**
      * 打开新窗口预览已发布版本
      */
@@ -9655,10 +9792,10 @@
         // 使用 status=published 明确指定查看已发布版本
         window.open(buildLayoutPreviewUrl({status: 'published'}), '_blank');
     }
-    
+
     /**
      * 切换编辑器预览版本（draft/published）
-     * 
+     *
      * @param {string} status - 'draft' 或 'published'
      */
     function switchPreviewStatus(status) {
@@ -9666,7 +9803,7 @@
             console.warn('无效的预览状态:', status);
             return;
         }
-        
+
         state.previewStatus = status;
         clearSlotSelection();
         deselectArea();
@@ -9674,16 +9811,16 @@
         if (status !== 'draft') {
             switchPreviewView('preview');
         }
-        
+
         // 刷新编辑器 iframe 预览
         refreshPreview();
-        
+
         // 更新 UI 状态指示
         updatePreviewStatusUI(status);
-        
+
         showToast(status === 'draft' ? '已切换到草稿版本' : '已切换到已发布版本', 'info');
     }
-    
+
     /**
      * 更新预览状态 UI 指示
      */
@@ -9700,13 +9837,13 @@
             structureTab.classList.toggle('disabled', !enabled);
             structureTab.setAttribute('aria-disabled', enabled ? 'false' : 'true');
         }
-        
+
         // 更新切换按钮状态
         document.querySelectorAll('.preview-status-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.status === status);
         });
     }
-    
+
     /**
      * 获取当前预览状态
      */
@@ -9795,7 +9932,7 @@
             'content': ['content', 'left_sidebar', 'right_sidebar'],
             'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
-        
+
         // 位置到区域的映射（与后端 POSITION_TO_AREA_MAP 保持一致）
         const positionToAreaMap = {
             'header': ['header'],
@@ -9806,7 +9943,7 @@
             'content': ['content', 'banner'],
             'footer': ['footer'],
         };
-        
+
         // 合并传入的拒绝类型和区域互斥规则
         const finalRejectTypes = [...rejectTypes];
         if (areaExclusiveTypes[areaCode]) {
@@ -9816,7 +9953,7 @@
                 }
             });
         }
-        
+
         let hasMatchInGroup = new Map();
 
         document.querySelectorAll('.widget-item.draggable').forEach(item => {
@@ -9824,7 +9961,7 @@
             let widgetPositions = [];
             const widgetType = item.dataset.widgetType || '';
             const widgetCode = item.dataset.widgetCode || '';
-            
+
             try {
                 widgetPositions = JSON.parse(positionsStr);
             } catch (e) {
@@ -9835,7 +9972,7 @@
             let allowedAreas = [];
             let isUniversal = false;
             let isExactMatch = false;
-            
+
             if (!widgetPositions || widgetPositions.length === 0) {
                 // 没有 position 限制，根据 type 推断
                 if (widgetType && typeToAreasMap[widgetType]) {
@@ -9868,13 +10005,13 @@
                 allowedAreas = [...new Set(allowedAreas)]; // 去重
                 isExactMatch = true;
             }
-            
+
             // 检查部件类型是否被当前区域拒绝
             const isTypeRejected = finalRejectTypes.includes(widgetType);
-            
+
             // 只有当区域允许且类型未被拒绝时才能放置
             const canPlace = allowedAreas.includes(areaCode) && !isTypeRejected;
-            
+
             // 清除所有匹配相关的类
             item.classList.remove('area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
 
@@ -9907,15 +10044,15 @@
                 }
             }
         });
-        
+
         // 隐藏没有匹配部件的分组，展开有匹配的分组
         document.querySelectorAll('.widget-group').forEach(group => {
             const groupType = group.dataset.type || '';
             const hasMatch = hasMatchInGroup.get(groupType);
-            
+
             // 如果整个分组类型在拒绝列表中，直接隐藏整个分组
             const isGroupRejected = finalRejectTypes.includes(groupType);
-            
+
             if (isGroupRejected) {
                 group.style.display = 'none';
             } else if (hasMatch) {
@@ -9925,7 +10062,7 @@
                 group.style.display = 'none';
             }
         });
-        
+
         console.log('[filterWidgetsByArea] Area:', areaCode, 'Reject types:', finalRejectTypes);
     }
 
@@ -9942,22 +10079,22 @@
         setTimeout(() => {
             const widgetPanelContent = document.querySelector('#widgetPanel .panel-content');
             if (!widgetPanelContent) return;
-            
+
             // 找到第一个可见的匹配部件（area-matched 或 area-universal）
             const firstMatchedWidget = widgetPanelContent.querySelector('.widget-item.area-matched, .widget-item.area-universal');
-            
+
             if (firstMatchedWidget) {
                 // 获取部件所在的组
                 const widgetGroup = firstMatchedWidget.closest('.widget-group');
-                
+
                 if (widgetGroup) {
                     // 计算滚动位置（组的顶部位置 - 一些间距）
                     const groupTop = widgetGroup.offsetTop;
                     const scrollOffset = Math.max(0, groupTop - 20); // 留出20px间距
-                    
-                    widgetPanelContent.scrollTo({ 
-                        top: scrollOffset, 
-                        behavior: 'smooth' 
+
+                    widgetPanelContent.scrollTo({
+                        top: scrollOffset,
+                        behavior: 'smooth'
                     });
                 }
             } else {
@@ -10061,7 +10198,7 @@
                     </div>
                 </div>
             `;
-            
+
             dialog.style.cssText = `
                 position: fixed;
                 top: 0;
@@ -10070,7 +10207,7 @@
                 bottom: 0;
                 z-index: 100000;
             `;
-            
+
             // 添加样式
             const style = document.createElement('style');
             style.textContent = `
@@ -10145,28 +10282,28 @@
                 }
             `;
             dialog.appendChild(style);
-            
+
             document.body.appendChild(dialog);
-            
+
             // 绑定按钮事件
             const btnConfirm = dialog.querySelector('.btn-confirm');
             const btnCancel = dialog.querySelector('.btn-cancel');
-            
+
             const cleanup = () => {
                 dialog.style.opacity = '0';
                 setTimeout(() => dialog.remove(), 200);
             };
-            
+
             btnConfirm.addEventListener('click', () => {
                 cleanup();
                 resolve(true);
             });
-            
+
             btnCancel.addEventListener('click', () => {
                 cleanup();
                 resolve(false);
             });
-            
+
             // 点击遮罩层关闭
             dialog.querySelector('.custom-confirm-overlay').addEventListener('click', () => {
                 cleanup();
@@ -10232,7 +10369,7 @@
     function renderBooleanSelect(fieldId, name, key, value, required, param) {
         const selectedValue = normalizeBooleanSelectValue(value);
         const options = getBooleanSelectOptions(key, param);
-        let html = `<select class="form-select" id="${fieldId}" name="${name}" ${required ? 'required' : ''}>`;
+        let html = `<select class="form-select" id="${escapeHtml(fieldId)}" name="${escapeHtml(name)}" ${required ? 'required' : ''}>`;
         for (const [optVal, optLabel] of Object.entries(options)) {
             html += `<option value="${escapeHtml(optVal)}" ${String(optVal) === selectedValue ? 'selected' : ''}>${escapeHtml(optLabel)}</option>`;
         }
@@ -10253,26 +10390,119 @@
             .replace(/'/g, '&#039;');
     }
 
+    function sanitizeUrlForAttribute(value, fallback = '') {
+        if (value === null || value === undefined) return fallback;
+        const raw = String(value).trim();
+        if (!raw) return fallback;
+
+        const normalized = raw.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+        if (normalized.startsWith('javascript:') || normalized.startsWith('vbscript:')) {
+            return fallback;
+        }
+        if (normalized.startsWith('data:') && !/^data:image\/(png|jpe?g|gif|webp);/i.test(raw)) {
+            return fallback;
+        }
+
+        return raw;
+    }
+
+    function escapeJsString(value) {
+        return String(value ?? '')
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+            .replace(/</g, '\\x3C')
+            .replace(/>/g, '\\x3E')
+            .replace(/&/g, '\\x26')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029');
+    }
+
+    function jsonForScript(value) {
+        return JSON.stringify(value)
+            .replace(/</g, '\\u003c')
+            .replace(/>/g, '\\u003e')
+            .replace(/&/g, '\\u0026')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029');
+    }
+
+    function renderSafeImagePreview(preview, rawUrl) {
+        if (!preview) return false;
+
+        const safeUrl = sanitizeUrlForAttribute(rawUrl, '');
+        if (!safeUrl) return false;
+
+        preview.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = safeUrl;
+        img.alt = '预览';
+        img.addEventListener('error', function() {
+            preview.innerHTML = '<div class="image-placeholder"><span>图片加载失败</span></div>';
+        });
+        preview.appendChild(img);
+        return true;
+    }
+
+    function sanitizeHtmlForEditorPreview(html) {
+        if (!html) return '';
+
+        const template = document.createElement('template');
+        template.innerHTML = String(html);
+
+        template.content
+            .querySelectorAll('script, style, link, meta, object, embed, iframe, frame, frameset, base, form, input, button, textarea, select, option')
+            .forEach(el => el.remove());
+
+        template.content.querySelectorAll('*').forEach(el => {
+            Array.from(el.attributes).forEach(attr => {
+                const name = attr.name.toLowerCase();
+                const value = String(attr.value || '').trim().replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+
+                if (name.startsWith('on') || name === 'srcdoc') {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+
+                if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'formaction') && (
+                    value.startsWith('javascript:') ||
+                    value.startsWith('vbscript:') ||
+                    (value.startsWith('data:') && !value.startsWith('data:image/'))
+                )) {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+
+                if (name === 'style' && /expression\s*\(|url\s*\(\s*['"]?\s*(?:javascript|vbscript|data):/i.test(attr.value)) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+
+        return template.innerHTML;
+    }
+
     /**
      * 从 HTML 字符串中剥离 widget-wrapper 和操作按钮
-     * 
+     *
      * 后端渲染 original_html 时，SlotRendererService 可能将其他 widget 注入到模板中，
      * 导致 "原始内容" 实际包含 widget-wrapper 元素。
      * 此函数将这些 wrapper 的内容提取出来（保留子内容），移除操作按钮。
-     * 
+     *
      * @param {string} html - 原始 HTML 字符串
      * @returns {string} - 剥离后的 HTML
      */
     function stripWidgetWrappersFromHtml(html) {
         if (!html) return html;
-        
+
         // 使用临时 DOM 解析
         const temp = document.createElement('div');
         temp.innerHTML = html;
-        
+
         // 移除所有 widget-hover-actions 操作按钮
         temp.querySelectorAll('.widget-hover-actions').forEach(el => el.remove());
-        
+
         // 将 widget-wrapper[data-layout-id] 替换为其内部内容（展开子节点）
         temp.querySelectorAll('.widget-wrapper[data-layout-id]').forEach(wrapper => {
             while (wrapper.firstChild) {
@@ -10280,13 +10510,13 @@
             }
             wrapper.remove();
         });
-        
+
         // 移除残留的 data-layout-id 属性（防止 initWidgetHoverActions 误识别）
         temp.querySelectorAll('[data-layout-id]').forEach(el => {
             el.removeAttribute('data-layout-id');
         });
-        
-        return temp.innerHTML;
+
+        return sanitizeHtmlForEditorPreview(temp.innerHTML);
     }
 
     function buildStructurePlaceholderHtml(areaEl, areaCode) {
@@ -10378,7 +10608,7 @@
 
     /**
      * 恢复原始布局（带自动备份）
-     * 
+     *
      * 新行为：
      * 1. 自动创建当前状态的备份版本
      * 2. 清空工作区恢复到主题模板原始状态
@@ -10417,11 +10647,11 @@
                 deselectArea();
                 deselectWidget();
                 resetStructureViewToEmptySlots();
-                
+
                 // 刷新版本列表
                 await loadVersions();
                 await fetchLayoutSlots();
-                
+
                 // 刷新预览
                 setTimeout(() => {
                     refreshPreview();
@@ -10437,7 +10667,7 @@
 
     /**
      * 刷新预览（仅用于手动刷新按钮）
-     * 
+     *
      * 注意：此函数只刷新 iframe，不会发起额外的 fetch 请求。
      * 部件的添加/修改/删除通过 updateWidgetPreviewInIframe() / removeWidgetFromIframe() 处理。
      */
@@ -10494,23 +10724,23 @@
     function setupIframeLinkInterception() {
         const iframe = elements.previewFrame;
         if (!iframe) return;
-        
+
         try {
             const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
             if (!iframeDoc) {
                 console.warn('[ThemeEditor] Cannot access iframe document for link interception');
                 return;
             }
-            
+
             // 获取当前站点的基础 URL
             const currentOrigin = window.location.origin;
             const baseUrl = config.apiBase?.replace(/\/theme\/backend\/theme-editor.*$/, '') || '';
-            
+
             // iframe 内区域点击事件处理，用于过滤部件面板
             iframeDoc.addEventListener('click', function(e) {
                 // data-editor-interactive 标记的元素保持原生交互，编辑器不拦截
                 if (e.target.closest('[data-editor-interactive]')) return;
-                
+
                 // 检查是否点击了区域元素
                 const themeArea = e.target.closest('.theme-area[data-area]');
                 if (themeArea && !e.target.closest('[data-layout-id]') && !e.target.closest('a')) {
@@ -10530,26 +10760,26 @@
                     }
                 }
             });
-            
+
             // 拦截所有链接点击
             iframeDoc.addEventListener('click', function(e) {
                 // data-editor-interactive 标记的元素保持原生交互，编辑器不拦截
                 if (e.target.closest('[data-editor-interactive]')) return;
-                
+
                 const link = e.target.closest('a');
                 if (!link) return;
-                
+
                 const href = link.getAttribute('href');
                 if (!href) return;
-                
+
                 // 跳过 JavaScript 链接和锚点
                 if (href.startsWith('#') || href.startsWith('javascript:')) {
                     return;
                 }
-                
+
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 // 判断是否为内部链接
                 let targetUrl;
                 try {
@@ -10558,20 +10788,20 @@
                     console.warn('[ThemeEditor] Invalid URL:', href);
                     return;
                 }
-                
+
                 // 外部链接 - 在新标签页打开
                 if (targetUrl.origin !== currentOrigin) {
                     window.open(href, '_blank');
                     showToast('外部链接已在新标签页打开', 'info');
                     return;
                 }
-                
+
                 // 内部链接 - 转换为预览模式 URL
                 // 根据目标路径判断页面类型（pageType = layoutType = 布局目录名）
                 const pathname = targetUrl.pathname;
                 let pageType = 'homepage';
                 let layoutType = 'homepage';
-                
+
                 // 路径到页面类型的映射（使用布局目录名）
                 if (pathname === '/' || pathname === '' || pathname.endsWith('/index')) {
                     pageType = 'homepage';
@@ -10599,7 +10829,7 @@
                     pageType = 'cms_page';
                     layoutType = 'cms_page';
                 }
-                
+
                 // 构建预览 URL
                 showToast(`已切换到 ${pageType} 布局`, 'info');
                 console.log('[ThemeEditor] Link intercepted:', href, '-> Editor page type:', pageType);
@@ -10616,26 +10846,26 @@
                 previewUrl.searchParams.set('editor_mode', '1');
                 previewUrl.searchParams.set('status', state.previewStatus || 'draft');
                 previewUrl.searchParams.set('_t', Date.now());
-                
+
                 // 更新状态
                 state.pageType = pageType;
                 state.layoutType = layoutType;
-                
+
                 // 更新 iframe
                 iframe.src = previewUrl.toString();
-                
+
                 // 更新页面类型选择器（如果有）
                 if (elements.pageTypeSelect) {
                     elements.pageTypeSelect.value = pageType;
                 }
-                
+
                 showToast(`已切换到 ${pageType} 布局预览`, 'info');
                 console.log('[ThemeEditor] Link intercepted:', href, '-> Preview:', previewUrl.toString());
             }, true); // 使用捕获阶段
-            
+
             // 添加编辑器模式的视觉提示
             iframeDoc.body?.classList.add('editor-mode');
-            
+
             console.log('[ThemeEditor] Link interception setup complete');
         } catch (err) {
             console.warn('[ThemeEditor] Error setting up link interception:', err.message);
@@ -10644,7 +10874,7 @@
 
     /**
      * 加载布局预览（编译后的页面）
-     * 
+     *
      * 后台编辑器 iframe 使用 editor_mode=1 参数，
      * 支持通过 status 参数切换 draft/published 版本
      */
@@ -10706,7 +10936,7 @@
                 state.slots = result.slots;
                 state.missingSlotWarnings = Array.isArray(result.missing_slot_warnings) ? result.missing_slot_warnings : [];
                 renderSlotsInfo(result.slots, state.missingSlotWarnings);
-                
+
                 // 显示插槽面板
                 if (elements.slotsInfoPanel) {
                     elements.slotsInfoPanel.classList.add('active');
@@ -10732,7 +10962,7 @@
             ).join('');
 
             html += `
-                <div class="slot-info-item" data-slot-id="${escapeHtml(slotId)}" onclick="scrollToSlot('${escapeHtml(slotId)}')">
+                <div class="slot-info-item" data-slot-id="${escapeHtml(slotId)}">
                     <div class="slot-name">${escapeHtml(slot.name || slotId)}</div>
                     <div class="slot-accept">${acceptTags || '<span>任意部件</span>'}</div>
                 </div>
@@ -10800,18 +11030,18 @@
     };
 
     window.switchPreviewStatus = switchPreviewStatus;
-    
+
     /**
      * 全局暴露：打开草稿预览（新窗口）
      */
     window.openPreview = openPreview;
     window.previewVersion = previewVersion;
-    
+
     /**
      * 全局暴露：打开已发布版本预览（新窗口）
      */
     window.openPublishedPreview = openPublishedPreview;
-    
+
     /**
      * 全局暴露：获取当前预览状态
      */
@@ -11147,7 +11377,7 @@
 
     function resolveAnchorPlacementInfo(layoutId) {
         const iframeDoc = getPreviewDocument();
-        const widgetEl = iframeDoc?.querySelector(`[data-layout-id="${layoutId}"]`) || document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`);
+        const widgetEl = iframeDoc?.querySelector(dataLayoutIdSelector(layoutId)) || document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
         if (!widgetEl) {
             return null;
         }
@@ -11382,12 +11612,17 @@
 
         let html = '';
         for (const version of state.versions) {
+            const safeVersionId = parseInt(version.version_id || '', 10);
+            if (!Number.isFinite(safeVersionId) || safeVersionId <= 0) {
+                continue;
+            }
+            version.version_id = safeVersionId;
             const isCurrent = versionIdEquals(version.version_id, state.currentVersionId);
             const isPublished = versionIdEquals(version.version_id, state.publishedVersionId);
             const isAutoBackup = version.is_auto_backup;
 
             html += `
-                <div class="version-item ${isCurrent ? 'current' : ''} ${isAutoBackup ? 'backup' : ''}" 
+                <div class="version-item ${isCurrent ? 'current' : ''} ${isAutoBackup ? 'backup' : ''}"
                      data-version-id="${version.version_id}">
                     <div class="version-info">
                         <span class="version-name">
@@ -11405,13 +11640,13 @@
                         ${version.description ? `<span class="version-desc">${escapeHtml(version.description)}</span>` : ''}
                     </div>
                     <div class="version-actions">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="previewVersion(${version.version_id})" title="Preview this version">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-version-action="preview" data-version-id="${escapeHtml(version.version_id)}" title="Preview this version">
                             <i class="fa fa-eye"></i> 预览
                         </button>
-                        ${!isCurrent ? `<button class="btn btn-sm btn-outline-primary" onclick="switchToVersion(${version.version_id})" title="Restore draft to this version">回撤
+                        ${!isCurrent ? `<button class="btn btn-sm btn-outline-primary" type="button" data-version-action="switch" data-version-id="${escapeHtml(version.version_id)}" title="Restore draft to this version">回撤
                             <i class="fa fa-undo"></i>
                         </button>` : ''}
-                        ${!isCurrent && !isPublished ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteVersion(${version.version_id})">
+                        ${!isCurrent && !isPublished ? `<button class="btn btn-sm btn-outline-danger" type="button" data-version-action="delete" data-version-id="${escapeHtml(version.version_id)}">
                             <i class="fa fa-trash"></i>
                         </button>` : ''}
                     </div>
@@ -11581,7 +11816,7 @@
                 align-items: center;
                 justify-content: center;
             `;
-            
+
             container.innerHTML = `
                 <div class="prompt-dialog-overlay" style="
                     position: absolute;
@@ -11662,7 +11897,7 @@
                 cleanup();
                 resolve(null);
             });
-            
+
             // 点击遮罩关闭
             overlay.addEventListener('click', () => {
                 cleanup();

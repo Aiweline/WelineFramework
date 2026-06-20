@@ -22,6 +22,10 @@ use Weline\Theme\Model\WelineTheme;
  */
 class CssVariableInjector
 {
+    private const MAX_CSS_VARIABLE_VALUE_LENGTH = 1024;
+    private const CSS_VARIABLE_NAME_PATTERN = '/^--[A-Za-z0-9_-]+$/';
+    private const CSS_VARIABLE_FORBIDDEN_VALUE_PATTERN = '/\/\*|\*\/|@import\b|url\s*\(|expression\s*\(|javascript\s*:|data\s*:/i';
+
     /**
      * 生成CSS变量定义
      * 
@@ -32,7 +36,7 @@ class CssVariableInjector
      */
     public function generateCssVariables(string $area, ?WelineTheme $theme = null, string $scope = 'default'): string
     {
-        $cssVariables = $this->collectVariables($area, $theme, $scope);
+        $cssVariables = $this->sanitizeVariables($this->collectVariables($area, $theme, $scope));
         
         if (empty($cssVariables)) {
             return '';
@@ -64,6 +68,68 @@ class CssVariableInjector
         $css .= "}\n";
         
         return $css;
+    }
+
+    /**
+     * @param array $variables 变量数组 [变量名 => 变量值]
+     * @return array 安全变量数组 [变量名 => 变量值]
+     */
+    private function sanitizeVariables(array $variables): array
+    {
+        $safeVariables = [];
+
+        foreach ($variables as $varName => $varValue) {
+            $safeName = $this->sanitizeCssVariableName((string)$varName);
+            if ($safeName === null) {
+                continue;
+            }
+
+            $safeValue = $this->sanitizeCssVariableValue($varValue);
+            if ($safeValue === null) {
+                continue;
+            }
+
+            $safeVariables[$safeName] = $safeValue;
+        }
+
+        return $safeVariables;
+    }
+
+    private function sanitizeCssVariableName(string $varName): ?string
+    {
+        $varName = trim($varName);
+
+        if (preg_match(self::CSS_VARIABLE_NAME_PATTERN, $varName) !== 1) {
+            return null;
+        }
+
+        return $varName;
+    }
+
+    private function sanitizeCssVariableValue(mixed $varValue): ?string
+    {
+        if (is_array($varValue) || is_object($varValue) || is_resource($varValue)) {
+            return null;
+        }
+
+        $varValue = trim((string)$varValue);
+        if ($varValue === '' || strlen($varValue) > self::MAX_CSS_VARIABLE_VALUE_LENGTH) {
+            return null;
+        }
+
+        if (preg_match('/[\x00-\x1F\x7F]/', $varValue) === 1) {
+            return null;
+        }
+
+        if (preg_match('/[;{}<>\\\\]/', $varValue) === 1) {
+            return null;
+        }
+
+        if (preg_match(self::CSS_VARIABLE_FORBIDDEN_VALUE_PATTERN, $varValue) === 1) {
+            return null;
+        }
+
+        return $varValue;
     }
     
     /**

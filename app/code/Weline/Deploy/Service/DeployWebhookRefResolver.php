@@ -10,7 +10,7 @@ namespace Weline\Deploy\Service;
  * 触发模式（deploy_trigger_mode）：
  * - branch：只有分支 push 生效，tag 推送忽略
  * - tag：   只有 tag 推送生效，分支 push 忽略
- * - both：  都生效（默认）
+ * - both：  都生效
  *
  * 兼容旧配置：未设置 deploy_trigger_mode 时，从 webhook_allow_tag_deploy 推断。
  */
@@ -27,7 +27,7 @@ class DeployWebhookRefResolver
     public function resolve(string $ref, array $config): array
     {
         $tagPrefix  = (string)($config['webhook_tag_prefix'] ?? $config['WEBHOOK_TAG_PREFIX'] ?? '');
-        $branch     = (string)($config['WEBHOOK_BRANCH'] ?? $config['GIT_BRANCH'] ?? '');
+        $branch     = (string)($config['webhook_branch'] ?? $config['WEBHOOK_BRANCH'] ?? $config['project_branch'] ?? $config['GIT_BRANCH'] ?? '');
         $triggerMode = $this->resolveTriggerMode($config);
 
         // --- Tag ---
@@ -108,9 +108,12 @@ class DeployWebhookRefResolver
             return $mode;
         }
 
-        // 兼容旧配置
-        $allowTag = (string)($config['webhook_allow_tag_deploy'] ?? $config['WEBHOOK_ALLOW_TAG_DEPLOY'] ?? '0') === '1';
-        return $allowTag ? DeployConfigService::TRIGGER_MODE_BOTH : DeployConfigService::TRIGGER_MODE_BRANCH;
+        if (array_key_exists('webhook_allow_tag_deploy', $config) || array_key_exists('WEBHOOK_ALLOW_TAG_DEPLOY', $config)) {
+            $allowTag = (string)($config['webhook_allow_tag_deploy'] ?? $config['WEBHOOK_ALLOW_TAG_DEPLOY'] ?? '0') === '1';
+            return $allowTag ? DeployConfigService::TRIGGER_MODE_BOTH : DeployConfigService::TRIGGER_MODE_BRANCH;
+        }
+
+        return DeployConfigService::TRIGGER_MODE_TAG;
     }
 
     private function skipped(string $reason, string $ref): array

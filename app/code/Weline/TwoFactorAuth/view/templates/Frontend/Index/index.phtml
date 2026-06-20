@@ -274,8 +274,8 @@
                 <?php endif; ?>
 
                 <div class="action-buttons">
-                    <button class="btn btn-secondary" onclick="showRegenerateModal()">重新生成备份码</button>
-                    <button class="btn btn-danger" onclick="showDisableModal()">禁用2FA</button>
+                    <button class="btn btn-secondary" type="button" data-twofa-action="show-regenerate-modal">重新生成备份码</button>
+                    <button class="btn btn-danger" type="button" data-twofa-action="show-disable-modal">禁用2FA</button>
                 </div>
             <?php else: ?>
                 <span class="status-badge status-disabled">✗ 未启用</span>
@@ -291,7 +291,7 @@
         <div class="app-link">
             <h2>📱 使用我们自己的验证器APP</h2>
             <p>完全自主开发，无需依赖第三方应用</p>
-            <a href="javascript:void(0)" onclick="showAuthenticatorAppModal()" class="btn" style="cursor: pointer;">打开验证器APP</a>
+            <button type="button" data-twofa-action="show-authenticator-app-modal" class="btn" style="cursor: pointer;">打开验证器APP</button>
         </div>
 
         <div class="feature-list">
@@ -334,8 +334,8 @@
                 <input type="text" id="disableCode" placeholder="输入6位验证码" maxlength="6">
             </div>
             <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeDisableModal()">取消</button>
-                <button class="btn btn-danger" onclick="disableTwoFactor()">确认禁用</button>
+                <button class="btn btn-secondary" type="button" data-twofa-action="close-disable-modal">取消</button>
+                <button class="btn btn-danger" type="button" data-twofa-action="disable-two-factor">确认禁用</button>
             </div>
         </div>
     </div>
@@ -350,8 +350,8 @@
                 <input type="text" id="regenerateCode" placeholder="输入6位验证码" maxlength="6">
             </div>
             <div class="action-buttons">
-                <button class="btn btn-secondary" onclick="closeRegenerateModal()">取消</button>
-                <button class="btn btn-primary" onclick="regenerateBackupCodes()">确认生成</button>
+                <button class="btn btn-secondary" type="button" data-twofa-action="close-regenerate-modal">取消</button>
+                <button class="btn btn-primary" type="button" data-twofa-action="regenerate-backup-codes">确认生成</button>
             </div>
         </div>
     </div>
@@ -361,6 +361,34 @@
     <!-- SweetAlert2 JS -->
     <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
+        document.addEventListener('click', function(e) {
+            const trigger = e.target.closest('[data-twofa-action]');
+            if (!trigger) {
+                return;
+            }
+
+            const action = trigger.getAttribute('data-twofa-action');
+            if (action === 'show-disable-modal') {
+                showDisableModal();
+            } else if (action === 'close-disable-modal') {
+                closeDisableModal();
+            } else if (action === 'disable-two-factor') {
+                disableTwoFactor();
+            } else if (action === 'show-regenerate-modal') {
+                showRegenerateModal();
+            } else if (action === 'close-regenerate-modal') {
+                closeRegenerateModal();
+            } else if (action === 'regenerate-backup-codes') {
+                regenerateBackupCodes();
+            } else if (action === 'reload-page') {
+                location.reload();
+            } else if (action === 'show-authenticator-app-modal') {
+                showAuthenticatorAppModal();
+            } else if (action === 'close-authenticator-app-modal') {
+                closeAuthenticatorAppModal();
+            }
+        });
+
         function showDisableModal() {
             document.getElementById('disableModal').classList.add('active');
         }
@@ -468,7 +496,7 @@
                     
                     const modal = document.getElementById('regenerateModal');
                     modal.querySelector('.modal-content').innerHTML = codesHtml + 
-                        '<button class="btn btn-primary" onclick="location.reload()">完成</button>';
+                        '<button class="btn btn-primary" type="button" data-twofa-action="reload-page">完成</button>';
                 } else {
                     if (typeof Swal !== 'undefined') {
                         Swal.fire({
@@ -561,10 +589,10 @@
                     </div>
                     ${installInstructions}
                     <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
-                        <button onclick="closeAuthenticatorAppModal()" style="padding: 0.75rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; cursor: pointer; font-weight: 500;">
+                        <button type="button" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; cursor: pointer; font-weight: 500;">
                             取消
                         </button>
-                        <a href="/twofa-app/" target="_blank" onclick="closeAuthenticatorAppModal()" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
+                        <a href="/twofa-app/" target="_blank" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
                             打开验证器
                         </a>
                     </div>

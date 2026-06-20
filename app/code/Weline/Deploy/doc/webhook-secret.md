@@ -14,8 +14,8 @@ Git 平台向站点 **随机 Webhook 公网路径**（`~wh~` 前缀，由 `deplo
 php bin/w command:upgrade -m Weline_Deploy
 
 php bin/w deploy:webhook:setup --base-url=https://你的域名
-# 或指定完整 URL
-php bin/w deploy:webhook:setup --url=https://你的域名/deploy
+# 如需指定完整 URL，必须使用命令生成或你已保存的 ~wh~ 随机路径
+php bin/w deploy:webhook:setup --url=https://你的域名/~wh~...
 ```
 
 命令会：
@@ -33,13 +33,13 @@ php bin/w deploy:webhook:setup --rotate-path -y --base-url=https://你的域名
 **刷新（轮换）访问密码**——生成新密钥并覆盖后台，随后必须同步更新 Git 平台 Webhook 中的 Secret/密码字段：
 
 ```bash
-php bin/w deploy:webhook:setup --force -y --url=https://你的域名/deploy
+php bin/w deploy:webhook:setup --force -y --base-url=https://你的域名
 ```
 
 仅查看当前密钥与 curl 示例、不覆盖后台：
 
 ```bash
-php bin/w deploy:webhook:setup --url=https://你的域名/deploy
+php bin/w deploy:webhook:setup --base-url=https://你的域名
 # 已有密钥时不会重新生成；加 --no-save 可只打印、不写库
 ```
 
@@ -87,11 +87,11 @@ WEBHOOK_SECRET='与 Git 平台一致的强随机密钥'
 |------|------|
 | Bearer（推荐） | `Authorization: Bearer <webhook_secret>` |
 | Gitee 明文 Token | `X-Gitee-Token: <webhook_secret>` |
-| URL 参数 | `POST /deploy?token=<webhook_secret>` |
+| URL 参数 | `POST /~wh~...?token=<webhook_secret>` |
 | Gitee HMAC | 配置了 Gitee 密码时，平台可发 HMAC 签名 |
 | GitHub HMAC | `X-Hub-Signature-256`，密钥为 `webhook_secret` |
 
-`GET /deploy?health=1` 健康检查**不需要**密码。
+`GET /~wh~...?health=1` 健康检查**不需要**密码。
 
 ## 验证
 
@@ -99,10 +99,10 @@ WEBHOOK_SECRET='与 Git 平台一致的强随机密钥'
 
 ```bash
 # 健康检查
-curl -s 'https://你的域名/deploy?health=1'
+curl -s 'https://你的域名/~wh~...?health=1'
 
 # 模拟推送（将 YOUR_SECRET 换为 webhook_secret）
-curl -s -X POST 'https://你的域名/deploy' \
+curl -s -X POST 'https://你的域名/~wh~...' \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer YOUR_SECRET' \
   --data '{"ref":"refs/heads/master"}'

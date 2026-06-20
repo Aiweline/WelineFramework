@@ -195,8 +195,30 @@ let icons = library === 'material' ? materialIcons : fontawesomeIcons;
 let currentCategory = null;
 let isOpen = false;
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(text ?? '')));
+    return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function sanitizeIconName(iconName) {
+    return String(iconName || '').replace(/[^\w-]/g, '');
+}
+
+function isKnownIcon(iconName) {
+    return Object.keys(icons).some(cat => (icons[cat] || []).includes(iconName));
+}
+
 // 获取图标类前缀
 function getIconClass(iconName) {
+    iconName = sanitizeIconName(iconName);
+    if (!iconName || !isKnownIcon(iconName)) {
+        return '';
+    }
     if (library === 'material') {
         return 'mdi ' + iconName;
     } else {
@@ -219,7 +241,7 @@ function renderCategories() {
     let html = '<button type="button" class="w-icon-picker-category active" data-category="">{$t_all}</button>';
     for (let cat in icons) {
         const label = categoryLabels[cat] || cat;
-        html += '<button type="button" class="w-icon-picker-category" data-category="' + cat + '">' + label + '</button>';
+        html += '<button type="button" class="w-icon-picker-category" data-category="' + escapeAttr(cat) + '">' + escapeHtml(label) + '</button>';
     }
     categoriesContainer.innerHTML = html;
     
@@ -263,7 +285,7 @@ function renderIcons(keyword = '') {
     listContainer.innerHTML = items.map(icon => {
         const cls = getIconClass(icon);
         const selected = icon === currentValue ? 'selected' : '';
-        return '<div class="w-icon-picker-item ' + selected + '" data-icon="' + icon + '" title="' + icon + '"><i class="' + cls + '"></i></div>';
+        return '<div class="w-icon-picker-item ' + selected + '" data-icon="' + escapeAttr(icon) + '" title="' + escapeAttr(icon) + '"><i class="' + escapeAttr(cls) + '"></i></div>';
     }).join('');
     
     listContainer.querySelectorAll('.w-icon-picker-item').forEach(el => {
@@ -275,6 +297,11 @@ function renderIcons(keyword = '') {
 
 // 选择图标
 function selectIcon(iconName) {
+    iconName = sanitizeIconName(iconName);
+    if (!iconName || !isKnownIcon(iconName)) {
+        clearSelection();
+        return;
+    }
     hidden.value = iconName;
     iconEl.className = getIconClass(iconName);
     textEl.textContent = iconName;
@@ -352,9 +379,15 @@ renderIcons();
 
 // 如果有初始值，设置显示
 if (hidden.value) {
-    iconEl.className = getIconClass(hidden.value);
-    textEl.textContent = hidden.value;
-    container.classList.add('has-value');
+    const initialIcon = sanitizeIconName(hidden.value);
+    if (initialIcon && isKnownIcon(initialIcon)) {
+        hidden.value = initialIcon;
+        iconEl.className = getIconClass(initialIcon);
+        textEl.textContent = initialIcon;
+        container.classList.add('has-value');
+    } else {
+        hidden.value = '';
+    }
 }
 JS;
             $html[] = '})();</script>';

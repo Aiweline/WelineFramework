@@ -12,6 +12,18 @@ use Weline\Framework\Database\Schema\SchemaParser;
 
 final class AclAccessMetadataTest extends TestCase
 {
+    private ?string $routeRegistryFile = null;
+
+    protected function tearDown(): void
+    {
+        AclService::resetRequestCache();
+        if ($this->routeRegistryFile !== null && is_file($this->routeRegistryFile)) {
+            @unlink($this->routeRegistryFile);
+        }
+        $this->routeRegistryFile = null;
+        parent::tearDown();
+    }
+
     public function testAclSchemaDeclaresApiAccessMetadataColumns(): void
     {
         $schema = (new SchemaParser())->parse(Acl::class);
@@ -60,5 +72,64 @@ final class AclAccessMetadataTest extends TestCase
 
         self::assertTrue($service->isRouteAllowedByEntries($entries, 'api/rest/v1/products', 'GET', true));
         self::assertFalse($service->isRouteAllowedByEntries($entries, 'api/rest/v1/products', 'POST', true));
+    }
+
+    public function testRouteAllowedByEntriesMatchesGeneratedAliasesForSameControllerAction(): void
+    {
+        $this->routeRegistryFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-acl-route-alias-' . bin2hex(random_bytes(4)) . '.php';
+        $routeData = [
+            'class' => [
+                'name' => 'Weline\\Server\\Controller\\Backend\\WlsPanel',
+                'method' => 'postSecurityRulesSave',
+                'request_method' => 'POST',
+            ],
+        ];
+        file_put_contents($this->routeRegistryFile, '<?php return ' . var_export([
+            'server/backend/wls-panel/security-rules-save::POST' => $routeData,
+            'server/backend/wls-panel/post-security-rules-save::POST' => $routeData,
+            'server/backend/wls-panel/postsecurityrulessave::POST' => $routeData,
+            'server/backend/wls-panel/security::GET' => [
+                'class' => [
+                    'name' => 'Weline\\Server\\Controller\\Backend\\WlsPanel',
+                    'method' => 'getSecurity',
+                    'request_method' => 'GET',
+                ],
+            ],
+        ], true) . ';');
+
+        $service = new class(
+            $this->routeRegistryFile,
+            $this->createMock(Role::class),
+            $this->createMock(RoleAccess::class),
+            $this->createMock(Acl::class)
+        ) extends AclService {
+            public function __construct(
+                private readonly string $routeRegistryFile,
+                Role $roleModel,
+                RoleAccess $roleAccessModel,
+                Acl $aclModel
+            ) {
+                parent::__construct($roleModel, $roleAccessModel, $aclModel);
+            }
+
+            public function isRouteProtected(string $routePath): bool
+            {
+                return true;
+            }
+
+            protected function getRouteRegistryFiles(): array
+            {
+                return [$this->routeRegistryFile];
+            }
+        };
+
+        $entries = [[
+            Acl::schema_fields_ROUTE => 'server/backend/wls-panel/postsecurityrulessave',
+            Acl::schema_fields_METHOD => 'POST',
+            Acl::schema_fields_ACCESS_MODE => Acl::ACCESS_MODE_EDIT,
+        ]];
+
+        self::assertTrue($service->isRouteAllowedByEntries($entries, 'server/backend/wls-panel/security-rules-save', 'POST'));
+        self::assertFalse($service->isRouteAllowedByEntries($entries, 'server/backend/wls-panel/security', 'POST'));
     }
 }

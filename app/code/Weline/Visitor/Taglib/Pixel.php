@@ -13,8 +13,7 @@ class Pixel implements TaglibInterface
 {
     private static function escapeScriptBreakout(mixed $pixelCode): string
     {
-        $code = (string)($pixelCode ?? '');
-        return str_ireplace('</script>', '<\/script>', $code);
+        return '';
     }
 
     /**
@@ -213,10 +212,8 @@ class Pixel implements TaglibInterface
     自定义事件：在你想要统计的标签上设置类名开头为weline-pixel::name类，冒号后面的名字将作为事件名。
     只有设置了weline-pixel::name类的标签才会被统计，例如：weline-pixel::place-order,weline-pixel::add-to-cart等。
     place-order,add-to-cart将自动解析为事件名字。
-    想要给像素自定义事件，请使用系统事件监听Weline_Visitor::taglib_pixel事件。并在返回pixel_code值中包含js代码
-    （例如:pixel_code=\"WelinePixel.initData.elementInfo.eventType = 'click';\"）
-    所有点击事件都包含在WelinePixel.initData.elementInfo中，自定义事件时判断WelinePixel.initData.elementInfo中的数据
-    然后修改WelinePixel.initData数据，最后调用WelinePixel.send()即可
+    自定义事件请使用标准 weline-pixel::event_name 标记或监听 Weline_Visitor::taglib_pixel 控制像素启停。
+    出于安全原因，pixel_code 不再作为前台 JavaScript 执行通道。
     <br><br>
     控制属性：
     - name（必填）：像素名称，用于区分统计来源

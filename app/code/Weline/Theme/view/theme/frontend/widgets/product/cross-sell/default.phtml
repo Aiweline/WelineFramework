@@ -24,6 +24,12 @@ $limit = (int)($this->getData('limit') ?? 4);
 $showAddAllButton = (bool)($this->getData('show_add_all_button') ?? true);
 $showTotalPrice = (bool)($this->getData('show_total_price') ?? true);
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png');
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_APOS
+    | JSON_HEX_AMP
+    | JSON_HEX_QUOT;
 
 // 示例产品数据
 $products = [];
@@ -105,6 +111,7 @@ $widgetId = 'cross-sell-' . uniqid();
                     <?= __('全部加入购物车') ?>
                 </button>
             <?php endif; ?>
+            <div class="cross-sell-status" role="status" aria-live="polite"></div>
         </div>
     </div>
 </div>
@@ -271,6 +278,21 @@ $widgetId = 'cross-sell-' . uniqid();
     background: var(--primary-dark, #0056b3);
 }
 
+.widget-cross-sell .cross-sell-status {
+    min-height: 20px;
+    font-size: 13px;
+    color: #666;
+    text-align: center;
+}
+
+.widget-cross-sell .cross-sell-status.is-warning {
+    color: var(--warning-color, #b7791f);
+}
+
+.widget-cross-sell .cross-sell-status.is-success {
+    color: var(--success-color, #28a745);
+}
+
 @media (max-width: 768px) {
     .widget-cross-sell .cross-sell-container {
         flex-direction: column;
@@ -289,11 +311,39 @@ $widgetId = 'cross-sell-' . uniqid();
 
 <script>
 (function() {
-    const widget = document.getElementById('<?= $widgetId ?>');
+    const widget = document.getElementById(<?= json_encode($widgetId, $jsonForScriptFlags) ?>);
     if (!widget) return;
+
+    const crossSellMessages = {
+        selectOne: <?= json_encode((string)__('请至少选择一个商品'), $jsonForScriptFlags) ?>,
+        added: <?= json_encode((string)__('已添加'), $jsonForScriptFlags) ?>,
+        addAll: <?= json_encode((string)__('全部加入购物车'), $jsonForScriptFlags) ?>
+    };
     
     const checkboxes = widget.querySelectorAll('.cross-checkbox');
     const totalEl = widget.querySelector('.total-price .value');
+
+    function showCrossSellNotice(message, type) {
+        if (window.Weline && window.Weline.Toast && typeof window.Weline.Toast.show === 'function') {
+            window.Weline.Toast.show({ message: message, type: type || 'info' });
+            return;
+        }
+        const status = widget.querySelector('.cross-sell-status');
+        if (status) {
+            status.textContent = message;
+            status.className = 'cross-sell-status is-' + (type || 'info');
+            return;
+        }
+        console.info(message);
+    }
+
+    function setAddAllButtonState(button, iconClass, label) {
+        button.textContent = '';
+        const icon = document.createElement('i');
+        icon.className = iconClass;
+        button.appendChild(icon);
+        button.appendChild(document.createTextNode(' ' + label));
+    }
     
     function updateTotal() {
         if (!totalEl) return;
@@ -325,18 +375,19 @@ $widgetId = 'cross-sell-' . uniqid();
             });
             
             if (selectedIds.length === 0) {
-                alert('<?= __('请至少选择一个商品') ?>');
+                showCrossSellNotice(crossSellMessages.selectOne, 'warning');
                 return;
             }
             
             console.log('Add to cart:', selectedIds);
             
             // 显示成功状态
-            this.innerHTML = '<i class="ri-check-line"></i> <?= __('已添加') ?>';
+            showCrossSellNotice(crossSellMessages.added, 'success');
+            setAddAllButtonState(this, 'ri-check-line', crossSellMessages.added);
             this.style.background = 'var(--success-color, #28a745)';
             
             setTimeout(() => {
-                this.innerHTML = '<i class="ri-shopping-cart-2-line"></i> <?= __('全部加入购物车') ?>';
+                setAddAllButtonState(this, 'ri-shopping-cart-2-line', crossSellMessages.addAll);
                 this.style.background = '';
             }, 2000);
         });

@@ -31,6 +31,8 @@ use Weline\Theme\Service\ThemeLayoutVersionService;
 class Layout extends BackendController
 {
     private const DEFAULT_SCOPE = 'default';
+    private const THEME_AREA_FRONTEND = 'frontend';
+    private const THEME_AREA_BACKEND = 'backend';
 
     /** @var array<string, array> 缓存 ThemeData 元信息池，避免重复查询 */
     private array $metaPoolCache = [];
@@ -2577,6 +2579,10 @@ class Layout extends BackendController
         }
         
         [$area, $scope] = $this->resolveAreaAndScope($area, $scope);
+        $inputError = $this->validateColorRequestInput($area, $colorFile, $colorValue);
+        if ($inputError !== null) {
+            return $this->fetchJson($this->error($inputError));
+        }
         
         // 解析文件路径
         $filePath = $this->resolveColorFilePath($theme, $area, $colorFile, $colorValue);
@@ -2630,11 +2636,19 @@ class Layout extends BackendController
         }
         
         [$area, $scope] = $this->resolveAreaAndScope($area, $scope);
+        $inputError = $this->validateColorRequestInput($area, $colorFile, $colorValue);
+        if ($inputError !== null) {
+            return $this->fetchJson($this->error($inputError));
+        }
         
         // 解析变量JSON
         $variables = json_decode($variablesJson, true);
         if (!is_array($variables)) {
             return $this->fetchJson($this->error(__('变量格式错误')));
+        }
+        $variableError = $this->validateColorVariablesPayload($variables);
+        if ($variableError !== null) {
+            return $this->fetchJson($this->error($variableError));
         }
         
         // 解析文件路径
@@ -2651,7 +2665,11 @@ class Layout extends BackendController
         }
         
         // 更新颜色变量
-        $updatedContent = $this->updateColorVariables($cssContent, $variables);
+        try {
+            $updatedContent = $this->updateColorVariables($cssContent, $variables);
+        } catch (\InvalidArgumentException $exception) {
+            return $this->fetchJson($this->error($exception->getMessage()));
+        }
         
         // 备份原文件
         $backupPath = $filePath . '.backup.' . date('YmdHis');
@@ -2685,20 +2703,33 @@ class Layout extends BackendController
         if (empty($themePath)) {
             return null;
         }
-        
-        // 尝试多种路径格式
-        $possiblePaths = [
-            // 标准路径：view/theme/{area}/colors/{colorValue}.css
-            rtrim($themePath, DS) . DS . 'view' . DS . 'theme' . DS . $area . DS . 'colors' . DS . $colorValue . '.css',
-            // 带下划线前缀：view/theme/{area}/colors/_{colorValue}.css
-            rtrim($themePath, DS) . DS . 'view' . DS . 'theme' . DS . $area . DS . 'colors' . DS . '_' . $colorValue . '.css',
-            // 使用原始文件名
-            rtrim($themePath, DS) . DS . 'view' . DS . 'theme' . DS . $area . DS . 'colors' . DS . basename($colorFile),
+
+        $themeRoot = realpath($themePath);
+        if ($themeRoot === false || !is_dir($themeRoot)) {
+            return null;
+        }
+
+        $colorsRoot = $this->resolveColorsRoot($themeRoot, $area);
+        if ($colorsRoot === null) {
+            return null;
+        }
+
+        $allowedFiles = [
+            $colorValue . '.css',
+            '_' . $colorValue . '.css',
         ];
+
+        $colorFile = basename(str_replace('\\', '/', $colorFile));
+        if ($colorFile !== '' && !in_array($colorFile, $allowedFiles, true)) {
+            return null;
+        }
+
+        $candidateFiles = $colorFile !== '' ? [$colorFile] : $allowedFiles;
         
-        foreach ($possiblePaths as $path) {
-            if (file_exists($path)) {
-                return $path;
+        foreach ($candidateFiles as $fileName) {
+            $realPath = realpath($colorsRoot . DS . $fileName);
+            if ($realPath !== false && is_file($realPath) && $this->isPathInsideRoot($realPath, $colorsRoot)) {
+                return $realPath;
             }
         }
         
@@ -2714,6 +2745,91 @@ class Layout extends BackendController
         }
         
         return null;
+    }
+
+    private function resolveColorsRoot(string $themeRoot, string $area): ?string
+    {
+        $candidateRoots = [
+            $themeRoot . DS . 'view' . DS . 'theme' . DS . $area . DS . 'colors',
+            $themeRoot . DS . 'theme' . DS . $area . DS . 'colors',
+        ];
+
+        foreach ($candidateRoots as $root) {
+            $realRoot = realpath($root);
+            if ($realRoot !== false && is_dir($realRoot) && $this->isPathInsideRoot($realRoot, $themeRoot)) {
+                return $realRoot;
+            }
+        }
+
+        return null;
+    }
+
+    private function isPathInsideRoot(string $path, string $root): bool
+    {
+        $path = rtrim(str_replace('\\', '/', $path), '/');
+        $root = rtrim(str_replace('\\', '/', $root), '/');
+
+        return $path === $root || str_starts_with($path . '/', $root . '/');
+    }
+
+    private function validateColorRequestInput(string $area, string $colorFile, string $colorValue): ?string
+    {
+        if (!$this->isSafeThemeArea($area)) {
+            return __('主题区域无效：%{area}', ['area' => $area]);
+        }
+
+        if (!$this->isSafeIdentifierSegment($colorValue)) {
+            return __('色系标识无效：%{value}', ['value' => $colorValue]);
+        }
+
+        $colorFile = basename(str_replace('\\', '/', $colorFile));
+        $allowedFiles = [
+            $colorValue . '.css',
+            '_' . $colorValue . '.css',
+        ];
+
+        if (!in_array($colorFile, $allowedFiles, true)) {
+            return __('色系文件名无效：%{file}', ['file' => $colorFile]);
+        }
+
+        return null;
+    }
+
+    private function isSafeThemeArea(string $area): bool
+    {
+        return in_array($area, [self::THEME_AREA_FRONTEND, self::THEME_AREA_BACKEND], true);
+    }
+
+    private function isSafeIdentifierSegment(string $value): bool
+    {
+        if ($value === '' || preg_match('/[\x00-\x1F\x7F\\\\\/]/', $value)) {
+            return false;
+        }
+
+        return preg_match('/^[A-Za-z0-9_-]+$/', $value) === 1;
+    }
+
+    private function validateColorVariablesPayload(array $variables): ?string
+    {
+        foreach ($variables as $varName => $varValue) {
+            $varName = is_string($varName) ? trim($varName) : '';
+            $varValueRaw = is_scalar($varValue) ? (string)$varValue : '';
+
+            if (!$this->isSafeCssVariableName($varName)) {
+                return __('CSS变量名无效：%{name}', ['name' => $varName]);
+            }
+
+            if (!$this->isSafeCssColorToken($varValueRaw)) {
+                return __('CSS颜色值无效：%{name}', ['name' => $varName]);
+            }
+        }
+
+        return null;
+    }
+
+    private function isSafeCssVariableName(string $name): bool
+    {
+        return preg_match('/^--[A-Za-z0-9_-]+$/', $name) === 1;
     }
     
     /**
@@ -2770,30 +2886,76 @@ class Layout extends BackendController
      */
     private function isColorValue(string $value): bool
     {
+        return $this->isSafeCssColorToken($value);
+    }
+
+    private function isSafeCssColorToken(string $value): bool
+    {
+        if ($value === '' || preg_match('/[\x00-\x1F\x7F;]/', $value)) {
+            return false;
+        }
+
         $value = trim($value);
-        
-        // 十六进制颜色
-        if (preg_match('/^#[0-9A-Fa-f]{3,8}$/', $value)) {
+        if ($value === '') {
+            return false;
+        }
+
+        if (preg_match('/[{}]/', $value)) {
+            return false;
+        }
+
+        if (preg_match('/(?:url|expression)\s*\(/i', $value)) {
+            return false;
+        }
+
+        if (preg_match('/^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/', $value)) {
             return true;
         }
-        
-        // rgb/rgba颜色
-        if (preg_match('/^rgba?\(/', $value)) {
+
+        if (preg_match('/^rgba?\(\s*(?:\d{1,3}|(?:\d{1,2}(?:\.\d+)?|100(?:\.0+)?)%)\s*,\s*(?:\d{1,3}|(?:\d{1,2}(?:\.\d+)?|100(?:\.0+)?)%)\s*,\s*(?:\d{1,3}|(?:\d{1,2}(?:\.\d+)?|100(?:\.0+)?)%)(?:\s*,\s*(?:0|1|0?\.\d+|(?:\d{1,2}(?:\.\d+)?|100(?:\.0+)?)%))?\s*\)$/i', $value)) {
+            return $this->isSafeRgbColorToken($value);
+        }
+
+        if (preg_match('/^hsla?\(\s*(?:\d{1,3}(?:\.\d+)?)(?:deg|grad|rad|turn)?\s*,\s*(?:\d{1,2}(?:\.\d+)?|100(?:\.0+)?)%\s*,\s*(?:\d{1,2}(?:\.\d+)?|100(?:\.0+)?)%(?:\s*,\s*(?:0|1|0?\.\d+|(?:\d{1,2}(?:\.\d+)?|100(?:\.0+)?)%))?\s*\)$/i', $value)) {
             return true;
         }
-        
-        // hsl/hsla颜色
-        if (preg_match('/^hsla?\(/', $value)) {
+
+        if (preg_match('/^var\(\s*--[A-Za-z0-9_-]+\s*\)$/', $value)) {
             return true;
         }
-        
-        // 命名颜色（如 red, blue等，但排除 transparent, inherit等）
-        $namedColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'cyan', 'magenta', 'black', 'white', 'gray', 'grey'];
-        if (in_array(strtolower($value), $namedColors)) {
-            return true;
+
+        $safeKeywords = ['transparent', 'currentcolor', 'black', 'white'];
+        return in_array(strtolower($value), $safeKeywords, true);
+    }
+
+    private function isSafeRgbColorToken(string $value): bool
+    {
+        if (!preg_match('/^rgba?\((.+)\)$/i', trim($value), $matches)) {
+            return false;
         }
-        
-        return false;
+
+        $parts = array_map('trim', explode(',', $matches[1]));
+        if (count($parts) < 3 || count($parts) > 4) {
+            return false;
+        }
+
+        for ($i = 0; $i < 3; $i++) {
+            $part = $parts[$i];
+            if (str_ends_with($part, '%')) {
+                $number = (float)substr($part, 0, -1);
+                if ($number < 0 || $number > 100) {
+                    return false;
+                }
+                continue;
+            }
+
+            $number = (int)$part;
+            if ((string)$number !== $part || $number < 0 || $number > 255) {
+                return false;
+            }
+        }
+
+        return true;
     }
     
     /**
@@ -2877,13 +3039,24 @@ class Layout extends BackendController
     {
         $lines = explode("\n", $cssContent);
         $updatedLines = [];
+        $safeVariables = [];
+
+        foreach ($variables as $varName => $varValue) {
+            $varName = is_string($varName) ? trim($varName) : '';
+            $varValueRaw = is_scalar($varValue) ? (string)$varValue : '';
+            $varValue = trim($varValueRaw);
+
+            if (!$this->isSafeCssVariableName($varName) || !$this->isSafeCssColorToken($varValueRaw)) {
+                throw new \InvalidArgumentException(__('CSS变量配置无效'));
+            }
+
+            $safeVariables[$varName] = $this->normalizeColorValue($varValue);
+        }
         
         foreach ($lines as $line) {
-            $updated = false;
-            
             // 匹配CSS变量定义
-            foreach ($variables as $varName => $varValue) {
-                $pattern = '/(--' . preg_quote(str_replace('--', '', $varName), '/') . ')\s*:\s*[^;]+;/';
+            foreach ($safeVariables as $varName => $varValue) {
+                $pattern = '/(?<![A-Za-z0-9_-])(' . preg_quote($varName, '/') . ')\s*:\s*[^;{}]+;/';
                 
                 if (preg_match($pattern, $line)) {
                     $line = preg_replace(
@@ -2891,7 +3064,6 @@ class Layout extends BackendController
                         '$1: ' . $varValue . ';',
                         $line
                     );
-                    $updated = true;
                     break;
                 }
             }
