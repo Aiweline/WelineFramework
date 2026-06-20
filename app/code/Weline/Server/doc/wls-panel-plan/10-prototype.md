@@ -529,12 +529,14 @@ flowchart TD
   D --> F["Layer 2 implemented: SOURCE_CREATE_FILE creates one small allowed source file"]
   F --> G["Layer 3 implemented: SOURCE_RENAME same-folder source rename"]
   G --> H["Layer 4 implemented: SOURCE_TRASH recoverable single-file source trash"]
-  H --> E{"Future source action requested?"}
-  E --> I["SOURCE_QUEUE: disabled until dedicated queue policy exists"]
+  H --> I["Layer 5 implemented: SOURCE_QUEUE_TRASH recoverable single-file source trash queue"]
+  I --> E{"Broader source action requested?"}
+  E --> L["SOURCE_QUEUE: disabled until separate policy exists"]
   F --> J["ACL + source policy + protected path + overwrite + audit"]
   G --> J
   H --> J
-  I --> K["Remain disabled"]
+  I --> J
+  L --> K["Remain disabled"]
 ```
 
 | Layer | State | Allowed intent | Must remain blocked |
@@ -543,8 +545,9 @@ flowchart TD
 | 1 | Implemented | Existing small file edit with `SAVE_SOURCE` | New file outside `SOURCE_CREATE_FILE`, rename outside `SOURCE_RENAME`, upload, delete, queue |
 | 2 | Implemented | Create one small allowed source file with `SOURCE_CREATE_FILE` | Directories, overwrite, upload, rename outside `SOURCE_RENAME`, delete, queue, protected paths |
 | 3 | Implemented | Same-folder source rename with `SOURCE_RENAME` | Cross-folder move, overwrite, extension change to unsafe type, protected paths |
-| 4 | Implemented | Recoverable single-file source trash with `SOURCE_TRASH` into same-root `.wls-trash` | Hard delete, recursive delete, purge, source queue, generated/vendor/env/lock paths |
-| 5 | Future blocked | Source queue operation only after a dedicated policy exists | Reusing ordinary ZIP/trash queue flows against source roots |
+| 4 | Implemented | Recoverable single-file source trash with `SOURCE_TRASH` into same-root `.wls-trash` | Hard delete, recursive delete, purge, broad source queue, generated/vendor/env/lock paths |
+| 5 | Implemented | Recoverable single-file source trash queue with `SOURCE_QUEUE_TRASH` and `source_trash_entry` worker revalidation | Upload, batch, hard delete, purge, ordinary `QUEUE_TRASH`/`QUEUE_COMPRESS` against source roots |
+| 6 | Future blocked | Broader source queue operation only after a separate policy exists | Reusing ordinary ZIP/trash queue flows against source roots |
 
 Source-tree writes must keep these no-go zones even when a future policy is
 enabled: `.env`, `app/etc/env.php`, lock files, `.git`, `.wls-trash`,
