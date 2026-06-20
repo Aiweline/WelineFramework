@@ -169,6 +169,13 @@ Stage 3 has its first native Security page slice:
   same-root `.wls-trash` after worker-side root/symlink/limit checks. Completed
   jobs can be restored from the recent queue list using only `queue_id` and
   server-side queue payload, while the original path remains free.
+- `Weline_FileManager` now includes the first source-code queue slice:
+  `SOURCE_QUEUE_TRASH`. It is limited to one existing allowlisted source file
+  under 128 KB after the source path policy is enabled, creates a
+  `source_trash_entry` queue payload, and the worker re-checks root key,
+  root/source path consistency, extension allowlist, protected paths, and
+  `max_entries=1` before moving the file into same-root `.wls-trash`. Broader
+  source queue flows remain blocked.
 - `Weline_FileManager` now also includes bounded recursive directory delete.
   Files and empty directories still use `DELETE_ENTRY`; non-empty directories
   require the recursive checkbox plus `DELETE_TREE`, reject symlinks, scan the
@@ -205,16 +212,18 @@ real DbManager mysql/pgsql lifecycle, backup, restore, and migration execution
 adapters plus explicit slave create/remove flows beyond the current dry-run
 plans, and broader FileManager source-tree write policy beyond the current
 opt-in existing-file `SAVE_SOURCE`, single-file `SOURCE_CREATE_FILE`,
-same-directory `SOURCE_RENAME`, and single-file recoverable `SOURCE_TRASH`
-layers.
+same-directory `SOURCE_RENAME`, single-file recoverable `SOURCE_TRASH`, and
+dedicated single-file `SOURCE_QUEUE_TRASH` source trash queue layers.
 The broader FileManager source-tree policy is now split as a staged contract:
 source roots remain read-only by default; the current implemented layers only
 edit existing small files through `SAVE_SOURCE`, create one new small file
 through `SOURCE_CREATE_FILE`, rename one existing file in the same directory
 through `SOURCE_RENAME`, or move one existing small source file into same-root
-`.wls-trash` through `SOURCE_TRASH`; any future source queue operation still
-requires a separate policy flag, confirmation phrase, worker-side validation,
-and smoke evidence before it becomes executable.
+`.wls-trash` through `SOURCE_TRASH`; the only source queue layer currently
+allowed is `SOURCE_QUEUE_TRASH` for the same single-file recoverable trash
+intent. Any broader source queue operation still requires a separate policy
+flag, confirmation phrase, worker-side validation, and smoke evidence before it
+becomes executable.
 FileManager restore history has its first dedicated queue-history slice,
 queue-created trash entries now have an explicit `PURGE_TRASH` permanent-purge
 path guarded by queue payload lookup and `.wls-trash` service-layer validation,
