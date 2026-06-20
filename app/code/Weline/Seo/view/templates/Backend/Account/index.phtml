@@ -77,9 +77,9 @@ function getPlatformColor($platform, $colors) {
                             </h4>
                             <div class='page-title-right'>
                                 <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                                    <li class='breadcrumb-item'><span>
                                             <lang>SEO管理</lang>
-                                        </a></li>
+                                        </span></li>
                                     <li class='breadcrumb-item active'>
                                         <lang>账户管理</lang>
                                     </li>
@@ -93,7 +93,12 @@ function getPlatformColor($platform, $colors) {
                 <div class="row mb-3">
                     <div class="col-12 d-flex justify-content-between align-items-center">
                         <h4 class="mb-0"><lang>SEO账户列表</lang></h4>
-                        <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#seoAccountOffcanvas" onclick="loadSeoAccountForm(0)">
+                        <button type="button"
+                                class="btn btn-primary"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#seoAccountOffcanvas"
+                                data-seo-account-action="load-form"
+                                data-account-id="0">
                             <i class="mdi mdi-plus-circle-outline me-1"></i>
                             <lang>新增账户</lang>
                         </button>
@@ -197,7 +202,8 @@ function getPlatformColor($platform, $colors) {
                                                 <div class="btn-group">
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-primary"
-                                                            onclick="loadSeoAccountForm(<?= $accountId ?>)"
+                                                            data-seo-account-action="load-form"
+                                                            data-account-id="<?= $accountId ?>"
                                                             data-bs-toggle="offcanvas" 
                                                             data-bs-target="#seoAccountOffcanvas"
                                                             title="<?= __('编辑') ?>">
@@ -205,7 +211,8 @@ function getPlatformColor($platform, $colors) {
                                                     </button>
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-success"
-                                                            onclick="loadWebsiteBindingForm(<?= $accountId ?>)"
+                                                            data-seo-account-action="load-website-binding"
+                                                            data-account-id="<?= $accountId ?>"
                                                             data-bs-toggle="offcanvas" 
                                                             data-bs-target="#websiteBindingOffcanvas"
                                                             title="<?= __('绑定站点') ?>">
@@ -217,7 +224,8 @@ function getPlatformColor($platform, $colors) {
                                                     <?php if ($boundCount > 0): ?>
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-info"
-                                                            onclick="syncAccountStats(<?= $accountId ?>)"
+                                                            data-seo-account-action="sync-stats"
+                                                            data-account-id="<?= $accountId ?>"
                                                             title="<?= __('同步统计数据') ?>">
                                                         <i class="mdi mdi-sync"></i>
                                                     </button>
@@ -280,3 +288,36 @@ function getPlatformColor($platform, $colors) {
                         </div>
                     </div>
                 </div>
+<script>
+(function () {
+    'use strict';
+
+    if (window.__seoAccountListActionsBound) {
+        return;
+    }
+    window.__seoAccountListActionsBound = true;
+
+    document.addEventListener('click', function (event) {
+        var trigger = event.target.closest('[data-seo-account-action]');
+        if (!trigger) {
+            return;
+        }
+
+        var accountId = Number.parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0;
+        var action = trigger.getAttribute('data-seo-account-action');
+
+        if (action === 'load-form' && typeof window.loadSeoAccountForm === 'function') {
+            window.loadSeoAccountForm(accountId);
+            return;
+        }
+        if (action === 'load-website-binding' && typeof window.loadWebsiteBindingForm === 'function') {
+            window.loadWebsiteBindingForm(accountId);
+            return;
+        }
+        if (action === 'sync-stats' && typeof window.syncAccountStats === 'function') {
+            event.preventDefault();
+            window.syncAccountStats(accountId);
+        }
+    });
+})();
+</script>

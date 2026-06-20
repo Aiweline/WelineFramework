@@ -30,9 +30,9 @@ $baseUrl = $this->request->getBaseUrl();
         <div class="header-logo">
             <a href="/" title="<?= __('首页') ?>">
                 <?php if ($logo): ?>
-                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" class="minimal-header__logo-image" data-fallback-target=".logo-text" data-fallback-display="inline-block">
                 <?php else: ?>
-                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" class="minimal-header__logo-image" data-fallback-target=".logo-text" data-fallback-display="inline-block">
                 <?php endif; ?>
                 <span class="logo-text" style="display: none;"><?= htmlspecialchars($logoText) ?></span>
             </a>
@@ -96,3 +96,20 @@ $baseUrl = $this->request->getBaseUrl();
         }
     }
 </style>
+
+<script>
+(function() {
+    'use strict';
+
+    document.querySelectorAll('.minimal-header__logo-image[data-fallback-target]').forEach(function(image) {
+        image.addEventListener('error', function() {
+            var targetSelector = image.getAttribute('data-fallback-target') || '';
+            var fallback = targetSelector && image.parentNode ? image.parentNode.querySelector(targetSelector) : null;
+            image.style.display = 'none';
+            if (fallback) {
+                fallback.style.display = image.getAttribute('data-fallback-display') || 'inline-block';
+            }
+        });
+    });
+})();
+</script>

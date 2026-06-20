@@ -297,7 +297,7 @@
 			'confirmReq'           : 'Bevestiging nodig',
 			'confirmRm'            : 'Weet u zeker dat u deze bestanden wil verwijderen?<br/>Deze actie kan niet ongedaan gemaakt worden!',
 			'confirmRepl'          : 'Oud bestand vervangen door het nieuwe bestand?',
-			'confirmRest'          : 'Replace existing item with the item in trash?', // fromv2.1.24 added 5.5.2017						
+			'confirmRest'          : 'Replace existing item with the item in trash?', // fromv2.1.24 added 5.5.2017
 			'confirmConvUTF8'      : 'Niet in UTF-8<br/>Converteren naar UTF-8?<br/>De inhoud wordt UTF-8 door op te slaan na de conversie', // from v2.1 added 08.04.2014
 			'confirmNonUTF8'  : 'Character encoding of this file couldn\'t be detected. It need to temporarily convert to UTF-8 for editting.<br/>Please select character encoding of this file.', // from v2.1.19 added 28.11.2016
 			'confirmNotSave'       : 'Het is aangepast.<br/>Wijzigingen gaan verloren als je niet opslaat', // from v2.1 added 15.7.2015
@@ -495,7 +495,7 @@
 			'kindSelects'          : 'Selecties', // from v2.1.29 added 29.8.2017
 			'kindAlias'            : 'Alias',
 			'kindAliasBroken'      : 'Verbroken alias',
-			
+
 			/********************************** applications **********************************/
 			'kindApp'              : 'Applicatie',
 			'kindPostscript'       : 'Postscript document',
@@ -518,7 +518,7 @@
 			'kindTTF'              : 'True Type font',
 			'kindOTF'              : 'Open Type font',
 			'kindRPM'              : 'RPM package',
-			
+
 			/********************************** texts **********************************/
 			'kindText'             : 'Tekst bestand',
 			'kindTextPlain'        : 'Tekst',
@@ -542,10 +542,10 @@
 			'kindCSV'              : 'Komma gescheiden waardes',
 			'kindDOCBOOK'          : 'Docbook XML document',
 			'kindMarkdown'         : 'Markdown tekst', // added 20.7.2015
-			
+
 			/********************************** images **********************************/
-			
-			//               
+
+			//
 			'kindImage'            : 'Afbeelding',
 			'kindBMP'              : 'BMP afbeelding',
 			'kindJPEG'             : 'JPEG afbeelding',
@@ -556,7 +556,7 @@
 			'kindPSD'              : 'Adobe Photoshop afbeelding',
 			'kindXBITMAP'          : 'X bitmap afbeelding',
 			'kindPXM'              : 'Pixelmator afbeelding',
-			
+
 			/********************************** media **********************************/
 			'kindAudio'            : 'Audio media',
 			'kindAudioMPEG'        : 'MPEG audio',

@@ -167,6 +167,29 @@ final class HybridControlPlaneServer implements ControlPlaneServerInterface
         }
     }
 
+    /**
+     * @return int[] IPC client IDs that accepted the outbound message.
+     */
+    public function sendToRoleAndCollectTargets(string $role, string $message): array
+    {
+        $targets = $this->controlServer->sendToRoleAndCollectTargets($role, $message);
+        if ($this->supervisorServer === null) {
+            return $targets;
+        }
+
+        foreach ($this->supervisorServer->sessions() as $session) {
+            if ($session->role !== $role) {
+                continue;
+            }
+            $supervisorClientId = $this->toSupervisorClientId($session->id);
+            if ($this->sendToSupervisor($supervisorClientId, $message)) {
+                $targets[] = $supervisorClientId;
+            }
+        }
+
+        return $targets;
+    }
+
     public function clientExists(int $clientId): bool
     {
         if ($this->isSupervisorClientId($clientId)) {

@@ -68,7 +68,7 @@ $countryName = $countryName === '' ? $countryCode : $countryName;
                     </div>
                     <div class="i18n-admin-actions">
                         <a class="btn btn-outline-primary" href="@backend-url('*/backend/countries/locale/words/collect')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>" data-confirm-href="@backend-url('*/backend/countries/locale/words/collect')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>" data-confirm-message="<?= htmlspecialchars(__('更新（收集）'), ENT_QUOTES, 'UTF-8') ?>" data-confirm-type="info"><?= __('更新') ?></a>
-                        <a class="btn btn-outline-success" href="javascript:void(0)" id="locale-word-publish-btn"><?= __('发布') ?></a>
+                        <button type="button" class="btn btn-outline-success" id="locale-word-publish-btn"><?= __('发布') ?></button>
                         <button type="button" class="btn btn-primary" id="locale-word-add-btn"><?= __('添加翻译') ?></button>
                         <a class="btn btn-outline-secondary" href="@backend-url('*/backend/dictionary')?locale_code=<?= urlencode($localeCode) ?>"><?= __('全局词典') ?></a>
                     </div>

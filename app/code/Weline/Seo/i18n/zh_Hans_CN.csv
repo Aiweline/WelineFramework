@@ -137,6 +137,12 @@ SEO主体管理,SEO主体管理
 "Dispatched after an SEO task is completed.","Dispatched after an SEO task is completed."
 "SEO trend sync completed","SEO trend sync completed"
 "Dispatched when trend data sync is completed.","Dispatched when trend data sync is completed."
+"SEO head output","SEO head output"
+"Renders SEO metadata and structured data in the document head.","Renders SEO metadata and structured data in the document head."
+"SEO body output","SEO body output"
+"Renders SEO body-level markup immediately after the document body starts.","Renders SEO body-level markup immediately after the document body starts."
+"SEO footer output","SEO footer output"
+"Renders SEO footer-level markup before the document body closes.","Renders SEO footer-level markup before the document body closes."
 百度站长平台,百度站长平台
 "缺少百度站点 URL","缺少百度站点 URL"
 "URL 列表为空","URL 列表为空"
@@ -316,14 +322,15 @@ URL,URL
 店铺,店铺
 网站,网站
 保存失败,保存失败
-请求失败,请求失败
 生成建议失败,生成建议失败
+请求失败,请求失败
 添加主体,添加主体
 "点击上方""添加主体""按钮创建第一个SEO主体。","点击上方""添加主体""按钮创建第一个SEO主体。"
 添加SEO主体,添加SEO主体
 删除,删除
 删除失败,删除失败
 确定要删除该SEO主体吗？,确定要删除该SEO主体吗？
+确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
 Sitemap管理,Sitemap管理
 "SEO 模块工作原理","SEO 模块工作原理"
 点击查看,点击查看
@@ -418,12 +425,17 @@ Sitemap提交,Sitemap提交
 搜索引擎账户启用,搜索引擎账户启用
 暂无可启用的搜索引擎账户,暂无可启用的搜索引擎账户
 "先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。","先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。"
+"URL Push","URL Push"
 Sitemap,Sitemap
+IndexNow,IndexNow
+"Catalog Only","Catalog Only"
+"Sitemap Submit","Sitemap Submit"
 数据同步,数据同步
 "Sitemap 频率","Sitemap 频率"
 抓取频率,抓取频率
 "URL 优先级","URL 优先级"
 启用该账户的网站自动提交,启用该账户的网站自动提交
+"启用该账户的 URL rewrite 推送","启用该账户的 URL rewrite 推送"
 保存后立即更新该网站的搜索引擎账户启用状态。,保存后立即更新该网站的搜索引擎账户启用状态。
 保存启用状态,保存启用状态
 实时,实时

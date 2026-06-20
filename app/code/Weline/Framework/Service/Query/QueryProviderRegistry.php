@@ -28,6 +28,8 @@ class QueryProviderRegistry
     /** @var array<string, array<string, array<string, mixed>>> */
     private static array $operationDescriptorCache = [];
 
+    private ?BinQueryDescriptorAttributeResolver $binQueryAttributeResolver = null;
+
     private function loadDefinitions(): void
     {
         if ($this->definitionsLoaded) {
@@ -295,7 +297,7 @@ class QueryProviderRegistry
         $descriptors = [];
         $operationIndex = [];
         foreach ($this->getAllProviders() as $provider) {
-            $descriptor = $provider->getDescriptor();
+            $descriptor = $this->mergeBinQueryAttributes($provider, $provider->getDescriptor());
             if (!\is_array($descriptor)) {
                 continue;
             }
@@ -344,7 +346,7 @@ class QueryProviderRegistry
             return null;
         }
 
-        $descriptor = $provider->getDescriptor();
+        $descriptor = $this->mergeBinQueryAttributes($provider, $provider->getDescriptor());
         if (!\is_array($descriptor)) {
             self::$operationDescriptorCache[$scope][$providerName] = [];
             return null;
@@ -390,5 +392,22 @@ class QueryProviderRegistry
         }
 
         return $language !== '' ? $language : 'default';
+    }
+
+    /**
+     * @param mixed $descriptor
+     * @return mixed
+     */
+    private function mergeBinQueryAttributes(QueryProviderInterface $provider, mixed $descriptor): mixed
+    {
+        if (!\is_array($descriptor)) {
+            return $descriptor;
+        }
+
+        if ($this->binQueryAttributeResolver === null) {
+            $this->binQueryAttributeResolver = new BinQueryDescriptorAttributeResolver();
+        }
+
+        return $this->binQueryAttributeResolver->merge($provider, $descriptor);
     }
 }

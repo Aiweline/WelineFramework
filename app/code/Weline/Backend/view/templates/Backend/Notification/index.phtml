@@ -34,7 +34,7 @@ $queryParams = function ($overrides = []) use ($filter) {
                     <i class="mdi mdi-cog me-1"></i><lang>管理订阅</lang>
                 </a>
                 <?php if (!empty($notifications)): ?>
-                <button type="button" class="btn btn-outline-primary btn-sm" onclick="WelineNotificationCenter.markAllRead()">
+                <button type="button" class="btn btn-outline-primary btn-sm" data-notification-center-action="mark-all-read">
                     <i class="mdi mdi-check-all me-1"></i><lang>全部已读</lang>
                 </button>
                 <?php endif; ?>
@@ -374,5 +374,15 @@ $queryParams = function ($overrides = []) use ($filter) {
     };
 
     window.WelineNotificationCenter = WelineNotificationCenter;
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-notification-center-action="mark-all-read"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        WelineNotificationCenter.markAllRead();
+    });
 })();
 </script>

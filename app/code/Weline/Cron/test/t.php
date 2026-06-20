@@ -12,33 +12,16 @@ declare(strict_types=1);
  */
 
 
-function parse_crontab($frequency = '* * * * *', $time = false)
+function parse_crontab($frequency = '* * * * *', $time = false): bool
 {
-    $time    = is_string($time) ? strtotime($time) : time();
-    $time    = explode(' ', date('i G j n w', $time));
-    $time[0] = $time[0] + 0;
-    $crontab = explode(' ', $frequency);
-    foreach ($crontab as $k => &$v) {
-        $v       = explode(',', $v);
-        $regexps = array(
-            '/^\*$/', # every
-            '/^\d+$/', # digit
-            '/^(\d+)\-(\d+)$/', # range
-            '/^\*\/(\d+)$/' # every digit
-        );
-        $content = array(
-            'true', # every
-            "{$time[$k]} === $0", # digit
-            "($1 <= {$time[$k]} && {$time[$k]} <= $2)", # range
-            "{$time[$k]} % $1 === 0" # every digit
-        );
-        foreach ($v as &$v1) {
-            $v1 = preg_replace($regexps, $content, $v1);
-        }
-        $v = '(' . implode(' || ', $v) . ')';
+    require_once __DIR__ . '/cron.php';
+
+    $timestamp = is_string($time) ? strtotime($time) : (is_int($time) ? $time : time());
+    if ($timestamp === false) {
+        return false;
     }
-    $crontab = implode(' && ', $crontab);
-    return eval("return {$crontab};");
+
+    return XwCrontab::check($timestamp, (string)$frequency) === true;
 }
 
 for ($i = 0; $i < 24; $i++) {

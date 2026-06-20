@@ -26,7 +26,7 @@ $rtlModeSwitch = !empty($themeConfigData['rtl-mode-switch']);
     <div data-simplebar class='h-100'>
         <div class='rightbar-title d-flex align-items-center px-3 py-4'>
             <h5 class='m-0 me-2'><?= __('设置') ?></h5>
-            <a href="javascript:void(0);" class="right-bar-toggle ms-auto">
+            <a href="#" class="right-bar-toggle ms-auto" role="button" data-right-bar-toggle-link="1">
                 <i class="mdi mdi-close noti-icon"></i>
             </a>
         </div>
@@ -83,6 +83,17 @@ $rtlModeSwitch = !empty($themeConfigData['rtl-mode-switch']);
 <script>
 (function($) {
     'use strict';
+
+    document.addEventListener('click', function(event) {
+        var target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        if (target.closest('[data-right-bar-toggle-link]')) {
+            event.preventDefault();
+        }
+    });
 
     function initLayoutPresetSettings() {
         // 布局预设映射

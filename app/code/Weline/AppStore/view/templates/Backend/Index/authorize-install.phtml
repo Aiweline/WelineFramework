@@ -6,6 +6,8 @@ $version = (string)($version ?? '');
 $installAction = (string)($install_action ?? '');
 $storeUrl = (string)($store_url ?? '');
 $installedUrl = (string)($installed_url ?? '');
+$wlsPanelReturn = !empty($wls_panel_return);
+$wlsPanelUrl = (string)($wls_panel_url ?? '');
 $authorizeError = trim((string)($authorize_error ?? ''));
 $installedState = is_array($installed_state ?? null) ? $installed_state : [];
 $isInstalled = !empty($installedState['is_installed']);
@@ -38,6 +40,11 @@ $displayName = (string)($module['display_name'] ?? $module['name'] ?? '');
                 <a class="btn btn-outline-secondary" href="<?= $esc($storeUrl) ?>">
                     <i class="bi bi-arrow-left me-1"></i><?= __('返回应用商城') ?>
                 </a>
+                <?php if ($wlsPanelReturn && $wlsPanelUrl !== ''): ?>
+                    <a class="btn btn-outline-primary" href="<?= $esc($wlsPanelUrl) ?>">
+                        <i class="bi bi-diagram-3 me-1"></i><?= __('Back To WLS Panel') ?>
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -71,6 +78,9 @@ $displayName = (string)($module['display_name'] ?? $module['name'] ?? '');
         </div>
     <?php elseif ($moduleId > 0 && $licenseKey !== ''): ?>
         <form method="post" action="<?= $esc($installAction) ?>">
+            <?php if ($wlsPanelReturn): ?>
+                <input type="hidden" name="wls_panel_return" value="1">
+            <?php endif; ?>
             <input type="hidden" name="module_id" value="<?= $moduleId ?>">
             <input type="hidden" name="license_key" value="<?= $esc($licenseKey) ?>">
             <input type="hidden" name="version" value="<?= $esc($version) ?>">

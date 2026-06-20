@@ -54,6 +54,80 @@ The client understands:
 
 Unknown fields are preserved in `marketplace_meta_json` but not interpreted.
 
+For WLS Panel plugins, modules may preserve optional entry fields in the same
+meta file. AppStore stores them as raw marketplace meta and
+`w_query('appstore', 'installedModules')` exposes them for WLS to consume:
+
+```json
+{
+  "wls_panel_url": "server/backend/wls-file-manager",
+  "wls_panel": {
+    "backend_route": "server/backend/wls-file-manager"
+  },
+  "capabilities": {
+    "file_manager": {
+      "backend_route": "server/backend/wls-file-manager"
+    }
+  }
+}
+```
+
+Menu entries can be declared under `wls_panel.menu[]` when a plugin wants to
+appear directly in the standalone WLS Panel sidebar:
+
+```json
+{
+  "wls_panel": {
+    "menu": [
+      {
+        "key": "file-manager",
+        "label": {
+          "zh_Hans_CN": "文件管理",
+          "en_US": "File Manager"
+        },
+        "description": {
+          "zh_Hans_CN": "管理 WLS 项目路径内的文件。",
+          "en_US": "Manage files inside WLS project paths."
+        },
+        "backend_route": "server/backend/wls-file-manager",
+        "group": "tools",
+        "order": 30
+      }
+    ]
+  }
+}
+```
+
+The WLS consumer accepts `wls_panel_url`, `panel_url`, `backend_url`,
+`capability_url`, `panel_entry`, `backend_entry`, `wls_panel`, and nested
+capability entries. These fields remain optional; `module:wls` is still the
+only mandatory WLS compatibility tag. If `wls_panel.menu[]` is absent but a
+panel URL is declared, WLS may render one fallback plugin panel entry.
+
+## Typed Tag Codes
+
+Tag `code` supports both the legacy dot format and the new typed format:
+
+```text
+legacy: surface.backend, capability.seo
+typed:  module:wls, custom:wls-file-manager, system:false
+```
+
+The typed format is:
+
+```text
+type:value
+```
+
+Client normalization rules:
+
+- `type` is lower-case.
+- `value` is lower-case and keeps hyphenated identifiers such as `wls-file-manager`.
+- `module:wls` is the WLS Panel compatibility tag.
+- `custom:*` identifies a product-specific plugin family.
+- `surface:backend` is treated the same as legacy `surface.backend` for surface filtering.
+- Legacy dot tags remain compatible and continue to be accepted.
+
 Minimum strict install meta:
 
 ```json
@@ -117,6 +191,44 @@ After install or platform refresh, the client submits these source words to `Wel
 If package meta provides other locale translations, they are submitted with the same source word. Missing locale translations are left to the existing I18n dictionary and AI translation queue.
 
 Tag labels accept the public `label` map and are normalized internally to `labels`. Legacy string tags remain readable in non-strict mode, but strict AppStore package installs require structured tags with source locale labels.
+
+Typed WLS plugin example:
+
+```json
+{
+  "schema_version": 1,
+  "module_name": "Vendor_WlsFileManager",
+  "i18n": {
+    "source_locale": "zh_Hans_CN",
+    "locales": {
+      "zh_Hans_CN": {
+        "display_name": "WLS File Manager"
+      }
+    }
+  },
+  "tags": [
+    {
+      "code": "module:wls",
+      "label": {
+        "zh_Hans_CN": "WLS Panel"
+      },
+      "primary": true
+    },
+    {
+      "code": "custom:wls-file-manager",
+      "label": {
+        "zh_Hans_CN": "WLS File Manager"
+      }
+    },
+    {
+      "code": "system:false",
+      "label": {
+        "zh_Hans_CN": "Third-party Module"
+      }
+    }
+  ]
+}
+```
 
 ## Installed Record Snapshot
 

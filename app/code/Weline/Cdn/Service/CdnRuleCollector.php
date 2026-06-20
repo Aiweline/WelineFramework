@@ -17,6 +17,8 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Service\Query\BinQueryCachePolicy;
+use Weline\Framework\Service\Query\QueryProviderRegistry;
 use ReflectionClass;
 use ReflectionMethod;
 
@@ -64,6 +66,8 @@ class CdnRuleCollector
             $moduleRules = $this->collectModule($moduleName, $module);
             $collected = array_merge($collected, $moduleRules);
         }
+
+        $collected = array_merge($collected, $this->collectBinQueryRules());
         
         return $collected;
     }
@@ -530,8 +534,93 @@ class CdnRuleCollector
         if (preg_match('/matches\s+"\^([^"]+)"/', $expression, $matches)) {
             return $matches[1];
         }
+        if (preg_match('/http\.request\.uri\.path\s+eq\s+"([^"]+)"/', $expression, $matches)) {
+            return $matches[1];
+        }
         
         return '';
+    }
+
+    /**
+     * 从 Weline_Framework Query 最终 descriptor 收集 BinQuery CDN 规则。
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectBinQueryRules(): array
+    {
+        $collected = [];
+        try {
+            /** @var QueryProviderRegistry $registry */
+            $registry = ObjectManager::getInstance(QueryProviderRegistry::class);
+            $cachePolicy = new BinQueryCachePolicy();
+            foreach ($registry->getAllDescriptors() as $descriptor) {
+                if (!is_array($descriptor)) {
+                    continue;
+                }
+                $provider = (string)($descriptor['provider'] ?? '');
+                $module = (string)($descriptor['module'] ?? 'Weline_Framework');
+                if ($provider === '') {
+                    continue;
+                }
+
+                foreach (($descriptor['operations'] ?? []) as $operation) {
+                    if (!is_array($operation) || !$cachePolicy->isCacheableOperation($operation)) {
+                        continue;
+                    }
+                    if (($operation['frontend'] ?? false) !== true) {
+                        continue;
+                    }
+
+                    $operationName = (string)($operation['name'] ?? '');
+                    if ($operationName === '') {
+                        continue;
+                    }
+                    $cache = is_array($operation['cache'] ?? null) ? $operation['cache'] : [];
+                    $ttl = $cachePolicy->parseTtlSeconds($cache['ttl'] ?? null);
+                    if ($ttl <= 0) {
+                        continue;
+                    }
+
+                    $status = $cache['status'] ?? [200];
+                    if (!is_array($status)) {
+                        $status = [200];
+                    }
+                    $markerPrefix = 'wq1.frontend.' . $provider . '.' . $operationName . '.';
+                    $rule = [
+                        'expression' => 'http.request.uri.path eq "/bin/query" and http.request.method eq "POST" and http.request.uri.query contains "__wq_cache=' . $markerPrefix . '"',
+                        'action' => [
+                            'cache' => [
+                                'status_code' => array_values(array_map('intval', $status)),
+                                'ttl' => $ttl,
+                            ],
+                        ],
+                        'description' => (string)($cache['description'] ?? ('BinQuery ' . $provider . '.' . $operationName)),
+                        'enabled' => true,
+                        'trigger' => (string)($cache['trigger'] ?? 'cron'),
+                    ];
+
+                    $apiRule = $this->saveRule(
+                        $rule,
+                        'Weline\\Framework\\Controller\\Api\\BinQuery::' . $provider,
+                        $operationName,
+                        $module !== '' ? $module : 'Weline_Framework'
+                    );
+                    if (($rule['trigger'] ?? 'cron') === 'realtime') {
+                        $this->pushRealtimeRule($apiRule);
+                    }
+                    $collected[] = $rule + [
+                        'provider' => $provider,
+                        'operation' => $operationName,
+                    ];
+                }
+            }
+        } catch (\Throwable $throwable) {
+            if (function_exists('w_log_warning')) {
+                w_log_warning('BinQuery CDN rule collection skipped: ' . $throwable->getMessage(), [], 'cdn');
+            }
+        }
+
+        return $collected;
     }
 
     /**

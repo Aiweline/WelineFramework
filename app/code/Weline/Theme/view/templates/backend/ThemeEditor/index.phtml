@@ -20,6 +20,13 @@ $page_type = $this->getData('page_type') ?: 'homepage';
 $page_types = $this->getData('page_types') ?: [];
 $layout_option = (string)($this->getData('layout_option') ?: 'default');
 $layout_options_by_type = $this->getData('layout_options_by_type') ?: [];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 $current_layout_options = $layout_options_by_type[$page_type] ?? [];
 if (empty($current_layout_options)) {
     $current_layout_options = [[
@@ -29,7 +36,7 @@ if (empty($current_layout_options)) {
         'file' => '',
     ]];
 }
-$layout_options_json = json_encode($layout_options_by_type, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
+$layout_options_json = json_encode($layout_options_by_type, $jsonForScriptFlags) ?: '{}';
 $areas = $this->getData('areas') ?: [];
 $editor_area = $this->getData('editor_area') ?: 'frontend';
 $theme_has_backend = (bool)$this->getData('theme_has_backend');
@@ -40,7 +47,7 @@ $preview_status = is_array($preview_context) ? (string)($preview_context['status
 $layout_editor_lock = $this->getData('layout_editor_lock') ?: ['enabled' => false];
 $layout_editor_lock = is_array($layout_editor_lock) ? $layout_editor_lock : ['enabled' => false];
 $layout_editor_locked = !empty($layout_editor_lock['enabled']);
-$layout_editor_lock_json = json_encode($layout_editor_lock, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{"enabled":false}';
+$layout_editor_lock_json = json_encode($layout_editor_lock, $jsonForScriptFlags) ?: '{"enabled":false}';
 $frontend_theme_id = (int)($this->getData('frontend_theme_id') ?: ($editor_area === 'frontend' ? $theme_id : 0));
 $backend_theme_id = (int)($this->getData('backend_theme_id') ?: ($editor_area === 'backend' ? $theme_id : 0));
 $previewParams = [
@@ -238,7 +245,7 @@ $getWidgetIcon = function ($type) {
         <div class="toolbar-right">
             <!-- 版本控制面板 -->
             <div class="version-selector-wrapper">
-                <button type="button" class="btn btn-outline-secondary btn-version-toggle" onclick="toggleVersionPanel()">
+                <button type="button" class="btn btn-outline-secondary btn-version-toggle" data-theme-editor-action="toggle-version-panel">
                     <i class="ri-history-line"></i>
                     <span id="currentVersionDisplay"><?= __('加载中...') ?></span>
                     <i class="ri-arrow-down-s-line"></i>
@@ -248,13 +255,13 @@ $getWidgetIcon = function ($type) {
                 <div id="versionPanel" class="version-panel">
                     <div class="version-panel-header">
                         <h5><i class="ri-git-branch-line"></i> <?= __('版本历史') ?></h5>
-                        <button type="button" class="btn btn-sm btn-close-panel" onclick="toggleVersionPanel()">
+                        <button type="button" class="btn btn-sm btn-close-panel" data-theme-editor-action="toggle-version-panel">
                             <i class="ri-close-line"></i>
                         </button>
                     </div>
                     
                     <div class="version-panel-actions">
-                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveNewVersion" onclick="document.getElementById('btnSave')?.click()">
+                        <button type="button" class="btn btn-primary btn-sm" id="btnSaveNewVersion" data-theme-editor-action="save-new-version">
                             <i class="ri-save-line"></i> <?= __('保存新版本') ?>
                         </button>
                     </div>
@@ -533,13 +540,13 @@ $getWidgetIcon = function ($type) {
                                          data-widget-module="<?= htmlspecialchars($wModule) ?>"
                                          data-widget-type="<?= htmlspecialchars($wType) ?>"
                                          data-widget-name="<?= htmlspecialchars($wName) ?>"
-                                         data-widget-position='<?= json_encode($wPosition) ?>'
+                                         data-widget-position='<?= htmlspecialchars(json_encode($wPosition, $jsonForScriptFlags) ?: '[]', ENT_QUOTES, 'UTF-8') ?>'
                                          data-widget-compatible="<?= $wCompatible ? '1' : '0' ?>"
                                          data-widget-slot="<?= htmlspecialchars($wSlot) ?>"
                                          data-widget-supports="<?= htmlspecialchars(implode(',', $wSlotCodes)) ?>"
                                          data-widget-slots="<?= htmlspecialchars(implode(',', is_array($wSlots) ? array_map('strval', array_keys($wSlots)) : [])) ?>"
                                          data-widget-exclusive="<?= $wExclusive ? '1' : '0' ?>"
-                                         data-widget-page-layouts='<?= json_encode($wPageLayouts) ?>'
+                                         data-widget-page-layouts='<?= htmlspecialchars(json_encode($wPageLayouts, $jsonForScriptFlags) ?: '[]', ENT_QUOTES, 'UTF-8') ?>'
                                          data-widget-is-container="<?= $wIsContainer ? '1' : '0' ?>">
                                         <div class="widget-preview">
                                             <div class="widget-preview-canvas">
@@ -4271,6 +4278,26 @@ body:has(.theme-editor-container) .footer {
 
 <!-- 本地 Remix Icon CSS URL，禁止使用外网 CDN -->
 <script>window.WELINE_REMIXICON_CSS_URL = '<?= $this->getRequest()->getBaseHost() . $this->fetchTagSource(\Weline\Framework\View\Data\DataInterface::dir_type_STATICS, 'Weline_Theme::css/remixicon.css') ?>';</script>
+<script>
+(function () {
+    document.addEventListener('click', function (event) {
+        const actionButton = event.target.closest('[data-theme-editor-action]');
+        if (!actionButton) {
+            return;
+        }
+
+        const action = actionButton.getAttribute('data-theme-editor-action');
+        if (action === 'toggle-version-panel' && typeof window.toggleVersionPanel === 'function') {
+            window.toggleVersionPanel();
+            return;
+        }
+
+        if (action === 'save-new-version') {
+            document.getElementById('btnSave')?.click();
+        }
+    });
+})();
+</script>
 <!-- ThemeEditor uses same-origin backend controller URLs; Weline.Api remains a fallback for non-direct requests. -->
 <script src="@static(Weline_Widget::js/widget-param-types.js)?v=20260602-ai-context-provider"></script>
 <script src="@static(Weline_Theme::js/theme-editor.js)?v=20260609-virtual-theme-block-ai"></script>

@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>像素数据分析面板</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="@static(Weline_Admin::assets/libs/chart.js/Chart.min.js)"></script>
     <script>
         window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
             modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
@@ -219,11 +219,11 @@
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('business', event)">商业价值</button>
-            <button class="tab" onclick="switchTab('dashboard', event)">实时大屏</button>
-            <button class="tab" onclick="switchTab('comparison', event)">数据对比</button>
-            <button class="tab" onclick="switchTab('abtest', event)">A/B测试</button>
-            <button class="tab" onclick="switchTab('report', event)">综合报告</button>
+            <button class="tab active" data-visitor-tab="business">商业价值</button>
+            <button class="tab" data-visitor-tab="dashboard">实时大屏</button>
+            <button class="tab" data-visitor-tab="comparison">数据对比</button>
+            <button class="tab" data-visitor-tab="abtest">A/B测试</button>
+            <button class="tab" data-visitor-tab="report">综合报告</button>
         </div>
 
         <!-- 商业价值分析 -->
@@ -254,7 +254,7 @@
                         <input type="date" id="business-endDate">
                     </div>
                 </div>
-                <button class="btn" onclick="loadBusinessValue()">查询</button>
+                <button class="btn" data-visitor-action="load-business-value">查询</button>
             </div>
 
             <div class="grid">
@@ -321,8 +321,8 @@
                         <input type="number" id="dashboard-hours" value="24" min="1" max="168">
                     </div>
                 </div>
-                <button class="btn" onclick="loadDashboard()">查询</button>
-                <button class="btn btn-secondary" onclick="toggleAutoRefresh()" id="auto-refresh-btn">开启自动刷新</button>
+                <button class="btn" data-visitor-action="load-dashboard">查询</button>
+                <button class="btn btn-secondary" data-visitor-action="toggle-auto-refresh" id="auto-refresh-btn">开启自动刷新</button>
             </div>
 
             <div class="grid">
@@ -368,7 +368,7 @@
                         <input type="number" id="comparison-days" value="7" min="1" max="30">
                     </div>
                 </div>
-                <button class="btn" onclick="loadComparison()">查询</button>
+                <button class="btn" data-visitor-action="load-comparison">查询</button>
             </div>
 
             <div class="card">
@@ -419,8 +419,8 @@
                         </select>
                     </div>
                 </div>
-                <button class="btn" onclick="loadAbTestList()">加载测试列表</button>
-                <button class="btn btn-secondary" onclick="showCreateAbTest()">创建新测试</button>
+                <button class="btn" data-visitor-action="load-abtest-list">加载测试列表</button>
+                <button class="btn btn-secondary" data-visitor-action="show-create-abtest">创建新测试</button>
             </div>
 
             <div class="card">
@@ -448,7 +448,7 @@
                     <label>测试ID</label>
                     <input type="text" id="abtest-detail-testId" readonly>
                 </div>
-                <button class="btn" onclick="loadAbTestData()">查看数据</button>
+                <button class="btn" data-visitor-action="load-abtest-data">查看数据</button>
                 <div id="abtest-detail-result" style="margin-top: 20px;">                </div>
             </div>
         </div>
@@ -471,8 +471,8 @@
                         <input type="date" id="report-endDate">
                     </div>
                 </div>
-                <button class="btn" onclick="loadReport()">生成报告</button>
-                <button class="btn btn-secondary" onclick="exportData()">导出数据</button>
+                <button class="btn" data-visitor-action="load-report">生成报告</button>
+                <button class="btn btn-secondary" data-visitor-action="export-data">导出数据</button>
             </div>
 
             <div class="grid">
@@ -557,6 +557,66 @@
         }
 
         const baseUrl = getBaseUrl();
+
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value == null ? '' : String(value);
+            return div.innerHTML;
+        }
+
+        function safeNumber(value, fallback = 0) {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : fallback;
+        }
+
+        document.addEventListener('click', function(event) {
+            const tab = event.target.closest('[data-visitor-tab]');
+            if (tab) {
+                event.preventDefault();
+                switchTab(tab.getAttribute('data-visitor-tab'), event);
+                return;
+            }
+
+            const abTestButton = event.target.closest('[data-abtest-id]');
+            if (abTestButton) {
+                event.preventDefault();
+                viewAbTest(abTestButton.getAttribute('data-abtest-id'));
+                return;
+            }
+
+            const modalAction = event.target.closest('[data-modal-action]');
+            if (modalAction) {
+                event.preventDefault();
+                const modal = modalAction.closest('[data-visitor-modal]');
+                if (modalAction.getAttribute('data-modal-action') === 'close' && modal) {
+                    modal.remove();
+                }
+                return;
+            }
+
+            const action = event.target.closest('[data-visitor-action]');
+            if (!action) {
+                return;
+            }
+
+            event.preventDefault();
+            const handlers = {
+                'load-business-value': loadBusinessValue,
+                'load-dashboard': loadDashboard,
+                'toggle-auto-refresh': toggleAutoRefresh,
+                'load-comparison': loadComparison,
+                'load-abtest-list': loadAbTestList,
+                'show-create-abtest': showCreateAbTest,
+                'load-abtest-data': loadAbTestData,
+                'load-report': loadReport,
+                'export-data': exportData,
+                'submit-create-abtest': submitCreateAbTest
+            };
+            const handler = handlers[action.getAttribute('data-visitor-action')];
+            if (typeof handler === 'function') {
+                handler();
+            }
+        });
         const apiBase = 'worker:visitor.analytics';
         let visitorApiPromise = null;
         function getVisitorApi() {
@@ -738,12 +798,12 @@
             const tbody = document.getElementById('business-table-body');
             tbody.innerHTML = data.data_points.map(point => `
                 <tr>
-                    <td>${point.date}</td>
-                    <td>${point.value.toLocaleString()}</td>
-                    <td>${point.events}</td>
-                    <td>${point.event_types}</td>
-                    <td>${point.avg_value.toFixed(2)}</td>
-                    <td>${(point.conversion_rate * 100).toFixed(2)}%</td>
+                    <td>${escapeHtml(point.date)}</td>
+                    <td>${safeNumber(point.value).toLocaleString()}</td>
+                    <td>${safeNumber(point.events).toLocaleString()}</td>
+                    <td>${safeNumber(point.event_types).toLocaleString()}</td>
+                    <td>${safeNumber(point.avg_value).toFixed(2)}</td>
+                    <td>${(safeNumber(point.conversion_rate) * 100).toFixed(2)}%</td>
                 </tr>
             `).join('');
         }
@@ -880,17 +940,17 @@
             const tbody = document.getElementById('comparison-table-body');
             tbody.innerHTML = data.comparisons.map(comp => `
                 <tr>
-                    <td>${comp.date}</td>
-                    <td>${comp.today.value.toLocaleString()}</td>
-                    <td>${comp.yesterday.value.toLocaleString()}</td>
-                    <td class="stat-value ${comp.change_value >= 0 ? 'positive' : 'negative'}">
-                        ${comp.change_value >= 0 ? '+' : ''}${comp.change_value.toFixed(2)}
+                    <td>${escapeHtml(comp.date)}</td>
+                    <td>${safeNumber(comp.today?.value).toLocaleString()}</td>
+                    <td>${safeNumber(comp.yesterday?.value).toLocaleString()}</td>
+                    <td class="stat-value ${safeNumber(comp.change_value) >= 0 ? 'positive' : 'negative'}">
+                        ${safeNumber(comp.change_value) >= 0 ? '+' : ''}${safeNumber(comp.change_value).toFixed(2)}
                     </td>
-                    <td class="stat-value ${comp.change_percentage >= 0 ? 'positive' : 'negative'}">
-                        ${comp.change_percentage >= 0 ? '+' : ''}${comp.change_percentage.toFixed(2)}%
+                    <td class="stat-value ${safeNumber(comp.change_percentage) >= 0 ? 'positive' : 'negative'}">
+                        ${safeNumber(comp.change_percentage) >= 0 ? '+' : ''}${safeNumber(comp.change_percentage).toFixed(2)}%
                     </td>
-                    <td>${comp.today.events}</td>
-                    <td>${comp.yesterday.events}</td>
+                    <td>${safeNumber(comp.today?.events).toLocaleString()}</td>
+                    <td>${safeNumber(comp.yesterday?.events).toLocaleString()}</td>
                 </tr>
             `).join('');
         }
@@ -968,18 +1028,18 @@
                     'completed': '<span class="badge badge-info">已完成</span>',
                     'draft': '<span class="badge badge-danger">草稿</span>'
                 };
-                return badges[status] || status;
+                return badges[status] || escapeHtml(status);
             };
 
             tbody.innerHTML = tests.map(test => `
                 <tr>
-                    <td>${test.test_id}</td>
-                    <td>${test.name}</td>
+                    <td>${escapeHtml(test.test_id)}</td>
+                    <td>${escapeHtml(test.name)}</td>
                     <td>${statusBadge(test.status)}</td>
-                    <td>${test.start_date || '--'}</td>
-                    <td>${test.end_date || '--'}</td>
+                    <td>${escapeHtml(test.start_date || '--')}</td>
+                    <td>${escapeHtml(test.end_date || '--')}</td>
                     <td>
-                        <button class="btn" onclick="viewAbTest('${test.test_id}')">查看</button>
+                        <button class="btn" data-abtest-id="${escapeHtml(test.test_id)}">查看</button>
                     </td>
                 </tr>
             `).join('');
@@ -1044,18 +1104,18 @@
                 const isWinner = data.winner === variant;
                 html += `
                     <div class="card" style="${isWinner ? 'border: 2px solid #28a745;' : ''}">
-                        <h3>变体 ${variant} ${isWinner ? '🏆 获胜' : ''}</h3>
+                        <h3>变体 ${escapeHtml(variant)} ${isWinner ? '🏆 获胜' : ''}</h3>
                         <div class="stat-item">
                             <span class="stat-label">价值:</span>
-                            <span class="stat-value">${stats.value.toLocaleString()}</span>
+                            <span class="stat-value">${safeNumber(stats.value).toLocaleString()}</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-label">事件数:</span>
-                            <span class="stat-value">${stats.events}</span>
+                            <span class="stat-value">${safeNumber(stats.events).toLocaleString()}</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-label">转化率:</span>
-                            <span class="stat-value">${(stats.conversion_rate * 100).toFixed(2)}%</span>
+                            <span class="stat-value">${(safeNumber(stats.conversion_rate) * 100).toFixed(2)}%</span>
                         </div>
                     </div>
                 `;
@@ -1065,7 +1125,7 @@
             if (data.improvement !== 0) {
                 html += `<div class="card" style="margin-top: 20px;">
                     <h3>改进情况</h3>
-                    <p>变体B相比变体A改进了 <strong>${data.improvement}%</strong></p>
+                    <p>变体B相比变体A改进了 <strong>${safeNumber(data.improvement).toFixed(2)}%</strong></p>
                 </div>`;
             }
             
@@ -1075,6 +1135,7 @@
         // 显示创建A/B测试表单
         function showCreateAbTest() {
             const modal = document.createElement('div');
+            modal.setAttribute('data-visitor-modal', 'create-abtest');
             modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
             modal.innerHTML = `
                 <div style="background:white;padding:30px;border-radius:8px;max-width:600px;width:90%;max-height:90vh;overflow-y:auto;">
@@ -1126,8 +1187,8 @@
                         <textarea id="create-variantB" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:monospace;" placeholder='{"color": "red"}'>{}</textarea>
                     </div>
                     <div style="display:flex;gap:10px;margin-top:20px;">
-                        <button class="btn" onclick="submitCreateAbTest()">创建</button>
-                        <button class="btn btn-secondary" onclick="this.closest('div[style*=\"position:fixed\"]').remove()">取消</button>
+                        <button class="btn" data-visitor-action="submit-create-abtest">创建</button>
+                        <button class="btn btn-secondary" data-modal-action="close">取消</button>
                     </div>
                 </div>
             `;
@@ -1297,12 +1358,13 @@
 
             let rank = 1;
             tbody.innerHTML = Object.entries(topEvents).map(([event, count]) => {
-                const percentage = total > 0 ? ((count / total) * 100).toFixed(2) : 0;
+                const safeCount = safeNumber(count);
+                const percentage = total > 0 ? ((safeCount / total) * 100).toFixed(2) : 0;
                 return `
                     <tr>
                         <td>${rank++}</td>
-                        <td>${event}</td>
-                        <td>${count.toLocaleString()}</td>
+                        <td>${escapeHtml(event)}</td>
+                        <td>${safeCount.toLocaleString()}</td>
                         <td>${percentage}%</td>
                     </tr>
                 `;

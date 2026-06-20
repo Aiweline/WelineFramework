@@ -310,7 +310,7 @@ class Table implements TaglibInterface
                 $addButtonText = __('新增');
                 $addButtonTitle = __('新增记录');
                 $addButtonHtml = <<<BUTTON
-                    <button type="button" class="w-toolbar-btn primary" onclick="if (typeof DataTableFormManager !== 'undefined') { DataTableFormManager.openModal('{$formId}', 'add'); } else { console.error('DataTableFormManager 未加载'); }" title="{$addButtonTitle}">
+                    <button type="button" class="w-toolbar-btn primary" data-datatable-form-action="open-modal" data-form-id="{$formId}" data-mode="add" title="{$addButtonTitle}">
                         <i class="fas fa-plus"></i>
                         {$addButtonText}
                     </button>
@@ -738,11 +738,11 @@ CSS;
                         <i class="fas fa-spinner fa-spin"></i>
                         <span><?= __('加载中') ?>...</span>
                     </button>
-                    <button type="button" class="w-toolbar-btn success" onclick="window.DataTableManager &amp;&amp; DataTableManager.refreshData('{$id}')" title="<?= __('刷新数据') ?>">
+                    <button type="button" class="w-toolbar-btn success" data-datatable-action="refresh-data" data-table="{$id}" title="<?= __('刷新数据') ?>">
                         <i class="fas fa-sync-alt"></i>
                         <?= __('刷新') ?>
                     </button>
-                    <button type="button" class="w-toolbar-btn warning" data-w-action="important-view" onclick="window.DataTableManager &amp;&amp; DataTableManager.toggleImportantView('{$id}')" title="<?= __('只显示重要数据') ?>">
+                    <button type="button" class="w-toolbar-btn warning" data-w-action="important-view" data-table="{$id}" title="<?= __('只显示重要数据') ?>">
                         <i class="fas fa-star"></i>
                         <?= __('只显示重要数据') ?>
                     </button>
@@ -758,20 +758,20 @@ CSS;
                                 </button>
                             <ul class="w-dropdown-menu">
                                 <li>
-                                    <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.clearHeaderConfig('{$id}')" title="<?= __('重置表头字段配置') ?>">
+                                    <button type="button" class="w-dropdown-item" data-datatable-action="clear-header-config" data-table="{$id}" title="<?= __('重置表头字段配置') ?>">
                                         <i class="fas fa-columns"></i>
                                         <?= __('重置表头') ?>
                                     </button>
                                 </li>
                                 <li>
-                                    <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.clearFilterConfig('{$id}')" title="<?= __('重置筛选字段配置') ?>">
+                                    <button type="button" class="w-dropdown-item" data-datatable-action="clear-filter-config" data-table="{$id}" title="<?= __('重置筛选字段配置') ?>">
                                         <i class="fas fa-filter"></i>
                                         <?= __('重置筛选') ?>
                                     </button>
                                 </li>
                                 <li><hr class="w-dropdown-divider"></li>
                                 <li>
-                                    <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.clearAllConfig('{$id}')" title="<?= __('重置全部配置') ?>">
+                                    <button type="button" class="w-dropdown-item" data-datatable-action="clear-all-config" data-table="{$id}" title="<?= __('重置全部配置') ?>">
                                         <i class="fas fa-trash"></i>
                                         <?= __('全部重置') ?>
                                     </button>
@@ -790,19 +790,19 @@ CSS;
                         </button>
                         <ul class="w-dropdown-menu">
                             <li>
-                                <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.exportData('{$id}', 'excel')" title="<?= __('导出为Excel') ?>">
+                                <button type="button" class="w-dropdown-item" data-datatable-action="export-data" data-table="{$id}" data-format="excel" title="<?= __('导出为Excel') ?>">
                                     <i class="fas fa-file-excel"></i>
                                     <?= __('导出Excel') ?>
                                 </button>
                             </li>
                             <li>
-                                <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.exportData('{$id}', 'csv')" title="<?= __('导出为CSV') ?>">
+                                <button type="button" class="w-dropdown-item" data-datatable-action="export-data" data-table="{$id}" data-format="csv" title="<?= __('导出为CSV') ?>">
                                     <i class="fas fa-file-csv"></i>
                                     <?= __('导出CSV') ?>
                                 </button>
                             </li>
                             <li>
-                                <button type="button" class="w-dropdown-item" onclick="window.DataTableManager &amp;&amp; DataTableManager.exportData('{$id}', 'json')" title="<?= __('导出为JSON') ?>">
+                                <button type="button" class="w-dropdown-item" data-datatable-action="export-data" data-table="{$id}" data-format="json" title="<?= __('导出为JSON') ?>">
                                     <i class="fas fa-file-code"></i>
                                     <?= __('导出JSON') ?>
                                 </button>
@@ -853,7 +853,7 @@ CSS;
             <h5 class="w-modal-title" id="w-field-config-modal-label-{$id}">
                 <i class="fas fa-cog"></i> <?= __('字段配置') ?>
             </h5>
-            <button type="button" class="w-btn-close" onclick="window.DataTableManager &amp;&amp; DataTableManager.closeFieldConfig('{$id}')" aria-label="Close">
+            <button type="button" class="w-btn-close" data-datatable-action="close-field-config" data-table="{$id}" aria-label="Close">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -918,8 +918,8 @@ CSS;
             </div>
         </div>
         <div class="w-modal-footer">
-            <button type="button" class="w-btn w-btn-secondary" onclick="window.DataTableManager &amp;&amp; DataTableManager.closeFieldConfig('{$id}')"><?= __('取消') ?></button>
-            <button type="button" class="w-btn w-btn-primary" onclick="window.DataTableManager &amp;&amp; DataTableManager.saveFieldConfig('{$id}')"><?= __('保存配置') ?></button>
+            <button type="button" class="w-btn w-btn-secondary" data-datatable-action="close-field-config" data-table="{$id}"><?= __('取消') ?></button>
+            <button type="button" class="w-btn w-btn-primary" data-datatable-action="save-field-config" data-table="{$id}"><?= __('保存配置') ?></button>
         </div>
     </div>
 </div>
@@ -1584,21 +1584,21 @@ HTML;
         $saveText = __('保存');
         $addText = __('添加');
         $formHtml = '<div class="w-form-modal" id="w-form-modal-' . $formId . '">';
-        $formHtml .= '<div class="w-form-modal-overlay" onclick="DataTableFormManager.closeModal(\'' . $formId . '\')"></div>';
+        $formHtml .= '<div class="w-form-modal-overlay" data-datatable-form-action="close-modal" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '"></div>';
         $formHtml .= '<div class="w-form-modal-container">';
         $formHtml .= '<div class="w-form-container" id="w-form-container-' . $formId . '">';
         $formHtml .= '<div class="w-form-header">';
         $formHtml .= '<h3 class="w-form-title"><i class="fas fa-edit"></i>' . $title . '</h3>';
-        $formHtml .= '<button type="button" class="w-form-close" onclick="DataTableFormManager.closeModal(\'' . $formId . '\')"><i class="fas fa-times"></i></button>';
+        $formHtml .= '<button type="button" class="w-form-close" data-datatable-form-action="close-modal" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '"><i class="fas fa-times"></i></button>';
         $formHtml .= '</div>';
         $formHtml .= '<form class="w-form w-form-vertical" id="' . $formId . '" action="' . htmlspecialchars($apiUrl, ENT_QUOTES, 'UTF-8') . '" method="POST" data-model="' . htmlspecialchars($model, ENT_QUOTES, 'UTF-8') . '" data-scope="' . htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') . '" data-mode="' . htmlspecialchars($mode, ENT_QUOTES, 'UTF-8') . '" data-record-id="">';
         $formHtml .= '<div class="w-form-body"><div class="w-form-fields" id="w-form-fields-' . $formId . '"><div class="w-auto-fields" id="w-auto-fields-' . $formId . '"><div class="w-loading-fields"><i class="fas fa-spinner fa-spin"></i>' . __('正在加载字段...') . '</div></div></div></div>';
         $formHtml .= '<div class="w-form-footer"><div class="w-form-actions">';
-        $formHtml .= '<button type="button" class="w-btn w-btn-secondary" onclick="DataTableFormManager.closeModal(\'' . $formId . '\')"><i class="fas fa-times"></i>' . $cancelText . '</button>';
-        $formHtml .= '<button type="button" class="w-btn w-btn-primary" onclick="DataTableFormManager.submitForm(\'' . $formId . '\')"><i class="fas fa-save"></i>' . $saveText . '</button>';
+        $formHtml .= '<button type="button" class="w-btn w-btn-secondary" data-datatable-form-action="close-modal" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '"><i class="fas fa-times"></i>' . $cancelText . '</button>';
+        $formHtml .= '<button type="button" class="w-btn w-btn-primary" data-datatable-form-action="submit-form" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '"><i class="fas fa-save"></i>' . $saveText . '</button>';
         $formHtml .= '</div></div></form></div></div></div>';
         if ($mode === 'add') {
-            $formHtml .= '<button type="button" class="w-btn w-btn-primary w-form-trigger" onclick="DataTableFormManager.openModal(\'' . $formId . '\', \'add\')"><i class="fas fa-plus"></i>' . $addText . '</button>';
+            $formHtml .= '<button type="button" class="w-btn w-btn-primary w-form-trigger" data-datatable-form-action="open-modal" data-form-id="' . htmlspecialchars($formId, ENT_QUOTES, 'UTF-8') . '" data-mode="add"><i class="fas fa-plus"></i>' . $addText . '</button>';
         }
         // 尝试加载 datatable-form-manager.js，浏览器会自动去重
         /**@var Template $tmp */

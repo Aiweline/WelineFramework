@@ -8,6 +8,8 @@ const urlsToCache = [
     '/twofa-app/',
     '/twofa-app/index.html',
     '/twofa-app/style.css',
+    '/twofa-app/jsqr',
+    '/twofa-app/qr-scanner',
     '/twofa-app/app.js',
     '/twofa-app/manifest.json'
 ];

@@ -1,5 +1,7 @@
 # WelineFramework
 
+![WelineFramework 封面](../assets/readme/weline-framework-cover.zh-Hant.png)
+
 [語言索引](./README.md) | [簡體中文](../../README.zh-CN.md)
 
 WelineFramework 是面向模組化 Web 應用、後台系統與電商業務場景的 PHP 框架。它圍繞模組、路由、ORM、事件/Hook、主題模板、後台 ACL、i18n、WLS 長執行服務與 CLI 工具組織工程能力，讓業務模組能穩定擴展、清晰部署、持續維護。

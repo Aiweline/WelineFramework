@@ -10,6 +10,7 @@ use Weline\DeveloperWorkspace\Model\Document\Translation;
 use Weline\DeveloperWorkspace\Service\Document\ApiDocumentTranslationMapper;
 use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationConfigService;
 use Weline\DeveloperWorkspace\Service\Document\DocumentTranslationReadService;
+use Weline\DeveloperWorkspace\Service\ApiDocCollector;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
@@ -174,25 +175,40 @@ class Docs extends FrontendController
             // 查询所有这些分类下的文档
             $documents = $this->documentModel->clear()
                 ->where(Document::schema_fields_CATEGORY_ID, $catalogIds, 'in')
-                ->order('sort_order', 'ASC')
-                ->order('id', 'DESC')
+                ->order(Document::schema_fields_SORT_ORDER, 'ASC')
+                ->order(Document::schema_fields_FILE_PATH, 'ASC')
+                ->order(Document::schema_fields_ID, 'ASC')
                 ->select()
                 ->fetch()
                 ->getItems();
             
-            $result = [];
+            $documentsByCatalogId = [];
             foreach ($documents as $doc) {
-                $view = $this->translationReadService->getDocumentView($doc, $locale, false, true);
-                $result[] = [
-                    'id' => $doc->getId(),
-                    'title' => $view['title'] ?? $doc->getTitle() ?? '',
-                    'summary' => $view['summary'] ?? $doc->getData('summary') ?? '',
-                    'category_id' => $doc->getCategoryId(),
-                    'module_name' => $doc->getModuleName() ?? '',
-                    'locale' => $view['locale'] ?? $locale,
-                    'is_translated' => $view['is_translated'] ?? false,
-                    'translation_status' => $view['translation_status'] ?? Translation::STATUS_MISSING,
-                ];
+                if (!$doc instanceof Document || !$doc->getId()) {
+                    continue;
+                }
+                $docCatalogId = (int)($doc->getCategoryId() ?? 0);
+                if (!isset($documentsByCatalogId[$docCatalogId])) {
+                    $documentsByCatalogId[$docCatalogId] = [];
+                }
+                $documentsByCatalogId[$docCatalogId][] = $doc;
+            }
+
+            $result = [];
+            foreach ($catalogIds as $orderedCatalogId) {
+                foreach (($documentsByCatalogId[(int)$orderedCatalogId] ?? []) as $doc) {
+                    $view = $this->translationReadService->getDocumentView($doc, $locale, false, true);
+                    $result[] = [
+                        'id' => $doc->getId(),
+                        'title' => $view['title'] ?? $doc->getTitle() ?? '',
+                        'summary' => $view['summary'] ?? $doc->getData('summary') ?? '',
+                        'category_id' => $doc->getCategoryId(),
+                        'module_name' => $doc->getModuleName() ?? '',
+                        'locale' => $view['locale'] ?? $locale,
+                        'is_translated' => $view['is_translated'] ?? false,
+                        'translation_status' => $view['translation_status'] ?? Translation::STATUS_MISSING,
+                    ];
+                }
             }
             
             return $this->fetchJson($result);
@@ -231,7 +247,41 @@ class Docs extends FrontendController
 
     private function loadCatalogTree(): array
     {
-        return $this->catalogModel->clear()->getTree('pid');
+        return $this->sortCatalogTree($this->catalogModel->clear()->getTree('pid'));
+    }
+
+    private function sortCatalogTree(array $trees): array
+    {
+        foreach ($trees as &$tree) {
+            if (isset($tree['nodes']) && is_array($tree['nodes'])) {
+                $tree['nodes'] = $this->sortCatalogTree($tree['nodes']);
+            }
+        }
+        unset($tree);
+
+        usort($trees, function (array $left, array $right): int {
+            $leftPosition = $this->normalizeCatalogPosition($left);
+            $rightPosition = $this->normalizeCatalogPosition($right);
+            if ($leftPosition !== $rightPosition) {
+                return $leftPosition <=> $rightPosition;
+            }
+
+            $nameCompare = strcmp((string)($left['name'] ?? ''), (string)($right['name'] ?? ''));
+            if ($nameCompare !== 0) {
+                return $nameCompare;
+            }
+
+            return (int)($left['id'] ?? 0) <=> (int)($right['id'] ?? 0);
+        });
+
+        return $trees;
+    }
+
+    private function normalizeCatalogPosition(array $tree): int
+    {
+        $position = (int)($tree[Catalog::schema_fields_position] ?? 0);
+
+        return $position >= 0 && $position < 999999 ? $position : 999999;
     }
 
     private function getDocumentCategoryIdMap(): array
@@ -812,9 +862,9 @@ class Docs extends FrontendController
             $this->assign('apiAdminArea', $apiAdminArea);
             
             // 获取API文档数据
-            /** @var \Weline\Api\Service\ApiDocService $apiDocService */
-            $apiDocService = ObjectManager::getInstance(\Weline\Api\Service\ApiDocService::class);
-            $allApis = $apiDocService->generateAll(true); // 强制重新生成，忽略缓存
+            /** @var ApiDocCollector $apiDocCollector */
+            $apiDocCollector = ObjectManager::getInstance(ApiDocCollector::class);
+            $allApis = $apiDocCollector->generateAll(true); // 强制重新生成，忽略缓存
             
             // 提取displayName的辅助函数
             $extractDisplayName = function(string $name): string {

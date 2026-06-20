@@ -1,9 +1,0 @@
-<?php
-
-$defaultThemeTemplate = BP . 'app' . DS . 'design' . DS . 'WeShop' . DS . 'default' . DS . 'frontend' . DS . 'pages' . DS . 'qa' . DS . 'index.phtml';
-
-if (!is_file($defaultThemeTemplate)) {
-    throw new RuntimeException('Default QA page template is missing.');
-}
-
-include $defaultThemeTemplate;

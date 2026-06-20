@@ -1,99 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-/**
- * Weline Server - 后台菜单配置
- * 
- * @author Aiweline
- * @email aiweline@qq.com
- */
--->
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    
-    <!-- 服务器管理（挂载到系统服务下） -->
-    <menu source="Weline_Server::server" 
-          name="server" 
-          title="服务器管理" 
-          parent="Weline_Backend::system_service_group" 
-          icon="mdi mdi-server-network" 
-          order="10">
-        
-        <!-- 服务器监控 -->
-        <menu source="Weline_Server::server_monitor" 
-              name="server_monitor" 
-              title="服务器监控" 
-              action="*/backend/server-monitor"
-              icon="mdi mdi-speedometer" 
-              order="0"/>
-        
-        <!-- 服务器实例 -->
-        <menu source="Weline_Server::server_manager" 
-              name="server_manager" 
-              title="服务器实例" 
-              action="*/backend/server-manager"
-              icon="mdi mdi-server" 
-              order="1"/>
-        
-        <menu source="Weline_Server::session_manager"
-              name="session_manager"
-              title="Session 管理"
-              action="*/backend/server-manager/session"
-              icon="mdi mdi-account-key"
-              order="2"/>
-        
-        <menu source="Weline_Server::memory_cache_manager"
-              name="memory_cache_manager"
-              title="内存缓存管理"
-              action="*/backend/server-manager/memory"
-              icon="mdi mdi-memory"
-              order="3"/>
-        
-        <!-- 攻击日志 -->
-        <menu source="Weline_Server::attack_log" 
-              name="attack_log" 
-              title="攻击日志" 
-              action="*/backend/server-monitor/attack-log"
-              icon="mdi mdi-shield-alert" 
-              order="4"/>
-        
-        <!-- 安全规则 -->
-        <menu source="Weline_Server::security_rules" 
-              name="security_rules" 
-              title="安全规则" 
-              action="*/backend/server-monitor/security-rules"
-              icon="mdi mdi-shield-check" 
-              order="5"/>
-        
-        <!-- SSL证书管理 -->
-        <menu source="Weline_Server::ssl"
-              name="ssl"
-              title="SSL证书管理"
-              action="*/backend/ssl-certificate"
-              icon="mdi mdi-shield-lock"
-              order="6"/>
-
-        <!-- 反向代理配置 -->
-        <menu source="Weline_Server::reverse_proxy"
-              name="reverse_proxy"
-              title="反向代理配置"
-              action="*/backend/reverse-proxy"
-              icon="mdi mdi-arrow-left-right"
-              order="6.5"/>
-
-        <!-- 性能优化指南 -->
-        <menu source="Weline_Server::optimization"
-              name="optimization"
-              title="性能优化指南"
-              action="*/backend/optimization-guide"
-              icon="mdi mdi-lightning-bolt"
-              order="7"/>
-        
-        <!-- API文档 -->
-        <menu source="Weline_Server::api_doc" 
-              name="api_doc" 
-              title="API文档" 
-              action="*/backend/server-monitor/api-doc"
-              icon="mdi mdi-book-open-page-variant" 
-              order="8"/>
-    </menu>
+    <menu source="Weline_Server::wls_panel"
+          name="wls_panel"
+          title="WLS Panel"
+          parent="Weline_Backend::system_service_group"
+          action="*/backend/wls-panel"
+          icon="mdi mdi-view-dashboard"
+          order="10"/>
 </menus>

@@ -349,6 +349,47 @@ function pruneTerminalLines() {
     }
 }
 
+function isDangerousStyle(value) {
+    var css = String(value || '').replace(/[\u0000-\u001f\u007f]+/g, '').toLowerCase();
+    return css.indexOf('@import') >= 0
+        || css.indexOf('expression(') >= 0
+        || /url\s*\(\s*['"]?\s*(?:javascript:|vbscript:|data:)/i.test(css);
+}
+
+function isDangerousUri(value) {
+    var url = String(value || '').replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+    if (!url) return false;
+    if (url.indexOf('javascript:') === 0 || url.indexOf('vbscript:') === 0) return true;
+    if (url.indexOf('data:') === 0 && !/^data:image\/(?:png|gif|jpe?g|webp|bmp);base64,/i.test(url)) return true;
+    var match = url.match(/^([a-z][a-z0-9+.-]*):/i);
+    return !!(match && ['http', 'https', 'mailto', 'tel', 'ftp'].indexOf(match[1]) === -1);
+}
+
+function sanitizeTerminalHtml(html) {
+    var template = document.createElement('template');
+    template.innerHTML = String(html || '');
+    template.content.querySelectorAll('script,style,link,meta,object,embed,iframe,frame,frameset,base,form,input,button,textarea,select,option').forEach(function(el) {
+        el.remove();
+    });
+    template.content.querySelectorAll('*').forEach(function(el) {
+        Array.prototype.slice.call(el.attributes).forEach(function(attr) {
+            var name = attr.name.toLowerCase();
+            if (name.indexOf('on') === 0 || name === 'srcdoc') {
+                el.removeAttribute(attr.name);
+                return;
+            }
+            if (['href', 'src', 'xlink:href', 'action', 'formaction', 'poster'].indexOf(name) >= 0 && isDangerousUri(attr.value)) {
+                el.removeAttribute(attr.name);
+                return;
+            }
+            if (name === 'style' && isDangerousStyle(attr.value)) {
+                el.removeAttribute(attr.name);
+            }
+        });
+    });
+    return template.innerHTML;
+}
+
 function log(text, type) {
     type = type || 'info';
     streamingLine = null;
@@ -375,7 +416,7 @@ function log(text, type) {
         var textEl = document.createElement('span');
         textEl.className = 'weline-sse-terminal-text';
         if (allowHtml && typeof lineText === 'string' && lineText.indexOf('<') >= 0) {
-            textEl.innerHTML = lineText;
+            textEl.innerHTML = sanitizeTerminalHtml(lineText);
         } else {
             textEl.textContent = lineText;
         }

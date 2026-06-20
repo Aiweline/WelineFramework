@@ -1088,7 +1088,7 @@ if (typeof __ === 'undefined') {
 
             // 鏂囦欢閫夋嫨鎸夐挳
             fieldHtml += '<div class="w-file-selector">';
-            fieldHtml += '<button type="button" class="w-btn w-btn-outline-primary w-file-btn" onclick="DataTableFormManager.triggerFileSelect(\'' + fieldId + '\')">';
+            fieldHtml += '<button type="button" class="w-btn w-btn-outline-primary w-file-btn" data-datatable-form-action="trigger-file-select" data-field-id="' + fieldId + '">';
             fieldHtml += '<i class="fas fa-upload"></i> 閫夋嫨鏂囦欢';
             fieldHtml += '</button>';
             fieldHtml += '<span class="w-file-info">鏀寔鏍煎紡锛? ' + accept + '锛屾渶澶э細' + maxSize + '</span>';
@@ -1132,7 +1132,7 @@ if (typeof __ === 'undefined') {
 
             // 鍥剧墖棰勮鍖哄煙
             fieldHtml += '<div class="w-image-preview" id="w-image-preview-' + fieldId + '">';
-            fieldHtml += '<div class="w-image-placeholder" onclick="DataTableFormManager.triggerFileSelect(\'' + fieldId + '\')">';
+            fieldHtml += '<div class="w-image-placeholder" data-datatable-form-action="trigger-file-select" data-field-id="' + fieldId + '">';
             fieldHtml += '<i class="fas fa-image"></i>';
             fieldHtml += '<div class="w-placeholder-text">鐐瑰嚮閫夋嫨鍥剧墖</div>';
             fieldHtml += '<div class="w-placeholder-info">鏀寔鏍煎紡锛欽PG銆丳NG銆丟IF锛屾渶澶э細' + maxSize + '</div>';
@@ -1141,10 +1141,10 @@ if (typeof __ === 'undefined') {
 
             // 鍥剧墖鎿嶄綔鎸夐挳
             fieldHtml += '<div class="w-image-actions" style="display: none;">';
-            fieldHtml += '<button type="button" class="w-btn w-btn-sm w-btn-outline-primary" onclick="DataTableFormManager.triggerFileSelect(\'' + fieldId + '\')">';
+            fieldHtml += '<button type="button" class="w-btn w-btn-sm w-btn-outline-primary" data-datatable-form-action="trigger-file-select" data-field-id="' + fieldId + '">';
             fieldHtml += '<i class="fas fa-edit"></i> 鏇存崲';
             fieldHtml += '</button>';
-            fieldHtml += '<button type="button" class="w-btn w-btn-sm w-btn-outline-danger" onclick="DataTableFormManager.clearImageField(\'' + fieldId + '\')">';
+            fieldHtml += '<button type="button" class="w-btn w-btn-sm w-btn-outline-danger" data-datatable-form-action="clear-image-field" data-field-id="' + fieldId + '">';
             fieldHtml += '<i class="fas fa-trash"></i> 鍒犻櫎';
             fieldHtml += '</button>';
             fieldHtml += '</div>';
@@ -1190,7 +1190,7 @@ if (typeof __ === 'undefined') {
             }
 
             if (preview) {
-                preview.innerHTML = '<div class="w-image-placeholder" onclick="DataTableFormManager.triggerFileSelect(\'' + fieldId + '\')">' +
+                preview.innerHTML = '<div class="w-image-placeholder" data-datatable-form-action="trigger-file-select" data-field-id="' + fieldId + '">' +
                     '<i class="fas fa-image"></i>' +
                     '<div class="w-placeholder-text">鐐瑰嚮閫夋嫨鍥剧墖</div>' +
                     '<div class="w-placeholder-info">鏀寔鏍煎紡锛欽PG銆丳NG銆丟IF锛屾渶澶э細5MB</div>' +
@@ -1226,7 +1226,7 @@ if (typeof __ === 'undefined') {
                     listHtml += '<i class="fas fa-file"></i>';
                     listHtml += '<span class="w-file-name">' + file.name + '</span>';
                     listHtml += '<span class="w-file-size">(' + fileSize + ')</span>';
-                    listHtml += '<button type="button" class="w-file-remove" onclick="DataTableFormManager.removeFileItem(this, \'' + fieldId + '\')">';
+                    listHtml += '<button type="button" class="w-file-remove" data-datatable-form-action="remove-file-item" data-field-id="' + fieldId + '">';
                     listHtml += '<i class="fas fa-times"></i>';
                     listHtml += '</button>';
                     listHtml += '</div>';
@@ -1476,6 +1476,58 @@ if (typeof __ === 'undefined') {
     const manager = window.DataTableFormManager;
     const originalInitForm = manager.initForm.bind(manager);
 
+    if (!window._datatableFormActionDelegated) {
+        window._datatableFormActionDelegated = true;
+        document.addEventListener('click', function (event) {
+            const trigger = event.target.closest('[data-datatable-form-action]');
+            if (!trigger || !window.DataTableFormManager) {
+                return;
+            }
+
+            const action = trigger.getAttribute('data-datatable-form-action');
+            const formId = trigger.getAttribute('data-form-id') || '';
+            const fieldId = trigger.getAttribute('data-field-id') || '';
+            const fieldsetId = trigger.getAttribute('data-fieldset-id') || '';
+            const mode = trigger.getAttribute('data-mode') || 'add';
+            const manager = window.DataTableFormManager;
+
+            switch (action) {
+                case 'open-modal':
+                    event.preventDefault();
+                    manager.openModal(formId, mode);
+                    break;
+                case 'close-modal':
+                    event.preventDefault();
+                    manager.closeModal(formId);
+                    break;
+                case 'submit-form':
+                    event.preventDefault();
+                    manager.submitForm(formId);
+                    break;
+                case 'reset-form':
+                    event.preventDefault();
+                    manager.resetForm(formId);
+                    break;
+                case 'trigger-file-select':
+                    event.preventDefault();
+                    manager.triggerFileSelect(fieldId);
+                    break;
+                case 'clear-image-field':
+                    event.preventDefault();
+                    manager.clearImageField(fieldId);
+                    break;
+                case 'remove-file-item':
+                    event.preventDefault();
+                    manager.removeFileItem(trigger, fieldId);
+                    break;
+                case 'toggle-fieldset':
+                    event.preventDefault();
+                    manager.toggleFieldset(fieldsetId);
+                    break;
+            }
+        });
+    }
+
     function resolveApiUrl(url, fallback) {
         const raw = String(url || fallback || '').trim();
         if (!raw) {
@@ -1533,6 +1585,13 @@ if (typeof __ === 'undefined') {
 
     function isSuccessfulResponse(response) {
         return !!(response && (response.success || response.code == 200 || response.code === '200'));
+    }
+
+
+    function operationName(instance, endpoint) {
+        const normalized = String(endpoint || '').replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        const operations = instance && instance.options && instance.options.operations ? instance.options.operations : {};
+        return operations[normalized] || operations[endpoint] || normalized;
     }
 
 

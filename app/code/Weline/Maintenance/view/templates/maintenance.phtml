@@ -323,13 +323,13 @@
             color: var(--primary);
         }
         
-        .maintenance-language-switcher .language-option .fas.fa-check {
+        .maintenance-language-switcher .language-option .mdi.mdi-check {
             float: right;
             opacity: 0;
             transition: opacity 0.2s ease;
         }
         
-        .maintenance-language-switcher .language-option.active .fas.fa-check {
+        .maintenance-language-switcher .language-option.active .mdi.mdi-check {
             opacity: 1;
         }
         
@@ -356,8 +356,7 @@
             }
         }
     </style>
-    <!-- Font Awesome图标库 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet" type="text/css">
     <!-- 加载i18n.js以支持语言切换 -->
     <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
 </head>
@@ -388,22 +387,22 @@
                         ?>
                         <div class="language-switcher" role="button" tabindex="0">
                             <span class="action-line-2">
-                                <i class="fas fa-globe" aria-hidden="true"></i>
+                                <i class="mdi mdi-web" aria-hidden="true"></i>
                                 <span class="current-language"><?= $langDisplay ?></span>
-                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                                <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
                             </span>
                             <div class="language-options" role="menu">
                                 <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
                                     <span>简体中文</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                    <i class="mdi mdi-check" aria-hidden="true"></i>
                                 </a>
                                 <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
                                     <span>English</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                    <i class="mdi mdi-check" aria-hidden="true"></i>
                                 </a>
                                 <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
                                     <span>繁體中文</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
+                                    <i class="mdi mdi-check" aria-hidden="true"></i>
                                 </a>
                             </div>
                         </div>
@@ -419,22 +418,22 @@
                     ?>
                     <div class="language-switcher" role="button" tabindex="0">
                         <span class="action-line-2">
-                            <i class="fas fa-globe" aria-hidden="true"></i>
+                            <i class="mdi mdi-web" aria-hidden="true"></i>
                             <span class="current-language"><?= $langDisplay ?></span>
-                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            <i class="mdi mdi-chevron-down" aria-hidden="true"></i>
                         </span>
                         <div class="language-options" role="menu">
                             <a href="?lang=zh_Hans_CN" class="language-option <?= $currentLang === 'zh_Hans_CN' ? 'active' : '' ?>" data-lang="zh_Hans_CN">
                                 <span>简体中文</span>
-                                <i class="fas fa-check" aria-hidden="true"></i>
+                                <i class="mdi mdi-check" aria-hidden="true"></i>
                             </a>
                             <a href="?lang=en_US" class="language-option <?= $currentLang === 'en_US' ? 'active' : '' ?>" data-lang="en_US">
                                 <span>English</span>
-                                <i class="fas fa-check" aria-hidden="true"></i>
+                                <i class="mdi mdi-check" aria-hidden="true"></i>
                             </a>
                             <a href="?lang=zh_Hant_TW" class="language-option <?= $currentLang === 'zh_Hant_TW' ? 'active' : '' ?>" data-lang="zh_Hant_TW">
                                 <span>繁體中文</span>
-                                <i class="fas fa-check" aria-hidden="true"></i>
+                                <i class="mdi mdi-check" aria-hidden="true"></i>
                             </a>
                         </div>
                     </div>

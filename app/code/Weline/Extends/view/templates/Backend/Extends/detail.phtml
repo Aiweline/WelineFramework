@@ -117,9 +117,11 @@ $hasThemeExtensions = $this->getData('has_theme_extensions') ?? false;
                     <div class="def-doc">
                         <?php if (!empty($moduleExtends['documentation'])): ?>
                             <strong>文档：</strong>
-                            <a href="#" onclick="if(typeof Swal!=='undefined'){Swal.fire({icon:'info',title:'<?= __('文档路径') ?>',text:'<?= htmlspecialchars(addslashes($moduleExtends['documentation'])) ?>',confirmButtonText:'<?= __('确定') ?>'});}else{console.log('文档路径：<?= htmlspecialchars(addslashes($moduleExtends['documentation'])) ?>');}">
+                            <button type="button"
+                                    class="btn btn-link p-0 align-baseline weline-extends-doc-path"
+                                    data-doc-path="<?= htmlspecialchars((string)$moduleExtends['documentation'], ENT_QUOTES, 'UTF-8') ?>">
                                 <?= htmlspecialchars($moduleExtends['documentation']) ?>
-                            </a>
+                            </button>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -316,6 +318,21 @@ document.addEventListener('DOMContentLoaded', function() {
             // 激活当前标签
             this.classList.add('active');
             document.getElementById(targetTab).classList.add('active');
+        });
+    });
+
+    document.querySelectorAll('.weline-extends-doc-path').forEach(button => {
+        button.addEventListener('click', function() {
+            const docPath = this.getAttribute('data-doc-path') || '';
+            const title = <?= json_encode((string)__('文档路径'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+            const confirmText = <?= json_encode((string)__('确定'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
+            if (typeof Swal !== 'undefined' && Swal.fire) {
+                Swal.fire({icon: 'info', title: title, text: docPath, confirmButtonText: confirmText});
+                return;
+            }
+
+            console.log(title + '：' + docPath);
         });
     });
 });

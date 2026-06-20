@@ -386,11 +386,11 @@ class Form implements TaglibInterface
             
             $formHtml .= '<div class="w-form-footer">';
             $formHtml .= '<div class="w-form-actions">';
-            $formHtml .= '<button type="button" class="w-btn w-btn-secondary" onclick="DataTableFormManager.resetForm(\'' . $id . '\')">';
+            $formHtml .= '<button type="button" class="w-btn w-btn-secondary" data-datatable-form-action="reset-form" data-form-id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">';
             $formHtml .= '<i class="fas fa-redo"></i> ';
             $formHtml .= __('閲嶇疆');
             $formHtml .= '</button>';
-            $formHtml .= '<button type="button" class="w-btn w-btn-primary" onclick="DataTableFormManager.submitForm(\'' . $id . '\')">';
+            $formHtml .= '<button type="button" class="w-btn w-btn-primary" data-datatable-form-action="submit-form" data-form-id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">';
             $formHtml .= '<i class="fas fa-save"></i> ';
             $formHtml .= $saveText;
             $formHtml .= '</button>';
@@ -401,7 +401,7 @@ class Form implements TaglibInterface
         } else {
             // Modal妯″紡锛氱敓鎴愭ā鎬佹HTML锛堥粯璁わ級
             $formHtml .= '<div class="w-form-modal" id="w-form-modal-' . $id . '">';
-            $formHtml .= '<div class="w-form-modal-overlay" onclick="DataTableFormManager.closeModal(\'' . $id . '\')"></div>';
+            $formHtml .= '<div class="w-form-modal-overlay" data-datatable-form-action="close-modal" data-form-id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '"></div>';
             $formHtml .= '<div class="w-form-modal-container">';
             
             $formHtml .= '<div class="w-form-container" id="w-form-container-' . $id . '">';
@@ -410,7 +410,7 @@ class Form implements TaglibInterface
             $formHtml .= '<i class="fas fa-edit"></i> ';
             $formHtml .= $title;
             $formHtml .= '</h3>';
-            $formHtml .= '<button type="button" class="w-form-close" onclick="DataTableFormManager.closeModal(\'' . $id . '\')">';
+            $formHtml .= '<button type="button" class="w-form-close" data-datatable-form-action="close-modal" data-form-id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">';
             $formHtml .= '<i class="fas fa-times"></i>';
             $formHtml .= '</button>';
             $formHtml .= '</div>';
@@ -434,11 +434,11 @@ class Form implements TaglibInterface
             
             $formHtml .= '<div class="w-form-footer">';
             $formHtml .= '<div class="w-form-actions">';
-            $formHtml .= '<button type="button" class="w-btn w-btn-secondary" onclick="DataTableFormManager.closeModal(\'' . $id . '\')">';
+            $formHtml .= '<button type="button" class="w-btn w-btn-secondary" data-datatable-form-action="close-modal" data-form-id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">';
             $formHtml .= '<i class="fas fa-times"></i> ';
             $formHtml .= $cancelText;
             $formHtml .= '</button>';
-            $formHtml .= '<button type="button" class="w-btn w-btn-primary" onclick="DataTableFormManager.submitForm(\'' . $id . '\')">';
+            $formHtml .= '<button type="button" class="w-btn w-btn-primary" data-datatable-form-action="submit-form" data-form-id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">';
             $formHtml .= '<i class="fas fa-save"></i> ';
             $formHtml .= $saveText;
             $formHtml .= '</button>';
@@ -453,7 +453,7 @@ class Form implements TaglibInterface
 
         // 鐢熸垚瑙﹀彂鎸夐挳锛堟牴鎹畇howTriggerButton鍜宮ode鍐冲畾锛?
         if ($showTriggerButton && $mode === 'add') {
-            $formHtml .= '<button type="button" class="' . $buttonClass . ' w-form-trigger" onclick="DataTableFormManager.openModal(\'' . $id . '\', \'add\')">';
+            $formHtml .= '<button type="button" class="' . $buttonClass . ' w-form-trigger" data-datatable-form-action="open-modal" data-form-id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '" data-mode="add">';
             $formHtml .= '<i class="' . $buttonIcon . '"></i> ';
             $formHtml .= $buttonText;
             $formHtml .= '</button>';
@@ -729,7 +729,7 @@ DOC;
                         $tableName = self::getTableFriendlyName($fieldsetId);
                         $legend = '<legend class="group-legend">';
                         $legend .= '<span class="legend-text">' . $tableName . '</span>';
-                        $legend .= '<span class="collapse-toggle" onclick="DataTableFormManager.toggleFieldset(\'' . $fieldsetId . '\')">';
+                        $legend .= '<span class="collapse-toggle" data-datatable-form-action="toggle-fieldset" data-fieldset-id="' . htmlspecialchars($fieldsetId, ENT_QUOTES, 'UTF-8') . '">';
                         $legend .= '<i class="fas fa-chevron-up"></i>';
                         $legend .= '</span>';
                         $legend .= '</legend>';
@@ -784,7 +784,7 @@ DOC;
 
     private static function decorateMultiTableLegend(string $legend, string $fieldsetId): string
     {
-        $toggleHtml = '<span class="collapse-toggle" onclick="DataTableFormManager.toggleFieldset(\'' . $fieldsetId . '\')"><i class="fas fa-chevron-up"></i></span>';
+        $toggleHtml = '<span class="collapse-toggle" data-datatable-form-action="toggle-fieldset" data-fieldset-id="' . htmlspecialchars($fieldsetId, ENT_QUOTES, 'UTF-8') . '"><i class="fas fa-chevron-up"></i></span>';
         $updatedLegend = preg_replace_callback(
             '/<legend([^>]*)>(.*?)<\/legend>/is',
             static function (array $matches) use ($toggleHtml) {
@@ -860,7 +860,7 @@ DOC;
             $html .= ' data-collapsible="true">';
             $html .= '<legend class="group-legend">';
             $html .= '<span class="legend-text">' . $tableName . '</span>';
-            $html .= '<span class="collapse-toggle" onclick="DataTableFormManager.toggleFieldset(\'' . $alias . '\')">';
+            $html .= '<span class="collapse-toggle" data-datatable-form-action="toggle-fieldset" data-fieldset-id="' . htmlspecialchars($alias, ENT_QUOTES, 'UTF-8') . '">';
             $html .= '<i class="fas fa-chevron-up"></i>';
             $html .= '</span>';
             $html .= '</legend>';

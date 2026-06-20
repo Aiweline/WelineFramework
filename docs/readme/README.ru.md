@@ -1,5 +1,7 @@
 # WelineFramework
 
+![WelineFramework cover](../assets/readme/weline-framework-cover.ru.png)
+
 [Языки](./README.md) | [Упрощённый китайский](../../README.zh-CN.md)
 
 WelineFramework — PHP-фреймворк для модульных веб-приложений, административных систем и коммерческих сценариев. Он объединяет модули, маршрутизацию, ORM, события/hooks, темы, backend ACL, i18n, долгоживущий сервис WLS и CLI-инструменты, чтобы бизнес-модули оставались расширяемыми и поддерживаемыми.

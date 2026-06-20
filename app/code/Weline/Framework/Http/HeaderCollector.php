@@ -155,7 +155,8 @@ class HeaderCollector implements HeaderCollectorInterface
         bool $httpOnly = true,
         string $sameSite = 'Lax'
     ): static {
-        $this->cookies[$name] = [
+        $storageKey = $this->getCookieStorageKey($name, $path, $domain);
+        $this->cookies[$storageKey] = [
             'name' => $name,
             'value' => $value,
             'expire' => $expire,
@@ -171,6 +172,11 @@ class HeaderCollector implements HeaderCollectorInterface
     public function removeCookie(string $name): static
     {
         unset($this->cookies[$name]);
+        foreach ($this->cookies as $key => $cookie) {
+            if (($cookie['name'] ?? '') === $name) {
+                unset($this->cookies[$key]);
+            }
+        }
         return $this;
     }
 
@@ -281,6 +287,25 @@ class HeaderCollector implements HeaderCollectorInterface
         }
 
         return \implode('; ', $parts);
+    }
+
+    private function getCookieStorageKey(string $name, string $path, string $domain): string
+    {
+        foreach ($this->cookies as $key => $cookie) {
+            if (
+                ($cookie['name'] ?? '') === $name
+                && ($cookie['path'] ?? '/') === $path
+                && ($cookie['domain'] ?? '') === $domain
+            ) {
+                return (string)$key;
+            }
+        }
+
+        if (!isset($this->cookies[$name])) {
+            return $name;
+        }
+
+        return $name . '#' . \sha1($path . "\0" . $domain);
     }
 
     private function normalizeHeaderName(string $name): string

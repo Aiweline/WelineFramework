@@ -42,7 +42,7 @@ $guideUrl = $this->getBackendUrl('*/backend/optimization-guide');
         <div class="alert alert-danger">
             <h5><i class="bi bi-exclamation-triangle me-2"></i><?= __('加载失败') ?></h5>
             <p id="error-message"></p>
-            <button class="btn btn-outline-danger" onclick="loadServerData()">
+            <button class="btn btn-outline-danger" data-server-manager-action="load-server-data">
                 <i class="bi bi-arrow-clockwise"></i> <?= __('重试') ?>
             </button>
         </div>
@@ -163,10 +163,95 @@ const GUIDE_URL = '<?= $guideUrl ?>';
 let refreshInterval = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('server-manager-container');
+    if (container) {
+        container.addEventListener('click', handleServerManagerClick);
+    }
     loadServerData();
     // 每 30 秒自动刷新
     refreshInterval = setInterval(loadServerData, 30000);
 });
+
+function handleServerManagerClick(event) {
+    const trigger = event.target.closest('[data-server-manager-action]');
+    const container = document.getElementById('server-manager-container');
+    if (!trigger || !container || !container.contains(trigger)) {
+        return;
+    }
+
+    const action = trigger.dataset.serverManagerAction;
+    if (action === 'load-server-data') {
+        loadServerData();
+        return;
+    }
+    if (action === 'start-new-server') {
+        startNewServer();
+        return;
+    }
+    if (action === 'start-server') {
+        startServer(trigger.dataset.instance || '');
+        return;
+    }
+    if (action === 'restart-server') {
+        restartServer(trigger.dataset.instance || '');
+        return;
+    }
+    if (action === 'reload-server') {
+        reloadServer(trigger.dataset.instance || '');
+        return;
+    }
+    if (action === 'stop-server') {
+        stopServer(trigger.dataset.instance || '');
+        return;
+    }
+    if (action === 'toggle-maintenance') {
+        toggleMaintenance(trigger.dataset.instance || '', trigger.dataset.enabled === '1');
+        return;
+    }
+    if (action === 'load-session-list') {
+        loadSessionList();
+        return;
+    }
+    if (action === 'persist-session-store') {
+        persistSessionStore();
+        return;
+    }
+    if (action === 'gc-session-store') {
+        gcSessionStore();
+        return;
+    }
+    if (action === 'show-session-detail') {
+        showSessionDetail(trigger.dataset.sessionId || '');
+        return;
+    }
+    if (action === 'destroy-session') {
+        destroySession(trigger.dataset.sessionId || '');
+        return;
+    }
+    if (action === 'load-memory-namespaces') {
+        loadMemoryNamespaces();
+        return;
+    }
+    if (action === 'persist-memory-store') {
+        persistMemoryStore();
+        return;
+    }
+    if (action === 'gc-memory-store') {
+        gcMemoryStore();
+        return;
+    }
+    if (action === 'load-memory-namespace-detail') {
+        loadMemoryNamespaceDetail(trigger.dataset.namespace || '');
+        return;
+    }
+    if (action === 'clear-memory-namespace') {
+        clearMemoryNamespace(trigger.dataset.namespace || '');
+        return;
+    }
+    if (action === 'delete-memory-key') {
+        deleteMemoryKey(trigger.dataset.namespace || '', trigger.dataset.key || '');
+    }
+}
 
 async function loadServerData() {
     try {
@@ -262,7 +347,7 @@ function renderContent(data) {
                     <?= __('服务器状态') ?>
                 </h5>
                 <div>
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadServerData()">
+                    <button class="btn btn-sm btn-outline-primary" data-server-manager-action="load-server-data">
                         <i class="bi bi-arrow-clockwise"></i> <?= __('刷新') ?>
                     </button>
                     <a href="${GUIDE_URL}" class="btn btn-sm btn-outline-info ms-2">
@@ -349,7 +434,7 @@ function renderContent(data) {
                     <i class="bi bi-hdd-rack me-2"></i>
                     <?= __('服务器实例') ?>
                 </h5>
-                <button class="btn btn-sm btn-success" onclick="startNewServer()">
+                <button class="btn btn-sm btn-success" data-server-manager-action="start-new-server">
                     <i class="bi bi-plus-lg"></i> <?= __('启动新实例') ?>
                 </button>
             </div>
@@ -401,23 +486,23 @@ function renderContent(data) {
                     </td>
                     <td>
                         ${isRunning ? `
-                            <button class="btn btn-sm btn-warning server-action-btn" onclick="restartServer('${escapeHtml(name)}')" title="<?= __('重启') ?>">
+                            <button class="btn btn-sm btn-warning server-action-btn" data-server-manager-action="restart-server" data-instance="${escapeHtml(name)}" title="<?= __('重启') ?>">
                                 <i class="bi bi-arrow-repeat"></i>
                             </button>
-                            <button class="btn btn-sm btn-info server-action-btn" onclick="reloadServer('${escapeHtml(name)}')" title="<?= __('热重载') ?>">
+                            <button class="btn btn-sm btn-info server-action-btn" data-server-manager-action="reload-server" data-instance="${escapeHtml(name)}" title="<?= __('热重载') ?>">
                                 <i class="bi bi-arrow-clockwise"></i>
                             </button>
-                            <button class="btn btn-sm btn-danger server-action-btn" onclick="stopServer('${escapeHtml(name)}')" title="<?= __('停止') ?>">
+                            <button class="btn btn-sm btn-danger server-action-btn" data-server-manager-action="stop-server" data-instance="${escapeHtml(name)}" title="<?= __('停止') ?>">
                                 <i class="bi bi-stop-fill"></i>
                             </button>
-                            <button class="btn btn-sm btn-secondary server-action-btn" onclick="toggleMaintenance('${escapeHtml(name)}', true)" title="<?= __('启用维护模式') ?>">
+                            <button class="btn btn-sm btn-secondary server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="1" title="<?= __('启用维护模式') ?>">
                                 <i class="bi bi-shield-fill-check"></i>
                             </button>
-                            <button class="btn btn-sm btn-secondary server-action-btn" onclick="toggleMaintenance('${escapeHtml(name)}', false)" title="<?= __('禁用维护模式') ?>">
+                            <button class="btn btn-sm btn-secondary server-action-btn" data-server-manager-action="toggle-maintenance" data-instance="${escapeHtml(name)}" data-enabled="0" title="<?= __('禁用维护模式') ?>">
                                 <i class="bi bi-shield-x"></i>
                             </button>
                         ` : `
-                            <button class="btn btn-sm btn-success server-action-btn" onclick="startServer('${escapeHtml(name)}')" title="<?= __('启动') ?>">
+                            <button class="btn btn-sm btn-success server-action-btn" data-server-manager-action="start-server" data-instance="${escapeHtml(name)}" title="<?= __('启动') ?>">
                                 <i class="bi bi-play-fill"></i>
                             </button>
                         `}
@@ -525,9 +610,9 @@ function renderSharedStateManagement(data, mode = 'all') {
                                 <?= __('内存') ?>: <strong>${formatBytes(sessionStats.memory_usage || 0)}</strong>
                             </div>
                             <div class="d-flex gap-2 flex-wrap mb-3">
-                                <button class="btn btn-sm btn-outline-primary" onclick="loadSessionList()"><i class="bi bi-arrow-clockwise"></i> <?= __('刷新列表') ?></button>
-                                <button class="btn btn-sm btn-outline-info" onclick="persistSessionStore()"><i class="bi bi-save"></i> <?= __('立即持久化') ?></button>
-                                <button class="btn btn-sm btn-outline-warning" onclick="gcSessionStore()"><i class="bi bi-recycle"></i> <?= __('GC 清理') ?></button>
+                                <button class="btn btn-sm btn-outline-primary" data-server-manager-action="load-session-list"><i class="bi bi-arrow-clockwise"></i> <?= __('刷新列表') ?></button>
+                                <button class="btn btn-sm btn-outline-info" data-server-manager-action="persist-session-store"><i class="bi bi-save"></i> <?= __('立即持久化') ?></button>
+                                <button class="btn btn-sm btn-outline-warning" data-server-manager-action="gc-session-store"><i class="bi bi-recycle"></i> <?= __('GC 清理') ?></button>
                             </div>
                             <div class="table-responsive">
                                 <table class="table table-sm align-middle">
@@ -564,9 +649,9 @@ function renderSharedStateManagement(data, mode = 'all') {
                                 <?= __('内存') ?>: <strong>${formatBytes(memoryStats.memory_usage || 0)}</strong>
                             </div>
                             <div class="d-flex gap-2 flex-wrap mb-3">
-                                <button class="btn btn-sm btn-outline-primary" onclick="loadMemoryNamespaces()"><i class="bi bi-arrow-clockwise"></i> <?= __('刷新命名空间') ?></button>
-                                <button class="btn btn-sm btn-outline-info" onclick="persistMemoryStore()"><i class="bi bi-save"></i> <?= __('立即持久化') ?></button>
-                                <button class="btn btn-sm btn-outline-warning" onclick="gcMemoryStore()"><i class="bi bi-recycle"></i> <?= __('GC 清理') ?></button>
+                                <button class="btn btn-sm btn-outline-primary" data-server-manager-action="load-memory-namespaces"><i class="bi bi-arrow-clockwise"></i> <?= __('刷新命名空间') ?></button>
+                                <button class="btn btn-sm btn-outline-info" data-server-manager-action="persist-memory-store"><i class="bi bi-save"></i> <?= __('立即持久化') ?></button>
+                                <button class="btn btn-sm btn-outline-warning" data-server-manager-action="gc-memory-store"><i class="bi bi-recycle"></i> <?= __('GC 清理') ?></button>
                             </div>
                             <div class="table-responsive">
                                 <table class="table table-sm align-middle">
@@ -661,10 +746,10 @@ async function loadSessionList() {
                     <td><span class="badge bg-secondary">${Number(row.data_count || 0)}</span></td>
                     <td class="weline-session-preview-cell">${previewHtml}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary me-1" onclick="showSessionDetail('${encodeURIComponent(sessionId)}')" title="<?= __('查看全部字段') ?>">
+                        <button class="btn btn-sm btn-outline-primary me-1" data-server-manager-action="show-session-detail" data-session-id="${encodeURIComponent(sessionId)}" title="<?= __('查看全部字段') ?>">
                             <i class="bi bi-card-list"></i> <?= __('查看详情') ?>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="destroySession('${encodeURIComponent(sessionId)}')">
+                        <button class="btn btn-sm btn-outline-danger" data-server-manager-action="destroy-session" data-session-id="${encodeURIComponent(sessionId)}">
                             <i class="bi bi-trash"></i> <?= __('销毁') ?>
                         </button>
                     </td>
@@ -846,10 +931,10 @@ async function loadMemoryNamespaces() {
                     <td>${Number(row.keys || 0)}</td>
                     <td class="small text-muted">${escapeHtml(sample)}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="loadMemoryNamespaceDetail('${encodeURIComponent(ns)}')">
+                        <button class="btn btn-sm btn-outline-primary" data-server-manager-action="load-memory-namespace-detail" data-namespace="${encodeURIComponent(ns)}">
                             <i class="bi bi-search"></i> <?= __('查看键') ?>
                         </button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="clearMemoryNamespace('${encodeURIComponent(ns)}')">
+                        <button class="btn btn-sm btn-outline-danger" data-server-manager-action="clear-memory-namespace" data-namespace="${encodeURIComponent(ns)}">
                             <i class="bi bi-trash"></i> <?= __('清空') ?>
                         </button>
                     </td>
@@ -889,7 +974,7 @@ async function loadMemoryNamespaceDetail(encodedNamespace) {
                     <td>${escapeHtml(row.type || '')}</td>
                     <td class="small">${renderMemoryPreview(row)}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteMemoryKey('${encodeURIComponent(namespace)}','${encodeURIComponent(key)}')">
+                        <button class="btn btn-sm btn-outline-danger" data-server-manager-action="delete-memory-key" data-namespace="${encodeURIComponent(namespace)}" data-key="${encodeURIComponent(key)}">
                             <i class="bi bi-trash"></i> <?= __('删除键') ?>
                         </button>
                     </td>

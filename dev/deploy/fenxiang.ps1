@@ -1,7 +1,10 @@
+[CmdletBinding(PositionalBinding = $false)]
 param(
+    [Parameter(Position = 0)]
+    [ValidateNotNullOrEmpty()]
+    [string]$UpdateBranch = "dev",
     [string]$RepoRoot = "E:\WelineFramework\DEV-workspace",
     [string]$SitesRoot = "E:\WelineFramework\Framework-Official",
-    [string]$UpdateBranch = "dev",
     [string[]]$Remotes = @("origin", "github"),
     [string]$CommitMessage = "",
     [string]$Php = "php",

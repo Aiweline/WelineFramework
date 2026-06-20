@@ -15,6 +15,9 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_status', columns: ['status'])]
 #[Index(name: 'idx_git_ref_type', columns: ['git_ref_type'])]
 #[Index(name: 'idx_trigger_type', columns: ['trigger_type'])]
+#[Index(name: 'idx_wls_release_profile_key', columns: ['profile_key'])]
+#[Index(name: 'idx_wls_release_project', columns: ['project_id'])]
+#[Index(name: 'idx_wls_release_domain', columns: ['domain'])]
 class DeployRelease extends Model
 {
     public const schema_table        = 'w_deploy_release';
@@ -25,6 +28,18 @@ class DeployRelease extends Model
 
     #[Col('varchar', 64, nullable: false, comment: '部署版本（tag 名或 commit 短 SHA）')]
     public const schema_fields_DEPLOY_VERSION = 'deploy_version';
+
+    #[Col('varchar', 190, nullable: true, comment: 'WLS project profile key')]
+    public const schema_fields_PROFILE_KEY = 'profile_key';
+
+    #[Col('varchar', 80, nullable: true, comment: 'WLS managed project ID')]
+    public const schema_fields_PROJECT_ID = 'project_id';
+
+    #[Col('varchar', 255, nullable: true, comment: 'Project domain')]
+    public const schema_fields_DOMAIN = 'domain';
+
+    #[Col('varchar', 80, nullable: true, comment: 'Project type')]
+    public const schema_fields_PROJECT_TYPE = 'project_type';
 
     #[Col('varchar', 64, comment: 'Worker 构建 ID')]
     public const schema_fields_WORKER_BUILD_ID = 'worker_build_id';

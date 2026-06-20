@@ -68,8 +68,8 @@
 进入后台,"Go to Admin"
 开始环境检测...,"Starting environment check..."
 "环境检测通过 ✓","Environment check passed ✓"
-通过,Passed
 环境检测未通过,"Environment check failed"
+通过,Passed
 未通过,Failed
 缺失扩展,"Missing extensions"
 被禁用函数,"Disabled functions"
@@ -84,8 +84,8 @@
 连接成功！,"Connection successful!"
 连接失败,"Connection failed"
 安装中...,Installing...
+安装失败,"Installation failed"
 后台入口密钥,"Admin URL Key"
 "API 后台密钥","API Admin Key"
 后台地址,"Admin URL"
-安装失败,"Installation failed"
 返回首页,"Back to Home"

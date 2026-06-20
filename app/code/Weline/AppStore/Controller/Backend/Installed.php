@@ -12,6 +12,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\MarketplaceMeta\MarketplaceTag;
 
 #[Acl('Weline_AppStore::installed', '我的模块', 'bi-puzzle', 'App 商城安装来源记录', 'Weline_AppStore::appstore')]
 class Installed extends BackendController
@@ -30,6 +31,8 @@ class Installed extends BackendController
         $locale = (string)w_env('user.lang', Env::get('user.lang', 'zh_Hans_CN'));
         $tagFilter = trim((string)$this->request->getGet('tag', ''));
         $surfaceFilter = trim((string)$this->request->getGet('surface', ''));
+        $wlsPanelReturn = $this->isWlsPanelReturnRequested();
+        $returnParams = $wlsPanelReturn ? ['wls_panel_return' => 1] : [];
         $modules = $this->enrichModulesWithMarketplaceMeta($modules, $locale);
         $tagFilterOptions = $this->collectTagFilterOptions($modules);
         $surfaceFilterOptions = $this->collectSurfaceFilterOptions($modules);
@@ -44,11 +47,13 @@ class Installed extends BackendController
         $this->assign('update_index', $updateResult['updates']);
         $this->assign('update_error', $updateResult['error']);
         $this->assign('system_modules', Env::getInstance()->getModuleList(true));
-        $this->assign('installed_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed'));
-        $this->assign('check_update_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/checkUpdate'));
-        $this->assign('update_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/update'));
-        $this->assign('uninstall_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/uninstall'));
-        $this->assign('review_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/submit-review'));
+        $this->assign('installed_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed', $returnParams));
+        $this->assign('check_update_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/checkUpdate', $returnParams));
+        $this->assign('update_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/update', $returnParams));
+        $this->assign('uninstall_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/uninstall', $returnParams));
+        $this->assign('review_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed/submit-review', $returnParams));
+        $this->assign('wls_panel_return', $wlsPanelReturn);
+        $this->assign('wls_panel_url', $this->getWlsPanelMarketplaceUrl());
         $this->assign('latest_uninstall_record', $this->loadLatestUninstallRecord());
         $this->assign('page_title', __('我的模块'));
 
@@ -272,6 +277,9 @@ class Installed extends BackendController
             /** @var ModuleUpdateService $updateService */
             $updateService = ObjectManager::getInstance(ModuleUpdateService::class);
             $result = $updateService->update($module, $update, $this->getCurrentDomain());
+            if (!empty($result['success']) && $this->isWlsPanelReturnRequested()) {
+                return $this->redirectToWlsPanelMarketplace();
+            }
             $this->assign('update_result', $result);
         } catch (\Throwable $e) {
             $this->assign('update_result', [
@@ -281,6 +289,31 @@ class Installed extends BackendController
         }
 
         return $this->index();
+    }
+
+    private function isWlsPanelReturnRequested(): bool
+    {
+        $value = strtolower(trim((string)($this->request->getParam('wls_panel_return', '')
+            ?: $this->request->getPost('wls_panel_return', ''))));
+
+        return in_array($value, ['1', 'true', 'yes', 'wls_panel'], true);
+    }
+
+    private function getWlsPanelMarketplaceUrl(array $params = []): string
+    {
+        $params = array_replace([
+            'panel_notice' => 'plugins_refreshed',
+            'panel_auto_refresh' => 'plugins',
+        ], $params);
+        return $this->request->getUrlBuilder()
+                ->getBackendUrl('server/backend/wls-panel/marketplace', $params)
+            . '#installed-plugins';
+    }
+
+    private function redirectToWlsPanelMarketplace(array $params = []): string
+    {
+        $this->redirect($this->getWlsPanelMarketplaceUrl($params));
+        return '';
     }
 
     private function jsonResponse(bool $success, string $message, array $data = []): string
@@ -423,8 +456,12 @@ class Installed extends BackendController
 
     private function filterModulesByMarketplaceMeta(array $modules, string $tagFilter, string $surfaceFilter): array
     {
-        $tagFilter = strtolower(trim($tagFilter));
+        $tagFilter = MarketplaceTag::normalizeCode($tagFilter);
         $surfaceFilter = strtolower(trim($surfaceFilter));
+        $surfaceTagFilter = MarketplaceTag::surfaceFromCode($surfaceFilter);
+        if ($surfaceTagFilter !== '') {
+            $surfaceFilter = $surfaceTagFilter;
+        }
         if ($tagFilter === '' && $surfaceFilter === '') {
             return $modules;
         }
@@ -434,7 +471,7 @@ class Installed extends BackendController
                 $tagCodes = [];
                 foreach ((array)($module['marketplace_tags'] ?? []) as $tag) {
                     if (is_array($tag) && !empty($tag['code'])) {
-                        $tagCodes[] = strtolower((string)$tag['code']);
+                        $tagCodes[] = MarketplaceTag::normalizeCode((string)$tag['code']);
                     }
                 }
                 if (!in_array($tagFilter, $tagCodes, true)) {

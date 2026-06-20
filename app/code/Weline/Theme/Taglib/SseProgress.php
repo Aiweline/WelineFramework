@@ -225,8 +225,8 @@ function renderSteps() {
     
     var html = '';
     steps.forEach(function(step, idx) {
-        var statusClass = step.status || 'waiting';
-        var iconClass = step.icon || 'mdi-checkbox-blank-circle-outline';
+        var statusClass = safeClassList(step.status || 'waiting', 'waiting');
+        var iconClass = safeClassList(step.icon || 'mdi-checkbox-blank-circle-outline', 'mdi-checkbox-blank-circle-outline');
         
         // 根据状态改变图标
         var displayIcon = iconClass;
@@ -235,8 +235,8 @@ function renderSteps() {
         else if (statusClass === 'running') displayIcon = 'mdi-loading mdi-spin';
         else if (statusClass === 'skipped') displayIcon = 'mdi-skip-next';
         
-        html += '<div class="weline-sse-progress-step ' + statusClass + '" data-step="' + step.key + '">';
-        html += '  <div class="weline-sse-progress-step-icon"><i class="mdi ' + displayIcon + '"></i></div>';
+        html += '<div class="weline-sse-progress-step ' + statusClass + '" data-step="' + escapeAttr(step.key) + '">';
+        html += '  <div class="weline-sse-progress-step-icon"><i class="mdi ' + safeClassList(displayIcon, 'mdi-checkbox-blank-circle-outline') + '"></i></div>';
         html += '  <span class="weline-sse-progress-step-label">' + escapeHtml(step.label) + '</span>';
         html += '</div>';
         
@@ -264,6 +264,15 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function escapeAttr(text) {
+    return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function safeClassList(value, fallback) {
+    var text = String(value || '').replace(/[^\w\s:-]/g, '').trim();
+    return text || fallback || '';
+}
+
 function formatTime() {
     var now = new Date();
     return now.toLocaleTimeString('zh-CN', { hour12: false });
@@ -281,7 +290,7 @@ function log(text, type) {
     
     var textEl = document.createElement('span');
     textEl.className = 'weline-sse-progress-text';
-    textEl.innerHTML = text;
+    textEl.textContent = text;
     line.appendChild(textEl);
     
     content.appendChild(line);

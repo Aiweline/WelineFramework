@@ -8,6 +8,7 @@
  */
 /** @var \Weline\Framework\View\Template $this */
 
+$jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
 $currentLocation = null;
 $locationFromCookie = \w_env_cookie('weline_delivery_location');
 if ($locationFromCookie) {
@@ -59,6 +60,24 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
                 <span><?= __('Manual select') ?></span>
             </button>
         </div>
+        <div class="location-manual-form" data-location-manual-form hidden>
+            <label class="location-manual-label" for="weline-delivery-address-input">
+                <?= __('Enter delivery address, format: Province/City/District') ?>
+            </label>
+            <input
+                type="text"
+                class="location-manual-input"
+                id="weline-delivery-address-input"
+                data-location-manual-input
+                placeholder="<?= __('Province/City/District') ?>"
+                autocomplete="shipping street-address"
+            >
+            <div class="location-manual-actions">
+                <button type="button" class="location-action-primary" data-action="save-manual-location"><?= __('Save') ?></button>
+                <button type="button" class="location-action-secondary" data-action="cancel-manual-location"><?= __('Cancel') ?></button>
+            </div>
+        </div>
+        <p class="location-selector-message" data-location-message role="status" aria-live="polite" hidden></p>
         <div class="location-selector-footer">
             <button type="button" class="btn-close" data-action="close-selector"><?= __('Close') ?></button>
         </div>
@@ -69,6 +88,18 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 (function () {
     'use strict';
 
+    var texts = {
+        apiUnavailable: <?= json_encode((string)__('Weline API is not available.'), $jsonForScriptFlags) ?>,
+        geoUnavailable: <?= json_encode((string)__('Geo module is not available.'), $jsonForScriptFlags) ?>,
+        addressLookupFailed: <?= json_encode((string)__('Address lookup failed.'), $jsonForScriptFlags) ?>,
+        locationDetectionFailed: <?= json_encode((string)__('Location detection failed.'), $jsonForScriptFlags) ?>,
+        locating: <?= json_encode((string)__('Locating...'), $jsonForScriptFlags) ?>,
+        manualRequired: <?= json_encode((string)__('Please enter a delivery address.'), $jsonForScriptFlags) ?>,
+        manualSaved: <?= json_encode((string)__('Delivery address saved.'), $jsonForScriptFlags) ?>,
+        countryChina: <?= json_encode((string)__('China'), $jsonForScriptFlags) ?>,
+        deliverTo: <?= json_encode((string)__('Deliver to'), $jsonForScriptFlags) ?>
+    };
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initLocationSelector);
     } else {
@@ -77,7 +108,7 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 
     function getApi(provider) {
         if (!window.Weline || !window.Weline.Api) {
-            return Promise.reject(new Error('Weline API is not available.'));
+            return Promise.reject(new Error(texts.apiUnavailable));
         }
 
         return Promise.resolve(window.Weline.Api.resource(provider));
@@ -94,26 +125,64 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
         var display = selector.querySelector('[data-location-display]');
         var autoDetect = selector.querySelector('[data-action="auto-detect"]');
         var manualSelect = selector.querySelector('[data-action="manual-select"]');
+        var manualForm = selector.querySelector('[data-location-manual-form]');
+        var manualInput = selector.querySelector('[data-location-manual-input]');
+        var saveManual = selector.querySelector('[data-action="save-manual-location"]');
+        var cancelManual = selector.querySelector('[data-action="cancel-manual-location"]');
         var closeBtn = selector.querySelector('[data-action="close-selector"]');
+        var messageNode = selector.querySelector('[data-location-message]');
 
         if (!link || !dropdown || !display) {
             return;
         }
 
+        function showLocationMessage(message, type) {
+            if (messageNode) {
+                messageNode.textContent = message || '';
+                messageNode.className = 'location-selector-message ' + (type || 'info');
+                messageNode.hidden = !message;
+                messageNode.setAttribute('role', type === 'error' ? 'alert' : 'status');
+            }
+
+            if (
+                message
+                && window.Weline
+                && window.Weline.Toast
+                && typeof window.Weline.Toast.show === 'function'
+            ) {
+                window.Weline.Toast.show({message: message, type: type || 'info'});
+            }
+        }
+
+        function clearLocationMessage() {
+            showLocationMessage('', 'info');
+        }
+
+        function closeSelector() {
+            dropdown.hidden = true;
+            if (manualForm) {
+                manualForm.hidden = true;
+            }
+            clearLocationMessage();
+        }
+
         link.addEventListener('click', function (event) {
             event.preventDefault();
             dropdown.hidden = !dropdown.hidden;
+            if (!dropdown.hidden) {
+                clearLocationMessage();
+            }
         });
 
         if (closeBtn) {
             closeBtn.addEventListener('click', function () {
-                dropdown.hidden = true;
+                closeSelector();
             });
         }
 
         document.addEventListener('click', function (event) {
             if (!selector.contains(event.target)) {
-                dropdown.hidden = true;
+                closeSelector();
             }
         });
 
@@ -121,14 +190,16 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
             autoDetect.addEventListener('click', async function () {
                 var originalHtml = autoDetect.innerHTML;
                 try {
+                    clearLocationMessage();
                     autoDetect.classList.add('loading');
-                    autoDetect.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span><?= __('Locating...') ?></span>';
+                    autoDetect.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span></span>';
+                    autoDetect.querySelector('span').textContent = texts.locating;
 
                     if (typeof WelineLocation === 'undefined') {
                         if (typeof Weline !== 'undefined' && Weline.load) {
                             await Weline.load('geo');
                         } else {
-                            throw new Error('Geo module is not available.');
+                            throw new Error(texts.geoUnavailable);
                         }
                     }
 
@@ -140,15 +211,15 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
                     }, {silent: true});
 
                     if (!geoResult || geoResult.code !== 200 || !geoResult.data) {
-                        throw new Error((geoResult && (geoResult.msg || geoResult.message)) || 'Address lookup failed.');
+                        throw new Error((geoResult && (geoResult.msg || geoResult.message)) || texts.addressLookupFailed);
                     }
 
                     saveLocationToStorage(geoResult.data);
                     updateLocationDisplay(geoResult.data);
                     await updateShippingInfo(geoResult.data);
-                    dropdown.hidden = true;
+                    closeSelector();
                 } catch (error) {
-                    alert(error.message || 'Location detection failed.');
+                    showLocationMessage(error.message || texts.locationDetectionFailed, 'error');
                 } finally {
                     autoDetect.classList.remove('loading');
                     autoDetect.innerHTML = originalHtml;
@@ -157,15 +228,37 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
         }
 
         if (manualSelect) {
-            manualSelect.addEventListener('click', async function () {
-                var selectedAddress = prompt('<?= __('Enter delivery address, format: Province/City/District') ?>', '');
+            manualSelect.addEventListener('click', function () {
+                clearLocationMessage();
+                if (manualForm) {
+                    manualForm.hidden = false;
+                }
+                if (manualInput) {
+                    manualInput.focus();
+                }
+            });
+        }
+
+        if (cancelManual) {
+            cancelManual.addEventListener('click', function () {
+                if (manualForm) {
+                    manualForm.hidden = true;
+                }
+                clearLocationMessage();
+            });
+        }
+
+        if (saveManual && manualInput) {
+            saveManual.addEventListener('click', async function () {
+                var selectedAddress = (manualInput.value || '').trim();
                 if (!selectedAddress) {
+                    showLocationMessage(texts.manualRequired, 'warning');
                     return;
                 }
 
                 var addressParts = selectedAddress.split('/');
                 var addressData = {
-                    country: '<?= __('China') ?>',
+                    country: texts.countryChina,
                     countryCode: 'CN',
                     province: addressParts[0] || '',
                     city: addressParts[1] || '',
@@ -177,7 +270,8 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
                 saveLocationToStorage(addressData);
                 updateLocationDisplay(addressData);
                 await updateShippingInfo(addressData);
-                dropdown.hidden = true;
+                showLocationMessage(texts.manualSaved, 'success');
+                closeSelector();
             });
         }
 
@@ -230,7 +324,7 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
             display.textContent = addressData.city
                 || addressData.province
                 || addressData.country
-                || '<?= __('Deliver to') ?>';
+                || texts.deliverTo;
         }
     }
 })();
@@ -324,6 +418,93 @@ if (empty($displayText) || $displayText === __('Deliver to')) {
 .geo-location-selector .location-option.loading {
     opacity: 0.7;
     pointer-events: none;
+}
+
+.geo-location-selector .location-manual-form {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    border: 1px solid #eee;
+    border-radius: 6px;
+}
+
+.geo-location-selector .location-manual-form[hidden] {
+    display: none;
+}
+
+.geo-location-selector .location-manual-label {
+    font-size: 12px;
+    color: #555;
+}
+
+.geo-location-selector .location-manual-input {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font: inherit;
+}
+
+.geo-location-selector .location-manual-input:focus {
+    outline: 2px solid rgba(13, 110, 253, 0.2);
+    border-color: #86b7fe;
+}
+
+.geo-location-selector .location-manual-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.geo-location-selector .location-action-primary,
+.geo-location-selector .location-action-secondary {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    cursor: pointer;
+}
+
+.geo-location-selector .location-action-primary {
+    border-color: #0d6efd;
+    background: #0d6efd;
+    color: #fff;
+}
+
+.geo-location-selector .location-action-secondary {
+    background: #fff;
+    color: #111;
+}
+
+.geo-location-selector .location-selector-message {
+    margin: 10px 0 0;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: #eef5ff;
+    color: #084298;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.geo-location-selector .location-selector-message[hidden] {
+    display: none;
+}
+
+.geo-location-selector .location-selector-message.error {
+    background: #f8d7da;
+    color: #842029;
+}
+
+.geo-location-selector .location-selector-message.warning {
+    background: #fff3cd;
+    color: #664d03;
+}
+
+.geo-location-selector .location-selector-message.success {
+    background: #d1e7dd;
+    color: #0f5132;
 }
 
 .geo-location-selector .location-selector-footer {

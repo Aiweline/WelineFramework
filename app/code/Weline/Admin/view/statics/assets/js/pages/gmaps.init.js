@@ -24,7 +24,7 @@ $(document).ready(function () {
         click: function (e) {
             if (console.log)
                 console.log(e);
-            alert('You clicked in this marker');
+            console.log('You clicked in this marker');
         }
     });
 

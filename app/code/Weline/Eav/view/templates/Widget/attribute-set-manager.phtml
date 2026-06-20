@@ -18,6 +18,28 @@ $isSelectMode = $block->isSelectMode();
 $selectedSetId = $block->getSelectedSetId();
 $apiBaseUrl = $block->getApiBaseUrl();
 $widgetId = 'eav-set-manager-' . uniqid();
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_THROW_ON_ERROR;
+$eavSetManagerI18n = [
+    'loading' => (string)__('加载中...'),
+    'loadFailed' => (string)__('加载失败'),
+    'networkError' => (string)__('网络错误'),
+    'setCode' => (string)__('属性集代码'),
+    'setName' => (string)__('属性集名称'),
+    'save' => (string)__('保存'),
+    'cancel' => (string)__('取消'),
+    'delete' => (string)__('删除'),
+    'enterSetName' => (string)__('请输入属性集名称'),
+    'saveSuccess' => (string)__('保存成功'),
+    'saveFailed' => (string)__('保存失败'),
+    'deleteSuccess' => (string)__('删除成功'),
+    'deleteFailed' => (string)__('删除失败'),
+    'deleteConfirm' => (string)__('确定要删除此属性集吗？'),
+];
 ?>
 
 <div class="eav-attribute-set-manager" id="<?= $widgetId ?>" 
@@ -49,9 +71,55 @@ $widgetId = 'eav-set-manager-' . uniqid();
                         <i class="mdi mdi-folder-outline me-2"></i>
                         <?= __('属性集') ?>
                     </h6>
-                    <button type="button" class="btn btn-sm btn-primary" onclick="EavSetManager.addSet('<?= $widgetId ?>')">
+                    <button type="button"
+                            class="btn btn-sm btn-primary"
+                            data-eav-set-action="add"
+                            data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
                         <i class="mdi mdi-plus"></i> <?= __('新建') ?>
                     </button>
+                </div>
+                <div class="eav-set-manager-notice alert mb-0" id="<?= $widgetId ?>-notice" style="display: none;" role="status" aria-live="polite"></div>
+                <div class="eav-set-create-form border-bottom p-3" id="<?= $widgetId ?>-new-set-form" style="display: none;">
+                    <label class="form-label" for="<?= $widgetId ?>-new-set-name"><?= __('属性集名称') ?></label>
+                    <div class="input-group input-group-sm">
+                        <input type="text"
+                               class="form-control"
+                               id="<?= $widgetId ?>-new-set-name"
+                               placeholder="<?= __('请输入属性集名称') ?>"
+                               autocomplete="off"
+                               data-eav-new-set-key
+                               data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="button"
+                                class="btn btn-primary"
+                                data-eav-set-action="submit-new"
+                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                            <?= __('新建') ?>
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-eav-set-action="cancel-add"
+                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                            <?= __('取消') ?>
+                        </button>
+                    </div>
+                    <div class="invalid-feedback" id="<?= $widgetId ?>-new-set-error" style="display: none;"></div>
+                </div>
+                <div class="eav-set-delete-confirm alert alert-warning justify-content-between align-items-center m-3" id="<?= $widgetId ?>-delete-confirm" style="display: none;" role="alert">
+                    <span><?= __('确定要删除此属性集吗？') ?></span>
+                    <span class="btn-group btn-group-sm">
+                        <button type="button"
+                                class="btn btn-danger"
+                                data-eav-set-action="confirm-inline-delete"
+                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                            <?= __('删除') ?>
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                data-eav-set-action="cancel-inline-delete"
+                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>">
+                            <?= __('取消') ?>
+                        </button>
+                    </span>
                 </div>
                 <div class="card-body p-0">
                     <?php if (empty($sets)): ?>
@@ -64,19 +132,25 @@ $widgetId = 'eav-set-manager-' . uniqid();
                             <?php foreach ($sets as $set): ?>
                                 <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                                      data-set-id="<?= $set['set_id'] ?>"
-                                     onclick="EavSetManager.selectSet('<?= $widgetId ?>', <?= $set['set_id'] ?>)">
+                                     data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
+                                     data-eav-set-action="select">
                                     <div>
                                         <strong><?= htmlspecialchars($set['local_name'] ?? $set['name'] ?? $set['code']) ?></strong>
                                         <br>
                                         <small class="text-muted"><?= htmlspecialchars($set['code']) ?></small>
                                     </div>
                                     <div class="btn-group btn-group-sm">
-                                        <button type="button" class="btn btn-outline-secondary" 
-                                                onclick="event.stopPropagation(); EavSetManager.editSet('<?= $widgetId ?>', <?= $set['set_id'] ?>)">
+                                        <button type="button"
+                                                class="btn btn-outline-secondary"
+                                                data-eav-set-action="edit"
+                                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
+                                                data-set-id="<?= (int)$set['set_id'] ?>">
                                             <i class="mdi mdi-pencil"></i>
                                         </button>
                                         <button type="button" class="btn btn-outline-danger"
-                                                onclick="event.stopPropagation(); EavSetManager.deleteSet('<?= $widgetId ?>', <?= $set['set_id'] ?>)">
+                                                data-eav-set-action="delete"
+                                                data-widget-id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
+                                                data-set-id="<?= (int)$set['set_id'] ?>">
                                             <i class="mdi mdi-delete"></i>
                                         </button>
                                     </div>
@@ -107,8 +181,60 @@ $widgetId = 'eav-set-manager-' . uniqid();
 
 <?php if ($isManageMode): ?>
 <script>
+window.EavSetManagerI18n = window.EavSetManagerI18n || <?= json_encode($eavSetManagerI18n, $jsonForScriptFlags) ?>;
+
 // 属性集管理器
 window.EavSetManager = window.EavSetManager || {
+    escapeHtml: function(value) {
+        const div = document.createElement('div');
+        div.textContent = value === null || value === undefined ? '' : String(value);
+        return div.innerHTML;
+    },
+
+    escapeAttr: function(value) {
+        return this.escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    },
+
+    getText: function(key) {
+        const words = window.EavSetManagerI18n || {};
+        return words[key] || '';
+    },
+
+    notify: function(widgetId, type, message) {
+        const toast = window.BackendToast || window.FrontendToast || null;
+        const toastType = type === 'error' ? 'error' : type;
+
+        if (toast && typeof toast[toastType] === 'function') {
+            toast[toastType](message);
+            return;
+        }
+
+        if (toast && type === 'error' && typeof toast.danger === 'function') {
+            toast.danger(message);
+            return;
+        }
+
+        const notice = document.getElementById(widgetId + '-notice');
+        if (!notice) {
+            if (window.console) {
+                (type === 'error' && console.error ? console.error : console.log).call(console, message);
+            }
+            return;
+        }
+
+        const alertType = type === 'error' ? 'danger' : type;
+        notice.className = 'eav-set-manager-notice alert mb-0 alert-' + alertType;
+        notice.textContent = message;
+        notice.style.display = 'block';
+    },
+
+    clearNotice: function(widgetId) {
+        const notice = document.getElementById(widgetId + '-notice');
+        if (notice) {
+            notice.textContent = '';
+            notice.style.display = 'none';
+        }
+    },
     
     selectSet: function(widgetId, setId) {
         const container = document.getElementById(widgetId);
@@ -126,7 +252,7 @@ window.EavSetManager = window.EavSetManager || {
         
         // 显示详情区域
         detailEl.style.display = 'block';
-        contentEl.innerHTML = '<div class="text-center py-3"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></div>';
+        contentEl.innerHTML = '<div class="text-center py-3"><i class="mdi mdi-loading mdi-spin"></i> ' + this.escapeHtml(this.getText('loading')) + '</div>';
         
         // 加载属性集详情
         var url = apiBase + '/set/detail?id=' + setId;
@@ -136,11 +262,11 @@ window.EavSetManager = window.EavSetManager || {
             if (data && data.success) {
                 this.renderSetDetail(widgetId, data.data);
             } else {
-                contentEl.innerHTML = '<div class="alert alert-danger">' + ((data && data.message) || '<?= __('加载失败') ?>') + '</div>';
+                contentEl.innerHTML = '<div class="alert alert-danger">' + this.escapeHtml((data && data.message) || this.getText('loadFailed')) + '</div>';
             }
         }.bind(this)).catch(function(error) {
-            contentEl.innerHTML = '<div class="alert alert-danger"><?= __('网络错误') ?>: ' + (error && error.message || '') + '</div>';
-        });
+            contentEl.innerHTML = '<div class="alert alert-danger">' + this.escapeHtml(this.getText('networkError') + ': ' + (error && error.message || '')) + '</div>';
+        }.bind(this));
     },
     
     renderSetDetail: function(widgetId, setData) {
@@ -149,17 +275,18 @@ window.EavSetManager = window.EavSetManager || {
         
         titleEl.textContent = setData.local_name || setData.name || setData.code;
         
+        const setId = parseInt(setData.set_id, 10) || 0;
         let html = `
             <div class="mb-3">
-                <label class="form-label"><?= __('属性集代码') ?></label>
-                <input type="text" class="form-control" value="${setData.code}" readonly>
+                <label class="form-label">${this.escapeHtml(this.getText('setCode'))}</label>
+                <input type="text" class="form-control" value="${this.escapeAttr(setData.code || '')}" readonly>
             </div>
             <div class="mb-3">
-                <label class="form-label"><?= __('属性集名称') ?></label>
-                <input type="text" class="form-control" value="${setData.name || ''}" id="${widgetId}-set-name">
+                <label class="form-label">${this.escapeHtml(this.getText('setName'))}</label>
+                <input type="text" class="form-control" value="${this.escapeAttr(setData.name || '')}" id="${widgetId}-set-name">
             </div>
-            <button type="button" class="btn btn-primary" onclick="EavSetManager.saveSet('${widgetId}', ${setData.set_id})">
-                <i class="mdi mdi-content-save me-1"></i> <?= __('保存') ?>
+            <button type="button" class="btn btn-primary" data-eav-set-action="save" data-widget-id="${this.escapeAttr(widgetId)}" data-set-id="${setId}">
+                <i class="mdi mdi-content-save me-1"></i> ${this.escapeHtml(this.getText('save'))}
             </button>
         `;
         
@@ -167,11 +294,74 @@ window.EavSetManager = window.EavSetManager || {
     },
     
     addSet: function(widgetId) {
+        this.clearNotice(widgetId);
+        this.cancelInlineDelete(widgetId);
+        const formEl = document.getElementById(widgetId + '-new-set-form');
+        const inputEl = document.getElementById(widgetId + '-new-set-name');
+        const errorEl = document.getElementById(widgetId + '-new-set-error');
+        if (!formEl || !inputEl) {
+            this.notify(widgetId, 'error', this.getText('enterSetName'));
+            return;
+        }
+
+        formEl.style.display = 'block';
+        inputEl.value = '';
+        inputEl.classList.remove('is-invalid');
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.style.display = 'none';
+        }
+        inputEl.focus();
+    },
+
+    handleNewSetKey: function(event, widgetId) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            this.submitNewSet(widgetId);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            this.cancelAddSet(widgetId);
+        }
+    },
+
+    cancelAddSet: function(widgetId) {
+        const formEl = document.getElementById(widgetId + '-new-set-form');
+        const inputEl = document.getElementById(widgetId + '-new-set-name');
+        const errorEl = document.getElementById(widgetId + '-new-set-error');
+        if (formEl) {
+            formEl.style.display = 'none';
+        }
+        if (inputEl) {
+            inputEl.value = '';
+            inputEl.classList.remove('is-invalid');
+        }
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.style.display = 'none';
+        }
+    },
+
+    submitNewSet: function(widgetId) {
         const container = document.getElementById(widgetId);
+        const inputEl = document.getElementById(widgetId + '-new-set-name');
+        const errorEl = document.getElementById(widgetId + '-new-set-error');
+        if (!container || !inputEl) {
+            return;
+        }
+
         const entityId = container.dataset.entityId;
-        const name = prompt('<?= __('请输入属性集名称') ?>');
-        
-        if (!name) return;
+        const name = inputEl.value.trim();
+
+        if (!name) {
+            inputEl.classList.add('is-invalid');
+            if (errorEl) {
+                errorEl.textContent = this.getText('enterSetName');
+                errorEl.style.display = 'block';
+            }
+            this.notify(widgetId, 'warning', this.getText('enterSetName'));
+            inputEl.focus();
+            return;
+        }
         
         const code = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
         
@@ -188,8 +378,17 @@ window.EavSetManager = window.EavSetManager || {
     
     saveSet: function(widgetId, setId) {
         const container = document.getElementById(widgetId);
-        const name = document.getElementById(widgetId + '-set-name').value;
+        const nameEl = document.getElementById(widgetId + '-set-name');
+        const name = nameEl ? nameEl.value.trim() : '';
         const entityId = container.dataset.entityId;
+
+        if (!name) {
+            this.notify(widgetId, 'warning', this.getText('enterSetName'));
+            if (nameEl) {
+                nameEl.focus();
+            }
+            return;
+        }
         
         this.doSaveSet(widgetId, {
             set_id: setId,
@@ -211,49 +410,141 @@ window.EavSetManager = window.EavSetManager || {
         req.then(function(res) {
             var result = (res && res.data) || res;
             if (result && result.success) {
-                if (typeof BackendToast !== 'undefined') BackendToast.success(result.message || '<?= __('保存成功') ?>');
-                else if (typeof alert === 'function') alert(result.message || '<?= __('保存成功') ?>');
+                this.notify(widgetId, 'success', result.message || this.getText('saveSuccess'));
                 location.reload();
             } else {
-                if (typeof BackendToast !== 'undefined') BackendToast.error((result && result.message) || '<?= __('保存失败') ?>');
-                else if (typeof alert === 'function') alert((result && result.message) || '<?= __('保存失败') ?>');
+                this.notify(widgetId, 'error', (result && result.message) || this.getText('saveFailed'));
             }
-        }).catch(function(error) {
-            var msg = '<?= __('网络错误') ?>: ' + (error && error.message || '');
-            if (typeof BackendToast !== 'undefined') BackendToast.error(msg);
-            else if (typeof alert === 'function') alert(msg);
-        });
+        }.bind(this)).catch(function(error) {
+            var msg = this.getText('networkError') + ': ' + (error && error.message || '');
+            this.notify(widgetId, 'error', msg);
+        }.bind(this));
+    },
+
+    doDeleteSet: function(widgetId, setId) {
+        const container = document.getElementById(widgetId);
+        const apiBase = container.dataset.apiBase;
+        const formData = new FormData();
+        formData.append('id', setId);
+        var req = window.Weline.Api.request(apiBase + '/set/delete', { method: 'POST', body: formData, silent: true });
+        req.then(function(res) {
+            var result = (res && res.data) || res;
+            if (result && result.success) {
+                this.notify(widgetId, 'success', result.message || this.getText('deleteSuccess'));
+                location.reload();
+            } else {
+                this.notify(widgetId, 'error', (result && result.message) || this.getText('deleteFailed'));
+            }
+        }.bind(this)).catch(function(error) {
+            var msg = this.getText('networkError') + ': ' + (error && error.message || '');
+            this.notify(widgetId, 'error', msg);
+        }.bind(this));
+    },
+
+    showInlineDeleteConfirm: function(widgetId, setId) {
+        this.cancelAddSet(widgetId);
+        const confirmEl = document.getElementById(widgetId + '-delete-confirm');
+        if (!confirmEl) {
+            this.notify(widgetId, 'warning', this.getText('deleteConfirm'));
+            return;
+        }
+        confirmEl.dataset.setId = setId;
+        confirmEl.style.display = 'flex';
+        const button = confirmEl.querySelector('.btn-danger');
+        if (button) {
+            button.focus();
+        }
+    },
+
+    cancelInlineDelete: function(widgetId) {
+        const confirmEl = document.getElementById(widgetId + '-delete-confirm');
+        if (confirmEl) {
+            confirmEl.dataset.setId = '';
+            confirmEl.style.display = 'none';
+        }
+    },
+
+    confirmInlineDelete: function(widgetId) {
+        const confirmEl = document.getElementById(widgetId + '-delete-confirm');
+        if (!confirmEl || !confirmEl.dataset.setId) {
+            return;
+        }
+        const setId = confirmEl.dataset.setId;
+        this.cancelInlineDelete(widgetId);
+        this.doDeleteSet(widgetId, setId);
     },
     
     deleteSet: function(widgetId, setId) {
-        var doDel = function() {
-            const container = document.getElementById(widgetId);
-            const apiBase = container.dataset.apiBase;
-            const formData = new FormData();
-            formData.append('id', setId);
-            var req = window.Weline.Api.request(apiBase + '/set/delete', { method: 'POST', body: formData, silent: true });
-            req.then(function(res) {
-                var result = (res && res.data) || res;
-                if (result && result.success) {
-                    if (typeof BackendToast !== 'undefined') BackendToast.success(result.message || '<?= __('删除成功') ?>');
-                    else if (typeof alert === 'function') alert(result.message || '<?= __('删除成功') ?>');
-                    location.reload();
-                } else {
-                    if (typeof BackendToast !== 'undefined') BackendToast.error((result && result.message) || '<?= __('删除失败') ?>');
-                    else if (typeof alert === 'function') alert((result && result.message) || '<?= __('删除失败') ?>');
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            window.BackendConfirm.show(this.getText('deleteConfirm'), {
+                type: 'danger',
+                confirmText: this.getText('delete'),
+                cancelText: this.getText('cancel')
+            }).then(function(ok) {
+                if (ok) {
+                    this.doDeleteSet(widgetId, setId);
                 }
-            }).catch(function(error) {
-                var msg = '<?= __('网络错误') ?>: ' + (error && error.message || '');
-                if (typeof BackendToast !== 'undefined') BackendToast.error(msg);
-                else if (typeof alert === 'function') alert(msg);
-            });
-        };
-        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
-            BackendConfirm.show('<?= __('确定要删除此属性集吗？') ?>').then(function(ok) { if (ok) doDel(); });
-        } else if (typeof confirm === 'function' && confirm('<?= __('确定要删除此属性集吗？') ?>')) {
-            doDel();
+            }.bind(this));
+            return;
         }
+
+        this.showInlineDeleteConfirm(widgetId, setId);
     }
 };
+
+document.addEventListener('keydown', function(event) {
+    const input = event.target.closest('[data-eav-new-set-key]');
+    if (!input) {
+        return;
+    }
+
+    EavSetManager.handleNewSetKey(event, input.getAttribute('data-widget-id') || '');
+});
+
+document.addEventListener('click', function(event) {
+    const trigger = event.target.closest('[data-eav-set-action]');
+    if (!trigger) {
+        return;
+    }
+
+    const action = trigger.getAttribute('data-eav-set-action') || '';
+    const widgetId = trigger.getAttribute('data-widget-id') || '';
+    const setId = parseInt(trigger.getAttribute('data-set-id') || '0', 10);
+
+    if (action === 'edit' || action === 'delete') {
+        event.stopPropagation();
+    }
+    event.preventDefault();
+
+    switch (action) {
+        case 'add':
+            EavSetManager.addSet(widgetId);
+            break;
+        case 'submit-new':
+            EavSetManager.submitNewSet(widgetId);
+            break;
+        case 'cancel-add':
+            EavSetManager.cancelAddSet(widgetId);
+            break;
+        case 'confirm-inline-delete':
+            EavSetManager.confirmInlineDelete(widgetId);
+            break;
+        case 'cancel-inline-delete':
+            EavSetManager.cancelInlineDelete(widgetId);
+            break;
+        case 'select':
+            EavSetManager.selectSet(widgetId, setId);
+            break;
+        case 'edit':
+            EavSetManager.editSet(widgetId, setId);
+            break;
+        case 'delete':
+            EavSetManager.deleteSet(widgetId, setId);
+            break;
+        case 'save':
+            EavSetManager.saveSet(widgetId, setId);
+            break;
+    }
+});
 </script>
 <?php endif; ?>
