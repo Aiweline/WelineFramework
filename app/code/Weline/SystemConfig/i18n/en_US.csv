@@ -1,4 +1,9 @@
-﻿配置读取,"Configuration read"
+﻿统一配置中心,统一配置中心
+配置已回滚，回滚批次：%{1},配置已回滚，回滚批次：%{1}
+配置回滚预检失败，当前配置未改变。,配置回滚预检失败，当前配置未改变。
+配置已保存，版本批次：%{1},配置已保存，版本批次：%{1}
+配置保存失败，当前配置未改变。,配置保存失败，当前配置未改变。
+配置读取,"Configuration read"
 当系统配置被读取时触发，允许其他模块拦截或修改配置值。,"Triggered when the system configuration is read, allowing other modules to intercept or modify configuration values."
 配置设置前,"Before configuration settings"
 在配置写入数据库前触发，允许其他模块验证或修改配置值。,"Triggered before configuration is written to the database, allowing other modules to validate or modify configuration values."
@@ -11,6 +16,13 @@
 "Get a resolved config value with source and fallback metadata.","Get a resolved config value with source and fallback metadata."
 "Get resolved config values for a module.","Get resolved config values for a module."
 "Preview normalized scope and fallback scopes.","Preview normalized scope and fallback scopes."
+"List SystemConfig templates registered through Extends.","List SystemConfig templates registered through Extends."
+"Parse one SystemConfig PHTML template without executing it.","Parse one SystemConfig PHTML template without executing it."
+"List modules that provide SystemConfig templates.","List modules that provide SystemConfig templates."
+"Build the SystemConfig template tree by module and area.","Build the SystemConfig template tree by module and area."
+"Save a template-backed config batch after field whitelist validation.","Save a template-backed config batch after field whitelist validation."
+"Precheck whether a template-backed config version can rollback without mutation.","Precheck whether a template-backed config version can rollback without mutation."
+"Rollback a template-backed config version after rollback precheck.","Rollback a template-backed config version after rollback precheck."
 "Set a global compatibility config value.","Set a global compatibility config value."
 "Set one scoped config value and create a version batch.","Set one scoped config value and create a version batch."
 "Delete one scoped value so resolution inherits from fallback scopes.","Delete one scoped value so resolution inherits from fallback scopes."
@@ -22,3 +34,36 @@ backend|frontend,backend|frontend
 "回滚配置版本 %{1}","回滚配置版本 %{1}"
 回滚配置失败，已恢复本次回滚前状态。%{1},回滚配置失败，已恢复本次回滚前状态。%{1}
 "当前 system_config 表尚未升级，不能保存非全局 scope 配置。","当前 system_config 表尚未升级，不能保存非全局 scope 配置。"
+存在未在配置模板声明的字段。,存在未在配置模板声明的字段。
+配置校验失败，当前配置未改变。,配置校验失败，当前配置未改变。
+没有需要保存的配置。,没有需要保存的配置。
+"配置模板不存在或未通过 Extends 注册。","配置模板不存在或未通过 Extends 注册。"
+"当前字段不允许保存到所选 scope。","当前字段不允许保存到所选 scope。"
+此字段不能为空。,此字段不能为空。
+字段值不在允许选项内。,字段值不在允许选项内。
+模块,模块
+全部模块,全部模块
+区域,区域
+后台,后台
+前台,前台
+Scope,Scope
+Locale,Locale
+搜索,搜索
+"当前 Scope","当前 Scope"
+模板,模板
+字段,字段
+适配入口,适配入口
+没有找到配置模板,没有找到配置模板
+当前值,当前值
+保存值,保存值
+继承,继承
+默认值,默认值
+保存配置,保存配置
+最近版本,最近版本
+操作,操作
+状态,状态
+时间,时间
+回滚,回滚
+不可回滚,不可回滚
+配置或字段,配置或字段
+保存原因,保存原因

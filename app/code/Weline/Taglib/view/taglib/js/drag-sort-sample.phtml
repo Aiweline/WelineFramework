@@ -137,39 +137,39 @@
     </script>
 </head>
 <body>
-<button onclick="add()" style="margin: 52px 0 0 52px;"> 新增 </button>
+<button type="button" data-drag-add style="margin: 52px 0 0 52px;"> 新增 </button>
 
 <div id="drag-div">
     <div class="drag-item" draggable="true">
-        <div class="close" onclick="del(event)">x</div>
+        <div class="close" data-drag-delete>x</div>
         <img src="./img/1.jpg" class="drag-pic" draggable="false">
     </div>
     <div class="drag-item" draggable="true">
-        <div class="close" onclick="del(event)">x</div>
+        <div class="close" data-drag-delete>x</div>
         <img src="./img/2.jpg" class="drag-pic" draggable="false">
     </div>
     <div class="drag-item" draggable="true">
-        <div class="close" onclick="del(event)">x</div>
+        <div class="close" data-drag-delete>x</div>
         <img src="./img/3.jpg" class="drag-pic" draggable="false">
     </div>
     <div class="drag-item" draggable="true">
-        <div class="close" onclick="del(event)">x</div>
+        <div class="close" data-drag-delete>x</div>
         <img src="./img/4.jpg" class="drag-pic" draggable="false">
     </div>
     <div class="drag-item" draggable="true">
-        <div class="close" onclick="del(event)">x</div>
+        <div class="close" data-drag-delete>x</div>
         <img src="./img/5.jpg" class="drag-pic" draggable="false">
     </div>
     <div class="drag-item" draggable="true">
-        <div class="close" onclick="del(event)">x</div>
+        <div class="close" data-drag-delete>x</div>
         <img src="./img/6.jpg" class="drag-pic" draggable="false">
     </div>
     <div class="drag-item" draggable="true">
-        <div class="close" onclick="del(event)">x</div>
+        <div class="close" data-drag-delete>x</div>
         <img src="./img/7.jpg" class="drag-pic" draggable="false">
     </div>
     <div class="drag-item" draggable="true">
-        <div class="close" onclick="del(event)">x</div>
+        <div class="close" data-drag-delete>x</div>
         <img src="./img/8.jpg" class="drag-pic" draggable="false">
     </div>
 </div>
@@ -184,7 +184,7 @@
     function add(event) {
         var node = document.getElementById('drag-div')
         var wrapper= document.createElement('div');
-        wrapper.innerHTML= '<div class="drag-item" draggable="true"> <div class="close" onclick="del(event)">x</div> <img src="./img/9.jpg" class="drag-pic" draggable="false"> </div>';
+        wrapper.innerHTML= '<div class="drag-item" draggable="true"> <div class="close" data-drag-delete>x</div> <img src="./img/9.jpg" class="drag-pic" draggable="false"> </div>';
         var html= wrapper.firstChild;
         node.appendChild(html)
 
@@ -194,6 +194,18 @@
         // 点击删除当前元素的父级元素
         event.currentTarget.parentElement.parentElement.removeChild(event.currentTarget.parentElement);
     }
+
+    document.addEventListener('click', function(event) {
+        if (event.target.closest('[data-drag-add]')) {
+            add(event);
+            return;
+        }
+
+        var trigger = event.target.closest('[data-drag-delete]');
+        if (trigger) {
+            del({currentTarget: trigger});
+        }
+    });
 
 </script>
 </html>

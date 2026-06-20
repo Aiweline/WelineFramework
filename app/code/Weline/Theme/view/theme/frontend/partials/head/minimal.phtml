@@ -148,7 +148,14 @@ $themeConfigPayload = [
         'layoutOption' => $layoutOption,
     ],
 ];
-$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$jsonEncodeFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, $jsonEncodeFlags));
 $this->setData('envConfig', $themeConfigPayload['env']);
 ?>
 <script data-no-extract="true">
@@ -156,7 +163,7 @@ $this->setData('envConfig', $themeConfigPayload['env']);
         if (!window.__WelineThemeConfig) {
             window.__WelineThemeConfig = {};
         }
-        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        const themeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFlags) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
         if (themeConfig.api) {
             window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, themeConfig.api);

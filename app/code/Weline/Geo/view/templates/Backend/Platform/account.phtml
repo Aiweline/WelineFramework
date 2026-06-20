@@ -8,7 +8,7 @@
 <div class="content-header">
     <h1><?= __('平台账户管理') ?> - <?= htmlspecialchars($platform->getData('platform_name')) ?></h1>
     <div class="action-bar">
-        <button type="button" class="btn btn-primary" onclick="showAddAccountModal()">
+        <button type="button" class="btn btn-primary" data-geo-account-action="show">
             <i class="mdi mdi-plus"></i> <?= __('添加账户') ?>
         </button>
         <a href="<?= $this->getUrl('geo/backend/platform') ?>" class="btn btn-secondary">
@@ -65,8 +65,9 @@
                         </td>
                         <td><?= $account['last_test_time'] ? date('Y-m-d H:i:s', $account['last_test_time']) : '-' ?></td>
                         <td>
-                            <button type="button" class="btn btn-sm btn-info" 
-                                    onclick="testConnection(<?= $account['id'] ?>)">
+                            <button type="button"
+                                    class="btn btn-sm btn-info"
+                                    data-geo-account-test="<?= (int)$account['id'] ?>">
                                 <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
                             </button>
                         </td>
@@ -115,7 +116,7 @@
 
             <div class="form-group">
                 <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
-                <button type="button" class="btn btn-secondary" onclick="hideAddAccountModal()"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-secondary" data-geo-account-action="hide"><?= __('取消') ?></button>
             </div>
         </form>
     </div>
@@ -221,6 +222,23 @@ document.getElementById('account-form').addEventListener('submit', function(e) {
         } else {
             console.error('<?= __('保存失败') ?>');
         }
+    });
+});
+
+document.querySelectorAll('[data-geo-account-action]').forEach(function(button) {
+    button.addEventListener('click', function() {
+        if (button.getAttribute('data-geo-account-action') === 'show') {
+            showAddAccountModal();
+            return;
+        }
+
+        hideAddAccountModal();
+    });
+});
+
+document.querySelectorAll('[data-geo-account-test]').forEach(function(button) {
+    button.addEventListener('click', function() {
+        testConnection(parseInt(button.getAttribute('data-geo-account-test') || '0', 10));
     });
 });
 </script>

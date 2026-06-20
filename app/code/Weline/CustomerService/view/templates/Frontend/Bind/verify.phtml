@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * 邮箱绑定验证结果页面
  */
@@ -183,10 +183,10 @@ $email = $this->getData('email') ?? '';
             <p class="verify-message"><?= htmlspecialchars($message) ?></p>
             <div class="verify-actions">
                 <a href="/" class="btn btn-primary"><?= __('返回首页') ?></a>
-                <button class="btn btn-secondary" onclick="history.back()"><?= __('返回上一页') ?></button>
+                <button class="btn btn-secondary" type="button" data-cs-bind-back><?= __('返回上一页') ?></button>
             </div>
             <p class="help-text">
-                <?= __('如有问题，请') ?> <a href="javascript:void(0)" onclick="openChat()"><?= __('联系客服') ?></a>
+                <?= __('如有问题，请') ?> <a href="/" data-cs-bind-open-chat><?= __('联系客服') ?></a>
             </p>
         <?php endif; ?>
     </div>
@@ -201,6 +201,21 @@ $email = $this->getData('email') ?? '';
             window.location.href = '/';
         }
     }
+
+    document.addEventListener('click', function(event) {
+        const backTrigger = event.target.closest('[data-cs-bind-back]');
+        if (backTrigger) {
+            event.preventDefault();
+            history.back();
+            return;
+        }
+
+        const chatTrigger = event.target.closest('[data-cs-bind-open-chat]');
+        if (chatTrigger) {
+            event.preventDefault();
+            openChat();
+        }
+    });
     </script>
 </body>
 </html>

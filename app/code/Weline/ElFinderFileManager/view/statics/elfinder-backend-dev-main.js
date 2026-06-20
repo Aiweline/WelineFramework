@@ -6,6 +6,15 @@
  **/
 (function(){
 	"use strict";
+	function notifyLoadError(message) {
+		var text = String(message || 'elFinder failed to load.');
+		if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+			window.BackendToast.error(text);
+			return;
+		}
+		console.error(text);
+	}
+
 	var // jQuery and jQueryUI version
 		jqver = '3.7.1',
 		uiver = '1.13.2',
@@ -94,7 +103,7 @@
 						);
 					});
 				} else {
-					alert('"elFinderConfig" object is wrong.');
+					notifyLoadError('"elFinderConfig" object is wrong.');
 				}
 			});
 		},
@@ -110,7 +119,7 @@
 				],
 				start,
 				function(error) {
-					alert(error.message);
+					notifyLoadError(error && error.message ? error.message : error);
 				}
 			);
 		},

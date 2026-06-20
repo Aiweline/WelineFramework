@@ -62,7 +62,7 @@ class DeployConfigService
             'webhook_secret' => '',
             'webhook_branch' => '',
             'webhook_bash' => 'bash',
-            'deploy_trigger_mode' => self::TRIGGER_MODE_BOTH,
+            'deploy_trigger_mode' => self::TRIGGER_MODE_TAG,
             'webhook_allow_tag_deploy' => '0',
             'webhook_tag_prefix' => '',
             'deploy_probe_token' => '',
@@ -77,16 +77,20 @@ class DeployConfigService
      */
     public function getEffectiveTriggerMode(): string
     {
-        $settings = $this->getSettings();
-        $mode     = (string)($settings['deploy_trigger_mode'] ?? '');
+        $storedSettings = $this->getStoredSettings();
+        $mode = (string)($storedSettings['deploy_trigger_mode'] ?? '');
 
-        // 兼容旧配置：如果 deploy_trigger_mode 未设置，从 webhook_allow_tag_deploy 推断
-        if ($mode === '' || !in_array($mode, self::TRIGGER_MODES, true)) {
-            $allowTag = (string)($settings['webhook_allow_tag_deploy'] ?? '0') === '1';
-            $mode     = $allowTag ? self::TRIGGER_MODE_BOTH : self::TRIGGER_MODE_BRANCH;
+        if ($mode !== '' && in_array($mode, self::TRIGGER_MODES, true)) {
+            return $mode;
         }
 
-        return $mode;
+        // 兼容旧配置：如果 deploy_trigger_mode 未设置，从 webhook_allow_tag_deploy 推断
+        if (array_key_exists('webhook_allow_tag_deploy', $storedSettings)) {
+            $allowTag = (string)($storedSettings['webhook_allow_tag_deploy'] ?? '0') === '1';
+            return $allowTag ? self::TRIGGER_MODE_BOTH : self::TRIGGER_MODE_BRANCH;
+        }
+
+        return self::TRIGGER_MODE_TAG;
     }
 
     public function getSettings(): array
@@ -165,6 +169,8 @@ class DeployConfigService
             'backup_before_deploy' => 'BACKUP_BEFORE_DEPLOY',
             'clean_before_deploy' => 'CLEAN_BEFORE_DEPLOY',
             'project_remote' => 'GIT_REMOTE_NAME',
+            'run_composer_install' => 'RUN_COMPOSER_INSTALL',
+            'composer_command' => 'COMPOSER_COMMAND',
             'post_deploy_command' => 'POST_DEPLOY_COMMAND',
             'git_update_mode' => 'GIT_UPDATE_MODE',
         ];

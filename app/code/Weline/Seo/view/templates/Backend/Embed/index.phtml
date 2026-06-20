@@ -23,6 +23,11 @@ $status = $this->getData('status');
 // 构建基础 URL 参数
 $baseParams = [];
 if ($scope) $baseParams['scope'] = $scope;
+
+$jsJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$jsString = static function (mixed $value) use ($jsJsonFlags): string {
+    return json_encode((string)$value, $jsJsonFlags);
+};
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -30,9 +35,9 @@ if ($scope) $baseParams['scope'] = $scope;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($title) ?></title>
-    <!-- 使用CDN加载Bootstrap和MDI图标以避免路径问题 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.5.95/css/materialdesignicons.min.css" rel="stylesheet">
+    <!-- 使用本地后台静态资源，避免第三方脚本/样式注入面 -->
+    <link href="@static(Weline_Admin::backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css)" rel="stylesheet">
+    <link href="@static(Weline_Admin::assets/css/icons.min.css)" rel="stylesheet">
     <style>
         body {
             background: #f5f5f5;
@@ -347,11 +352,44 @@ if ($scope) $baseParams['scope'] = $scope;
     </div>
 
     <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="@static(Weline_Admin::backend/lib/bootstrap-5.1.3-dist/js/bootstrap.bundle.min.js)"></script>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const saveUrl = '<?= $this->getUrl('*/backend/embed/save') ?>';
-        const deleteUrl = '<?= $this->getUrl('*/backend/embed/delete') ?>';
+        const saveUrl = <?= $jsString($this->getUrl('*/backend/embed/save')) ?>;
+        const deleteUrl = <?= $jsString($this->getUrl('*/backend/embed/delete')) ?>;
+        const text = {
+            saveSuccess: <?= $jsString(__('保存成功')) ?>,
+            saveFailed: <?= $jsString(__('保存失败')) ?>,
+            deleteFailed: <?= $jsString(__('删除失败')) ?>,
+            requestFailed: <?= $jsString(__('请求失败')) ?>,
+            confirmDelete: <?= $jsString(__('确定要删除该SEO主体吗？')) ?>,
+            confirmUnavailable: <?= $jsString(__('确认组件不可用，请刷新页面后重试。')) ?>
+        };
+
+        function getBackendTool(name) {
+            if (window[name]) {
+                return window[name];
+            }
+            try {
+                if (window.parent && window.parent !== window && window.parent[name]) {
+                    return window.parent[name];
+                }
+            } catch (error) {
+                return null;
+            }
+            return null;
+        }
+
+        function notify(type, message) {
+            var toast = getBackendTool('BackendToast');
+            if (toast && typeof toast[type] === 'function') {
+                toast[type](typeof message === 'string' ? message : String(message || ''));
+            }
+        }
+
+        function requestFailedMessage(error) {
+            return text.requestFailed + (error && error.message ? ': ' + error.message : '');
+        }
         
         // 添加主体表单提交
         document.getElementById('addSubjectForm').addEventListener('submit', function(e) {
@@ -360,16 +398,15 @@ if ($scope) $baseParams['scope'] = $scope;
             window.Weline.Api.request(saveUrl, { method: 'POST', body: formData })
             .then(function(response) {
                 var data = response.data;
-                var Toast = window.BackendToast || window.BackendToast;
                 if (response.ok && data && data.success) {
-                    if (Toast) Toast.success(data.message || '<?= __('保存成功') ?>');
+                    notify('success', data.message || text.saveSuccess);
                     location.reload();
                 } else {
-                    if (Toast) Toast.error((data && (data.message || data.msg)) || '<?= __('保存失败') ?>');
+                    notify('error', (data && (data.message || data.msg)) || text.saveFailed);
                 }
             })
             .catch(function(error) {
-                (window.BackendToast || window.BackendToast).error(error && error.message ? error.message : '<?= __('请求失败') ?>');
+                notify('error', requestFailedMessage(error));
             });
         });
         
@@ -385,22 +422,22 @@ if ($scope) $baseParams['scope'] = $scope;
                     window.Weline.Api.request(deleteUrl, { method: 'POST', body: fd })
                     .then(function(response) {
                         var data = response.data;
-                        var Toast = window.BackendToast || window.BackendToast;
                         if (response.ok && data && data.success) {
                             var card = self.closest('.subject-card');
                             if (card) card.remove();
                         } else {
-                            if (Toast) Toast.error((data && (data.message || data.msg)) || '<?= __('删除失败') ?>');
+                            notify('error', (data && (data.message || data.msg)) || text.deleteFailed);
                         }
                     })
                     .catch(function(error) {
-                        (window.BackendToast || window.BackendToast).error(error && error.message ? error.message : '<?= __('请求失败') ?>');
+                        notify('error', requestFailedMessage(error));
                     });
                 };
-                if (typeof BackendConfirm !== 'undefined') {
-                    BackendConfirm.show('<?= __('确定要删除该SEO主体吗？') ?>').then(doDelete);
+                var confirm = getBackendTool('BackendConfirm');
+                if (confirm && typeof confirm.show === 'function') {
+                    confirm.show(text.confirmDelete).then(doDelete);
                 } else {
-                    doDelete(window.confirm('<?= __('确定要删除该SEO主体吗？') ?>'));
+                    notify('error', text.confirmUnavailable);
                 }
             });
         });

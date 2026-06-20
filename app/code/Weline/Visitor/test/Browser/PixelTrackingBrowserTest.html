@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -91,42 +91,42 @@
     
     <div class="test-section">
         <h2>基础像素跟踪测试</h2>
-        <button class="test-button" onclick="testBasicPixelTracking()">测试基础像素跟踪</button>
-        <button class="test-button" onclick="testPixelWithABTest()">测试A/B测试像素</button>
-        <button class="test-button" onclick="testPixelWithCustomData()">测试自定义数据像素</button>
+        <button class="test-button" data-visitor-test-action="test-basic-pixel-tracking">测试基础像素跟踪</button>
+        <button class="test-button" data-visitor-test-action="test-pixel-with-abtest">测试A/B测试像素</button>
+        <button class="test-button" data-visitor-test-action="test-pixel-with-custom-data">测试自定义数据像素</button>
         <div id="basic-result" class="result" style="display:none;"></div>
         <div id="basic-log" class="log" style="display:none;"></div>
     </div>
 
     <div class="test-section">
         <h2>像素脚本加载测试</h2>
-        <button class="test-button" onclick="testPixelScriptLoad()">测试像素脚本加载</button>
-        <button class="test-button" onclick="testPixelVersionFetch()">测试版本号获取</button>
+        <button class="test-button" data-visitor-test-action="test-pixel-script-load">测试像素脚本加载</button>
+        <button class="test-button" data-visitor-test-action="test-pixel-version-fetch">测试版本号获取</button>
         <div id="script-result" class="result" style="display:none;"></div>
         <div id="script-log" class="log" style="display:none;"></div>
     </div>
 
     <div class="test-section">
         <h2>事件触发测试</h2>
-        <button class="test-button" onclick="testClickEvent()">测试点击事件</button>
-        <button class="test-button" onclick="testCustomEvent()">测试自定义事件</button>
-        <button class="test-button" data-test-id="test_001" data-variant="A" onclick="testABTestEvent(this)">测试A/B测试事件（变体A）</button>
-        <button class="test-button" data-test-id="test_001" data-variant="B" onclick="testABTestEvent(this)">测试A/B测试事件（变体B）</button>
+        <button class="test-button" data-visitor-test-action="test-click-event">测试点击事件</button>
+        <button class="test-button" data-visitor-test-action="test-custom-event">测试自定义事件</button>
+        <button class="test-button" data-test-id="test_001" data-variant="A" data-visitor-test-action="test-abtest-event">测试A/B测试事件（变体A）</button>
+        <button class="test-button" data-test-id="test_001" data-variant="B" data-visitor-test-action="test-abtest-event">测试A/B测试事件（变体B）</button>
         <div id="event-result" class="result" style="display:none;"></div>
         <div id="event-log" class="log" style="display:none;"></div>
     </div>
 
     <div class="test-section">
         <h2>数据验证测试</h2>
-        <button class="test-button" onclick="testDataValidation()">测试数据验证</button>
-        <button class="test-button" onclick="testSiteIdDetection()">测试站点ID检测</button>
+        <button class="test-button" data-visitor-test-action="test-data-validation">测试数据验证</button>
+        <button class="test-button" data-visitor-test-action="test-site-id-detection">测试站点ID检测</button>
         <div id="validation-result" class="result" style="display:none;"></div>
         <div id="validation-log" class="log" style="display:none;"></div>
     </div>
 
     <div class="test-section">
         <h2>完整测试套件</h2>
-        <button class="test-button" onclick="runAllTests()">运行所有测试</button>
+        <button class="test-button" data-visitor-test-action="run-all-tests">运行所有测试</button>
         <div id="all-result" class="result" style="display:none;"></div>
         <div id="all-log" class="log" style="display:none;"></div>
     </div>
@@ -198,6 +198,32 @@
         }
 
         const baseUrl = getBaseUrl();
+
+        document.addEventListener('click', function(event) {
+            const trigger = event.target.closest('[data-visitor-test-action]');
+            if (!trigger) {
+                return;
+            }
+
+            event.preventDefault();
+            const actions = {
+                'test-basic-pixel-tracking': testBasicPixelTracking,
+                'test-pixel-with-abtest': testPixelWithABTest,
+                'test-pixel-with-custom-data': testPixelWithCustomData,
+                'test-pixel-script-load': testPixelScriptLoad,
+                'test-pixel-version-fetch': testPixelVersionFetch,
+                'test-click-event': testClickEvent,
+                'test-custom-event': testCustomEvent,
+                'test-abtest-event': function() { testABTestEvent(trigger); },
+                'test-data-validation': testDataValidation,
+                'test-site-id-detection': testSiteIdDetection,
+                'run-all-tests': runAllTests
+            };
+            const action = actions[trigger.getAttribute('data-visitor-test-action')];
+            if (typeof action === 'function') {
+                action();
+            }
+        });
         const pixelApiUrl = baseUrl + '/visitor/rest/v1/pixel';
         const versionApiUrl = baseUrl + '/visitor/rest/v1/version/current';
 

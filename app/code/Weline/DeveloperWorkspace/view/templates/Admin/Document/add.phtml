@@ -34,10 +34,12 @@
                                     class='btn btn-primary waves-effect waves-light pull-right'>
                                 <lang>保存</lang>
                             </button>
-                            <a href="javascript:window.history.back();"
-                               class='btn btn-default waves-effect waves-light pull-right'>
+                            <button type="button"
+                                    class='btn btn-default waves-effect waves-light pull-right'
+                                    data-dev-workspace-action='history-back'
+                                    data-dev-workspace-fallback="@admin-url('dev/tool/admin/document')">
                                 <lang>返回</lang>
-                            </a>
+                            </button>
                         </div>
                     </div>
                     <div class='row'>
@@ -167,6 +169,20 @@
     'use strict';
     
     $(document).ready(function () {
+        $(document).on('click', '[data-dev-workspace-action="history-back"]', function(e) {
+            e.preventDefault();
+
+            if (window.history.length > 1) {
+                window.history.back();
+                return;
+            }
+
+            var fallbackUrl = $(this).data('dev-workspace-fallback');
+            if (fallbackUrl) {
+                window.location.href = fallbackUrl;
+            }
+        });
+
         if ($('#elm1').length > 0) {
             tinymce.init({
                 selector: '#elm1',

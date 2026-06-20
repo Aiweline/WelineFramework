@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "module_name": "Weline_PhpManager",
+  "i18n": {
+    "source_locale": "en_US",
+    "locales": {
+      "en_US": {
+        "display_name": "WLS PHP Manager",
+        "description": "Provides PHP runtime readout, guarded project PHP profile storage, reversible php.ini apply, and WLS reload controls for managed projects."
+      },
+      "zh_Hans_CN": {
+        "display_name": "WLS PHP Manager",
+        "description": "Provides PHP runtime readout, guarded project PHP profile storage, reversible php.ini apply, and WLS reload controls for managed projects."
+      }
+    }
+  },
+  "tags": [
+    {
+      "code": "module:wls",
+      "type": "module",
+      "primary": true,
+      "labels": {
+        "en_US": "WLS Panel Plugin",
+        "zh_Hans_CN": "WLS Panel Plugin"
+      }
+    },
+    {
+      "code": "custom:wls-php-manager",
+      "type": "custom",
+      "labels": {
+        "en_US": "WLS PHP Manager",
+        "zh_Hans_CN": "WLS PHP Manager"
+      }
+    },
+    {
+      "code": "category:server-tools",
+      "type": "category",
+      "labels": {
+        "en_US": "Server Tools",
+        "zh_Hans_CN": "Server Tools"
+      }
+    },
+    {
+      "code": "feature:php-config",
+      "type": "feature",
+      "labels": {
+        "en_US": "PHP Configuration",
+        "zh_Hans_CN": "PHP Configuration"
+      }
+    },
+    {
+      "code": "capability:php-read",
+      "type": "capability",
+      "labels": {
+        "en_US": "PHP Runtime Readout",
+        "zh_Hans_CN": "PHP Runtime Readout"
+      }
+    },
+    {
+      "code": "capability:php-profile-write",
+      "type": "capability",
+      "labels": {
+        "en_US": "Guarded PHP Profile Write",
+        "zh_Hans_CN": "Guarded PHP Profile Write"
+      }
+    },
+    {
+      "code": "capability:php-ini-apply",
+      "type": "capability",
+      "labels": {
+        "en_US": "Reversible php.ini Apply",
+        "zh_Hans_CN": "Reversible php.ini Apply"
+      }
+    },
+    {
+      "code": "capability:wls-reload-request",
+      "type": "capability",
+      "labels": {
+        "en_US": "WLS Reload Request",
+        "zh_Hans_CN": "WLS Reload Request"
+      }
+    },
+    {
+      "code": "system:true",
+      "type": "system",
+      "labels": {
+        "en_US": "System Module",
+        "zh_Hans_CN": "System Module"
+      }
+    }
+  ],
+  "surfaces": [
+    "backend"
+  ],
+  "capabilities": {
+    "php.config": {
+      "label": {
+        "en_US": "PHP Configuration",
+        "zh_Hans_CN": "PHP Configuration"
+      },
+      "status": "guarded-write",
+      "backend_route": "weline_phpmanager/backend/wls-php-manager"
+    },
+    "php.extensions": {
+      "label": {
+        "en_US": "PHP Extensions",
+        "zh_Hans_CN": "PHP Extensions"
+      },
+      "status": "readout",
+      "backend_route": "weline_phpmanager/backend/wls-php-manager"
+    },
+    "project.php_profile": {
+      "label": {
+        "en_US": "Project PHP Context",
+        "zh_Hans_CN": "Project PHP Context"
+      },
+      "status": "guarded-write",
+      "backend_route": "weline_phpmanager/backend/wls-php-manager"
+    },
+    "php.ini.apply": {
+      "label": {
+        "en_US": "php.ini Apply",
+        "zh_Hans_CN": "php.ini Apply"
+      },
+      "status": "guarded-write",
+      "backend_route": "weline_phpmanager/backend/wls-php-manager"
+    },
+    "runtime.reload.request": {
+      "label": {
+        "en_US": "Runtime Reload Request",
+        "zh_Hans_CN": "Runtime Reload Request"
+      },
+      "status": "operator-selected",
+      "backend_route": "weline_phpmanager/backend/wls-php-manager"
+    }
+  },
+  "wls_panel": {
+    "menu": [
+      {
+        "key": "php-profile",
+        "label": {
+          "en_US": "PHP",
+          "zh_Hans_CN": "PHP"
+        },
+        "description": {
+          "en_US": "Open PHP runtime profiles and project PHP configuration for WLS managed projects.",
+          "zh_Hans_CN": "Open PHP runtime profiles and project PHP configuration for WLS managed projects."
+        },
+        "group": "tools",
+        "order": 10,
+        "backend_route": "weline_phpmanager/backend/wls-php-manager"
+      }
+    ]
+  },
+  "seo": {
+    "slug": "wls-php-manager"
+  }
+}

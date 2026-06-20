@@ -471,6 +471,7 @@ class ServerInstanceManager
             'memory_server_port',
             'memory_server_token_file_name',
             'shared_state',
+            'gateway',
             'orchestrator_runtime_options',
             'http_redirect_port',
             'started_by',

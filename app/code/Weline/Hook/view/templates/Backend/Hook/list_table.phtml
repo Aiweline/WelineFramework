@@ -165,7 +165,8 @@ $buildQuery = static function (array $overrides = []) use (
             </div>
             <div class="pagination-actions">
                 <a class="btn btn-sm btn-secondary pagination-link<?= $currentPage <= 1 ? ' disabled' : '' ?>"
-                   href="<?= $currentPage <= 1 ? 'javascript:void(0)' : ('?' . $buildQuery(['page' => $currentPage - 1])) ?>"
+                   href="<?= $currentPage <= 1 ? '#' : ('?' . $buildQuery(['page' => $currentPage - 1])) ?>"
+                   aria-disabled="<?= $currentPage <= 1 ? 'true' : 'false' ?>"
                    data-page="<?= max(1, $currentPage - 1) ?>">
                     上一页
                 </a>
@@ -181,7 +182,8 @@ $buildQuery = static function (array $overrides = []) use (
                     </a>
                 <?php endfor; ?>
                 <a class="btn btn-sm btn-secondary pagination-link<?= $currentPage >= $totalPages ? ' disabled' : '' ?>"
-                   href="<?= $currentPage >= $totalPages ? 'javascript:void(0)' : ('?' . $buildQuery(['page' => $currentPage + 1])) ?>"
+                   href="<?= $currentPage >= $totalPages ? '#' : ('?' . $buildQuery(['page' => $currentPage + 1])) ?>"
+                   aria-disabled="<?= $currentPage >= $totalPages ? 'true' : 'false' ?>"
                    data-page="<?= min($totalPages, $currentPage + 1) ?>">
                     下一页
                 </a>

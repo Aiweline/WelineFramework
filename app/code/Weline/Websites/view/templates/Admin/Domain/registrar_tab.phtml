@@ -8,11 +8,18 @@
  */
 $adapterOptions = $adapter_options ?? [];
 $accounts = $accounts ?? [];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><?= __('域名商账号管理') ?></h5>
-    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#accountFormModal" onclick="resetAccountForm()">
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#accountFormModal" data-domain-account-action="reset">
         <i class="mdi mdi-plus me-1"></i><?= __('添加账号') ?>
     </button>
 </div>
@@ -53,15 +60,19 @@ $accounts = $accounts ?? [];
                         <td><?= htmlspecialchars($account['created_at'] ?? '-') ?></td>
                         <td class="text-end">
                             <button type="button" class="btn btn-outline-info btn-sm" title="<?= __('测试连接') ?>"
-                                    onclick="testAccountConnection(<?= (int)($account['account_id'] ?? 0) ?>, '<?= htmlspecialchars($account['registrar_code'] ?? '') ?>')">
+                                    data-domain-account-action="test"
+                                    data-account-id="<?= (int)($account['account_id'] ?? 0) ?>"
+                                    data-registrar-code="<?= htmlspecialchars((string)($account['registrar_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                 <i class="mdi mdi-lan-connect"></i>
                             </button>
                             <button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('编辑') ?>"
-                                    onclick="editAccount(<?= htmlspecialchars(json_encode($account, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>)">
+                                    data-domain-account-action="edit"
+                                    data-account-payload="<?= htmlspecialchars(json_encode($account, $jsonForScriptFlags), ENT_QUOTES, 'UTF-8') ?>">
                                 <i class="mdi mdi-pencil"></i>
                             </button>
                             <button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>"
-                                    onclick="removeAccount(<?= (int)($account['account_id'] ?? 0) ?>)">
+                                    data-domain-account-action="remove"
+                                    data-account-id="<?= (int)($account['account_id'] ?? 0) ?>">
                                 <i class="mdi mdi-delete"></i>
                             </button>
                         </td>
@@ -86,7 +97,7 @@ $accounts = $accounts ?? [];
 
                     <div class="mb-3">
                         <label class="form-label"><?= __('域名商渠道') ?> <span class="text-danger">*</span></label>
-                        <select name="registrar_code" id="form-registrar-code" class="form-select" required onchange="onRegistrarChange(this.value)">
+                        <select name="registrar_code" id="form-registrar-code" class="form-select" required>
                             <option value=""><?= __('请选择域名商') ?></option>
                             <?php foreach ($adapterOptions as $opt): ?>
                                 <option value="<?= htmlspecialchars($opt['code']) ?>"
@@ -121,7 +132,7 @@ $accounts = $accounts ?? [];
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" onclick="saveAccount()">
+                <button type="button" class="btn btn-primary" data-domain-account-action="save">
                     <i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>
                 </button>
             </div>
@@ -459,6 +470,43 @@ window.testAccountConnection = function(accountId, registrarCode) {
         showToast('<?= __('测试失败') ?>: ' + err.message, 'error');
     });
 };
+
+document.addEventListener('click', function(event) {
+    var trigger = event.target.closest('[data-domain-account-action]');
+    if (!trigger) {
+        return;
+    }
+    var action = trigger.getAttribute('data-domain-account-action');
+    if (action === 'reset') {
+        resetAccountForm();
+        return;
+    }
+
+    event.preventDefault();
+    if (action === 'test') {
+        testAccountConnection(
+            parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0,
+            trigger.getAttribute('data-registrar-code') || ''
+        );
+    } else if (action === 'edit') {
+        try {
+            editAccount(JSON.parse(trigger.getAttribute('data-account-payload') || '{}'));
+        } catch (e) {
+            showToast('<?= __('请求失败') ?>', 'error');
+        }
+    } else if (action === 'remove') {
+        removeAccount(parseInt(trigger.getAttribute('data-account-id') || '0', 10) || 0);
+    } else if (action === 'save') {
+        saveAccount();
+    }
+});
+
+var registrarSelect = document.getElementById('form-registrar-code');
+if (registrarSelect) {
+    registrarSelect.addEventListener('change', function() {
+        onRegistrarChange(this.value);
+    });
+}
 
 })();
 </script>

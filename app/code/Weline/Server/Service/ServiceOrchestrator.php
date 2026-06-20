@@ -1800,7 +1800,7 @@ class ServiceOrchestrator
         }
         $workerCount = \max(1, (int) $workerCount);
         $nMaint = \max(1, (int)\ceil($workerCount / 3));
-        $sticky = (bool) (
+        $sticky = self::normalizeBooleanConfig(
             ($context->envConfig['system']['maintenance'] ?? null)
             ?? ($context->envConfig['maintenance'] ?? false)
         );
@@ -1825,9 +1825,39 @@ class ServiceOrchestrator
     }
 
     /**
-     * 检查业务 Worker 是否已就绪，决定是否退出维护模式
-     *
-     * @return bool true = 业务 Worker 已就绪，可以退出维护模式
+     * Normalize env-style boolean values such as "false" and "off".
+     */
+    private static function normalizeBooleanConfig(mixed $value, bool $default = false): bool
+    {
+        if ($value === null) {
+            return $default;
+        }
+
+        if (\is_bool($value)) {
+            return $value;
+        }
+
+        if (\is_int($value) || \is_float($value)) {
+            return (bool)$value;
+        }
+
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+            if ($normalized === '') {
+                return $default;
+            }
+
+            $boolean = \filter_var($normalized, \FILTER_VALIDATE_BOOLEAN, \FILTER_NULL_ON_FAILURE);
+            if ($boolean !== null) {
+                return $boolean;
+            }
+        }
+
+        return (bool)$value;
+    }
+
+    /**
+     * @return bool true when business workers are ready and maintenance can be disabled
      */
     public function checkAndDisableMaintenanceIfReady(): bool
     {
@@ -2092,6 +2122,7 @@ class ServiceOrchestrator
 
         // 记录启动完成时间（用于启动后冷却期）
         $this->startAllCompletedAt = \microtime(true);
+        $this->markStartupPhaseRunning($context, \count($this->registry->getAllInstances()));
 
         // 启动后置任务改为异步调度，避免在启动 Fiber 内同步阻塞。
         $this->schedulePostStartupHousekeeping($context);
@@ -2772,6 +2803,10 @@ class ServiceOrchestrator
     private function resolveStartupAcceptanceMinReady(string $role, int $plannedCount): int
     {
         if ($plannedCount <= 0) {
+            return 0;
+        }
+
+        if ($role === ControlMessage::ROLE_GATEWAY) {
             return 0;
         }
 
@@ -9855,6 +9890,7 @@ class ServiceOrchestrator
             'dispatcher_enabled',
             'worker_port',
             'worker_base_port',
+            'gateway',
             'http_redirect_port',
             'started_by',
             'started_at',
@@ -10719,6 +10755,10 @@ class ServiceOrchestrator
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, $data, 'Telemetry retrieved'));
                 break;
 
+            case ControlMessage::ACTION_PROXY_APPLY:
+                $this->handleProxyApplyCommand($clientId, $msg);
+                break;
+
             case ControlMessage::ACTION_FIBER_STATS:
                 $this->requestFiberPoolStats($clientId);
                 break;
@@ -10727,6 +10767,77 @@ class ServiceOrchestrator
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, [], 'Unknown command'));
                 break;
         }
+    }
+
+    private function handleProxyApplyCommand(int $clientId, array $msg): void
+    {
+        $routeSource = $msg['routes'] ?? ($msg['payload']['routes'] ?? []);
+        $routes = $this->normalizeProxyApplyRoutes(\is_array($routeSource) ? $routeSource : []);
+        $msgId = (string)($msg['msg_id'] ?? '');
+        if ($this->controlServer === null) {
+            return;
+        }
+
+        $message = ControlMessage::proxyReload($routes);
+        $targetClientIds = $this->controlServer->sendToRoleAndCollectTargets(ControlMessage::ROLE_GATEWAY, $message);
+        $targets = \array_map(
+            static fn(int $clientId): string => ControlMessage::ROLE_GATEWAY . "(ipc:{$clientId})",
+            $targetClientIds
+        );
+        $sentCount = \count($targetClientIds);
+
+        $data = [
+            'routes' => \count($routes),
+            'gateways' => $sentCount,
+            'targets' => $targets,
+        ];
+
+        if ($sentCount <= 0) {
+            $this->controlServer->sendTo(
+                $clientId,
+                ControlMessage::commandResult(false, $data, (string)__('没有已连接的 Gateway 进程可应用代理配置。'), $msgId)
+            );
+            return;
+        }
+
+        WlsLogger::info_(
+            '[IPC] PROXY_RELOAD routes=' . \count($routes) . ' -> ' . \implode(', ', $targets)
+        );
+        $this->controlServer->sendTo(
+            $clientId,
+            ControlMessage::commandResult(true, $data, (string)__('代理配置已应用到 %{1} 个 Gateway 进程。', [$sentCount]), $msgId)
+        );
+    }
+
+    /**
+     * @param array<int, mixed> $routes
+     * @return array<int, array{domain:string,backend_host:string,backend_port:int,backend_ssl:bool,priority:int}>
+     */
+    private function normalizeProxyApplyRoutes(array $routes): array
+    {
+        $normalized = [];
+        foreach ($routes as $route) {
+            if (!\is_array($route)) {
+                continue;
+            }
+
+            $domain = \strtolower(\trim((string)($route['domain'] ?? '')));
+            $backendHost = \trim((string)($route['backend_host'] ?? ''));
+            $backendPort = (int)($route['backend_port'] ?? 0);
+            if ($domain === '' || $backendHost === '' || $backendPort < 1 || $backendPort > 65535) {
+                continue;
+            }
+
+            $normalized[] = [
+                'domain' => $domain,
+                'backend_host' => $backendHost,
+                'backend_port' => $backendPort,
+                'backend_ssl' => (bool)($route['backend_ssl'] ?? false),
+                'priority' => (int)($route['priority'] ?? 0),
+            ];
+        }
+
+        return $normalized;
     }
 
     private function handleScalingStatusCommand(int $clientId, array $msg): void

@@ -7,6 +7,10 @@
         <observer name="Weline_Framework_Database::setup_upgrade_adapter_scan" instance="Weline\Framework\Database\Observer\ModuleUpgradeAdapterScanObserver" disabled="false" shared="true" sort="100"/>
     </event>
 
+    <event name="Weline_DeveloperWorkspace::api_doc_collect_after">
+        <observer name="Weline_Framework_BinQuery::api_doc_sdk" instance="Weline\Framework\Service\Query\Observer\BinQueryApiDocContributor" disabled="false" shared="true" sort="100"/>
+    </event>
+
     <!-- 维护模式：API 请求统一JSON 响应 -->
     <event name="Weline_Maintenance::maintenance">
         <observer name="Weline_Framework_Api::maintenance_response" instance="Weline\Framework\Api\Observer\Maintenance" disabled="false" shared="true" sort="-100"/>

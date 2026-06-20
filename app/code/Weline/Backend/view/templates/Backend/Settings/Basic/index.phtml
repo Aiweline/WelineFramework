@@ -44,7 +44,7 @@ $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
             <div class="card-body">
                 <h4 class="card-title mb-4"><lang>基础设置</lang></h4>
                 
-                <form id="settingsForm" onsubmit="WelineBasicSettings.save(event)">
+                <form id="settingsForm">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -131,5 +131,10 @@ $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
             });
         }
     };
+
+    var settingsForm = document.getElementById('settingsForm');
+    if (settingsForm) {
+        settingsForm.addEventListener('submit', window.WelineBasicSettings.save);
+    }
 })();
 </script>

@@ -2,14 +2,14 @@
 @template(Weline_FileManager::image-preview/template.phtml)
 
 <!-- 触发按钮 -->
-<button type="button" class="btn btn-primary btn-sm waves-effect waves-light" 
-        onclick="WelineMediaManager_{{target}}_open()">{{title}}</button>
+<button type="button" class="btn btn-primary btn-sm waves-effect waves-light"
+        data-wm-open="{{target}}">{{title}}</button>
 <if condition="ext !== '*'"><br><span>@lang{允许的文件类型：}({{ext}})</span></if>
 <br>
 <span>@lang{允许的文件大小：}{{size_alias}}</span>
 
 <!-- 自定义 Modal -->
-<div id="{{target}}-modal-overlay" class="wm-modal-overlay" onclick="if(event.target===this)WelineMediaManager_{{target}}_close()">
+<div id="{{target}}-modal-overlay" class="wm-modal-overlay" data-wm-overlay="{{target}}">
     <div class="wm-modal-container">
         <div class="wm-modal-header">
             <h5 class="wm-modal-title">
@@ -17,7 +17,7 @@
                 <if condition="ext !== '*'"><span class="wm-modal-hint">@lang{允许的文件类型：}({{ext}})</span></if>
                 <span class="wm-modal-hint">@lang{允许的文件大小：}{{size_alias}}</span>
             </h5>
-            <button type="button" class="wm-modal-close" onclick="WelineMediaManager_{{target}}_close()">&times;</button>
+            <button type="button" class="wm-modal-close" data-wm-close="{{target}}">&times;</button>
         </div>
         <div class="wm-modal-body">
             <iframe id="{{target}}-file-manager-iframe" class="wm-modal-iframe" src="" frameborder="0"
@@ -130,10 +130,50 @@
 </style>
 
 <script>
-function WelineMediaManager_{{target}}_open() {
-    var overlay = document.getElementById('{{target}}-modal-overlay');
-    var iframe = document.getElementById('{{target}}-file-manager-iframe');
-    if (!overlay) { alert('Modal not found'); return; }
+    document.querySelectorAll('[data-wm-open]').forEach(function(trigger) {
+        if (trigger.getAttribute('data-wm-open') === targetId) {
+            trigger.addEventListener('click', openMediaManager);
+        }
+    });
+
+    document.querySelectorAll('[data-wm-close]').forEach(function(trigger) {
+        if (trigger.getAttribute('data-wm-close') === targetId) {
+            trigger.addEventListener('click', closeMediaManager);
+        }
+    });
+
+    var overlayTrigger = document.getElementById(targetId + '-modal-overlay');
+    if (overlayTrigger) {
+        overlayTrigger.addEventListener('click', function(event) {
+            if (event.target === overlayTrigger) {
+                closeMediaManager();
+            }
+        });
+    }
+
+    window.WelineMediaManager = window.WelineMediaManager && typeof window.WelineMediaManager === 'object'
+        ? window.WelineMediaManager
+        : Object.create(null);
+    window.WelineMediaManager[targetId] = {
+        open: openMediaManager,
+        close: closeMediaManager
+    };
+    if (!/^[A-Za-z0-9_-]+$/.test(targetId)) {
+        console.error('Invalid media manager target id');
+        return;
+    }
+
+function openMediaManager() {
+    var overlay = document.getElementById(targetId + '-modal-overlay');
+    var iframe = document.getElementById(targetId + '-file-manager-iframe');
+    if (!overlay) {
+        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+            window.BackendToast.error('<?= __('媒体选择器初始化失败，请刷新页面后重试。') ?>');
+        } else {
+            console.error('Media modal not found');
+        }
+        return;
+    }
     
     overlay.classList.add('wm-show');
     document.body.style.overflow = 'hidden';
@@ -141,7 +181,7 @@ function WelineMediaManager_{{target}}_open() {
     if (iframe) {
         var connectorUrl = iframe.getAttribute('data-connector');
         if (connectorUrl) {
-            var targetEl = document.getElementById('{{target}}');
+            var targetEl = document.getElementById(targetId);
             var currentValue = (targetEl && targetEl.value !== undefined) ? (targetEl.value || '') : '';
             var sep = connectorUrl.indexOf('?') >= 0 ? '&' : '?';
             iframe.src = connectorUrl + sep + 'initialValue=' + encodeURIComponent(currentValue);
@@ -149,8 +189,8 @@ function WelineMediaManager_{{target}}_open() {
     }
 }
 
-function WelineMediaManager_{{target}}_close() {
-    var overlay = document.getElementById('{{target}}-modal-overlay');
+function closeMediaManager() {
+    var overlay = document.getElementById(targetId + '-modal-overlay');
     if (overlay) {
         overlay.classList.remove('wm-show');
         document.body.style.overflow = '';
@@ -163,7 +203,7 @@ function WelineMediaManager_{{target}}_close() {
     document.addEventListener('keydown', function(e) {
         var overlay = document.getElementById(targetId + '-modal-overlay');
         if (e.key === 'Escape' && overlay && overlay.classList.contains('wm-show')) {
-            WelineMediaManager_{{target}}_close();
+            closeMediaManager();
         }
     });
     
@@ -173,7 +213,7 @@ function WelineMediaManager_{{target}}_close() {
         // 处理取消消息
         if (e.data.type === 'weline-media-manager-cancel') {
             if (e.data.target && e.data.target !== targetId) return;
-            WelineMediaManager_{{target}}_close();
+            closeMediaManager();
             return;
         }
         
@@ -210,6 +250,24 @@ function WelineMediaManager_{{target}}_close() {
             }
         }
         
+        function normalizeMediaPreviewUrl(rawValue, allowDataImage) {
+            var value = String(rawValue || '').trim();
+            if (!value) {
+                return '';
+            }
+
+            var compactValue = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+            if (
+                compactValue.indexOf('javascript:') === 0 ||
+                compactValue.indexOf('vbscript:') === 0 ||
+                (compactValue.indexOf('data:') === 0 && (!allowDataImage || compactValue.indexOf('data:image/') !== 0))
+            ) {
+                return '';
+            }
+
+            return value;
+        }
+
         var previewContainer = document.getElementById(targetId + '-preview');
         if (previewContainer) {
             if (!isMulti) {
@@ -220,9 +278,26 @@ function WelineMediaManager_{{target}}_close() {
                 var wrapper = document.createElement('div');
                 wrapper.className = 'drag-item';
                 wrapper.draggable = true;
-                var relativePath = (f.path || f.url || '').replace(/^\/pub\/media\//, '');
-                wrapper.innerHTML = '<div class="close" onclick="delSelectedImage(event)">x</div>' +
-                    '<img data-src="' + relativePath + '" src="' + (f.thumb || f.url || f.path) + '" alt="' + (f.name || '') + '" class="drag-pic img-responsive" draggable="false" data-file="">';
+                var closeButton = document.createElement('div');
+                closeButton.className = 'close';
+                closeButton.textContent = 'x';
+                closeButton.addEventListener('click', function(event) {
+                    if (typeof delSelectedImage === 'function') {
+                        delSelectedImage(event);
+                    }
+                });
+
+                var relativePath = normalizeMediaPreviewUrl((f.path || f.url || '').replace(/^\/pub\/media\//, ''), false);
+                var image = document.createElement('img');
+                image.setAttribute('data-src', relativePath);
+                image.src = normalizeMediaPreviewUrl(f.thumb || f.url || f.path, true);
+                image.alt = String(f.name || '');
+                image.className = 'drag-pic img-responsive';
+                image.draggable = false;
+                image.setAttribute('data-file', '');
+
+                wrapper.appendChild(closeButton);
+                wrapper.appendChild(image);
                 previewContainer.appendChild(wrapper);
             });
             // 触发 flushSelectedImage（如果存在）来同步隐藏输入框的值
@@ -231,7 +306,7 @@ function WelineMediaManager_{{target}}_close() {
             }
         }
         
-        WelineMediaManager_{{target}}_close();
+        closeMediaManager();
     });
 })();
 </script>
@@ -239,7 +314,10 @@ function WelineMediaManager_{{target}}_close() {
 <notempty name="preview">
 <script>
 (function() {
-    var previewContainer = document.getElementById('{{target}}-preview');
+    var targetId = '{{target}}';
+    if (!/^[A-Za-z0-9_-]+$/.test(targetId)) return;
+
+    var previewContainer = document.getElementById(targetId + '-preview');
     if (!previewContainer) return;
     
     previewContainer.addEventListener('click', function(e) {
@@ -249,7 +327,7 @@ function WelineMediaManager_{{target}}_close() {
         var url = img.dataset.url;
         if (!url) return;
         
-        var iframe = document.getElementById('{{target}}-file-manager-iframe');
+        var iframe = document.getElementById(targetId + '-file-manager-iframe');
         if (iframe) {
             iframe.src = url;
             var overlay = document.getElementById('{{target}}-modal-overlay');

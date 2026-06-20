@@ -531,7 +531,7 @@ $uniqueEventCount = count($eventNames);
             <h4 class='mb-sm-0'><?= __('系统事件') ?></h4>
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><?= __('系统') ?></a></li>
+                    <li class='breadcrumb-item'><span><?= __('系统') ?></span></li>
                     <li class='breadcrumb-item active'><?= __('系统事件') ?></li>
                 </ol>
             </div>
@@ -667,7 +667,7 @@ $uniqueEventCount = count($eventNames);
     }
     ?>
     <div class="weline-event-file-card" data-file="<?= htmlspecialchars(strtolower($file)) ?>" data-module="<?= htmlspecialchars($moduleName) ?>">
-        <div class="weline-event-file-header" onclick="toggleEventFile(this)">
+        <div class="weline-event-file-header" data-event-file-toggle="1">
             <span class="weline-event-file-title">
                 <i class="mdi mdi-file-code-outline"></i>
                 <?= htmlspecialchars($file) ?>
@@ -756,6 +756,12 @@ $uniqueEventCount = count($eventNames);
         header.classList.toggle('collapsed');
         body.classList.toggle('collapsed');
     };
+
+    document.querySelectorAll('[data-event-file-toggle]').forEach(function(header) {
+        header.addEventListener('click', function() {
+            window.toggleEventFile(header);
+        });
+    });
     
     document.getElementById('expand-all').addEventListener('click', function() {
         document.querySelectorAll('.weline-event-file-header').forEach(function(header) {

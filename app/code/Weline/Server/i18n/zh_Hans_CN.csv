@@ -586,6 +586,7 @@ PID：%{1},PID：%{1}
 env.wls.servers.%{1},env.wls.servers.%{1}
 env.wls,env.wls
 命令行参数,命令行参数
+环境变量,环境变量
 "参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。","参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。"
 "真实 Host 解析校验失败","真实 Host 解析校验失败"
 "SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动","SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动"
@@ -1037,6 +1038,7 @@ HTTPS,HTTPS
 "Weline Server 管理","Weline Server 管理"
 "Session 管理","Session 管理"
 内存服务管理,内存服务管理
+实例名称不合法,实例名称不合法
 启动命令已提交,启动命令已提交
 停止命令已发送,停止命令已发送
 重启命令已发送,重启命令已发送
@@ -1044,9 +1046,9 @@ HTTPS,HTTPS
 维护模式已启用,维护模式已启用
 维护模式已禁用,维护模式已禁用
 "Session 列表加载完成","Session 列表加载完成"
-"缺少 Session ID 参数","缺少 Session ID 参数"
+"Session ID 参数不合法","Session ID 参数不合法"
 "Session 详情加载完成","Session 详情加载完成"
-"缺少 Session ID","缺少 Session ID"
+"Session ID 不合法","Session ID 不合法"
 "Session 已销毁","Session 已销毁"
 "Session 销毁失败，请确认服务可用后重试","Session 销毁失败，请确认服务可用后重试"
 "Session 数据已持久化","Session 数据已持久化"
@@ -1054,11 +1056,11 @@ HTTPS,HTTPS
 "Session 垃圾回收已执行","Session 垃圾回收已执行"
 "Session 垃圾回收执行失败","Session 垃圾回收执行失败"
 内存命名空间加载完成,内存命名空间加载完成
-缺少命名空间参数,缺少命名空间参数
+命名空间参数不合法,命名空间参数不合法
 命名空间详情加载完成,命名空间详情加载完成
 内存命名空间已清空,内存命名空间已清空
 "命名空间清理失败，请检查 Memory Service 状态","命名空间清理失败，请检查 Memory Service 状态"
-缺少命名空间或键名参数,缺少命名空间或键名参数
+命名空间或键名参数不合法,命名空间或键名参数不合法
 缓存键已删除,缓存键已删除
 缓存键删除失败,缓存键删除失败
 内存服务数据已持久化,内存服务数据已持久化
@@ -1124,6 +1126,20 @@ HTTPS,HTTPS
 %{1}：证书记录不存在,%{1}：证书记录不存在
 %{1}：%{2},%{1}：%{2}
 续签失败,续签失败
+"WLS Panel","WLS 面板"
+"WLS Plugin Marketplace","WLS 插件商城"
+"WLS Security","WLS 安全"
+"Managed project save failed.",托管项目保存失败。
+"Managed project delete failed.",托管项目删除失败。
+"Gateway route apply failed.",网关路由应用失败。
+"Gateway mode configuration save failed.",网关模式配置保存失败。
+"Security rules save failed.",安全规则保存失败。
+"Managed project saved.",托管项目已保存。
+"Managed project removed.",托管项目已移除。
+"Gateway routes applied.",网关路由已应用。
+"Gateway mode configuration saved. Restart or reload the target WLS instance for listener changes to take effect.","网关模式配置已保存。监听变更需要重启或重载目标 WLS 实例后生效。"
+"Security rules saved.",安全规则已保存。
+"Panel plugin capabilities refreshed.",面板插件能力已刷新。
 "WLS Fiber concurrency probe is disabled.","WLS Fiber 并发探针未启用（需 DEV、ENV_TEST 或环境变量 WLS_FIBER_CONCURRENCY_PROBE=1）。"
 "WLS fiber probe: parallel clients are required; sequential PHP curl does not simulate users.","需要多路并行客户端；PHP 单进程里顺序 curl 无法模拟多用户同时访问。"
 "WLS fiber probe: set env WLS_FIBER_CONCURRENCY_PROBE=1 when DEV is off.","生产或 DEV 关闭时，可设置环境变量 WLS_FIBER_CONCURRENCY_PROBE=1 以启用探针。"
@@ -1249,6 +1265,9 @@ WLS错误扫描,WLS错误扫描
 "广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）","广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）"
 "读取 WLS 攻击统计","读取 WLS 攻击统计"
 统计天数,统计天数
+"Resolve a WLS Panel managed project for plugin context","Resolve a WLS Panel managed project for plugin context"
+"Managed project ID","Managed project ID"
+"Managed project domain","Managed project domain"
 "为当前后台浏览器设置 WLS 健康检查放行 Cookie","为当前后台浏览器设置 WLS 健康检查放行 Cookie"
 域名不能为空,域名不能为空
 "PFX 文件内容无效（Base64 解码失败）","PFX 文件内容无效（Base64 解码失败）"
@@ -1267,10 +1286,16 @@ WLS错误扫描,WLS错误扫描
 "Only managed local wildcard domains are allowed for local wildcard certificate issuance","Only managed local wildcard domains are allowed for local wildcard certificate issuance"
 "Failed to ensure the managed local wildcard certificate","Failed to ensure the managed local wildcard certificate"
 请先登录后台,请先登录后台
+"Managed project context is empty.","Managed project context is empty."
+"Managed project was not found.","Managed project was not found."
+"Managed project context resolved.","Managed project context resolved."
 本地域名证书不允许删除,本地域名证书不允许删除
+"缺少 Session ID","缺少 Session ID"
 "Session 销毁失败，请稍后重试","Session 销毁失败，请稍后重试"
 "Session 持久化失败","Session 持久化失败"
+缺少命名空间参数,缺少命名空间参数
 命名空间清理失败,命名空间清理失败
+缺少命名空间或键名参数,缺少命名空间或键名参数
 内存服务垃圾回收执行失败,内存服务垃圾回收执行失败
 "Session query provider unsupported operation: %{1}","Session query provider unsupported operation: %{1}"
 "Session Query","Session Query"
@@ -1301,6 +1326,11 @@ DDoS攻击,DDoS攻击
 "ReverseProxy 新建记录时 domain 不能为空","ReverseProxy 新建记录时 domain 不能为空"
 "域名格式无效: %{1}","域名格式无效: %{1}"
 "域名 %{1} 已被其他证书记录使用（cert_id=%{2}），不能重复保存。请通过证书管理合并或删除重复记录。","域名 %{1} 已被其他证书记录使用（cert_id=%{2}），不能重复保存。请通过证书管理合并或删除重复记录。"
+"Project name is required.",项目名称不能为空。
+"Project domain is invalid.",项目域名无效。
+"Gateway backend host is required.",网关后端主机不能为空。
+"Gateway backend port must be between 1 and 65535.","网关后端端口必须在 1 到 65535 之间。"
+"Project URL must start with http:// or https://.","项目 URL 必须以 http:// 或 https:// 开头。"
 "WLS 通知：%{1}","WLS 通知：%{1}"
 "高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成","高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成"
 "当前 PHP 环境未启用 curl 扩展，无法执行压测。","当前 PHP 环境未启用 curl 扩展，无法执行压测。"
@@ -1502,6 +1532,11 @@ DDoS攻击,DDoS攻击
 "[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请","[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请"
 "子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书","子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书"
 "HTTPS 已在此域名禁用","HTTPS 已在此域名禁用"
+"[SslCertificateService] Failed to persist reusable global local CA files to %{1}","[SslCertificateService] Failed to persist reusable global local CA files to %{1}"
+"[SslCertificateService] Local CA is now reusable across projects from %{1}","[SslCertificateService] Local CA is now reusable across projects from %{1}"
+"[SslCertificateService] Failed to restore project local CA files from global reusable CA","[SslCertificateService] Failed to restore project local CA files from global reusable CA"
+"[SslCertificateService] Reusing global Weline local CA for this project","[SslCertificateService] Reusing global Weline local CA for this project"
+"[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key","[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key"
 "Failed to generate local CA private key","Failed to generate local CA private key"
 "Failed to generate local CA CSR","Failed to generate local CA CSR"
 "Failed to sign local CA certificate","Failed to sign local CA certificate"
@@ -1662,6 +1697,129 @@ DDoS攻击,DDoS攻击
 "本地域名 %{1} 的证书受保护，跳过清除","本地域名 %{1} 的证书受保护，跳过清除"
 "域名 %{1} 删除 DB 记录失败：%{2}","域名 %{1} 删除 DB 记录失败：%{2}"
 "server:ssl:reload --clear 清理","server:ssl:reload --clear 清理"
+"Current Project",当前项目
+Local,本地
+Path,路径
+Active,运行中
+Inactive,未启用
+Upstream,上游
+"Gateway mode configuration could not be saved.",网关模式配置无法保存。
+"Gateway traffic mode changes require a target WLS restart before the listener topology changes.","Gateway traffic mode changes require a target WLS restart before the listener topology changes."
+"Gateway mode configuration saved.",网关模式配置已保存。
+"Select a Gateway instance before applying routes.","应用路由前请选择一个 Gateway 实例。"
+"Runtime action skipped.",已跳过运行时动作。
+"Select a target WLS instance before applying runtime changes.","应用运行时变更前请选择目标 WLS 实例。"
+"WLS runtime reload requested.","已请求 WLS 运行时重载。"
+"Selected WLS instance %{1} was not found.","Selected WLS instance %{1} was not found."
+"WLS restart command was submitted but no valid PID was returned.","WLS 重启命令已提交，但未返回有效 PID。"
+"WLS restart command submitted for %{1}. Master PID: %{2}","已为 %{1} 提交 WLS 重启命令。Master PID：%{2}"
+"Direct listen","Direct listen"
+Passthrough,Passthrough
+Auto,Auto
+"Prefer SO_REUSEPORT direct worker listening when the runtime supports it. Falls back only after an explicit restart is corrected.","Prefer SO_REUSEPORT direct worker listening when the runtime supports it. Falls back only after an explicit restart is corrected."
+"Force Dispatcher/Gateway passthrough so one listener accepts traffic and routes to workers.","Force Dispatcher/Gateway passthrough so one listener accepts traffic and routes to workers."
+"Let WLS choose the stable topology for the current operating system and runtime profile.","Let WLS choose the stable topology for the current operating system and runtime profile."
+"Direct listen supported",支持直连监听
+"Direct listen unavailable",直连监听不可用
+"Direct listen capability unknown",直连监听能力未知
+"Gateway listen port must be between 1 and 65535.","网关监听端口必须在 1 到 65535 之间。"
+"Gateway listen host is invalid.",网关监听主机无效。
+"AppStore plugin query returned an invalid response.","AppStore 插件查询返回了无效响应。"
+Installed,已安装
+"Plugin required",需要插件
+"Open Capability",打开能力
+"Installed Plugin",已安装插件
+"Install Plugin",安装插件
+"Plugin Panel",插件面板
+"Panel plugin module list refresh failed: %{1}","Panel plugin module list refresh failed: %{1}"
+"Panel plugin registry refresh completed with warnings.",面板插件注册表刷新完成，但存在警告。
+"Panel plugin registry refresh failed: %{1}",面板插件注册表刷新失败：%{1}
+"Panel plugin route refresh failed: %{1}",面板插件路由刷新失败：%{1}
+"Local project",本地项目
+"Gateway enabled",网关已启用
+"Gateway disabled",网关已停用
+Ready,就绪
+"Scoped editor",项目编辑器
+Marketplace,商城
+"Install plugin",安装插件
+"Current project",当前项目
+"Registered project",已登记项目
+"Gateway route",网关路由
+"Managed project",托管项目
+"PHP Config","PHP 配置"
+"Database Config",数据库配置
+Files,文件
+Deploy,部署
+"Configure PHP","配置 PHP"
+"Configure Database",配置数据库
+"Open Files",打开文件
+"Configure Deploy",配置发布
+"Open editor",打开编辑器
+"PHP profile not selected","未选择 PHP 档案"
+"Database profile not selected",未选择数据库档案
+"Project path ready",项目路径就绪
+"Project path missing",项目路径缺失
+"Project release context ready",项目发布上下文就绪
+"Project release context missing",项目发布上下文缺失
+"local context",本地上下文
+"Managed project does not exist.",托管项目不存在。
+"Managed project ID is invalid.","托管项目 ID 无效。"
+"Project Path",项目路径
+"Runtime profile editable",运行时档案可编辑
+"Click to configure profile",点击配置档案
+"Gateway rule is disabled for this project.",该项目的网关规则已停用。
+"Gateway rule saved.",网关规则已保存。
+"Security rules JSON cannot be empty.","安全规则 JSON 不能为空。"
+"Security rules JSON is invalid.","安全规则 JSON 格式无效。"
+"Security rules saved. WLS workers will reload rules from the update flag.","安全规则已保存。WLS Worker 会通过更新标记重载规则。"
+"Security rules JSON is invalid. Visual fields were not saved.","安全规则 JSON 格式无效，可视化字段未保存。"
+"Security rules JSON is invalid. Project policy was not saved.","Security rules JSON is invalid. Project policy was not saved."
+"Select one managed project before saving a project security policy.","Select one managed project before saving a project security policy."
+"Project security policy removed.","Project security policy removed."
+"Project security policy saved.","Project security policy saved."
+"No events",暂无事件
+"No attacks",暂无攻击
+"All managed projects",全部托管项目
+"Current project: %{1}",当前项目：%{1}
+"%{1} (%{2})",%{1}（%{2}）
+"Rate Limit",限流
+Enabled,已启用
+"Window Seconds",窗口秒数
+"Max Requests",最大请求数
+"Block Seconds",封禁秒数
+"Path Rate Limits",路径级限流
+Rules,规则
+"Path Scan",路径扫描
+"Unique Paths","Unique Paths"
+"SSL Handshake","SSL 握手"
+"Max Failures",最大失败次数
+"Fast Close Threshold",快速关闭阈值
+"Unknown Route Ban",未知路由封禁
+"Only In Spike Mode",仅流量突增时启用
+"Consecutive Count",连续次数
+"IP Whitelist","IP 白名单"
+"Whitelisted IPs","白名单 IP"
+"Protected Paths",受保护路径
+Paths,Paths
+"%{1} overrides / %{2} inherited","%{1} 项覆盖 / %{2} 项继承"
+"Project override",项目覆盖
+"Custom equals global",自定义与全局一致
+Inherited,继承
+Disabled,已停用
+"%{1} (%{2}/%{3}s)",%{1}（%{2}/%{3}秒）
+"%{1} entries: %{2}","%{1} entries: %{2}"
+"0 entries","0 entries"
+"Global rules",全局规则
+"Common rules saved",通用规则已保存
+"Project policy saved",项目策略已保存
+"Project policy removed",项目策略已移除
+"Rules JSON saved","规则 JSON 已保存"
+"Policy updated",策略已更新
+"Visual editor",可视化编辑器
+"Project policy editor",项目策略编辑器
+"Advanced JSON","高级 JSON"
+Configured,已配置
+"%{1} entries","%{1} 条"
 定时器间隔必须大于0,定时器间隔必须大于0
 "定时器需要 pcntl 扩展或事件循环支持","定时器需要 pcntl 扩展或事件循环支持"
 放行健康检查（开发模式）,放行健康检查（开发模式）
@@ -1719,8 +1877,9 @@ DDoS攻击,DDoS攻击
 后端端口为项目实际监听端口,后端端口为项目实际监听端口
 保存失败,保存失败
 请求失败,请求失败
-请先填写后端主机和端口,请先填写后端主机和端口
+操作失败,操作失败
 连接失败,连接失败
+请先填写后端主机和端口,请先填写后端主机和端口
 "配置 WLS Gateway 的域名路由规则","配置 WLS Gateway 的域名路由规则"
 总规则数,总规则数
 新建规则,新建规则
@@ -1733,10 +1892,10 @@ DDoS攻击,DDoS攻击
 测试,测试
 删除,删除
 "确定要应用配置到 Gateway 吗？","确定要应用配置到 Gateway 吗？"
-应用失败,应用失败
-操作失败,操作失败
 确定要删除此规则吗？,确定要删除此规则吗？
+应用失败,应用失败
 删除失败,删除失败
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
 正在加载服务器状态...,正在加载服务器状态...
 "Session 全部字段","Session 全部字段"
 关闭,关闭
@@ -2020,6 +2179,291 @@ LiteSSL,LiteSSL
 确定要批量续签选中的,确定要批量续签选中的
 个证书吗？,个证书吗？
 正在批量续签，请稍候...,正在批量续签，请稍候...
+Incremental,增量
+"Global fallback","Global fallback"
+Global,全量
+"No route modules",无路由模块
+Failed,失败
+Unknown,未知
+"Plugin Marketplace",插件商城
+Security,安全
+Dashboard,仪表盘
+Dark,暗色
+Light,亮色
+Projects,项目
+Gateway,网关
+"Gateway Sites",网关站点
+"Direct listen first, proxy fallback",优先直连监听，代理兜底
+"%{1}/%{2} active","%{1}/%{2} 已启用"
+"WLS Runtime","WLS Runtime"
+"Workers, session, memory service",Worker、会话、内存服务
+"%{1} running, %{2} workers","%{1} 个运行中，%{2} 个 Worker"
+"Security Rules",安全规则
+"Attack rules and protection logs",攻击规则与防护日志
+"%{1} blocked in 7d","7 天内拦截 %{1} 次"
+"SSL Certificates","SSL 证书"
+"Certificate and domain binding",证书与域名绑定
+"Manage project paths from the WLS panel plugin area.","通过 WLS 面板插件区管理项目路径。"
+Pending,待处理
+"Webhook and tag driven release workflow for child projects.","面向子项目的 Webhook 与 tag 驱动发布流程。"
+"Configure PHP runtime profiles and extension checks.","配置 PHP 运行时档案与扩展检查。"
+"Store project database profiles for panel-managed sites.",保存面板托管站点的数据库配置。
+"WLS Panel navigation","WLS 面板导航"
+"WLS Standalone Backend","WLS 独立后台"
+"Plugin Capabilities",插件能力
+"Independent Server Panel",独立服务器面板
+"Toggle theme",切换主题
+"Project Admin",项目后台
+"Exit to Backend",返回框架后台
+"Panel operation result",面板操作结果
+"Panel operation warning",面板操作警告
+"Plugin refresh summary",插件刷新摘要
+"Capability Reload",能力重载
+"Panel plugin refresh result",面板插件刷新结果
+"Routes refreshed",路由已刷新
+"Routes unchanged",路由未变化
+"Registry mode",注册表模式
+"Registry modules",注册表模块
+"Route modules",路由模块
+"WLS plugins","WLS 插件"
+"Panel menu entries",面板菜单入口
+"Online source",在线来源
+"Online WLS Plugins","在线 WLS 插件"
+"Open the AppStore with the WLS plugin tag filter applied.","打开已应用 WLS 插件标签过滤的 AppStore。"
+"Open Online Marketplace",打开在线商城
+"Installed WLS Plugins","已安装 WLS 插件"
+"Review installed modules that declared module:wls.","查看声明了 module:wls 的已安装模块。"
+"Installed Plugins",已安装插件
+Contract,契约
+"Tag Contract",标签契约
+"Only modules declaring module:wls appear in this panel marketplace flow.","只有声明 module:wls 的模块会出现在这个面板商城流程中。"
+"Panel Capabilities",面板能力
+"Installed Panel Plugins",已安装面板插件
+"Refresh Panel Plugins",刷新面板插件
+"Installed plugin discovery failed: %{1}",已安装插件发现失败：%{1}
+"No installed WLS plugins yet.","暂未安装 WLS 插件。"
+"Install modules tagged module:wls to extend this standalone panel.","安装带有 module:wls 标签的模块即可扩展这个独立面板。"
+"Open Plugin Panel",打开插件面板
+"No panel entry declared",未声明面板入口
+"Type Tag",类型标签
+Search,搜索
+"Search WLS plugins","搜索 WLS 插件"
+Filter,过滤
+"Open Install Flow",打开安装流程
+"AppStore keeps the signature, hash, dependency, and permission checks.","AppStore 保留签名、哈希、依赖和权限校验。"
+Protection,防护
+"Security Rules And Attack Logs",安全规则与攻击日志
+"Advanced Rules",高级规则
+"Attack Logs",攻击日志
+"Security data warning",安全数据警告
+"Events In 7d","7 天事件"
+"Blocked In 7d","7 天拦截"
+"Critical In 7d","7 天严重事件"
+"Blocked IPs","封禁 IP"
+"Project security drilldown",项目安全钻取
+"Project Security Drilldown",项目安全钻取
+"Each managed project shows its 7-day attack posture before you drill into filtered logs.","每个托管项目会先展示 7 天攻击态势，再进入筛选日志钻取。"
+"7-day scope","7 天范围"
+"No project security scope found.",暂无项目安全范围。
+"Add managed projects or gateway domains to compare project-level attack posture.",添加托管项目或网关域名后，可对比项目级攻击态势。
+"No recent events",暂无最近事件
+Events,事件
+Blocked,已拦截
+Critical,Critical
+"Top Type",主要类型
+"Latest Event",最近事件
+"Latest IP","最近 IP"
+"View Logs",查看日志
+"Edit Policy","Edit Policy"
+"Project security policy","Project security policy"
+"Project Security Policy","Project Security Policy"
+"Override selected protection rules for one managed domain while keeping common rules as fallback.","Override selected protection rules for one managed domain while keeping common rules as fallback."
+"Custom policy","Custom policy"
+"Select one project to edit its policy.","Select one project to edit its policy."
+"Use Edit Policy on a project card or choose a concrete project scope in the log filter.","Use Edit Policy on a project card or choose a concrete project scope in the log filter."
+Project,项目
+Domain,域名
+Updated,Updated
+"Not saved","Not saved"
+"Enable project override","Enable project override"
+"Policy inheritance map","Policy inheritance map"
+"Policy Inheritance Map",策略继承图
+"Compare common rules with the selected project policy before saving changes.",保存前对比通用规则和当前项目策略。
+"No inheritance details available.",暂无继承明细。
+"Select a project policy to compare common and project-level rule values.",请选择项目策略以对比通用规则和项目级规则值。
+"Global Value",全局值
+"Project Effective",项目生效值
+"Enable rule",启用规则
+"Specific path prefixes can override the global rate limit. Clear a path to remove that row; fill the blank row to add one.",指定路径前缀可以覆盖全局限流。清空路径可删除该行；填写空白行可新增一条。
+"Path Prefix",路径前缀
+"One entry per line",每行一条
+"Save Project Policy","Save Project Policy"
+"Remove Custom Policy","Remove Custom Policy"
+"Security policy audit","Security policy audit"
+"Security Policy Audit",安全策略审计
+"Recent policy changes are recorded without storing the full rule payload in the panel audit list.",最近的策略变更会记录在面板审计中，但不会保存完整规则内容。
+"Latest changes",最新变更
+"No policy changes recorded yet.",暂无策略变更记录。
+"Saving common rules or a project policy will create an audit entry here.",保存通用规则或项目策略后会在这里生成审计记录。
+"Unknown time","Unknown time"
+Scope,Scope
+All,All
+"Project Label",项目标签
+Changes,变更
+"Changed rule sections",变更规则区块
+"Common Rule Editor",常用规则编辑器
+"Visual fields update common AttackDetector rule keys before the merged JSON is saved.","可视化字段会先更新常用 AttackDetector 规则键，再保存合并后的 JSON。"
+"Max Unique Paths",最大不同路径数
+"Protected Path List",受保护路径列表
+"No rule changes pending.",暂无待保存规则变更。
+"Rules JSON is invalid; preview is unavailable.","规则 JSON 无效，暂无法预览。"
+"%{1} pending changes","%{1} 项待保存变更"
+Before,变更前
+After,变更后
+"Rule Change Preview",规则变更预览
+"Preview shows what the visual fields will overwrite before the merged JSON is saved.","预览会显示保存合并 JSON 前，可视化字段将覆盖哪些规则。"
+"Changing a visual field will show the affected rule keys here.",修改可视化字段后，会在这里显示受影响的规则键。
+"Merged Rules JSON","合并后的规则 JSON"
+"Advanced JSON stays available; visual fields overwrite matching common keys on save.","高级 JSON 仍可编辑；保存时可视化字段会覆盖对应的常用键。"
+"Save Security Rules",保存安全规则
+"Security rule summary",安全规则摘要
+"Rule Summary",规则摘要
+"Quick visibility for the most important WLS protection switches.","快速查看 WLS 关键防护开关。"
+"Recent attack events",最近攻击事件
+"Last Events",最近事件
+"Recent Attack Logs",最近攻击日志
+"Open Full Log",打开完整日志
+"Project Scope",项目范围
+Instance,实例
+"All instances",全部实例
+Severity,严重级别
+"All severities",全部级别
+"Attack Type",攻击类型
+"All types",全部类型
+"Blocked Status",拦截状态
+"All events",全部事件
+"Blocked only",仅已拦截
+"Observed only",仅观察
+"Page Size",每页数量
+"Apply Filters",应用筛选
+Reset,重置
+"No attack events found.",暂无攻击事件。
+"WLS will list recent AttackDetector events here after traffic is inspected.","WLS 检查流量后，会在这里展示最近的 AttackDetector 事件。"
+Observed,已观察
+"Showing %{1} of %{2} attack logs","显示 %{1} / %{2} 条攻击日志"
+"Attack log pagination",攻击日志分页
+Previous,上一页
+"Page %{1} of %{2}","第 %{1} / %{2} 页"
+Next,下一页
+"Panel summary",面板摘要
+"Managed Projects",托管项目
+"Gateway Rules",网关规则
+"WLS Plugins","WLS 插件"
+"Security Events",安全事件
+"Dashboard data warnings",面板数据警告
+"Some dashboard data could not be loaded.",部分面板数据暂时无法加载。
+"Panel Plugins",面板插件
+"Operations Capability Center",运维能力中心
+"%{1} installed","已安装 %{1} 个"
+"%{1} required","缺少 %{1} 个"
+"Open WLS Marketplace","打开 WLS 插件商城"
+"Operation capability discovery warning: %{1}",运维能力发现警告：%{1}
+"No operation capabilities are defined.",尚未定义运维能力。
+"WLS will show PHP, database, file manager, and deploy plugin slots here.","WLS 会在这里显示 PHP、数据库、文件管理和部署插件槽位。"
+"Required Tag",必需标签
+"Feature Tag",功能标签
+"Installed plugin has not exposed a WLS panel URL yet.","已安装插件尚未暴露 WLS 面板 URL。"
+"Open the contributed WLS panel page when the plugin exposes it.","当插件暴露入口后，可打开它贡献的 WLS 面板页面。"
+"Install flow stays inside AppStore with WLS tags prefilled.","安装流程仍在 AppStore 内完成，并预填 WLS 标签。"
+"Plugin Menu",插件菜单
+"WLS Panel Plugin Entries","WLS 面板插件入口"
+"Manage Plugins",管理插件
+"Plugin contribution discovery warning: %{1}",插件贡献发现警告：%{1}
+"No plugin panel entries yet.",暂无插件面板入口。
+"Installed WLS plugins can declare wls_panel.menu entries in module meta to extend this standalone panel.","已安装的 WLS 插件可以在模块 meta 中声明 wls_panel.menu 入口来扩展这个独立面板。"
+Loaded,已加载
+"This installed plugin declared a WLS panel menu entry.","这个已安装插件声明了一个 WLS 面板菜单入口。"
+"Open Panel Entry",打开面板入口
+"Contributed by %{1}","由 %{1} 贡献"
+"Gateway Mode",网关模式
+"Gateway Settings",网关设置
+"Advanced Gateway",高级网关
+"Gateway instance discovery failed: %{1}","Gateway 实例发现失败：%{1}"
+"Multiple Gateway instances are running. Select one before applying routes.","当前有多个 Gateway 实例运行中，应用路由前请选择一个目标。"
+"Gateway environment variables are overriding the saved panel configuration for this runtime.",当前运行时的网关环境变量正在覆盖面板保存的配置。
+"Active Routes",活跃路由
+"Gateway Enabled",启用网关
+"Gateway Running",运行中网关
+"Traffic Mode","Traffic Mode"
+"Gateway Mode Configuration",网关模式配置
+"Saved to wls.gateway in env config. Listener changes need a WLS restart or reload to spawn the Gateway process.","保存到 env 配置的 wls.gateway。监听变更需要重启或重载 WLS 才会拉起 Gateway 进程。"
+"Effective: Enabled",当前生效：已启用
+"Effective: Disabled",当前生效：已停用
+"Enable Gateway mode",启用网关模式
+"Gateway Listen",网关监听
+"Apply Target",应用目标
+"Auto select Gateway","自动选择 Gateway"
+"Runtime Action",运行时动作
+"Reload workers after saving","保存后重载 Worker"
+"Restart target WLS instance after saving","保存后重启目标 WLS 实例"
+"Apply routes only",仅应用路由
+"Apply routes after saving",保存后应用路由
+"Worker reload refreshes runtime workers. Listener, Gateway role, or traffic mode changes need a target instance restart.","Worker reload refreshes runtime workers. Listener, Gateway role, or traffic mode changes need a target instance restart."
+"Effective Listen",当前生效监听
+"Saved Listen",已保存监听
+"Effective Mode","Effective Mode"
+"Saved Mode","Saved Mode"
+"Direct Listen Capability",直连监听能力
+"Runtime OS",运行时系统
+"Save Gateway Mode",保存网关模式
+"Gateway Target",网关目标
+"Apply Routes Now",立即应用路由
+"No WLS instances discovered.","未发现 WLS 实例。"
+"Start a WLS instance with Gateway enabled to apply routes from this panel.","启动启用 Gateway 的 WLS 实例后，可在此面板应用路由。"
+"Gateway listen not configured","未配置 Gateway 监听"
+"Main Listen",主监听
+Topology,Topology
+SO_REUSEPORT,SO_REUSEPORT
+"Control Port",控制端口
+Unavailable,不可用
+Master,Master
+Running,运行中
+Stopped,已停止
+"Gateway Processes","Gateway 进程"
+"%{1}/%{2} ready","%{1}/%{2} 就绪"
+"Project Switching",项目切换
+"Managed WLS Projects","托管 WLS 项目"
+"New Project",新建项目
+"Edit Managed Project",编辑托管项目
+"Add Managed Project",添加托管项目
+"Clear Editing",清除编辑
+"Project Name",项目名称
+"Project Admin URL","项目后台 URL"
+"Child WLS Panel URL","子 WLS 面板 URL"
+"PHP Profile","PHP 档案"
+"Database Profile",数据库档案
+Status,状态
+"Backend Host",后端主机
+"Backend Port",后端端口
+"Backend SSL","后端 SSL"
+Description,描述
+"Save Project",保存项目
+"Project Operations",项目运维
+"Project Config Center",项目配置中心
+"%{1} projects","%{1} 个项目"
+"%{1} plugin slots ready","%{1} 个插件槽位就绪"
+"Safe Context",安全上下文
+"Child Panel",子面板
+"Security Policy",安全策略
+"Path ready",路径就绪
+"Path missing",路径缺失
+Database,数据库
+PHP,PHP
+"Open Panel",打开面板
+Edit,编辑
+Remove,移除
+Operations,操作
+"Gateway, Security, Runtime",网关、安全、运行时
 无效的监听地址：%{1},无效的监听地址：%{1}
 "Windows 模式：单进程运行","Windows 模式：单进程运行"
 "Weline Server 只能在 CLI 模式下运行","Weline Server 只能在 CLI 模式下运行"

@@ -25,7 +25,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
             <if condition='flush || save'>
                 <div class='btn btn-group-justified sticky-top pull-right gap-2 d-flex'>
                     <if condition='flush'>
-                        <button class='{{flush_button_class}} pull-right ' onclick='{{id}}flushIframe()'>
+                        <button class='{{flush_button_class}} pull-right ' data-offcanvas-flush='{{id}}'>
                             <lang>{{flush_button_text}}</lang>
                         </button>
                     </if>
@@ -186,6 +186,10 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                 iframe.attr('src', iframe.attr('src'))
                 hideLoading();
             }
+
+            $('[data-offcanvas-flush="{{id}}"]').on('click', function () {
+                window['{{id}}flushIframe']();
+            })
         })
     </script>
 </if>

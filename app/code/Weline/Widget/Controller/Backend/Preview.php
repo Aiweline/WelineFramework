@@ -12,8 +12,8 @@ declare(strict_types=1);
 namespace Weline\Widget\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Widget\Service\WidgetData;
+use Weline\Widget\Service\WidgetPreviewService;
 use Weline\Widget\Taglib\Widget;
 
 /**
@@ -21,11 +21,10 @@ use Weline\Widget\Taglib\Widget;
  */
 class Preview extends BackendController
 {
-    private WidgetScanner $widgetScanner;
-
-    public function __construct(WidgetScanner $widgetScanner)
-    {
-        $this->widgetScanner = $widgetScanner;
+    public function __construct(
+        private readonly WidgetData $widgetData,
+        private readonly WidgetPreviewService $previewService,
+    ) {
     }
 
     /**
@@ -69,10 +68,12 @@ class Preview extends BackendController
             $method = $reflection->getMethod('renderWidget');
             $method->setAccessible(true);
             $html = $method->invokeArgs(null, [$widget, $params]);
+            $html = $this->previewService->sanitizePreviewHtml(is_string($html) ? $html : '');
 
             return $this->fetchJson([
                 'success' => true,
-                'html' => $html
+                'html' => $html,
+                'preview_safe' => true,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -98,11 +99,12 @@ class Preview extends BackendController
                 ]);
             }
 
-            // 这里可以处理页面内容，渲染所有 w:widget 标签
-            // 暂时返回原始内容
+            $html = $this->previewService->sanitizePreviewHtml($content);
+
             return $this->fetchJson([
                 'success' => true,
-                'html' => $content
+                'html' => $html,
+                'preview_safe' => true,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([

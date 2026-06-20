@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Service;
 
-use Weline\Api\Service\ApiDocService;
 use Weline\DeveloperWorkspace\Model\Document;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\Framework\Api\Validator\ApiSpecValidator;
@@ -24,7 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class ApiDocImporter
 {
-    private ApiDocService $apiDocService;
+    private ApiDocCollector $apiDocCollector;
     private ApiSpecValidator $validator;
     private Document $documentModel;
     private Catalog $catalogModel;
@@ -35,12 +34,12 @@ class ApiDocImporter
     private $progressCallback = null;
     
     public function __construct(
-        ApiDocService $apiDocService,
+        ApiDocCollector $apiDocCollector,
         ApiSpecValidator $validator,
         Document $documentModel,
         Catalog $catalogModel
     ) {
-        $this->apiDocService = $apiDocService;
+        $this->apiDocCollector = $apiDocCollector;
         $this->validator = $validator;
         $this->documentModel = $documentModel;
         $this->catalogModel = $catalogModel;
@@ -97,7 +96,7 @@ class ApiDocImporter
         
         // 生成所有API文档
         $this->progress(__('正在生成API文档...'), 'info');
-        $allApis = $this->apiDocService->generateAll($force);
+        $allApis = $this->apiDocCollector->generateAll($force);
         
         // 按模块组织并导入
         foreach ($allApis as $moduleName => $apis) {
@@ -284,6 +283,35 @@ class ApiDocImporter
         if (!empty($api['example'])) {
             $content .= "## 示例\n\n";
             $example = $api['example'];
+
+            $sdkExampleLabels = [
+                'package' => '包名',
+                'download' => '下载位置',
+                'install' => '安装命令',
+                'docs' => '文档',
+                'content_type' => 'Content-Type',
+                'protocol' => '协议',
+                'derived_path' => '推导路径',
+            ];
+            $sdkExampleLines = [];
+            foreach ($sdkExampleLabels as $key => $label) {
+                if (!isset($example[$key]) || $example[$key] === '') {
+                    continue;
+                }
+                $sdkExampleLines[] = '- **' . $label . '**: `' . (string)$example[$key] . '`';
+            }
+            if (!empty($sdkExampleLines)) {
+                $content .= "**SDK / 协议信息**:\n\n";
+                $content .= implode("\n", $sdkExampleLines) . "\n\n";
+            }
+
+            if (($example['frontend_worker'] ?? false) !== true && !empty($example['code'])) {
+                $codeLanguage = str_starts_with((string)($example['package'] ?? ''), '@') ? 'js' : 'php';
+                $content .= "**示例代码**:\n\n";
+                $content .= "```{$codeLanguage}\n";
+                $content .= (string)$example['code'] . "\n";
+                $content .= "```\n\n";
+            }
 
             if (($example['frontend_worker'] ?? false) === true) {
                 $content .= "**前端调用**:\n\n";

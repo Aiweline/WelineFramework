@@ -44,7 +44,7 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') {
     <header class="motor-account-sidebar__header">
         <div class="motor-account-sidebar__avatar">
             <?php if ($avatar): ?>
-                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" class="motor-account-sidebar__avatar-image" data-fallback-target=".motor-account-sidebar__avatar-fallback" data-fallback-display="flex">
                 <div class="motor-account-sidebar__avatar-fallback" style="display:none"><?= htmlspecialchars($avatarInitial) ?></div>
             <?php else: ?>
                 <div class="motor-account-sidebar__avatar-fallback"><?= htmlspecialchars($avatarInitial) ?></div>
@@ -133,3 +133,20 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') {
         </a>
     </nav>
 </div>
+
+<script>
+(function() {
+    'use strict';
+
+    document.querySelectorAll('.motor-account-sidebar__avatar-image[data-fallback-target]').forEach(function(image) {
+        image.addEventListener('error', function() {
+            var targetSelector = image.getAttribute('data-fallback-target') || '';
+            var fallback = targetSelector && image.parentNode ? image.parentNode.querySelector(targetSelector) : null;
+            image.style.display = 'none';
+            if (fallback) {
+                fallback.style.display = image.getAttribute('data-fallback-display') || 'flex';
+            }
+        });
+    });
+})();
+</script>

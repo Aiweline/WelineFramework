@@ -10,6 +10,7 @@
 
 #### 核心开发
 - [模块开发完整指南](./模块开发完整指南.md) - 模块开发全流程
+- [BinQuery 文档目录](./BinQuery/) - 站外二进制 Query 网关、SDK 与 Provider 开发指南
 - [文档更新日志](./文档更新日志.md) - 文档变更记录
 - [DOCUMENTATION-UPDATE-SUMMARY](./DOCUMENTATION-UPDATE-SUMMARY.md) - 文档更新总结
 
@@ -83,6 +84,7 @@
 ## 📅 更新记录
 
 - **2025-10-26**: 创建文档中心，规范化文档结构
+- **2026-06-17**: 新增 BinQuery 网关、SDK 与协议文档入口
 - **2025-01**: 完善国际化文档
 - **2025-01**: 更新Console命令文档
 

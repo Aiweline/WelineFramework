@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "module_name": "Weline_FileManager",
+  "i18n": {
+    "source_locale": "zh_Hans_CN",
+    "locales": {
+      "zh_Hans_CN": {
+        "display_name": "WLS 文件管理器",
+        "description": "为 WLS 面板提供项目路径、路径白名单和文件管理入口。当前阶段提供目录浏览、受限下载、受控写入、操作审计和项目级路径策略。"
+      },
+      "en_US": {
+        "display_name": "WLS File Manager",
+        "description": "Provides project path, path allowlist, and file management entry points for WLS Panel. This stage ships directory browsing, restricted downloads, guarded writes, operation audit, and project-level path policy."
+      }
+    }
+  },
+  "tags": [
+    {
+      "code": "module:wls",
+      "type": "module",
+      "primary": true,
+      "labels": {
+        "zh_Hans_CN": "WLS 面板插件",
+        "en_US": "WLS Panel Plugin"
+      }
+    },
+    {
+      "code": "custom:wls-file-manager",
+      "type": "custom",
+      "labels": {
+        "zh_Hans_CN": "WLS 文件管理器",
+        "en_US": "WLS File Manager"
+      }
+    },
+    {
+      "code": "category:server-tools",
+      "type": "category",
+      "labels": {
+        "zh_Hans_CN": "服务器工具",
+        "en_US": "Server Tools"
+      }
+    },
+    {
+      "code": "feature:file-manager",
+      "type": "feature",
+      "labels": {
+        "zh_Hans_CN": "文件管理",
+        "en_US": "File Manager"
+      }
+    },
+    {
+      "code": "capability:files-read",
+      "type": "capability",
+      "labels": {
+        "zh_Hans_CN": "文件读取",
+        "en_US": "Files Read"
+      }
+    },
+    {
+      "code": "capability:files-write",
+      "type": "capability",
+      "labels": {
+        "zh_Hans_CN": "受控写入",
+        "en_US": "Controlled Files Write"
+      }
+    },
+    {
+      "code": "capability:files-policy",
+      "type": "capability",
+      "labels": {
+        "zh_Hans_CN": "项目路径策略",
+        "en_US": "Project Path Policy"
+      }
+    },
+    {
+      "code": "capability:files-compress",
+      "type": "capability",
+      "labels": {
+        "zh_Hans_CN": "受控压缩",
+        "en_US": "Bounded Files Compression"
+      }
+    },
+    {
+      "code": "capability:files-delete-tree",
+      "type": "capability",
+      "labels": {
+        "zh_Hans_CN": "受限递归删除",
+        "en_US": "Bounded Recursive Delete"
+      }
+    },
+    {
+      "code": "capability:files-trash",
+      "type": "capability",
+      "labels": {
+        "zh_Hans_CN": "\u53ef\u6062\u590d\u56de\u6536",
+        "en_US": "Recoverable Trash"
+      }
+    },
+    {
+      "code": "system:true",
+      "type": "system",
+      "labels": {
+        "zh_Hans_CN": "系统模块",
+        "en_US": "System Module"
+      }
+    }
+  ],
+  "surfaces": [
+    "backend"
+  ],
+  "capabilities": {
+    "files.read": {
+      "label": {
+        "zh_Hans_CN": "读取项目路径",
+        "en_US": "Read Project Paths"
+      },
+      "status": "enabled",
+      "backend_route": "weline_filemanager/backend/wls-file-manager"
+    },
+    "files.write": {
+      "label": {
+        "zh_Hans_CN": "受控写入项目文件",
+        "en_US": "Controlled Project File Operations"
+      },
+      "status": "guarded",
+      "backend_route": "weline_filemanager/backend/wls-file-manager"
+    },
+    "files.policy": {
+      "label": {
+        "zh_Hans_CN": "项目级文件路径策略",
+        "en_US": "Project File Path Policy"
+      },
+      "status": "guarded",
+      "backend_route": "weline_filemanager/backend/wls-file-manager#path-policy"
+    },
+    "files.compress": {
+      "label": {
+        "zh_Hans_CN": "受控压缩项目文件",
+        "en_US": "Bounded Project File Compression"
+      },
+      "status": "guarded",
+      "backend_route": "weline_filemanager/backend/wls-file-manager"
+    },
+    "files.delete-tree": {
+      "label": {
+        "zh_Hans_CN": "受限递归删除项目目录",
+        "en_US": "Bounded Project Directory Delete"
+      },
+      "status": "guarded",
+      "backend_route": "weline_filemanager/backend/wls-file-manager"
+    },
+    "files.trash": {
+      "label": {
+        "zh_Hans_CN": "\u53ef\u6062\u590d\u56de\u6536\u9879\u76ee\u6587\u4ef6",
+        "en_US": "Recoverable Project File Trash"
+      },
+      "status": "guarded",
+      "backend_route": "weline_filemanager/backend/wls-file-manager#queue-operations"
+    },
+    "project.path": {
+      "label": {
+        "zh_Hans_CN": "项目路径上下文",
+        "en_US": "Project Path Context"
+      },
+      "status": "shell"
+    }
+  },
+  "wls_panel": {
+    "menu": [
+      {
+        "key": "file-manager",
+        "label": {
+          "zh_Hans_CN": "文件管理",
+          "en_US": "File Manager"
+        },
+        "description": {
+          "zh_Hans_CN": "查看当前项目根目录和后续文件管理能力入口。",
+          "en_US": "Open the current project path, browse files, and use guarded write operations."
+        },
+        "group": "tools",
+        "order": 30,
+        "backend_route": "weline_filemanager/backend/wls-file-manager"
+      }
+    ]
+  },
+  "seo": {
+    "slug": "wls-file-manager"
+  }
+}

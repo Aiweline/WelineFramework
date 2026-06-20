@@ -138,13 +138,13 @@ class MarketplaceMetaReader
             if (!is_array($tag)) {
                 continue;
             }
-            $code = $this->normalizeTagCode((string)($tag['code'] ?? ''));
+            $code = MarketplaceTag::normalizeCode((string)($tag['code'] ?? ''));
             if ($code === '') {
                 continue;
             }
-            $type = trim((string)($tag['type'] ?? ''));
+            $type = MarketplaceTag::normalizeType((string)($tag['type'] ?? ''));
             if ($type === '') {
-                $type = str_starts_with($code, 'custom.') ? 'custom' : 'system';
+                $type = MarketplaceTag::typeFromCode($code);
             }
             $labels = is_array($tag['labels'] ?? null) ? $tag['labels'] : [];
             $label = $tag['label'] ?? null;
@@ -172,8 +172,9 @@ class MarketplaceMetaReader
         }
         foreach ($tags as $tag) {
             $code = (string)($tag['code'] ?? '');
-            if (str_starts_with($code, 'surface.')) {
-                $surfaces[substr($code, strlen('surface.'))] = true;
+            $surface = MarketplaceTag::surfaceFromCode($code);
+            if ($surface !== '') {
+                $surfaces[$surface] = true;
             }
         }
         $meta['surfaces'] = array_keys($surfaces);
@@ -224,13 +225,6 @@ class MarketplaceMetaReader
         }
 
         return $this->normalizeMeta($meta);
-    }
-
-    private function normalizeTagCode(string $code): string
-    {
-        $code = strtolower(trim($code));
-        $code = str_replace('-', '_', $code);
-        return trim($code, '.');
     }
 
     private function normalizeRelativePath(string $path): string

@@ -22,7 +22,7 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
             </h4>
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>系统</lang></a></li>
+                    <li class='breadcrumb-item'><span><lang>系统</lang></span></li>
                     <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
                     <li class='breadcrumb-item active'><?= $isEdit ? __('编辑货币') : __('添加货币') ?></li>
                 </ol>
@@ -193,8 +193,8 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
                         <div class='alert alert-info' id='formatPreview'>
                             <lang>输入金额后显示预览</lang>
                         </div>
-                        <input type='number' class='form-control' id='previewAmount' 
-                               value='1234.56' step='0.01' oninput='WelineCurrencyForm.updatePreview()'>
+                        <input type='number' class='form-control' id='previewAmount'
+                               value='1234.56' step='0.01'>
                     </div>
 
                     <div class='mb-3'>
@@ -241,6 +241,11 @@ $currencyLocalNames = is_array($currency_local_names ?? null) ? $currency_local_
                 input.addEventListener('change', WelineCurrencyForm.updatePreview);
             }
         });
+
+        var previewAmount = document.getElementById('previewAmount');
+        if (previewAmount) {
+            previewAmount.addEventListener('input', WelineCurrencyForm.updatePreview);
+        }
     });
 })();
 </script>

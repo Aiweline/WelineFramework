@@ -1230,11 +1230,16 @@ class ModuleInstallerService
         if (DIRECTORY_SEPARATOR === '\\') {
             $output = [];
             $returnCode = 1;
-            exec('tasklist /FI "PID eq ' . $pid . '" 2>NUL', $output, $returnCode);
-            if ($returnCode === 0) {
-                return str_contains(implode("\n", $output), (string)$pid);
+            $tasklist = 'tasklist';
+            $systemRoot = getenv('SystemRoot') ?: getenv('WINDIR') ?: '';
+            if (is_string($systemRoot) && $systemRoot !== '') {
+                $candidate = rtrim($systemRoot, '\\/') . '\\System32\\tasklist.exe';
+                if (is_file($candidate)) {
+                    $tasklist = escapeshellarg($candidate);
+                }
             }
-            return false;
+            exec($tasklist . ' /FI "PID eq ' . $pid . '" 2>NUL', $output, $returnCode);
+            return str_contains(implode("\n", $output), (string)$pid);
         }
 
         if (function_exists('posix_kill')) {

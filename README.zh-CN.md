@@ -1,6 +1,6 @@
 # WelineFramework
 
-![WelineFramework logo](./app/code/Weline/Admin/view/statics/assets/images/logo-weline-default.svg)
+![WelineFramework 封面](./docs/assets/readme/weline-framework-cover.zh-CN.png)
 
 **使用清晰模块边界、自动生成路由、属性驱动 ORM、主题扩展和 WLS 长运行服务构建模块化 PHP 业务系统。**
 

@@ -373,63 +373,63 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     <h5 class="weline-domain-list-title"><?= __('域名列表') ?></h5>
     <div class="weline-domain-list-actions">
         <div class="weline-domain-list-actions-group">
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.refreshServerIp()">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="refreshServerIp">
                 <i class="mdi mdi-ip"></i>
                 <span><?= __('刷新服务器IP') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" onclick="WelineDomainList.showManualCreateDomainOffcanvas()">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" data-domain-list-action="showManualCreateDomainOffcanvas">
                 <i class="mdi mdi-plus-circle-outline"></i>
                 <span><?= __('新建域名') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" onclick="WelineDomainList.showImportModal()">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" data-domain-list-action="showImportModal">
                 <i class="mdi mdi-import"></i>
                 <span><?= __('导入域名') ?></span>
             </button>
         </div>
         <div class="weline-domain-list-actions-group weline-domain-list-actions-group--batch">
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--success" onclick="WelineDomainList.batchTransferToPool()">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--success" data-domain-list-action="batchTransferToPool">
                 <i class="mdi mdi-database-export"></i>
                 <span><?= __('批量转存域名池') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--success" onclick="WelineDomainList.batchTransferToPoolWithIpCheck()" title="<?= __('只转存解析到本服务器的域名，跳过IP不匹配的') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--success" data-domain-list-action="batchTransferToPoolWithIpCheck" title="<?= __('只转存解析到本服务器的域名，跳过IP不匹配的') ?>">
                 <i class="mdi mdi-folder-move"></i>
                 <span><?= __('批量转存（检查IP）') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--warning" onclick="WelineDomainList.batchResolveToLocal()" title="<?= __('将选中域名的 @ 和 www 解析到本服务器公网IP') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--warning" data-domain-list-action="batchResolveToLocal" title="<?= __('将选中域名的 @ 和 www 解析到本服务器公网IP') ?>">
                 <i class="mdi mdi-server"></i>
                 <span><?= __('批量解析到本地') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.showBatchAddDnsRecordModal()" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="showBatchAddDnsRecordModal" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
                 <i class="mdi mdi-plus-network"></i>
                 <span><?= __('批量添加记录') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.showBatchChangeNsModal()" title="<?= __('将选中域名的DNS服务器切换到其他服务商') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="showBatchChangeNsModal" title="<?= __('将选中域名的DNS服务器切换到其他服务商') ?>">
                 <i class="mdi mdi-swap-horizontal"></i>
                 <span><?= __('批量切换DNS') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.batchCheckResolve()">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="batchCheckResolve">
                 <i class="mdi mdi-dns"></i>
                 <span><?= __('批量检测解析') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.batchDetectDnsProvider()" title="<?= __('检测选中域名的 DNS 服务商') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="batchDetectDnsProvider" title="<?= __('检测选中域名的 DNS 服务商') ?>">
                 <i class="mdi mdi-magnify-scan"></i>
                 <span><?= __('检测DNS') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.showBatchSetAccountsModal()" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="showBatchSetAccountsModal" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
                 <i class="mdi mdi-account-cog"></i>
                 <span><?= __('设置账户') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.showSwitchDnsAccountModal()" title="<?= __('为根域名切换 DNS 服务账户，NS 切换后定时任务将把记录推送到新账户') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" data-domain-list-action="showSwitchDnsAccountModal" title="<?= __('为根域名切换 DNS 服务账户，NS 切换后定时任务将把记录推送到新账户') ?>">
                 <i class="mdi mdi-dns"></i>
                 <span><?= __('切换DNS账户') ?></span>
             </button>
         </div>
         <div class="weline-domain-list-actions-group">
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" onclick="WelineDomainList.cleanupDnsProviderDomains()" title="<?= __('清理误同步的 DNS 服务商域名') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" data-domain-list-action="cleanupDnsProviderDomains" title="<?= __('清理误同步的 DNS 服务商域名') ?>">
                 <i class="mdi mdi-broom"></i>
                 <span><?= __('清理DNS域名') ?></span>
             </button>
-            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" onclick="WelineDomainList.batchDeleteDomains()" title="<?= __('删除选中的根域，其子域名与池记录一并删除') ?>">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" data-domain-list-action="batchDeleteDomains" title="<?= __('删除选中的根域，其子域名与池记录一并删除') ?>">
                 <i class="mdi mdi-delete-outline"></i>
                 <span><?= __('批量删除') ?></span>
             </button>
@@ -450,14 +450,14 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         class="weline-domain-filter-account-select"
         on-select="handleDomainFilterAccountChange"
     />
-    <select class="form-select form-select-sm" id="weline-domain-filter-resolve" onchange="WelineDomainList.loadDomains()">
+    <select class="form-select form-select-sm" id="weline-domain-filter-resolve" data-domain-list-change="loadDomains">
         <option value=""><?= __('解析状态') ?></option>
         <option value="resolved"><?= __('已解析') ?></option>
         <option value="unresolved"><?= __('未解析') ?></option>
         <option value="error"><?= __('解析错误') ?></option>
         <option value="local"><?= __('指向本服务器') ?></option>
     </select>
-    <select class="form-select form-select-sm" id="weline-domain-filter-https" onchange="WelineDomainList.loadDomains()">
+    <select class="form-select form-select-sm" id="weline-domain-filter-https" data-domain-list-change="loadDomains">
         <option value=""><?= __('HTTPS状态') ?></option>
         <option value="valid"><?= __('证书有效') ?></option>
         <option value="expiring"><?= __('即将过期') ?></option>
@@ -465,8 +465,8 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         <option value="none"><?= __('无证书') ?></option>
     </select>
     <input type="text" class="form-control form-control-sm" id="weline-domain-filter-search"
-           placeholder="<?= __('搜索域名...') ?>" onkeyup="WelineDomainList.onSearchKeyup(event)">
-    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="WelineDomainList.resetFilters()">
+           placeholder="<?= __('搜索域名...') ?>" data-domain-list-keyup="search">
+    <button type="button" class="btn btn-outline-secondary btn-sm" data-domain-list-action="resetFilters">
         <i class="mdi mdi-filter-off"></i>
     </button>
 </div>
@@ -476,7 +476,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     <table class="table table-hover align-middle weline-domain-table mb-0">
         <thead class="table-light">
             <tr>
-                <th><input type="checkbox" id="weline-domain-select-all" onchange="WelineDomainList.toggleSelectAll()"></th>
+                <th><input type="checkbox" id="weline-domain-select-all" data-domain-list-change="toggleSelectAll"></th>
                 <th><?= __('域名') ?></th>
                 <th><?= __('服务商') ?></th>
                 <th><?= __('状态') ?></th>
@@ -528,12 +528,12 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <div>
-                        <input type="checkbox" id="weline-import-select-all" onchange="WelineDomainList.toggleImportSelectAll()">
+                        <input type="checkbox" id="weline-import-select-all" data-domain-list-change="toggleImportSelectAll">
                         <label for="weline-import-select-all" class="form-label mb-0 ms-1"><?= __('全选') ?></label>
                         <span class="text-muted ms-2" id="weline-import-count"></span>
                     </div>
                     <div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="WelineDomainList.toggleShowImported()">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-domain-list-action="toggleShowImported">
                             <i class="mdi mdi-eye-off me-1"></i><span id="weline-import-toggle-text"><?= __('隐藏已导入') ?></span>
                         </button>
                     </div>
@@ -582,7 +582,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" onclick="WelineDomainList.importSelectedDomains()">
+                <button type="button" class="btn btn-primary" data-domain-list-action="importSelectedDomains">
                     <i class="mdi mdi-import me-1"></i><?= __('导入选中域名') ?>
                 </button>
             </div>
@@ -610,10 +610,10 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                         <code id="weline-dns-server-ip">-</code>
                     </div>
                     <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="WelineDomainList.syncDnsRecords()">
+                        <button type="button" class="btn btn-outline-primary btn-sm" data-domain-list-action="syncDnsRecords">
                             <i class="mdi mdi-sync me-1"></i><?= __('同步记录') ?>
                         </button>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.showAddDnsRecordForm()">
+                        <button type="button" class="btn btn-primary btn-sm" data-domain-list-action="showAddDnsRecordForm">
                             <i class="mdi mdi-plus me-1"></i><?= __('添加记录') ?>
                         </button>
                     </div>
@@ -652,10 +652,10 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                                         <input type="number" class="form-control form-control-sm" id="weline-dns-form-ttl" value="600">
                                     </div>
                                     <div class="col-md-2 d-flex align-items-end gap-2">
-                                        <button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.saveDnsRecord()">
+                                        <button type="button" class="btn btn-primary btn-sm" data-domain-list-action="saveDnsRecord">
                                             <i class="mdi mdi-check"></i>
                                         </button>
-                                        <button type="button" class="btn btn-secondary btn-sm" onclick="WelineDomainList.hideAddDnsRecordForm()">
+                                        <button type="button" class="btn btn-secondary btn-sm" data-domain-list-action="hideAddDnsRecordForm">
                                             <i class="mdi mdi-close"></i>
                                         </button>
                                     </div>
@@ -689,7 +689,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-success btn-sm" onclick="WelineDomainList.autoResolve()">
+                <button type="button" class="btn btn-outline-success btn-sm" data-domain-list-action="autoResolve">
                     <i class="mdi mdi-auto-fix me-1"></i><?= __('自动解析到本服务器') ?>
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
@@ -792,7 +792,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-batch-ns-submit" onclick="WelineDomainList.doBatchChangeNs()">
+                <button type="button" class="btn btn-primary" id="weline-batch-ns-submit" data-domain-list-action="doBatchChangeNs">
                     <i class="mdi mdi-swap-horizontal me-1"></i><?= __('确认切换') ?>
                 </button>
             </div>
@@ -819,7 +819,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
                 <div class="weline-server-ip-option mb-3">
                     <label class="weline-checkbox-label">
-                        <input type="checkbox" id="weline-batch-add-dns-use-server-ip" onchange="WelineDomainList.onBatchAddDnsUseServerIpChange()">
+                        <input type="checkbox" id="weline-batch-add-dns-use-server-ip" data-domain-list-change="onBatchAddDnsUseServerIpChange">
                         <span class="weline-checkbox-custom"></span>
                         <span class="weline-checkbox-text"><?= __('使用本服务器公网IP') ?></span>
                     </label>
@@ -877,7 +877,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-batch-add-dns-submit" onclick="WelineDomainList.doBatchAddDnsRecords()">
+                <button type="button" class="btn btn-primary" id="weline-batch-add-dns-submit" data-domain-list-action="doBatchAddDnsRecords">
                     <i class="mdi mdi-plus me-1"></i><?= __('确认添加') ?>
                 </button>
             </div>
@@ -949,7 +949,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="weline-switch-dns-cancel-btn" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-switch-dns-submit" onclick="WelineDomainList.doSwitchDnsAccount()">
+                <button type="button" class="btn btn-primary" id="weline-switch-dns-submit" data-domain-list-action="doSwitchDnsAccount">
                     <i class="mdi mdi-swap-horizontal me-1"></i><?= __('确认切换') ?>
                 </button>
             </div>
@@ -1039,7 +1039,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" id="weline-batch-set-accounts-submit" onclick="WelineDomainList.doBatchSetAccounts()">
+                <button type="button" class="btn btn-primary" id="weline-batch-set-accounts-submit" data-domain-list-action="doBatchSetAccounts">
                     <i class="mdi mdi-check me-1"></i><?= __('确认设置') ?>
                 </button>
             </div>
@@ -1093,7 +1093,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         </div>
         <div class="mb-3">
             <label class="form-label"><?= __('HTTPS 处理方式') ?></label>
-            <select class="form-select" id="weline-manual-https-mode" onchange="WelineDomainList.onManualHttpsModeChange()">
+            <select class="form-select" id="weline-manual-https-mode" data-domain-list-change="onManualHttpsModeChange">
                 <option value="none"><?= __('暂不处理') ?></option>
                 <option value="auto"><?= __('自动申请证书') ?></option>
                 <option value="manual"><?= __('手动导入证书') ?></option>
@@ -1115,7 +1115,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             <div class="mb-2"><textarea class="form-control" rows="2" id="weline-manual-chain-text" placeholder="<?= __('可选：中间证书链') ?>"></textarea></div>
         </div>
         <div class="d-flex justify-content-end mt-3">
-            <button type="button" class="btn btn-primary" id="weline-manual-domain-submit" onclick="WelineDomainList.submitManualDomain()">
+            <button type="button" class="btn btn-primary" id="weline-manual-domain-submit" data-domain-list-action="submitManualDomain">
                 <i class="mdi mdi-check me-1"></i><?= __('创建域名') ?>
             </button>
         </div>
@@ -1547,7 +1547,12 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
     function escapeOptLabel(s) {
         if (!s) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     function loadImportDnsCdnSelects(callback) {
@@ -1678,7 +1683,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     renderPagination(pagination);
                 } else {
                     toast(data.msg || '<?= __('加载失败') ?>', 'error');
-                    tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + (data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + escapeOptLabel(data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
                 }
             })
             .catch(function(err) {
@@ -1779,7 +1784,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 '<strong><?= __('部分供应商获取域名失败') ?></strong></div>' +
                 '<ul class="mb-0 ps-4">';
             providerErrors.forEach(function(e) {
-                errorHtml += '<li><strong>' + (e.account || '<?= __('未知账户') ?>') + '</strong>: ' + (e.error || '<?= __('未知错误') ?>') + '</li>';
+                errorHtml += '<li><strong>' + escapeOptLabel(e.account || '<?= __('未知账户') ?>') + '</strong>: ' + escapeOptLabel(e.error || '<?= __('未知错误') ?>') + '</li>';
             });
             errorHtml += '</ul></div>';
             tableWrapper.insertAdjacentHTML('beforebegin', errorHtml);
@@ -1799,7 +1804,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         // 显示提示信息
         var infoHtml = '<div class="alert alert-info mb-3 d-flex align-items-center justify-content-between">' +
             '<span><i class="mdi mdi-information-outline me-2"></i><?= __('以下域名尚未拉取到本地，请选择域名后点击「导入选中」按钮') ?></span>' +
-            '<button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.importSelectedRemoteDomains()">' +
+            '<button type="button" class="btn btn-primary btn-sm" data-domain-list-action="importSelectedRemoteDomains">' +
             '<i class="mdi mdi-import me-1"></i><?= __('导入选中') ?></button></div>';
         
         // 在表格前插入提示
@@ -1813,16 +1818,19 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 ? '<span class="badge bg-success"><?= __('已拉取') ?></span>'
                 : '<span class="badge bg-secondary"><?= __('未拉取') ?></span>';
 
-            html += '<tr data-domain="' + (d.domain || '') + '" data-account-id="' + (d._account_id || '') + '">' +
-                '<td><input type="checkbox" class="weline-remote-domain-checkbox" value="' + (d.domain || '') + '" data-account-id="' + (d._account_id || '') + '"' + (d.is_local ? ' disabled' : '') + '></td>' +
-                '<td><span class="domain-name">' + (d.domain || '') + '</span></td>' +
-                '<td><span class="badge bg-primary">' + (d._account_name || '-') + '</span></td>' +
-                '<td><span class="weline-domain-status-badge ' + statusClass + '">' + statusText + '</span></td>' +
-                '<td>' + (d.expires_at || '-') + '</td>' +
+            var remoteDomain = String(d.domain || '');
+            var remoteAccountId = parseInt(d._account_id || 0, 10) || 0;
+
+            html += '<tr data-domain="' + escapeOptLabel(remoteDomain) + '" data-account-id="' + remoteAccountId + '">' +
+                '<td><input type="checkbox" class="weline-remote-domain-checkbox" value="' + escapeOptLabel(remoteDomain) + '" data-account-id="' + remoteAccountId + '"' + (d.is_local ? ' disabled' : '') + '></td>' +
+                '<td><span class="domain-name">' + escapeOptLabel(remoteDomain) + '</span></td>' +
+                '<td><span class="badge bg-primary">' + escapeOptLabel(d._account_name || '-') + '</span></td>' +
+                '<td><span class="weline-domain-status-badge ' + statusClass + '">' + escapeOptLabel(statusText) + '</span></td>' +
+                '<td>' + escapeOptLabel(d.expires_at || '-') + '</td>' +
                 '<td>' + localBadge + '</td>' +
                 '<td>-</td>' +
                 '<td class="text-end weline-domain-actions">' +
-                    (d.is_local ? '-' : '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('导入') ?>" onclick="WelineDomainList.importSingleRemoteDomain(\'' + (d.domain || '').replace(/'/g, "\\'") + '\', ' + (d._account_id || 0) + ')"><i class="mdi mdi-import"></i></button>') +
+                    (d.is_local ? '-' : '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('导入') ?>" data-domain-list-action="importSingleRemoteDomain" data-domain="' + escapeOptLabel(remoteDomain) + '" data-account-id="' + remoteAccountId + '"><i class="mdi mdi-import"></i></button>') +
                 '</td>' +
                 '</tr>';
         });
@@ -1926,7 +1934,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
                     '<p class="mt-2 mb-1"><?= __('当前筛选条件下暂无已拉取的域名') ?></p>' +
                     '<p class="text-muted small mb-2"><?= __('请切换筛选条件为「全部」，从线上选择域名拉取到本地') ?></p>' +
-                    '<button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.resetFilters()">' +
+                    '<button type="button" class="btn btn-primary btn-sm" data-domain-list-action="resetFilters">' +
                     '<i class="mdi mdi-filter-off me-1"></i><?= __('查看全部状态') ?></button></td></tr>';
                 return;
             }
@@ -2023,16 +2031,19 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 '</div>' +
             '</div>';
 
-            html += '<tr data-domain-id="' + item.domain_id + '">' +
-                '<td><input type="checkbox" class="weline-domain-checkbox" value="' + item.domain_id + '" data-domain="' + (item.domain || '') + '"></td>' +
-                '<td><span class="domain-name">' + (item.domain || '') + '</span></td>' +
+            var domainId = parseInt(item.domain_id || 0, 10) || 0;
+            var domainName = String(item.domain || '');
+
+            html += '<tr data-domain-id="' + domainId + '">' +
+                '<td><input type="checkbox" class="weline-domain-checkbox" value="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '"></td>' +
+                '<td><span class="domain-name">' + escapeOptLabel(domainName) + '</span></td>' +
                 '<td>' + providerCell + '</td>' +
                 '<td>' + summaryCell + '</td>' +
                 '<td class="text-end weline-domain-actions">' +
-                    '<button type="button" class="btn btn-outline-success btn-sm" title="<?= __('转存域名池') ?>" onclick="WelineDomainList.transferToPool(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-database-export"></i></button> ' +
-                    '<button type="button" class="btn btn-outline-info btn-sm" title="<?= __('DNS管理') ?>" onclick="WelineDomainList.showDnsModal(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-dns"></i></button> ' +
-                    '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('检测解析') ?>" onclick="WelineDomainList.checkResolve(' + item.domain_id + ')"><i class="mdi mdi-refresh"></i></button> ' +
-                    '<button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>" onclick="WelineDomainList.deleteDomain(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-delete-outline"></i></button>' +
+                    '<button type="button" class="btn btn-outline-success btn-sm" title="<?= __('转存域名池') ?>" data-domain-list-action="transferToPool" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '"><i class="mdi mdi-database-export"></i></button> ' +
+                    '<button type="button" class="btn btn-outline-info btn-sm" title="<?= __('DNS管理') ?>" data-domain-list-action="showDnsModal" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '"><i class="mdi mdi-dns"></i></button> ' +
+                    '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('检测解析') ?>" data-domain-list-action="checkResolve" data-domain-id="' + domainId + '"><i class="mdi mdi-refresh"></i></button> ' +
+                    '<button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>" data-domain-list-action="deleteDomain" data-domain-id="' + domainId + '" data-domain="' + escapeOptLabel(domainName) + '"><i class="mdi mdi-delete-outline"></i></button>' +
                 '</td>' +
                 '</tr>';
         });
@@ -2061,25 +2072,25 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
 
         var linksHtml = '';
         if (lastPage > 1) {
-            linksHtml += '<li class="page-item ' + (current <= 1 ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + (current - 1) + ');return false;">&laquo;</a></li>';
+            linksHtml += '<li class="page-item ' + (current <= 1 ? 'disabled' : '') + '"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="' + (current - 1) + '">&laquo;</a></li>';
             var start = Math.max(1, current - 2);
             var end = Math.min(lastPage, current + 2);
             if (start > 1) {
-                linksHtml += '<li class="page-item"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(1);return false;">1</a></li>';
+                linksHtml += '<li class="page-item"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="1">1</a></li>';
                 if (start > 2) {
                     linksHtml += '<li class="page-item disabled"><span class="page-link">…</span></li>';
                 }
             }
             for (var i = start; i <= end; i++) {
-                linksHtml += '<li class="page-item ' + (i === current ? 'active' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + i + ');return false;">' + i + '</a></li>';
+                linksHtml += '<li class="page-item ' + (i === current ? 'active' : '') + '"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="' + i + '">' + i + '</a></li>';
             }
             if (end < lastPage) {
                 if (end < lastPage - 1) {
                     linksHtml += '<li class="page-item disabled"><span class="page-link">…</span></li>';
                 }
-                linksHtml += '<li class="page-item"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + lastPage + ');return false;">' + lastPage + '</a></li>';
+                linksHtml += '<li class="page-item"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="' + lastPage + '">' + lastPage + '</a></li>';
             }
-            linksHtml += '<li class="page-item ' + (current >= lastPage ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + (current + 1) + ');return false;">&raquo;</a></li>';
+            linksHtml += '<li class="page-item ' + (current >= lastPage ? 'disabled' : '') + '"><a class="page-link" href="#" data-domain-list-action="loadDomains" data-page="' + (current + 1) + '">&raquo;</a></li>';
         } else if (total > 0) {
             linksHtml = '<li class="page-item disabled"><span class="page-link"><?= __('仅 1 页') ?></span></li>';
         }
@@ -2121,7 +2132,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     toast(data.msg || '<?= __('获取成功') ?>', 'success');
                 } else {
                     toast(data.msg || '<?= __('获取失败') ?>', 'error');
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">' + (data.msg || '<?= __('获取失败') ?>') + '</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">' + escapeOptLabel(data.msg || '<?= __('获取失败') ?>') + '</td></tr>';
                     remoteDomainData = [];
                 }
                 updateImportCount();
@@ -2342,15 +2353,19 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             }
 
             var localBadge = rec.is_local_ip ? ' <span class="weline-domain-local-badge"><?= __('本机') ?></span>' : '';
+            var recordId = String(rec.remote_record_id || rec.record_id || '');
+            var recordType = String(rec.record_type || rec.type || 'A');
+            var recordHost = String(rec.host || '@');
+            var recordValue = String(rec.value || '');
 
             html += '<tr>' +
-                '<td><span class="badge bg-secondary">' + (rec.record_type || rec.type || 'A') + '</span></td>' +
-                '<td>' + (rec.host || '@') + '</td>' +
-                '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + (rec.value || '') + '">' + (rec.value || '') + localBadge + '</td>' +
+                '<td><span class="badge bg-secondary">' + escapeOptLabel(recordType) + '</span></td>' +
+                '<td>' + escapeOptLabel(recordHost) + '</td>' +
+                '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + escapeOptLabel(recordValue) + '">' + escapeOptLabel(recordValue) + localBadge + '</td>' +
                 '<td>' + (rec.ttl || 600) + '</td>' +
                 '<td><span class="weline-domain-status-badge ' + statusClass + '">' + statusText + '</span></td>' +
                 '<td class="text-end">' +
-                    '<button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>" onclick="WelineDomainList.deleteDnsRecord(\'' + (rec.remote_record_id || rec.record_id || '') + '\', \'' + (rec.record_type || rec.type || 'A') + '\', \'' + (rec.host || '@') + '\')"><i class="mdi mdi-delete"></i></button>' +
+                    '<button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>" data-domain-list-action="deleteDnsRecord" data-record-id="' + escapeOptLabel(recordId) + '" data-record-type="' + escapeOptLabel(recordType) + '" data-record-host="' + escapeOptLabel(recordHost) + '"><i class="mdi mdi-delete"></i></button>' +
                 '</td>' +
                 '</tr>';
         });
@@ -3393,12 +3408,26 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             var icon = eventIcons[eventType] || '<i class="mdi mdi-circle-small"></i>';
             var time = (data && data.time) ? data.time : '';
             var msg = (data && data.message) ? data.message : (typeof data === 'string' ? data : JSON.stringify(data));
-            var domainTag = (data && data.domain) ? '<strong>[' + data.domain + ']</strong> ' : '';
             var item = document.createElement('div');
             item.className = 'weline-dns-log-item';
-            item.innerHTML = '<span class="weline-dns-log-time">' + time + '</span>'
-                + '<span class="weline-dns-log-icon">' + icon + '</span>'
-                + '<span class="weline-dns-log-msg">' + domainTag + msg + '</span>';
+            var timeSpan = document.createElement('span');
+            timeSpan.className = 'weline-dns-log-time';
+            timeSpan.textContent = time == null ? '' : String(time);
+            var iconSpan = document.createElement('span');
+            iconSpan.className = 'weline-dns-log-icon';
+            iconSpan.innerHTML = icon;
+            var msgSpan = document.createElement('span');
+            msgSpan.className = 'weline-dns-log-msg';
+            if (data && data.domain) {
+                var domainTag = document.createElement('strong');
+                domainTag.textContent = '[' + data.domain + ']';
+                msgSpan.appendChild(domainTag);
+                msgSpan.appendChild(document.createTextNode(' '));
+            }
+            msgSpan.appendChild(document.createTextNode(msg == null ? '' : String(msg)));
+            item.appendChild(timeSpan);
+            item.appendChild(iconSpan);
+            item.appendChild(msgSpan);
             logPanel.appendChild(item);
             logPanel.scrollTop = logPanel.scrollHeight;
         };
@@ -3444,7 +3473,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     var f = (data.failed || 0);
                     summaryEl.innerHTML = '<div class="alert mb-0" style="background:var(--backend-color-bg-tertiary,#e9ecef);color:var(--backend-color-text-primary,#333);border:1px solid var(--backend-color-border-default,#dee2e6);">'
                         + '<i class="mdi mdi-check-circle me-1" style="color:var(--backend-color-success,#198754);"></i>'
-                        + '<strong>' + (data.message || '') + '</strong>'
+                        + '<strong>' + escapeOptLabel(data.message || '') + '</strong>'
                         + '</div>';
                     summaryEl.style.display = 'block';
 
@@ -3783,6 +3812,174 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 toast('<?= __('鍔犺浇璐︽埛鍒楄〃澶辫触') ?>', 'error');
             });
     }
+
+    function readDataInt(element, name, fallback) {
+        var value = parseInt(element.getAttribute(name) || '', 10);
+        return Number.isNaN(value) ? fallback : value;
+    }
+
+    function runDomainListAction(trigger) {
+        var action = trigger.getAttribute('data-domain-list-action') || '';
+        var domainId = readDataInt(trigger, 'data-domain-id', 0);
+        var accountId = readDataInt(trigger, 'data-account-id', 0);
+        var page = readDataInt(trigger, 'data-page', 1);
+        var domain = trigger.getAttribute('data-domain') || '';
+        var recordId = trigger.getAttribute('data-record-id') || '';
+        var recordType = trigger.getAttribute('data-record-type') || '';
+        var recordHost = trigger.getAttribute('data-record-host') || '';
+
+        switch (action) {
+            case 'refreshServerIp':
+                refreshServerIp();
+                break;
+            case 'showManualCreateDomainOffcanvas':
+                showManualCreateDomainOffcanvas();
+                break;
+            case 'showImportModal':
+                showImportModal();
+                break;
+            case 'batchTransferToPool':
+                batchTransferToPool();
+                break;
+            case 'batchTransferToPoolWithIpCheck':
+                batchTransferToPoolWithIpCheck();
+                break;
+            case 'batchResolveToLocal':
+                batchResolveToLocal();
+                break;
+            case 'showBatchAddDnsRecordModal':
+                showBatchAddDnsRecordModal();
+                break;
+            case 'showBatchChangeNsModal':
+                showBatchChangeNsModal();
+                break;
+            case 'batchCheckResolve':
+                batchCheckResolve();
+                break;
+            case 'batchDetectDnsProvider':
+                batchDetectDnsProvider();
+                break;
+            case 'showBatchSetAccountsModal':
+                showBatchSetAccountsModal();
+                break;
+            case 'showSwitchDnsAccountModal':
+                showSwitchDnsAccountModal();
+                break;
+            case 'cleanupDnsProviderDomains':
+                cleanupDnsProviderDomains();
+                break;
+            case 'batchDeleteDomains':
+                batchDeleteDomains();
+                break;
+            case 'resetFilters':
+                resetFilters();
+                break;
+            case 'toggleShowImported':
+                toggleShowImported();
+                break;
+            case 'importSelectedDomains':
+                importSelectedDomains();
+                break;
+            case 'importSelectedRemoteDomains':
+                importSelectedRemoteDomains();
+                break;
+            case 'importSingleRemoteDomain':
+                importSingleRemoteDomain(domain, accountId);
+                break;
+            case 'syncDnsRecords':
+                syncDnsRecords();
+                break;
+            case 'showAddDnsRecordForm':
+                showAddDnsRecordForm();
+                break;
+            case 'saveDnsRecord':
+                saveDnsRecord();
+                break;
+            case 'hideAddDnsRecordForm':
+                hideAddDnsRecordForm();
+                break;
+            case 'autoResolve':
+                autoResolve();
+                break;
+            case 'doBatchChangeNs':
+                doBatchChangeNs();
+                break;
+            case 'doBatchAddDnsRecords':
+                doBatchAddDnsRecords();
+                break;
+            case 'doSwitchDnsAccount':
+                doSwitchDnsAccount();
+                break;
+            case 'doBatchSetAccounts':
+                doBatchSetAccounts();
+                break;
+            case 'submitManualDomain':
+                submitManualDomain();
+                break;
+            case 'transferToPool':
+                transferToPool(domainId, domain);
+                break;
+            case 'showDnsModal':
+                showDnsModal(domainId, domain);
+                break;
+            case 'checkResolve':
+                checkResolve(domainId);
+                break;
+            case 'deleteDomain':
+                deleteDomain(domainId, domain);
+                break;
+            case 'deleteDnsRecord':
+                deleteDnsRecord(recordId, recordType, recordHost);
+                break;
+            case 'loadDomains':
+                loadDomains(page);
+                break;
+        }
+    }
+
+    document.addEventListener('click', function (event) {
+        var trigger = event.target.closest('[data-domain-list-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        runDomainListAction(trigger);
+    });
+
+    document.addEventListener('change', function (event) {
+        var trigger = event.target.closest('[data-domain-list-change]');
+        if (!trigger) {
+            return;
+        }
+
+        switch (trigger.getAttribute('data-domain-list-change') || '') {
+            case 'loadDomains':
+                loadDomains(1);
+                break;
+            case 'toggleSelectAll':
+                toggleSelectAll();
+                break;
+            case 'toggleImportSelectAll':
+                toggleImportSelectAll();
+                break;
+            case 'onBatchAddDnsUseServerIpChange':
+                onBatchAddDnsUseServerIpChange();
+                break;
+            case 'onManualHttpsModeChange':
+                onManualHttpsModeChange();
+                break;
+        }
+    });
+
+    document.addEventListener('keyup', function (event) {
+        var trigger = event.target.closest('[data-domain-list-keyup]');
+        if (!trigger) {
+            return;
+        }
+        if ((trigger.getAttribute('data-domain-list-keyup') || '') === 'search') {
+            onSearchKeyup(event);
+        }
+    });
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() { loadDomains(1); });

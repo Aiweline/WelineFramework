@@ -28,6 +28,13 @@ $currentCurrency = strtoupper(trim((string)$currentCurrency));
 if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
     $currentCurrency = $defaultCurrency;
 }
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 ?>
 <base href="@backend-url('/')">
 <meta charset="UTF-8">
@@ -55,5 +62,5 @@ window.__WelineLoginConfig = <?= json_encode([
     'defaultCurrency' => $defaultCurrency,
     'availableCurrencies' => $availableCurrencies,
     'themeMode' => $themeModel === '' ? 'light' : $themeModel,
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+], $jsonForScriptFlags) ?>;
 </script>

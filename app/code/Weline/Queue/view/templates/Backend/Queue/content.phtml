@@ -80,7 +80,7 @@
                 <notempty name="data">
                     <div class="weline-queue-content-body" id="queueContentBody">{{data}}</div>
                     <div class="weline-queue-content-actions">
-                        <button type="button" class="weline-queue-content-btn weline-queue-content-btn--copy" onclick="WelineQueueContent.copyContent()">
+                        <button type="button" class="weline-queue-content-btn weline-queue-content-btn--copy" data-queue-content-copy="1">
                             <i class="mdi mdi-content-copy"></i>
                             <lang>复制内容</lang>
                         </button>
@@ -140,5 +140,17 @@
             document.body.removeChild(textarea);
         }
     };
+
+    document.addEventListener('click', function(event) {
+        var target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        if (target.closest('[data-queue-content-copy]')) {
+            event.preventDefault();
+            window.WelineQueueContent.copyContent();
+        }
+    });
 })();
 </script>

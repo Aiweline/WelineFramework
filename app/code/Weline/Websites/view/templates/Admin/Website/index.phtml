@@ -218,7 +218,7 @@ $search = $this->getData('search') ?? '';
             </h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>后台</lang></a></li>
+                    <li class="breadcrumb-item"><span><lang>后台</lang></span></li>
                     <li class="breadcrumb-item active"><lang>网站管理</lang></li>
                 </ol>
             </div>
@@ -323,6 +323,15 @@ $search = $this->getData('search') ?? '';
     var tableContainer = document.getElementById('website-table-container');
     var clearSearchBtn = document.getElementById('clear-search');
     var searchUrl = '<?= $this->getUrl('*/admin/website') ?>';
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
     
     function performSearch() {
         if (!searchForm || !tableContainer) return;
@@ -407,7 +416,7 @@ $search = $this->getData('search') ?? '';
                     }
                 }
             } else {
-                tableContainer.innerHTML = '<div class="alert alert-danger"><?= __('搜索失败') ?>: ' + (data.message || '<?= __('未知错误') ?>') + '</div>';
+                tableContainer.innerHTML = '<div class="alert alert-danger"><?= __('搜索失败') ?>: ' + escapeHtml(data.message || '<?= __('未知错误') ?>') + '</div>';
             }
         })
         .catch(function(error) {

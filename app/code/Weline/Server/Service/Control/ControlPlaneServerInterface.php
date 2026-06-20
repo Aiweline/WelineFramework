@@ -29,6 +29,11 @@ interface ControlPlaneServerInterface
 
     public function sendToRole(string $role, string $message): void;
 
+    /**
+     * @return int[] IPC client IDs that accepted the outbound message.
+     */
+    public function sendToRoleAndCollectTargets(string $role, string $message): array;
+
     public function clientExists(int $clientId): bool;
 
     public function closeClient(int $clientId): void;

@@ -13,9 +13,9 @@ $isEdit = !empty($user) && $user->getId();
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
                     <li class='breadcrumb-item'>
-                        <a href='javascript: void(0);'>
+                        <span>
                             <lang>API</lang>
-                        </a>
+                        </span>
                     </li>
                     <li class='breadcrumb-item'>
                         <a href="@backend-url('*/api/backend/user')"><lang>API用户</lang></a>
@@ -152,7 +152,9 @@ $isEdit = !empty($user) && $user->getId();
                                     <input type='text' class='form-control' id="api-key-input"
                                            value='<?= htmlspecialchars($user->getApiKey() ?? '') ?>' 
                                            readonly>
-                                    <button class="btn btn-outline-secondary" type="button" onclick="ApiUserForm.copyToClipboard(document.getElementById('api-key-input'))">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            data-api-user-action="copy"
+                                            data-api-user-target="api-key-input">
                                         <lang>复制</lang>
                                     </button>
                                 </div>
@@ -213,6 +215,19 @@ $isEdit = !empty($user) && $user->getId();
             }
         }
     };
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-api-user-action="copy"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        var target = document.getElementById(trigger.getAttribute('data-api-user-target') || '');
+        if (target) {
+            window.ApiUserForm.copyToClipboard(target);
+        }
+    });
 })();
 </script>
 </js:part>

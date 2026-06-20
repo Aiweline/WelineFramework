@@ -700,7 +700,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                     </div>
                     
                     <div class="w-export-actions">
-                        <button type="button" class="w-export-btn secondary" onclick="DataTableManager.cancelExport()" id="cancel-export-btn">
+                        <button type="button" class="w-export-btn secondary" data-datatable-action="cancel-export" id="cancel-export-btn">
                             <i class="fas fa-times me-1"></i>${__('閸欐牗绉风€电厧鍤?')}
                         </button>
                     </div>
@@ -1076,7 +1076,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             URL.revokeObjectURL(url);
             // 閺囧瓨鏌婂Ο鈩冣偓浣诡攱
             document.querySelector('.w-export-actions').innerHTML = `
-                <button type="button" class="w-export-btn primary" onclick="document.querySelector('.w-export-modal').remove()">鐎瑰本鍨?/button>
+                <button type="button" class="w-export-btn primary" data-datatable-action="close-export-modal">鐎瑰本鍨?/button>
             `;
         } catch (error) {
             this.showExportError('閻㈢喐鍨氶弬鍥︽婢惰精瑙﹂敍? ' + error.message);
@@ -1125,7 +1125,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         icon.classList.add('fa-exclamation-circle');
         document.querySelector('.w-export-status-text').textContent = __('鐎电厧鍤径杈Е');
         document.querySelector('.w-export-actions').innerHTML = `
-            <button type="button" class="w-export-btn primary" onclick="document.querySelector('.w-export-modal').remove()">${__('閸忔娊妫?')}</button>
+            <button type="button" class="w-export-btn primary" data-datatable-action="close-export-modal">${__('閸忔娊妫?')}</button>
         `;
         console.error('Export error:', message);
     },
@@ -2747,7 +2747,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${cancelBtnText}</button>
-                            <button type="button" class="btn btn-primary" onclick="DataTableManager.saveRow('${instance.container.attr('id')}')">${saveBtnText}</button>
+                            <button type="button" class="btn btn-primary" data-datatable-action="save-row" data-table="${instance.container.attr('id')}">${saveBtnText}</button>
                         </div>
                     </div>
                 </div>
@@ -3549,12 +3549,18 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         }
 
         // 閸掓稑缂撻柨娆掝嚖濞戝牊浼呴崗鍐
+        const retryId = showRetry && retryCallback ? 'datatable-retry-' + Date.now() + '-' + Math.random().toString(36).slice(2) : '';
+        if (retryId) {
+            window._datatableRetryCallbacks = window._datatableRetryCallbacks || {};
+            window._datatableRetryCallbacks[retryId] = retryCallback;
+        }
+
         const errorHtml = `
             <div class="datatable-error-message">
                 <i class="fas fa-exclamation-circle"></i>
                 <span>${message}</span>
                 ${showRetry && retryCallback ? `
-                    <button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="${retryCallback}">
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-auto" data-datatable-action="retry-error" data-retry-id="${retryId}">
                         <i class="fas fa-redo"></i> ${__('闁插秷鐦?')}
                     </button>
                 ` : ''}
@@ -4127,7 +4133,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         </div>
         <div class="w-field-actions">
             <button type="button" class="w-btn w-btn-sm w-btn-outline-primary" 
-                    onclick="DataTableManager.addField('${tableId}', '${field.name}', 'display')"
+                    data-datatable-action="add-field" data-table="${tableId}" data-field="${field.name}" data-field-type="display"
                     ${disabledAttr}>
                 <i class="fas fa-table"></i> ${__("閺勫墽銇?")}
             </button>
@@ -4160,7 +4166,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         </div>
         <div class="w-field-actions">
             <button type="button" class="w-btn w-btn-sm w-btn-outline-success" 
-                    onclick="DataTableManager.addField('${tableId}', '${field.name}', 'filter')"
+                    data-datatable-action="add-field" data-table="${tableId}" data-field="${field.name}" data-field-type="filter"
                     ${disabledAttr}>
                 <i class="fas fa-filter"></i> ${__("缁涙盯鈧?")}
             </button>
@@ -4212,7 +4218,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 // 鐎甸€涚艾濡剝婢樼€涙顔岄崪灞煎瘜闁?缁便垹绱╃€涙顔岄敍灞肩瑝閺勫墽銇氶梾鎰閹稿鎸?
                 const hideButtonHtml = (isTemplateField || isPrimaryOrIndex) ? '' : `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-danger" 
-                    onclick="DataTableManager.removeField('${tableId}', '${field.name}', 'display')"
+                    data-datatable-action="remove-field" data-table="${tableId}" data-field="${field.name}" data-field-type="display"
                     ${disabledAttr}>
                 <i class="fas fa-eye-slash"></i> ${__("闂呮劘妫?")}
             </button>`;
@@ -4220,13 +4226,13 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const canMove = field.display_orderable !== false && field.display_orderable !== 'false' && field.display_orderable !== 0 && field.display_orderable !== '0';
                 const moveUpButtonHtml = canMove ? `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary" 
-                    onclick="DataTableManager.moveField('${tableId}', '${field.name}', 'up', 'display')"
+                    data-datatable-action="move-field" data-table="${tableId}" data-field="${field.name}" data-direction="up" data-field-type="display"
                     ${index === 0 ? 'disabled' : ''}>
                 <i class="fas fa-arrow-up"></i> ${__("娑撳﹦些")}
             </button>` : '';
                 const moveDownButtonHtml = canMove ? `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary" 
-                    onclick="DataTableManager.moveField('${tableId}', '${field.name}', 'down', 'display')"
+                    data-datatable-action="move-field" data-table="${tableId}" data-field="${field.name}" data-direction="down" data-field-type="display"
                     ${index === displayFields.length - 1 ? 'disabled' : ''}>
                 <i class="fas fa-arrow-down"></i> ${__("娑撳些")}
             </button>` : '';
@@ -4254,8 +4260,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         </div>
         <div class="w-field-actions" style="flex-direction:column;gap:6px;align-items:flex-end;min-width:70px;">
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary w-btn-toggle-config" 
-                    onclick="DataTableManager.toggleFieldConfig('${tableId}', '${field.name}', 'display')"
-                    data-field="${field.name}" data-type="display" ${isProtected ? 'disabled' : ''}>
+                    data-datatable-action="toggle-field-config" data-table="${tableId}" data-field="${field.name}" data-field-type="display"
+                    data-type="display" ${isProtected ? 'disabled' : ''}>
                 <i class="fas fa-cog"></i> ${__("鐠佸墽鐤?")}
             </button>
             ${hideButtonHtml}
@@ -4304,7 +4310,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 // 閸欐ぞ绻氶幎銈呯摟濞堝吀绗夐弰鍓с仛缁夊娅庨幐澶愭尦
                 const removeButtonHtml = isProtected ? '' : `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-danger" 
-                    onclick="DataTableManager.removeField('${tableId}', '${field.name}', 'filter')"
+                    data-datatable-action="remove-field" data-table="${tableId}" data-field="${field.name}" data-field-type="filter"
                     ${disabledAttr}>
                 <i class="fas fa-eye-slash"></i> ${__("缁夊娅?")}
             </button>`;
@@ -4313,13 +4319,13 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
                 const canMove = field.filter_orderable !== false && field.filter_orderable !== 'false' && field.filter_orderable !== 0 && field.filter_orderable !== '0';
                 const moveUpButtonHtml = canMove ? `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary" 
-                    onclick="DataTableManager.moveField('${tableId}', '${field.name}', 'up', 'filter')"
+                    data-datatable-action="move-field" data-table="${tableId}" data-field="${field.name}" data-direction="up" data-field-type="filter"
                     ${index === 0 ? 'disabled' : ''}>
                 <i class="fas fa-arrow-up"></i> ${__("娑撳﹦些")}
             </button>` : '';
                 const moveDownButtonHtml = canMove ? `
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary" 
-                    onclick="DataTableManager.moveField('${tableId}', '${field.name}', 'down', 'filter')"
+                    data-datatable-action="move-field" data-table="${tableId}" data-field="${field.name}" data-direction="down" data-field-type="filter"
                     ${index === finalFilterFields.length - 1 ? 'disabled' : ''}>
                 <i class="fas fa-arrow-down"></i> ${__("娑撳些")}
             </button>` : '';
@@ -4347,8 +4353,8 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         </div>
         <div class="w-field-actions" style="flex-direction:column;gap:6px;align-items:flex-end;min-width:70px;">
             <button type="button" class="w-btn w-btn-sm w-btn-outline-secondary w-btn-toggle-config" 
-                    onclick="DataTableManager.toggleFieldConfig('${tableId}', '${field.name}', 'filter')"
-                    data-field="${field.name}" data-type="filter" ${isProtected ? 'disabled' : ''}>
+                    data-datatable-action="toggle-field-config" data-table="${tableId}" data-field="${field.name}" data-field-type="filter"
+                    data-type="filter" ${isProtected ? 'disabled' : ''}>
                 <i class="fas fa-cog"></i> ${__("鐠佸墽鐤?")}
             </button>
             ${removeButtonHtml}
@@ -5050,7 +5056,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         if (otherFields.length > 0) {
             filterHtml += `
                 <div class="filter-accordion">
-                    <div class="filter-accordion-header" onclick="DataTableManager.toggleFilterAccordion('${tableId}')">
+                    <div class="filter-accordion-header" data-datatable-action="toggle-filter-accordion" data-table="${tableId}">
                         <i class="fas fa-filter"></i>
                         <span>閺囨潙顦跨粵娑⑩偓澶嬫蒋娴?(${otherFields.length})</span>
                         <i class="fas fa-chevron-down filter-accordion-icon"></i>
@@ -6493,6 +6499,98 @@ document.addEventListener('click', function (e) {
         }
     }
 });
+
+if (typeof window !== 'undefined' && !window._datatableActionDelegated) {
+    window._datatableActionDelegated = true;
+    document.addEventListener('click', function (event) {
+        const trigger = event.target.closest('[data-datatable-action]');
+        if (!trigger || !window.DataTableManager) {
+            return;
+        }
+
+        const manager = window.DataTableManager;
+        const action = trigger.getAttribute('data-datatable-action');
+        const tableId = trigger.getAttribute('data-table') || '';
+        const fieldName = trigger.getAttribute('data-field') || '';
+        const fieldType = trigger.getAttribute('data-field-type') || trigger.getAttribute('data-type') || '';
+        const direction = trigger.getAttribute('data-direction') || '';
+        const format = trigger.getAttribute('data-format') || 'excel';
+
+        switch (action) {
+            case 'refresh-data':
+                event.preventDefault();
+                manager.refreshData(tableId);
+                break;
+            case 'clear-header-config':
+                event.preventDefault();
+                manager.clearHeaderConfig(tableId);
+                break;
+            case 'clear-filter-config':
+                event.preventDefault();
+                manager.clearFilterConfig(tableId);
+                break;
+            case 'clear-all-config':
+                event.preventDefault();
+                manager.clearAllConfig(tableId);
+                break;
+            case 'export-data':
+                event.preventDefault();
+                manager.exportData(tableId, format);
+                break;
+            case 'close-field-config':
+                event.preventDefault();
+                manager.closeFieldConfig(tableId);
+                break;
+            case 'save-field-config':
+                event.preventDefault();
+                manager.saveFieldConfig(tableId);
+                break;
+            case 'cancel-export':
+                event.preventDefault();
+                if (typeof manager.cancelExport === 'function') {
+                    manager.cancelExport();
+                }
+                break;
+            case 'close-export-modal':
+                event.preventDefault();
+                document.querySelectorAll('.w-export-modal').forEach(modal => modal.remove());
+                break;
+            case 'save-row':
+                event.preventDefault();
+                manager.saveRow(tableId);
+                break;
+            case 'retry-error': {
+                event.preventDefault();
+                const retryId = trigger.getAttribute('data-retry-id') || '';
+                const callback = window._datatableRetryCallbacks && window._datatableRetryCallbacks[retryId];
+                if (typeof callback === 'function') {
+                    callback();
+                }
+                break;
+            }
+            case 'add-field':
+                event.preventDefault();
+                manager.addField(tableId, fieldName, fieldType);
+                break;
+            case 'remove-field':
+                event.preventDefault();
+                manager.removeField(tableId, fieldName, fieldType);
+                break;
+            case 'move-field':
+                event.preventDefault();
+                manager.moveField(tableId, fieldName, direction, fieldType);
+                break;
+            case 'toggle-field-config':
+                event.preventDefault();
+                manager.toggleFieldConfig(tableId, fieldName, fieldType);
+                break;
+            case 'toggle-filter-accordion':
+                event.preventDefault();
+                manager.toggleFilterAccordion(tableId);
+                break;
+        }
+    });
+}
 
 // 閸掓繂顫愰崠鏍︾瑓閹峰褰嶉崡鏇炲閼虫枻绱欓崣顏勬躬閸楁洑绶ュΟ鈥崇础娑撳澧界悰灞肩濞嗏槄绱?
 if (typeof window !== 'undefined' && window.DataTableManager && !window.DataTableManager._initialized) {

@@ -337,6 +337,7 @@ ID,ID
 "共 %{1} 条记录，第 %{2}/%{3} 页","Total %{1} Records, Page %{2}/%{3}"
 上一页,"Previous page"
 下一页,"Next page"
+确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
 确定要设置此账户为默认账户吗？,"Are you sure you want to set this account as the default account?"
 操作失败,"Operation failed"
 模块筛选,"Module filtering"

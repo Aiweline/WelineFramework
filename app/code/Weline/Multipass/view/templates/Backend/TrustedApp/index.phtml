@@ -80,7 +80,7 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
             <div class="text-muted mb-2"><?= __('该密钥只在创建或轮换时显示一次，后台不会明文保存。') ?></div>
             <div class="weline-multipass-client" id="secretValue"></div>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-dark" onclick="copyIdentitySecret()">
+        <button type="button" class="btn btn-sm btn-outline-dark" data-multipass-app-action="copy-secret">
             <i class="mdi mdi-content-copy"></i> <?= __('复制') ?>
         </button>
     </div>
@@ -150,10 +150,10 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
                                         <strong><?= (int)($bindingCounts[$app->getId()] ?? 0) ?></strong>
                                     </div>
                                     <div class="d-flex flex-wrap gap-2">
-                                        <button type="button" class="btn btn-sm btn-outline-primary" data-app="<?= $encodedApp ?>" onclick="editTrustedApp(this)">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-app="<?= $encodedApp ?>" data-multipass-app-action="edit">
                                             <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-warning" onclick="rotateIdentitySecret(<?= (int)$app->getId() ?>)">
+                                        <button type="button" class="btn btn-sm btn-outline-warning" data-multipass-app-action="rotate" data-app-id="<?= (int)$app->getId() ?>">
                                             <i class="mdi mdi-key-change"></i> <?= __('轮换密钥') ?>
                                         </button>
                                     </div>
@@ -328,6 +328,23 @@ $bindingCounts = $this->getData('binding_counts') ?? [];
             .catch(function() {
                 BackendToast.error('<?= __('请求失败') ?>');
             });
+    });
+
+    document.querySelectorAll('[data-multipass-app-action]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var action = button.getAttribute('data-multipass-app-action') || '';
+            if (action === 'copy-secret') {
+                copyIdentitySecret();
+                return;
+            }
+            if (action === 'edit') {
+                editTrustedApp(button);
+                return;
+            }
+            if (action === 'rotate') {
+                rotateIdentitySecret(parseInt(button.getAttribute('data-app-id') || '0', 10));
+            }
+        });
     });
 
     document.getElementById('trustedAppOffcanvas').addEventListener('hidden.bs.offcanvas', function() {

@@ -137,9 +137,12 @@ AI翻译,"AI Translate"
 测试,Test
 在新窗口打开,"Open in a new window"
 快捷链接:,"Quick Links:"
+确认组件不可用，操作已取消,确认组件不可用，操作已取消
 解析部件参数失败,"Failed to parse widget parameters"
 预览失败,"Preview failed"
 确定要删除这个部件吗？,"Are you sure you want to delete this widget?"
+确认删除,确认删除
+取消,取消
 选择一个部件进行配置,"Select a widget to configure"
 请填写页面标题和标识,"Please fill in page title and handle"
 未知错误,"Unknown error"

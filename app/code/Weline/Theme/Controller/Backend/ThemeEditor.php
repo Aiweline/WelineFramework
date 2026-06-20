@@ -2718,14 +2718,14 @@ class ThemeEditor extends BackendController
 
         $xpath = new \DOMXPath($doc);
 
-        // 移除所有脚本
-        foreach ($xpath->query('//script') as $script) {
-            $script->parentNode?->removeChild($script);
+        // 移除脚本、样式、嵌入内容和表单控件，预览只保留静态可展示结构。
+        $blockedNodes = [];
+        $blockedQuery = '//script | //style | //link | //meta | //object | //embed | //iframe | //frame | //frameset | //base | //form | //input | //button | //textarea | //select | //option';
+        foreach ($xpath->query($blockedQuery) as $node) {
+            $blockedNodes[] = $node;
         }
-
-        // 移除所有 iframe（避免 html2canvas 触发 layout-preview 请求）
-        foreach ($xpath->query('//iframe') as $iframe) {
-            $iframe->parentNode?->removeChild($iframe);
+        foreach ($blockedNodes as $node) {
+            $node->parentNode?->removeChild($node);
         }
 
         // 移除所有指向 layout-preview 的链接和图片
@@ -2738,14 +2738,39 @@ class ThemeEditor extends BackendController
             }
         }
 
-        // 移除所有内联事件（onclick/onload/...）
+        // 移除内联事件、危险 URL 和危险 CSS。
+        $uriAttributes = ['href', 'src', 'xlink:href', 'action', 'formaction', 'poster'];
         foreach ($xpath->query('//*') as $node) {
             if (!$node->hasAttributes()) {
                 continue;
             }
             $toRemove = [];
             foreach ($node->attributes as $attr) {
-                if (stripos($attr->name, 'on') === 0) {
+                $name = strtolower($attr->name);
+                $value = trim((string)$attr->value);
+                $compactValue = strtolower((string)preg_replace('/[\x00-\x1F\x7F\s]+/', '', $value));
+
+                if (str_starts_with($name, 'on') || $name === 'srcdoc') {
+                    $toRemove[] = $attr->name;
+                    continue;
+                }
+
+                if (in_array($name, $uriAttributes, true)) {
+                    $hasScheme = preg_match('/^[a-z][a-z0-9+.-]*:/i', $value) === 1;
+                    $allowedScheme = preg_match('/^(https?:|mailto:|tel:|ftp:)/i', $value) === 1;
+                    $allowedDataImage = preg_match('/^data:image\/(?:png|gif|jpe?g|webp|bmp);base64,/i', $value) === 1;
+                    $blockedScheme = str_starts_with($compactValue, 'javascript:')
+                        || str_starts_with($compactValue, 'vbscript:')
+                        || (str_starts_with($compactValue, 'data:') && !$allowedDataImage);
+
+                    if ($blockedScheme || ($hasScheme && !$allowedScheme && !$allowedDataImage)) {
+                        $toRemove[] = $attr->name;
+                    }
+
+                    continue;
+                }
+
+                if ($name === 'style' && preg_match('/@import\b|expression\s*\(|url\s*\(\s*[\'"]?\s*(?:javascript|vbscript|data):/i', $value) === 1) {
                     $toRemove[] = $attr->name;
                 }
             }

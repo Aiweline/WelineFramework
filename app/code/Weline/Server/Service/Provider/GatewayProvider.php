@@ -35,6 +35,11 @@ class GatewayProvider extends AbstractServiceProvider
     public function isEnabled(ServiceContext $context): bool
     {
         // 检查 env.php 中是否配置了 wls.gateway.enabled
+        $envEnabled = \getenv('WLS_GATEWAY_ENABLED');
+        if ($envEnabled !== false && \trim((string)$envEnabled) !== '') {
+            return \in_array(\strtolower(\trim((string)$envEnabled)), ['1', 'true', 'yes', 'on'], true);
+        }
+
         return (bool) $context->getConfig('wls.gateway.enabled', false);
     }
 
@@ -55,7 +60,7 @@ class GatewayProvider extends AbstractServiceProvider
 
     public function isCriticalRole(): bool
     {
-        return true;
+        return false;
     }
 
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
@@ -66,8 +71,7 @@ class GatewayProvider extends AbstractServiceProvider
         $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);
 
         // 获取监听地址
-        $gatewayConfig = $context->getConfig('wls.gateway', []);
-        $listen = $gatewayConfig['listen'] ?? '0.0.0.0:443';
+        $listen = $this->resolveListenAddress($context);
         [$listenHost, $listenPort] = explode(':', $listen);
 
         $arguments = [
@@ -88,10 +92,20 @@ class GatewayProvider extends AbstractServiceProvider
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         // Gateway 监听的端口
-        $gatewayConfig = $context->getConfig('wls.gateway', []);
-        $listen = $gatewayConfig['listen'] ?? '0.0.0.0:443';
+        $listen = $this->resolveListenAddress($context);
         [, $listenPort] = explode(':', $listen);
         return (int) $listenPort;
+    }
+
+    private function resolveListenAddress(ServiceContext $context): string
+    {
+        $envListen = \getenv('WLS_GATEWAY_LISTEN');
+        if ($envListen !== false && \trim((string)$envListen) !== '') {
+            return \trim((string)$envListen);
+        }
+
+        $gatewayConfig = $context->getConfig('wls.gateway', []);
+        return (string)($gatewayConfig['listen'] ?? '0.0.0.0:443');
     }
 
     public function handleMessage(array $message, ServiceInstance $instance, ServiceOrchestrator $orchestrator): bool

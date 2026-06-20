@@ -27,6 +27,16 @@ use Weline\Server\Service\AttackLogService;
 
 class AttackDetector
 {
+    private const REPLACE_LIST_RULE_FIELDS = [
+        ['path_rate_limits', 'rules'],
+        ['cdn_trusted_ips', 'ips'],
+        ['ip_whitelist', 'ips'],
+        ['malicious_patterns', 'patterns'],
+        ['bad_user_agents', 'patterns'],
+        ['protected_paths', 'paths'],
+        ['ban_on_path_match', 'paths'],
+    ];
+
     /**
      * 单例实例
      */
@@ -255,6 +265,11 @@ class AttackDetector
             'enabled' => true,
             'count' => 3,
         ],
+
+        'domain_overrides' => [
+            'enabled' => true,
+            'domains' => [],
+        ],
     ];
     
     /**
@@ -266,6 +281,11 @@ class AttackDetector
      * 规则检查间隔（秒）
      */
     private int $rulesCheckInterval = 5;
+
+    /**
+     * Last observed persisted rules update signal.
+     */
+    private string $lastRulesUpdateSignal = '';
     
     /**
      * 上次清理时间
@@ -359,7 +379,7 @@ class AttackDetector
         if (\is_file($rulesFile)) {
             $rules = @\json_decode(\file_get_contents($rulesFile), true);
             if (\is_array($rules)) {
-                $this->rules = \array_replace_recursive($this->defaultRules, $rules);
+                $this->rules = $this->mergeRules($rules);
             }
         }
         
@@ -527,10 +547,10 @@ class AttackDetector
     /**
      * 检查规则更新
      */
-    public function checkRulesUpdate(): void
+    public function checkRulesUpdate(bool $force = false): void
     {
         $now = \time();
-        if ($now - $this->lastRulesCheck < $this->rulesCheckInterval) {
+        if (!$force && $now - $this->lastRulesCheck < $this->rulesCheckInterval) {
             return;
         }
         $this->lastRulesCheck = $now;
@@ -538,10 +558,11 @@ class AttackDetector
         $flagFile = self::getRulesUpdateFlagPath();
         if (\is_file($flagFile)) {
             $flagMtime = @\filemtime($flagFile);
-            static $lastFlagMtime = 0;
+            $flagValue = \trim((string)@\file_get_contents($flagFile));
+            $flagSignal = (string)$flagMtime . ':' . $flagValue;
             
-            if ($flagMtime > $lastFlagMtime) {
-                $lastFlagMtime = $flagMtime;
+            if ($flagSignal !== $this->lastRulesUpdateSignal) {
+                $this->lastRulesUpdateSignal = $flagSignal;
                 $this->reload();
             }
         }
@@ -571,6 +592,12 @@ class AttackDetector
         
         // 定期清理
         $this->maybeCleanup();
+
+        $requestDomain = $this->normalizeRuleDomain((string)($headers['host'] ?? $headers['Host'] ?? ''));
+        $baseRules = $this->rules;
+        $this->rules = $this->getEffectiveRulesForDomain($requestDomain);
+
+        try {
         
         // 0. 白名单检查（完全跳过所有攻击检测）
         if ($this->isWhitelisted($clientIp)) {
@@ -588,7 +615,7 @@ class AttackDetector
             'uri' => $uri,
             'method' => $method,
             'user_agent' => $headers['user-agent'] ?? $headers['User-Agent'] ?? '',
-            'domain' => $headers['host'] ?? $headers['Host'] ?? '',
+            'domain' => $requestDomain,
             'headers' => $headers,
             'instance' => $this->instanceName ?? 'default',
         ];
@@ -712,6 +739,9 @@ class AttackDetector
             'reason' => '',
             'should_block' => false,
         ];
+        } finally {
+            $this->rules = $baseRules;
+        }
     }
     
     /**
@@ -1449,12 +1479,85 @@ class AttackDetector
         $this->permanentBannedIps = [];
         $this->savePermanentBannedIps();
     }
+
+    private function mergeRules(array $rules): array
+    {
+        $merged = \array_replace_recursive($this->defaultRules, $rules);
+
+        foreach (self::REPLACE_LIST_RULE_FIELDS as [$ruleKey, $fieldKey]) {
+            if (!\is_array($rules[$ruleKey] ?? null) || !\array_key_exists($fieldKey, $rules[$ruleKey])) {
+                continue;
+            }
+
+            $list = $rules[$ruleKey][$fieldKey];
+            if (\is_array($list)) {
+                $merged[$ruleKey][$fieldKey] = \array_values($list);
+            }
+        }
+
+        return $merged;
+    }
     
     /**
      * 获取当前规则
      */
+    private function getEffectiveRulesForDomain(string $domain): array
+    {
+        $rules = $this->rules;
+        $domainOverrides = \is_array($rules['domain_overrides'] ?? null) ? $rules['domain_overrides'] : [];
+        unset($rules['domain_overrides']);
+
+        if ($domain === '' || !($domainOverrides['enabled'] ?? true)) {
+            return $rules;
+        }
+
+        $domains = \is_array($domainOverrides['domains'] ?? null) ? $domainOverrides['domains'] : [];
+        $override = \is_array($domains[$domain] ?? null) ? $domains[$domain] : [];
+        if ($override === [] || !($override['enabled'] ?? true)) {
+            return $rules;
+        }
+
+        $overrideRules = \is_array($override['rules'] ?? null) ? $override['rules'] : [];
+        if ($overrideRules === []) {
+            return $rules;
+        }
+
+        $effective = \array_replace_recursive($rules, $overrideRules);
+        foreach (self::REPLACE_LIST_RULE_FIELDS as [$ruleKey, $fieldKey]) {
+            if (!\is_array($overrideRules[$ruleKey] ?? null) || !\array_key_exists($fieldKey, $overrideRules[$ruleKey])) {
+                continue;
+            }
+
+            $list = $overrideRules[$ruleKey][$fieldKey];
+            if (\is_array($list)) {
+                $effective[$ruleKey][$fieldKey] = \array_values($list);
+            }
+        }
+
+        return $effective;
+    }
+
+    private function normalizeRuleDomain(string $domain): string
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return '';
+        }
+
+        $domain = \preg_replace('#^https?://#i', '', $domain) ?? $domain;
+        $domain = \explode('/', $domain, 2)[0] ?? $domain;
+        $domain = \trim($domain);
+        if (\str_contains($domain, ':')) {
+            $domain = \explode(':', $domain, 2)[0] ?? $domain;
+        }
+
+        return \trim($domain);
+    }
+
     public function getRules(): array
     {
+        $this->checkRulesUpdate(true);
+
         return $this->rules;
     }
     
@@ -1463,7 +1566,7 @@ class AttackDetector
      */
     public function updateRules(array $rules): void
     {
-        $this->rules = \array_replace_recursive($this->defaultRules, $rules);
+        $this->rules = $this->mergeRules($rules);
         
         // 保存合并后的规则到文件，保证重载时与当前内存一致（避免只保存前端片段导致缺省项丢失）
         $rulesFile = self::getRulesFilePath();

@@ -170,13 +170,15 @@ tag：%{1},"Tag: %{1}"
 最新提交：%{1},"Latest Commit: %{1}"
 同步目录：%{1},"Sync directories: %{1}"
 完全覆盖模式：更新所有文件...,"Full Overwrite Mode: Updating All Files..."
-"增量模式：只更新 Git 变化的文件...","Incremental mode: Only update files changed in Git..."
+"增量模式：Git 变更 + 内容不一致文件同步...","Incremental mode: Git changes + out-of-sync file sync..."
 "✓ 已是最新版本，无需更新文件","✓ Already the latest version, no need to update the file"
 "⚠ vendor 目录未更新，保留现有依赖包","⚠ The vendor directory is not updated and existing dependency packages are retained."
+未检测到核心文件变化，跳过反射工厂刷新,未检测到核心文件变化，跳过反射工厂刷新
+刷新反射元数据与编译工厂...,刷新反射元数据与编译工厂...
+反射工厂刷新完成,反射工厂刷新完成
 "✓ 处理了 %{1} 个变化的文件","✓ %{1} changed files processed"
 "补缺：同步 %{1} 个本地缺失的核心文件","Backfill: synced %{1} missing core files"
 "刷新：覆盖 %{1} 个内容与源不一致的核心文件","Refresh: overwrote %{1} core files that differ from source"
-"增量模式：Git 变更 + 内容不一致文件同步...","Incremental mode: Git changes + out-of-sync file sync..."
 "⚠ 源路径不存在: %{1}","⚠ Source path does not exist: %{1}"
 "拷贝 %{1}...","Copying %{1}..."
 "✓ %{1}","✓ %{1}"
@@ -206,11 +208,99 @@ tag：%{1},"Tag: %{1}"
 请求方式错误,请求方式错误
 部署配置已保存,部署配置已保存
 部署配置保存失败：%{1},部署配置保存失败：%{1}
-"Git fetch 失败：%{1}","Git fetch failed: %{1}"
-"Git checkout tag 失败：%{1}","Git checkout tag failed: %{1}"
-"Git checkout 分支失败：%{1}","Git checkout branch failed: %{1}"
-"Git reset 失败：%{1}","Git reset failed: %{1}"
-"Git pull 失败：%{1}","Git pull failed: %{1}"
+"WLS 部署发布","WLS Deploy"
+请求方式错误。,"Invalid request method."
+"项目发布 Profile 保存失败。","Project release profile save failed."
+发布预检存在阻断项，请先修正标红项。,"Release preflight has blocking items. Fix the red items first."
+"请输入需要回放的 Webhook Ref。","Enter the Webhook Ref to replay."
+"Invalid request method.","Invalid request method."
+"Please enter a Git ref for the manual release.","Please enter a Git ref for the manual release."
+"Please enter a Git ref for the manual release plan.","Please enter a Git ref for the manual release plan."
+"Release preflight has blocking items, so the manual release was not executed.","Release preflight has blocking items, so the manual release was not executed."
+"Release preflight has blocking items, so the manual plan was not built.","Release preflight has blocking items, so the manual plan was not built."
+"Confirm the manual release before running it.","Confirm the manual release before running it."
+"Manual release failed.","Manual release failed."
+请先勾选确认框后再执行回滚。,请先勾选确认框后再执行回滚。
+发布预检存在阻断项，不能执行回滚。,发布预检存在阻断项，不能执行回滚。
+"当前项目 Profile 未配置回滚参考。","当前项目 Profile 未配置回滚参考。"
+回滚失败。,回滚失败。
+当前项目发布记录,"Current Project Releases"
+当前域名发布记录,"Current Domain Releases"
+全局发布记录,"Global Releases"
+"未选择子项目，显示 WLS 主项目发布历史。","No child project is selected, so WLS host project release history is shown."
+"Tag 发布策略","Tag Release Policy"
+默认启用,"Enabled by Default"
+已调整,Adjusted
+"默认仅响应 tag push；需要分支发布时必须在 Deploy 配置中显式开启。","By default only tag pushes are accepted; branch releases must be explicitly enabled in Deploy Config."
+"Webhook 随机路径","Webhook Random Path"
+已生成,Generated
+待生成,Pending
+"公网入口使用 ~wh~ 随机路径和密钥鉴权，由 ModuleRouter 转入发布控制器。","The public endpoint uses a ~wh~ random path plus secret authentication, then ModuleRouter forwards it to the release controller."
+子项目发布档案,"Child Project Release Profiles"
+已启用,Enabled
+已保存,Saved
+继承全局,"Inherits Global"
+"当前项目已有独立发布 Profile，后续 webhook/manual release 会按项目上下文读取。","This project already has a dedicated release profile; later webhook/manual release flows will read it by project context."
+"当前项目暂未保存独立 Profile，发布能力继续读取全局 Deploy 配置。","This project has no dedicated profile yet, so release capabilities continue to read global Deploy configuration."
+发布日志,"Release Logs"
+已接入,Connected
+"Webhook 与命令发布共用发布历史服务，面板可直接查看最近发布状态。","Webhook and command releases share the release history service, so the panel can show recent release status directly."
+"仅分支 Push","Branch Push Only"
+"分支 + Tag 都生效","Branch + Tag"
+"仅 Tag Push","Tag Push Only"
+成功,Success
+失败,Failed
+运行中,Running
+等待中,Pending
+未知,Unknown
+会触发发布,"Would Trigger Release"
+不会触发,"Will Be Skipped"
+待回放,"Ready to Replay"
+"Plan ready","Plan ready"
+"Policy skipped","Policy skipped"
+"Waiting for ref","Waiting for ref"
+"Current WLS project root","Current WLS project root"
+Enabled,Enabled
+Disabled,Disabled
+"Enabled, command not configured","Enabled, command not configured"
+"No execution plan yet","No execution plan yet"
+"Enter a matching tag or branch ref to preview the manual release path.","Enter a matching tag or branch ref to preview the manual release path."
+"Fetch tags from %{1}, then checkout tag %{2}.","Fetch tags from %{1}, then checkout tag %{2}."
+"Fetch %{1}, then %{2} branch %{3}.","Fetch %{1}, then %{2} branch %{3}."
+"Preflight gate","Preflight gate"
+Backup,Backup
+"Create a deploy backup before Git changes.","Create a deploy backup before Git changes."
+"Git update","Git update"
+Composer,Composer
+"Composer is enabled, but no command is configured yet.","Composer is enabled, but no command is configured yet."
+"Composer is disabled for this project.","Composer is disabled for this project."
+"Post deploy","Post deploy"
+"No post-deploy command is configured.","No post-deploy command is configured."
+"Runtime stamp and reload","Runtime stamp and reload"
+"A real release would write current.json, sync env release metadata, record project-scoped history, dispatch release_after, and reload WLS.","A real release would write current.json, sync env release metadata, record project-scoped history, dispatch release_after, and reload WLS."
+"Execution gate","Execution gate"
+"Build Plan stays read-only. Run Release requires explicit confirmation and re-runs the preflight and trigger policy before execution.","Build Plan stays read-only. Run Release requires explicit confirmation and re-runs the preflight and trigger policy before execution."
+"Manual release ref contains unsupported shell control characters.","Manual release ref contains unsupported shell control characters."
+"Manual release ref is outside the WLS allowlist.","Manual release ref is outside the WLS allowlist."
+策略命中，会进入发布流程。,"Policy matched; it would enter the release flow."
+"当前为仅 Tag Push，分支事件会被跳过。","Current mode is Tag Push only, so branch events will be skipped."
+"当前为仅分支 Push，Tag 事件会被跳过。","Current mode is Branch Push only, so tag events will be skipped."
+"分支与 Webhook 分支过滤不匹配。","Branch does not match the Webhook branch filter."
+"Tag 不符合配置的前缀过滤。","Tag does not match the configured prefix filter."
+"Ref 不是可识别的分支或 Tag。","Ref is not a recognizable branch or tag."
+暂无回放结果。,"No replay result yet."
+"项目发布 Profile 已保存。","Project release profile saved."
+发布预检已完成，未执行真实发布。,"Release preflight completed; no real release was executed."
+"Webhook 回放预检已完成，未执行真实发布。","Webhook replay preflight completed; no real release was executed."
+项目回滚已完成。,项目回滚已完成。
+"Manual release plan is ready; no release was executed.","Manual release plan is ready; no release was executed."
+"Manual release plan was skipped by the current trigger policy; no release was executed.","Manual release plan was skipped by the current trigger policy; no release was executed."
+"Manual release completed.","Manual release completed."
+"Manual release was skipped by the current trigger policy; no release was executed.","Manual release was skipped by the current trigger policy; no release was executed."
+项目仓库地址不合法。,"Project repository URL is invalid."
+"Webhook 密钥包含不允许的控制字符。","Webhook secret contains disallowed control characters."
+"Git working directory does not exist: %{1}","Git working directory does not exist: %{1}"
+"Git process could not be opened.","Git process could not be opened."
 开始发布：%{1},"Starting release: %{1}"
 备份中...,"Backing up..."
 "Git 更新中...","Updating Git..."
@@ -218,6 +308,83 @@ tag：%{1},"Tag: %{1}"
 版本戳已写入：%{1},"Version stamp written: %{1}"
 重载服务...,"Reloading server..."
 发布成功：%{1},"Release succeeded: %{1}"
+"Rollback reference cannot be empty.","Rollback reference cannot be empty."
+寮€濮嬪洖婊氾細%{1},寮€濮嬪洖婊氾細%{1}
+鍥炴粴鍓嶅浠戒腑...,鍥炴粴鍓嶅浠戒腑...
+"Git 鍥炴粴涓?..","Git 鍥炴粴涓?.."
+鍥炴粴鐗堟湰宸插啓鍏ワ細%{1},鍥炴粴鐗堟湰宸插啓鍏ワ細%{1}
+閲嶈浇鏈嶅姟...,閲嶈浇鏈嶅姟...
+鍥炴粴鎴愬姛锛?{1},鍥炴粴鎴愬姛锛?{1}
+鍥炴粴澶辫触锛?{1},鍥炴粴澶辫触锛?{1}
+部署根目录包含不允许的控制字符。,"Deploy root contains disallowed control characters."
+部署根目录必须是绝对路径：%{1},"Deploy root must be an absolute path: %{1}"
+部署根目录不存在：%{1},"Deploy root does not exist: %{1}"
+"Composer 命令只允许 composer install。","Composer command only allows composer install."
+"Composer 命令包含未允许的参数：%{1}","Composer command contains an unsupported option: %{1}"
+部署后命令包含空命令片段。,"Post-deploy command contains an empty command segment."
+"回滚参考包含不允许的 shell 控制字符。","Rollback reference contains disallowed shell control characters."
+"回滚参考不能以短横线开头，也不能包含 ..、// 或 @{。","Rollback reference cannot start with a dash or contain .., //, or @{."
+回滚参考不能以点号或斜杠结尾。,"Rollback reference cannot end with a dot or slash."
+"回滚参考格式不在 WLS 白名单内。","Rollback reference format is outside the WLS allowlist."
+"回滚参考仅支持 tag、refs/tags/name、refs/heads/name 或 7-40 位 commit SHA；禁止 shell 控制字符。","Rollback reference only supports tag, refs/tags/name, refs/heads/name, or a 7-40 character commit SHA; shell control characters are forbidden."
+"禁止管道、重定向、分号、单独 &、引号、命令替换和任意脚本路径。","Pipes, redirects, semicolons, single ampersands, quotes, command substitution, and arbitrary script paths are blocked."
+"部署后命令未在 WLS 维护命令白名单内：%{1}","Post-deploy command is not in the WLS maintenance allowlist: %{1}"
+部署后命令包含未允许的参数：%{1},"Post-deploy command contains an unsupported option: %{1}"
+"命令包含不允许的 shell 控制字符。","Command contains unsupported shell control characters."
+命令包含不允许的命令替换表达式。,"Command contains unsupported command substitution."
+"命令包含不允许的 & 控制符。","Command contains unsupported ampersand control tokens."
+"项目 Profile","Project Profile"
+继承全局配置,"Inherited Global Config"
+"Profile 来源","Profile Source"
+"当前发布会优先读取该项目的独立 Profile。","The release will prefer this project's dedicated profile."
+已保存未启用,"Saved but Disabled"
+"该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。","This project has a profile, but it is disabled; releases still inherit global Deploy config."
+"当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。","This project has no dedicated profile yet; releases will use global Deploy config."
+仓库配置,"Repository Config"
+缺少仓库,"Repository Missing"
+必须配置项目仓库地址后才能执行发布。,"A project repository URL is required before release execution."
+地址不合法,"Invalid URL"
+"项目仓库地址只支持 http(s)、ssh:// 或 git@host:path.git 形式。","Project repository URL supports only http(s), ssh://, or git@host:path.git formats."
+已配置,Configured
+仓库地址格式可被发布服务识别。,"The repository URL format can be recognized by the release service."
+部署目录,"Deploy Directory"
+未配置,"Not Configured"
+未设置部署根目录；后续发布会回退到当前运行项目目录。,"Deploy root is not set; later releases will fall back to the current running project directory."
+路径需检查,"Path Needs Review"
+部署根目录包含不适合发布配置的控制字符。,"The deploy root contains control characters unsuitable for release config."
+部署根目录已填写；预检不访问文件系统，也不会创建目录。,"Deploy root is configured; preflight does not access the filesystem or create directories."
+触发模式,"Trigger Mode"
+不支持,Unsupported
+部署触发模式不在允许列表内。,"Deploy trigger mode is not in the allowlist."
+"默认保守策略已生效，分支 Push 不会触发发布。","The conservative default is active; branch pushes will not trigger releases."
+"当前项目显式允许分支发布，请确认 Git 平台事件和分支过滤符合预期。","This project explicitly allows branch releases; confirm Git platform events and branch filters."
+"Webhook 入口","Webhook Entry"
+项目密钥,"Project Secret"
+"随机路径已生成，当前项目会使用独立 Webhook 密钥验签。","Random path exists; this project will verify Webhook requests with its own secret."
+"尚未生成随机 Webhook 路径；请先执行 deploy:webhook:setup。","No random Webhook path has been generated; run deploy:webhook:setup first."
+路径需轮换,"Path Rotation Suggested"
+"Webhook 路径不是 ~wh~ 随机路径，建议使用 deploy:webhook:setup --rotate-path 轮换。","Webhook path is not a ~wh~ random path; rotate it with deploy:webhook:setup --rotate-path."
+密钥未配置,"Secret Missing"
+"Webhook 路径已生成，但访问密钥为空；请生成或保存 webhook_secret。","Webhook path exists, but the access secret is empty; generate or save webhook_secret."
+已就绪,Ready
+随机路径和访问密钥均已配置。,"Random path and access secret are both configured."
+命令白名单,"Command Allowlist"
+需修正,"Needs Fix"
+"Composer 命令为空","Composer Command Empty"
+"已开启 Composer，但未配置 composer install 命令。","Composer is enabled, but no composer install command is configured."
+通过,Passed
+"Composer 与部署后命令均符合 WLS 发布命令白名单。","Composer and post-deploy commands both satisfy the WLS release command allowlist."
+回滚策略,"Rollback Policy"
+回滚参考为空；后续不会展示可执行回滚动作。,"Rollback reference is empty; executable rollback actions will not be shown later."
+需要修正,"Needs Fix"
+"Tag 回滚","Tag Rollback"
+"回滚引用已通过 WLS 白名单，将只在当前项目 Profile 下作为后续显式回滚动作的目标。","Rollback reference passed the WLS allowlist and will only be used as a future explicit rollback target under the current project Profile."
+提交回滚,"Commit Rollback"
+分支回滚,"Branch Rollback"
+"回滚参考已通过白名单，但 commit/branch 回滚需要后续显式动作再次确认。","Rollback reference passed the allowlist, but commit/branch rollback needs another explicit confirmation in a later action."
+存在阻断项,Blocked
+需要确认,"Needs Review"
+可进入发布流程,"Ready for Release Flow"
 无法创建部署版本目录：%{1},"Cannot create deploy version directory: %{1}"
 无法写入部署版本文件,"Cannot write deploy version file"
 无法创建目录：%{1},无法创建目录：%{1}
@@ -242,12 +409,11 @@ tag：%{1},"Tag: %{1}"
 "【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。","【7】部署 SSH 公钥：将公钥添加到 Git 平台「部署公钥 / Deploy Key」（只读即可），服务器私钥位于 %{1}（勿提交 Git）。"
 "【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。","【8】使用 SSH 拉取时，将后台「项目仓库地址」改为 git@ 形式，并确保部署用户默认使用该私钥（如配置 GIT_SSH_COMMAND 或 ~/.ssh/config）。"
 已配置，留空表示不修改,已配置，留空表示不修改
-未配置,未配置
 部署配置,部署配置
 "后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。","后台配置保存后会优先于 dev/deploy/.config 和 .env；字段留空时才回退到服务器文件配置。"
 项目仓库,项目仓库
-项目仓库地址,项目仓库地址
-项目分支,项目分支
+项目仓库地址,"Project Repository URL"
+项目分支,"Project Branch"
 "Git Remote 名称","Git Remote 名称"
 项目仓库用户名,项目仓库用户名
 "项目仓库 Token","项目仓库 Token"
@@ -255,7 +421,7 @@ tag：%{1},"Tag: %{1}"
 部署根目录,部署根目录
 "Git 更新模式","Git 更新模式"
 "Composer 命令","Composer 命令"
-部署后命令,部署后命令
+部署后命令,"Post Deploy Command"
 允许覆盖本地改动,允许覆盖本地改动
 允许切换分支,允许切换分支
 "更新 Submodule","更新 Submodule"
@@ -301,21 +467,17 @@ Webhook,Webhook
 "Payload 要求","Payload Requirements"
 "请求体为 JSON 格式，必须包含 <code>ref</code> 字段：","请求体为 JSON 格式，必须包含 <code>ref</code> 字段："
 "Nginx 反代示例（WLS）","Nginx 反代示例（WLS）"
-"/deploy 与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。","/deploy 与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。"
+"Webhook 随机路径与站点其他路径共用 WLS 反代，无需单独 fastcgi 入口。","Webhook random path shares the same WLS reverse proxy as the rest of the site; no extra fastcgi entry is required."
 手动测试,"Manual Test"
-"返回 {""ok"":true} 表示部署触发成功；{""skipped"":true,""reason"":""branch_mismatch""} 表示分支不匹配，不会部署。","返回 {""ok"":true} 表示部署触发成功；{""skipped"":true,""reason"":""branch_mismatch""} 表示分支不匹配，不会部署。"
-触发模式,"Trigger Mode"
+"默认仅 Tag Push：分支测试会返回 trigger_mode_tag_only；选择分支或两者都生效后，branch_mismatch 表示分支不匹配。","Default is Tag Push only: branch tests return trigger_mode_tag_only. After selecting Branch or Both, branch_mismatch means the branch filter did not match."
 部署触发方式,"Deploy Trigger"
-"仅分支 Push","Branch Push Only"
-"仅 Tag Push","Tag Push Only"
-"分支 + Tag 都生效","Both Branch & Tag"
-"选择 Webhook 触发部署的条件：仅分支推送、仅 Tag 推送、或两者都生效","Choose when Webhook triggers deployment: branch push only, tag push only, or both"
+"默认仅 Tag Push；只有明确选择分支模式或两者都生效时才响应分支 push。","Default is Tag Push only; branch pushes are accepted only when Branch or Both is selected explicitly."
 分支过滤,"Branch Filter"
 "留空匹配所有分支；填写后仅该分支的 push 触发部署","Leave empty to match all branches; set to only trigger on pushes to this branch"
 "Tag 前缀过滤","Tag Prefix Filter"
 "留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署","留空匹配所有 tag；填写后仅匹配此前缀的 tag 触发部署"
 "发布探测 Token","Deploy Probe Token"
-"访问 GET /deploy/version?token=xxx 可查看详细版本信息","Access GET /deploy/version?token=xxx for detailed version info"
+"访问 Webhook 路径后加 /version?token=xxx 可查看详细版本信息","Append /version?token=xxx to the Webhook path to view detailed version info"
 版本策略,"Version Policy"
 "分支 Push 版本 = commit 短 SHA（如 a3f5c2d）；Tag Push 版本 = tag 名（如 v2.4.1）。","Branch push version = commit short SHA (e.g. a3f5c2d); Tag push version = tag name (e.g. v2.4.1)."
 "Git 平台配置提示","Git Platform Setup Tips"
@@ -335,9 +497,138 @@ Cloudflare,Cloudflare
 版本,Version
 类型,Type
 触发,Trigger
+范围,Scope
 状态,Status
 耗时,Duration
 Commit,Commit
 当前,Current
 tag,tag
 branch,branch
+全局,Global
+已配置，留空表示保留当前项目密钥,"Configured; leave blank to keep the current project secret."
+未配置，可填写当前项目独立密钥,"Not configured; enter a project-specific secret if needed."
+全局密钥,"Global Secret"
+"WLS 部署导航","WLS Deploy Navigation"
+"WLS 插件面板","WLS Plugin Panel"
+部署发布,Deploy
+部署发布菜单,"Deploy Menu"
+总览,Overview
+配置摘要,"Configuration Summary"
+发布预检,"Release Preflight"
+"Webhook 回放","Webhook Replay"
+发布记录,"Release Records"
+插件商城,"Plugin Marketplace"
+"Manual Plan","Manual Plan"
+切换明暗色,"Toggle Theme"
+深色,Dark
+"返回 WLS Panel","Back to WLS Panel"
+"WLS 独立插件","WLS Standalone Plugin"
+"集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。","Review the current WLS project's tag/webhook release policy, redacted configuration status, and recent release results; full editing stays in Deploy Config."
+"打开 Deploy 配置","Open Deploy Config"
+完整发布历史,"Full Release History"
+项目后台,"Project Admin"
+项目上下文,"Project Context"
+项目,Project
+"当前 WLS","Current WLS"
+本机面板,"Local Panel"
+域名,Domain
+未指定,"Not Specified"
+由项目卡片安全透传,"Safely passed from the project card"
+操作,Operation
+"来自 WLS capability 链接","From WLS capability link"
+触发策略,"Trigger Policy"
+默认保守发布策略,"Default conservative release policy"
+"项目发布 Profile","Project Release Profile"
+"为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。","Save a dedicated repository, tag policy, rollback reference, and release command for the current WLS project; saving still requires a later explicit release action."
+"启用项目 Profile","Enable Project Profile"
+发布前备份,"Backup Before Release"
+"Tag 前缀","Tag 前缀"
+"例如 v","For example v"
+"Webhook 分支过滤","Webhook 分支过滤"
+"项目 Webhook 密钥","Project Webhook Secret"
+当前验签来源,"Current verification source"
+"Composer 示例","Composer Examples"
+部署后命令示例,"Post-deploy Command Examples"
+回滚参考,"Rollback Reference"
+回滚示例,"Rollback Examples"
+说明,Description
+记录该项目发布注意事项,"Record release notes for this project"
+"发布 Profile 会被后续 webhook/manual release 按项目上下文读取；当前按钮只保存配置。","The release profile will be read by later webhook/manual release flows using the project context; this button only saves configuration."
+"保存 Profile","Save Profile"
+"仅检查当前项目发布配置、触发策略和命令白名单，不执行 Git、文件写入或服务重载。","Checks only the current project release config, trigger policy, and command allowlist; it does not run Git, write files, or reload services."
+执行预检,"Run Preflight"
+暂无预检结果。,"No preflight result yet."
+"Rollback Action","Rollback Action"
+"Only the saved Profile rollback reference is used, and it runs inside the selected project context.","Only the saved Profile rollback reference is used, and it runs inside the selected project context."
+"Not configured","Not configured"
+"Rollback Version","Rollback Version"
+"Release ID","Release ID"
+Ref,Ref
+"Confirm rollback in the selected project context","Confirm rollback in the selected project context"
+"Run Rollback","Run Rollback"
+"Webhook 回放预检","Webhook Replay Preflight"
+"输入 webhook payload.ref，复用当前项目 Tag/Branch 策略，只判断是否会触发发布。","Enter webhook payload.ref and reuse the current project Tag/Branch policy to check whether a release would trigger."
+"Webhook Ref","Webhook Ref"
+回放预检,"Replay Preflight"
+回放示例,"Replay Examples"
+"Tag 示例","Tag Example"
+分支示例,"Branch Example"
+判断结果,Decision
+发布版本,"Release Version"
+"Git Checkout","Git Checkout"
+原因,Reason
+"还没有回放结果；可以先用 Tag 示例确认默认 tag-only 策略。","No replay result yet; use the Tag example to confirm the default tag-only policy."
+"Manual Release Plan","Manual Release Plan"
+"Preview the exact project-scoped release path, then run it only after explicit confirmation. The server re-checks preflight and trigger policy before execution.","Preview the exact project-scoped release path, then run it only after explicit confirmation. The server re-checks preflight and trigger policy before execution."
+"Manual release ref","Manual release ref"
+"Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred.","Raw tag names are interpreted as tag refs in tag mode; explicit refs/tags/* and refs/heads/* are preferred."
+"Build Plan","Build Plan"
+"Manual release examples","Manual release examples"
+"Tag sample","Tag sample"
+"Branch sample","Branch sample"
+"I understand this will run Git, write release metadata, record history, and reload WLS for the selected project context.","I understand this will run Git, write release metadata, record history, and reload WLS for the selected project context."
+"Run Release","Run Release"
+"Plan status","Plan status"
+Type,Type
+"Deploy version","Deploy version"
+"Git checkout","Git checkout"
+Profile,Profile
+"Deploy root","Deploy root"
+"Remote / mode","Remote / mode"
+Reason,Reason
+"No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy.","No manual release plan yet. Build a tag plan first to verify the selected project Profile and trigger policy."
+planned,planned
+pending,pending
+敏感字段只显示是否配置，不显示原值。,"Sensitive fields only show whether they are configured; raw values are not displayed."
+"Webhook 已生成","Webhook Generated"
+"Webhook 待生成","Webhook Pending"
+仓库地址,"Repository URL"
+"分支 / Remote","Branch / Remote"
+"Webhook 路径","Webhook Path"
+未生成,"Not Generated"
+"Tag 前缀 / 分支过滤","Tag Prefix / Branch Filter"
+"全部 Tag","All Tags"
+全部分支,"All Branches"
+密钥状态,"Secret Status"
+"仓库 Token","Repository Token"
+后置能力,"Post Deploy Capabilities"
+启用,On
+关闭,Off
+命令,Command
+当前运行版本,"Current Runtime Version"
+"读取 var/deploy/current.json，不触发发布动作。","Reads var/deploy/current.json without triggering a release."
+已发布,Released
+暂无版本,"No Version"
+引用,Ref
+提交,Commit
+发布时间,"Released At"
+"尚未发布过；完成一次 deploy:release 或合法 Tag Webhook 后会在这里显示当前版本。","No release yet; after deploy:release or a valid tag webhook, the current version will appear here."
+能力阶段,"Capability Stage"
+"仅显示当前 WLS 项目最近 12 条发布历史，失败记录保留错误摘要。","Only the 12 most recent release records for the current WLS project are shown; failed records keep their error summary."
+"显示 WLS 主项目最近 12 条发布历史，失败记录保留错误摘要。","The 12 most recent WLS host project release records are shown; failed records keep their error summary."
+查看完整列表,"View Full List"
+发布历史暂不可用：%{1},"Release history is temporarily unavailable: %{1}"
+耗时未知,"Duration Unknown"
+"当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。","No release records for the current project yet. A project-context release or tag webhook will write records here."
+"暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。","No release records yet. Command releases or tag webhooks will write release history."
+浅色,Light

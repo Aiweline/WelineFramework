@@ -124,7 +124,11 @@ class QueueQueryProvider implements QueryProviderInterface
             $queue->where('t.module_name', $module);
         }
         if ($search !== '') {
-            $queue->where("concat(main_table.name,main_table.content,main_table.result) like '%$search%'");
+            $queue->where(
+                'CONCAT(main_table.name,main_table.content,main_table.result)',
+                '%' . $search . '%',
+                'LIKE'
+            );
         }
         if ($queueId > 0) {
             $queue->where('main_table.' . Queue::schema_fields_ID, $queueId);

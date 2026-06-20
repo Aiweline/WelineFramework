@@ -36,21 +36,20 @@
             let url = checkInput.attr('w-check-url') ?? checkInput.attr('w-url') ?? '';
             let type = checkInput.attr('w-check-type') ?? '';
             if (!type) {
-                confirm('@lang{w-check: w-check-type is required.}')
+                console.error('@lang{w-check: w-check-type is required.}', checkInput.get(0))
                 return
             }
             let field = checkInput.attr('w-check-field') ?? 'name';
             let id = checkInput.attr('w-check-id') ?? '';
             let id_field = checkInput.attr('w-check-id-field') ?? '';
             if (!id_field) {
-                console.info(checkInput)
-                confirm('@lang{w-check: w-check-id-field is required.}')
+                console.error('@lang{w-check: w-check-id-field is required.}', checkInput.get(0))
                 return
             }
             let invalid_class = checkInput.attr('w-invalid-class') ?? 'is-invalid';
             let valid_class = checkInput.attr('w-valid-class') ?? 'is-valid';
             if (!url) {
-                console.log('w-check @lang{element w-url is missing.}')
+                console.error('w-check @lang{element w-url is missing.}', checkInput.get(0))
                 return
             }
             checkInput.change(debounce(function () {

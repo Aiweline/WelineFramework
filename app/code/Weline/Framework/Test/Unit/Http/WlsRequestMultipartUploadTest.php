@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\WlsRequest;
 
 final class WlsRequestMultipartUploadTest extends TestCase
@@ -31,6 +33,9 @@ final class WlsRequestMultipartUploadTest extends TestCase
 
     protected function tearDown(): void
     {
+        Context::leave();
+        WelineEnv::getInstance()->reset();
+
         foreach ($this->tempFiles as $tempFile) {
             if (\is_string($tempFile) && $tempFile !== '' && \is_file($tempFile)) {
                 @\unlink($tempFile);
@@ -80,6 +85,14 @@ final class WlsRequestMultipartUploadTest extends TestCase
         self::assertSame($firstTmp, $secondTmp);
         self::assertSame('banner.txt', $_FILES['upload']['name'][0] ?? null);
         self::assertSame('upload', $_POST['cmd'] ?? null);
+
+        self::assertSame('banner.txt', $request->getFiles()['upload']['name'][0] ?? null);
+
+        $context = Context::fromRequest($request);
+        self::assertSame('banner.txt', $context->file('upload')['name'][0] ?? null);
+
+        Context::enter($context);
+        self::assertSame('banner.txt', WelineEnv::getFiles('upload')['name'][0] ?? null);
     }
 
     public function testRequestWithoutFilesClearsStaleFiles(): void

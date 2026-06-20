@@ -13,26 +13,37 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend\Countries;
 
-use Weline\Framework\Http\Cookie;
+use Weline\Acl\Model\Acl as AclModel;
+use Weline\Framework\Acl\Acl as AclAttribute;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Ui\FormKey;
 use Weline\I18n\Controller\Backend\BaseController;
 use Weline\I18n\Model\Countries;
 use Weline\I18n\Model\Countries\Locale\Name;
+use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locale\Name as LocaleName;
-use Weline\Framework\App\Env;
-use Weline\I18n\Model\I18n;
 
 class AsyncUpdate extends BaseController
 {
     private const BATCH_SIZE = 100;
     private const PROGRESS_KEY_PREFIX = 'i18n_update_progress_';
+    private const SESSION_KEY_PREFIX = 'weline_i18n_async_update.';
+    private const MAX_BATCH_INDEX = 100000;
+
+    protected function csrf(): string
+    {
+        return FormKey::key_name;
+    }
     
+    #[AclAttribute('Weline_I18n::i18n_countries_async_start', '启动国家数据异步更新', 'mdi mdi-refresh', '启动国家地区异步更新', 'Weline_I18n::i18n_countries', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function index()
     {
         try {
+            $this->assertPostRequest();
+
             // 生成唯一的任务ID
-            $taskId = uniqid('update_', true);
+            $taskId = 'update_' . bin2hex(random_bytes(16));
             
             // 初始化进度
             $this->initProgress($taskId);
@@ -41,26 +52,25 @@ class AsyncUpdate extends BaseController
             $this->executeFullUpdate($taskId);
             
             // 返回任务ID给前端
-            $this->request->getResponse()->setData([
+            return $this->jsonResponse([
                 'success' => true,
                 'task_id' => $taskId,
-                'message' => '开始异步更新全球数据...'
+                'message' => (string)__('开始异步更新全球数据...')
             ]);
-            return;
             
-        } catch (\Exception $e) {
-            $this->request->getResponse()->setData([
+        } catch (\Throwable $e) {
+            w_log_error('I18n async country update start failed: ' . $e->getMessage(), [], 'i18n');
+            return $this->jsonResponse([
                 'success' => false,
-                'message' => '启动更新失败：' . $e->getMessage()
-            ]);
-            return;
+                'message' => (string)__('启动更新失败：%{1}', $e->getMessage())
+            ], $this->statusCodeForException($e));
         }
     }
     
     /**
      * 执行完整的数据更新
      */
-    private function executeFullUpdate($taskId)
+    private function executeFullUpdate(string $taskId): void
     {
         try {
             // 步骤1：更新国家数据
@@ -75,21 +85,25 @@ class AsyncUpdate extends BaseController
             // 步骤4：完成更新
             $this->finalizeUpdate($taskId);
             
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->setProgressError($taskId, $e->getMessage());
+            throw $e;
         }
     }
     
     /**
      * 执行异步更新任务
      */
+    #[AclAttribute('Weline_I18n::i18n_countries_async_execute', '执行国家数据异步更新', 'mdi mdi-refresh', '执行国家地区异步更新', 'Weline_I18n::i18n_countries', accessMode: AclModel::ACCESS_MODE_EDIT)]
     public function execute()
     {
-        $taskId = $this->request->getPost('task_id');
-        $step = $this->request->getPost('step', 1);
-        $batch = $this->request->getPost('batch', 0);
-        
         try {
+            $this->assertPostRequest();
+
+            $taskId = $this->sanitizeTaskId($this->request->getPost('task_id'));
+            $step = $this->sanitizeStep($this->request->getPost('step', 1));
+            $batch = $this->sanitizeBatch($this->request->getPost('batch', 0));
+
             switch ($step) {
                 case 1:
                     $this->updateCountries($taskId);
@@ -104,58 +118,57 @@ class AsyncUpdate extends BaseController
                     $this->finalizeUpdate($taskId);
                     break;
                 default:
-                    throw new \Exception('未知的更新步骤');
+                    throw new \InvalidArgumentException((string)__('未知的更新步骤'));
             }
             
-            $this->request->getResponse()->setData([
+            return $this->jsonResponse([
                 'success' => true,
                 'task_id' => $taskId,
                 'step' => $step,
                 'batch' => $batch,
                 'progress' => $this->getProgress($taskId)
             ]);
-            return;
             
-        } catch (\Exception $e) {
-            $this->setProgressError($taskId, $e->getMessage());
-            $this->request->getResponse()->setData([
+        } catch (\Throwable $e) {
+            if (isset($taskId) && $taskId !== '') {
+                $this->setProgressError($taskId, $e->getMessage());
+            }
+            w_log_error('I18n async country update execute failed: ' . $e->getMessage(), [], 'i18n');
+            return $this->jsonResponse([
                 'success' => false,
-                'message' => '执行更新失败：' . $e->getMessage()
-            ]);
-            return;
+                'message' => (string)__('执行更新失败：%{1}', $e->getMessage())
+            ], $this->statusCodeForException($e));
         }
     }
     
     /**
      * 获取更新进度
      */
+    #[AclAttribute('Weline_I18n::i18n_countries_async_progress', '查看国家数据更新进度', 'mdi mdi-progress-clock', '查看国家地区异步更新进度', 'Weline_I18n::i18n_countries', accessMode: AclModel::ACCESS_MODE_READ)]
     public function progress()
     {
-        $taskId = $this->request->getGet('task_id');
-        
-        if (!$taskId) {
-            $this->request->getResponse()->setData([
-                'success' => false,
-                'message' => '缺少任务ID'
+        try {
+            $taskId = $this->sanitizeTaskId($this->request->getGet('task_id'));
+            $progress = $this->getProgress($taskId);
+
+            return $this->jsonResponse([
+                'success' => true,
+                'progress' => $progress
             ]);
-            return;
+        } catch (\Throwable $e) {
+            return $this->jsonResponse([
+                'success' => false,
+                'message' => (string)$e->getMessage()
+            ], $this->statusCodeForException($e));
         }
-        
-        $progress = $this->getProgress($taskId);
-        
-        $this->request->getResponse()->setData([
-            'success' => true,
-            'progress' => $progress
-        ]);
-        return;
     }
     
     /**
      * 更新国家数据
      */
-    private function updateCountries($taskId)
+    private function updateCountries(string $taskId): void
     {
-        $this->setProgress($taskId, '正在更新国家数据...', 10);
+        $this->setProgress($taskId, (string)__('正在更新国家数据...'), 10);
         
         /** @var I18n $i18n */
         $i18n = ObjectManager::getInstance(I18n::class);
@@ -181,6 +194,9 @@ class AsyncUpdate extends BaseController
         
         $processed = 0;
         $total = count($availableCountries);
+        if ($total === 0) {
+            throw new \RuntimeException((string)__('没有找到可安装的国家数据！'));
+        }
         
         foreach ($availableCountries as $code => $country) {
             $countryData = [
@@ -205,7 +221,10 @@ class AsyncUpdate extends BaseController
             }
             
             $processed++;
-            $this->setProgress($taskId, "正在处理国家数据... ({$processed}/{$total})", 10 + ($processed / $total) * 20);
+            $this->setProgress($taskId, (string)__('正在处理国家数据... (%{processed}/%{total})', [
+                'processed' => $processed,
+                'total' => $total,
+            ]), 10 + ($processed / $total) * 20);
         }
         
         // 批量插入新国家
@@ -224,15 +243,15 @@ class AsyncUpdate extends BaseController
             }
         }
         
-        $this->setProgress($taskId, '国家数据更新完成', 30);
+        $this->setProgress($taskId, (string)__('国家数据更新完成'), 30);
     }
     
     /**
      * 更新所有区域数据（完整版本）
      */
-    private function updateAllLocales($taskId)
+    private function updateAllLocales(string $taskId): void
     {
-        $this->setProgress($taskId, '正在更新区域数据...', 30);
+        $this->setProgress($taskId, (string)__('正在更新区域数据...'), 30);
         
         /** @var I18n $i18n */
         $i18n = ObjectManager::getInstance(I18n::class);
@@ -247,6 +266,9 @@ class AsyncUpdate extends BaseController
         $allLocales = [];
         $processed = 0;
         $total = count($allCountries);
+        if ($total === 0) {
+            throw new \RuntimeException((string)__('没有找到已安装的国家'));
+        }
         
         foreach ($allCountries as $country) {
             $countryCode = $country->getData(Countries::schema_fields_CODE);
@@ -266,11 +288,14 @@ class AsyncUpdate extends BaseController
                 }
             } catch (\Exception $e) {
                 // 跳过无法获取区域的国家
-                w_log_warning("无法获取国家 {$countryCode} 的区域信息: " . $e->getMessage(), [], 'i18n');
+                w_log_warning((string)__('无法获取国家 %{1} 的区域信息: %{2}', [$countryCode, $e->getMessage()]), [], 'i18n');
             }
             
             $processed++;
-            $this->setProgress($taskId, "正在收集区域数据... ({$processed}/{$total})", 30 + ($processed / $total) * 20);
+            $this->setProgress($taskId, (string)__('正在收集区域数据... (%{processed}/%{total})', [
+                'processed' => $processed,
+                'total' => $total,
+            ]), 30 + ($processed / $total) * 20);
         }
         
         // 批量插入Locale数据
@@ -289,19 +314,22 @@ class AsyncUpdate extends BaseController
                 }
                 
                 $progress = 30 + 20 + (($index + 1) / $totalBatches) * 20;
-                $this->setProgress($taskId, "正在插入区域数据... (批次 " . ($index + 1) . "/{$totalBatches})", $progress);
+                $this->setProgress($taskId, (string)__('正在插入区域数据... (批次 %{batch}/%{total})', [
+                    'batch' => $index + 1,
+                    'total' => $totalBatches,
+                ]), $progress);
             }
         }
         
-        $this->setProgress($taskId, '区域数据更新完成', 70);
+        $this->setProgress($taskId, (string)__('区域数据更新完成'), 70);
     }
     
     /**
      * 更新所有区域名称数据（完整版本）
      */
-    private function updateAllLocaleNames($taskId)
+    private function updateAllLocaleNames(string $taskId): void
     {
-        $this->setProgress($taskId, '正在更新区域名称数据...', 70);
+        $this->setProgress($taskId, (string)__('正在更新区域名称数据...'), 70);
         
         // 支持的语言列表
         $displayLanguages = ['en', 'zh_Hans_CN', 'zh_TW', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar'];
@@ -319,6 +347,9 @@ class AsyncUpdate extends BaseController
         
         $processed = 0;
         $total = count($allLocales) * count($displayLanguages);
+        if ($total === 0) {
+            throw new \RuntimeException((string)__('没有找到可更新的区域数据'));
+        }
         
         foreach ($allLocales as $localeItem) {
             $localeCode = $localeItem->getData(Locale::schema_fields_CODE);
@@ -334,7 +365,10 @@ class AsyncUpdate extends BaseController
                 
                 $processed++;
                 if ($processed % 100 === 0) {
-                    $this->setProgress($taskId, "正在生成区域名称... ({$processed}/{$total})", 70 + ($processed / $total) * 20);
+                    $this->setProgress($taskId, (string)__('正在生成区域名称... (%{processed}/%{total})', [
+                        'processed' => $processed,
+                        'total' => $total,
+                    ]), 70 + ($processed / $total) * 20);
                 }
             }
         }
@@ -356,19 +390,22 @@ class AsyncUpdate extends BaseController
                 }
                 
                 $progress = 70 + 20 + (($index + 1) / $totalBatches) * 10;
-                $this->setProgress($taskId, "正在插入区域名称数据... (批次 " . ($index + 1) . "/{$totalBatches})", $progress);
+                $this->setProgress($taskId, (string)__('正在插入区域名称数据... (批次 %{batch}/%{total})', [
+                    'batch' => $index + 1,
+                    'total' => $totalBatches,
+                ]), $progress);
             }
         }
         
-        $this->setProgress($taskId, '区域名称数据更新完成', 90);
+        $this->setProgress($taskId, (string)__('区域名称数据更新完成'), 90);
     }
     
     /**
      * 更新Locale数据（分批版本）
      */
-    private function updateLocales($taskId, $batch = 0)
+    private function updateLocales(string $taskId, int $batch = 0): void
     {
-        $this->setProgress($taskId, '正在更新区域数据...', 30);
+        $this->setProgress($taskId, (string)__('正在更新区域数据...'), 30);
         
         /** @var I18n $i18n */
         $i18n = ObjectManager::getInstance(I18n::class);
@@ -406,6 +443,10 @@ class AsyncUpdate extends BaseController
         // 获取当前批次的数据
         $allLocales = $this->getSessionData('async_locales_' . $taskId, []);
         $total = $this->getSessionData('async_locales_total_' . $taskId, 0);
+        if (!\is_array($allLocales)) {
+            throw new \RuntimeException((string)__('任务状态数据无效'));
+        }
+        $total = (int)$total;
         $batchData = array_slice($allLocales, $batch * self::BATCH_SIZE, self::BATCH_SIZE);
         
         if (!empty($batchData)) {
@@ -415,8 +456,11 @@ class AsyncUpdate extends BaseController
             $processed = ($batch + 1) * self::BATCH_SIZE;
             if ($processed > $total) $processed = $total;
             
-            $progress = 30 + ($processed / $total) * 20;
-            $this->setProgress($taskId, "正在插入区域数据... ({$processed}/{$total})", $progress);
+            $progress = $total > 0 ? 30 + ($processed / $total) * 20 : 50;
+            $this->setProgress($taskId, (string)__('正在插入区域数据... (%{processed}/%{total})', [
+                'processed' => $processed,
+                'total' => $total,
+            ]), $progress);
             
             // 如果还有更多批次，返回继续处理
             if ($processed < $total) {
@@ -428,15 +472,15 @@ class AsyncUpdate extends BaseController
         $this->unsetSessionData('async_locales_' . $taskId);
         $this->unsetSessionData('async_locales_total_' . $taskId);
         
-        $this->setProgress($taskId, '区域数据更新完成', 50);
+        $this->setProgress($taskId, (string)__('区域数据更新完成'), 50);
     }
     
     /**
      * 更新Locale名称数据
      */
-    private function updateLocaleNames($taskId, $batch = 0)
+    private function updateLocaleNames(string $taskId, int $batch = 0): void
     {
-        $this->setProgress($taskId, '正在更新区域名称数据...', 50);
+        $this->setProgress($taskId, (string)__('正在更新区域名称数据...'), 50);
         
         // 支持的语言列表
         $displayLanguages = ['en', 'zh_Hans_CN', 'zh_TW', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'ar'];
@@ -475,6 +519,10 @@ class AsyncUpdate extends BaseController
         // 获取当前批次的数据
         $allLocaleNames = $this->getSessionData('async_locale_names_' . $taskId, []);
         $total = $this->getSessionData('async_locale_names_total_' . $taskId, 0);
+        if (!\is_array($allLocaleNames)) {
+            throw new \RuntimeException((string)__('任务状态数据无效'));
+        }
+        $total = (int)$total;
         $batchData = array_slice($allLocaleNames, $batch * self::BATCH_SIZE, self::BATCH_SIZE);
         
         if (!empty($batchData)) {
@@ -484,8 +532,11 @@ class AsyncUpdate extends BaseController
             $processed = ($batch + 1) * self::BATCH_SIZE;
             if ($processed > $total) $processed = $total;
             
-            $progress = 50 + ($processed / $total) * 40;
-            $this->setProgress($taskId, "正在插入区域名称数据... ({$processed}/{$total})", $progress);
+            $progress = $total > 0 ? 50 + ($processed / $total) * 40 : 90;
+            $this->setProgress($taskId, (string)__('正在插入区域名称数据... (%{processed}/%{total})', [
+                'processed' => $processed,
+                'total' => $total,
+            ]), $progress);
             
             // 如果还有更多批次，返回继续处理
             if ($processed < $total) {
@@ -497,20 +548,20 @@ class AsyncUpdate extends BaseController
         $this->unsetSessionData('async_locale_names_' . $taskId);
         $this->unsetSessionData('async_locale_names_total_' . $taskId);
         
-        $this->setProgress($taskId, '区域名称数据更新完成', 90);
+        $this->setProgress($taskId, (string)__('区域名称数据更新完成'), 90);
     }
     
     /**
      * 完成更新
      */
-    private function finalizeUpdate($taskId)
+    private function finalizeUpdate(string $taskId): void
     {
-        $this->setProgress($taskId, '全球数据更新完成！', 100);
+        $this->setProgress($taskId, (string)__('全球数据更新完成！'), 100);
         
         // 设置完成状态
         $progressData = $this->getSessionData(self::PROGRESS_KEY_PREFIX . $taskId, []);
         $progressData['status'] = 'completed';
-        $progressData['message'] = '全球数据更新完成！';
+        $progressData['message'] = (string)__('全球数据更新完成！');
         $progressData['progress'] = 100;
         $progressData['last_update'] = time();
         
@@ -520,7 +571,7 @@ class AsyncUpdate extends BaseController
     /**
      * 分批插入Locale数据
      */
-    private function batchInsertLocales($taskId, $allLocales)
+    private function batchInsertLocales(string $taskId, array $allLocales): void
     {
         /** @var Locale $locale */
         $locale = ObjectManager::getInstance(Locale::class);
@@ -532,14 +583,17 @@ class AsyncUpdate extends BaseController
             $locale->clearQuery()->insert($batch, Locale::schema_fields_CODE)->fetch();
             
             $progress = 30 + (($index + 1) / $totalBatches) * 20;
-            $this->setProgress($taskId, "正在插入区域数据... (批次 " . ($index + 1) . "/{$totalBatches})", $progress);
+            $this->setProgress($taskId, (string)__('正在插入区域数据... (批次 %{batch}/%{total})', [
+                'batch' => $index + 1,
+                'total' => $totalBatches,
+            ]), $progress);
         }
     }
     
     /**
      * 分批插入Locale名称数据
      */
-    private function batchInsertLocaleNames($taskId, $localeNames)
+    private function batchInsertLocaleNames(string $taskId, array $localeNames): void
     {
         /** @var LocaleName $localeName */
         $localeName = ObjectManager::getInstance(LocaleName::class);
@@ -552,14 +606,17 @@ class AsyncUpdate extends BaseController
             $localeName->clearQuery()->insert($batch, LocaleName::schema_fields_LOCALE_CODE . ',' . LocaleName::schema_fields_DISPLAY_LOCALE_CODE)->fetch();
             
             $progress = 50 + (($index + 1) / $totalBatches) * 40;
-            $this->setProgress($taskId, "正在插入区域名称数据... (批次 " . ($index + 1) . "/{$totalBatches})", $progress);
+            $this->setProgress($taskId, (string)__('正在插入区域名称数据... (批次 %{batch}/%{total})', [
+                'batch' => $index + 1,
+                'total' => $totalBatches,
+            ]), $progress);
         }
     }
     
     /**
      * 获取Locale名称（带降级处理）
      */
-    private function getLocaleNameWithFallback($localeCode, $displayLang, $i18n)
+    private function getLocaleNameWithFallback(string $localeCode, string $displayLang, I18n $i18n): string
     {
         try {
             // 尝试使用I18n服务获取名称
@@ -598,12 +655,12 @@ class AsyncUpdate extends BaseController
     /**
      * 初始化进度
      */
-    private function initProgress($taskId)
+    private function initProgress(string $taskId): void
     {
         $progress = [
             'task_id' => $taskId,
             'status' => 'running',
-            'message' => '准备开始更新...',
+            'message' => (string)__('准备开始更新...'),
             'progress' => 0,
             'start_time' => time(),
             'error' => null
@@ -615,11 +672,11 @@ class AsyncUpdate extends BaseController
     /**
      * 设置进度
      */
-    private function setProgress($taskId, $message, $progress)
+    private function setProgress(string $taskId, string $message, int|float $progress): void
     {
         $progressData = $this->getSessionData(self::PROGRESS_KEY_PREFIX . $taskId, []);
         $progressData['message'] = $message;
-        $progressData['progress'] = $progress;
+        $progressData['progress'] = max(0, min(100, (float)$progress));
         $progressData['last_update'] = time();
         
         $this->setSessionData(self::PROGRESS_KEY_PREFIX . $taskId, $progressData);
@@ -628,7 +685,7 @@ class AsyncUpdate extends BaseController
     /**
      * 设置错误
      */
-    private function setProgressError($taskId, $error)
+    private function setProgressError(string $taskId, string $error): void
     {
         $progressData = $this->getSessionData(self::PROGRESS_KEY_PREFIX . $taskId, []);
         $progressData['status'] = 'error';
@@ -641,19 +698,25 @@ class AsyncUpdate extends BaseController
     /**
      * 获取进度
      */
-    private function getProgress($taskId)
+    private function getProgress(string $taskId): array
     {
-        return $this->getSessionData(self::PROGRESS_KEY_PREFIX . $taskId, [
+        $progress = $this->getSessionData(self::PROGRESS_KEY_PREFIX . $taskId, [
             'status' => 'not_found',
-            'message' => '任务不存在',
+            'message' => (string)__('任务不存在'),
             'progress' => 0
         ]);
+
+        return \is_array($progress) ? $progress : [
+            'status' => 'invalid',
+            'message' => (string)__('任务状态数据无效'),
+            'progress' => 0,
+        ];
     }
     
     /**
      * 清理进度
      */
-    private function clearProgress($taskId)
+    private function clearProgress(string $taskId): void
     {
         $this->unsetSessionData(self::PROGRESS_KEY_PREFIX . $taskId);
     }
@@ -661,24 +724,97 @@ class AsyncUpdate extends BaseController
     /**
      * 设置会话数据
      */
-    private function setSessionData($key, $value)
+    private function setSessionData(string $key, mixed $value): void
     {
-        $_SESSION[$key] = $value;
+        $this->session->set($this->sessionKey($key), $value);
+        $this->session->getSession()->save();
     }
     
     /**
      * 获取会话数据
      */
-    private function getSessionData($key, $default = null)
+    private function getSessionData(string $key, mixed $default = null): mixed
     {
-        return $_SESSION[$key] ?? $default;
+        $value = $this->session->get($this->sessionKey($key));
+
+        return $value ?? $default;
     }
     
     /**
      * 删除会话数据
      */
-    private function unsetSessionData($key)
+    private function unsetSessionData(string $key): void
     {
-        unset($_SESSION[$key]);
+        $this->session->delete($this->sessionKey($key));
+        $this->session->getSession()->save();
+    }
+
+    private function sessionKey(string $key): string
+    {
+        $key = trim($key);
+        if ($key === '' || !preg_match('/^[A-Za-z0-9_.-]+$/', $key)) {
+            throw new \InvalidArgumentException((string)__('任务状态键无效'));
+        }
+
+        return self::SESSION_KEY_PREFIX . $key;
+    }
+
+    private function assertPostRequest(): void
+    {
+        if (!$this->request->isPost()) {
+            throw new \RuntimeException((string)__('请求方法错误，请使用 POST 提交'));
+        }
+    }
+
+    private function sanitizeTaskId(mixed $taskId): string
+    {
+        $taskId = trim((string)$taskId);
+        if ($taskId === '') {
+            throw new \InvalidArgumentException((string)__('缺少任务ID'));
+        }
+        if (!preg_match('/^update_[A-Fa-f0-9]{32}$/', $taskId)) {
+            throw new \InvalidArgumentException((string)__('任务ID格式无效'));
+        }
+
+        return $taskId;
+    }
+
+    private function sanitizeStep(mixed $step): int
+    {
+        $step = filter_var($step, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => 4],
+        ]);
+        if ($step === false) {
+            throw new \InvalidArgumentException((string)__('未知的更新步骤'));
+        }
+
+        return (int)$step;
+    }
+
+    private function sanitizeBatch(mixed $batch): int
+    {
+        $batch = filter_var($batch, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 0, 'max_range' => self::MAX_BATCH_INDEX],
+        ]);
+        if ($batch === false) {
+            throw new \InvalidArgumentException((string)__('批次参数无效'));
+        }
+
+        return (int)$batch;
+    }
+
+    private function jsonResponse(array $payload, int $statusCode = 200): string
+    {
+        $response = $this->request->getResponse();
+        $response->setHttpResponseCode($statusCode)
+            ->setHeader('Content-Type', 'application/json; charset=utf-8')
+            ->setBody((string)json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+
+        return $response->getBody();
+    }
+
+    private function statusCodeForException(\Throwable $throwable): int
+    {
+        return $throwable instanceof \InvalidArgumentException ? 400 : 500;
     }
 }
