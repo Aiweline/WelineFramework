@@ -21,7 +21,8 @@
                                     $sub_level = $node['level']??1;
                                     $sub_nodes = $node['nodes']??[];
                                 </php>
-                                <a href="@php{if($sub_nodes):echo 'javascript: void(0);';else:echo $node['href'];endif;}"
+                                <a href="@php{if($sub_nodes):echo '#';else:echo $node['href'];endif;}"
+                                   data-dev-workspace-menu-toggle="@php{if($sub_nodes):echo '1';else:echo '0';endif;}"
                                    class='@if{$sub_nodes=>"has-arrow"} waves-effect'>
                                     <i class='@var{$node["icon"]}'></i>
                                     <span><var>$node['name']</var></span>
@@ -45,3 +46,17 @@
         <!-- Sidebar -->
     </div>
 </div>
+<script>
+(function() {
+    'use strict';
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('a[data-dev-workspace-menu-toggle="1"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+    });
+})();
+</script>

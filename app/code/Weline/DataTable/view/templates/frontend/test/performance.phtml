@@ -23,7 +23,7 @@
     </div>
 
     <div class="dt-demo-actions">
-        <button type="button" class="btn btn-outline-primary" data-testid="performance-reload" onclick="reloadPerformanceTable()"><?= __('Reload Table') ?></button>
+        <button type="button" class="btn btn-outline-primary" data-testid="performance-reload" data-datatable-performance-action="reload"><?= __('Reload Table') ?></button>
     </div>
 
     <w:d-table id="demo-performance-table"
@@ -50,4 +50,15 @@
             window.DataTableManager.loadData(instance);
         }
     }
+
+    document.addEventListener('click', function(event) {
+        const trigger = event.target.closest('[data-datatable-performance-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        if (trigger.getAttribute('data-datatable-performance-action') === 'reload') {
+            reloadPerformanceTable();
+        }
+    });
 </script>

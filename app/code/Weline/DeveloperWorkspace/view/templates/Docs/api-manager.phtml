@@ -23,6 +23,7 @@ $apiDocsApiUrl = $isDev
 $apiDocsThemeJsUrl = $isDev
     ? '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2'
     : '/static/Weline/Theme/theme/frontend/assets/js/theme.js';
+$apiDocsQueryBinUrl = \Weline\Framework\App\Env::getFrontendQueryBinPath();
 $apiDocsThemeConfigPayload = [
     'env' => [
         'WELINE_ENV' => $isDev ? 'DEV' : 'PROD',
@@ -34,8 +35,8 @@ $apiDocsThemeConfigPayload = [
     'modulesBaseUrl' => $apiDocsModulesBaseUrl,
     'api' => [
         'workerUrl' => $apiDocsWorkerUrl,
-        'endpoint' => '/api/framework/query-bin',
-        'queryBinUrl' => '/api/framework/query-bin',
+        'endpoint' => $apiDocsQueryBinUrl,
+        'queryBinUrl' => $apiDocsQueryBinUrl,
     ],
     'currentLang' => \w_env('user.lang', 'zh_Hans_CN'),
     'currentCurrency' => \w_env('user.currency', 'CNY'),
@@ -44,6 +45,12 @@ $apiDocsThemeConfigPayload = [
         'name' => 'Weline API Docs',
     ],
 ];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT;
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -69,10 +76,12 @@ $apiDocsThemeConfigPayload = [
     <script data-no-extract="true">
         window.WelineApiConfig = window.WelineApiConfig || {};
         window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || '<?= htmlspecialchars($apiDocsWorkerUrl, ENT_QUOTES, 'UTF-8') ?>';
+        window.WelineApiConfig.endpoint = window.WelineApiConfig.endpoint || <?= json_encode($apiDocsQueryBinUrl, $jsonForScriptFlags) ?>;
+        window.WelineApiConfig.queryBinUrl = window.WelineApiConfig.queryBinUrl || <?= json_encode($apiDocsQueryBinUrl, $jsonForScriptFlags) ?>;
         window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
         window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
         window.__WelineThemeConfig = window.__WelineThemeConfig || {};
-        Object.assign(window.__WelineThemeConfig, <?= json_encode($apiDocsThemeConfigPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>);
+        Object.assign(window.__WelineThemeConfig, <?= json_encode($apiDocsThemeConfigPayload, $jsonForScriptFlags) ?>);
         window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
     </script>
     <script src="<?= htmlspecialchars($apiDocsFallbackUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
@@ -1525,6 +1534,187 @@ $apiDocsThemeConfigPayload = [
         .method-select-group .form-group:last-child {
             flex: 1;
         }
+
+        .worker-target-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .worker-target-item {
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-color);
+        }
+
+        .worker-target-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+
+        .worker-target-value {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            color: var(--text-color);
+        }
+
+        .worker-target-note {
+            margin: 0 0 14px;
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .worker-param-collapsible {
+            margin: 8px 0 16px;
+        }
+
+        .worker-param-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 700;
+            text-align: left;
+        }
+
+        .worker-param-toggle:hover {
+            border-color: var(--primary-color);
+            background: var(--bg-color);
+        }
+
+        .worker-param-toggle:focus-visible {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+        }
+
+        .worker-param-toggle-icon {
+            display: inline-flex;
+            width: 16px;
+            justify-content: center;
+            color: var(--primary-color);
+            transform: rotate(0deg);
+            transition: transform 0.16s ease;
+        }
+
+        .worker-param-toggle-meta {
+            margin-left: auto;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .worker-param-collapsible.is-open .worker-param-toggle-icon {
+            transform: rotate(90deg);
+        }
+
+        .worker-param-collapsible:not(.is-open) .worker-param-editor {
+            display: none;
+        }
+
+        .worker-param-editor {
+            display: grid;
+            gap: 10px;
+            margin: 10px 0 16px;
+        }
+
+        .worker-param-row {
+            display: grid;
+            gap: 8px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-color);
+        }
+
+        .worker-param-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .worker-param-name {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+
+        .worker-param-type {
+            flex: 0 0 auto;
+            padding: 2px 7px;
+            border-radius: 999px;
+            background: rgba(102, 126, 234, 0.1);
+            color: var(--primary-color);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 11px;
+        }
+
+        .worker-param-required {
+            color: var(--danger-color);
+            font-weight: 700;
+        }
+
+        .worker-param-control {
+            width: 100%;
+            padding: 9px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 13px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+
+        .worker-param-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        textarea.worker-param-control {
+            min-height: 78px;
+            resize: vertical;
+        }
+
+        .worker-param-desc {
+            color: var(--text-secondary);
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .worker-param-empty {
+            margin: 8px 0 16px;
+            padding: 10px 12px;
+            border: 1px dashed var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            background: var(--bg-color);
+        }
+
+        .worker-json-textarea.is-invalid {
+            border-color: var(--danger-color);
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+        }
         
         /* 请求头编辑 */
         .headers-editor {
@@ -1781,6 +1971,81 @@ $apiDocsThemeConfigPayload = [
         .btn-copy-example:active {
             transform: translateY(0);
             box-shadow: 0 2px 4px rgba(11, 177, 151, 0.2);
+        }
+
+        .sdk-action-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 12px 0 16px;
+        }
+
+        .sdk-action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 38px;
+            padding: 9px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .sdk-action-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(11, 177, 151, 0.16);
+        }
+
+        .sdk-action-btn.primary {
+            background: var(--success-color);
+            border-color: var(--success-color);
+            color: #fff;
+        }
+
+        .sdk-action-btn.primary:hover {
+            background: #0a9d82;
+            border-color: #0a9d82;
+            color: #fff;
+        }
+
+        .sdk-guide-panel {
+            margin: 14px 0 18px;
+            padding: 14px 16px;
+            border-left: 3px solid var(--primary-color);
+            background: var(--bg-color);
+            border-radius: 6px;
+        }
+
+        .sdk-guide-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-bottom: 8px;
+        }
+
+        .sdk-guide-panel ol {
+            margin: 0;
+            padding-left: 18px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.75;
+        }
+
+        .sdk-guide-panel code {
+            color: var(--text-color);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 5px;
         }
         
         /* 示例内容区域 */
@@ -2172,7 +2437,7 @@ $apiDocsThemeConfigPayload = [
         <div class="i18n-switcher-top">
             <div class="i18n-item-top">
                 <label><?=__('语言')?>:</label>
-                <select id="locale-select" class="i18n-select-top" onchange="switchLocale(this.value)">
+                <select id="locale-select" class="i18n-select-top" data-api-change-action="switch-locale">
                     <?php 
                     $availableLocales = $this->getData('availableLocales') ?? [
                         ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
@@ -2189,7 +2454,7 @@ $apiDocsThemeConfigPayload = [
             </div>
             <div class="i18n-item-top">
                 <label><?=__('货币')?>:</label>
-                <select id="currency-select" class="i18n-select-top" onchange="switchCurrency(this.value)">
+                <select id="currency-select" class="i18n-select-top" data-api-change-action="switch-currency">
                     <?php 
                     $availableCurrencies = $this->getData('availableCurrencies') ?? [
                         ['code' => 'CNY', 'name' => '人民币'],
@@ -2215,17 +2480,17 @@ $apiDocsThemeConfigPayload = [
                     <p><?=__('选择接口查看详情')?></p>
                 </div>
                 <div class="sidebar-controls">
-                    <button class="sidebar-toggle" onclick="toggleSidebar()" title="<?=__('收起/展开')?>">
+                    <button class="sidebar-toggle" data-api-action="toggle-sidebar" title="<?=__('收起/展开')?>">
                         <span>◀</span>
                     </button>
                 </div>
             </div>
             <!-- API类型切换 -->
             <div class="api-type-tabs">
-                <button class="api-type-tab active" id="api-type-frontend" onclick="switchApiType('frontend')">
+                <button class="api-type-tab active" id="api-type-frontend" data-api-action="switch-api-type" data-api-type="frontend">
                     <?=__('前端API')?>
                 </button>
-                <button class="api-type-tab" id="api-type-backend" onclick="switchApiType('backend')">
+                <button class="api-type-tab" id="api-type-backend" data-api-action="switch-api-type" data-api-type="backend">
                     <?=__('后端API')?>
                 </button>
             </div>
@@ -2237,7 +2502,7 @@ $apiDocsThemeConfigPayload = [
                            placeholder="<?=__('搜索接口名称、路径、方法、描述...')?>"
                            autocomplete="off">
                     <span class="search-icon">🔍</span>
-                    <span class="search-clear" id="search-clear" onclick="clearSearch()" title="<?=__('清除搜索')?>">×</span>
+                    <span class="search-clear" id="search-clear" data-api-action="clear-search" role="button" tabindex="0" title="<?=__('清除搜索')?>">×</span>
                 </div>
             </div>
             <div class="api-tree">
@@ -2255,16 +2520,16 @@ $apiDocsThemeConfigPayload = [
                 <div class="content-header-actions">
                     <div class="production-mode-toggle" id="production-mode-toggle">
                         <label class="switch">
-                            <input type="checkbox" id="production-mode-switch" onchange="toggleProductionMode()">
+                            <input type="checkbox" id="production-mode-switch" data-api-change-action="toggle-production-mode">
                             <span class="slider"></span>
                         </label>
                         <span class="production-mode-label" id="production-mode-label"><?=__('正式环境调试')?></span>
                     </div>
-                    <button class="btn btn-primary" onclick="showLoginModal()" id="login-btn">
+                    <button class="btn btn-primary" data-api-action="show-login-modal" id="login-btn">
                         <span>🔐</span>
                         <span><?=__('登录')?></span>
                     </button>
-                    <button class="btn btn-light" onclick="toggleTheme()" title="<?=__('切换主题')?>">
+                    <button class="btn btn-light" data-api-action="toggle-theme" title="<?=__('切换主题')?>">
                         <span id="theme-icon">🌙</span>
                     </button>
                     <a href="<?= $this->getUrl('dev/tool/docs') ?>" class="btn btn-light">
@@ -2331,13 +2596,13 @@ $apiDocsThemeConfigPayload = [
     </div>
     
     <!-- 登录模态框 -->
-    <div class="modal" id="login-modal" onclick="closeLoginModalOnBackdrop(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal" id="login-modal" data-api-modal-backdrop="login">
+        <div class="modal-content" data-api-stop-click="1">
             <div class="modal-header">
                 <h3 id="login-modal-title"><?=__('API用户登录')?></h3>
-                <button type="button" class="modal-close" onclick="closeLoginModal()" title="<?=__('关闭')?>">×</button>
+                <button type="button" class="modal-close" data-api-action="close-login-modal" title="<?=__('关闭')?>">×</button>
             </div>
-            <form id="login-form" onsubmit="handleLogin(event)">
+            <form id="login-form" data-api-submit-action="login">
                 <div class="form-group">
                     <label><?=__('用户名')?></label>
                     <input type="text" name="username" required>
@@ -2354,17 +2619,31 @@ $apiDocsThemeConfigPayload = [
             </form>
         </div>
     </div>
+
+    <div class="modal" id="api-doc-confirm-modal" data-api-modal-backdrop="confirm">
+        <div class="modal-content" data-api-stop-click="1">
+            <div class="modal-header">
+                <h3 id="api-doc-confirm-title"><?=__('操作确认')?></h3>
+                <button type="button" class="modal-close" data-api-action="close-api-confirm" data-confirm-result="false" title="<?=__('关闭')?>">×</button>
+            </div>
+            <p id="api-doc-confirm-message"></p>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" data-api-action="close-api-confirm" data-confirm-result="false"><?=__('取消')?></button>
+                <button type="button" class="btn btn-primary" id="api-doc-confirm-action" data-api-action="close-api-confirm" data-confirm-result="true"><?=__('确认')?></button>
+            </div>
+        </div>
+    </div>
     
     <script>
         // API数据
-        const apiData = <?= json_encode($apis ?? [], JSON_UNESCAPED_UNICODE) ?>;
-        const moduleDisplayNames = <?= json_encode($this->getData('moduleDisplayNames') ?? [], JSON_UNESCAPED_UNICODE) ?>;
-        const selectedApiId = <?= json_encode($apiId ?? '', JSON_UNESCAPED_UNICODE) ?>;
-        const selectedApi = <?= json_encode($selectedApi ?? null, JSON_UNESCAPED_UNICODE) ?>;
+        const apiData = <?= json_encode($apis ?? [], $jsonForScriptFlags) ?>;
+        const moduleDisplayNames = <?= json_encode($this->getData('moduleDisplayNames') ?? [], $jsonForScriptFlags) ?>;
+        const selectedApiId = <?= json_encode($apiId ?? '', $jsonForScriptFlags) ?>;
+        const selectedApi = <?= json_encode($selectedApi ?? null, $jsonForScriptFlags) ?>;
         
         // 获取可用的货币和语言列表（从后端传递）
-        const availableCurrencies = <?= json_encode($this->getData('availableCurrencies') ?? [], JSON_UNESCAPED_UNICODE) ?>;
-        const availableLocales = <?= json_encode($this->getData('availableLocales') ?? [], JSON_UNESCAPED_UNICODE) ?>;
+        const availableCurrencies = <?= json_encode($this->getData('availableCurrencies') ?? [], $jsonForScriptFlags) ?>;
+        const availableLocales = <?= json_encode($this->getData('availableLocales') ?? [], $jsonForScriptFlags) ?>;
         
         // 将selectedApi存储到全局变量
         window.selectedApi = selectedApi;
@@ -2384,11 +2663,11 @@ $apiDocsThemeConfigPayload = [
         const API_TYPE_KEY = 'api_doc_api_type';
         
         // 获取沙盒密钥（从后端获取或使用默认值）
-        const sandboxKey = '<?= \Weline\Framework\App\Env::getInstance()->getConfig('sandbox_key') ?? 'dev_sandbox_2024' ?>';
+        const sandboxKey = (localStorage.getItem(SANDBOX_KEY) || '').trim();
         
         // 获取API area配置（从后端传递，使用 area_routes）
-        const API_AREA = <?= json_encode((string)($this->getData('apiArea') ?: (\Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: 'api')), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-        const API_ADMIN_AREA = <?= json_encode((string)($this->getData('apiAdminArea') ?: (\Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: 'api_admin')), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        const API_AREA = <?= json_encode((string)($this->getData('apiArea') ?: (\Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: 'api')), $jsonForScriptFlags) ?>;
+        const API_ADMIN_AREA = <?= json_encode((string)($this->getData('apiAdminArea') ?: (\Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: 'api_admin')), $jsonForScriptFlags) ?>;
         
         // 定义 window.api 函数，统一使用它生成 API URL
         // 获取当前货币和语言
@@ -2468,18 +2747,20 @@ $apiDocsThemeConfigPayload = [
             return segments.slice(1).join('/');
         }
 
-        function buildDirectRestDocUrl(path, baseUrl) {
+        function buildDirectRestDocUrl(path, baseUrl, isBackend = false) {
             const segments = String(path || '').replace(/^\/+/, '').split('/').filter(Boolean);
             if (segments.length < 2) {
                 return null;
             }
 
-            if (segments[0] === 'rest') {
-                return baseUrl + '/' + API_AREA + '/' + segments.join('/');
+            const area = isBackend ? API_ADMIN_AREA : API_AREA;
+
+            if (segments[0] === area && segments[1] !== 'rest') {
+                return baseUrl + '/' + segments.join('/');
             }
 
-            if ((segments[0] === 'api' || segments[0] === 'api_admin' || segments[0] === API_AREA || segments[0] === API_ADMIN_AREA) && segments[1] === 'rest') {
-                return baseUrl + '/' + segments.join('/');
+            if (segments[0] === 'rest' || segments[1] === 'rest') {
+                return baseUrl + '/' + area + '/' + segments.join('/');
             }
 
             return null;
@@ -2527,7 +2808,7 @@ $apiDocsThemeConfigPayload = [
                 // 移除开头的斜杠
                 path = normalizeApiDocPathForRequest(path, isBackend);
                 const baseUrl = window.location.origin;
-                const directRestUrl = buildDirectRestDocUrl(path, baseUrl);
+                const directRestUrl = buildDirectRestDocUrl(path, baseUrl, isBackend);
                 if (directRestUrl) {
                     return directRestUrl;
                 }
@@ -2599,6 +2880,71 @@ $apiDocsThemeConfigPayload = [
                 }
             });
         }
+
+        function centerElementInScrollContainer(container, element, behavior = 'smooth') {
+            if (!container || !element) {
+                return;
+            }
+
+            const target = element.querySelector('.jstree-anchor') || element;
+            const containerRect = container.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+            if (!containerRect.height || !targetRect.height) {
+                return;
+            }
+
+            const offsetToCenter = (targetRect.top - containerRect.top)
+                - (containerRect.height / 2)
+                + (targetRect.height / 2);
+            const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+            const nextScrollTop = Math.max(0, Math.min(maxScrollTop, container.scrollTop + offsetToCenter));
+
+            container.scrollTo({
+                top: nextScrollTop,
+                behavior: behavior
+            });
+        }
+
+        function openApiTreeParents(tree, nodeId) {
+            const node = tree ? tree.get_node(nodeId) : null;
+            if (!node) {
+                return null;
+            }
+
+            const parents = Array.isArray(node.parents)
+                ? node.parents.filter(function(parentId) { return parentId && parentId !== '#'; }).reverse()
+                : [];
+            parents.forEach(function(parentId) {
+                tree.open_node(parentId);
+            });
+
+            return node;
+        }
+
+        function centerApiTreeNode(nodeId, behavior = 'smooth') {
+            if (!nodeId) {
+                return;
+            }
+
+            const run = function() {
+                const container = document.querySelector('.api-tree');
+                const tree = $('#api-tree').jstree(true);
+                let nodeElement = null;
+                if (tree) {
+                    const nodeQuery = tree.get_node(nodeId, true);
+                    if (nodeQuery && nodeQuery.length) {
+                        nodeElement = nodeQuery[0];
+                    }
+                }
+                if (!nodeElement) {
+                    nodeElement = document.getElementById(nodeId);
+                }
+                centerElementInScrollContainer(container, nodeElement, behavior);
+            };
+
+            window.requestAnimationFrame(run);
+            window.setTimeout(run, 220);
+        }
         
         function clearCurrentApiSelection(removeApiId = false) {
             window.selectedApi = null;
@@ -2623,15 +2969,179 @@ $apiDocsThemeConfigPayload = [
             if (!api) {
                 return false;
             }
-            const parents = tree.get_path(currentSelectedApiId, true) || [];
-            parents.forEach(function(parentId) {
-                tree.open_node(parentId);
-            });
+            openApiTreeParents(tree, currentSelectedApiId);
             tree.deselect_all(true);
             tree.select_node(currentSelectedApiId, true);
             loadApiDetail(api);
             updateCurrentApiUrl(currentSelectedApiId, true);
+            centerApiTreeNode(currentSelectedApiId, 'auto');
             return true;
+        }
+
+        function handleApiActionClick(event) {
+            const actionEl = event.target.closest('[data-api-action]');
+            if (actionEl) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const action = actionEl.dataset.apiAction;
+                switch (action) {
+                    case 'toggle-sidebar':
+                        toggleSidebar();
+                        break;
+                    case 'switch-api-type':
+                        switchApiType(actionEl.dataset.apiType || 'frontend');
+                        break;
+                    case 'clear-search':
+                        clearSearch();
+                        break;
+                    case 'show-login-modal':
+                        showLoginModal();
+                        break;
+                    case 'logout':
+                        handleLogout();
+                        break;
+                    case 'toggle-theme':
+                        toggleTheme();
+                        break;
+                    case 'close-login-modal':
+                        closeLoginModal();
+                        break;
+                    case 'close-api-confirm':
+                        closeApiDocsConfirm(actionEl.dataset.confirmResult === 'true');
+                        break;
+                    case 'toggle-worker-param-editor':
+                        toggleFrontendWorkerParamEditor();
+                        break;
+                    case 'copy-example-path':
+                        copyExamplePath(actionEl.dataset.copyPath || '');
+                        break;
+                    case 'copy-example-body':
+                        copyExampleBody();
+                        break;
+                    case 'copy-example-response':
+                        copyExampleResponse();
+                        break;
+                    case 'send-test-request':
+                        sendTestRequest();
+                        break;
+                    case 'toggle-collapsible':
+                        toggleCollapsible(actionEl);
+                        break;
+                    case 'copy-response-body':
+                        copyResponseBody();
+                        break;
+                    case 'format-response-body':
+                        formatResponseBody();
+                        break;
+                    case 'import-request-params':
+                        importExampleRequestParams();
+                        break;
+                    case 'import-headers':
+                        importExampleHeaders();
+                        break;
+                    case 'import-body':
+                        importExampleBody();
+                        break;
+                    case 'add-request-param':
+                        addRequestParam();
+                        break;
+                    case 'add-header':
+                        addHeader();
+                        break;
+                    case 'remove-row':
+                        removeHeader(actionEl);
+                        if (actionEl.dataset.updateUrl === '1') {
+                            updateUrlFromParams();
+                        }
+                        break;
+                }
+
+                return;
+            }
+
+            if (event.target.closest('[data-api-stop-click]')) {
+                event.stopPropagation();
+                return;
+            }
+
+            const backdrop = event.target.closest('[data-api-modal-backdrop]');
+            if (backdrop && event.target === backdrop) {
+                if (backdrop.dataset.apiModalBackdrop === 'login') {
+                    closeLoginModal();
+                } else if (backdrop.dataset.apiModalBackdrop === 'confirm') {
+                    closeApiDocsConfirm(false);
+                }
+            }
+        }
+
+        function handleApiActionChange(event) {
+            const target = event.target;
+            const action = target.dataset.apiChangeAction;
+
+            if (target.matches('[data-worker-param="1"]')) {
+                handleWorkerParamInputChange(target);
+            }
+
+            switch (action) {
+                case 'switch-locale':
+                    switchLocale(target.value);
+                    break;
+                case 'switch-currency':
+                    switchCurrency(target.value);
+                    break;
+                case 'toggle-production-mode':
+                    toggleProductionMode();
+                    break;
+                case 'switch-i18n-mode':
+                    switchI18nMode(target.dataset.i18nMode || target.value);
+                    break;
+                case 'update-test-url':
+                    updateTestUrl();
+                    break;
+                case 'update-url-from-params':
+                    updateUrlFromParams();
+                    break;
+            }
+        }
+
+        function handleApiActionInput(event) {
+            const target = event.target;
+
+            if (target.matches('[data-worker-param="1"]')) {
+                handleWorkerParamInputChange(target);
+                return;
+            }
+
+            if (target.dataset.apiInputAction === 'worker-json') {
+                handleWorkerJsonInputChange();
+            }
+        }
+
+        function handleApiActionSubmit(event) {
+            const form = event.target.closest('[data-api-submit-action]');
+            if (!form) {
+                return;
+            }
+
+            if (form.dataset.apiSubmitAction === 'login') {
+                event.preventDefault();
+                handleLogin(event);
+            }
+        }
+
+        function handleApiActionKeydown(event) {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+
+            const actionEl = event.target.closest('[data-api-action]');
+            if (!actionEl) {
+                return;
+            }
+
+            event.preventDefault();
+            actionEl.click();
         }
         
         // 设置语言和货币选择器的值
@@ -2648,6 +3158,11 @@ $apiDocsThemeConfigPayload = [
             // 设置API类型Tab
             document.getElementById('api-type-frontend').classList.toggle('active', currentApiType === 'frontend');
             document.getElementById('api-type-backend').classList.toggle('active', currentApiType === 'backend');
+            document.addEventListener('click', handleApiActionClick);
+            document.addEventListener('change', handleApiActionChange);
+            document.addEventListener('input', handleApiActionInput);
+            document.addEventListener('submit', handleApiActionSubmit);
+            document.addEventListener('keydown', handleApiActionKeydown);
             updateLoginStatus();
         });
         
@@ -2664,7 +3179,7 @@ $apiDocsThemeConfigPayload = [
         }
         
         // 切换正式环境模式
-        function toggleProductionMode() {
+        async function toggleProductionMode() {
             const switchEl = document.getElementById('production-mode-switch');
             const toggleEl = document.getElementById('production-mode-toggle');
             
@@ -2674,13 +3189,13 @@ $apiDocsThemeConfigPayload = [
             
             if (switchEl.checked && !productionMode) {
                 // 开启正式环境模式 - 显示警告
-                if (confirm('⚠️ 警告：您即将开启正式环境调试模式！\n\n' +
-                    '开启后，所有API请求将直接发送到正式环境，可能会：\n' +
-                    '• 修改正式环境的数据\n' +
-                    '• 影响正式环境的业务\n' +
-                    '• 造成不可逆的数据损失\n\n' +
-                    '请确认您已充分了解风险，并谨慎操作！\n\n' +
-                    '是否继续开启？')) {
+                const confirmed = await showApiDocsConfirm({
+                    title: <?= json_encode(__('正式环境调试确认'), $jsonForScriptFlags) ?>,
+                    message: <?= json_encode("⚠️ " . __('您即将开启正式环境调试模式！') . "\n\n" . __('开启后，所有API请求将直接发送到正式环境，可能会修改正式环境数据、影响业务或造成不可逆的数据损失。') . "\n\n" . __('请确认您已充分了解风险，并谨慎操作。是否继续开启？'), $jsonForScriptFlags) ?>,
+                    actionText: <?= json_encode(__('继续开启'), $jsonForScriptFlags) ?>
+                });
+
+                if (confirmed) {
                     productionMode = true;
                     localStorage.setItem(PRODUCTION_MODE_KEY, 'true');
                     toggleEl.classList.add('active');
@@ -2733,7 +3248,8 @@ $apiDocsThemeConfigPayload = [
             });
             
             // 绑定事件（在jstree初始化后）
-            $('#api-tree').on('select_node.jstree', function(e, data) {
+            $('#api-tree').off('.apiDocTree');
+            $('#api-tree').on('select_node.jstree.apiDocTree', function(e, data) {
                 const node = data.node;
                 // 检查是否是API节点（有api属性）
                 // jstree会将数据存储在node.original中，但我们的api是直接存储的
@@ -2747,6 +3263,7 @@ $apiDocsThemeConfigPayload = [
                     const apiId = api.id || node.id || (node.a_attr && node.a_attr['data-api-id']);
                     if (apiId) {
                         updateCurrentApiUrl(apiId);
+                        centerApiTreeNode(apiId);
                     }
                 } else {
                     console.log('Node does not have API data:', node, 'original:', node.original);
@@ -2754,7 +3271,7 @@ $apiDocsThemeConfigPayload = [
             });
             
             // 绑定ready事件
-            $('#api-tree').one('ready.jstree', function() {
+            $('#api-tree').one('ready.jstree.apiDocTree', function() {
                 // 渲染HTML内容到jstree节点
                 $('#api-tree').find('.jstree-anchor').each(function() {
                     const $anchor = $(this);
@@ -2781,10 +3298,9 @@ $apiDocsThemeConfigPayload = [
                         // 选中节点
                         $('#api-tree').jstree('select_node', selectedApiId);
                         // 展开所有父节点
-                        const parents = $('#api-tree').jstree('get_path', selectedApiId, true);
-                        parents.forEach(function(parentId) {
-                            $('#api-tree').jstree('open_node', parentId);
-                        });
+                        const tree = $('#api-tree').jstree(true);
+                        openApiTreeParents(tree, selectedApiId);
+                        centerApiTreeNode(selectedApiId, 'auto');
                     }
                 }
             });
@@ -2865,26 +3381,220 @@ $apiDocsThemeConfigPayload = [
                                 search: searchKeywords
                             });
                         }
-                        
+
                         // 如果类下没有API（被过滤掉了），跳过这个类
                         if (classNode.children.length === 0) {
                             continue;
                         }
-                        
+
                         versionNode.children.push(classNode);
                     }
-                    
+
                     moduleNode.children.push(versionNode);
                 }
-                
+
                 tree.push(moduleNode);
             }
-            
+
             return tree;
         }
 
         function isFrontendWorkerApi(api) {
             return !!(api && (api.frontend_worker || api.example?.frontend_worker || api.worker));
+        }
+
+        function isBinQuerySdkApi(api) {
+            const example = api?.example || {};
+            return !!(api && (api.binquery || example.package || example.download || example.install || example.protocol));
+        }
+
+        function getBinQuerySdkRows(api) {
+            const example = api?.example || {};
+            return [
+                ['<?=__('包名')?>', example.package],
+                ['<?=__('下载位置')?>', example.download],
+                ['<?=__('安装命令')?>', example.install],
+                ['<?=__('文档')?>', example.docs],
+                ['Content-Type', example.content_type],
+                ['<?=__('协议')?>', example.protocol],
+                ['<?=__('推导路径')?>', example.derived_path],
+                ['<?=__('apiKey 来源')?>', example.api_key_source],
+                ['<?=__('apiKey 类型')?>', example.api_key_type],
+                ['<?=__('apiKey 有效期')?>', example.api_key_ttl],
+                ['<?=__('Refresh Token 有效期')?>', example.refresh_token_ttl],
+                ['Scope', example.scope],
+                ['<?=__('外部操作数')?>', example.external_operation_count],
+            ].filter(row => row[1] !== undefined && row[1] !== null && String(row[1]).trim() !== '');
+        }
+
+        function getBinQueryExampleCode(api) {
+            const example = api?.example || {};
+            if (example.code) {
+                return String(example.code);
+            }
+            if (example.install) {
+                return String(example.install);
+            }
+            if (example.docs) {
+                return String(example.docs);
+            }
+            return 'https://{domain}/bin/query';
+        }
+
+        function normalizeApiDocActionUrl(url) {
+            const value = String(url || '').trim();
+            if (!value) {
+                return '';
+            }
+            if (/^https?:\/\//i.test(value)) {
+                return value;
+            }
+            return window.location.origin + (value.startsWith('/') ? value : '/' + value);
+        }
+
+        function getBinQuerySdkKind(api) {
+            const method = String(api?.method || '').toLowerCase();
+            const example = api?.example || {};
+            const packageName = String(example.package || '').toLowerCase();
+            const download = String(example.download || '').toLowerCase();
+            if (method.includes('php') || packageName.includes('binquery-php') || download.includes('binquery-php')) {
+                return 'php';
+            }
+            if (method.includes('js') || method.includes('javascript') || packageName.includes('@aiweline/binquery') || download.includes('binquery-js')) {
+                return 'js';
+            }
+            if (method.includes('protocol')) {
+                return 'protocol';
+            }
+            return 'overview';
+        }
+
+        function getBinQuerySdkActions(api) {
+            const example = api?.example || {};
+            const kind = getBinQuerySdkKind(api);
+            const actions = [];
+            const seenUrls = new Set();
+            const addAction = (label, url, icon, variant = '', isDownload = false) => {
+                const resolvedUrl = normalizeApiDocActionUrl(url);
+                if (!resolvedUrl || seenUrls.has(resolvedUrl)) {
+                    return;
+                }
+                seenUrls.add(resolvedUrl);
+                actions.push({
+                    label,
+                    url: resolvedUrl,
+                    icon,
+                    variant,
+                    isDownload
+                });
+            };
+
+            if (Array.isArray(example.downloads)) {
+                example.downloads.forEach(item => {
+                    if (!item || !item.url) {
+                        return;
+                    }
+                    addAction(item.label || 'SDK', item.url, 'fa fa-download', 'primary', true);
+                });
+            } else if (example.download_url) {
+                const label = kind === 'js' ? '<?=__('下载 JS SDK')?>' : '<?=__('下载 PHP SDK')?>';
+                addAction(label, example.download_url, 'fa fa-download', 'primary', true);
+            } else if (String(example.download || '').includes('binquery-php')) {
+                addAction('<?=__('下载 PHP SDK')?>', '/dev/tool/docs/api/sdk-download?sdk=php', 'fa fa-download', 'primary', true);
+            } else if (String(example.download || '').includes('binquery-js')) {
+                addAction('<?=__('下载 JS SDK')?>', '/dev/tool/docs/api/sdk-download?sdk=js', 'fa fa-download', 'primary', true);
+            }
+
+            const guideUrl = example.guide_url || (kind === 'protocol'
+                ? '/dev/tool/docs/api/sdk-guide?doc=protocol'
+                : '/dev/tool/docs/api/sdk-guide?doc=sdk');
+            const guideLabel = kind === 'protocol' ? '<?=__('协议对接指南')?>' : '<?=__('SDK 使用指南')?>';
+            addAction(guideLabel, guideUrl, 'fa fa-book', '', false);
+
+            return actions;
+        }
+
+        function getWorkerSdkActions() {
+            return [
+                {
+                    label: '<?=__('SDK 下载与使用指南')?>',
+                    url: normalizeApiDocActionUrl('/dev/tool/docs/api/sdk-guide?doc=sdk'),
+                    icon: 'fa fa-book',
+                    variant: '',
+                    isDownload: false
+                },
+                {
+                    label: '<?=__('下载 PHP SDK')?>',
+                    url: normalizeApiDocActionUrl('/dev/tool/docs/api/sdk-download?sdk=php'),
+                    icon: 'fa fa-download',
+                    variant: 'primary',
+                    isDownload: true
+                },
+                {
+                    label: '<?=__('下载 JS SDK')?>',
+                    url: normalizeApiDocActionUrl('/dev/tool/docs/api/sdk-download?sdk=js'),
+                    icon: 'fa fa-download',
+                    variant: 'primary',
+                    isDownload: true
+                }
+            ];
+        }
+
+        function renderSdkActionButtons(actions) {
+            if (actions.length === 0) {
+                return '';
+            }
+
+            const links = actions.map(action => {
+                const className = `sdk-action-btn ${action.variant || ''}`.trim();
+                const targetAttr = action.isDownload ? '' : ' target="_blank" rel="noopener"';
+                const downloadAttr = action.isDownload ? ' download' : '';
+                return `<a class="${escapeHtml(className)}" href="${escapeHtml(action.url)}"${targetAttr}${downloadAttr}>`
+                    + `<i class="${escapeHtml(action.icon)}"></i>`
+                    + `<span>${escapeHtml(action.label)}</span>`
+                    + '</a>';
+            }).join('');
+
+            return `<div class="sdk-action-bar">${links}</div>`;
+        }
+
+        function renderBinQuerySdkActions(api) {
+            return renderSdkActionButtons(getBinQuerySdkActions(api));
+        }
+
+        function renderWorkerSdkActions() {
+            return renderSdkActionButtons(getWorkerSdkActions());
+        }
+
+        function renderBinQuerySdkUsageGuide(api) {
+            const example = api?.example || {};
+            const kind = getBinQuerySdkKind(api);
+            if (kind === 'protocol') {
+                return '<div class="sdk-guide-panel">'
+                    + '<div class="sdk-guide-title"><?=__('非支持语言对接')?></div>'
+                    + '<ol>'
+                    + '<li><?=__('由 domain 推导')?> <code>https://{domain}/bin/query</code><?=__('，不需要开发者填写完整 endpoint。')?></li>'
+                    + '<li><?=__('apiKey 填 Weline_Api 第三方应用 access_token；它是临时令牌，默认 3600 秒，不是永久密钥。')?></li>'
+                    + '<li><?=__('请求头携带')?> <code>Authorization: Bearer {apiKey}</code> <?=__('和')?> <code>X-Weline-BinQuery-Protocol: binquery-v1</code><?=__('。')?></li>'
+                    + '<li><?=__('请求类型固定为')?> <code>connect</code> / <code>query</code> / <code>call</code> / <code>graph</code><?=__('，缓存请求可携带')?> <code>__wq_cache</code><?=__('。')?></li>'
+                    + '</ol>'
+                    + '</div>';
+            }
+
+            const installStep = example.install
+                ? '<?=__('安装 SDK：')?>' + `<code>${escapeHtml(String(example.install))}</code>`
+                : '<?=__('点击下载 PHP SDK 或 JS SDK，然后按包内 README 接入。')?>';
+
+            return '<div class="sdk-guide-panel">'
+                + '<div class="sdk-guide-title"><?=__('SDK 使用指南')?></div>'
+                + '<ol>'
+                + `<li>${installStep}</li>`
+                + '<li><?=__('后台/API 集成创建第三方应用，授权')?> <code>Weline_Framework::binquery</code> <?=__('或')?> <code>Weline_Framework::binquery::post</code><?=__('，再用授权码换')?> <code>access_token</code><?=__('。')?></li>'
+                + '<li><?=__('建连只填写')?> <code>domain</code> <?=__('和')?> <code>apiKey</code><?=__('；apiKey 填临时')?> <code>access_token</code><?=__('，默认有效期 3600 秒，过期后用 refresh token 换新。SDK 默认')?> <code>area=frontend</code><?=__('。')?></li>'
+                + '<li><?=__('用')?> <code>help</code> / <code>query</code> / <code>docs</code> / <code>hasOperation</code> <?=__('快速检查资源、操作和文档。')?></li>'
+                + '<li><?=__('查询用')?> <code>call(provider, operation, params)</code><?=__('，只读编排用')?> <code>graph([...])</code><?=__('。')?></li>'
+                + '</ol>'
+                + '</div>';
         }
 
         function getFrontendWorkerDescriptor(api) {
@@ -2900,46 +3610,378 @@ $apiDocsThemeConfigPayload = [
         }
 
         function getFrontendWorkerSamplePayload(api) {
+            const descriptor = getFrontendWorkerDescriptor(api);
             const sampleParams = api?.example?.sample_params;
-            if (sampleParams && typeof sampleParams === 'object' && !Array.isArray(sampleParams)) {
-                return sampleParams;
-            }
+            const payload = (sampleParams && typeof sampleParams === 'object' && !Array.isArray(sampleParams))
+                ? {...sampleParams}
+                : {};
 
-            const payload = {};
             (api?.parameters || []).forEach(param => {
                 const name = param?.name || '';
                 if (!name) {
                     return;
                 }
-                const lowerName = name.toLowerCase();
-                if (lowerName.includes('email')) {
-                    payload[name] = 'customer@example.com';
-                } else if (lowerName.includes('password')) {
-                    payload[name] = 'password123';
-                } else if (lowerName === 'username' || lowerName === 'login') {
-                    payload[name] = 'customer@example.com';
-                } else if (lowerName === 'firstname' || lowerName === 'first_name') {
-                    payload[name] = 'Jane';
-                } else if (lowerName === 'lastname' || lowerName === 'last_name') {
-                    payload[name] = 'Doe';
-                } else if (lowerName === 'agree_terms') {
-                    payload[name] = true;
-                } else if (lowerName === 'remember_duration') {
-                    payload[name] = 2592000;
-                } else if (lowerName.includes('token')) {
-                    payload[name] = 'token-value';
-                } else if (lowerName === 'code') {
-                    payload[name] = '123456';
-                } else if (['int', 'integer'].includes(String(param.type || '').toLowerCase())) {
-                    payload[name] = 1;
-                } else if (['bool', 'boolean'].includes(String(param.type || '').toLowerCase())) {
-                    payload[name] = true;
-                } else {
-                    payload[name] = 'value';
-                }
+                payload[name] = getFrontendWorkerParamExampleValue(api, descriptor, param, payload[name]);
             });
 
             return payload;
+        }
+
+        function isGenericWorkerExampleValue(value) {
+            return value === undefined
+                || value === null
+                || value === ''
+                || value === 'value'
+                || value === 'token-value';
+        }
+
+        function getFrontendWorkerModuleExample(api, descriptor) {
+            const moduleName = String(api?.module || api?.example?.module || api?.worker?.module || '').trim();
+            if (moduleName && moduleName !== 'Frontend Worker API') {
+                return moduleName;
+            }
+            if ((descriptor?.provider || '') === 'query_help') {
+                return 'Weline_Framework';
+            }
+            return moduleName || 'Weline_Framework';
+        }
+
+        function getFrontendWorkerParamExampleValue(api, descriptor, param, currentValue) {
+            const name = param?.name || '';
+            const lowerName = name.toLowerCase();
+            if (!isGenericWorkerExampleValue(currentValue)) {
+                return currentValue;
+            }
+            if (lowerName === 'provider') {
+                return descriptor.provider || 'query_help';
+            }
+            if (lowerName === 'operation') {
+                return descriptor.operation || 'providers';
+            }
+            if (lowerName === 'module') {
+                return getFrontendWorkerModuleExample(api, descriptor);
+            }
+            if (param && Object.prototype.hasOwnProperty.call(param, 'default')) {
+                return param.default;
+            }
+            if (lowerName.includes('email')) {
+                return 'customer@example.com';
+            }
+            if (lowerName.includes('password')) {
+                return 'password123';
+            }
+            if (lowerName === 'username' || lowerName === 'login') {
+                return 'customer@example.com';
+            }
+            if (lowerName === 'firstname' || lowerName === 'first_name') {
+                return 'Jane';
+            }
+            if (lowerName === 'lastname' || lowerName === 'last_name') {
+                return 'Doe';
+            }
+            if (lowerName === 'agree_terms') {
+                return true;
+            }
+            if (lowerName === 'remember_duration') {
+                return 2592000;
+            }
+            if (lowerName.includes('token')) {
+                return 'token-value';
+            }
+            if (lowerName === 'code') {
+                return '123456';
+            }
+            if (['int', 'integer'].includes(String(param.type || '').toLowerCase())) {
+                return 1;
+            }
+            if (['bool', 'boolean'].includes(String(param.type || '').toLowerCase())) {
+                return true;
+            }
+            return 'value';
+        }
+
+        function getFrontendWorkerParamType(param) {
+            return String(param?.type || 'string').toLowerCase();
+        }
+
+        function getFrontendWorkerParamInputValue(value, param) {
+            const type = getFrontendWorkerParamType(param);
+            if (value === undefined || value === null) {
+                return '';
+            }
+            if (type === 'array' || type === 'object' || typeof value === 'object') {
+                return JSON.stringify(value, null, 2);
+            }
+            if (type === 'bool' || type === 'boolean') {
+                return value ? 'true' : 'false';
+            }
+            return String(value);
+        }
+
+        function getFrontendWorkerParamDomId(name) {
+            return 'worker-param-' + String(name || '').replace(/[^\w-]/g, '_');
+        }
+
+        function nextFrontendWorkerParamEditSeq() {
+            window.__frontendWorkerParamEditSeq = (window.__frontendWorkerParamEditSeq || 0) + 1;
+            return window.__frontendWorkerParamEditSeq;
+        }
+
+        function markFrontendWorkerParamDirty(control) {
+            if (!control) {
+                return;
+            }
+            control.setAttribute('data-param-dirty', '1');
+            control.setAttribute('data-param-last-edited', String(nextFrontendWorkerParamEditSeq()));
+        }
+
+        function isQueryHelpProviderRequest(api) {
+            const descriptor = getFrontendWorkerDescriptor(api);
+            return descriptor.provider === 'query_help' && descriptor.operation === 'provider';
+        }
+
+        function renderFrontendWorkerParamEditor(api, payload) {
+            const params = (api?.parameters || []).filter(param => !!(param && param.name));
+            if (params.length === 0) {
+                return '<div class="worker-param-empty"><?=__('该 Worker operation 没有可调整请求参数。')?></div>';
+            }
+
+            const rows = params.map(param => {
+                const name = String(param.name || '');
+                const type = getFrontendWorkerParamType(param);
+                const value = Object.prototype.hasOwnProperty.call(payload || {}, name)
+                    ? payload[name]
+                    : getFrontendWorkerParamExampleValue(api, getFrontendWorkerDescriptor(api), param, undefined);
+                const inputValue = getFrontendWorkerParamInputValue(value, param);
+                const required = !!param.required;
+                const domId = getFrontendWorkerParamDomId(name);
+                const requiredText = required ? '<span class="worker-param-required">*</span>' : '';
+                const description = param.description ? `<div class="worker-param-desc">${escapeHtml(String(param.description))}</div>` : '';
+                const commonAttrs = `id="${escapeHtmlAttr(domId)}" class="worker-param-control" data-worker-param="1" data-param-name="${escapeHtmlAttr(name)}" data-param-type="${escapeHtmlAttr(type)}" data-param-required="${required ? '1' : '0'}" data-param-default-value="${escapeHtmlAttr(inputValue)}" data-param-dirty="0" data-param-last-edited="0"`;
+                let control = '';
+
+                if (type === 'bool' || type === 'boolean') {
+                    const selectedTrue = inputValue === 'true' ? ' selected' : '';
+                    const selectedFalse = inputValue === 'false' ? ' selected' : '';
+                    const emptyOption = required ? '' : '<option value=""><?=__('不传')?></option>';
+                    control = `<select ${commonAttrs}>${emptyOption}<option value="true"${selectedTrue}>true</option><option value="false"${selectedFalse}>false</option></select>`;
+                } else if (type === 'array' || type === 'object') {
+                    control = `<textarea ${commonAttrs} rows="3">${escapeHtml(inputValue)}</textarea>`;
+                } else {
+                    const inputType = ['int', 'integer', 'float', 'double', 'number'].includes(type) ? 'number' : 'text';
+                    const stepAttr = ['float', 'double', 'number'].includes(type) ? ' step="any"' : '';
+                    control = `<input ${commonAttrs} type="${inputType}"${stepAttr} value="${escapeHtmlAttr(inputValue)}">`;
+                }
+
+                return '<div class="worker-param-row">'
+                    + '<div class="worker-param-meta">'
+                    + `<label class="worker-param-name" for="${escapeHtmlAttr(domId)}">${escapeHtml(name)}${requiredText}</label>`
+                    + `<span class="worker-param-type">${escapeHtml(type || 'string')}</span>`
+                    + '</div>'
+                    + control
+                    + description
+                    + '</div>';
+            }).join('');
+
+            return '<div class="worker-param-collapsible" id="worker-param-collapsible">'
+                + '<button type="button" class="worker-param-toggle" data-api-action="toggle-worker-param-editor" aria-expanded="false" aria-controls="worker-param-editor">'
+                + '<span class="worker-param-toggle-icon" aria-hidden="true">&rsaquo;</span>'
+                + '<span><?=__('请求参数')?></span>'
+                + `<span class="worker-param-toggle-meta">(${params.length})</span>`
+                + '</button>'
+                + `<div class="worker-param-editor" id="worker-param-editor">${rows}</div>`
+                + '</div>';
+        }
+
+        function toggleFrontendWorkerParamEditor(forceOpen = null) {
+            const wrapper = document.getElementById('worker-param-collapsible');
+            if (!wrapper) {
+                return;
+            }
+            const nextOpen = forceOpen === null ? !wrapper.classList.contains('is-open') : !!forceOpen;
+            const toggle = wrapper.querySelector('.worker-param-toggle');
+            wrapper.classList.toggle('is-open', nextOpen);
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+            }
+        }
+
+        function parseFrontendWorkerParamValue(rawValue, paramType, required, name) {
+            const raw = String(rawValue ?? '');
+            if (!required && raw.trim() === '') {
+                return undefined;
+            }
+            if (paramType === 'int' || paramType === 'integer') {
+                const value = Number.parseInt(raw, 10);
+                if (Number.isNaN(value)) {
+                    throw new Error('<?=__('参数必须是整数：')?>' + name);
+                }
+                return value;
+            }
+            if (paramType === 'float' || paramType === 'double' || paramType === 'number') {
+                const value = Number.parseFloat(raw);
+                if (Number.isNaN(value)) {
+                    throw new Error('<?=__('参数必须是数字：')?>' + name);
+                }
+                return value;
+            }
+            if (paramType === 'bool' || paramType === 'boolean') {
+                if (raw === 'true') {
+                    return true;
+                }
+                if (raw === 'false') {
+                    return false;
+                }
+                if (!required && raw === '') {
+                    return undefined;
+                }
+                throw new Error('<?=__('参数必须是布尔值：')?>' + name);
+            }
+            if (paramType === 'array' || paramType === 'object') {
+                try {
+                    return JSON.parse(raw || (paramType === 'array' ? '[]' : '{}'));
+                } catch (e) {
+                    throw new Error('<?=__('参数必须是有效 JSON：')?>' + name);
+                }
+            }
+            return raw;
+        }
+
+        function normalizeFrontendWorkerPayload(api, payload, meta = {}) {
+            if (!isQueryHelpProviderRequest(api)) {
+                return payload;
+            }
+
+            const normalized = {...payload};
+            const hasProvider = Object.prototype.hasOwnProperty.call(normalized, 'provider')
+                && String(normalized.provider ?? '').trim() !== '';
+            const hasModule = Object.prototype.hasOwnProperty.call(normalized, 'module')
+                && String(normalized.module ?? '').trim() !== '';
+
+            if (!hasProvider || !hasModule) {
+                return normalized;
+            }
+
+            const providerMeta = meta.provider || {};
+            const moduleMeta = meta.module || {};
+            const providerDirty = !!providerMeta.dirty;
+            const moduleDirty = !!moduleMeta.dirty;
+
+            if (moduleDirty && !providerDirty) {
+                delete normalized.provider;
+                return normalized;
+            }
+            if (providerDirty && !moduleDirty) {
+                delete normalized.module;
+                return normalized;
+            }
+            if (moduleDirty && providerDirty) {
+                const providerEdited = Number(providerMeta.lastEdited || 0);
+                const moduleEdited = Number(moduleMeta.lastEdited || 0);
+                if (moduleEdited >= providerEdited) {
+                    delete normalized.provider;
+                } else {
+                    delete normalized.module;
+                }
+                return normalized;
+            }
+
+            delete normalized.module;
+            return normalized;
+        }
+
+        function getFrontendWorkerPayloadFromControls(api = window.selectedApi) {
+            const controls = document.querySelectorAll('[data-worker-param="1"]');
+            const payload = {};
+            const meta = {};
+            controls.forEach(control => {
+                const name = control.getAttribute('data-param-name') || '';
+                const type = control.getAttribute('data-param-type') || 'string';
+                const required = control.getAttribute('data-param-required') === '1';
+                if (!name) {
+                    return;
+                }
+                const value = parseFrontendWorkerParamValue(control.value, type, required, name);
+                const defaultValue = control.getAttribute('data-param-default-value') ?? '';
+                meta[name] = {
+                    dirty: control.getAttribute('data-param-dirty') === '1' || String(control.value ?? '') !== defaultValue,
+                    lastEdited: Number(control.getAttribute('data-param-last-edited') || 0)
+                };
+                if (value !== undefined) {
+                    payload[name] = value;
+                }
+            });
+            return normalizeFrontendWorkerPayload(api, payload, meta);
+        }
+
+        function setFrontendWorkerControlsFromPayload(payload, options = {}) {
+            document.querySelectorAll('[data-worker-param="1"]').forEach(control => {
+                const name = control.getAttribute('data-param-name') || '';
+                if (!name) {
+                    return;
+                }
+                const type = control.getAttribute('data-param-type') || 'string';
+                const hasValue = Object.prototype.hasOwnProperty.call(payload || {}, name);
+                control.value = hasValue ? getFrontendWorkerParamInputValue(payload[name], {type}) : '';
+                if (options.markDirty) {
+                    if (hasValue) {
+                        markFrontendWorkerParamDirty(control);
+                    } else {
+                        control.setAttribute('data-param-dirty', '0');
+                        control.setAttribute('data-param-last-edited', '0');
+                    }
+                }
+            });
+        }
+
+        function updateFrontendWorkerRequestPreview(api, payload, options = {}) {
+            const targetApi = api || window.selectedApi;
+            if (!targetApi || !isFrontendWorkerApi(targetApi)) {
+                return;
+            }
+            const bodyEl = document.getElementById('test-body');
+            const codeEl = document.getElementById('frontend-worker-call-code');
+            const nextPayload = payload || {};
+
+            if (bodyEl && options.updateJson !== false) {
+                bodyEl.value = JSON.stringify(nextPayload, null, 2);
+                bodyEl.classList.remove('is-invalid');
+            }
+            if (codeEl) {
+                codeEl.textContent = getFrontendWorkerExampleCode(targetApi, nextPayload);
+                if (typeof Prism !== 'undefined') {
+                    Prism.highlightElement(codeEl);
+                }
+            }
+        }
+
+        function handleWorkerParamInputChange(control = null) {
+            const api = window.selectedApi;
+            if (!api || !isFrontendWorkerApi(api)) {
+                return;
+            }
+            try {
+                markFrontendWorkerParamDirty(control);
+                updateFrontendWorkerRequestPreview(api, getFrontendWorkerPayloadFromControls(api));
+            } catch (error) {
+                showToast(error && error.message ? error.message : String(error), 'error');
+            }
+        }
+
+        function handleWorkerJsonInputChange() {
+            const api = window.selectedApi;
+            const bodyEl = document.getElementById('test-body');
+            if (!api || !isFrontendWorkerApi(api) || !bodyEl) {
+                return;
+            }
+            try {
+                const payload = bodyEl.value.trim() ? JSON.parse(bodyEl.value.trim()) : {};
+                bodyEl.classList.remove('is-invalid');
+                setFrontendWorkerControlsFromPayload(payload, {markDirty: true});
+                updateFrontendWorkerRequestPreview(api, getFrontendWorkerPayloadFromControls(api), {updateJson: false});
+            } catch (error) {
+                bodyEl.classList.add('is-invalid');
+            }
         }
 
         function getFrontendWorkerExampleCode(api, payload = null) {
@@ -3061,7 +4103,7 @@ $apiDocsThemeConfigPayload = [
             // API头部
             detailHtml += '<div class="api-detail-header">';
             detailHtml += '<div>';
-            const method = (api.route?.method || 'GET').toUpperCase();
+            const method = normalizeHttpMethod(api.route?.method);
             detailHtml += `<span class="api-method-badge ${method.toLowerCase()}">${method}</span>`;
             detailHtml += `<span class="api-path">${escapeHtml(api.route?.path || '')}</span>`;
             detailHtml += '</div>';
@@ -3069,6 +4111,13 @@ $apiDocsThemeConfigPayload = [
                 detailHtml += `<div class="api-summary">${escapeHtml(api.document.summary)}</div>`;
             }
             detailHtml += '</div>';
+
+            if (isFrontendWorkerApi(api)) {
+                detailHtml += '<div class="api-section">';
+                detailHtml += '<h3 class="api-section-title"><?=__('SDK 下载')?></h3>';
+                detailHtml += renderWorkerSdkActions();
+                detailHtml += '</div>';
+            }
             
             // 接口描述
             if (api.document?.description) {
@@ -3077,8 +4126,29 @@ $apiDocsThemeConfigPayload = [
                 detailHtml += `<p>${escapeHtml(api.document.description).replace(/\n/g, '<br>')}</p>`;
                 detailHtml += '</div>';
             }
+
+            const binQuerySdkRows = getBinQuerySdkRows(api);
+            if (binQuerySdkRows.length > 0) {
+                detailHtml += '<div class="api-section">';
+                detailHtml += '<h3 class="api-section-title"><?=__('SDK 信息')?></h3>';
+                detailHtml += '<table class="api-param-table">';
+                detailHtml += '<thead><tr><th><?=__('字段')?></th><th><?=__('值')?></th></tr></thead>';
+                detailHtml += '<tbody>';
+                binQuerySdkRows.forEach(row => {
+                    detailHtml += '<tr>';
+                    detailHtml += `<td>${escapeHtml(row[0])}</td>`;
+                    detailHtml += `<td><code>${escapeHtml(String(row[1]))}</code></td>`;
+                    detailHtml += '</tr>';
+                });
+                detailHtml += '</tbody></table>';
+                detailHtml += '</div>';
+            }
             
             // 请求参数
+            if (binQuerySdkRows.length > 0) {
+                detailHtml += renderBinQuerySdkActions(api);
+            }
+
             if (api.parameters && api.parameters.length > 0) {
                 detailHtml += '<div class="api-section">';
                 detailHtml += '<h3 class="api-section-title"><?=__('请求参数')?></h3>';
@@ -3108,7 +4178,7 @@ $apiDocsThemeConfigPayload = [
                             'HEADER_X_API_TOKEN': '<?=__('X-API-Token头')?>',
                             'request': '<?=__('请求参数')?>'
                         };
-                        sourceText = sourceMap[param.source] || param.source;
+                        sourceText = sourceMap[param.source] || escapeHtml(param.source);
                         // 只有当source_description与sourceMap中的值不同时才显示
                         if (param.source_description && param.source_description !== sourceText && param.source_description !== param.source) {
                             sourceText += ` (${escapeHtml(param.source_description)})`;
@@ -3145,7 +4215,9 @@ $apiDocsThemeConfigPayload = [
                     // 如果路径已经是完整URL，直接使用；否则构建完整URL
                     let fullPath = path;
                     if (isFrontendWorkerApi(api)) {
-                        fullPath = api.example.code || getFrontendWorkerExampleCode(api);
+                        fullPath = getFrontendWorkerExampleCode(api);
+                    } else if (isBinQuerySdkApi(api)) {
+                        fullPath = getBinQueryExampleCode(api);
                     } else if (!path.startsWith('http')) {
                         const isBackendApi = api.route?.is_backend || false;
                         
@@ -3158,17 +4230,15 @@ $apiDocsThemeConfigPayload = [
                         }
                     }
                     
-                    // 转义单引号，避免JavaScript错误
-                    const escapedPath = fullPath.replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
-                    detailHtml += `<button type="button" class="btn-copy-example" onclick="copyExamplePath('${escapedPath}')" title="<?=__('复制路径')?>">`;
+                    detailHtml += `<button type="button" class="btn-copy-example" data-api-action="copy-example-path" data-copy-path="${escapeHtmlAttr(fullPath)}" title="<?=__('复制路径')?>">`;
                     detailHtml += '<span>📋</span>';
-                    detailHtml += '<span>' + (isFrontendWorkerApi(api) ? '<?=__('复制调用')?>' : '<?=__('复制路径')?>') + '</span>';
+                    detailHtml += '<span>' + ((isFrontendWorkerApi(api) || isBinQuerySdkApi(api)) ? '<?=__('复制调用')?>' : '<?=__('复制路径')?>') + '</span>';
                     detailHtml += '</button>';
                 }
                 
                 // 复制请求体按钮
                 if (api.example.body || api.example.Body) {
-                    detailHtml += `<button type="button" class="btn-copy-example" onclick="copyExampleBody()" title="<?=__('复制请求体')?>">`;
+                    detailHtml += `<button type="button" class="btn-copy-example" data-api-action="copy-example-body" title="<?=__('复制请求体')?>">`;
                     detailHtml += '<span>📋</span>';
                     detailHtml += '<span><?=__('复制请求体')?></span>';
                     detailHtml += '</button>';
@@ -3176,7 +4246,7 @@ $apiDocsThemeConfigPayload = [
                 
                 // 复制响应体按钮
                 if (api.example.response || api.example.Response) {
-                    detailHtml += `<button type="button" class="btn-copy-example" onclick="copyExampleResponse()" title="<?=__('复制响应体')?>">`;
+                    detailHtml += `<button type="button" class="btn-copy-example" data-api-action="copy-example-response" title="<?=__('复制响应体')?>">`;
                     detailHtml += '<span>📋</span>';
                     detailHtml += '<span><?=__('复制响应体')?></span>';
                     detailHtml += '</button>';
@@ -3196,7 +4266,9 @@ $apiDocsThemeConfigPayload = [
                     // 如果路径已经是完整URL，直接使用；否则构建完整URL
                     let fullPath = path;
                     if (isFrontendWorkerApi(api)) {
-                        fullPath = api.example.code || getFrontendWorkerExampleCode(api);
+                        fullPath = getFrontendWorkerExampleCode(api);
+                    } else if (isBinQuerySdkApi(api)) {
+                        fullPath = getBinQueryExampleCode(api);
                     } else if (!path.startsWith('http')) {
                         const isBackendApi = api.route?.is_backend || false;
                         
@@ -3210,8 +4282,8 @@ $apiDocsThemeConfigPayload = [
                     }
                     
                     detailHtml += '<div class="example-item">';
-                    detailHtml += '<div class="example-label">' + (isFrontendWorkerApi(api) ? '<?=__('调用')?>' : '<?=__('路径')?>') + ':</div>';
-                    if (isFrontendWorkerApi(api)) {
+                    detailHtml += '<div class="example-label">' + ((isFrontendWorkerApi(api) || isBinQuerySdkApi(api)) ? '<?=__('调用')?>' : '<?=__('路径')?>') + ':</div>';
+                    if (isFrontendWorkerApi(api) || isBinQuerySdkApi(api)) {
                         detailHtml += '<div class="code-block">';
                         detailHtml += `<pre><code class="language-javascript">${escapeHtml(fullPath)}</code></pre>`;
                         detailHtml += '</div>';
@@ -3326,12 +4398,51 @@ $apiDocsThemeConfigPayload = [
                 statusCodeEl.style.display = 'none';
             }
             
-            const method = (api.route?.method || 'GET').toUpperCase();
+            const method = normalizeHttpMethod(api.route?.method);
             let path = api.route?.path || '';
+
+            if (isBinQuerySdkApi(api)) {
+                const sdkRows = getBinQuerySdkRows(api);
+                const exampleCode = getBinQueryExampleCode(api);
+                let testHtml = '<div class="test-panel-header">';
+                testHtml += '<div class="test-panel-header-left">';
+                testHtml += '<h2><?=__('BinQuery SDK')?></h2>';
+                testHtml += '<p><?=__('通过 domain 推导 /bin/query，使用 API Key 建连；非 PHP/JS 语言按协议文档自行对接。')?></p>';
+                testHtml += '</div>';
+                testHtml += '<span id="request-status-code" class="request-status-code" style="display: none;"></span>';
+                testHtml += '</div>';
+                testHtml += '<div class="test-panel-content">';
+                testHtml += '<div class="test-request-section">';
+                testHtml += renderBinQuerySdkActions(api);
+                testHtml += renderBinQuerySdkUsageGuide(api);
+                if (sdkRows.length > 0) {
+                    testHtml += '<div class="test-section-title"><?=__('SDK 信息')?></div>';
+                    testHtml += '<table class="api-param-table">';
+                    testHtml += '<thead><tr><th><?=__('字段')?></th><th><?=__('值')?></th></tr></thead>';
+                    testHtml += '<tbody>';
+                    sdkRows.forEach(row => {
+                        testHtml += '<tr>';
+                        testHtml += `<td>${escapeHtml(row[0])}</td>`;
+                        testHtml += `<td><code>${escapeHtml(String(row[1]))}</code></td>`;
+                        testHtml += '</tr>';
+                    });
+                    testHtml += '</tbody></table>';
+                }
+                testHtml += '<div class="form-group">';
+                testHtml += '<label><?=__('示例')?></label>';
+                testHtml += `<pre><code class="language-javascript">${escapeHtml(exampleCode)}</code></pre>`;
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testHtml += '</div>';
+                testPanel.innerHTML = testHtml;
+                initStickyTestPanel();
+                return;
+            }
 
             if (isFrontendWorkerApi(api)) {
                 const descriptor = getFrontendWorkerDescriptor(api);
-                const defaultBody = JSON.stringify(getFrontendWorkerSamplePayload(api), null, 2);
+                const defaultPayload = getFrontendWorkerSamplePayload(api);
+                const defaultBody = JSON.stringify(defaultPayload, null, 2);
                 let testHtml = '<div class="test-panel-header">';
                 testHtml += '<div class="test-panel-header-left">';
                 testHtml += '<h2><?=__('Frontend Worker 试调')?></h2>';
@@ -3339,7 +4450,7 @@ $apiDocsThemeConfigPayload = [
                 testHtml += '</div>';
                 testHtml += '<div style="display: flex; align-items: center; gap: 8px;">';
                 testHtml += '<span id="request-status-code" class="request-status-code" style="display: none;"></span>';
-                testHtml += '<button type="button" class="test-send-btn" onclick="sendTestRequest()">';
+                testHtml += '<button type="button" class="test-send-btn" data-api-action="send-test-request">';
                 testHtml += '<span>▶</span>';
                 testHtml += '<span><?=__('发送请求')?></span>';
                 testHtml += '</button>';
@@ -3347,31 +4458,33 @@ $apiDocsThemeConfigPayload = [
                 testHtml += '</div>';
                 testHtml += '<div class="test-panel-content">';
                 testHtml += '<div class="test-request-section">';
-                testHtml += '<div class="test-section-title"><?=__('Worker Operation')?></div>';
-                testHtml += '<div class="method-select-group">';
-                testHtml += '<div class="form-group">';
-                testHtml += '<label><?=__('Provider')?></label>';
-                testHtml += `<input type="text" id="test-worker-provider" value="${escapeHtml(descriptor.provider)}" readonly>`;
+                testHtml += '<div class="test-section-title"><?=__('Worker 调用目标')?></div>';
+                testHtml += '<div class="worker-target-grid">';
+                testHtml += '<div class="worker-target-item">';
+                testHtml += '<span class="worker-target-label"><?=__('Resource（固定）')?></span>';
+                testHtml += `<code class="worker-target-value" title="${escapeHtmlAttr(descriptor.provider)}">${escapeHtml(descriptor.provider)}</code>`;
                 testHtml += '</div>';
-                testHtml += '<div class="form-group">';
-                testHtml += '<label><?=__('Operation')?></label>';
-                testHtml += `<input type="text" id="test-worker-operation" value="${escapeHtml(descriptor.operation)}" readonly>`;
+                testHtml += '<div class="worker-target-item">';
+                testHtml += '<span class="worker-target-label"><?=__('Operation（固定）')?></span>';
+                testHtml += `<code class="worker-target-value" title="${escapeHtmlAttr(descriptor.operation)}">${escapeHtml(descriptor.operation)}</code>`;
                 testHtml += '</div>';
                 testHtml += '</div>';
+                testHtml += '<p class="worker-target-note"><?=__('上方是当前文档接口固定调用目标；需要测试不同入参时，请修改下方参数，调用代码和 JSON 会自动同步。')?></p>';
+                testHtml += renderFrontendWorkerParamEditor(api, defaultPayload);
                 testHtml += '<div class="form-group">';
                 testHtml += '<label><?=__('调用代码')?></label>';
-                testHtml += `<pre><code class="language-javascript">${escapeHtml(api.example?.code || getFrontendWorkerExampleCode(api))}</code></pre>`;
+                testHtml += `<pre><code class="language-javascript" id="frontend-worker-call-code">${escapeHtml(getFrontendWorkerExampleCode(api, defaultPayload))}</code></pre>`;
                 testHtml += '</div>';
                 testHtml += '<div class="form-group">';
-                testHtml += '<div class="test-section-title"><?=__('请求参数')?></div>';
-                testHtml += `<textarea id="test-body" placeholder='<?=__('请输入 JSON 格式的请求参数')?>' rows="10">${escapeHtml(defaultBody)}</textarea>`;
+                testHtml += '<label><?=__('请求 JSON')?></label>';
+                testHtml += `<textarea id="test-body" class="worker-json-textarea" data-api-input-action="worker-json" placeholder='<?=__('请输入 JSON 格式的请求参数')?>' rows="8">${escapeHtml(defaultBody)}</textarea>`;
                 testHtml += '</div>';
                 testHtml += '</div>';
                 testHtml += '<div class="test-response-section" id="test-response-section" style="display: none;">';
                 testHtml += '<div class="test-section-title"><?=__('响应信息')?></div>';
                 testHtml += '<div class="response-info" id="response-info"></div>';
                 testHtml += '<div class="response-headers">';
-                testHtml += '<div class="test-section-title collapsible" onclick="toggleCollapsible(this)"><?=__('响应头')?></div>';
+                testHtml += '<div class="test-section-title collapsible" data-api-action="toggle-collapsible" role="button" tabindex="0"><?=__('响应头')?></div>';
                 testHtml += '<div class="collapsible-content">';
                 testHtml += '<table class="response-headers-table" id="response-headers-table">';
                 testHtml += '<thead><tr><th><?=__('Header名称')?></th><th><?=__('Header值')?></th></tr></thead>';
@@ -3383,8 +4496,8 @@ $apiDocsThemeConfigPayload = [
                 testHtml += '<div class="response-body-header">';
                 testHtml += '<h4><?=__('响应体')?></h4>';
                 testHtml += '<div class="response-body-actions">';
-                testHtml += '<button type="button" class="btn-icon" onclick="copyResponseBody()"><?=__('复制')?></button>';
-                testHtml += '<button type="button" class="btn-icon" onclick="formatResponseBody()"><?=__('格式化')?></button>';
+                testHtml += '<button type="button" class="btn-icon" data-api-action="copy-response-body"><?=__('复制')?></button>';
+                testHtml += '<button type="button" class="btn-icon" data-api-action="format-response-body"><?=__('格式化')?></button>';
                 testHtml += '</div>';
                 testHtml += '</div>';
                 testHtml += '<div class="code-block">';
@@ -3518,7 +4631,7 @@ $apiDocsThemeConfigPayload = [
             // 根据登录状态显示不同的按钮
             if (needsLogin) {
                 // 需要登录但未登录，显示"登录后发起请求"按钮
-                testHtml += '<button type="button" class="test-send-btn test-send-btn-disabled" onclick="showLoginModal()" title="<?= htmlspecialchars(__('此接口需要登录，请先登录'), ENT_QUOTES, 'UTF-8') ?>">';
+                testHtml += '<button type="button" class="test-send-btn test-send-btn-disabled" data-api-action="show-login-modal" title="<?= htmlspecialchars(__('此接口需要登录，请先登录'), ENT_QUOTES, 'UTF-8') ?>">';
                 testHtml += '<span>🔐</span>';
                 testHtml += '<span><?=__('登录后发起请求')?></span>';
                 testHtml += '</button>';
@@ -3526,7 +4639,7 @@ $apiDocsThemeConfigPayload = [
                 // 已登录或不需要登录，显示正常的发送请求按钮
                 testHtml += '<div style="display: flex; align-items: center; gap: 8px;">';
                 testHtml += '<span id="request-status-code" class="request-status-code" style="display: none;"></span>';
-                testHtml += '<button type="button" class="test-send-btn" onclick="sendTestRequest()">';
+                testHtml += '<button type="button" class="test-send-btn" data-api-action="send-test-request">';
                 testHtml += '<span>▶</span>';
                 testHtml += '<span><?=__('发送请求')?></span>';
                 testHtml += '</button>';
@@ -3541,22 +4654,22 @@ $apiDocsThemeConfigPayload = [
             testHtml += '<div class="test-request-section">';
             
             // 语言和货币配置（可折叠）
-            testHtml += '<div class="test-section-title collapsible" onclick="toggleCollapsible(this)"><?=__('语言和货币')?></div>';
+            testHtml += '<div class="test-section-title collapsible" data-api-action="toggle-collapsible" role="button" tabindex="0"><?=__('语言和货币')?></div>';
             testHtml += '<div class="i18n-config-section collapsible-content">';
             testHtml += '<div class="i18n-mode-switch">';
             testHtml += '<label class="switch-label">';
-            testHtml += `<input type="radio" name="i18n-mode" value="path" ${currentI18nMode === 'path' ? 'checked' : ''} onchange="switchI18nMode('path')">`;
+            testHtml += `<input type="radio" name="i18n-mode" value="path" data-api-change-action="switch-i18n-mode" data-i18n-mode="path" ${currentI18nMode === 'path' ? 'checked' : ''}>`;
             testHtml += '<span><?=__('路径切换')?></span>';
             testHtml += '</label>';
             testHtml += '<label class="switch-label">';
-            testHtml += `<input type="radio" name="i18n-mode" value="param" ${currentI18nMode === 'param' ? 'checked' : ''} onchange="switchI18nMode('param')">`;
+            testHtml += `<input type="radio" name="i18n-mode" value="param" data-api-change-action="switch-i18n-mode" data-i18n-mode="param" ${currentI18nMode === 'param' ? 'checked' : ''}>`;
             testHtml += '<span><?=__('参数切换')?></span>';
             testHtml += '</label>';
             testHtml += '</div>';
             testHtml += '<div class="i18n-config-values">';
             testHtml += '<div class="i18n-config-item">';
             testHtml += '<label><?=__('语言')?>:</label>';
-            testHtml += `<select id="test-locale-select" class="form-control" onchange="updateTestUrl()">`;
+            testHtml += `<select id="test-locale-select" class="form-control" data-api-change-action="update-test-url">`;
             // 使用网站配置的语言列表
             if (typeof availableLocales !== 'undefined' && availableLocales.length > 0) {
                 availableLocales.forEach(function(locale) {
@@ -3564,7 +4677,7 @@ $apiDocsThemeConfigPayload = [
                     const name = locale.name || '';
                     const displayText = name ? (name + ' (' + code + ')') : code;
                     const selected = currentLocale === code ? 'selected' : '';
-                    testHtml += `<option value="${escapeHtml(code)}" ${selected}>${escapeHtml(displayText)}</option>`;
+                    testHtml += `<option value="${escapeHtmlAttr(code)}" ${selected}>${escapeHtml(displayText)}</option>`;
                 });
             } else {
                 // 如果没有配置，使用默认语言列表
@@ -3575,7 +4688,7 @@ $apiDocsThemeConfigPayload = [
             testHtml += '</div>';
             testHtml += '<div class="i18n-config-item">';
             testHtml += '<label><?=__('货币')?>:</label>';
-            testHtml += `<select id="test-currency-select" class="form-control" onchange="updateTestUrl()">`;
+            testHtml += `<select id="test-currency-select" class="form-control" data-api-change-action="update-test-url">`;
             // 使用网站配置的货币列表
             if (typeof availableCurrencies !== 'undefined' && availableCurrencies.length > 0) {
                 availableCurrencies.forEach(function(currency) {
@@ -3583,7 +4696,7 @@ $apiDocsThemeConfigPayload = [
                     const name = currency.name || '';
                     const displayText = name ? (code + ' - ' + name) : code;
                     const selected = currentCurrency === code ? 'selected' : '';
-                    testHtml += `<option value="${escapeHtml(code)}" ${selected}>${escapeHtml(displayText)}</option>`;
+                    testHtml += `<option value="${escapeHtmlAttr(code)}" ${selected}>${escapeHtml(displayText)}</option>`;
                 });
             } else {
                 // 如果没有配置，使用默认货币列表
@@ -3696,7 +4809,7 @@ $apiDocsThemeConfigPayload = [
             }
             urlWithParams = urlObj.toString();
             
-            testHtml += `<input type="text" id="test-url" value="${escapeHtml(urlWithParams)}" placeholder="<?= htmlspecialchars(__('请输入请求URL'), ENT_QUOTES, 'UTF-8') ?>">`;
+            testHtml += `<input type="text" id="test-url" value="${escapeHtmlAttr(urlWithParams)}" placeholder="<?= htmlspecialchars(__('请输入请求URL'), ENT_QUOTES, 'UTF-8') ?>">`;
             testHtml += '</div>';
             testHtml += '</div>';
             
@@ -3705,7 +4818,7 @@ $apiDocsThemeConfigPayload = [
                 testHtml += '<div class="form-group" style="margin-top: 15px;">';
                 testHtml += '<div class="section-header-with-action">';
                 testHtml += '<div class="test-section-title"><?=__('请求参数')?></div>';
-                testHtml += `<button type="button" class="btn-import-example" onclick="importExampleRequestParams()" title="<?= htmlspecialchars(__('导入示例请求参数'), ENT_QUOTES, 'UTF-8') ?>">`;
+                testHtml += `<button type="button" class="btn-import-example" data-api-action="import-request-params" title="<?= htmlspecialchars(__('导入示例请求参数'), ENT_QUOTES, 'UTF-8') ?>">`;
                 testHtml += '<span>📥</span>';
                 testHtml += '<span><?=__('导入示例')?></span>';
                 testHtml += '</button>';
@@ -3714,13 +4827,13 @@ $apiDocsThemeConfigPayload = [
                 // 默认显示示例参数
                 Object.entries(api.example.request_parameters).forEach(([key, value]) => {
                     testHtml += '<div class="header-row">';
-                    testHtml += `<input type="text" class="header-key" value="${escapeHtml(key)}" placeholder="<?= htmlspecialchars(__('参数名'), ENT_QUOTES, 'UTF-8') ?>">`;
-                    testHtml += `<input type="text" class="header-value" value="${escapeHtml(value)}" placeholder="<?= htmlspecialchars(__('参数值'), ENT_QUOTES, 'UTF-8') ?>">`;
-                    testHtml += '<button type="button" class="btn-remove" onclick="removeHeader(this)">×</button>';
+                    testHtml += `<input type="text" class="header-key" value="${escapeHtmlAttr(key)}" placeholder="<?= htmlspecialchars(__('参数名'), ENT_QUOTES, 'UTF-8') ?>">`;
+                    testHtml += `<input type="text" class="header-value" value="${escapeHtmlAttr(value)}" placeholder="<?= htmlspecialchars(__('参数值'), ENT_QUOTES, 'UTF-8') ?>">`;
+                    testHtml += '<button type="button" class="btn-remove" data-api-action="remove-row">×</button>';
                     testHtml += '</div>';
                 });
                 testHtml += '</div>';
-                testHtml += '<button type="button" class="btn-add-header" onclick="addRequestParam()"><?=__('添加参数')?></button>';
+                testHtml += '<button type="button" class="btn-add-header" data-api-action="add-request-param"><?=__('添加参数')?></button>';
                 testHtml += '</div>';
             }
             
@@ -3736,7 +4849,7 @@ $apiDocsThemeConfigPayload = [
                 }
             }
             if (exampleHeaders.length > 0) {
-                testHtml += `<button type="button" class="btn-import-example" onclick="importExampleHeaders()" title="<?= htmlspecialchars(__('导入示例请求头'), ENT_QUOTES, 'UTF-8') ?>">`;
+                testHtml += `<button type="button" class="btn-import-example" data-api-action="import-headers" title="<?= htmlspecialchars(__('导入示例请求头'), ENT_QUOTES, 'UTF-8') ?>">`;
                 testHtml += '<span>📥</span>';
                 testHtml += '<span><?=__('导入示例')?></span>';
                 testHtml += '</button>';
@@ -3745,13 +4858,13 @@ $apiDocsThemeConfigPayload = [
             testHtml += '<div class="headers-editor" id="headers-editor">';
             defaultHeaders.forEach((header, index) => {
                 testHtml += '<div class="header-row">';
-                testHtml += `<input type="text" class="header-key" placeholder="<?=__('Header名称')?>" value="${escapeHtml(header.key)}">`;
-                testHtml += `<input type="text" class="header-value" placeholder="<?=__('Header值')?>" value="${escapeHtml(header.value)}">`;
-                testHtml += `<button type="button" class="btn-remove" onclick="removeHeader(this)">×</button>`;
+                testHtml += `<input type="text" class="header-key" placeholder="<?=__('Header名称')?>" value="${escapeHtmlAttr(header.key)}">`;
+                testHtml += `<input type="text" class="header-value" placeholder="<?=__('Header值')?>" value="${escapeHtmlAttr(header.value)}">`;
+                testHtml += `<button type="button" class="btn-remove" data-api-action="remove-row">×</button>`;
                 testHtml += '</div>';
             });
             testHtml += '</div>';
-            testHtml += '<button type="button" class="btn-add-header" onclick="addHeader()">+ <?=__('添加请求头')?></button>';
+            testHtml += '<button type="button" class="btn-add-header" data-api-action="add-header">+ <?=__('添加请求头')?></button>';
             testHtml += '</div>';
             
             // 请求体（仅POST/PUT/PATCH）
@@ -3760,7 +4873,7 @@ $apiDocsThemeConfigPayload = [
                 testHtml += '<div class="section-header-with-action">';
                 testHtml += '<div class="test-section-title"><?=__('请求体')?></div>';
                 if (exampleBody) {
-                    testHtml += `<button type="button" class="btn-import-example" onclick="importExampleBody()" title="<?= htmlspecialchars(__('导入示例请求体'), ENT_QUOTES, 'UTF-8') ?>">`;
+                    testHtml += `<button type="button" class="btn-import-example" data-api-action="import-body" title="<?= htmlspecialchars(__('导入示例请求体'), ENT_QUOTES, 'UTF-8') ?>">`;
                     testHtml += '<span>📥</span>';
                     testHtml += '<span><?=__('导入示例')?></span>';
                     testHtml += '</button>';
@@ -3781,7 +4894,7 @@ $apiDocsThemeConfigPayload = [
             
             // 响应头（可折叠）
             testHtml += '<div class="response-headers">';
-            testHtml += '<div class="test-section-title collapsible" onclick="toggleCollapsible(this)"><?=__('响应头')?></div>';
+            testHtml += '<div class="test-section-title collapsible" data-api-action="toggle-collapsible" role="button" tabindex="0"><?=__('响应头')?></div>';
             testHtml += '<div class="collapsible-content">';
             testHtml += '<table class="response-headers-table" id="response-headers-table">';
             testHtml += '<thead><tr><th><?=__('Header名称')?></th><th><?=__('Header值')?></th></tr></thead>';
@@ -3795,8 +4908,8 @@ $apiDocsThemeConfigPayload = [
             testHtml += '<div class="response-body-header">';
             testHtml += '<h4><?=__('响应体')?></h4>';
             testHtml += '<div class="response-body-actions">';
-            testHtml += '<button type="button" class="btn-icon" onclick="copyResponseBody()"><?=__('复制')?></button>';
-            testHtml += '<button type="button" class="btn-icon" onclick="formatResponseBody()"><?=__('格式化')?></button>';
+            testHtml += '<button type="button" class="btn-icon" data-api-action="copy-response-body"><?=__('复制')?></button>';
+            testHtml += '<button type="button" class="btn-icon" data-api-action="format-response-body"><?=__('格式化')?></button>';
             testHtml += '</div>';
             testHtml += '</div>';
             testHtml += '<div class="code-block">';
@@ -3825,7 +4938,7 @@ $apiDocsThemeConfigPayload = [
             row.innerHTML = `
                 <input type="text" class="header-key" placeholder="<?=__('Header名称')?>">
                 <input type="text" class="header-value" placeholder="<?=__('Header值')?>">
-                <button type="button" class="btn-remove" onclick="removeHeader(this)">×</button>
+                <button type="button" class="btn-remove" data-api-action="remove-row">×</button>
             `;
             editor.appendChild(row);
         }
@@ -3848,7 +4961,15 @@ $apiDocsThemeConfigPayload = [
                 const descriptor = getFrontendWorkerDescriptor(api);
                 const bodyEl = document.getElementById('test-body');
                 let payload = {};
-                if (bodyEl && bodyEl.value.trim()) {
+                if (document.querySelector('[data-worker-param="1"]')) {
+                    try {
+                        payload = getFrontendWorkerPayloadFromControls();
+                        updateFrontendWorkerRequestPreview(api, payload);
+                    } catch (e) {
+                        showToast(e && e.message ? e.message : String(e), 'error');
+                        return;
+                    }
+                } else if (bodyEl && bodyEl.value.trim()) {
                     try {
                         payload = JSON.parse(bodyEl.value.trim());
                     } catch (e) {
@@ -4343,9 +5464,9 @@ $apiDocsThemeConfigPayload = [
                     const row = document.createElement('div');
                     row.className = 'header-row';
                     row.innerHTML = `
-                        <input type="text" class="header-key" placeholder="<?=__('Header名称')?>" value="${escapeHtml(key)}">
-                        <input type="text" class="header-value" placeholder="<?=__('Header值')?>" value="${escapeHtml(String(value))}">
-                        <button type="button" class="btn-remove" onclick="removeHeader(this)">×</button>
+                        <input type="text" class="header-key" placeholder="<?=__('Header名称')?>" value="${escapeHtmlAttr(key)}">
+                        <input type="text" class="header-value" placeholder="<?=__('Header值')?>" value="${escapeHtmlAttr(String(value))}">
+                        <button type="button" class="btn-remove" data-api-action="remove-row">×</button>
                     `;
                     headersEditor.appendChild(row);
                 });
@@ -4408,9 +5529,9 @@ $apiDocsThemeConfigPayload = [
                 const row = document.createElement('div');
                 row.className = 'header-row';
                 row.innerHTML = `
-                    <input type="text" class="header-key" value="${escapeHtml(key)}" placeholder="<?=__('参数名')?>" onchange="updateUrlFromParams()">
-                    <input type="text" class="header-value" value="${escapeHtml(value)}" placeholder="<?=__('参数值')?>" onchange="updateUrlFromParams()">
-                    <button type="button" class="btn-remove" onclick="removeHeader(this); updateUrlFromParams();">×</button>
+                    <input type="text" class="header-key" value="${escapeHtmlAttr(key)}" placeholder="<?=__('参数名')?>" data-api-change-action="update-url-from-params">
+                    <input type="text" class="header-value" value="${escapeHtmlAttr(value)}" placeholder="<?=__('参数值')?>" data-api-change-action="update-url-from-params">
+                    <button type="button" class="btn-remove" data-api-action="remove-row" data-update-url="1">×</button>
                 `;
                 paramsEditor.appendChild(row);
             });
@@ -4428,9 +5549,9 @@ $apiDocsThemeConfigPayload = [
             const row = document.createElement('div');
             row.className = 'header-row';
             row.innerHTML = `
-                <input type="text" class="header-key" placeholder="<?=__('参数名')?>" onchange="updateUrlFromParams()">
-                <input type="text" class="header-value" placeholder="<?=__('参数值')?>" onchange="updateUrlFromParams()">
-                <button type="button" class="btn-remove" onclick="removeHeader(this); updateUrlFromParams();">×</button>
+                <input type="text" class="header-key" placeholder="<?=__('参数名')?>" data-api-change-action="update-url-from-params">
+                <input type="text" class="header-value" placeholder="<?=__('参数值')?>" data-api-change-action="update-url-from-params">
+                <button type="button" class="btn-remove" data-api-action="remove-row" data-update-url="1">×</button>
             `;
             editor.appendChild(row);
         }
@@ -4475,6 +5596,17 @@ $apiDocsThemeConfigPayload = [
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function escapeHtmlAttr(text) {
+            const div = document.createElement('div');
+            div.textContent = text === undefined || text === null ? '' : String(text);
+            return div.innerHTML.replace(/"/g, '&quot;');
+        }
+
+        function normalizeHttpMethod(method) {
+            const normalized = String(method || 'GET').toUpperCase();
+            return /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)$/.test(normalized) ? normalized : 'GET';
         }
         
         // 切换侧边栏
@@ -4622,6 +5754,46 @@ $apiDocsThemeConfigPayload = [
                 closeLoginModal();
             }
         }
+
+        let apiDocsConfirmResolver = null;
+
+        function showApiDocsConfirm(options) {
+            const modal = document.getElementById('api-doc-confirm-modal');
+            const title = document.getElementById('api-doc-confirm-title');
+            const message = document.getElementById('api-doc-confirm-message');
+            const action = document.getElementById('api-doc-confirm-action');
+
+            if (!modal || !title || !message || !action) {
+                return Promise.resolve(false);
+            }
+
+            title.textContent = String(options && options.title ? options.title : <?= json_encode(__('操作确认'), $jsonForScriptFlags) ?>);
+            message.textContent = String(options && options.message ? options.message : '');
+            action.textContent = String(options && options.actionText ? options.actionText : <?= json_encode(__('确认'), $jsonForScriptFlags) ?>);
+
+            modal.classList.add('active');
+
+            return new Promise(function(resolve) {
+                apiDocsConfirmResolver = resolve;
+            });
+        }
+
+        function closeApiDocsConfirm(confirmed, event) {
+            if (event && event.target && event.target.id !== 'api-doc-confirm-modal') {
+                return;
+            }
+
+            const modal = document.getElementById('api-doc-confirm-modal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+
+            if (apiDocsConfirmResolver) {
+                const resolver = apiDocsConfirmResolver;
+                apiDocsConfirmResolver = null;
+                resolver(!!confirmed);
+            }
+        }
         
         // 处理登录
         async function handleLogin(event) {
@@ -4689,6 +5861,18 @@ $apiDocsThemeConfigPayload = [
         }
         
         // 更新登录状态显示
+        function setLoginButtonContent(button, icon, label) {
+            button.textContent = '';
+
+            const iconNode = document.createElement('span');
+            iconNode.textContent = icon;
+            const labelNode = document.createElement('span');
+            labelNode.textContent = String(label || '');
+
+            button.appendChild(iconNode);
+            button.appendChild(labelNode);
+        }
+
         function updateLoginStatus() {
             // 根据当前选中的API类型获取对应的用户和token
             const isBackendApi = window.selectedApi?.route?.is_backend || currentApiType === 'backend';
@@ -4706,22 +5890,28 @@ $apiDocsThemeConfigPayload = [
             
             if (token && user.username) {
                 if (loginBtn) {
-                    loginBtn.innerHTML = `<span>👤</span><span>${user.username}</span>`;
-                    loginBtn.onclick = handleLogout;
-                    loginBtn.title = '点击退出登录';
+                    setLoginButtonContent(loginBtn, '👤', user.username);
+                    loginBtn.dataset.apiAction = 'logout';
+                    loginBtn.title = <?= json_encode(__('点击退出登录'), $jsonForScriptFlags) ?>;
                 }
             } else {
                 if (loginBtn) {
-                    loginBtn.innerHTML = `<span>🔐</span><span><?=__('登录')?></span>`;
-                    loginBtn.onclick = showLoginModal;
-                    loginBtn.title = '点击登录';
+                    setLoginButtonContent(loginBtn, '🔐', <?= json_encode(__('登录'), $jsonForScriptFlags) ?>);
+                    loginBtn.dataset.apiAction = 'show-login-modal';
+                    loginBtn.title = <?= json_encode(__('点击登录'), $jsonForScriptFlags) ?>;
                 }
             }
         }
         
         // 退出登录
-        function handleLogout() {
-            if (confirm('确定要退出登录吗？')) {
+        async function handleLogout() {
+            const confirmed = await showApiDocsConfirm({
+                title: <?= json_encode(__('退出登录确认'), $jsonForScriptFlags) ?>,
+                message: <?= json_encode(__('确定要退出登录吗？'), $jsonForScriptFlags) ?>,
+                actionText: <?= json_encode(__('退出登录'), $jsonForScriptFlags) ?>
+            });
+
+            if (confirmed) {
                 // 根据当前选中的API类型清除对应的token
                 const isBackendApi = window.selectedApi?.route?.is_backend || currentApiType === 'backend';
                 
@@ -4736,7 +5926,7 @@ $apiDocsThemeConfigPayload = [
                 }
                 
                 updateLoginStatus();
-                showToast('已退出登录');
+                showToast(<?= json_encode(__('已退出登录'), $jsonForScriptFlags) ?>);
                 
                 // 如果当前有选中的API，重新加载测试面板
                 if (window.selectedApi) {
@@ -4823,6 +6013,7 @@ $apiDocsThemeConfigPayload = [
             
             // 重新构建树
             const treeData = buildTreeData(apiData, type);
+            $('#api-tree').off('.apiDocTree');
             $('#api-tree').jstree('destroy');
             $('#api-tree').jstree({
                 'core': {
@@ -4845,7 +6036,7 @@ $apiDocsThemeConfigPayload = [
             });
             
             // 绑定事件（在jstree初始化后）
-            $('#api-tree').on('select_node.jstree', function(e, data) {
+            $('#api-tree').on('select_node.jstree.apiDocTree', function(e, data) {
                 const node = data.node;
                 const api = getApiFromTreeNode(node);
                 if (api) {
@@ -4853,8 +6044,13 @@ $apiDocsThemeConfigPayload = [
                     const apiId = api.id || node.id || (node.a_attr && node.a_attr['data-api-id']);
                     if (apiId) {
                         updateCurrentApiUrl(apiId);
+                        centerApiTreeNode(apiId);
                     }
                 }
+            });
+
+            $('#api-tree').one('ready.jstree.apiDocTree', function() {
+                renderApiTreeAnchors();
             });
             
             // 清空当前选中的API
@@ -5130,11 +6326,15 @@ $apiDocsThemeConfigPayload = [
             if (!searchValue) {
                 // 清除搜索
                 $('#api-tree').jstree('clear_search');
+                centerApiTreeNode(getCurrentSelectedApiId(), 'auto');
                 return;
             }
             
             // 执行jstree搜索
             $('#api-tree').jstree('search', searchValue);
+            window.setTimeout(function() {
+                centerApiTreeNode(getCurrentSelectedApiId(), 'auto');
+            }, 80);
         }
         
         // 清除搜索
@@ -5142,6 +6342,7 @@ $apiDocsThemeConfigPayload = [
             $('#api-search-input').val('');
             $('#search-input-wrapper').removeClass('has-value');
             $('#api-tree').jstree('clear_search');
+            centerApiTreeNode(getCurrentSelectedApiId(), 'auto');
             $('#api-search-input').focus();
         }
         

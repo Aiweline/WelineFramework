@@ -10,6 +10,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\MarketplaceMeta\MarketplaceTag;
 
 #[Acl('Weline_AppStore::index', '商城首页', 'bi-bag', '应用商城首页', 'Weline_AppStore::appstore')]
 class Index extends BackendController
@@ -24,8 +25,10 @@ class Index extends BackendController
         $account = $accountService->getCurrentAccount();
         $searchQuery = trim((string)$this->request->getGet('q', ''));
         $pricingFilter = trim((string)$this->request->getGet('pricing', ''));
-        $tagFilter = trim((string)$this->request->getGet('tag', ''));
-        $surfaceFilter = trim((string)$this->request->getGet('surface', ''));
+        $tagFilter = MarketplaceTag::normalizeCode((string)$this->request->getGet('tag', ''));
+        $surfaceFilter = $this->normalizeSurfaceFilter((string)$this->request->getGet('surface', ''));
+        $wlsPanelReturn = $this->isWlsPanelReturnRequested();
+        $returnParams = $wlsPanelReturn ? ['wls_panel_return' => 1] : [];
         if (!in_array($pricingFilter, ['', 'free', 'paid'], true)) {
             $pricingFilter = '';
         }
@@ -50,11 +53,13 @@ class Index extends BackendController
         $this->assign('platform_url', $accountService->getPlatformUrl());
         $this->assign('store_domain', $this->getCurrentDomain());
         $this->assign('account_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/account'));
-        $this->assign('installed_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed'));
-        $this->assign('index_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index'));
-        $this->assign('download_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index/download'));
-        $this->assign('install_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index/install'));
-        $this->assign('authorize_install_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index/authorize-install'));
+        $this->assign('installed_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed', $returnParams));
+        $this->assign('index_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend', $returnParams));
+        $this->assign('download_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index/download', $returnParams));
+        $this->assign('install_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index/install', $returnParams));
+        $this->assign('authorize_install_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index/authorize-install', $returnParams));
+        $this->assign('wls_panel_return', $wlsPanelReturn);
+        $this->assign('wls_panel_url', $this->getWlsPanelMarketplaceUrl());
         $this->assign('title', __('应用商城'));
         $this->assign('page_title', __('应用商城'));
 
@@ -163,9 +168,12 @@ class Index extends BackendController
             ]);
         }
 
-        $this->assign('install_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index/install'));
-        $this->assign('store_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index'));
-        $this->assign('installed_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed'));
+        $returnParams = $this->isWlsPanelReturnRequested() ? ['wls_panel_return' => 1] : [];
+        $this->assign('install_action', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/index/install', $returnParams));
+        $this->assign('store_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend', $returnParams));
+        $this->assign('installed_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed', $returnParams));
+        $this->assign('wls_panel_return', $returnParams !== []);
+        $this->assign('wls_panel_url', $this->getWlsPanelMarketplaceUrl());
         $this->assign('store_domain', $this->getCurrentDomain());
         $this->assign('title', __('安装授权'));
         $this->assign('page_title', __('安装授权'));
@@ -233,6 +241,9 @@ class Index extends BackendController
 
             $installResult = $installer->install($downloadResult['file_path'], $installOptions);
             if (!empty($installResult['success'])) {
+                if ($this->isWlsPanelReturnRequested()) {
+                    return $this->redirectToWlsPanelMarketplace();
+                }
                 $installResult['message'] = __('模块已下载安装，功能页面已生成');
                 $this->assign('install_result', $installResult);
                 return $this->index();
@@ -250,6 +261,31 @@ class Index extends BackendController
         }
 
         return $this->index();
+    }
+
+    private function isWlsPanelReturnRequested(): bool
+    {
+        $value = strtolower(trim((string)($this->request->getParam('wls_panel_return', '')
+            ?: $this->request->getPost('wls_panel_return', ''))));
+
+        return in_array($value, ['1', 'true', 'yes', 'wls_panel'], true);
+    }
+
+    private function getWlsPanelMarketplaceUrl(array $params = []): string
+    {
+        $params = array_replace([
+            'panel_notice' => 'plugins_refreshed',
+            'panel_auto_refresh' => 'plugins',
+        ], $params);
+        return $this->request->getUrlBuilder()
+                ->getBackendUrl('server/backend/wls-panel/marketplace', $params)
+            . '#installed-plugins';
+    }
+
+    private function redirectToWlsPanelMarketplace(array $params = []): string
+    {
+        $this->redirect($this->getWlsPanelMarketplaceUrl($params));
+        return '';
     }
 
     private function jsonResponse(bool $success, string $message, array $data = []): string
@@ -285,11 +321,13 @@ class Index extends BackendController
             if (!empty($filters['pricing'])) {
                 $payload['pricing'] = (string)$filters['pricing'];
             }
-            if (!empty($filters['tag'])) {
-                $payload['tag'] = (string)$filters['tag'];
+            $tagFilter = MarketplaceTag::normalizeCode((string)($filters['tag'] ?? ''));
+            if ($tagFilter !== '') {
+                $payload['tag'] = $tagFilter;
             }
-            if (!empty($filters['surface'])) {
-                $payload['surface'] = (string)$filters['surface'];
+            $surfaceFilter = $this->normalizeSurfaceFilter((string)($filters['surface'] ?? ''));
+            if ($surfaceFilter !== '') {
+                $payload['surface'] = $surfaceFilter;
             }
 
             $client = new \GuzzleHttp\Client($accountService->getHttpClientOptions(['timeout' => 30]));
@@ -485,6 +523,21 @@ class Index extends BackendController
         }
 
         return trim($domain);
+    }
+
+    private function normalizeSurfaceFilter(string $surface): string
+    {
+        $surface = trim($surface);
+        if ($surface === '') {
+            return '';
+        }
+
+        $tagSurface = MarketplaceTag::surfaceFromCode($surface);
+        if ($tagSurface !== '') {
+            return $tagSurface;
+        }
+
+        return strtolower($surface);
     }
 
     private function isLoopbackDomain(string $domain): bool

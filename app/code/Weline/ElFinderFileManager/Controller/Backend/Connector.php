@@ -7,10 +7,14 @@ namespace Weline\ElFinderFileManager\Controller\Backend;
 use elFinder;
 use Weline\ElFinderFileManager\Service\ConnectorOptionsBuilder;
 use Weline\FileManager\Helper\MimeTypes;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\Response;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
+#[Acl('Weline_ElFinderFileManager::backend_connector', 'ElFinder 文件管理器', 'mdi-folder-image', '访问 ElFinder 后端文件管理器入口', 'Weline_Backend::system_maintenance')]
 class Connector extends BackendController
 {
     public function __init()
@@ -23,15 +27,20 @@ class Connector extends BackendController
             $ds = DS;
             $mainJs = VENDOR_PATH . "studio-42{$ds}elfinder{$ds}main.default.js";
             if (!is_file($mainJs)) {
-                die(__('main.js无法加载！请确保你已通过Composer安装了studio-42/elfinder'));
+                $this->terminateConnectorError((string)__('ElFinder main.js 加载失败，请确认已通过 Composer 安装 studio-42/elfinder。'));
             }
-            $mainJsContent = file_get_contents($mainJs);
+            $mainJsContent = @file_get_contents($mainJs);
+            if ($mainJsContent === false) {
+                $this->terminateConnectorError((string)__('ElFinder main.js 加载失败，请确认已通过 Composer 安装 studio-42/elfinder。'));
+            }
             $mainJs = __DIR__ . DS . '..' . DS . '..' . DS . 'view' . DS . 'statics' . DS . $mainJsFileName;
             $mainJsDir = dirname($mainJs);
             if (!is_dir($mainJsDir)) {
-                mkdir($mainJsDir, 755, true);
+                @mkdir($mainJsDir, 0755, true);
             }
-            file_put_contents($mainJs, $mainJsContent);
+            if (!is_dir($mainJsDir) || @file_put_contents($mainJs, $mainJsContent) === false) {
+                $this->terminateConnectorError((string)__('ElFinder main.js 生成失败，请检查文件权限。'));
+            }
             $mainJsUrl = $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/' . $mainJsFileName);
             $baseUrl = str_replace($mainJsFileName, 'js', $mainJsUrl);
             if (str_contains($baseUrl, '?')) {
@@ -43,16 +52,22 @@ class Connector extends BackendController
             $replaces = [
                 "baseUrl : 'js'" => "baseUrl : '{$baseUrl}'",
                 "php/connector.minimal.php" => "$urlPath",
+                "elFinder.prototype.loadCss('//code.jquery.com/ui/'+uiver+'/themes/smoothness/jquery-ui.css');" => "elFinder.prototype.loadCss('" . $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery-ui.min.css') . "');",
                 "//cdnjs.cloudflare.com/ajax/libs/jqueryui/' + uiver + '/themes/smoothness/jquery-ui.css" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery-ui.min.css'),
+                "'jquery'   : '//code.jquery.com/jquery-'+jqver+'.min'" => "'jquery'   : '" . $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery.min.js') . "'",
                 "//cdnjs.cloudflare.com/ajax/libs/jquery/' + (old ? '1.12.4' : jqver) + '/jquery.min" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery.min.js'),
+                "'jquery-ui': '//code.jquery.com/ui/'+uiver+'/jquery-ui.min'" => "'jquery-ui': '" . $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery-ui.min.js') . "'",
                 "//cdnjs.cloudflare.com/ajax/libs/jqueryui/' + uiver + '/jquery-ui.min" => $this->getTemplate()->fetchTagSource('statics', 'Weline_ElFinderFileManager::/statics/jquery-ui.min.js'),
+                "'encoding-japanese': '//cdn.jsdelivr.net/npm/encoding-japanese@2.2.0/encoding.min'" => "'encoding-japanese': 'encoding-japanese'",
             ];
             foreach ($replaces as $replace => $replacement) {
                 $mainJsContent = str_replace($replace, $replacement, $mainJsContent);
             }
-            file_put_contents($mainJs, $mainJsContent);
+            if (@file_put_contents($mainJs, $mainJsContent) === false) {
+                $this->terminateConnectorError((string)__('ElFinder main.js 生成失败，请检查文件权限。'));
+            }
             if (!is_file($mainJs)) {
-                die(__('main.js无法加载！请检查文件权限.'));
+                $this->terminateConnectorError((string)__('ElFinder main.js 生成失败，请检查文件权限。'));
             }
             # 获取Url
             $this->cache->set($mainJsFileName, $mainJsUrl);
@@ -83,8 +98,15 @@ class Connector extends BackendController
             $builder = ObjectManager::getInstance(ConnectorOptionsBuilder::class);
             $opts = $builder->build($rootPath, $rootUrl, $mimes, $startPath, $local);
 
-            require VENDOR_PATH . '/autoload.php';
-            elFinder::$netDrivers['ftp'] = 'FTP';
+            $autoload = VENDOR_PATH . '/autoload.php';
+            if (!is_file($autoload)) {
+                $this->terminateConnectorError((string)__('ElFinder 依赖加载失败，请通过 Composer 安装依赖后重试。'), true);
+            }
+            require $autoload;
+            if (!class_exists(elFinder::class)) {
+                $this->terminateConnectorError((string)__('ElFinder 依赖加载失败，请通过 Composer 安装依赖后重试。'), true);
+            }
+            elFinder::$netDrivers = [];
 
             // // Required for Dropbox network mount
         // // Installation by composer
@@ -131,8 +153,8 @@ class Connector extends BackendController
         // define('ELFINDER_BOX_CLIENTSECRET', '');
         // ===============================================
 
-            // WLS 兼容：直接调用 elFinder::exec() 而非 elFinderConnector::run()
-            // 后者会调用 exit() 终止 Worker 进程
+            // WLS 兼容：直接调用 elFinder::exec()，避免 vendor connector runner 终止 Worker 进程
+            // 后者会终止 Worker 进程
             $elFinder = new elFinder($opts);
             
             // 解析请求参数
@@ -177,6 +199,10 @@ class Connector extends BackendController
                 return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_UPLOAD, elFinder::ERROR_UPLOAD_TOTAL_SIZE)]);
             }
             
+            if ($builder->isDisabledCommand((string)$cmd)) {
+                return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_PERM_DENIED)]);
+            }
+
             if (!$elFinder->commandExists($cmd)) {
                 return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_UNKNOWN_CMD)]);
             }
@@ -207,6 +233,10 @@ class Connector extends BackendController
             if ($hasFiles) {
                 $args['FILES'] = $_FILES;
             }
+
+            if ($cmd === 'upload' && !empty($args['upload'])) {
+                return $this->fetchJson(['error' => $elFinder->error(elFinder::ERROR_PERM_DENIED)]);
+            }
             
             // 执行命令
             $result = $elFinder->exec($cmd, $args);
@@ -233,6 +263,15 @@ class Connector extends BackendController
             }
         }
         return $mimes;
+    }
+
+    private function terminateConnectorError(string $message, bool $json = false): never
+    {
+        $response = $json
+            ? Response::json(['error' => $message], 500)
+            : Response::text($message, 500);
+
+        throw new ResponseTerminateException($response);
     }
 
     public function getManager()

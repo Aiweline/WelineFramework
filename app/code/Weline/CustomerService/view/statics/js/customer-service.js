@@ -69,6 +69,29 @@ const CustomerServiceWidget = (function() {
         return interpolateTranslation(text, params);
     }
 
+    function notify(type, message) {
+        const themeNotice = window.Weline && window.Weline.Theme && window.Weline.Theme.Notice
+            ? window.Weline.Theme.Notice
+            : null;
+
+        if (themeNotice && typeof themeNotice[type] === 'function') {
+            themeNotice[type](message);
+            return;
+        }
+
+        if (themeNotice && typeof themeNotice.toast === 'function') {
+            themeNotice.toast({ type: type, message: message });
+            return;
+        }
+
+        if (window.Weline && window.Weline.Toast && typeof window.Weline.Toast.show === 'function') {
+            window.Weline.Toast.show(message, type);
+            return;
+        }
+
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+
     let config = {
         chatUrl: '',
         bindUrl: '',
@@ -91,6 +114,7 @@ const CustomerServiceWidget = (function() {
     let guestBindPromptShown = false;
     let customerServiceApiPromise = null;
     let miniCartStateObserver = null;
+    let widgetControlsBound = false;
     
     let state = {
         sessionId: null,
@@ -128,6 +152,7 @@ const CustomerServiceWidget = (function() {
         
         // 閸掓繂顫愰崠鏈閻樿埖鈧?
         initUIState();
+        bindWidgetControls();
         updateWidgetLocaleText();
         bindMiniCartLayerState();
     }
@@ -146,6 +171,60 @@ const CustomerServiceWidget = (function() {
         const displayModeSelect = document.getElementById('cs-display-mode');
         if (displayModeSelect) {
             displayModeSelect.value = state.displayMode;
+        }
+    }
+
+    function bindWidgetControls() {
+        if (widgetControlsBound) {
+            return;
+        }
+
+        widgetControlsBound = true;
+        document.querySelectorAll('[data-cs-toggle-chat]').forEach(button => {
+            button.addEventListener('click', event => {
+                event.preventDefault();
+                toggleChat();
+            });
+        });
+
+        const settingsButton = document.querySelector('[data-cs-toggle-settings]');
+        if (settingsButton) {
+            settingsButton.addEventListener('click', event => {
+                event.preventDefault();
+                toggleSettings();
+            });
+        }
+
+        const localeSelect = document.getElementById('cs-locale-select');
+        if (localeSelect) {
+            localeSelect.addEventListener('change', event => {
+                changeLanguage(event.target.value);
+            });
+        }
+
+        const displayModeSelect = document.getElementById('cs-display-mode');
+        if (displayModeSelect) {
+            displayModeSelect.addEventListener('change', event => {
+                changeDisplayMode(event.target.value);
+            });
+        }
+
+        const messageInput = document.getElementById('cs-message-input');
+        if (messageInput) {
+            messageInput.addEventListener('keydown', event => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    sendMessage();
+                }
+            });
+        }
+
+        const sendButton = document.querySelector('[data-cs-send-message]');
+        if (sendButton) {
+            sendButton.addEventListener('click', event => {
+                event.preventDefault();
+                sendMessage();
+            });
         }
     }
 
@@ -370,7 +449,7 @@ const CustomerServiceWidget = (function() {
         const sessionReady = await ensureSessionReady();
         if (!sessionReady || !state.sessionId) {
             state.isSending = false;
-            alert(__('客服会话初始化失败，请稍后重试'));
+            notify('error', __('客服会话初始化失败，请稍后重试'));
             return;
         }
         
@@ -405,11 +484,11 @@ const CustomerServiceWidget = (function() {
                 scrollToBottom();
                 maybeShowGuestBindPrompt();
             } else {
-                alert(data.message || __('发送失败'));
+                notify('error', data.message || __('发送失败'));
             }
         } catch (error) {
             console.error('Failed to send message:', error);
-            alert(__('发送失败，请稍后重试'));
+            notify('error', __('发送失败，请稍后重试'));
         } finally {
             input.disabled = false;
             sendButton.disabled = false;
@@ -816,12 +895,57 @@ const CustomerServiceWidget = (function() {
         }
     }
     
+    function sanitizeStaticTemplateHtml(html) {
+        const template = document.createElement('template');
+        template.innerHTML = String(html || '');
+
+        template.content.querySelectorAll('script, style, link, meta, iframe, frame, frameset, object, embed, base').forEach(node => node.remove());
+        template.content.querySelectorAll('*').forEach(node => {
+            Array.from(node.attributes).forEach(attribute => {
+                const name = String(attribute.name || '').toLowerCase();
+                const compactValue = String(attribute.value || '').trim().replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+
+                if (name.indexOf('on') === 0 || name === 'srcdoc') {
+                    node.removeAttribute(attribute.name);
+                    return;
+                }
+
+                if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction' || name === 'poster') && (
+                    compactValue.indexOf('javascript:') === 0 ||
+                    compactValue.indexOf('vbscript:') === 0 ||
+                    (compactValue.indexOf('data:') === 0 && compactValue.indexOf('data:image/') !== 0)
+                )) {
+                    node.removeAttribute(attribute.name);
+                }
+            });
+        });
+
+        return template.innerHTML;
+    }
+
+    function bindBindModalActions(modal) {
+        if (!modal || modal.getAttribute('data-cs-bind-events') === '1') {
+            return;
+        }
+
+        modal.setAttribute('data-cs-bind-events', '1');
+        modal.querySelectorAll('[data-cs-bind-close]').forEach(button => {
+            button.addEventListener('click', closeBindModal);
+        });
+
+        const sendButton = modal.querySelector('[data-cs-bind-send]');
+        if (sendButton) {
+            sendButton.addEventListener('click', sendBindEmail);
+        }
+    }
+
     /**
      * Lazily create the bind-email modal only after the guest shows intent.
      */
     function ensureBindModal() {
         let modal = document.getElementById('cs-bind-modal');
         if (modal) {
+            bindBindModalActions(modal);
             return modal;
         }
 
@@ -832,7 +956,7 @@ const CustomerServiceWidget = (function() {
 
         const wrapper = document.createElement('div');
         try {
-            wrapper.innerHTML = JSON.parse(template.textContent || '""');
+            wrapper.innerHTML = sanitizeStaticTemplateHtml(JSON.parse(template.textContent || '""'));
         } catch (error) {
             console.error('CustomerService: bind modal template parse failed', error);
             return null;
@@ -844,6 +968,7 @@ const CustomerServiceWidget = (function() {
         }
 
         document.body.appendChild(modal);
+        bindBindModalActions(modal);
         return modal;
     }
 
@@ -900,14 +1025,14 @@ const CustomerServiceWidget = (function() {
         const email = emailInput.value.trim();
         
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            alert(__('请输入有效的邮箱地址'));
+            notify('warning', __('请输入有效的邮箱地址'));
             return;
         }
         
         if (!state.sessionToken) {
             const sessionReady = await ensureSessionReady();
             if (!sessionReady || !state.sessionToken) {
-                alert(__('会话未初始化，请刷新页面重试'));
+                notify('error', __('会话未初始化，请刷新页面重试'));
                 return;
             }
         }
@@ -919,14 +1044,14 @@ const CustomerServiceWidget = (function() {
             }, {silent: true});
             
             if (data.success) {
-                alert(__('验证邮件已发送，请查收您的邮箱'));
+                notify('success', __('验证邮件已发送，请查收您的邮箱'));
                 closeBindModal();
             } else {
-                alert(data.message || __('发送失败，请稍后重试'));
+                notify('error', data.message || __('发送失败，请稍后重试'));
             }
         } catch (error) {
             console.error('Failed to send bind email:', error);
-            alert(__('发送失败，请稍后重试'));
+            notify('error', __('发送失败，请稍后重试'));
         }
     }
     

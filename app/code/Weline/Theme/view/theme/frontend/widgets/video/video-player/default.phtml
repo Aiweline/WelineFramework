@@ -39,14 +39,152 @@ $ratioMap = [
 ];
 $paddingTop = $ratioMap[$aspectRatio] ?? '56.25%';
 
+$safeVideoUrl = static function (mixed $url): string {
+    $url = trim((string)$url);
+    if ($url === '') {
+        return '';
+    }
+    $normalized = strtolower(str_replace(["\r", "\n", "\t", ' '], '', $url));
+    if (preg_match('#^(javascript:|data:text/html|vbscript:)#i', $normalized)) {
+        return '';
+    }
+    if (str_starts_with($url, '//')) {
+        return '';
+    }
+    if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $url)) {
+        $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
+        return in_array($scheme, ['http', 'https'], true) ? $url : '';
+    }
+    return preg_match('#^(/(?!/)|\./|\.\./|[^<>"\']+$)#', $url) ? $url : '';
+};
+
+$sanitizeEmbedCode = static function (mixed $html) use ($safeVideoUrl): string {
+    $html = trim((string)$html);
+    if ($html === '') {
+        return '';
+    }
+
+    $allowedTags = ['iframe' => true, 'video' => true, 'source' => true, 'embed' => true];
+    $allowedAttrs = [
+        'iframe' => ['src', 'width', 'height', 'title', 'allow', 'allowfullscreen', 'loading', 'referrerpolicy', 'class'],
+        'video' => ['src', 'poster', 'width', 'height', 'controls', 'autoplay', 'muted', 'loop', 'playsinline', 'preload', 'class'],
+        'source' => ['src', 'type', 'media'],
+        'embed' => ['src', 'type', 'width', 'height', 'class'],
+    ];
+    $trustedIframeHosts = [
+        'youtube.com',
+        'www.youtube.com',
+        'youtube-nocookie.com',
+        'www.youtube-nocookie.com',
+        'player.vimeo.com',
+    ];
+
+    $previous = libxml_use_internal_errors(true);
+    try {
+        $wrapped = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>';
+        if (function_exists('mb_encode_numericentity')) {
+            $wrapped = mb_encode_numericentity($wrapped, [0x80, 0x10FFFF, 0, 0xFFFF], 'UTF-8');
+        }
+        $doc = new DOMDocument('1.0', 'UTF-8');
+        $doc->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $xpath = new DOMXPath($doc);
+
+        $nodes = [];
+        foreach ($xpath->query('//body//*') as $node) {
+            if ($node instanceof DOMElement) {
+                $nodes[] = $node;
+            }
+        }
+
+        foreach ($nodes as $node) {
+            if (!$node->parentNode) {
+                continue;
+            }
+            $tag = strtolower($node->tagName);
+            if (!isset($allowedTags[$tag])) {
+                if (!in_array($tag, ['script', 'style', 'object'], true)) {
+                    while ($node->firstChild) {
+                        $node->parentNode->insertBefore($node->firstChild, $node);
+                    }
+                }
+                $node->parentNode?->removeChild($node);
+                continue;
+            }
+
+            $toRemove = [];
+            foreach ($node->attributes as $attr) {
+                $name = strtolower($attr->name);
+                $value = (string)$attr->value;
+                if (str_starts_with($name, 'on') || $name === 'style' || $name === 'srcdoc' || !in_array($name, $allowedAttrs[$tag], true)) {
+                    $toRemove[] = $attr->name;
+                    continue;
+                }
+
+                if (in_array($name, ['src', 'poster'], true)) {
+                    $safeUrl = $safeVideoUrl($value);
+                    if ($safeUrl === '') {
+                        $toRemove[] = $attr->name;
+                        continue;
+                    }
+                    if ($tag === 'iframe') {
+                        $host = strtolower((string)parse_url($safeUrl, PHP_URL_HOST));
+                        if (!in_array($host, $trustedIframeHosts, true)) {
+                            $toRemove[] = $attr->name;
+                            continue;
+                        }
+                    }
+                    $node->setAttribute($attr->name, $safeUrl);
+                } elseif ($name === 'class') {
+                    $node->setAttribute($attr->name, trim((string)preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $value)));
+                } elseif (in_array($name, ['width', 'height'], true) && !preg_match('/^\d{1,4}(?:\.\d{1,2})?%?$/', $value)) {
+                    $toRemove[] = $attr->name;
+                } elseif ($name === 'allow') {
+                    $node->setAttribute($attr->name, preg_replace('/[^a-zA-Z0-9;,\-\s]/', '', $value) ?: '');
+                }
+            }
+            foreach ($toRemove as $name) {
+                $node->removeAttribute($name);
+            }
+
+            if (($tag === 'iframe' || $tag === 'embed') && !$node->hasAttribute('src')) {
+                $node->parentNode?->removeChild($node);
+                continue;
+            }
+            if ($tag === 'iframe') {
+                $node->setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+                $node->setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+                $node->setAttribute('loading', 'lazy');
+            }
+        }
+
+        $body = $doc->getElementsByTagName('body')->item(0);
+        $safeHtml = '';
+        if ($body) {
+            foreach ($body->childNodes as $child) {
+                $safeHtml .= $doc->saveHTML($child);
+            }
+        }
+        return $safeHtml;
+    } catch (Throwable) {
+        return '';
+    } finally {
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+    }
+};
+
+$videoUrl = $safeVideoUrl($videoUrl);
+$poster = $safeVideoUrl($poster);
+$embedCode = $sanitizeEmbedCode($embedCode);
+
 // 提取YouTube/Vimeo视频ID
 $videoId = '';
 if ($videoType === 'youtube' && $videoUrl) {
     preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\?\/]+)/', $videoUrl, $matches);
-    $videoId = $matches[1] ?? $videoUrl;
+    $videoId = isset($matches[1]) && preg_match('/^[A-Za-z0-9_-]{6,64}$/', $matches[1]) ? $matches[1] : '';
 } elseif ($videoType === 'vimeo' && $videoUrl) {
     preg_match('/vimeo\.com\/(\d+)/', $videoUrl, $matches);
-    $videoId = $matches[1] ?? $videoUrl;
+    $videoId = $matches[1] ?? '';
 }
 
 $widgetId = 'video-player-' . uniqid();
@@ -59,6 +197,9 @@ $widgetId = 'video-player-' . uniqid();
                     class="video-iframe"
                     frameborder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    sandbox="allow-scripts allow-same-origin allow-presentation"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    loading="lazy"
                     allowfullscreen></iframe>
         
         <?php elseif ($videoType === 'vimeo' && $videoId): ?>
@@ -66,6 +207,9 @@ $widgetId = 'video-player-' . uniqid();
                     class="video-iframe"
                     frameborder="0"
                     allow="autoplay; fullscreen; picture-in-picture"
+                    sandbox="allow-scripts allow-same-origin allow-presentation"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    loading="lazy"
                     allowfullscreen></iframe>
         
         <?php elseif ($videoType === 'local' && $videoUrl): ?>

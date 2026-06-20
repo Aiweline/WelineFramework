@@ -15,6 +15,14 @@ $isEnabled = $this->getData('is_enabled');
 
 $backendBase = $this->getBackendUrl('shipping/backend/shippingaddress');
 $createUrl = $this->getBackendUrl('shipping/backend/shippingaddress/edit');
+$dialogJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$confirmMessages = [
+    'confirmTitle' => (string)__('确认操作'),
+    'confirmButton' => (string)__('确定'),
+    'cancelButton' => (string)__('取消'),
+    'setDefault' => (string)__('确定要设置为默认地址吗？'),
+    'deleteAddress' => (string)__('确定要删除这个地址吗？'),
+];
 ?>
 <div class="row">
                     <div class="col-12">
@@ -133,7 +141,7 @@ $createUrl = $this->getBackendUrl('shipping/backend/shippingaddress/edit');
                                                                 <?php if (empty($address[ShippingAddress::fields_IS_DEFAULT])): ?>
                                                                     <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/setDefault', ['id' => $address[ShippingAddress::fields_ID]]) ?>" 
                                                                        class="btn btn-info btn-sm" 
-                                                                       onclick="return confirm('<?= __('确定要设置为默认地址吗？') ?>')">
+                                                                       data-shipping-address-confirm="setDefault">
                                                                         <i class="mdi mdi-star"></i>
                                                                     </a>
                                                                 <?php endif; ?>
@@ -150,7 +158,7 @@ $createUrl = $this->getBackendUrl('shipping/backend/shippingaddress/edit');
                                                                 <?php endif; ?>
                                                                 <a href="<?= $this->getBackendUrl('shipping/backend/shippingaddress/delete', ['id' => $address[ShippingAddress::fields_ID]]) ?>" 
                                                                    class="btn btn-danger btn-sm" 
-                                                                   onclick="return confirm('<?= __('确定要删除这个地址吗？') ?>')">
+                                                                   data-shipping-address-confirm="deleteAddress">
                                                                     <i class="mdi mdi-delete"></i>
                                                                 </a>
                                                             </div>
@@ -193,3 +201,104 @@ $createUrl = $this->getBackendUrl('shipping/backend/shippingaddress/edit');
                         </div>
                     </div>
                 </div>
+<script>
+(function () {
+    'use strict';
+
+    const messages = <?= json_encode($confirmMessages, $dialogJsonFlags) ?>;
+
+    function showLocalChoice(message) {
+        return new Promise(function(resolve) {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:1055;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+            const dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.style.cssText = 'width:min(420px,100%);background:#fff;border-radius:8px;box-shadow:0 20px 60px rgba(15,23,42,.25);padding:24px;';
+
+            const title = document.createElement('h4');
+            title.textContent = messages.confirmTitle;
+            title.style.cssText = 'margin:0 0 12px;font-size:18px;';
+
+            const body = document.createElement('p');
+            body.textContent = message;
+            body.style.cssText = 'margin:0 0 20px;color:#475569;';
+
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+
+            const cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
+            cancelButton.className = 'btn btn-secondary';
+            cancelButton.textContent = messages.cancelButton;
+
+            const confirmButton = document.createElement('button');
+            confirmButton.type = 'button';
+            confirmButton.className = 'btn btn-primary';
+            confirmButton.textContent = messages.confirmButton;
+
+            function close(value) {
+                document.removeEventListener('keydown', onKeydown);
+                overlay.remove();
+                resolve(value);
+            }
+
+            function onKeydown(event) {
+                if (event.key === 'Escape') {
+                    close(false);
+                }
+            }
+
+            cancelButton.addEventListener('click', function() { close(false); });
+            confirmButton.addEventListener('click', function() { close(true); });
+            overlay.addEventListener('click', function(event) {
+                if (event.target === overlay) {
+                    close(false);
+                }
+            });
+
+            actions.append(cancelButton, confirmButton);
+            dialog.append(title, body, actions);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+            document.addEventListener('keydown', onKeydown);
+            confirmButton.focus();
+        });
+    }
+
+    function showShippingAddressChoice(message) {
+        if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+            return Swal.fire({
+                icon: 'warning',
+                title: messages.confirmTitle,
+                text: message,
+                showCancelButton: true,
+                confirmButtonText: messages.confirmButton,
+                cancelButtonText: messages.cancelButton
+            }).then(function(result) {
+                return !!(result && result.isConfirmed);
+            });
+        }
+
+        return showLocalChoice(message);
+    }
+
+    document.querySelectorAll('[data-shipping-address-confirm]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            const key = link.getAttribute('data-shipping-address-confirm');
+            const message = messages[key];
+            if (!message) {
+                return;
+            }
+
+            event.preventDefault();
+            showShippingAddressChoice(message).then(function(confirmed) {
+                if (confirmed) {
+                    window.location.href = link.href;
+                }
+            });
+        });
+    });
+})();
+</script>

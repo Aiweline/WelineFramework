@@ -41,25 +41,25 @@
         
         <div class="test-section">
             <h3>1. DataTableManager 基础功能测试</h3>
-            <button class="btn btn-primary" onclick="testDataTableManager()">运行测试</button>
+            <button class="btn btn-primary" data-datatable-frontend-test-action="manager">运行测试</button>
             <div id="manager-test-results"></div>
         </div>
         
         <div class="test-section">
             <h3>2. DataTableFormManager 基础功能测试</h3>
-            <button class="btn btn-primary" onclick="testFormManager()">运行测试</button>
+            <button class="btn btn-primary" data-datatable-frontend-test-action="form">运行测试</button>
             <div id="form-test-results"></div>
         </div>
         
         <div class="test-section">
             <h3>3. 字段验证功能测试</h3>
-            <button class="btn btn-primary" onclick="testFieldValidation()">运行测试</button>
+            <button class="btn btn-primary" data-datatable-frontend-test-action="validation">运行测试</button>
             <div id="validation-test-results"></div>
         </div>
         
         <div class="test-section">
             <h3>4. 实时编辑功能测试</h3>
-            <button class="btn btn-primary" onclick="testInlineEdit()">运行测试</button>
+            <button class="btn btn-primary" data-datatable-frontend-test-action="inline-edit">运行测试</button>
             <div id="inline-edit-test-results"></div>
             
             <!-- 测试表格 -->
@@ -91,7 +91,7 @@
         
         <div class="test-section">
             <h3>5. API 调用测试</h3>
-            <button class="btn btn-primary" onclick="testApiCalls()">运行测试</button>
+            <button class="btn btn-primary" data-datatable-frontend-test-action="api">运行测试</button>
             <div id="api-test-results"></div>
         </div>
     </div>
@@ -441,6 +441,30 @@
             testApiCall();
             addTestResult(containerId, '注意：实际 API 调用需要后端服务支持', 'info');
         }
+        document.addEventListener('click', function(event) {
+            const trigger = event.target.closest('[data-datatable-frontend-test-action]');
+            if (!trigger) {
+                return;
+            }
+            event.preventDefault();
+            switch (trigger.getAttribute('data-datatable-frontend-test-action')) {
+                case 'manager':
+                    testDataTableManager();
+                    break;
+                case 'form':
+                    testFormManager();
+                    break;
+                case 'validation':
+                    testFieldValidation();
+                    break;
+                case 'inline-edit':
+                    testInlineEdit();
+                    break;
+                case 'api':
+                    testApiCalls();
+                    break;
+            }
+        });
     </script>
 </body>
 </html>

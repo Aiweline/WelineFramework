@@ -32,7 +32,7 @@ class Connector extends BackendController
     {
         $ext = $this->request->getParam('ext') ?? '';
         $mimes = MimeTypes::collectMimes($ext);
-        $rootPath = PUB . 'media';
+        $rootPath = \rtrim(PUB, '/\\') . \DIRECTORY_SEPARATOR . 'media' . \DIRECTORY_SEPARATOR;
         $rootUrl = '/pub/media';
         $startPath = $this->request->getParam('startPath');
         $local = Cookie::getLangLocal();

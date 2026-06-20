@@ -1,6 +1,9 @@
+[CmdletBinding(PositionalBinding = $false)]
 param(
-    [string]$CoreRepo = 'E:\WelineFramework\DEV-workspace',
+    [Parameter(Position = 0)]
+    [ValidateNotNullOrEmpty()]
     [string]$Branch = 'dev',
+    [string]$CoreRepo = 'E:\WelineFramework\DEV-workspace',
     [string]$CommitMessage = '',
     [string[]]$IncludePaths = @(),
     [string[]]$Sites = @(

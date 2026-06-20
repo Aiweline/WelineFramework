@@ -98,7 +98,15 @@ class PcController extends Core
         }
         if (is_string($url)) {
             if ($this->_url->isLink($url)) {
-                $this->request->getResponse()->redirect($url . (str_contains($url, '?') ? '&' : '') . http_build_query($params));
+                $safeExternalUrl = $this->normalizeExternalRedirectUrl($url);
+                if ($safeExternalUrl === null) {
+                    $fallbackUrl = $this->request->isBackend()
+                        ? $this->_url->getBackendUrl('', [], false)
+                        : $this->_url->getFrontendUrl('/', [], false);
+                    $this->request->getResponse()->redirect($fallbackUrl);
+                } else {
+                    $this->request->getResponse()->redirect($safeExternalUrl . (str_contains($safeExternalUrl, '?') ? '&' : '') . http_build_query($params));
+                }
             } else {
                 if (str_starts_with($url, '/')) {
                     if ($this->request->isBackend() && str_starts_with($url, '/component/offcanvas/')) {
@@ -116,6 +124,59 @@ class PcController extends Core
         }
 
         return '';
+    }
+
+    private function normalizeExternalRedirectUrl(string $url): ?string
+    {
+        $url = \trim($url);
+        if ($url === '' || \preg_match('/[\x00-\x1F\x7F]/', $url)) {
+            return null;
+        }
+
+        $parsed = \parse_url($url);
+        if (!\is_array($parsed) || empty($parsed['host'])) {
+            return null;
+        }
+
+        $scheme = \strtolower((string)($parsed['scheme'] ?? $this->request->getSsl()));
+        if (!\in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+
+        if (!$this->isSameOriginRedirectTarget($parsed, $scheme)) {
+            return null;
+        }
+
+        if (\str_starts_with($url, '//')) {
+            return $this->request->getSsl() . ':' . $url;
+        }
+
+        return $url;
+    }
+
+    private function isSameOriginRedirectTarget(array $target, string $targetScheme): bool
+    {
+        $base = \parse_url($this->request->getBaseHost());
+        if (!\is_array($base) || empty($base['host'])) {
+            return false;
+        }
+
+        $currentScheme = \strtolower((string)($base['scheme'] ?? $this->request->getSsl()));
+        $targetHost = $this->normalizeRedirectHost((string)($target['host'] ?? ''));
+        $currentHost = $this->normalizeRedirectHost((string)($base['host'] ?? ''));
+        if ($targetHost === '' || $currentHost === '' || $targetHost !== $currentHost) {
+            return false;
+        }
+
+        $targetPort = (int)($target['port'] ?? ($targetScheme === 'https' ? 443 : 80));
+        $currentPort = (int)($base['port'] ?? ($currentScheme === 'https' ? 443 : 80));
+
+        return $targetScheme === $currentScheme && $targetPort === $currentPort;
+    }
+
+    private function normalizeRedirectHost(string $host): string
+    {
+        return \rtrim(\strtolower(\trim($host, " \t\n\r\0\x0B[]")), '.');
     }
 
     protected function getEventManager(): EventsManager

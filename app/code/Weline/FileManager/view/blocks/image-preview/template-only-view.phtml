@@ -1,3 +1,9 @@
+<?php
+$previewWidth = filter_var($this->getData('width'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 4096]]);
+$previewHeight = filter_var($this->getData('height'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 4096]]);
+$previewWidth = $previewWidth === false ? 50 : $previewWidth;
+$previewHeight = $previewHeight === false ? 50 : $previewHeight;
+?>
 <!-- 图片预览 -->
 <style media="screen">
     .file-target-preview {
@@ -13,8 +19,8 @@
         display: block;
         position: relative;
         float: left;
-        wth: <?= $this->getData('width') ?? 50 ?>px;
-        height: <?= $this->getData('height') ?? 50 ?>px;
+        wth: <?= $previewWidth ?>px;
+        height: <?= $previewHeight ?>px;
         border: 1px sol #CCC;
     }
 
@@ -76,11 +82,15 @@
 </div><!-- /.modal -->
 <script type="text/javascript">
     $('#{{id}}-preview').on('click', 'img', function () {
-        let src = '/pub/media/' + $(this).attr('data-src');
+        let src = '/pub/media/' + String($(this).attr('data-src') || '');
         let zoomModal = $('#{{id}}-zoom-modal');
         let zoomPreviewImageBody = $('#{{id}}-zoom-preview-image-body');
         zoomPreviewImageBody.empty()
-        zoomPreviewImageBody.append(`<img src="${src}" class="img-fluid" alt="">`)
+        let previewImage = document.createElement('img')
+        previewImage.src = src
+        previewImage.className = 'img-fluid'
+        previewImage.alt = ''
+        zoomPreviewImageBody.append(previewImage)
         zoomModal.modal('show')
     })
 </script>

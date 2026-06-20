@@ -191,7 +191,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 if (!isset($this->pending_class_level_acls[$module])) {
                     $this->pending_class_level_acls[$module] = [];
                 }
-                $aclData = $acl->getData();
+                $aclData = $this->normalizeAclDataForPersistence($acl->getData());
                 // 补全表中有默认值的字段，避免插入时缺列
                 if (!isset($aclData[\Weline\Acl\Model\Acl::schema_fields_ORDER])) {
                     $aclData[\Weline\Acl\Model\Acl::schema_fields_ORDER] = 0;
@@ -462,6 +462,53 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         $acl->setApiExposable($acl->getApiExposable());
     }
 
+    private function normalizeAclDataForPersistence(array $aclData): array
+    {
+        if (array_key_exists(Acl::schema_fields_ACL_ID, $aclData)
+            && ($aclData[Acl::schema_fields_ACL_ID] === '' || $aclData[Acl::schema_fields_ACL_ID] === null)
+        ) {
+            unset($aclData[Acl::schema_fields_ACL_ID]);
+        }
+
+        $aclData[Acl::schema_fields_ORDER] = $this->normalizeIntegerValue(
+            $aclData[Acl::schema_fields_ORDER] ?? 0,
+            0
+        );
+
+        $flagDefaults = [
+            Acl::schema_fields_IS_ENABLE => 1,
+            Acl::schema_fields_IS_BACKEND => 0,
+            Acl::schema_fields_API_EXPOSABLE => 0,
+        ];
+        foreach ($flagDefaults as $field => $default) {
+            if (array_key_exists($field, $aclData)) {
+                $aclData[$field] = $this->normalizeIntegerValue($aclData[$field], $default);
+            }
+        }
+
+        return $aclData;
+    }
+
+    private function normalizeIntegerValue(mixed $value, int $default): int
+    {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+        if (is_numeric($value)) {
+            return (int)$value;
+        }
+
+        $booleanValue = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($booleanValue !== null) {
+            return $booleanValue ? 1 : 0;
+        }
+
+        return $default;
+    }
+
     /**
      * 处理待处理的方法级别权限
      * 当类级别权限收集完成后，处理之前待处理的方法级别权限
@@ -494,7 +541,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             if (!isset($this->pending_method_level_acls[$module])) {
                 $this->pending_method_level_acls[$module] = [];
             }
-            $methodAclData = $acl->getData();
+            $methodAclData = $this->normalizeAclDataForPersistence($acl->getData());
             if (!isset($methodAclData[\Weline\Acl\Model\Acl::schema_fields_ORDER])) {
                 $methodAclData[\Weline\Acl\Model\Acl::schema_fields_ORDER] = 0;
             }

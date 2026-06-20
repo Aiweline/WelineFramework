@@ -7,7 +7,7 @@ File: Rating Js File
 
 $(function () {
     $('input.check').on('change', function () {
-        alert('Rating: ' + $(this).val());
+        console.log('Rating: ' + $(this).val());
     });
     $('.rating-tooltip').rating({
         extendSymbol: function (rate) {

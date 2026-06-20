@@ -1,4 +1,20 @@
-﻿缺少站点ID,"Missing site ID"
+﻿"client_id 不能为空","client_id 不能为空"
+应用不存在或已禁用,应用不存在或已禁用
+回调地址不匹配,回调地址不匹配
+授权信息获取成功,授权信息获取成功
+请先登录后再授权,请先登录后再授权
+授权成功,授权成功
+授权码或客户端凭证无效,授权码或客户端凭证无效
+"Token 发放成功","Token 发放成功"
+"刷新 token 无效","刷新 token 无效"
+"Token 刷新成功","Token 刷新成功"
+"Token 不能为空","Token 不能为空"
+"Token 不存在或已失效","Token 不存在或已失效"
+"Token 已撤销","Token 已撤销"
+"Token 无效或已过期","Token 无效或已过期"
+用户资料获取成功,用户资料获取成功
+账号绑定成功,账号绑定成功
+缺少站点ID,"Missing site ID"
 缺少密钥,"Missing key"
 用户名或邮箱至少需要提供一个,"Username or email must be provided at least one"
 站点配置不存在,"Site Configuration Not Found"
@@ -20,6 +36,11 @@ Multipass账户管理,"Multipass account management"
 站点类型与用户类型不匹配,"Site type does not match user type"
 用户不存在,"User does not exist"
 用户已被禁用,"User has been disabled"
+官网登录提供方,"Official login provider"
+官网登录提供方已保存,"Official login provider saved"
+保存失败：%{1},"Save failed: %{1}"
+官网登录提供方已删除,"Official login provider deleted"
+官网登录提供方不存在,"Official login provider does not exist"
 "缺少 Multipass token","Missing Multipass token"
 该站点不支持后端登录,"This site does not support backend login"
 该站点已禁用,"This site has been disabled"
@@ -40,10 +61,57 @@ Multipass账户管理,"Multipass account management"
 站点ID不能为空,"Site ID cannot be empty"
 站点删除成功,"Site deleted successfully"
 删除失败:,"Deletion failed:"
+互通应用,互通应用
+互通应用已保存,互通应用已保存
+"互通应用已创建，请立即保存 client_secret","互通应用已创建，请立即保存 client_secret"
+"应用 ID 不能为空","应用 ID 不能为空"
+"client_secret 已轮换，请立即保存","client_secret 已轮换，请立即保存"
+请先登录后再继续授权,请先登录后再继续授权
+授权应用已撤销,"Authorized app has been revoked"
+授权应用不存在或无权撤销,"Authorized app does not exist or cannot be revoked"
+官网授权登录未配置,"Official authorization login is not configured"
+官网授权登录成功,"Official authorization login succeeded"
+官网授权登录失败：%{1},"Official authorization login failed: %{1}"
+"授权应用访问你的 Weline 账号","授权应用访问你的 Weline 账号"
 该站点不支持前端登录,"This site does not support frontend login"
 用户不存在，请先在系统中注册,"User does not exist; please register in the system first"
+应用名称不能为空,应用名称不能为空
+回调地址格式不正确,回调地址格式不正确
+可信域名不能为空,可信域名不能为空
+应用不存在,应用不存在
+用户未登录,用户未登录
+当前授权不允许绑定外部账号,当前授权不允许绑定外部账号
+外部账号标识不能为空,外部账号标识不能为空
+低风险,"Low risk"
+高风险,"High risk"
+中风险,"Medium risk"
+以下授权范围不可用：%{1},以下授权范围不可用：%{1}
+授权提供方不存在,"Identity provider does not exist"
+授权提供方名称不能为空,"Identity provider name cannot be empty"
+官网授权地址格式不正确,"Official authorization URL format is invalid"
+官网接口地址格式不正确,"Official API URL format is invalid"
+"Client ID 不能为空","Client ID cannot be empty"
+"Client Secret 不能为空","Client Secret cannot be empty"
+本站回调地址格式不正确,"This site's callback URL format is invalid"
+授权提供方不存在或已禁用,"Identity provider does not exist or is disabled"
+"官网未返回 Access Token","Official site did not return an access token"
+"授权码换 token 失败","Authorization code token exchange failed"
+"官网 token 响应缺少 access_token","Official token response is missing access_token"
+获取官网用户资料失败,"Failed to fetch official user profile"
+官网授权资料缺少邮箱地址,"Official authorization profile is missing email"
+绑定官网授权账号失败,"Failed to bind official authorization account"
+官网授权资料缺少有效邮箱地址,"Official authorization profile is missing a valid email"
+"授权 state 不能为空","Authorization state cannot be empty"
+"授权 state 已失效，请重新发起登录","Authorization state has expired; start login again"
+"授权 state 已过期，请重新发起登录","Authorization state has timed out; start login again"
+授权提供方已禁用,"Identity provider is disabled"
+授权提供方配置不完整,"Identity provider configuration is incomplete"
+"HTTP 请求失败","HTTP request failed"
 "Multipass 模块安装完成","Multipass module installation completed"
 "安装失败: %{1}","Installation failed: %{1}"
+授权应用,"Authorized apps"
+管理通信登录与账号绑定,"Manage communication login and account bindings"
+使用官网登录,"Sign in with official account"
 首页,Home
 后端账户,"Backend Account"
 前端账户,"Frontend Account"
@@ -73,6 +141,27 @@ Token,Token
 生成令牌失败,"Failed to generate token"
 Token已复制到剪贴板,"Token has been copied to the clipboard"
 登录链接已复制到剪贴板,"Login link copied to clipboard"
+Multipass管理,Multipass管理
+添加官网登录提供方,"Add official login provider"
+名称,Name
+例如：Weline官网,"For example: Weline official site"
+官网授权地址,"Official authorization URL"
+官网接口地址,"Official API URL"
+"留空时默认使用官网授权地址 + /api123。","Leave blank to use official authorization URL + /api123."
+"Client ID","Client ID"
+"Client Secret","Client Secret"
+本站回调地址,"This site's callback URL"
+授权范围,授权范围
+状态,状态
+启用,启用
+禁用,禁用
+排序,"Sort order"
+保存,Save
+已配置提供方,"Configured providers"
+"暂无官网登录提供方。目标站点需要配置官网生成的 client_id 和 client_secret 后才能发起授权登录。","No official login provider configured. Target sites must configure the official client_id and client_secret before starting authorization login."
+密钥,Secret
+留空保持不变,"Leave blank to keep unchanged"
+删除,Delete
 Multipass站点管理,"Multipass site management"
 站点列表,"Site List"
 添加站点,"Add Site"
@@ -80,9 +169,7 @@ Multipass站点管理,"Multipass site management"
 已启用,Enabled
 已禁用,Disabled
 站点URL,"Site URL"
-密钥,"Secret Key"
 编辑,Edit
-删除,Delete
 站点名称,"Site Name"
 例如：主站、CRM系统,"e.g., Main Site, CRM System"
 例如：https://example.com,"e.g., https://example.com"
@@ -95,87 +182,53 @@ Multipass站点管理,"Multipass site management"
 后端用户,"Backend User"
 该站点用于登录哪类用户,"Which type of user does this site log in"
 启用站点,"Enable site"
-保存,Save
 密钥已复制到剪贴板,"Secret key copied to clipboard"
 编辑站点,"Edit Site"
 "确定要删除站点 ""%{1}"" 吗？此操作不可恢复。","Are you sure you want to delete the site ""%{1}""? This action cannot be undone."
 删除失败,"Deletion failed"
 保存失败,"Save Failed"
-授权通信登录,"Authorize communication login"
-Weline 可信通信,"Weline trusted communication"
-返回个人中心,"Back to account center"
-该应用请求以下权限,"This app is requesting these permissions"
-取消,Cancel
-同意并继续,"Allow and continue"
-授权应用,"Authorized apps"
-管理通信登录与账号绑定,"Manage communication login and account bindings"
-授权应用已撤销,"Authorized app has been revoked"
-授权应用不存在或无权撤销,"Authorized app does not exist or cannot be revoked"
-基础资料,"Basic profile"
-"读取用户 ID、昵称和头像","Read user ID, display name, and avatar"
-邮箱地址,"Email address"
-读取账号邮箱用于登录识别,"Read account email for sign-in identification"
-账号绑定,"Account binding"
-创建或更新该应用的外部账号绑定,"Create or update this app's external account binding"
-应用商城账号,"App Store account"
-创建或关联应用商城账号,"Create or link an App Store account"
-社区账号,"Community account"
-创建或关联论坛/社区账号,"Create or link a forum/community account"
-该应用请求的自定义授权范围,"Custom authorization scope requested by this app"
-低风险,"Low risk"
-中风险,"Medium risk"
-高风险,"High risk"
-这里展示通过 Weline 账号授权通信登录的可信应用。撤销后，该应用的 Access Token 和 Refresh Token 会立即失效。,"Trusted apps authorized for communication login with your Weline account are shown here. After revocation, the app's access token and refresh token expire immediately."
-暂无授权应用。您从 App、Skill、BBS 或 A2A 站点发起登录授权后，会在这里看到记录。,"No authorized apps yet. Records will appear here after you start login authorization from App, Skill, BBS, or A2A sites."
+"请立即保存 client_secret","请立即保存 client_secret"
+该密钥只在创建或轮换时显示一次，后台不会明文保存。,该密钥只在创建或轮换时显示一次，后台不会明文保存。
+复制,复制
+可信应用列表,可信应用列表
+添加应用,添加应用
+"暂无互通应用，请先添加 App、Skill、商城或社区站点。","暂无互通应用，请先添加 App、Skill、商城或社区站点。"
+可信域名,可信域名
+回调地址,回调地址
+已绑定账号,已绑定账号
+轮换密钥,轮换密钥
+添加互通应用,添加互通应用
+应用名称,应用名称
+例如：App商城、bbs.a2a、Skill市场,例如：App商城、bbs.a2a、Skill市场
+应用类型,应用类型
+社区,社区
+自定义,自定义
+"授权码换 token 时会精确校验该地址。","授权码换 token 时会精确校验该地址。"
+留空时自动从回调地址提取域名。,留空时自动从回调地址提取域名。
+删除态,删除态
+"client_secret 已复制","client_secret 已复制"
+编辑互通应用,编辑互通应用
+"确定要轮换该应用的 client_secret 吗？旧密钥会立即失效。","确定要轮换该应用的 client_secret 吗？旧密钥会立即失效。"
+密钥已轮换,密钥已轮换
+密钥轮换失败,密钥轮换失败
+保存成功,保存成功
+"这里展示通过 Weline 账号授权通信登录的可信应用。撤销后，该应用的 Access Token 和 Refresh Token 会立即失效。","Trusted apps authorized for communication login with your Weline account are shown here. After revocation, the app's access token and refresh token expire immediately."
+"暂无授权应用。您从 App、Skill、BBS 或 A2A 站点发起登录授权后，会在这里看到记录。","No authorized apps yet. Records will appear here after you start login authorization from App, Skill, BBS, or A2A sites."
 最近授权,"Last authorized"
 外部账号,"External account"
 撤销授权,"Revoke authorization"
 未知,Unknown
-授权提供方不存在,"Identity provider does not exist"
-授权提供方名称不能为空,"Identity provider name cannot be empty"
-官网授权地址格式不正确,"Official authorization URL format is invalid"
-官网接口地址格式不正确,"Official API URL format is invalid"
-"Client ID 不能为空","Client ID cannot be empty"
-"Client Secret 不能为空","Client Secret cannot be empty"
-本站回调地址格式不正确,"This site's callback URL format is invalid"
-授权提供方不存在或已禁用,"Identity provider does not exist or is disabled"
-授权提供方已禁用,"Identity provider is disabled"
-授权提供方配置不完整,"Identity provider configuration is incomplete"
-官网未返回 Access Token,"Official site did not return an access token"
-授权码换 token 失败,"Authorization code token exchange failed"
-官网 token 响应缺少 access_token,"Official token response is missing access_token"
-获取官网用户资料失败,"Failed to fetch official user profile"
-绑定官网授权账号失败,"Failed to bind official authorization account"
-官网授权资料缺少邮箱地址,"Official authorization profile is missing email"
-官网授权资料缺少有效邮箱地址,"Official authorization profile is missing a valid email"
-授权 state 不能为空,"Authorization state cannot be empty"
-授权 state 已失效，请重新发起登录,"Authorization state has expired; start login again"
-授权 state 已过期，请重新发起登录,"Authorization state has timed out; start login again"
-HTTP 请求失败,"HTTP request failed"
-官网授权登录未配置,"Official authorization login is not configured"
-官网授权登录成功,"Official authorization login succeeded"
-官网授权登录失败：%{1},"Official authorization login failed: %{1}"
-官网登录提供方,"Official login provider"
-配置本站通过官网授权登录,"Configure this site to sign in through the official site"
-保存官网登录提供方,"Save official login provider"
-保存本站官网登录提供方配置,"Save this site's official login provider configuration"
-官网登录提供方已保存,"Official login provider saved"
-保存失败：%{1},"Save failed: %{1}"
-删除官网登录提供方,"Delete official login provider"
-删除本站官网登录提供方配置,"Delete this site's official login provider configuration"
-官网登录提供方已删除,"Official login provider deleted"
-官网登录提供方不存在,"Official login provider does not exist"
-使用官网登录,"Sign in with official account"
-添加官网登录提供方,"Add official login provider"
-名称,Name
-例如：Weline官网,"For example: Weline official site"
-官网授权地址,"Official authorization URL"
-官网接口地址,"Official API URL"
-留空时默认使用官网授权地址 + /api123。,"Leave blank to use official authorization URL + /api123."
-"Client Secret","Client Secret"
-本站回调地址,"This site's callback URL"
-排序,"Sort order"
-已配置提供方,"Configured providers"
-暂无官网登录提供方。目标站点需要配置官网生成的 client_id 和 client_secret 后才能发起授权登录。,"No official login provider configured. Target sites must configure the official client_id and client_secret before starting authorization login."
-密钥,Secret
-留空保持不变,"Leave blank to keep unchanged"
+未知应用,未知应用
+"Weline 账号授权","Weline 账号授权"
+"请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。","请确认应用来源和请求权限。授权后，该应用可以用你的 Weline 账号完成登录和账号关联。"
+你还没有登录。登录后会回到这里继续确认授权。,你还没有登录。登录后会回到这里继续确认授权。
+请求授权的应用,请求授权的应用
+"当前 Weline 账号","当前 Weline 账号"
+已登录用户,已登录用户
+登录后将显示你的账号信息，并由你决定是否继续授权。,登录后将显示你的账号信息，并由你决定是否继续授权。
+应用请求的权限,应用请求的权限
+需确认,需确认
+取消,Cancel
+同意并继续,"Allow and continue"
+登录后继续,登录后继续
+如果你不认识这个应用或域名，请取消授权。,如果你不认识这个应用或域名，请取消授权。

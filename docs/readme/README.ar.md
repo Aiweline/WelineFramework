@@ -1,5 +1,7 @@
 # WelineFramework
 
+![WelineFramework cover](../assets/readme/weline-framework-cover.ar.png)
+
 [اللغات](./README.md) | [الصينية المبسطة](../../README.zh-CN.md)
 
 WelineFramework هو إطار PHP لتطبيقات الويب المعيارية، وأنظمة الإدارة، وسيناريوهات التجارة. ينظم الوحدات، والتوجيه، و ORM، والأحداث/hooks، والقوالب، وصلاحيات backend ACL، و i18n، وخدمة WLS طويلة التشغيل، وأدوات CLI حتى تبقى وحدات الأعمال قابلة للتوسعة والصيانة.

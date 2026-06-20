@@ -61,7 +61,7 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
             <aside class="motor-account-summary-card">
                 <div class="motor-account-summary-card__avatar">
                     <?php if ($avatar): ?>
-                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" class="motor-account-avatar-image" data-fallback-target=".motor-account-summary-card__avatar-fallback" data-fallback-display="flex">
                         <div class="motor-account-summary-card__avatar-fallback" style="display:none"><?= htmlspecialchars($avatarInitial) ?></div>
                     <?php else: ?>
                         <div class="motor-account-summary-card__avatar-fallback"><?= htmlspecialchars($avatarInitial) ?></div>
@@ -239,10 +239,10 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
                     <div class="motor-account-profile-preview">
                         <div class="motor-account-profile-preview__avatar">
                             <?php if ($avatar): ?>
-                                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="motor-account-avatar-image" data-fallback-target="#avatarFallback" data-fallback-display="flex">
                                 <div class="motor-account-profile-preview__fallback" id="avatarFallback" style="display:none"><?= htmlspecialchars($avatarInitial) ?></div>
                             <?php else: ?>
-                                <img src="" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" hidden>
+                                <img src="" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="motor-account-avatar-image" data-fallback-target="#avatarFallback" data-fallback-display="flex" hidden>
                                 <div class="motor-account-profile-preview__fallback" id="avatarFallback"><?= htmlspecialchars($avatarInitial) ?></div>
                             <?php endif; ?>
                         </div>
@@ -424,20 +424,86 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
     var sidebarContentMount = document.querySelector('[data-account-sidebar-content-mount]');
     var loadedSidebarSections = Object.create(null);
     var sidebarContentLoading = Object.create(null);
+    var loadedSidebarScripts = Object.create(null);
 
     function refreshAccountSections() {
         sections = Array.prototype.slice.call(document.querySelectorAll('[data-account-section]'));
     }
 
-    function executeInsertedScripts(container) {
-        Array.prototype.slice.call(container.querySelectorAll('script')).forEach(function(oldScript) {
+    function isSafeSidebarAssetUrl(rawValue, extension) {
+        var value = String(rawValue || '').trim();
+        var compactValue = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+        if (
+            compactValue.indexOf('javascript:') === 0 ||
+            compactValue.indexOf('vbscript:') === 0 ||
+            compactValue.indexOf('data:') === 0 ||
+            compactValue.indexOf('//') === 0
+        ) {
+            return false;
+        }
+
+        try {
+            var url = new URL(value, window.location.href);
+            return url.origin === window.location.origin && url.pathname.toLowerCase().indexOf(extension, url.pathname.length - extension.length) !== -1;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function loadTrustedSidebarScripts(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+
+        Array.prototype.slice.call(template.content.querySelectorAll('script[src]')).forEach(function(scriptNode) {
+            var src = scriptNode.getAttribute('src') || '';
+            if (!isSafeSidebarAssetUrl(src, '.js') || loadedSidebarScripts[src]) {
+                return;
+            }
+
+            loadedSidebarScripts[src] = true;
             var script = document.createElement('script');
-            Array.prototype.slice.call(oldScript.attributes).forEach(function(attribute) {
-                script.setAttribute(attribute.name, attribute.value);
-            });
-            script.text = oldScript.textContent || '';
-            oldScript.parentNode.replaceChild(script, oldScript);
+            script.src = src;
+            script.defer = true;
+            document.head.appendChild(script);
         });
+    }
+
+    function sanitizeSidebarHtml(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+
+        template.content.querySelectorAll('script, style, meta, iframe, frame, frameset, object, embed, base').forEach(function(node) {
+            node.remove();
+        });
+        template.content.querySelectorAll('link').forEach(function(node) {
+            var rel = String(node.getAttribute('rel') || '').toLowerCase();
+            var href = node.getAttribute('href') || '';
+            if (rel !== 'stylesheet' || !isSafeSidebarAssetUrl(href, '.css')) {
+                node.remove();
+            }
+        });
+
+        template.content.querySelectorAll('*').forEach(function(node) {
+            Array.prototype.slice.call(node.attributes).forEach(function(attribute) {
+                var name = String(attribute.name || '').toLowerCase();
+                var compactValue = String(attribute.value || '').trim().replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+
+                if (name.indexOf('on') === 0 || name === 'srcdoc' || name === 'style') {
+                    node.removeAttribute(attribute.name);
+                    return;
+                }
+
+                if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction' || name === 'poster') && (
+                    compactValue.indexOf('javascript:') === 0 ||
+                    compactValue.indexOf('vbscript:') === 0 ||
+                    (compactValue.indexOf('data:') === 0 && compactValue.indexOf('data:image/') !== 0)
+                )) {
+                    node.removeAttribute(attribute.name);
+                }
+            });
+        });
+
+        return template.innerHTML;
     }
 
     function buildSidebarContentUrl(sectionName) {
@@ -489,8 +555,8 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
             }
 
             if (payload.html) {
-                sidebarContentMount.insertAdjacentHTML('beforeend', payload.html);
-                executeInsertedScripts(sidebarContentMount);
+                loadTrustedSidebarScripts(payload.html);
+                sidebarContentMount.insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html));
             }
             loadedSidebarSections[sectionName] = true;
             refreshAccountSections();
@@ -817,6 +883,25 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
     syncFromHash();
     window.addEventListener('hashchange', syncFromHash);
 
+    function showAccountImageFallback(image) {
+        if (!image) {
+            return;
+        }
+
+        var targetSelector = image.getAttribute('data-fallback-target') || '';
+        var fallback = targetSelector ? document.querySelector(targetSelector) : null;
+        image.style.display = 'none';
+        if (fallback) {
+            fallback.style.display = image.getAttribute('data-fallback-display') || 'flex';
+        }
+    }
+
+    document.querySelectorAll('.motor-account-index img[data-fallback-target]').forEach(function(image) {
+        image.addEventListener('error', function() {
+            showAccountImageFallback(image);
+        });
+    });
+
     function updateAvatarPreview() {
         if (!avatarPreview || !avatarFallback) {
             return;
@@ -825,12 +910,14 @@ $accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/side
         var url = avatarInput ? avatarInput.value.trim() : '';
         if (!url) {
             avatarPreview.hidden = true;
+            avatarPreview.style.display = 'none';
             avatarPreview.removeAttribute('src');
             avatarFallback.style.display = 'flex';
             return;
         }
 
         avatarPreview.hidden = false;
+        avatarPreview.style.display = '';
         avatarPreview.src = url;
         avatarFallback.style.display = 'none';
     }

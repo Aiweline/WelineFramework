@@ -53,6 +53,7 @@ php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
 - 禁止硬编码用户可见文案。
 - 禁止跨模块直接引用对方内部 PHP 类或内部实现；跨模块协作必须使用契约、Hook、事件、Query Provider、配置、接口、队列或扩展点。
 - 禁止用类名白名单、特例分支、路径判断、字符串修补等方式只修症状不修根因。
+- 禁止在使用 AI 能力时由调用方直接硬编码模型名、直接实例化模型客户端、直接按模型字段分支或绕过能力匹配；必须通过已发布的 Provider / Adapter / ModelResolver / CapabilityRouter 等适配器契约，根据任务场景、能力需求、配置、租户/模块上下文匹配正确模型。若当前能力缺少适配层，先补适配器或解析契约与文档，再接入 AI 调用。
 
 ### 4.1 跨模块协作与 w_query（强制）
 
