@@ -9618,6 +9618,106 @@ Test-Path var/process/setup_upgrade.lock
 False.
 ```
 
+## 2026-06-20 - FileManager SOURCE_QUEUE_TRASH Source Queue Slice
+
+Status: passed for the first source-code queue policy layer.
+
+Scope:
+
+- Added `SOURCE_QUEUE_TRASH` as the only executable source queue action.
+- It queues one existing allowlisted source file under 128 KB into a
+  recoverable same-root `.wls-trash` entry.
+- Broader source upload, batch, hard delete, purge, and ordinary ZIP/trash
+  queue reuse against source roots remain blocked.
+- The queue worker rejects invalid source payloads before execution, including
+  protected paths, too many entries, and mismatched `source_path` versus
+  `root_path + source_relative_path`.
+
+Changed areas:
+
+```text
+app/code/Weline/FileManager/Controller/Backend/WlsFileManager.php
+app/code/Weline/FileManager/Queue/WlsFileManagerLargeOperationQueue.php
+app/code/Weline/FileManager/view/templates/Backend/WlsFileManager/index.phtml
+app/code/Weline/FileManager/i18n/en_US.csv
+app/code/Weline/FileManager/i18n/zh_Hans_CN.csv
+app/code/Weline/FileManager/doc/README.md
+app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
+app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
+app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0715-wls-file-manager-source-queue-policy
+```
+
+Validation:
+
+```text
+php -l app/code/Weline/FileManager/Queue/WlsFileManagerLargeOperationQueue.php
+No syntax errors detected.
+
+php -l app/code/Weline/FileManager/Controller/Backend/WlsFileManager.php
+No syntax errors detected.
+
+Worker payload probe:
+valid=true
+mismatch=false
+protected=false
+too_many_entries=false
+
+php bin/w setup:upgrade --route -m Weline_FileManager --skip-classmap --skip-composer-dump --skip-env-check
+Generated backend routes:
+weline_filemanager/backend/wls-file-manager/source-trash-queue::POST -> postSourceTrashQueue
+weline_filemanager/backend/wls-file-manager/post-source-trash-queue::POST -> postSourceTrashQueue
+
+node --check dev/ai/codex/tasks/2026-06-20/2026-06-20-0715-wls-file-manager-source-queue-policy/artifacts/filemanager-source-trash-queue-smoke.mjs
+```
+
+Runtime smoke:
+
+```text
+php bin/w server:start ai-test-wls-file-source-queue-9985 -p 9985 -c 1 --no-ssl --no-dispatcher --no-daemon
+curl.exe -I http://127.0.0.1:9985/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin/login
+HTTP/1.1 200 OK
+
+node dev/ai/codex/tasks/2026-06-20/2026-06-20-0715-wls-file-manager-source-queue-policy/artifacts/filemanager-source-trash-queue-smoke.mjs
+status=passed
+functional_http=passed
+baseUrl=http://127.0.0.1:9985
+queueAfterCreate.queue_id=75
+queueAfterCreate.status=pending
+queuePayload.operation=source_trash_entry
+queuePayload.source_policy=true
+queuePayload.max_entries=1
+queuePayload.max_bytes=131072
+queueRunOutput includes: queue:run --id=75
+queueAfterRun.status=done
+sourceExistsAfterQueue=false
+trashPath=E:\WelineFramework\DEV-workspace\.wls-trash\20260620-073747-005d67513ff4-source-trash-queue-http-mqm1p7n1.md
+path-policy-reset=wfm_notice=path_policy_reset
+```
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-file-source-queue-9985
+Instance metadata marked stopped.
+
+Get-NetTCPConnection -LocalPort 9985 -State Listen
+No matching listener.
+
+Test-Path var/wls-panel/file-manager-path-policy.json
+False.
+```
+
+Notes:
+
+- A first 9984 smoke created queue `74`, but the verification script used a
+  mismatched biz-key normalization. Running `php bin/w queue:run --id=74`
+  completed that queue and moved its source file into `.wls-trash`; the script
+  was then fixed and the clean 9985 smoke above passed.
+- Browser visual screenshots were not rerun for this HTTP-only source queue
+  slice. The latest FileManager desktop/mobile visual baseline remains the
+  existing safe-text/source-create smoke evidence.
+
 ## 2026-06-20 - FileManager SOURCE_TRASH Source-Policy Slice
 
 Scope:
