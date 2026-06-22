@@ -15,6 +15,14 @@ use Weline\Framework\Http\Url;
 class BackendLoginReturnUrlService
 {
     private const SESSION_KEYS = ['backend_login_referer', 'referer'];
+    private const UNSAFE_RETURN_ROUTE_SEGMENTS = [
+        'batch',
+        'delete',
+        'download',
+        'export',
+        'import',
+        'upload',
+    ];
 
     public function __construct(
         private readonly AclService $aclService,
@@ -147,19 +155,30 @@ class BackendLoginReturnUrlService
             return false;
         }
 
-        if (str_contains($normalized, 'add')
-            || str_contains($normalized, 'edit')
-            || str_contains($normalized, 'download')
-            || str_contains($normalized, 'upload')
-            || str_contains($normalized, 'export')
-            || str_contains($normalized, 'import')
-            || str_contains($normalized, 'delete')
-            || str_contains($normalized, 'batch')
-        ) {
+        if ($this->hasUnsafeReturnRouteSegment($normalized)) {
             return false;
         }
 
         return $this->isKnownBackendReturnRoute($normalized);
+    }
+
+    private function hasUnsafeReturnRouteSegment(string $routePath): bool
+    {
+        $segments = array_values(array_filter(
+            explode('/', trim($routePath, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+
+        foreach ($segments as $segment) {
+            $segment = strtolower($segment);
+            foreach (self::UNSAFE_RETURN_ROUTE_SEGMENTS as $unsafeSegment) {
+                if (str_contains($segment, $unsafeSegment)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function isKnownBackendReturnRoute(string $routePath): bool
