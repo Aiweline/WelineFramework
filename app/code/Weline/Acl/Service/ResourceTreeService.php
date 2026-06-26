@@ -239,6 +239,10 @@ class ResourceTreeService implements ResourceTreeServiceInterface
             if (!empty($children)) {
                 $node['nodes'] = $children;
             }
+
+            if (trim((string)($node['route'] ?? '')) === '' && empty($node['nodes'])) {
+                continue;
+            }
             
             $nodes[] = $node;
         }
