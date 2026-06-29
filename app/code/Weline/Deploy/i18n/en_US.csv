@@ -309,13 +309,12 @@ Composer,Composer
 重载服务...,"Reloading server..."
 发布成功：%{1},"Release succeeded: %{1}"
 "Rollback reference cannot be empty.","Rollback reference cannot be empty."
-寮€濮嬪洖婊氾細%{1},寮€濮嬪洖婊氾細%{1}
-鍥炴粴鍓嶅浠戒腑...,鍥炴粴鍓嶅浠戒腑...
-"Git 鍥炴粴涓?..","Git 鍥炴粴涓?.."
-鍥炴粴鐗堟湰宸插啓鍏ワ細%{1},鍥炴粴鐗堟湰宸插啓鍏ワ細%{1}
-閲嶈浇鏈嶅姟...,閲嶈浇鏈嶅姟...
-鍥炴粴鎴愬姛锛?{1},鍥炴粴鎴愬姛锛?{1}
-鍥炴粴澶辫触锛?{1},鍥炴粴澶辫触锛?{1}
+开始回滚：%{1},"Starting rollback: %{1}"
+回滚前备份中...,"Backing up before rollback..."
+"Git 回滚中...","Rolling back Git..."
+回滚版本已写入：%{1},"Rollback version written: %{1}"
+回滚成功：%{1},"Rollback succeeded: %{1}"
+回滚失败：%{1},"Rollback failed: %{1}"
 部署根目录包含不允许的控制字符。,"Deploy root contains disallowed control characters."
 部署根目录必须是绝对路径：%{1},"Deploy root must be an absolute path: %{1}"
 部署根目录不存在：%{1},"Deploy root does not exist: %{1}"
@@ -337,7 +336,7 @@ Composer,Composer
 继承全局配置,"Inherited Global Config"
 "Profile 来源","Profile Source"
 "当前发布会优先读取该项目的独立 Profile。","The release will prefer this project's dedicated profile."
-已保存未启用,"Saved but Disabled"
+已保存未启用,"Saved, Disabled"
 "该项目已有 Profile，但未启用；发布仍会继承全局 Deploy 配置。","This project has a profile, but it is disabled; releases still inherit global Deploy config."
 "当前项目尚未保存独立 Profile，发布会使用全局 Deploy 配置。","This project has no dedicated profile yet; releases will use global Deploy config."
 仓库配置,"Repository Config"
@@ -508,19 +507,25 @@ branch,branch
 已配置，留空表示保留当前项目密钥,"Configured; leave blank to keep the current project secret."
 未配置，可填写当前项目独立密钥,"Not configured; enter a project-specific secret if needed."
 全局密钥,"Global Secret"
+"当前 WLS","Current WLS"
+域名上下文,"Domain Context"
+本机面板,"Local Panel"
+"当前 WLS 主项目","Current WLS Host Project"
 "WLS 部署导航","WLS Deploy Navigation"
 "WLS 插件面板","WLS Plugin Panel"
 部署发布,Deploy
 部署发布菜单,"Deploy Menu"
 总览,Overview
+发布路径,"Release Path"
 配置摘要,"Configuration Summary"
 发布预检,"Release Preflight"
 "Webhook 回放","Webhook Replay"
 发布记录,"Release Records"
 插件商城,"Plugin Marketplace"
 "Manual Plan","Manual Plan"
-切换明暗色,"Toggle Theme"
 深色,Dark
+浅色,Light
+切换明暗色,"Toggle Theme"
 "返回 WLS Panel","Back to WLS Panel"
 "WLS 独立插件","WLS Standalone Plugin"
 "集中查看当前 WLS 项目的 Tag/Webhook 发布策略、脱敏配置状态和最近发布结果；完整编辑仍进入 Deploy 配置页。","Review the current WLS project's tag/webhook release policy, redacted configuration status, and recent release results; full editing stays in Deploy Config."
@@ -529,8 +534,6 @@ branch,branch
 项目后台,"Project Admin"
 项目上下文,"Project Context"
 项目,Project
-"当前 WLS","Current WLS"
-本机面板,"Local Panel"
 域名,Domain
 未指定,"Not Specified"
 由项目卡片安全透传,"Safely passed from the project card"
@@ -538,6 +541,15 @@ branch,branch
 "来自 WLS capability 链接","From WLS capability link"
 触发策略,"Trigger Policy"
 默认保守发布策略,"Default conservative release policy"
+项目发布路径,"Project Release Path"
+"从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。","When opened from a project card, Profile, Webhook Replay, Manual Plan, and release records share the same WLS project context."
+"发布 Profile","Release Profile"
+"配置 Profile","Configure Profile"
+触发与计划,"Trigger and Plan"
+默认示例：%{1},"Default sample: %{1}"
+"%{1} 条","%{1} records"
+查看当前范围,"View Current Scope"
+"真实发布成功后会记录 profile_key、project_id、domain 与 project_type；当前页面按这组上下文刷新发布历史。","A successful release records profile_key, project_id, domain, and project_type; this page refreshes release history by that context."
 "项目发布 Profile","Project Release Profile"
 "为当前 WLS 项目保存独立仓库、Tag 策略、回滚参考和发布命令；保存后仍由后续发布动作显式触发。","Save a dedicated repository, tag policy, rollback reference, and release command for the current WLS project; saving still requires a later explicit release action."
 "启用项目 Profile","Enable Project Profile"
@@ -631,4 +643,3 @@ pending,pending
 耗时未知,"Duration Unknown"
 "当前项目暂无发布记录。完成一次项目上下文发布或 Tag Webhook 后会写入这里。","No release records for the current project yet. A project-context release or tag webhook will write records here."
 "暂无发布记录。完成一次命令发布或 Tag Webhook 后会写入发布历史。","No release records yet. Command releases or tag webhooks will write release history."
-浅色,Light

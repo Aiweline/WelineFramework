@@ -34,6 +34,11 @@ class WlsFileManager extends BackendController
     private const SOURCE_RENAME_CONFIRM_PHRASE = 'SOURCE_RENAME';
     private const SOURCE_TRASH_CONFIRM_PHRASE = 'SOURCE_TRASH';
     private const SOURCE_QUEUE_TRASH_CONFIRM_PHRASE = 'SOURCE_QUEUE_TRASH';
+    private const SOURCE_QUEUE_ARCHIVE_CONFIRM_PHRASE = 'SOURCE_QUEUE_ARCHIVE';
+    private const SOURCE_QUEUE_ARCHIVE_TREE_CONFIRM_PHRASE = 'SOURCE_QUEUE_ARCHIVE_TREE';
+    private const SOURCE_QUEUE_ARCHIVE_SELECTION_CONFIRM_PHRASE = 'SOURCE_QUEUE_ARCHIVE_SELECTION';
+    private const SOURCE_ARCHIVE_SELECTION_MAX_ITEMS = 20;
+    private const SOURCE_ARCHIVE_RELATIVE_PATH = 'wls-panel/file-manager/source-archives';
     private const SOURCE_EDIT_PROTECTED_SEGMENTS = ['.git', '.wls-trash', 'generated', 'node_modules', 'vendor', 'var'];
     private const SOURCE_EDIT_PROTECTED_PATHS = [
         '.env',
@@ -85,9 +90,14 @@ class WlsFileManager extends BackendController
         $pathPolicy = $this->pathPolicyService()->getPolicyForContext($context);
         $roots = $this->rootCards($context, $pathPolicy);
         $browse = $this->browseData($roots);
+        $pageKey = $this->normalizePageKey(
+            trim((string)$this->request->getGet('page_key', '')),
+            trim((string)$this->request->getGet('operation', ''))
+        );
 
         $this->assign('title', __('WLS 文件管理器'));
         $this->assign('page_title', __('WLS 文件管理器'));
+        $this->assign('wlsFileManagerPageKey', $pageKey);
         $this->assign('wlsFileManagerContext', $context);
         $this->assign('wlsFileManagerPathPolicy', $pathPolicy);
         $this->assign('wlsFileManagerRoots', $roots);
@@ -96,6 +106,7 @@ class WlsFileManager extends BackendController
         $this->assign('wlsFileManagerCapabilities', $this->capabilityCards($context));
         $this->assign('wlsFileManagerNotice', $this->resolveNotice((string)$this->request->getGet('wfm_notice', '')));
         $this->assign('wlsFileManagerError', $this->resolveError((string)$this->request->getGet('wfm_error', '')));
+        $this->assign('wlsFileManagerEmbedded', $this->isEmbeddedPanelRequest());
         $this->assign('wlsFileManagerQueueOperations', $this->queueOperationData());
         $operationAudit = $this->operationAuditData($roots);
         $this->assign('wlsFileManagerOperationLogs', $operationAudit['logs']);
@@ -103,6 +114,73 @@ class WlsFileManager extends BackendController
         $this->assign('wlsFileManagerOperationLogSummary', $operationAudit['summary']);
 
         return $this->fetch('index');
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_roots', 'View WLS File Roots', 'mdi mdi-folder-outline', 'View WLS Panel file roots')]
+    public function getRoots(): string
+    {
+        return $this->openPage('roots', 'roots');
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_browser', 'View WLS File Browser', 'mdi mdi-file-tree-outline', 'View WLS Panel file browser')]
+    public function getBrowser(): string
+    {
+        return $this->openPage('browser', 'file-manager');
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_policy_page', 'View WLS File Policy', 'mdi mdi-shield-edit-outline', 'View WLS Panel file path policy')]
+    public function getPolicyPage(): string
+    {
+        return $this->openPage('policy', 'path-policy');
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_write_page', 'View WLS File Write Operations', 'mdi mdi-file-edit-outline', 'View WLS Panel file write operations')]
+    public function getWritePage(): string
+    {
+        return $this->openPage('write', 'write-operations');
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_queue_page', 'View WLS File Queue', 'mdi mdi-progress-clock', 'View WLS Panel file queue operations')]
+    public function getQueuePage(): string
+    {
+        return $this->openPage('queue', 'file-queue');
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_log_page', 'View WLS File Operation Log', 'mdi mdi-clipboard-text-clock-outline', 'View WLS Panel file operation log')]
+    public function getLogPage(): string
+    {
+        return $this->openPage('audit', 'operation-log');
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_capabilities_page', 'View WLS File Capabilities', 'mdi mdi-puzzle-outline', 'View WLS Panel file capabilities')]
+    public function getCapabilitiesPage(): string
+    {
+        return $this->openPage('capabilities', 'capabilities');
+    }
+
+    private function openPage(string $pageKey, string $operation): string
+    {
+        $this->request->setGet('page_key', $pageKey);
+        $this->request->setGet('operation', $operation);
+        return $this->getIndex();
+    }
+
+    private function normalizePageKey(string $pageKey, string $operation): string
+    {
+        $pageKey = trim($pageKey);
+        if (in_array($pageKey, ['roots', 'browser', 'policy', 'write', 'queue', 'audit', 'capabilities'], true)) {
+            return $pageKey;
+        }
+
+        return match (trim($operation)) {
+            'path-policy' => 'policy',
+            'write-operations' => 'write',
+            'file-queue', 'queue-operations' => 'queue',
+            'operation-log' => 'audit',
+            'capabilities' => 'capabilities',
+            'file-manager', 'files.read' => 'browser',
+            default => 'roots',
+        };
     }
 
     #[Acl('Weline_FileManager::wls_file_manager_write', '受控写入 WLS 文件', 'mdi-file-edit-outline', '创建目录和保存小文本文件')]
@@ -538,6 +616,365 @@ class WlsFileManager extends BackendController
             $post + ['queue_id' => (string)$queueId]
         );
         $this->redirectToFileManager($params + ['wfm_notice' => 'source_trash_queue_created'], '#queue-operations');
+        return '';
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source file archive', 'mdi-archive-arrow-down-outline', 'Archive one controlled source file through queue')]
+    public function postSourceArchiveQueue(): string
+    {
+        if (!$this->request->isPost()) {
+            $this->redirectToFileManager(['wfm_error' => 'method_not_allowed'], '#queue-operations');
+            return '';
+        }
+
+        $post = (array)$this->request->getPost();
+        $rootKey = trim((string)($post['root'] ?? ''));
+        $relativePath = $this->safeRelativePathForWrite((string)($post['path'] ?? ''));
+        $fileName = $this->safeNewEntryName((string)($post['source_file_name'] ?? ''));
+        $params = $this->redirectParamsFromInput($post, $rootKey, $relativePath);
+        $action = 'source_archive_queue';
+
+        if ((string)($post['confirm_write'] ?? '0') !== '1'
+            || trim((string)($post['confirm_phrase'] ?? '')) !== self::SOURCE_QUEUE_ARCHIVE_CONFIRM_PHRASE
+        ) {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $fileName, 'missing_confirmation', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'missing_confirmation'], '#queue-operations');
+            return '';
+        }
+
+        if ($fileName === '' || !$this->isAllowedSourceFileName($fileName)) {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $fileName, 'invalid_source_file', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'invalid_source_file'], '#queue-operations');
+            return '';
+        }
+
+        $resolved = $this->resolveSourceArchiveEntry($this->rootCards(), $rootKey, $relativePath, $fileName);
+        if ($resolved['error'] !== '') {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $fileName, (string)$resolved['error_code'], $post);
+            $this->redirectToFileManager($params + ['wfm_error' => (string)$resolved['error_code']], '#queue-operations');
+            return '';
+        }
+
+        $archiveDirectory = $this->ensureSourceArchiveDirectory();
+        if ($archiveDirectory['error_code'] !== '') {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $fileName, (string)$archiveDirectory['error_code'], $post);
+            $this->redirectToFileManager($params + ['wfm_error' => (string)$archiveDirectory['error_code']], '#queue-operations');
+            return '';
+        }
+
+        $archiveName = $this->buildSourceArchiveName((string)$resolved['source_relative_path']);
+        $targetPath = rtrim((string)$archiveDirectory['path'], "\\/") . DIRECTORY_SEPARATOR . $archiveName;
+        $sourcePath = (string)$resolved['source_path'];
+        $bizKey = 'wls_file_manager_source_archive:' . sha1(implode('|', [
+            (string)$resolved['root_path'],
+            $sourcePath,
+            $targetPath,
+        ]));
+
+        $payload = [
+            'operation' => WlsFileManagerLargeOperationQueue::OPERATION_SOURCE_ARCHIVE_FILE,
+            'source_policy' => true,
+            'root_key' => $rootKey,
+            'root_path' => (string)$resolved['root_path'],
+            'source_path' => $sourcePath,
+            'source_relative_path' => (string)$resolved['source_relative_path'],
+            'source_parent_relative_path' => trim($relativePath, '/'),
+            'archive_root_path' => (string)$archiveDirectory['path'],
+            'target_path' => $targetPath,
+            'target_relative_path' => $archiveName,
+            'project_id' => trim((string)($post['project_id'] ?? '')),
+            'domain' => trim((string)($post['domain'] ?? '')),
+            'project_type' => trim((string)($post['project_type'] ?? '')),
+            'requested_at' => date('Y-m-d H:i:s'),
+            'requested_ip' => $this->clientIp(),
+            'max_entries' => 1,
+            'max_bytes' => self::MAX_TEXT_SAVE_BYTES,
+        ];
+
+        try {
+            $queueResult = \w_query('queue', 'create', [
+                'class' => WlsFileManagerLargeOperationQueue::class,
+                'name' => (string)__('WLS source archive: %{1}', [(string)$resolved['source_relative_path']]),
+                'module' => 'Weline_FileManager',
+                'content' => $payload,
+                'auto' => true,
+                'biz_key' => $bizKey,
+            ]);
+        } catch (\Throwable) {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $fileName, 'queue_create_failed', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'queue_create_failed'], '#queue-operations');
+            return '';
+        }
+
+        $queueId = is_array($queueResult) ? (int)($queueResult['queue_id'] ?? 0) : 0;
+        if ($queueId <= 0) {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $fileName, 'queue_create_failed', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'queue_create_failed'], '#queue-operations');
+            return '';
+        }
+
+        $this->appendOperationLog(
+            $action,
+            'success',
+            $rootKey,
+            $relativePath,
+            $fileName . ' -> ' . $archiveName,
+            'source_archive_queue_created',
+            $post + ['queue_id' => (string)$queueId]
+        );
+        $this->redirectToFileManager($params + ['wfm_notice' => 'source_archive_queue_created'], '#queue-operations');
+        return '';
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source directory archive', 'mdi-archive-arrow-down-outline', 'Archive one controlled source directory through queue')]
+    public function postSourceArchiveTreeQueue(): string
+    {
+        if (!$this->request->isPost()) {
+            $this->redirectToFileManager(['wfm_error' => 'method_not_allowed'], '#queue-operations');
+            return '';
+        }
+
+        $post = (array)$this->request->getPost();
+        $rootKey = trim((string)($post['root'] ?? ''));
+        $relativePath = $this->safeRelativePathForWrite((string)($post['path'] ?? ''));
+        $directoryName = $this->safeNewEntryName((string)($post['source_directory_name'] ?? ''));
+        $params = $this->redirectParamsFromInput($post, $rootKey, $relativePath);
+        $action = 'source_archive_tree_queue';
+
+        if ((string)($post['confirm_write'] ?? '0') !== '1'
+            || trim((string)($post['confirm_phrase'] ?? '')) !== self::SOURCE_QUEUE_ARCHIVE_TREE_CONFIRM_PHRASE
+        ) {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $directoryName, 'missing_confirmation', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'missing_confirmation'], '#queue-operations');
+            return '';
+        }
+
+        if ($directoryName === '') {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $directoryName, 'invalid_name', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'invalid_name'], '#queue-operations');
+            return '';
+        }
+
+        $resolved = $this->resolveSourceArchiveTreeEntry($this->rootCards(), $rootKey, $relativePath, $directoryName);
+        if ($resolved['error'] !== '') {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $directoryName, (string)$resolved['error_code'], $post);
+            $this->redirectToFileManager($params + ['wfm_error' => (string)$resolved['error_code']], '#queue-operations');
+            return '';
+        }
+
+        $archiveDirectory = $this->ensureSourceArchiveDirectory();
+        if ($archiveDirectory['error_code'] !== '') {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $directoryName, (string)$archiveDirectory['error_code'], $post);
+            $this->redirectToFileManager($params + ['wfm_error' => (string)$archiveDirectory['error_code']], '#queue-operations');
+            return '';
+        }
+
+        $archiveName = $this->buildSourceArchiveName((string)$resolved['source_relative_path']);
+        $targetPath = rtrim((string)$archiveDirectory['path'], "\\/") . DIRECTORY_SEPARATOR . $archiveName;
+        $sourcePath = (string)$resolved['source_path'];
+        $bizKey = 'wls_file_manager_source_archive_tree:' . sha1(implode('|', [
+            (string)$resolved['root_path'],
+            $sourcePath,
+        ]));
+
+        try {
+            $existingQueue = \w_query('queue', 'getByBizKey', ['biz_key' => $bizKey]);
+        } catch (\Throwable) {
+            $existingQueue = null;
+        }
+
+        if (is_array($existingQueue) && in_array((string)($existingQueue['status'] ?? ''), ['pending', 'running'], true)) {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $directoryName, 'source_archive_tree_queue_already_pending', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'source_archive_tree_queue_already_pending'], '#queue-operations');
+            return '';
+        }
+
+        $payload = [
+            'operation' => WlsFileManagerLargeOperationQueue::OPERATION_SOURCE_ARCHIVE_TREE,
+            'source_policy' => true,
+            'root_key' => $rootKey,
+            'root_path' => (string)$resolved['root_path'],
+            'source_path' => $sourcePath,
+            'source_relative_path' => (string)$resolved['source_relative_path'],
+            'source_parent_relative_path' => trim($relativePath, '/'),
+            'archive_root_path' => (string)$archiveDirectory['path'],
+            'target_path' => $targetPath,
+            'target_relative_path' => $archiveName,
+            'project_id' => trim((string)($post['project_id'] ?? '')),
+            'domain' => trim((string)($post['domain'] ?? '')),
+            'project_type' => trim((string)($post['project_type'] ?? '')),
+            'requested_at' => date('Y-m-d H:i:s'),
+            'requested_ip' => $this->clientIp(),
+            'max_entries' => self::MAX_COMPRESS_ENTRIES,
+            'max_bytes' => self::MAX_COMPRESS_BYTES,
+        ];
+
+        try {
+            $queueResult = \w_query('queue', 'create', [
+                'class' => WlsFileManagerLargeOperationQueue::class,
+                'name' => (string)__('WLS source directory archive: %{1}', [(string)$resolved['source_relative_path']]),
+                'module' => 'Weline_FileManager',
+                'content' => $payload,
+                'auto' => true,
+                'biz_key' => $bizKey,
+            ]);
+        } catch (\Throwable) {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $directoryName, 'queue_create_failed', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'queue_create_failed'], '#queue-operations');
+            return '';
+        }
+
+        $queueId = is_array($queueResult) ? (int)($queueResult['queue_id'] ?? 0) : 0;
+        if ($queueId <= 0) {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $directoryName, 'queue_create_failed', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'queue_create_failed'], '#queue-operations');
+            return '';
+        }
+
+        $this->appendOperationLog(
+            $action,
+            'success',
+            $rootKey,
+            $relativePath,
+            $directoryName . ' -> ' . $archiveName,
+            'source_archive_tree_queue_created',
+            $post + ['queue_id' => (string)$queueId]
+        );
+        $this->redirectToFileManager($params + ['wfm_notice' => 'source_archive_tree_queue_created'], '#queue-operations');
+        return '';
+    }
+
+    #[Acl('Weline_FileManager::wls_file_manager_write', 'Queue WLS source selection archive', 'mdi-archive-check-outline', 'Archive selected controlled source entries through queue')]
+    public function postSourceArchiveSelectionQueue(): string
+    {
+        if (!$this->request->isPost()) {
+            $this->redirectToFileManager(['wfm_error' => 'method_not_allowed'], '#queue-operations');
+            return '';
+        }
+
+        $post = (array)$this->request->getPost();
+        $rootKey = trim((string)($post['root'] ?? ''));
+        $relativePath = $this->safeRelativePathForWrite((string)($post['path'] ?? ''));
+        $params = $this->redirectParamsFromInput($post, $rootKey, $relativePath);
+        $action = 'source_archive_selection_queue';
+        $selection = $this->sourceSelectionEntryNames((string)($post['source_entry_names'] ?? ''));
+        $entryNames = (array)($selection['names'] ?? []);
+        $entryLabel = implode(', ', $entryNames);
+
+        if ((string)($post['confirm_write'] ?? '0') !== '1'
+            || trim((string)($post['confirm_phrase'] ?? '')) !== self::SOURCE_QUEUE_ARCHIVE_SELECTION_CONFIRM_PHRASE
+        ) {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $entryLabel, 'missing_confirmation', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'missing_confirmation'], '#queue-operations');
+            return '';
+        }
+
+        if (!empty($selection['invalid']) || $entryNames === []) {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $entryLabel, 'invalid_source_selection', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'invalid_source_selection'], '#queue-operations');
+            return '';
+        }
+
+        if (!empty($selection['too_many'])) {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $entryLabel, 'source_archive_selection_too_many', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'source_archive_selection_too_many'], '#queue-operations');
+            return '';
+        }
+
+        $resolved = $this->resolveSourceArchiveSelectionEntries($this->rootCards(), $rootKey, $relativePath, $entryNames);
+        if ($resolved['error'] !== '') {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $entryLabel, (string)$resolved['error_code'], $post);
+            $this->redirectToFileManager($params + ['wfm_error' => (string)$resolved['error_code']], '#queue-operations');
+            return '';
+        }
+
+        $archiveDirectory = $this->ensureSourceArchiveDirectory();
+        if ($archiveDirectory['error_code'] !== '') {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $entryLabel, (string)$archiveDirectory['error_code'], $post);
+            $this->redirectToFileManager($params + ['wfm_error' => (string)$archiveDirectory['error_code']], '#queue-operations');
+            return '';
+        }
+
+        $sourceEntries = (array)$resolved['source_entries'];
+        $selectionKey = implode('|', array_map(
+            static fn (array $entry): string => (string)($entry['source_relative_path'] ?? ''),
+            $sourceEntries
+        ));
+        $archiveName = $this->buildSourceArchiveName('selection-' . substr(sha1($selectionKey), 0, 12));
+        $targetPath = rtrim((string)$archiveDirectory['path'], "\\/") . DIRECTORY_SEPARATOR . $archiveName;
+        $bizKey = 'wls_file_manager_source_archive_selection:' . sha1(implode('|', [
+            (string)$resolved['root_path'],
+            (string)$resolved['source_parent_relative_path'],
+            $selectionKey,
+        ]));
+
+        try {
+            $existingQueue = \w_query('queue', 'getByBizKey', ['biz_key' => $bizKey]);
+        } catch (\Throwable) {
+            $existingQueue = null;
+        }
+
+        if (is_array($existingQueue) && in_array((string)($existingQueue['status'] ?? ''), ['pending', 'running'], true)) {
+            $this->appendOperationLog($action, 'denied', $rootKey, $relativePath, $entryLabel, 'source_archive_selection_queue_already_pending', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'source_archive_selection_queue_already_pending'], '#queue-operations');
+            return '';
+        }
+
+        $payload = [
+            'operation' => WlsFileManagerLargeOperationQueue::OPERATION_SOURCE_ARCHIVE_SELECTION,
+            'source_policy' => true,
+            'root_key' => $rootKey,
+            'root_path' => (string)$resolved['root_path'],
+            'source_parent_path' => (string)$resolved['source_parent_path'],
+            'source_parent_relative_path' => (string)$resolved['source_parent_relative_path'],
+            'source_entries' => $sourceEntries,
+            'archive_root_path' => (string)$archiveDirectory['path'],
+            'target_path' => $targetPath,
+            'target_relative_path' => $archiveName,
+            'project_id' => trim((string)($post['project_id'] ?? '')),
+            'domain' => trim((string)($post['domain'] ?? '')),
+            'project_type' => trim((string)($post['project_type'] ?? '')),
+            'requested_at' => date('Y-m-d H:i:s'),
+            'requested_ip' => $this->clientIp(),
+            'max_selected' => self::SOURCE_ARCHIVE_SELECTION_MAX_ITEMS,
+            'max_entries' => self::MAX_COMPRESS_ENTRIES,
+            'max_bytes' => self::MAX_COMPRESS_BYTES,
+        ];
+
+        try {
+            $queueResult = \w_query('queue', 'create', [
+                'class' => WlsFileManagerLargeOperationQueue::class,
+                'name' => (string)__('WLS source selection archive: %{1}', [
+                    (string)$resolved['source_parent_relative_path'] !== '' ? (string)$resolved['source_parent_relative_path'] : '/',
+                ]),
+                'module' => 'Weline_FileManager',
+                'content' => $payload,
+                'auto' => true,
+                'biz_key' => $bizKey,
+            ]);
+        } catch (\Throwable) {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $entryLabel, 'queue_create_failed', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'queue_create_failed'], '#queue-operations');
+            return '';
+        }
+
+        $queueId = is_array($queueResult) ? (int)($queueResult['queue_id'] ?? 0) : 0;
+        if ($queueId <= 0) {
+            $this->appendOperationLog($action, 'failed', $rootKey, $relativePath, $entryLabel, 'queue_create_failed', $post);
+            $this->redirectToFileManager($params + ['wfm_error' => 'queue_create_failed'], '#queue-operations');
+            return '';
+        }
+
+        $this->appendOperationLog(
+            $action,
+            'success',
+            $rootKey,
+            $relativePath,
+            $entryLabel . ' -> ' . $archiveName,
+            'source_archive_selection_queue_created',
+            $post + ['queue_id' => (string)$queueId]
+        );
+        $this->redirectToFileManager($params + ['wfm_notice' => 'source_archive_selection_queue_created'], '#queue-operations');
         return '';
     }
 
@@ -1422,6 +1859,23 @@ class WlsFileManager extends BackendController
         ];
 
         return $context + $this->resolveManagedProjectContext($context);
+    }
+
+    private function isEmbeddedPanelRequest(): bool
+    {
+        $value = strtolower(trim((string)$this->request->getGet('embedded', '')));
+        return in_array($value, ['1', 'true', 'yes', 'wls_panel'], true);
+    }
+
+    private function shouldKeepEmbeddedMode(): bool
+    {
+        if ($this->isEmbeddedPanelRequest()) {
+            return true;
+        }
+
+        $post = $this->request->isPost() ? (array)$this->request->getPost() : [];
+        $value = strtolower(trim((string)($post['embedded'] ?? '')));
+        return in_array($value, ['1', 'true', 'yes', 'wls_panel'], true);
     }
 
     /**
@@ -2451,6 +2905,332 @@ class WlsFileManager extends BackendController
 
     /**
      * @param array<int, array<string, mixed>> $roots
+     * @return array{source_path:string,root_path:string,source_relative_path:string,error:string,error_code:string}
+     */
+    private function resolveSourceArchiveEntry(array $roots, string $rootKey, string $relativePath, string $fileName): array
+    {
+        $empty = [
+            'source_path' => '',
+            'root_path' => '',
+            'source_relative_path' => '',
+            'error' => '',
+            'error_code' => '',
+        ];
+
+        $rootMap = $this->rootMap($roots);
+        if (
+            $rootKey === ''
+            || !isset($rootMap[$rootKey])
+            || !in_array($rootKey, WlsFileManagerPathPolicyService::ALLOWED_SOURCE_EDIT_ROOTS, true)
+            || empty($rootMap[$rootKey]['source_edit_enabled'])
+        ) {
+            $empty['error'] = (string)__('Source policy does not allow the selected root.');
+            $empty['error_code'] = 'source_edit_policy_disabled';
+            return $empty;
+        }
+
+        if (!$this->isAllowedSourceFileName($fileName)) {
+            $empty['error'] = (string)__('Source file name or extension is not allowed.');
+            $empty['error_code'] = 'invalid_source_file';
+            return $empty;
+        }
+
+        $rawRelativePath = trim(str_replace('\\', '/', $relativePath), '/');
+        $safeRelativePath = $this->safeRelativePath($rawRelativePath);
+        if ($rawRelativePath !== '' && $safeRelativePath === '') {
+            $empty['error'] = (string)__('Source directory is invalid or outside the selected root.');
+            $empty['error_code'] = 'invalid_write_path';
+            return $empty;
+        }
+
+        $safeFileName = $this->safeNewEntryName($fileName);
+        $sourceRelativePath = trim(($safeRelativePath !== '' ? $safeRelativePath . '/' : '') . $safeFileName, '/');
+        if ($sourceRelativePath === '' || !$this->sourceEditRelativePathAllowed($sourceRelativePath)) {
+            $empty['error'] = (string)__('Source path is protected by policy.');
+            $empty['error_code'] = 'source_edit_protected_path';
+            return $empty;
+        }
+
+        $rootPath = (string)($rootMap[$rootKey]['path'] ?? '');
+        $directory = $this->resolveBrowsePath($rootPath, $safeRelativePath);
+        if ($directory === null || !is_dir($directory)) {
+            $empty['error'] = (string)__('Source directory is invalid or outside the selected root.');
+            $empty['error_code'] = 'invalid_write_path';
+            return $empty;
+        }
+
+        $sourcePath = rtrim($directory, "\\/") . DIRECTORY_SEPARATOR . $safeFileName;
+        $sourceRealPath = realpath($sourcePath);
+        if ($sourceRealPath === false || !$this->isWithinRoot($rootPath, $sourceRealPath)) {
+            $empty['error'] = (string)__('Source archive requires an existing readable file.');
+            $empty['error_code'] = 'source_edit_existing_file_required';
+            return $empty;
+        }
+
+        if (!is_file($sourceRealPath) || is_link($sourcePath) || is_link($sourceRealPath) || !is_readable($sourceRealPath)) {
+            $empty['error'] = (string)__('Source archive requires an existing readable file.');
+            $empty['error_code'] = 'source_edit_existing_file_required';
+            return $empty;
+        }
+
+        $bytes = $this->fileSizeBytes($sourceRealPath);
+        if ($bytes === null || $bytes > self::MAX_TEXT_SAVE_BYTES) {
+            $empty['error'] = (string)__('Source archive only allows one source file smaller than 128 KB.');
+            $empty['error_code'] = 'source_archive_too_large';
+            return $empty;
+        }
+
+        return [
+            'source_path' => $sourceRealPath,
+            'root_path' => $rootPath,
+            'source_relative_path' => $sourceRelativePath,
+            'error' => '',
+            'error_code' => '',
+        ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $roots
+     * @return array{source_path:string,root_path:string,source_relative_path:string,error:string,error_code:string}
+     */
+    private function resolveSourceArchiveTreeEntry(array $roots, string $rootKey, string $relativePath, string $directoryName): array
+    {
+        $empty = [
+            'source_path' => '',
+            'root_path' => '',
+            'source_relative_path' => '',
+            'error' => '',
+            'error_code' => '',
+        ];
+
+        $rootMap = $this->rootMap($roots);
+        if (
+            $rootKey === ''
+            || !isset($rootMap[$rootKey])
+            || !in_array($rootKey, WlsFileManagerPathPolicyService::ALLOWED_SOURCE_EDIT_ROOTS, true)
+            || empty($rootMap[$rootKey]['source_edit_enabled'])
+        ) {
+            $empty['error'] = (string)__('Source policy does not allow the selected root.');
+            $empty['error_code'] = 'source_edit_policy_disabled';
+            return $empty;
+        }
+
+        $safeDirectoryName = $this->safeNewEntryName($directoryName);
+        if ($safeDirectoryName === '') {
+            $empty['error'] = (string)__('Source directory name is invalid.');
+            $empty['error_code'] = 'invalid_name';
+            return $empty;
+        }
+
+        $rawRelativePath = trim(str_replace('\\', '/', $relativePath), '/');
+        $safeRelativePath = $this->safeRelativePath($rawRelativePath);
+        if ($rawRelativePath !== '' && $safeRelativePath === '') {
+            $empty['error'] = (string)__('Source directory is invalid or outside the selected root.');
+            $empty['error_code'] = 'invalid_write_path';
+            return $empty;
+        }
+
+        $sourceRelativePath = trim(($safeRelativePath !== '' ? $safeRelativePath . '/' : '') . $safeDirectoryName, '/');
+        if ($sourceRelativePath === '' || !$this->sourceEditRelativePathAllowed($sourceRelativePath)) {
+            $empty['error'] = (string)__('Source path is protected by policy.');
+            $empty['error_code'] = 'source_edit_protected_path';
+            return $empty;
+        }
+
+        $rootPath = (string)($rootMap[$rootKey]['path'] ?? '');
+        $directory = $this->resolveBrowsePath($rootPath, $safeRelativePath);
+        if ($directory === null || !is_dir($directory)) {
+            $empty['error'] = (string)__('Source directory is invalid or outside the selected root.');
+            $empty['error_code'] = 'invalid_write_path';
+            return $empty;
+        }
+
+        $sourcePath = rtrim($directory, "\\/") . DIRECTORY_SEPARATOR . $safeDirectoryName;
+        $sourceRealPath = realpath($sourcePath);
+        if ($sourceRealPath === false || !$this->isWithinRoot($rootPath, $sourceRealPath)) {
+            $empty['error'] = (string)__('Source archive requires an existing readable directory.');
+            $empty['error_code'] = 'entry_not_found';
+            return $empty;
+        }
+
+        if (!is_dir($sourceRealPath) || is_link($sourcePath) || is_link($sourceRealPath) || !is_readable($sourceRealPath)) {
+            $empty['error'] = (string)__('Source archive requires an existing readable directory.');
+            $empty['error_code'] = 'entry_not_readable';
+            return $empty;
+        }
+
+        return [
+            'source_path' => $sourceRealPath,
+            'root_path' => $rootPath,
+            'source_relative_path' => $sourceRelativePath,
+            'error' => '',
+            'error_code' => '',
+        ];
+    }
+
+    /**
+     * @return array{names: array<int, string>, invalid: bool, too_many: bool}
+     */
+    private function sourceSelectionEntryNames(string $rawNames): array
+    {
+        $parts = preg_split('/[\r\n,;]+/', $rawNames) ?: [];
+        $names = [];
+        $invalid = false;
+        $tooMany = false;
+
+        foreach ($parts as $part) {
+            $name = trim((string)$part);
+            if ($name === '') {
+                continue;
+            }
+
+            $safeName = $this->safeNewEntryName($name);
+            if ($safeName === '' || $safeName !== $name) {
+                $invalid = true;
+                continue;
+            }
+
+            if (!in_array($safeName, $names, true)) {
+                $names[] = $safeName;
+            }
+
+            if (count($names) > self::SOURCE_ARCHIVE_SELECTION_MAX_ITEMS) {
+                $tooMany = true;
+                $names = array_slice($names, 0, self::SOURCE_ARCHIVE_SELECTION_MAX_ITEMS);
+                break;
+            }
+        }
+
+        return [
+            'names' => $names,
+            'invalid' => $invalid,
+            'too_many' => $tooMany,
+        ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $roots
+     * @param array<int, string> $entryNames
+     * @return array{source_parent_path:string,root_path:string,source_parent_relative_path:string,source_entries:array<int,array{source_path:string,source_relative_path:string,type:string}>,error:string,error_code:string}
+     */
+    private function resolveSourceArchiveSelectionEntries(array $roots, string $rootKey, string $relativePath, array $entryNames): array
+    {
+        $empty = [
+            'source_parent_path' => '',
+            'root_path' => '',
+            'source_parent_relative_path' => '',
+            'source_entries' => [],
+            'error' => '',
+            'error_code' => '',
+        ];
+
+        $rootMap = $this->rootMap($roots);
+        if (
+            $rootKey === ''
+            || !isset($rootMap[$rootKey])
+            || !in_array($rootKey, WlsFileManagerPathPolicyService::ALLOWED_SOURCE_EDIT_ROOTS, true)
+            || empty($rootMap[$rootKey]['source_edit_enabled'])
+        ) {
+            $empty['error'] = (string)__('Source policy does not allow the selected root.');
+            $empty['error_code'] = 'source_edit_policy_disabled';
+            return $empty;
+        }
+
+        if ($entryNames === [] || count($entryNames) > self::SOURCE_ARCHIVE_SELECTION_MAX_ITEMS) {
+            $empty['error'] = (string)__('Source selection is invalid.');
+            $empty['error_code'] = count($entryNames) > self::SOURCE_ARCHIVE_SELECTION_MAX_ITEMS
+                ? 'source_archive_selection_too_many'
+                : 'invalid_source_selection';
+            return $empty;
+        }
+
+        $rawRelativePath = trim(str_replace('\\', '/', $relativePath), '/');
+        $safeRelativePath = $this->safeRelativePath($rawRelativePath);
+        if ($rawRelativePath !== '' && $safeRelativePath === '') {
+            $empty['error'] = (string)__('Source directory is invalid or outside the selected root.');
+            $empty['error_code'] = 'invalid_write_path';
+            return $empty;
+        }
+
+        $rootPath = (string)($rootMap[$rootKey]['path'] ?? '');
+        $directory = $this->resolveBrowsePath($rootPath, $safeRelativePath);
+        if ($directory === null || !is_dir($directory) || is_link($directory) || !is_readable($directory)) {
+            $empty['error'] = (string)__('Source directory is invalid or outside the selected root.');
+            $empty['error_code'] = 'invalid_write_path';
+            return $empty;
+        }
+
+        $sourceEntries = [];
+        foreach ($entryNames as $entryName) {
+            $safeEntryName = $this->safeNewEntryName((string)$entryName);
+            if ($safeEntryName === '') {
+                $empty['error'] = (string)__('Source selection is invalid.');
+                $empty['error_code'] = 'invalid_source_selection';
+                return $empty;
+            }
+
+            $sourceRelativePath = trim(($safeRelativePath !== '' ? $safeRelativePath . '/' : '') . $safeEntryName, '/');
+            if ($sourceRelativePath === '' || !$this->sourceEditRelativePathAllowed($sourceRelativePath)) {
+                $empty['error'] = (string)__('Source path is protected by policy.');
+                $empty['error_code'] = 'source_edit_protected_path';
+                return $empty;
+            }
+
+            $sourcePath = rtrim($directory, "\\/") . DIRECTORY_SEPARATOR . $safeEntryName;
+            $sourceRealPath = realpath($sourcePath);
+            if ($sourceRealPath === false || !$this->isWithinRoot($rootPath, $sourceRealPath)) {
+                $empty['error'] = (string)__('Source selection requires existing readable entries.');
+                $empty['error_code'] = 'entry_not_found';
+                return $empty;
+            }
+
+            if (is_link($sourcePath) || is_link($sourceRealPath) || !is_readable($sourceRealPath)) {
+                $empty['error'] = (string)__('Source selection requires existing readable entries.');
+                $empty['error_code'] = 'entry_not_readable';
+                return $empty;
+            }
+
+            $type = is_dir($sourceRealPath) ? 'directory' : (is_file($sourceRealPath) ? 'file' : '');
+            if ($type === '') {
+                $empty['error'] = (string)__('Source selection requires existing readable entries.');
+                $empty['error_code'] = 'entry_not_readable';
+                return $empty;
+            }
+
+            if ($type === 'file') {
+                if (!$this->isAllowedSourceFileName($safeEntryName)) {
+                    $empty['error'] = (string)__('Source file name or extension is not allowed.');
+                    $empty['error_code'] = 'invalid_source_file';
+                    return $empty;
+                }
+
+                $bytes = $this->fileSizeBytes($sourceRealPath);
+                if ($bytes === null || $bytes > self::MAX_TEXT_SAVE_BYTES) {
+                    $empty['error'] = (string)__('Source archive only allows source files smaller than 128 KB.');
+                    $empty['error_code'] = 'source_archive_too_large';
+                    return $empty;
+                }
+            }
+
+            $sourceEntries[] = [
+                'source_path' => $sourceRealPath,
+                'source_relative_path' => $sourceRelativePath,
+                'type' => $type,
+            ];
+        }
+
+        return [
+            'source_parent_path' => $directory,
+            'root_path' => $rootPath,
+            'source_parent_relative_path' => $safeRelativePath,
+            'source_entries' => $sourceEntries,
+            'error' => '',
+            'error_code' => '',
+        ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $roots
      * @return array{path:string,root_path:string,error:string,error_code:string}
      */
     private function resolveSourceEditableFile(array $roots, string $rootKey, string $relativePath, string $fileName): array
@@ -2665,6 +3445,51 @@ class WlsFileManager extends BackendController
         }
 
         return strtolower((string)pathinfo($name, PATHINFO_EXTENSION)) === 'zip' ? $name : '';
+    }
+
+    private function buildSourceArchiveName(string $sourceRelativePath): string
+    {
+        $baseName = (string)(preg_replace('/[^A-Za-z0-9._-]+/', '_', basename(str_replace('\\', '/', $sourceRelativePath))) ?: 'source');
+        $baseName = trim($baseName, '._-');
+        if ($baseName === '') {
+            $baseName = 'source';
+        }
+
+        return $this->safeArchiveName(sprintf(
+            'source-archive-%s-%s-%s.zip',
+            date('Ymd-His'),
+            substr(sha1($sourceRelativePath . '|' . microtime(true)), 0, 12),
+            mb_substr($baseName, 0, 64)
+        ));
+    }
+
+    /**
+     * @return array{path:string,error_code:string}
+     */
+    private function ensureSourceArchiveDirectory(): array
+    {
+        $varPath = defined('VAR_PATH') ? (string)VAR_PATH : ((defined('BP') ? (string)BP : '') . DIRECTORY_SEPARATOR . 'var');
+        $varPath = rtrim($varPath, "\\/");
+        $varRealPath = $varPath !== '' ? realpath($varPath) : false;
+        if ($varRealPath === false) {
+            return ['path' => '', 'error_code' => 'invalid_write_path'];
+        }
+
+        $archivePath = rtrim($varRealPath, "\\/") . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, self::SOURCE_ARCHIVE_RELATIVE_PATH);
+        if (!is_dir($archivePath) && !mkdir($archivePath, 0775, true) && !is_dir($archivePath)) {
+            return ['path' => '', 'error_code' => 'write_failed'];
+        }
+
+        $archiveRealPath = realpath($archivePath);
+        if ($archiveRealPath === false || !$this->isCandidateWithinRoot($varRealPath, $archiveRealPath)) {
+            return ['path' => '', 'error_code' => 'path_escape'];
+        }
+
+        if (!is_writable($archiveRealPath)) {
+            return ['path' => '', 'error_code' => 'directory_not_writable'];
+        }
+
+        return ['path' => $archiveRealPath, 'error_code' => ''];
     }
 
     private function isAllowedTextFileName(string $fileName): bool
@@ -3123,11 +3948,24 @@ class WlsFileManager extends BackendController
      */
     private function redirectToFileManager(array $params, string $fragment = '#browser'): void
     {
-        $url = $this->request->getUrlBuilder()->getBackendUrl('weline_filemanager/backend/wls-file-manager', $params);
-        if ($fragment !== '') {
-            $url .= $fragment;
+        if ($this->shouldKeepEmbeddedMode()) {
+            $params['embedded'] = '1';
         }
-        $this->redirect($url);
+
+        $this->redirect($this->request->getUrlBuilder()->getBackendUrl($this->fileManagerRouteForFragment($fragment), $params));
+    }
+
+    private function fileManagerRouteForFragment(string $fragment): string
+    {
+        return match (ltrim(trim($fragment), '#')) {
+            'roots' => 'weline_filemanager/backend/wls-file-manager/roots',
+            'path-policy' => 'weline_filemanager/backend/wls-file-manager/policy-page',
+            'write-operations' => 'weline_filemanager/backend/wls-file-manager/write-page',
+            'queue-operations' => 'weline_filemanager/backend/wls-file-manager/queue-page',
+            'operation-log' => 'weline_filemanager/backend/wls-file-manager/log-page',
+            'capabilities' => 'weline_filemanager/backend/wls-file-manager/capabilities-page',
+            default => 'weline_filemanager/backend/wls-file-manager/browser',
+        };
     }
 
     /**
@@ -3383,7 +4221,7 @@ class WlsFileManager extends BackendController
         $root = trim((string)$this->request->getGet('log_root', ''));
         $query = trim((string)$this->request->getGet('log_query', ''));
 
-        $allowedActions = ['create_directory', 'save_text', 'save_source', 'source_create', 'source_rename', 'source_trash', 'source_trash_queue', 'upload_file', 'rename_entry', 'delete_entry', 'delete_tree', 'compress_entry', 'compress_queue', 'trash_queue', 'trash_restore', 'trash_purge', 'path_policy_save', 'path_policy_reset'];
+        $allowedActions = ['create_directory', 'save_text', 'save_source', 'source_create', 'source_rename', 'source_trash', 'source_trash_queue', 'source_archive_queue', 'source_archive_tree_queue', 'source_archive_selection_queue', 'upload_file', 'rename_entry', 'delete_entry', 'delete_tree', 'compress_entry', 'compress_queue', 'trash_queue', 'trash_restore', 'trash_purge', 'path_policy_save', 'path_policy_reset'];
         $allowedResults = ['success', 'denied', 'failed'];
         $allowedRoots = ['project', 'local_project', 'project_var', 'project_pub', 'app_code', 'var', 'pub', 'policy'];
         if ($roots !== []) {
@@ -3546,6 +4384,10 @@ class WlsFileManager extends BackendController
             'source_created' => (string)__('源码文件已创建。'),
             'source_renamed' => (string)__('源码文件已重命名。'),
             'source_trashed' => (string)__('源码文件已移入可恢复回收站。'),
+            'source_archive_queue_created' => (string)__('Source archive queue created.'),
+            'source_archive_tree_queue_created' => (string)__('Source directory archive queue created.'),
+            'source_archive_selection_queue_created' => (string)__('Source selection archive queue created.'),
+            'source_archive_too_large' => (string)__('Source archive only allows one source file smaller than 128 KB.'),
             default => '',
         };
     }
@@ -3576,6 +4418,9 @@ class WlsFileManager extends BackendController
             'source_rename' => (string)__('重命名源码文件'),
             'source_trash' => (string)__('回收源码文件'),
             'source_trash_queue' => (string)__('队列回收源码文件'),
+            'source_archive_queue' => (string)__('Queued source archive'),
+            'source_archive_tree_queue' => (string)__('Queued source directory archive'),
+            'source_archive_selection_queue' => (string)__('Queued source selection archive'),
             default => $action,
         };
     }
@@ -3687,6 +4532,15 @@ class WlsFileManager extends BackendController
             'source_created' => (string)__('源码文件已创建。'),
             'source_renamed' => (string)__('源码文件已重命名。'),
             'source_trashed' => (string)__('源码文件已移入可恢复回收站。'),
+            'source_archive_queue_created' => (string)__('Source archive queue created.'),
+            'source_archive_tree_queue_created' => (string)__('Source directory archive queue created.'),
+            'source_archive_tree_queue_already_pending' => (string)__('A pending or running queue already targets this source directory archive.'),
+            'source_archive_selection_queue_created' => (string)__('Source selection archive queue created.'),
+            'source_archive_selection_queue_already_pending' => (string)__('A pending or running queue already targets this source selection archive.'),
+            'invalid_source_selection' => (string)__('Source selection is invalid.'),
+            'source_archive_selection_too_many' => (string)__('Source selection archive accepts up to 20 entries.'),
+            'source_archive_too_large' => (string)__('Source archive only allows one source file smaller than 128 KB.'),
+            'source_archive_tree_too_large' => (string)__('Source directory archive exceeds the 10 MB source queue limit.'),
             default => '',
         };
     }
@@ -3697,6 +4551,9 @@ class WlsFileManager extends BackendController
             WlsFileManagerLargeOperationQueue::OPERATION_COMPRESS_ZIP => (string)__('Queued compression'),
             WlsFileManagerLargeOperationQueue::OPERATION_TRASH_ENTRY => (string)__('Queued trash move'),
             WlsFileManagerLargeOperationQueue::OPERATION_SOURCE_TRASH_ENTRY => (string)__('Queued source trash move'),
+            WlsFileManagerLargeOperationQueue::OPERATION_SOURCE_ARCHIVE_FILE => (string)__('Queued source archive'),
+            WlsFileManagerLargeOperationQueue::OPERATION_SOURCE_ARCHIVE_TREE => (string)__('Queued source directory archive'),
+            WlsFileManagerLargeOperationQueue::OPERATION_SOURCE_ARCHIVE_SELECTION => (string)__('Queued source selection archive'),
             default => $operation !== '' ? $operation : (string)__('Queue operation'),
         };
     }

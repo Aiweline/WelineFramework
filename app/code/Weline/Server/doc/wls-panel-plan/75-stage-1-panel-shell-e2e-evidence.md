@@ -9618,6 +9618,969 @@ Test-Path var/process/setup_upgrade.lock
 False.
 ```
 
+## 2026-06-21 - Current full WLS Panel regression smoke after shared plugin UI layer
+
+Scope:
+
+- Revalidated the current integrated WLS Panel after the shared
+  `wls-panel-plugins.js` interaction layer was added to the backend footer.
+- This was a browser/runtime regression proof only. No production code was
+  changed in this slice.
+- Covered the independent shell, Marketplace, native Security page, and the
+  installed PHP, Database, File Manager, and Deploy WLS plugin pages.
+
+Task directory:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke
+```
+
+Script checks:
+
+```text
+node --check dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs
+exit 0
+
+node --check dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs
+exit 0
+```
+
+Runtime:
+
+```text
+php bin/w server:start ai-test-wls-panel-regression-9994 -p 9994 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
+```
+
+Result:
+
+```text
+Server started on http://p11005ce4.weline.test:9994
+Master PID: 17556
+Workers: 2
+Topology: dispatcher
+HTTP mode: no SSL
+```
+
+Browser URL note:
+
+```text
+Edge/CDP returned HTTP 502 for the test domain path:
+http://p11005ce4.weline.test:9994/...
+
+curl.exe -I to the same domain returned a valid 302 backend login redirect.
+curl.exe -I to http://127.0.0.1:9994/... also returned a valid 302 backend
+login redirect. The browser smoke therefore used http://127.0.0.1:9994 to
+avoid a browser/domain proxy path issue and keep the validation focused on the
+WLS Panel application surface.
+```
+
+Full panel CDP sweep:
+
+```text
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost'; process.env.WLS_BASE_URL='http://127.0.0.1:9994'; process.env.CDP_PORT='9344'; await import('./dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs');"
+```
+
+Result:
+
+```text
+passed=true
+baseUrl=http://127.0.0.1:9994
+pages=Dashboard, Marketplace, Security, PHP Manager, DB Manager, File Manager, Deploy
+viewports=desktop-dark-1440, phone-dark-390
+loginFallback=false for every page
+overflow=0 for every page
+fatalHits=[] for every page
+buttonsFit=true for every page
+expected text matched for every page
+```
+
+Theme spotcheck:
+
+```text
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost'; process.env.WLS_BASE_URL='http://127.0.0.1:9994'; process.env.CDP_PORT='9345'; await import('./dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs');"
+```
+
+Result:
+
+```text
+passed=true
+pages=Dashboard, File Manager, Deploy
+viewports=desktop-1280, phone-390
+themes=light, dark
+actualTheme matched expectedTheme for every page/viewport/theme combination
+overflow=0 for every combination
+fatalHits=[] for every combination
+```
+
+Result artifacts:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/multi-page-cdp-smoke-result.json
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/dashboard-desktop-dark-1440.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/marketplace-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/security-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/php-manager-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/db-manager-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/file-manager-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/artifacts-localhost/deploy-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/theme-cdp-spotcheck-result.json
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/dashboard-phone-390-light.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/dashboard-phone-390-dark.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/file-manager-phone-390-dark.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0555-wls-panel-current-regression-smoke/theme-artifacts-localhost/deploy-desktop-1280-dark.png
+```
+
+Visual review notes:
+
+- Dashboard desktop dark keeps the standalone server-panel layout, left
+  navigation, operation cards, and project/action center readable without
+  backend chrome.
+- Marketplace mobile dark stacks navigation and actions cleanly with no
+  horizontal overflow.
+- File Manager mobile dark keeps the plugin navigation and project context
+  cards readable; controls remain touch-sized.
+- Deploy desktop dark keeps the project Profile form, context cards, and
+  action buttons visually aligned.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-panel-regression-9994
+Instance stopped.
+
+php bin/w server:status ai-test-wls-panel-regression-9994
+Master PID: -
+Master 状态：○ 已停止
+状态：全部停止 (0/0)
+```
+
+## 2026-06-21 - WLS-DB-EXEC-001 DbManager Lifecycle Execution Boundary
+
+Scope:
+
+- Add a guarded real execution boundary to WLS Database Manager lifecycle SQL
+  without turning the panel into an unsafe direct DBA console.
+- Keep the first execution slice limited to adapter-generated database/user/grant
+  SQL; backup, restore, migration, replica topology, and WLS reload orchestration
+  remain separate atomic tasks.
+
+Changed files:
+
+```text
+app/code/Weline/DbManager/Service/WlsDatabaseLifecycleExecutionService.php
+app/code/Weline/DbManager/Service/WlsDatabaseProfileService.php
+app/code/Weline/DbManager/Service/WlsDatabaseLifecyclePlanService.php
+app/code/Weline/DbManager/Service/Adapter/WlsDatabaseLifecycleSqlPlanAdapter.php
+app/code/Weline/DbManager/Controller/Backend/WlsDbManager.php
+app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
+app/code/Weline/DbManager/i18n/en_US.csv
+app/code/Weline/DbManager/i18n/zh_Hans_CN.csv
+app/code/Weline/DbManager/doc/README.md
+app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary
+```
+
+Execution boundary:
+
+- `postLifecycleExecute` is POST-only and ACL-protected through the existing
+  DbManager backend controller boundary.
+- The execution service requires:
+  - lifecycle plan `can_execute=true`;
+  - adapter plan state `planned`;
+  - selected source DBA env profile;
+  - enabled Project Database Profile;
+  - exact confirmation phrase `RUN_DB_LIFECYCLE`;
+  - checkbox acknowledgement `confirm_lifecycle_execute=1`.
+- The service connects through PDO, runs `SELECT 1` preflight, executes only the
+  rebuilt adapter statements, runs verification queries, and writes sanitized
+  audit records through `WlsDatabaseProfileService::appendAuditEvent`.
+- The browser smoke submitted only a negative POST without the phrase/checkbox,
+  so no lifecycle SQL was executed during validation.
+
+Static validation:
+
+```text
+php -l app/code/Weline/DbManager/Service/WlsDatabaseLifecycleExecutionService.php
+No syntax errors detected
+
+php -l app/code/Weline/DbManager/Controller/Backend/WlsDbManager.php
+No syntax errors detected
+
+php -l app/code/Weline/DbManager/Service/WlsDatabaseLifecyclePlanService.php
+No syntax errors detected
+
+php -l app/code/Weline/DbManager/Service/Adapter/WlsDatabaseLifecycleSqlPlanAdapter.php
+No syntax errors detected
+
+php -l app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
+No syntax errors detected
+
+rg -n "\b(sleep|usleep|die|exit)\b|alert\(|confirm\(|prompt\(" <touched DbManager files>
+No output.
+```
+
+CSV and route validation:
+
+```text
+Get-Content app/code/Weline/DbManager/i18n/en_US.csv | ConvertFrom-Csv -Header source,target | Measure-Object
+Count: 360
+
+Get-Content app/code/Weline/DbManager/i18n/zh_Hans_CN.csv | ConvertFrom-Csv -Header source,target | Measure-Object
+Count: 360
+
+php bin/w setup:upgrade --route -m Weline_DbManager --skip-env-check --skip-classmap --skip-reflection-compile --skip-composer-dump
+Weline_DbManager route refresh completed.
+
+generated/routers/backend_pc.php:
+weline_dbmanager/backend/wls-db-manager/lifecycle-execute::POST -> postLifecycleExecute
+```
+
+Whitespace validation:
+
+```text
+git diff --check -- <changed DbManager files and task artifacts>
+Exit 0. Git reported LF/CRLF working-copy warnings only.
+```
+
+Runtime/browser validation:
+
+```text
+php bin/w server:start ai-test-wls-db-exec-9993 -p 9993 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
+node dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-smoke.mjs
+```
+
+Result:
+
+```text
+passed=true
+baseUrl=http://127.0.0.1:9993
+desktop-light-1280: shell=true lifecycle=true execution-form=true overflow=0 loginFallback=false fatalHits=[]
+desktop-dark-1280: actualTheme=dark overflow=0 buttonsFit=true fatalHits=[]
+phone-dark-390: actualTheme=dark overflow=0 buttonsFit=true fatalHits=[]
+negativePost: status=200 blocked=true executedNotice=false hasShell=true
+```
+
+Screenshots:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-desktop-light-1280.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-desktop-dark-1280.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-smoke-result.json
+```
+
+Visual review notes:
+
+- Desktop dark mode keeps clear hierarchy between sidebar, shell background,
+  panels, form controls, status badges, and SQL preview blocks.
+- Phone width `390` stacks lifecycle controls cleanly without horizontal
+  overflow; the guarded execution status remains visible and readable.
+- The plugin page inherits host `body/html` dark-mode attributes. A follow-up
+  plugin interaction slice added a panel-level global script so backend-injected
+  WLS plugin content no longer depends on inert inline scripts for theme
+  toggles.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-db-exec-9993
+Instance stopped. IPC reported dispatcher and both workers exited cleanly.
+```
+
+## 2026-06-21 - WLS-PANEL-PLUGIN-UI-001 Global Plugin Interaction Script
+
+Scope:
+
+- Add a backend-loaded global WLS plugin interaction asset so WLS plugin pages do
+  not depend on inline scripts that may be inert when content is injected into
+  the admin shell.
+- Keep the script data-attribute scoped: ordinary backend pages without WLS
+  plugin shells do not receive behavior.
+- Cover the current WLS standalone shell theme toggle and DbManager plugin theme
+  toggle. FileManager and Deploy-specific actions remain separate slices.
+
+Changed files:
+
+```text
+app/code/Weline/Server/view/statics/assets/js/wls-panel-plugins.js
+app/code/Weline/Admin/view/templates/common/footer.phtml
+app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0440-wls-panel-plugin-interactions
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-smoke.mjs
+```
+
+Behavior:
+
+- The global asset is loaded from the backend footer:
+  `@static(Weline_Server::assets/js/wls-panel-plugins.js)`.
+- It initializes existing WLS shells and observes later DOM insertions with a
+  throttled `MutationObserver`.
+- It persists `wls_panel_theme` and `wls_db_manager_theme`, applies host
+  `body/html` theme attributes, updates standalone WLS shell `data-wls-theme`,
+  updates DbManager shell `data-theme`, and refreshes button labels/ARIA state.
+- Click handling is delegated on the document capture phase for
+  `[data-wls-theme-toggle]` and `[data-wdb-theme-toggle]`, preventing duplicate
+  inline/local handlers from double-toggling.
+
+Static validation:
+
+```text
+php -l app/code/Weline/Admin/view/templates/common/footer.phtml
+No syntax errors detected
+
+php -l app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
+No syntax errors detected
+
+rg -n "\b(sleep|usleep|die|exit)\b|alert\(|confirm\(|prompt\(" app/code/Weline/Server/view/statics/assets/js/wls-panel-plugins.js app/code/Weline/Admin/view/templates/common/footer.phtml app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
+No output.
+```
+
+Runtime/browser validation reused the DbManager lifecycle smoke, upgraded to
+click the real plugin theme button instead of manually applying theme
+attributes:
+
+```text
+php bin/w server:start ai-test-wls-db-exec-9993 -p 9993 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
+node dev/ai/codex/tasks/2026-06-21/2026-06-21-0348-wls-db-lifecycle-execution-boundary/artifacts/db-manager-lifecycle-exec-smoke.mjs
+```
+
+Result:
+
+```text
+passed=true
+desktop-light-1280: pluginScriptLoaded=true shellTheme=light themeButtonLabel=Dark overflow=0
+desktop-dark-1280: pluginScriptLoaded=true shellTheme=dark themeButtonLabel=Light overflow=0
+phone-dark-390: pluginScriptLoaded=true shellTheme=dark themeButtonLabel=Light overflow=0
+negativePost: status=200 blocked=true executedNotice=false
+```
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-db-exec-9993
+Instance stopped. IPC reported dispatcher and both workers exited cleanly.
+```
+
+## 2026-06-21 - DbManager Lifecycle SQL Plan Adapter Preview
+
+Status: passed for preview-only mysql/pgsql lifecycle adapter planning, panel
+rendering, desktop/mobile responsive behavior, light/dark theme behavior, and
+runtime cleanup.
+
+Scope:
+
+- Added `WlsDatabaseLifecycleSqlPlanAdapter` as the first vendor-aware
+  lifecycle adapter boundary for `create_database`, `create_user`, and
+  `grant_user`.
+- Adapter output is preview-only: SQL statements, verification queries,
+  rollback/cleanup guidance, audit event name, and `RUN_DB_LIFECYCLE`
+  confirmation phrase are rendered, but no DB connection or SQL execution route
+  exists in this slice.
+- The Database Manager panel now renders an adapter SQL plan section below the
+  lifecycle plan steps and keeps the lifecycle execution button disabled.
+
+Changed files:
+
+```text
+app/code/Weline/DbManager/Service/Adapter/WlsDatabaseLifecycleSqlPlanAdapter.php
+app/code/Weline/DbManager/Service/WlsDatabaseLifecyclePlanService.php
+app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
+app/code/Weline/DbManager/i18n/en_US.csv
+app/code/Weline/DbManager/i18n/zh_Hans_CN.csv
+app/code/Weline/DbManager/doc/README.md
+app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
+app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
+app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer
+```
+
+Static validation:
+
+```text
+php -l app/code/Weline/DbManager/Service/Adapter/WlsDatabaseLifecycleSqlPlanAdapter.php
+No syntax errors detected.
+
+php -l app/code/Weline/DbManager/Service/WlsDatabaseLifecyclePlanService.php
+No syntax errors detected.
+
+php -l app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
+No syntax errors detected.
+
+php -l dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-lifecycle-adapter-probe.php
+No syntax errors detected.
+
+php -l dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-csv-parse-probe.php
+No syntax errors detected.
+```
+
+The local PHP runtime still reports duplicate extension loading warnings before
+syntax output; the lint results themselves passed.
+
+CSV and adapter probes:
+
+```text
+php dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-csv-parse-probe.php
+app/code/Weline/DbManager/i18n/en_US.csv OK 324
+app/code/Weline/DbManager/i18n/zh_Hans_CN.csv OK 324
+
+php dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-lifecycle-adapter-probe.php
+passed=true
+mysql_grant: state=dry_run_only adapter_state=planned sql=GRANT SELECT ON `app_db`.* TO 'app_user'@'127.0.0.1';
+pgsql_create_user: state=dry_run_only adapter_state=planned sql=CREATE ROLE "app_role" LOGIN PASSWORD '<profile-secret>';
+unsafe_database: state=blocked adapter_state=blocked statements=[]
+mysql_missing_host: state=blocked adapter_state=blocked
+```
+
+Mojibake and whitespace checks:
+
+```text
+rg -n "寮€|鍥炴|閲嶈|鎴愬姛|澶辫|锛\?\{|\?\{1\}|绛夊緟|鐢熷懡|鏁版嵁|鐢ㄦ埛" \
+  app/code/Weline/DbManager/Service/Adapter/WlsDatabaseLifecycleSqlPlanAdapter.php \
+  app/code/Weline/DbManager/Service/WlsDatabaseLifecyclePlanService.php \
+  app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml \
+  app/code/Weline/DbManager/i18n/en_US.csv \
+  app/code/Weline/DbManager/i18n/zh_Hans_CN.csv
+No output.
+
+git diff --check -- <touched DbManager, WLS Panel plan, and task files>
+No whitespace errors. Git reported LF/CRLF working-copy warnings for existing
+touched files.
+```
+
+Browser smoke:
+
+```text
+php bin/w server:start ai-test-wls-db-adapter-9992 -p 9992 -c 1 --no-ssl --supervisor false --worker-memory-limit=512M
+$env:WLS_BASE_URL='http://127.0.0.1:9992'; node dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-cdp-smoke.mjs
+```
+
+Result:
+
+```text
+passed=true
+viewports=desktop-1280, phone-390
+themes=light, dark
+all cases: shellFound=true, adapterPlanFound=true, loginFallback=false,
+overflow=0, hasGrantSql=true, hasConfirmationPhrase=true,
+hasAuditEvent=true, lifecycleButtonDisabled=true, buttonsFit=true,
+fatalHits=[]
+```
+
+Artifacts:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-cdp-smoke-result.json
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-desktop-1280-light.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-desktop-1280-dark.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-phone-390-light.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0017-wls-db-lifecycle-adapter-plan-layer/artifacts/db-manager-sql-plan-phone-390-dark.png
+```
+
+Notes:
+
+- The first CDP attempt against `p11005ce4.weline.test:9992` failed in Edge at
+  `chrome-error://chromewebdata/` while `curl.exe -I` returned 200. The accepted
+  browser proof used `http://127.0.0.1:9992`, which WLS status also advertises
+  as the local test URL.
+- A default 256 MB worker run rendered the first case, then hit the WLS output
+  capture memory guard on repeated screenshots. The accepted run used
+  `--worker-memory-limit=512M`, matching the existing plugin-heavy panel smoke
+  baseline.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-db-adapter-9992
+Instance stopped.
+
+php bin/w server:status ai-test-wls-db-adapter-9992
+Status: all stopped (0/0).
+
+Get-NetTCPConnection -LocalPort 9992 -State Listen
+No output.
+
+Get-NetTCPConnection -LocalPort 9342 -State Listen
+No output.
+
+Test-Path var/process/setup_upgrade.lock
+False.
+```
+
+## 2026-06-21 - WLS Deploy Panel Chinese Text And Rollback Log Polish
+
+Scope:
+
+- Repaired rollback progress source strings in
+  `app/code/Weline/Deploy/Service/DeployOrchestratorService.php` from mojibake
+  to valid Chinese i18n keys with intact `%{1}` placeholders.
+- Updated `app/code/Weline/Deploy/i18n/en_US.csv` for the repaired rollback
+  source keys.
+- Updated `app/code/Weline/Deploy/i18n/zh_Hans_CN.csv` for WLS Deploy panel
+  manual release, rollback action, execution plan, preflight gate, status
+  summary, and Git error visible strings.
+
+Validation:
+
+```text
+php -l app/code/Weline/Deploy/Service/DeployOrchestratorService.php
+No syntax errors detected in app/code/Weline/Deploy/Service/DeployOrchestratorService.php
+```
+
+The local PHP runtime still reports duplicate extension loading warnings before
+syntax output; the lint result itself passed.
+
+```text
+php -d error_reporting=22527 -r "<fgetcsv parse both Deploy CSV files>"
+app/code/Weline/Deploy/i18n/en_US.csv OK 633
+app/code/Weline/Deploy/i18n/zh_Hans_CN.csv OK 634
+```
+
+```text
+rg -n "寮€|鍥炴|閲嶈|鎴愬姛|澶辫|锛\?\{|\?\{1\}" \
+  app/code/Weline/Deploy/Service/DeployOrchestratorService.php \
+  app/code/Weline/Deploy/i18n/en_US.csv \
+  app/code/Weline/Deploy/i18n/zh_Hans_CN.csv
+No output.
+```
+
+```text
+Targeted zh_Hans_CN untranslated-key probe for manual release, rollback,
+execution gate, plan status, and empty-plan strings
+No output.
+```
+
+```text
+git diff --check -- \
+  app/code/Weline/Deploy/Service/DeployOrchestratorService.php \
+  app/code/Weline/Deploy/i18n/en_US.csv \
+  app/code/Weline/Deploy/i18n/zh_Hans_CN.csv
+No whitespace errors. Git reported LF/CRLF working-copy warnings for the
+existing touched files.
+```
+
+No route refresh or browser smoke was run for this slice because it did not add
+routes, templates, forms, CSS, or runtime release behavior.
+
+## 2026-06-20 - WLS Panel Current Multi-page and Theme Baseline
+
+Goal: confirm the current independent WLS Panel shell remains usable after the
+latest FileManager source queue work, before continuing the broader gateway,
+plugin, and deploy plan.
+
+Runtime:
+
+```text
+php bin/w server:start ai-test-wls-panel-current-9996 -p 9996 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
+curl.exe -I http://p11005ce4.weline.test:9996/
+php bin/w server:status ai-test-wls-panel-current-9996
+```
+
+Evidence:
+
+```text
+HTTP/1.1 200 OK
+Master, two HTTP workers, and Dispatcher were running on the dedicated instance.
+```
+
+Multi-page visual smoke:
+
+```text
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts'; process.env.WLS_BASE_URL='http://p11005ce4.weline.test:9996'; process.env.CDP_PORT='9338'; await import('./dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs');"
+```
+
+Result:
+
+```text
+passed=true
+pages=Dashboard, Marketplace, Security, PHP Manager, DB Manager, File Manager, Deploy
+viewports=desktop-dark-1440, phone-dark-390
+all cases: shell=true, loginFallback=false, overflow=0, fatalHits=[], buttonsFit=true
+```
+
+Theme spot-check:
+
+```text
+node --check dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs
+node dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs
+```
+
+Result:
+
+```text
+passed=true
+pages=Dashboard, File Manager, Deploy
+themes=light, dark
+viewports=desktop-1280, phone-390
+all cases: expected theme matched actual shell theme, overflow=0, fatalHits=[]
+```
+
+Artifacts:
+
+```text
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/multi-page-cdp-smoke-result.json
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/theme-cdp-spotcheck-result.json
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/dashboard-desktop-dark-1440.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/marketplace-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/file-manager-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/deploy-phone-dark-390.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/dashboard-phone-390-light.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/file-manager-phone-390-light.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/deploy-phone-390-light.png
+```
+
+Visual review notes:
+
+- The desktop Dashboard keeps the WLS Panel independent from the framework
+  backend chrome and shows core navigation plus WLS plugin capability cards.
+- Phone widths stack navigation and action buttons without horizontal overflow.
+- Light and dark themes both maintain readable contrast in the main content
+  surfaces; the dark navigation/header zone remains intentionally consistent
+  across light plugin shells.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-panel-current-9996
+php bin/w server:status ai-test-wls-panel-current-9996
+Get-NetTCPConnection -LocalPort 9996 -ErrorAction SilentlyContinue
+Get-NetTCPConnection -LocalPort 9338 -ErrorAction SilentlyContinue
+Get-NetTCPConnection -LocalPort 9339 -ErrorAction SilentlyContinue
+Test-Path var/process/setup_upgrade.lock
+```
+
+Result:
+
+```text
+Instance stopped.
+Status reported all stopped (0/0).
+Ports 9996, 9338, and 9339 had no listeners.
+setup_upgrade.lock was absent.
+```
+
+## 2026-06-20 - FileManager SOURCE_QUEUE_ARCHIVE_TREE Slice
+
+Status: passed for implementation, route registration, direct service ZIP
+probe, and focused HTTP/worker queue smoke. Browser visual screenshot capture
+was not rerun for this HTTP-only source directory queue slice because the
+repository-local Node environment did not have Playwright installed and no
+browser MCP automation tool was exposed in this run.
+
+Scope:
+
+- Added `SOURCE_QUEUE_ARCHIVE_TREE` as the first bounded read-only source
+  directory queue.
+- The panel accepts one existing child directory under the current enabled
+  source-policy path and posts only the directory name plus the standard
+  confirmation checkbox/phrase.
+- The queue payload uses `operation=source_archive_tree`, records safe root and
+  source-relative path state, caps execution at 200 entries and 10 MB, and
+  writes only to `var/wls-panel/file-manager/source-archives/`.
+- The worker re-checks root key/path consistency, protected path segments,
+  symlink traversal, archive target confinement, entry count, and byte limits.
+- Source upload, hard delete, recursive source delete, purge, overwrite,
+  source-root ZIP writes, multi-root, and broader multi-directory queues remain
+  disabled.
+
+Changed files:
+
+```text
+app/code/Weline/FileManager/Controller/Backend/WlsFileManager.php
+app/code/Weline/FileManager/Queue/WlsFileManagerLargeOperationQueue.php
+app/code/Weline/FileManager/Service/WlsFileManagerLargeOperationService.php
+app/code/Weline/FileManager/view/templates/Backend/WlsFileManager/index.phtml
+app/code/Weline/FileManager/i18n/en_US.csv
+app/code/Weline/FileManager/i18n/zh_Hans_CN.csv
+app/code/Weline/FileManager/doc/README.md
+app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
+app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
+app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0904-wls-file-manager-source-archive-tree-queue
+```
+
+Route refresh:
+
+```text
+php bin/w setup:upgrade --route
+```
+
+Result:
+
+- Route generation and composer/autoload refresh reached the env auto-repair
+  stage, then exited 1 because the local Windows PATH could not resolve child
+  commands such as `php` / `chcp`.
+- `setup_upgrade.lock` was checked afterward and was not present.
+
+Focused route refresh:
+
+```text
+php bin/w setup:upgrade --route -m Weline_FileManager --skip-classmap --skip-composer-dump --skip-env-check
+```
+
+Result:
+
+```text
+Weline_FileManager: route refresh completed.
+Route file write completed.
+System upgrade completed.
+Maintenance mode disabled.
+exit=0
+```
+
+Static validation:
+
+```text
+php -l app/code/Weline/FileManager/Controller/Backend/WlsFileManager.php
+No syntax errors detected in app/code/Weline/FileManager/Controller/Backend/WlsFileManager.php
+
+php -l app/code/Weline/FileManager/Queue/WlsFileManagerLargeOperationQueue.php
+No syntax errors detected in app/code/Weline/FileManager/Queue/WlsFileManagerLargeOperationQueue.php
+
+php -l app/code/Weline/FileManager/Service/WlsFileManagerLargeOperationService.php
+No syntax errors detected in app/code/Weline/FileManager/Service/WlsFileManagerLargeOperationService.php
+
+php -l app/code/Weline/FileManager/view/templates/Backend/WlsFileManager/index.phtml
+No syntax errors detected in app/code/Weline/FileManager/view/templates/Backend/WlsFileManager/index.phtml
+```
+
+Direct service probe:
+
+- Created a temporary source-policy directory under
+  `var/codex-wls-source-tree-archive-smoke/source-root/Module/Service`.
+- Called
+  `WlsFileManagerLargeOperationService::createSourceTreeArchive(..., 200, 10485760)`.
+- Result: success with `entries=1`, `bytes=21`, and ZIP entry
+  `source/Module/Service/Example.php`.
+- Temporary probe directory was cleaned after verifying the workspace path.
+
+Runtime:
+
+```text
+php bin/w server:start ai-test-wls-file-source-tree-9988 -p 9988 --no-ssl --supervisor false -c 1
+```
+
+Result:
+
+```text
+baseUrl=http://p11005ce4.weline.test:9988
+HTTP smoke used http://127.0.0.1:9988
+```
+
+HTTP/queue smoke:
+
+```text
+node dev/ai/codex/tasks/2026-06-20/2026-06-20-0904-wls-file-manager-source-archive-tree-queue/artifacts/filemanager-source-archive-tree-queue-smoke.mjs
+```
+
+Result file:
+
+```text
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0904-wls-file-manager-source-archive-tree-queue/artifacts/filemanager-source-archive-tree-queue-smoke-result.json
+```
+
+Result summary:
+
+```text
+status=passed
+baseUrl=http://127.0.0.1:9988
+domain=codex-source-archive-tree-9988.local
+queue_id=77
+queuePayload.operation=source_archive_tree
+queuePayload.max_entries=200
+queuePayload.max_bytes=10485760
+queueFinal.status=done
+sourceExistsAfterQueue=true
+archiveRoot=var/wls-panel/file-manager/source-archives
+zipEntry=source/dev/ai/codex/tasks/2026-06-20/2026-06-20-0904-wls-file-manager-source-archive-tree-queue/artifacts/source-tree-mqn0cvu0/Example.php
+path-policy-reset=true
+```
+
+Browser/tooling note:
+
+- `node -e "import('playwright')"` failed with `Cannot find package
+  'playwright'`.
+- No in-app Browser MCP automation tool was exposed for this continuation.
+- The smoke still performed real authenticated HTTP requests through the
+  backend login, path policy save/reset, FileManager panel route, queue-create
+  route, operation log route, and `queue:run --id=77`.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-file-source-tree-9988
+Instance stopped.
+
+php bin/w server:status ai-test-wls-file-source-tree-9988
+Master status: stopped; status all stopped (0/0).
+
+Get-NetTCPConnection -LocalPort 9988 -State Listen
+No matching listener.
+
+Test-Path setup_upgrade.lock
+False
+
+Test-Path var/process/setup_upgrade.lock
+False
+```
+
+## 2026-06-20 - FileManager SOURCE_QUEUE_ARCHIVE Slice
+
+Status: passed for implementation, route registration, focused HTTP/worker
+queue smoke, in-app Browser desktop/mobile visual smoke, and isolated policy
+cleanup.
+
+Scope:
+
+- Added a dedicated source-policy queue operation for read-only single-file
+  source archives.
+- `SOURCE_QUEUE_ARCHIVE` requires the existing source-edit policy, an existing
+  allowlisted source file, confirmation checkbox, and the
+  `SOURCE_QUEUE_ARCHIVE` phrase.
+- The worker reads one source file and writes the ZIP only under
+  `var/wls-panel/file-manager/source-archives`.
+- Source-root queue upload, ordinary source-root ZIP creation, hard delete,
+  recursive delete, purge, overwrite, and directory archive remain disabled.
+
+Changed files:
+
+```text
+app/code/Weline/FileManager/Controller/Backend/WlsFileManager.php
+app/code/Weline/FileManager/Queue/WlsFileManagerLargeOperationQueue.php
+app/code/Weline/FileManager/Service/WlsFileManagerLargeOperationService.php
+app/code/Weline/FileManager/view/templates/Backend/WlsFileManager/index.phtml
+app/code/Weline/FileManager/i18n/en_US.csv
+app/code/Weline/FileManager/i18n/zh_Hans_CN.csv
+app/code/Weline/FileManager/doc/README.md
+app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
+app/code/Weline/Server/doc/wls-panel-plan/10-prototype.md
+app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue
+```
+
+Generated route evidence:
+
+```text
+generated/routers/backend_pc.php: weline_filemanager/backend/wls-file-manager/source-archive-queue::POST -> postSourceArchiveQueue
+generated/routers/backend_pc.php: weline_filemanager/backend/wls-file-manager/post-source-archive-queue::POST -> postSourceArchiveQueue
+```
+
+Static validation:
+
+```text
+php -l app\code\Weline\FileManager\Controller\Backend\WlsFileManager.php
+No syntax errors detected in app\code\Weline\FileManager\Controller\Backend\WlsFileManager.php
+
+php -l app\code\Weline\FileManager\Queue\WlsFileManagerLargeOperationQueue.php
+No syntax errors detected in app\code\Weline\FileManager\Queue\WlsFileManagerLargeOperationQueue.php
+
+php -l app\code\Weline\FileManager\Service\WlsFileManagerLargeOperationService.php
+No syntax errors detected in app\code\Weline\FileManager\Service\WlsFileManagerLargeOperationService.php
+
+php -l app\code\Weline\FileManager\view\templates\Backend\WlsFileManager\index.phtml
+No syntax errors detected in app\code\Weline\FileManager\view\templates\Backend\WlsFileManager\index.phtml
+
+node --check dev\ai\codex\tasks\2026-06-20\2026-06-20-0757-wls-file-manager-source-archive-queue\artifacts\filemanager-source-archive-queue-smoke.mjs
+No output.
+
+node --check dev\ai\codex\tasks\2026-06-20\2026-06-20-0757-wls-file-manager-source-archive-queue\artifacts\filemanager-source-archive-queue-visual.mjs
+No output.
+```
+
+Notes:
+
+- PHP startup still prints duplicate-extension warnings from the local PHP
+  configuration.
+- GitNexus impact lookup did not resolve
+  `Weline\FileManager\Queue\WlsFileManagerLargeOperationQueue::execute` or
+  `::validate` in the current index, so impact remains `UNKNOWN`.
+
+Runtime:
+
+```text
+php bin/w server:start ai-test-wls-file-source-archive-9986 -p 9986 -c 1 --no-ssl --no-dispatcher --no-daemon
+curl.exe -I http://127.0.0.1:9986/
+HTTP/1.1 200 OK
+X-Wls-Instance: ai-test-wls-file-source-archive-9986
+X-Wls-Worker-Port: 9986
+```
+
+HTTP/queue smoke:
+
+```text
+node dev\ai\codex\tasks\2026-06-20\2026-06-20-0757-wls-file-manager-source-archive-queue\artifacts\filemanager-source-archive-queue-smoke.mjs
+```
+
+Result file:
+
+```text
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-queue-smoke-result.json
+```
+
+Result summary:
+
+```text
+status=passed
+functional_http=passed
+baseUrl=http://127.0.0.1:9986
+domain=codex-source-archive-9986.local
+queue_id=76
+queuePayload.operation=source_archive_file
+queuePayload.source_policy=true
+queueFinal.status=done
+sourceExistsAfterQueue=true
+archivePath=E:\WelineFramework\DEV-workspace\var\wls-panel\file-manager\source-archives\source-archive-20260620-083244-1d7d112cc8cc-source-archive-http-mqm3nvrj.md.zip
+zipEntry=source/dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/source-archive-http-mqm3nvrj.md
+path-policy-reset=true
+```
+
+Browser smoke:
+
+- Used the Codex in-app Browser because the repository-local Node environment
+  does not have `playwright` installed.
+- Logged into the backend through the real login form.
+- Opened the standalone FileManager panel route with
+  `operation=files.write`, `root=project`, and the task artifacts path.
+- Enabled only the current project source-edit policy for the isolated
+  `codex-source-archive-9986.local` domain before visual validation.
+- Confirmed the archive queue card rendered with:
+  - submit button enabled
+  - button text `创建源码归档队列`
+  - source placeholder `component.php`
+  - confirmation placeholder `SOURCE_QUEUE_ARCHIVE`
+- Desktop default viewport `1280x720`: document overflowX `0`, queue card
+  width `424px`.
+- Mobile viewport `390x844`: document overflowX `0`, `main-content`
+  overflowX `0`, queue card width `268px`.
+- Reset the temporary path policy after validation and restored the browser
+  viewport.
+
+Browser artifacts:
+
+```text
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-desktop.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-desktop-queue.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-mobile.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-mobile-queue.png
+dev/ai/codex/tasks/2026-06-20/2026-06-20-0757-wls-file-manager-source-archive-queue/artifacts/filemanager-source-archive-browser-result.json
+```
+
+Runtime note:
+
+- The first supervised foreground run served the HTTP smoke, then exited with
+  `SupervisorServer.php:270` / `fwrite(): supplied resource is not a valid stream
+  resource`. Browser validation was rerun on the same instance name and port
+  with `--supervisor false` to avoid the unrelated control-plane interruption.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-file-source-archive-9986
+Instance stopped.
+php bin/w server:status ai-test-wls-file-source-archive-9986
+Master status: stopped; status all stopped (0/0).
+Get-NetTCPConnection -LocalPort 9986 -State Listen
+No output.
+```
+
 ## 2026-06-20 - FileManager SOURCE_QUEUE_TRASH Source Queue Slice
 
 Status: passed for the first source-code queue policy layer.
@@ -10155,3 +11118,1005 @@ No output.
 Test-Path var/process/setup_upgrade.lock
 False.
 ```
+
+## 2026-06-21 - DbManager lifecycle success harness readiness
+
+Status: blocked by local database privileges, with read-only evidence recorded.
+
+Scope:
+
+- Reviewed `WlsDatabaseLifecycleExecutionService` as the real lifecycle
+  execution boundary. It opens a PDO connection, runs a connectivity probe,
+  executes rebuilt adapter SQL, runs verification queries, and appends audit
+  events. It does not contain a fake-success path.
+- Added a small readiness task to check whether the current local DB role can
+  safely run a success-path lifecycle harness without mutating the developer
+  application database.
+- No DDL or lifecycle execution was run in this slice.
+
+Task directory:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0610-wls-db-lifecycle-harness-readiness
+```
+
+Environment summary:
+
+```text
+type=pgsql
+host=127.0.0.1
+port=5432
+database=weline_dev
+username_present=true
+password_present=true
+slaves_count=0
+```
+
+Read-only readiness probe:
+
+```text
+driver=pgsql
+connectable=true
+can_create_database=false
+can_create_user=false
+safe_for_real_lifecycle_harness=false
+reason=Current PostgreSQL role lacks createdb and/or createrole.
+```
+
+Decision:
+
+- The real success-path lifecycle harness is intentionally not executed in the
+  current environment.
+- Resume this atom when a disposable DBA test profile is available with
+  `createdb` and `createrole`, a disposable database/user prefix, and explicit
+  cleanup assertions.
+
+## 2026-06-21 - FileManager plugin-heavy panel memory profile at 512M
+
+Status: passed with one runtime observation.
+
+Scope:
+
+- Re-profile the current FileManager/plugin-heavy WLS Panel after the shared
+  plugin interaction layer and recent FileManager growth.
+- Reuse existing CDP browser smoke scripts instead of adding new E2E specs.
+- Validate the documented 512M worker-memory baseline on a dedicated non-9501
+  WLS instance.
+
+Task directory:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile
+```
+
+Startup:
+
+```text
+php bin/w server:start ai-test-wls-panel-memory-9995 -p 9995 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
+```
+
+Runtime:
+
+```text
+baseUrl=http://127.0.0.1:9995
+Master PID=37184
+Dispatcher PID=43396
+Worker #1 initial PID=7696
+Worker #2 PID=41484
+```
+
+HTTP precheck:
+
+```text
+curl.exe -I http://127.0.0.1:9995/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin
+HTTP/1.1 302 Found
+```
+
+Memory checkpoints:
+
+| Checkpoint | Master | Worker #1 | Worker #2 | Dispatcher |
+| --- | ---: | ---: | ---: | ---: |
+| Initial status | 70.32 MB | 86.88 MB | 54.07 MB | 45.59 MB |
+| After full panel smoke | 70.32 MB | 309.63 MB | 98.94 MB | 45.68 MB |
+| After theme spotcheck | 70.79 MB | 81.36 MB | 190.56 MB | 45.84 MB |
+
+Full panel CDP smoke:
+
+```text
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/artifacts-512m'; process.env.WLS_BASE_URL='http://127.0.0.1:9995'; process.env.CDP_PORT='9351'; await import('./dev/ai/codex/tasks/2026-06-19/2026-06-19-1551-wls-panel-multi-page-visual-smoke/artifacts/wls-panel-multi-page-cdp-smoke.mjs');"
+```
+
+Result:
+
+```text
+passed=true
+covered=Dashboard, Marketplace, Security, PHP Manager, DB Manager, File Manager, Deploy
+viewports=desktop-dark-1440, phone-dark-390
+loginFallback=false
+fatalHits=[]
+overflow=0
+buttonsFit=true
+```
+
+Artifacts:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/artifacts-512m/multi-page-cdp-smoke-result.json
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/artifacts-512m/file-manager-desktop-dark-1440.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/artifacts-512m/file-manager-phone-dark-390.png
+```
+
+Theme CDP spotcheck:
+
+```text
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/theme-artifacts-512m'; process.env.WLS_BASE_URL='http://127.0.0.1:9995'; process.env.CDP_PORT='9352'; await import('./dev/ai/codex/tasks/2026-06-20/2026-06-20-0846-wls-panel-current-multipage-smoke/artifacts/wls-panel-theme-cdp-spotcheck.mjs');"
+```
+
+Result:
+
+```text
+passed=true
+covered=dashboard, file-manager, deploy
+viewports=desktop-1280, phone-390
+themes=light,dark
+expectedTheme=actualTheme
+shellFound=true
+overflow=0
+fatalHits=[]
+```
+
+Artifacts:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/theme-artifacts-512m/theme-cdp-spotcheck-result.json
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/theme-artifacts-512m/dashboard-desktop-1280-light.png
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0531-wls-panel-filemanager-memory-profile/theme-artifacts-512m/file-manager-phone-390-light.png
+```
+
+Runtime observation:
+
+- Worker #1 was replaced during/after the theme spotcheck:
+  `7696 -> 27796`.
+- `var/log/wls/ai-test-wls-panel-memory-9995/error-2026-06-21.log` records
+  the trigger as the Master self-check detecting only one ready worker slot and
+  filling the missing slot.
+- `var/log/wls-startup-trace.log` records Worker #1 PID `7696` ready at
+  `2026-06-21T05:35:26+00:00` and replacement PID `27796` ready at
+  `2026-06-21T05:40:32+00:00`.
+- The browser smoke stayed green and the final pre-cleanup status was
+  all-running, so this is recorded as a stability observation rather than a
+  panel UI failure. Track root cause if repeated longer plugin-heavy sessions
+  reproduce it.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-panel-memory-9995
+Dispatcher 43396, Worker 41484, and Worker 27796 drained and stopped.
+
+php bin/w server:status ai-test-wls-panel-memory-9995
+Status: stopped, 0/0.
+
+Get-NetTCPConnection -LocalPort 9995 -State Listen
+No matching listener.
+
+Get-CimInstance -Query "SELECT ProcessId,CommandLine FROM Win32_Process WHERE Name='php.exe' AND CommandLine LIKE '%ai-test-wls-panel-memory-9995%'"
+No matching process.
+```
+
+Conclusion:
+
+- The current plugin-heavy WLS Panel remains viable under the 512M worker
+  baseline.
+- The historical 256M FileManager memory-headroom warning should continue to be
+  treated as a lower-bound failure context, not as a current 512M blocker.
+- Keep `--worker-memory-limit=512M` as the documented panel-mode test/prod
+  baseline until longer soak/performance runs justify lowering or raising it.
+
+## 2026-06-21 - WLS-PANEL-SOAK-001 Worker Self-Heal Soak
+
+Purpose:
+
+- Reproduce or clear the Worker self-heal observation from
+  `WLS-PANEL-MEM-002` under a longer plugin-heavy WLS Panel route/theme loop.
+- Reuse existing CDP browser smoke scripts instead of adding persistent E2E
+  specs.
+- Keep the scope to evidence unless a narrow runtime root cause is proven.
+
+Task directory:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0558-wls-panel-worker-self-heal-soak
+```
+
+Startup:
+
+```text
+php bin/w server:start ai-test-wls-panel-soak-9997 -p 9997 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
+```
+
+Initial runtime:
+
+```text
+baseUrl=http://127.0.0.1:9997
+Master PID=43856
+Dispatcher PID=23420
+Worker #1 initial PID=20376
+Worker #2 initial PID=44856
+```
+
+HTTP precheck:
+
+```text
+curl.exe -I http://127.0.0.1:9997/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin
+HTTP/1.1 302 Found
+```
+
+Full panel CDP smoke pass 1:
+
+```text
+passed=true
+covered=Dashboard, Marketplace, Security, PHP Manager, DB Manager, File Manager, Deploy
+viewports=desktop-dark-1440, phone-dark-390
+loginFallback=false
+fatalHits=[]
+overflow=0
+buttonsFit=true
+```
+
+Theme CDP spotcheck pass 1:
+
+```text
+passed=true
+covered=dashboard, file-manager, deploy
+viewports=desktop-1280, phone-390
+themes=light,dark
+expectedTheme=actualTheme
+overflow=0
+fatalHits=[]
+```
+
+After theme pass 1, `server:status` showed Worker #2 replaced:
+
+```text
+Worker #2: 44856 -> 49784
+Worker #1: 20376 stayed running
+```
+
+Full panel CDP smoke pass 2:
+
+```text
+passed=true
+covered=Dashboard, Marketplace, Security, PHP Manager, DB Manager, File Manager, Deploy
+viewports=desktop-dark-1440, phone-dark-390
+loginFallback=false
+fatalHits=[]
+overflow=0
+buttonsFit=true
+```
+
+Theme CDP spotcheck pass 2:
+
+```text
+passed=true
+covered=dashboard, file-manager, deploy
+viewports=desktop-1280, phone-390
+themes=light,dark
+expectedTheme=actualTheme
+overflow=0
+fatalHits=[]
+```
+
+After theme pass 2, `server:status` showed Worker #1 replaced:
+
+```text
+Worker #1: 20376 -> 41780
+Worker #2: 49784 stayed running
+```
+
+Runtime evidence:
+
+- `var/log/wls/ai-test-wls-panel-soak-9997/error-2026-06-21.log` recorded two
+  Master self-check events at `06:05:55` and `06:10:54`: desired ready Worker
+  slots were `2`, current ready Worker slots were `1`, and Master filled the
+  missing slot.
+- `var/log/wls-startup-trace.log` recorded replacement Worker #2 PID `49784`
+  ready at `2026-06-21T06:06:01+00:00` and replacement Worker #1 PID `41780`
+  ready at `2026-06-21T06:11:00+00:00`.
+- Current Worker command-line inspection confirmed `--memory-limit=512M` on
+  both replacement Workers, so CLI memory-limit propagation is not the observed
+  issue.
+- The old Worker processes did not leave a captured `exit_reason` in the
+  available logs, so this remains a runtime observability/root-cause follow-up
+  rather than a closed memory-limit finding.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-panel-soak-9997
+Dispatcher 23420, Worker 49784, and Worker 41780 drained and stopped.
+
+php bin/w server:status ai-test-wls-panel-soak-9997
+Status: stopped, 0/0.
+
+Get-NetTCPConnection -LocalPort 9997 -State Listen
+No matching listener.
+
+Get-CimInstance -Query "SELECT ProcessId,CommandLine FROM Win32_Process WHERE Name='php.exe' AND CommandLine LIKE '%ai-test-wls-panel-soak-9997%'"
+No matching process.
+```
+
+Conclusion:
+
+- Panel UI viability remains green: both full route sweeps and both theme
+  spotchecks passed.
+- Worker replacement is reproducible in longer plugin-heavy route/theme
+  sessions under the documented 512M baseline.
+- Next runtime slice should capture worker-exit reason and pre-exit memory /
+  request counters, then decide whether the fix belongs in Worker memory drain,
+  fatal shutdown reporting, or Master self-audit logging.
+
+## 2026-06-21 - WLS-WORKER-EXIT-001 Worker Exit Reason Observability
+
+Task:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0628-wls-worker-exit-reason-observability
+```
+
+Scope:
+
+- `draining_complete` accepts an optional `reason` and propagates it through
+  `ControlMessage`, `ControlClient`, child-control clients, and Supervisor
+  child client compatibility.
+- Dispatcher global drain now reports
+  `dispatcher_global_drain:port={dispatcher_port}` and flushes the IPC write.
+- Plain Worker, SSL Worker, and event-buffer Worker paths send/flush exit
+  reasons around drain, recycle, and shutdown exits.
+- Master records `child_exit_reason` both for child-originated
+  `exit_reason`/`draining_complete.reason` and for Master-issued shutdown when
+  a non-shared child has no prior reason.
+
+Validation commands:
+
+```text
+php -l app\code\Weline\Server\bin\worker.php
+php -l app\code\Weline\Server\bin\worker_ssl.php
+php -l app\code\Weline\Server\bin\worker_ssl_event.php
+php -l app\code\Weline\Server\Dispatcher\Dispatcher.php
+php -l app\code\Weline\Server\Service\ServiceOrchestrator.php
+php -l app\code\Weline\Server\IPC\ControlMessage.php
+php -l app\code\Weline\Server\IPC\ControlClient.php
+php -l app\code\Weline\Server\IPC\ChildControl\ChildControlClientInterface.php
+php -l app\code\Weline\Server\IPC\ChildControl\SubprocessControlKernel.php
+php -l app\code\Weline\Server\Supervisor\Client\SupervisorChildClient.php
+php -l app\code\Weline\Server\Test\Unit\ChildControl\SubprocessControlKernelTest.php
+php -l app\code\Weline\Server\Test\Unit\Dispatcher\DispatcherDeferredWorkerJobsTest.php
+php -l app\code\Weline\Server\Test\Unit\Dispatcher\DispatcherMaintenanceFallbackRoutingTest.php
+```
+
+Runtime proof:
+
+```text
+php bin/w server:start ai-test-wls-exit-reason-kernel-10004 -p 10004 -c 1 --no-ssl --worker-memory-limit=512M --supervisor false
+Master PID: 50092
+Dispatcher PID: 49144
+Worker #1 PID: 20548
+Worker #1 port: 26456
+
+curl.exe -I http://127.0.0.1:10004/
+HTTP/1.1 200 OK
+X-Wls-Worker-Pid: 20548
+
+php bin/w server:stop ai-test-wls-exit-reason-kernel-10004
+Full stop protocol completed.
+```
+
+Trace evidence:
+
+```text
+var/log/wls-startup-trace.log:97423
+event=child_exit_reason
+role=dispatcher
+pid=49144
+port=10004
+reason=dispatcher_global_drain:port=10004
+source=draining_complete
+
+var/log/wls-startup-trace.log:97424
+event=child_exit_reason
+role=worker
+pid=20548
+tracking_pid=20548
+port=26456
+reason=shutdown_command:role=worker,instance_id=1,pid=20548
+source=master_shutdown
+```
+
+Cleanup:
+
+```text
+php bin/w server:status ai-test-wls-exit-reason-kernel-10004
+Status: stopped, 0/0.
+
+Get-NetTCPConnection -LocalPort 10004 -State Listen
+No matching listener.
+
+Get-CimInstance -Query "SELECT ProcessId,CommandLine FROM Win32_Process WHERE Name='php.exe' AND CommandLine LIKE '%ai-test-wls-exit-reason-kernel-10004%'"
+No matching process.
+```
+
+Notes:
+
+- `git rev-parse --show-toplevel` returned
+  `E:/WelineFramework/DEV-workspace`, but `gitnexus status` returned
+  `Not a git repository`; this task therefore records source scans and live WLS
+  evidence instead of GitNexus impact output.
+- Focused PHPUnit on the three touched Server unit test files was attempted and
+  stopped before behavioral assertions because direct invocation leaves `BP`
+  undefined in the current test bootstrap. The failed run reported
+  `Tests: 57, Assertions: 173, Errors: 14`.
+- The next plugin-heavy soak should use these trace records to classify worker
+  replacements as memory drain, request recycle, fatal/abnormal loss, or
+  Master-side shutdown/self-audit behavior.
+
+## 2026-06-21 - WLS-PANEL-SOAK-002 Worker Exit Reason Soak
+
+Task:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-1516-wls-panel-worker-exit-reason-soak
+```
+
+Scope:
+
+- Re-ran the plugin-heavy WLS Panel route/theme workload after
+  `WLS-WORKER-EXIT-001`.
+- Started a dedicated non-9501 instance:
+  `ai-test-wls-panel-exit-soak-10005`, port `10005`, `-c 2`,
+  `--no-ssl`, `--worker-memory-limit=512M`, `--supervisor false`.
+- Covered Dashboard, Marketplace, Security, PHP Manager, DB Manager,
+  File Manager, and Deploy with the existing CDP route sweep, then covered
+  Dashboard, File Manager, and Deploy with light/dark theme spotchecks.
+
+Browser evidence:
+
+- Full panel CDP pass 1: `passed=true`, no login fallback, no fatal hits, no
+  horizontal overflow.
+- Theme CDP spotcheck pass 1: `passed=true`, light/dark matched, no horizontal
+  overflow.
+- Full panel CDP pass 2: `passed=true`, no login fallback, no fatal hits, no
+  horizontal overflow.
+- Theme CDP spotcheck pass 2 after Worker #2 replacement: `passed=true`,
+  light/dark matched, no horizontal overflow.
+
+Runtime classification:
+
+```text
+Initial:
+Master 13292
+Dispatcher 35788
+Worker #1 45652 port 26457
+Worker #2 2368 port 26458
+
+Worker #2 drain:
+var/log/wls-startup-trace.log:97458
+reason=memory_pressure_drain:worker=2,memory=476MB,before=476MB,limit=512M,threshold=88%,requests=128
+source=exit_reason
+
+var/log/wls-startup-trace.log:97459
+reason=memory_pressure_drain:worker=2,memory=476MB,before=476MB,limit=512M,threshold=88%,requests=128
+source=draining_complete
+
+Worker #2 refill:
+var/log/wls-startup-trace.log:97460-97461
+replacement PID 18108 on port 26458
+
+Worker #1 drain:
+var/log/wls-startup-trace.log:97462
+reason=memory_pressure_drain:worker=1,memory=474MB,before=474MB,limit=512M,threshold=88%,requests=165
+source=exit_reason
+
+var/log/wls-startup-trace.log:97463
+reason=memory_pressure_drain:worker=1,memory=474MB,before=474MB,limit=512M,threshold=88%,requests=165
+source=draining_complete
+
+Worker #1 refill:
+var/log/wls-startup-trace.log:97464-97465
+replacement PID 28596 on port 26457
+```
+
+Master self-heal log:
+
+```text
+var/log/wls/ai-test-wls-panel-exit-soak-10005/error-2026-06-21.log
+07:25:51 expected 2 READY worker slots, current 1, filled slot
+07:28:52 expected 2 READY worker slots, current 1, filled slot
+```
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-panel-exit-soak-10005
+php bin/w server:status ai-test-wls-panel-exit-soak-10005
+Status: stopped, 0/0.
+
+Get-NetTCPConnection -LocalPort 10005 -State Listen
+No matching listener.
+
+Get-CimInstance ... LIKE '%ai-test-wls-panel-exit-soak-10005%'
+No matching process.
+```
+
+Conclusion:
+
+- The prior repeated worker replacement is explained by the existing
+  memory-pressure drain threshold: workers drain around `474-476MB`, which is
+  `88%` of the configured `512M` limit.
+- The browser-visible WLS Panel remains functionally green during and after
+  replacement.
+- Next optimization should target plugin-heavy render memory retention or
+  explicitly document/tune the panel-mode worker memory policy.
+
+## 2026-06-21 - WLS-PANEL-MEM-003 Worker Memory Retention Optimization
+
+Task:
+
+```text
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0738-wls-panel-memory-retention-optimization
+```
+
+Scope:
+
+- Worker memory-pressure drain checks now use actual used memory and include
+  allocated memory in the exit reason.
+- Worker request-interval compaction can clear WLS static file cache,
+  WorkerResponseMemoryGuard runtime caches, Phrase Parser worker caches, Admin
+  full-page cache, and ObjectManager pressure caches before the drain threshold.
+- `/_wls/health?detail=1` exposes actual used memory and peak used memory;
+  `memory=1`, `static=1`, and `objects=1` add targeted diagnostics for static
+  caches and ObjectManager buckets.
+- ObjectManager diagnostics skip internal/deprecated property reads so the
+  diagnostic endpoint does not create PHP 8.4 `DOMDocument` deprecation noise.
+- `WlsRuntime::reset()` clears the current fiber output buffer.
+- Phrase Parser skips heavy generated locale dictionary loads when a persistent
+  worker is under memory pressure, relying on the already-loaded module CSV
+  layer instead of risking an `Allowed memory size` fatal.
+- DbManager lifecycle empty plan now defines `$state`, removing the warning
+  found during the panel DB Manager route smoke.
+
+Syntax validation:
+
+```text
+php -l app\code\Weline\Framework\Phrase\Parser.php
+php -l app\code\Weline\DbManager\Service\Adapter\WlsDatabaseLifecycleSqlPlanAdapter.php
+php -l app\code\Weline\Framework\Manager\ObjectManager.php
+```
+
+All three returned `No syntax errors detected`. The local PHP binary still
+emits the existing duplicate-extension warnings before lint output.
+
+Runtime proof:
+
+```text
+php bin/w server:start ai-test-wls-panel-phraseguard-10013 -p 10013 -c 2 --no-ssl --worker-memory-limit=512M --dispatcher-memory-limit=512M
+```
+
+Browser evidence on `http://127.0.0.1:10013`:
+
+- Full route pass 1: Dashboard, Marketplace, Security, PHP Manager, DB
+  Manager, File Manager, and Deploy passed at 1440px and 390px.
+- Theme spotcheck: Dashboard, File Manager, and Deploy passed in light/dark at
+  desktop and mobile.
+- Full route pass 2: the same seven routes passed again at 1440px and 390px.
+- All browser passes reported `passed=true`, no login fallback, no fatal text,
+  and no horizontal overflow.
+
+Memory and trace evidence:
+
+```text
+10013 post-pass health:
+worker 26465: healthy, used 429.4 MB, allocated 440 MB, peak used 431.5 MB
+worker 26466: healthy, used 392.9 MB, allocated 412 MB, peak used 396.6 MB
+
+wls-startup-trace.log:
+NO_MEMORY_PRESSURE_DRAIN_FOR_10013
+```
+
+Recent php_error filtering after the 10013 route/theme/route sequence showed
+no Parser `Allowed memory size` fatal and no DbManager undefined `$state`
+warning. The only new warning found was caused by the new object diagnostic
+reading deprecated internal `DOMDocument` properties, so ObjectManager
+diagnostics were tightened.
+
+Diagnostic side-effect proof:
+
+```text
+php bin/w server:start ai-test-wls-panel-diagfix-10014 -p 10014 -c 1 --no-ssl --worker-memory-limit=512M --dispatcher-memory-limit=512M
+GET http://127.0.0.1:26466/_wls/health?detail=1&memory=1&objects=1
+```
+
+The health response was `healthy`, memory used was about `63.3 MB`, and the
+php_error offset check after that request returned:
+
+```json
+{
+  "added_bytes": 0,
+  "diagnostic_hits": []
+}
+```
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-panel-phraseguard-10013
+php bin/w server:stop ai-test-wls-panel-diagfix-10014
+```
+
+Both stop flows completed with dispatcher/worker drains and no AI test instance
+left running.
+
+Conclusion:
+
+- The prior SOAK-002 drain/OOM path is improved under the same two-worker 512M
+  plugin-heavy panel workload: no 10013 memory-pressure drain was recorded and
+  the Parser OOM did not recur.
+- Worker memory is still high after repeated plugin-heavy rendering, so the
+  panel should keep the documented 512M worker baseline while later slices can
+  continue reducing template/render retention or tune the policy for production
+  profiles.
+
+## 2026-06-21 - Panel-mode startup memory default
+
+Status: passed for `WLS-PANEL-MEM-004`.
+
+Scope:
+
+- Panel mode can be enabled by `wls.panel.enabled`, `wls.panel.mode`,
+  `WLS_PANEL_ENABLED`, or `WLS_PANEL_MODE`.
+- When panel mode is enabled and worker/dispatcher memory remains at the
+  ordinary 256M default, `server:start` promotes the panel baseline to 512M.
+- Explicit `wls.worker_memory_limit`, `wls.dispatcher_memory_limit`,
+  `--worker-memory-limit`, and `--dispatcher-memory-limit` keep priority.
+
+Changed files:
+
+```text
+app/code/Weline/Server/Console/Server/Start.php
+app/code/Weline/Server/Test/Unit/Console/StartCommandArgsSolidificationTest.php
+app/etc/env.sample.php
+dev/ai/codex/tasks/2026-06-21/2026-06-21-0930-wls-panel-mode-memory-default
+```
+
+Syntax validation:
+
+```text
+php -l app\code\Weline\Server\Console\Server\Start.php
+php -l app\code\Weline\Server\Test\Unit\Console\StartCommandArgsSolidificationTest.php
+```
+
+Both returned `No syntax errors detected`; the local PHP binary still emits the
+known duplicate-extension warnings before lint output.
+
+Focused PHPUnit:
+
+```text
+php vendor\bin\phpunit app\code\Weline\Server\Test\Unit\Console\StartCommandArgsSolidificationTest.php
+```
+
+This direct file-level run failed before executing the target assertions because
+the Weline test bootstrap was absent and `BP` was undefined. The same test file
+passed with the project bootstrap:
+
+```text
+php vendor\bin\phpunit --bootstrap app\bootstrap_phpunit.php app\code\Weline\Server\Test\Unit\Console\StartCommandArgsSolidificationTest.php
+```
+
+Result:
+
+```text
+OK (26 tests, 69 assertions)
+```
+
+Runtime smoke:
+
+```text
+$env:WLS_PANEL_ENABLED='1'
+php bin/w server:start ai-test-wls-panel-defaultmem-10015 -p 10015 -c 1 --no-ssl --supervisor false
+```
+
+The instance started successfully without `--worker-memory-limit` or
+`--dispatcher-memory-limit`. The Dispatcher child process log showed the panel
+default was applied:
+
+```text
+var/process/weline-wls-dispatcher-ai-test-wls-panel-defaultmem-10015-p11005ce4.log
+--memory-limit=512M
+```
+
+Status and cleanup:
+
+```text
+php bin/w server:status ai-test-wls-panel-defaultmem-10015
+php bin/w server:stop ai-test-wls-panel-defaultmem-10015
+php bin/w server:status ai-test-wls-panel-defaultmem-10015
+```
+
+The instance first reported all services running, then `server:stop` completed
+through the dispatcher/worker drain flow. Final status reported:
+
+```text
+全部停止 (0/0)
+```
+
+Conclusion:
+
+- The documented panel 512M baseline is now a startup policy rather than a
+  command-line convention.
+- Ordinary WLS remains on the 256M default unless panel mode or explicit memory
+  settings are used.
+
+## 2026-06-21 - WLS Deploy rollback UI gate
+
+Status: passed for `WLS-DEPLOY-UI-002`, with browser automation unavailable in
+the current shell.
+
+Scope:
+
+- The standalone WLS Deploy panel rollback action now renders as a real disabled
+  control until the browser confirms both conditions:
+  selected project rollback readiness and explicit rollback checkbox consent.
+- The button keeps `aria-disabled` synchronized with the actual disabled state.
+- No release, webhook, rollback service, model, route, or command behavior is
+  changed in this slice.
+
+Changed files:
+
+```text
+app/code/Weline/Deploy/view/templates/Backend/WlsDeploy/index.phtml
+dev/ai/codex/tasks/2026-06-21/2026-06-21-1750-wls-deploy-rollback-ui-gate
+```
+
+Syntax validation:
+
+```text
+php -l app\code\Weline\Deploy\view\templates\Backend\WlsDeploy\index.phtml
+```
+
+Result:
+
+```text
+No syntax errors detected in app\code\Weline\Deploy\view\templates\Backend\WlsDeploy\index.phtml
+```
+
+The local PHP binary still emits duplicate-extension warnings before the lint
+result.
+
+Runtime smoke:
+
+```text
+$env:WLS_PANEL_ENABLED='1'
+php bin/w server:start ai-test-wls-panel-rollback-ui-10016 -p 10016 -c 1 --no-ssl --supervisor false
+curl.exe ... /deploy/backend/wls-deploy
+```
+
+The dedicated instance started on `http://127.0.0.1:10016`, the admin session
+was established, and the Deploy panel returned `HTTP/1.1 200 OK` with the
+standalone `wls-deploy-shell` surface rather than the login form.
+
+Rendered HTML assertions:
+
+```json
+{
+  "hasDeployShell": true,
+  "notLoginPage": true,
+  "hasRollbackButton": true,
+  "rollbackButtonDisabled": true,
+  "rollbackButtonAriaDisabled": true,
+  "rollbackBlockedAttr": true,
+  "hasRollbackSyncScript": true,
+  "hasManualGate": true
+}
+```
+
+The rollback button rendered with `disabled`, `aria-disabled="true"`,
+`data-rollback-blocked="1"`, and a scoped `syncRollbackButton()` script that
+updates both the actual disabled state and ARIA state. The existing manual
+release confirmation gate also remained present on the rendered page.
+
+Browser automation note:
+
+```text
+playwright missing
+'playwright' is not recognized as an internal or external command
+```
+
+Click-level Playwright validation could not run because browser automation is
+not installed in the current shell. This slice therefore uses WLS runtime HTML
+rendering plus static DOM assertions as the available smoke check.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-panel-rollback-ui-10016
+php bin/w server:status ai-test-wls-panel-rollback-ui-10016
+```
+
+`server:stop` completed the dispatcher/worker drain flow. Final status reported
+Master stopped and all services stopped for
+`ai-test-wls-panel-rollback-ui-10016`.
+
+## 2026-06-21 - WLS PHP Manager Chinese i18n polish
+
+Status: passed for `WLS-PHP-I18N-001`; production behavior is unchanged.
+
+Scope:
+
+- The standalone WLS PHP Manager shell now has focused `zh_Hans_CN`
+  translations for shell navigation, project context, runtime cards, PHP
+  Profile labels, php.ini apply/rollback controls, extension lifecycle dry-run
+  labels, recent audit labels, light/dark theme labels, and the typed WLS
+  marketplace note.
+- `en_US.csv` now includes the missing source key for the marketplace typed-tag
+  explanatory note used by the template.
+- No controller, service, route, model, php.ini apply behavior, extension
+  dry-run behavior, or WLS reload behavior changed in this slice.
+
+Changed files:
+
+```text
+app/code/Weline/PhpManager/i18n/en_US.csv
+app/code/Weline/PhpManager/i18n/zh_Hans_CN.csv
+dev/ai/codex/tasks/2026-06-21/2026-06-21-1029-wls-panel-next-local-slice
+```
+
+Read-only follow-up audits:
+
+- Backend audit recommends the next local execution slice be the PostgreSQL
+  read-only DB backup adapter (`backup_database` only), while leaving
+  direct-listen SO_REUSEPORT proof and DB lifecycle success harness out of the
+  current Windows local lane.
+- UI audit recommends the next panel polish slice unify plugin theme handling
+  across Deploy/PHP/FileManager, add remaining theme `aria-pressed` parity, and
+  make plugin sidebar active state follow hash navigation.
+
+Validation:
+
+```text
+CSV parse:
+zhRows=196, enRows=196, zhBadRows=0, enBadRows=0
+extractedKeys=192, missingZh=[], missingEn=[], untranslatedTargets=[]
+
+PHP lint:
+php -l app\code\Weline\PhpManager\view\templates\Backend\WlsPhpManager\index.phtml
+php -l app\code\Weline\PhpManager\Controller\Backend\WlsPhpManager.php
+php -l app\code\Weline\PhpManager\Service\WlsPhpProfileService.php
+php -l app\code\Weline\PhpManager\Service\WlsPhpIniService.php
+```
+
+All lint commands returned `No syntax errors detected`; the local PHP binary
+still emits the known duplicate-extension warnings first.
+
+Dedicated WLS render:
+
+```text
+$env:WLS_PANEL_ENABLED='1'
+php bin/w server:start ai-test-wls-php-i18n-10017 -p 10017 -c 1 --no-ssl --supervisor false --worker-memory-limit=512M
+```
+
+The login page returned `200`, login POST returned `302`, and the standalone PHP
+Manager page returned `200` at:
+
+```text
+/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/CNY/zh_Hans_CN/weline_phpmanager/backend/wls-php-manager
+```
+
+Rendered HTML assertions:
+
+```json
+{
+  "notLoginPage": true,
+  "hasShell": true,
+  "hasStandalone": true,
+  "hasPhpManager": true,
+  "hasPluginTitle": true,
+  "hasProjectAdmin": true,
+  "hasProjectContext": true,
+  "hasRuntime": true,
+  "hasMarketplace": true,
+  "hasTypedTagNote": true
+}
+```
+
+The English source labels `Project Admin`, `Project Context`, and
+`Current PHP Runtime` still appeared only inside the rendered translation
+dictionary JSON, for example `"Project Admin":"项目后台"`, not as visible
+untranslated UI labels.
+
+Cleanup:
+
+```text
+php bin/w server:stop ai-test-wls-php-i18n-10017
+php bin/w server:status ai-test-wls-php-i18n-10017
+```
+
+Final status reported `全部停止 (0/0)`.
+
+## 2026-06-21 - WLS DbManager restore preflight boundary
+
+Implemented a read-only restore preflight boundary for the standalone WLS
+Database Manager panel.
+
+Behavior added:
+
+- `restore_database` plans can now become `ready_to_preflight` when an enabled
+  mysql/pgsql Project Profile and a driver-safe artifact name are present.
+- The Database Manager panel renders a separate `Database Restore Preflight
+  Boundary` form guarded by checkbox plus `CHECK_DB_RESTORE`.
+- `WlsDatabaseRestorePreflightService` resolves only existing artifacts inside
+  `var/backups/wls/db-manager/database`, requires adjacent JSON metadata,
+  recalculates SHA-256 and byte size, verifies artifact name, driver,
+  database, metadata action, and readability, then appends sanitized
+  `restore_preflight_passed` or `restore_preflight_failed` audit records.
+- No restore command, SQL apply, migration apply, env write, overwrite,
+  pre-restore backup creation, verification query, rollback, or WLS reload is
+  enabled by this slice.
+
+Changed files:
+
+```text
+app/code/Weline/DbManager/Service/WlsDatabaseRestorePreflightService.php
+app/code/Weline/DbManager/Service/WlsDatabaseBackupPlanService.php
+app/code/Weline/DbManager/Controller/Backend/WlsDbManager.php
+app/code/Weline/DbManager/view/templates/Backend/WlsDbManager/index.phtml
+app/code/Weline/DbManager/i18n/en_US.csv
+app/code/Weline/DbManager/i18n/zh_Hans_CN.csv
+app/code/Weline/DbManager/doc/README.md
+app/code/Weline/Server/doc/wls-panel-plan/00-INDEX.md
+app/code/Weline/Server/doc/wls-panel-plan/30-atomic-task-plan.md
+dev/ai/codex/tasks/2026-06-21/2026-06-21-1453-wls-db-restore-preflight-boundary/restore-preflight-probe.php
+```
+
+Validation:
+
+```text
+php -l app\code\Weline\DbManager\Service\WlsDatabaseRestorePreflightService.php
+php -l app\code\Weline\DbManager\Service\WlsDatabaseBackupPlanService.php
+php -l app\code\Weline\DbManager\Controller\Backend\WlsDbManager.php
+php -l app\code\Weline\DbManager\view\templates\Backend\WlsDbManager\index.phtml
+php -l dev\ai\codex\tasks\2026-06-21\2026-06-21-1453-wls-db-restore-preflight-boundary\restore-preflight-probe.php
+php dev\ai\codex\tasks\2026-06-21\2026-06-21-1453-wls-db-restore-preflight-boundary\restore-preflight-probe.php
+php -d error_reporting=22527 -r "<DbManager en_US/zh_Hans_CN CSV parse>"
+```
+
+Probe result:
+
+```json
+{
+  "ok": true,
+  "plan_state": "ready_to_preflight",
+  "passed_bytes": 28,
+  "audit_events": [
+    "restore_preflight_passed",
+    "restore_preflight_failed",
+    "restore_preflight_failed",
+    "restore_preflight_failed"
+  ]
+}
+```
+
+CSV parse:
+
+```text
+app/code/Weline/DbManager/i18n/en_US.csv OK 476
+app/code/Weline/DbManager/i18n/zh_Hans_CN.csv OK 476
+```
+
+Acceptance note:
+
+- This closes the first restore-adapter prerequisite: artifact trust can now be
+  proven server-side before any destructive restore work is allowed.
+- Real restore execution remains a separate future slice that must add fresh
+  pre-restore backup evidence, isolated disposable DB harness coverage,
+  adapter command execution, post-restore verification, rollback guidance, and
+  cleanup.

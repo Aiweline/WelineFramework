@@ -4,6 +4,10 @@
  */
 $context = $this->getData('wlsPhpManagerContext');
 $context = is_array($context) ? $context : [];
+$embedded = !empty($this->getData('wlsPhpManagerEmbedded'));
+$pageKey = trim((string)$this->getData('wlsPhpManagerPageKey'));
+$pageUrls = $this->getData('wlsPhpManagerPageUrls');
+$pageUrls = is_array($pageUrls) ? $pageUrls : [];
 $runtime = $this->getData('wlsPhpManagerRuntime');
 $runtime = is_array($runtime) ? $runtime : [];
 $capabilities = $this->getData('wlsPhpManagerCapabilities');
@@ -24,15 +28,32 @@ $extensionChecks = is_array($extensionPlan['checks'] ?? null) ? array_values($ex
 $extensionSteps = is_array($extensionPlan['steps'] ?? null) ? array_values($extensionPlan['steps']) : [];
 $extensionErrors = is_array($extensionPlan['errors'] ?? null) ? array_values($extensionPlan['errors']) : [];
 $extensionWarnings = is_array($extensionPlan['warnings'] ?? null) ? array_values($extensionPlan['warnings']) : [];
+$extensionCommandPlan = is_array($extensionPlan['command_plan'] ?? null) ? array_values($extensionPlan['command_plan']) : [];
+$extensionPostVerification = is_array($extensionPlan['post_verification'] ?? null) ? array_values($extensionPlan['post_verification']) : [];
+$extensionRollbackGuidance = is_array($extensionPlan['rollback_guidance'] ?? null) ? array_values($extensionPlan['rollback_guidance']) : [];
 $auditRecords = $this->getData('wlsPhpManagerAuditRecords');
 $auditRecords = is_array($auditRecords) ? array_values($auditRecords) : [];
 $profileSaveUrl = (string)$this->getData('wlsPhpManagerProfileSaveUrl');
 $iniApplyUrl = (string)$this->getData('wlsPhpManagerIniApplyUrl');
 $iniRollbackUrl = (string)$this->getData('wlsPhpManagerIniRollbackUrl');
+$extensionExecuteUrl = (string)$this->getData('wlsPhpManagerExtensionExecuteUrl');
 $notice = trim((string)$this->getData('wlsPhpManagerNotice'));
 $error = trim((string)$this->getData('wlsPhpManagerError'));
 $formKey = (string)$this->getFormKeyValue();
 $operation = trim((string)($context['operation'] ?? 'php-profile'));
+if ($pageKey === '') {
+    $pageKey = match ($operation) {
+        'summary' => 'summary',
+        'runtime' => 'runtime',
+        'inheritance' => 'inheritance',
+        'ini-apply' => 'ini',
+        'php-extension' => 'extensions',
+        'audit' => 'audit',
+        default => 'project-profile',
+    };
+}
+$showPage = static fn (string ...$keys): bool => in_array($pageKey, $keys, true);
+$navClass = static fn (string $key): string => $key === $pageKey ? 'is-active' : '';
 $projectId = trim((string)($context['project_id'] ?? ''));
 $domain = trim((string)($context['domain'] ?? ''));
 $projectType = trim((string)($context['project_type'] ?? ''));
@@ -40,16 +61,7 @@ $panelUrl = $this->getBackendUrl('server/backend/wls-panel');
 $marketplaceUrl = $this->getBackendUrl('server/backend/wls-panel/marketplace');
 $projectAdminUrl = $this->getBackendUrl('admin');
 $extensionPlanUrl = $this->getBackendUrl('weline_phpmanager/backend/wls-php-manager');
-$buildPhpManagerAnchorUrl = static function (string $anchor) use ($extensionPlanUrl, $operation, $projectId, $domain, $projectType): string {
-    $query = array_filter([
-        'operation' => $operation,
-        'project_id' => $projectId,
-        'domain' => $domain,
-        'project_type' => $projectType,
-    ], static fn (mixed $value): bool => $value !== null && $value !== '');
-
-    return $extensionPlanUrl . ($query !== [] ? '?' . http_build_query($query) : '') . '#' . ltrim($anchor, '#');
-};
+$phpPageUrl = static fn (string $key): string => (string)($pageUrls[$key] ?? $extensionPlanUrl);
 $escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $profileValue = static fn (string $key, mixed $default = ''): string => htmlspecialchars((string)($projectProfile[$key] ?? $default), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $profileChecked = static fn (string $key): string => !empty($projectProfile[$key]) ? 'checked' : '';
@@ -87,6 +99,21 @@ $themeLabels = json_encode(
         background: var(--wpm-bg);
         color: var(--wpm-text);
         font-size: 14px;
+    }
+    .wls-php-manager-shell.is-embedded {
+        min-height: auto;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .wls-php-manager-shell.is-embedded .wpm-sidebar {
+        display: none;
+    }
+    .wls-php-manager-shell.is-embedded .wpm-main {
+        min-height: auto;
+        padding: 0;
+    }
+    .wls-php-manager-shell.is-embedded .wpm-eyebrow,
+    .wls-php-manager-shell.is-embedded .wpm-actions {
+        display: none;
     }
     body:has(.wls-php-manager-shell) {
         margin: 0;
@@ -259,10 +286,20 @@ $themeLabels = json_encode(
     }
     .wpm-card,
     .wpm-field-card {
+        min-width: 0;
         border: 1px solid var(--wpm-border);
         border-radius: 8px;
         padding: 16px;
         background: var(--wpm-panel-soft);
+    }
+    .wpm-field-card strong,
+    .wpm-field-card code,
+    .wpm-field-card p,
+    .wpm-section-note,
+    .wpm-extension-plan-list li {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
     .wpm-card-label,
     .wpm-field-label {
@@ -581,30 +618,38 @@ $themeLabels = json_encode(
     }
 </style>
 
-<div class="wls-php-manager-shell"
+<div class="wls-php-manager-shell<?= $embedded ? ' is-embedded' : '' ?>"
      data-wls-php-manager-shell
      data-theme="dark"
      data-profile-state="<?= $hasProjectProfile ? 'saved' : 'inherited' ?>">
+    <?php if (!$embedded): ?>
     <aside class="wpm-sidebar">
         <div>
             <div class="wpm-brand-kicker"><?= $escapeHtml(__('WLS Standalone Backend')) ?></div>
             <div class="wpm-brand-title"><?= $escapeHtml(__('PHP Manager')) ?></div>
         </div>
-        <nav class="wpm-nav" aria-label="<?= $escapeHtml(__('WLS PHP Manager navigation')) ?>">
-            <a href="<?= $escapeHtml($buildPhpManagerAnchorUrl('summary')) ?>" class="is-active"><span class="mdi mdi-view-dashboard-outline"></span><?= $escapeHtml(__('Summary')) ?></a>
-            <a href="<?= $escapeHtml($buildPhpManagerAnchorUrl('runtime')) ?>"><span class="mdi mdi-console"></span><?= $escapeHtml(__('Runtime')) ?></a>
-            <a href="<?= $escapeHtml($buildPhpManagerAnchorUrl('inheritance')) ?>"><span class="mdi mdi-source-branch"></span><?= $escapeHtml(__('Inheritance')) ?></a>
-            <a href="<?= $escapeHtml($buildPhpManagerAnchorUrl('project-profile')) ?>"><span class="mdi mdi-tune-variant"></span><?= $escapeHtml(__('Project Profile')) ?></a>
-            <a href="<?= $escapeHtml($buildPhpManagerAnchorUrl('ini-apply')) ?>"><span class="mdi mdi-file-cog-outline"></span><?= $escapeHtml(__('php.ini')) ?></a>
-            <a href="<?= $escapeHtml($buildPhpManagerAnchorUrl('extensions')) ?>"><span class="mdi mdi-puzzle-outline"></span><?= $escapeHtml(__('Extensions')) ?></a>
-            <a href="<?= $escapeHtml($buildPhpManagerAnchorUrl('audit')) ?>"><span class="mdi mdi-clipboard-text-clock-outline"></span><?= $escapeHtml(__('Audit')) ?></a>
+        <nav class="wpm-nav" data-wls-plugin-nav aria-label="<?= $escapeHtml(__('WLS PHP Manager navigation')) ?>">
+            <a href="<?= $escapeHtml($phpPageUrl('summary')) ?>" class="<?= $escapeHtml($navClass('summary')) ?>"<?= $pageKey === 'summary' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-view-dashboard-outline"></span><?= $escapeHtml(__('Summary')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('runtime')) ?>" class="<?= $escapeHtml($navClass('runtime')) ?>"<?= $pageKey === 'runtime' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-console"></span><?= $escapeHtml(__('Runtime')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('inheritance')) ?>" class="<?= $escapeHtml($navClass('inheritance')) ?>"<?= $pageKey === 'inheritance' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-source-branch"></span><?= $escapeHtml(__('Inheritance')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('project-profile')) ?>" class="<?= $escapeHtml($navClass('project-profile')) ?>"<?= $pageKey === 'project-profile' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-tune-variant"></span><?= $escapeHtml(__('Project Profile')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('ini')) ?>" class="<?= $escapeHtml($navClass('ini')) ?>"<?= $pageKey === 'ini' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-file-cog-outline"></span><?= $escapeHtml(__('php.ini')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('extensions')) ?>" class="<?= $escapeHtml($navClass('extensions')) ?>"<?= $pageKey === 'extensions' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-puzzle-outline"></span><?= $escapeHtml(__('Extensions')) ?></a>
+            <a href="<?= $escapeHtml($phpPageUrl('audit')) ?>" class="<?= $escapeHtml($navClass('audit')) ?>"<?= $pageKey === 'audit' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-clipboard-text-clock-outline"></span><?= $escapeHtml(__('Audit')) ?></a>
         </nav>
         <div class="wpm-sidebar-spacer"></div>
-        <button class="wpm-theme-button" type="button" data-wpm-theme-toggle aria-pressed="true">
+        <button class="wpm-theme-button"
+                type="button"
+                data-wpm-theme-toggle
+                data-wpm-theme-dark-label="<?= $escapeHtml(__('Dark')) ?>"
+                data-wpm-theme-light-label="<?= $escapeHtml(__('Light')) ?>"
+                aria-label="<?= $escapeHtml(__('切换明暗色')) ?>"
+                aria-pressed="true">
             <span class="mdi mdi-weather-night"></span>
             <span data-wpm-theme-label><?= $escapeHtml(__('Dark')) ?></span>
         </button>
     </aside>
+    <?php endif; ?>
 
     <main class="wpm-main">
         <header class="wpm-topbar">
@@ -632,6 +677,7 @@ $themeLabels = json_encode(
             <div class="wpm-alert is-danger"><?= $escapeHtml($error) ?></div>
         <?php endif; ?>
 
+        <?php if ($showPage('summary')): ?>
         <section id="summary" class="wpm-section">
             <div class="wpm-grid">
                 <?php foreach ($capabilities as $card): ?>
@@ -643,7 +689,9 @@ $themeLabels = json_encode(
                 <?php endforeach; ?>
             </div>
         </section>
+        <?php endif; ?>
 
+        <?php if ($showPage('summary')): ?>
         <section class="wpm-section" data-wpm-context>
             <h2 class="wpm-section-title"><?= $escapeHtml(__('Project Context')) ?></h2>
             <p class="wpm-section-note">
@@ -656,7 +704,9 @@ $themeLabels = json_encode(
                 <div class="wpm-field-card"><p class="wpm-field-label"><?= $escapeHtml(__('Project Type')) ?></p><strong><?= $escapeHtml($projectType !== '' ? $projectType : 'wls') ?></strong></div>
             </div>
         </section>
+        <?php endif; ?>
 
+        <?php if ($showPage('runtime')): ?>
         <section id="runtime" class="wpm-section" data-wpm-runtime>
             <h2 class="wpm-section-title"><?= $escapeHtml(__('Current PHP Runtime')) ?></h2>
             <p class="wpm-section-note">
@@ -680,7 +730,9 @@ $themeLabels = json_encode(
                 </div>
             <?php endif; ?>
         </section>
+        <?php endif; ?>
 
+        <?php if ($showPage('inheritance')): ?>
         <section id="inheritance" class="wpm-section" data-wpm-inheritance-map>
             <h2 class="wpm-section-title"><?= $escapeHtml(__('PHP Profile Inheritance Map')) ?></h2>
             <p class="wpm-section-note">
@@ -731,7 +783,9 @@ $themeLabels = json_encode(
                 <?php endforeach; ?>
             </div>
         </section>
+        <?php endif; ?>
 
+        <?php if ($showPage('project-profile')): ?>
         <section id="project-profile"
                  class="wpm-section"
                  data-wpm-project-profile
@@ -826,7 +880,9 @@ $themeLabels = json_encode(
                 </div>
             </form>
         </section>
+        <?php endif; ?>
 
+        <?php if ($showPage('ini')): ?>
         <section id="ini-apply"
                  class="wpm-section"
                  data-wpm-ini-plan
@@ -968,18 +1024,21 @@ $themeLabels = json_encode(
                 </form>
             <?php endif; ?>
         </section>
+        <?php endif; ?>
 
+        <?php if ($showPage('extensions')): ?>
         <section id="extensions"
                  class="wpm-section"
                  data-wpm-extensions
-                 data-wpm-extension-plan-state="<?= $escapeHtml($extensionPlan['state'] ?? 'idle') ?>">
+                 data-wpm-extension-plan-state="<?= $escapeHtml($extensionPlan['state'] ?? 'idle') ?>"
+                 data-wpm-extension-can-execute="<?= !empty($extensionPlan['can_execute']) ? '1' : '0' ?>">
             <h2 class="wpm-section-title"><?= $escapeHtml(__('Extension Lifecycle Plan')) ?></h2>
             <p class="wpm-section-note">
-                <?= $escapeHtml(__('Preview install or remove intent before any future platform adapter is allowed to run. This slice never executes package commands.')) ?>
+                <?= $escapeHtml(__('Preview install or remove intent, then run only the guarded bundled Windows adapter when every path, DLL, and managed-block rule passes.')) ?>
             </p>
 
             <form method="get"
-                  action="<?= $escapeHtml($extensionPlanUrl) ?>"
+                  action="<?= $escapeHtml($phpPageUrl('extensions')) ?>"
                   data-wpm-extension-plan-form>
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
                 <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
@@ -1035,7 +1094,23 @@ $themeLabels = json_encode(
                 </div>
                 <div class="wpm-field-card">
                     <p class="wpm-field-label"><?= $escapeHtml(__('Execution')) ?></p>
-                    <span class="wpm-state"><?= $escapeHtml($extensionPlan['execution_label'] ?? __('Execution disabled in this slice')) ?></span>
+                    <span class="wpm-state"><?= $escapeHtml($extensionPlan['execution_label'] ?? __('Guarded Adapter Waiting')) ?></span>
+                </div>
+                <div class="wpm-field-card">
+                    <p class="wpm-field-label"><?= $escapeHtml(__('Adapter')) ?></p>
+                    <strong><?= $escapeHtml($extensionPlan['adapter_label'] ?? __('Windows bundled PHP ini adapter')) ?></strong>
+                </div>
+                <div class="wpm-field-card">
+                    <p class="wpm-field-label"><?= $escapeHtml(__('Target php.ini')) ?></p>
+                    <strong><?= $escapeHtml(($extensionPlan['target_ini_path'] ?? '') !== '' ? ($extensionPlan['target_ini_path'] ?? '') : '-') ?></strong>
+                </div>
+                <div class="wpm-field-card">
+                    <p class="wpm-field-label"><?= $escapeHtml(__('Extension File')) ?></p>
+                    <strong><?= $escapeHtml(($extensionPlan['extension_file'] ?? '') !== '' ? ($extensionPlan['extension_file'] ?? '') : '-') ?></strong>
+                </div>
+                <div class="wpm-field-card">
+                    <p class="wpm-field-label"><?= $escapeHtml(__('Managed Block')) ?></p>
+                    <span class="wpm-state"><?= $escapeHtml($extensionPlan['managed_block_state'] ?? __('Not Evaluated')) ?></span>
                 </div>
             </div>
 
@@ -1056,17 +1131,82 @@ $themeLabels = json_encode(
                 <?php endforeach; ?>
             </ol>
 
-            <div class="wpm-ini-toolbar">
-                <button class="wpm-secondary-button wpm-disabled-button" type="button" disabled>
-                    <span class="mdi mdi-lock-outline"></span><?= $escapeHtml(__('Run Extension Action')) ?>
-                </button>
-                <div class="wpm-field-card">
-                    <span class="wpm-field-label"><?= $escapeHtml(__('Execution Boundary')) ?></span>
-                    <p class="wpm-section-note">
-                        <?= $escapeHtml(__('A later adapter slice must provide an allowlisted command plan, confirmation phrase, audit record, and WLS reload binding before this action can run.')) ?>
-                    </p>
+            <?php if ($extensionCommandPlan !== [] || $extensionPostVerification !== [] || $extensionRollbackGuidance !== []): ?>
+                <div class="wpm-context-grid" style="margin-top:16px">
+                    <div class="wpm-field-card">
+                        <span class="wpm-field-label"><?= $escapeHtml(__('Allowlisted Operation Plan')) ?></span>
+                        <ol class="wpm-extension-plan-list">
+                            <?php foreach ($extensionCommandPlan as $commandStep): ?>
+                                <li><?= $escapeHtml($commandStep) ?></li>
+                            <?php endforeach; ?>
+                        </ol>
+                    </div>
+                    <div class="wpm-field-card">
+                        <span class="wpm-field-label"><?= $escapeHtml(__('Post Verification')) ?></span>
+                        <ol class="wpm-extension-plan-list">
+                            <?php foreach ($extensionPostVerification as $verificationStep): ?>
+                                <li><?= $escapeHtml($verificationStep) ?></li>
+                            <?php endforeach; ?>
+                        </ol>
+                    </div>
+                    <div class="wpm-field-card">
+                        <span class="wpm-field-label"><?= $escapeHtml(__('Rollback Guidance')) ?></span>
+                        <ol class="wpm-extension-plan-list">
+                            <?php foreach ($extensionRollbackGuidance as $rollbackStep): ?>
+                                <li><?= $escapeHtml($rollbackStep) ?></li>
+                            <?php endforeach; ?>
+                        </ol>
+                    </div>
                 </div>
-            </div>
+            <?php endif; ?>
+
+            <form method="post"
+                  action="<?= $escapeHtml($extensionExecuteUrl) ?>"
+                  data-wpm-extension-execute-form
+                  data-wpm-extension-can-execute="<?= !empty($extensionPlan['can_execute']) ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="project_id" value="<?= $profileValue('project_id', $projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $profileValue('domain', $domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $profileValue('project_type', $projectType) ?>">
+                <input type="hidden" name="extension_action" value="<?= $escapeHtml($extensionPlan['action'] ?? '') ?>">
+                <input type="hidden" name="extension_name" value="<?= $escapeHtml($extensionPlan['extension'] ?? '') ?>">
+
+                <div class="wpm-ini-toolbar">
+                    <label class="wpm-field-card">
+                        <span class="wpm-field-label"><?= $escapeHtml(__('Runtime Action')) ?></span>
+                        <select class="wpm-form-select" name="runtime_action">
+                            <option value="none"><?= $escapeHtml(__('Apply only')) ?></option>
+                            <option value="reload"><?= $escapeHtml(__('Apply and request WLS reload')) ?></option>
+                        </select>
+                    </label>
+                    <label class="wpm-field-card">
+                        <span class="wpm-field-label"><?= $escapeHtml(__('Runtime Instance')) ?></span>
+                        <input class="wpm-form-control" name="runtime_instance" value="<?= $profileValue('last_runtime_instance') ?>" placeholder="ai-test-wls-panel-9700">
+                    </label>
+                    <label class="wpm-field-card">
+                        <span class="wpm-field-label"><?= $escapeHtml(__('Confirmation Phrase')) ?></span>
+                        <input class="wpm-form-control"
+                               name="confirm_phrase"
+                               placeholder="<?= $escapeHtml($extensionPlan['confirmation_phrase'] ?? 'RUN_PHP_EXTENSION_ACTION') ?>">
+                    </label>
+                    <div class="wpm-field-card">
+                        <label class="wpm-check-row">
+                            <input type="checkbox" name="confirm_extension_execute" value="1">
+                            <span><?= $escapeHtml(__('I understand PHP Manager will update only the WLS-managed extension block after creating a backup.')) ?></span>
+                        </label>
+                        <button class="wpm-secondary-button" type="submit" <?= empty($extensionPlan['can_execute']) ? 'disabled' : '' ?>>
+                            <span class="mdi <?= !empty($extensionPlan['can_execute']) ? 'mdi-puzzle-check-outline' : 'mdi-lock-outline' ?>"></span><?= $escapeHtml(__('Run Extension Action')) ?>
+                        </button>
+                        <?php if (empty($extensionPlan['can_execute'])): ?>
+                            <p class="wpm-section-note">
+                                <?= $escapeHtml(__('Execution stays locked until the adapter reports ready.')) ?>
+                            </p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </form>
 
             <h3 class="wpm-section-title" style="margin-top:18px"><?= $escapeHtml(__('Loaded Extensions')) ?></h3>
             <div class="wpm-chip-list">
@@ -1075,7 +1215,9 @@ $themeLabels = json_encode(
                 <?php endforeach; ?>
             </div>
         </section>
+        <?php endif; ?>
 
+        <?php if ($showPage('audit')): ?>
         <section id="audit" class="wpm-section" data-wpm-audit-log>
             <h2 class="wpm-section-title"><?= $escapeHtml(__('Recent Audit')) ?></h2>
             <?php if ($auditRecords === []): ?>
@@ -1099,7 +1241,9 @@ $themeLabels = json_encode(
                 </div>
             <?php endif; ?>
         </section>
+        <?php endif; ?>
 
+        <?php if ($showPage('summary')): ?>
         <section class="wpm-section">
             <h2 class="wpm-section-title"><?= $escapeHtml(__('Marketplace')) ?></h2>
             <p class="wpm-section-note">
@@ -1109,6 +1253,7 @@ $themeLabels = json_encode(
                 <span class="mdi mdi-store-search-outline"></span><?= $escapeHtml(__('Open WLS Marketplace')) ?>
             </a>
         </section>
+        <?php endif; ?>
     </main>
 </div>
 

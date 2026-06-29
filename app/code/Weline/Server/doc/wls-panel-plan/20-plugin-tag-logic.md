@@ -80,9 +80,65 @@ local `Weline_AppStore` module as the client-side install surface:
 - `ModuleCatalogService::moduleHasTypedTags()` uses exact normalized matching;
   `module:wls-extra` must not match `module:wls`.
 - Marketplace responses may return `tags`, flat `tags_resolved`, locale-grouped `tags_resolved`, or `marketplace_meta.tags`.
+- The final runner `tools/marketplace-typed-tag-e2e.php --self-test=1`
+  verifies all of those response shapes offline before any live AppStore token
+  or network call is attempted.
+- Final live AppStore verification should add `--require-negative-conclusive=1`
+  so a `module:wls-extra` canary result is required; an empty negative query is
+  not enough to prove exact matching.
+- The App Store source manifest must contain both real WLS-positive package
+  entries tagged `module:wls` and a real negative canary entry tagged
+  `module:wls-extra` without `module:wls`. The readiness probe checks
+  `official-apps/manifest.json` for those conditions before the live API E2E is
+  accepted.
 - The local AppStore normalizes all of those forms through `MarketplaceTag` before storing installed-module meta.
+- The local AppStore marketplace card view also normalizes `tags`,
+  `tags_resolved`, and `marketplace_meta.tags` before rendering badges and
+  browser-side filters, so locale-grouped online responses still show
+  `module:wls` plugin tags before installation.
+- Browser-side tag filtering is exact token matching. For example,
+  `module:wls-extra` must not match `module:wls`.
 - The Office Site indexing task must preserve `:` and `-` in tag codes and index
   them as exact filter keys.
+
+### Current Verification Gate
+
+As of 2026-06-22, the official marketplace source-contract check has been
+re-run in the actual official checkout:
+
+```text
+E:\WelineFramework\Framework-Official\App\weline
+```
+
+Verified files:
+
+- `app\code\Weline\PlatformAppStore\Service\ModuleCatalogService.php`
+- `app\code\Weline\PlatformAppStore\Controller\Api\V1\Platform\Module.php`
+- `app\code\Weline\PlatformAppStore\test\Unit\Service\ModuleCatalogServiceTagFilterTest.php`
+
+Verification commands:
+
+```powershell
+php -l app\code\Weline\PlatformAppStore\Service\ModuleCatalogService.php
+php -l app\code\Weline\PlatformAppStore\Controller\Api\V1\Platform\Module.php
+php vendor\phpunit\phpunit\phpunit app\code\Weline\PlatformAppStore\test\Unit\Service\ModuleCatalogServiceTagFilterTest.php
+php E:\WelineFramework\DEV-workspace\app\code\Weline\Server\doc\wls-panel-plan\tools\marketplace-typed-tag-e2e.php --self-test=1
+```
+
+Result:
+
+- PHP lint passed for the service and API controller.
+- PHPUnit ran 3 tests / 6 assertions for typed tag normalization, exact
+  matching, and `any` matching.
+- The focused test confirms `module:wls-extra` does not match `module:wls`.
+- The WLS Panel typed-tag runner self-test confirms string, JSON-string,
+  structured `type/value`, locale-grouped `tags_resolved`,
+  `marketplace_meta.tags`, `system:false`, and negative `module:wls-extra`
+  response handling without token, network, WLS startup, or file writes.
+- The runner self-test also confirms `--require-negative-conclusive=1` accepts
+  a real negative canary and rejects an empty negative-query pass.
+- The run emitted only the existing PHPUnit coverage-mode warning.
+- No official repository files were edited during this verification pass.
 
 ## WLS Recognition Rules
 
@@ -185,6 +241,28 @@ The WLS Panel client does not call AppStore internal PHP services directly. Stag
 `Backend\Index::index()`. Action endpoints remain under
 `appstore/backend/index/...`, for example `download`, `install`, and
 `authorize-install`.
+
+The AppStore index view treats online platform payloads as compatible when
+they expose any of these tag surfaces:
+
+```json
+{
+  "tags": [{"code": "module:wls"}],
+  "tags_resolved": [{"code": "module:wls", "label": "WLS Panel"}],
+  "tags_resolved": {
+    "zh_Hans_CN": [{"code": "module:wls", "label": "WLS Panel"}],
+    "en_US": [{"code": "module:wls", "label": "WLS Panel"}]
+  },
+  "marketplace_meta": {
+    "tags": [{"type": "module", "value": "wls"}]
+  }
+}
+```
+
+All four shapes are flattened to normalized codes by the client view before
+badges, search text, and browser-side tag filters are calculated. This mirrors
+the installed-module normalization path without making WLS depend on AppStore
+implementation classes.
 
 ```mermaid
 sequenceDiagram

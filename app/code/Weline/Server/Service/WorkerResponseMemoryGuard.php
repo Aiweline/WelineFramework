@@ -191,6 +191,16 @@ final class WorkerResponseMemoryGuard
             $compactions['cleared_process_caches']++;
         }
 
+        if (\class_exists(\Weline\Framework\Phrase\Parser::class, false)) {
+            \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+            $compactions['cleared_process_caches']++;
+        }
+
+        if (\class_exists(\Weline\Admin\Controller\BaseController::class, false)) {
+            \Weline\Admin\Controller\BaseController::clearRuntimeFullPageCache();
+            $compactions['cleared_process_caches']++;
+        }
+
         if ($aggressive && \class_exists(\Weline\Framework\Event\EventData::class, false)) {
             \Weline\Framework\Event\EventData::clearCache();
             $compactions['cleared_process_caches']++;

@@ -1610,7 +1610,10 @@ class Dispatcher
                 } else {
                     // 全局 drain（stopAll 时使用），Dispatcher 自己不需要排水，直接完成
                     $this->log('Received global drain signal, completing immediately...', 'DRAIN');
-                    $this->ipcClient?->sendDrainingComplete(0, $this->port);
+                    if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+                        $this->ipcClient->sendDrainingComplete(0, $this->port, '', 'dispatcher_global_drain:port=' . $this->port);
+                        $this->ipcClient->flushPendingWrites(0.05);
+                    }
                 }
                 break;
                 

@@ -463,7 +463,7 @@ class ControlClient implements ChildControlClientInterface
         return $this->send(ControlMessage::workerLoopStarted($workerId, $port, $pid));
     }
 
-    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool
+    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool
     {
         if ($workerId === 0 && $this->registerInfo) {
             $workerId = $this->registerInfo['worker_id'];
@@ -471,7 +471,7 @@ class ControlClient implements ChildControlClientInterface
             $msgId    = (string)($this->registerInfo['msg_id'] ?? $msgId);
         }
 
-        return $this->send(ControlMessage::drainingComplete($workerId, $port, $msgId));
+        return $this->send(ControlMessage::drainingComplete($workerId, $port, $msgId, $reason));
     }
 
     /**

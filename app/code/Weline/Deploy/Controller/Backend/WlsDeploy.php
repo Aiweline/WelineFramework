@@ -34,6 +34,10 @@ class WlsDeploy extends BackendController
     {
         $this->useStandaloneLayout();
 
+        $pageKey = $this->normalizePageKey(
+            trim((string)$this->request->getGet('page_key', '')),
+            trim((string)$this->request->getGet('operation', ''))
+        );
         $context = $this->requestContext();
         $settings = $this->deployConfigService->getSettings();
         $profile = $this->profileService->getFormData($context, $settings);
@@ -54,16 +58,18 @@ class WlsDeploy extends BackendController
 
         $this->assign('title', __('WLS 部署发布'));
         $this->assign('page_title', __('WLS 部署发布'));
+        $this->assign('wlsDeployPageKey', $pageKey);
         $this->assign('wlsDeployContext', $context);
         $this->assign('wlsDeploySettings', $this->settingsSummary($effectiveSettings));
         $this->assign('wlsDeployProfile', $profile);
         $this->assign('wlsDeployPreflight', $preflight);
         $this->assign('wlsDeployCommandPolicy', $this->commandPolicyService->getPanelSummary());
-        $this->assign('wlsDeployProfileSaveUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/profile-save'));
-        $this->assign('wlsDeployPreflightRunUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/preflight-run'));
-        $this->assign('wlsDeployWebhookReplayUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/webhook-replay'));
-        $this->assign('wlsDeployManualPlanUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/manual-plan-run'));
-        $this->assign('wlsDeployRollbackRunUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/rollback-run'));
+        $embeddedParams = $this->embeddedUrlParams();
+        $this->assign('wlsDeployProfileSaveUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/profile-save', $embeddedParams));
+        $this->assign('wlsDeployPreflightRunUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/preflight-run', $embeddedParams));
+        $this->assign('wlsDeployWebhookReplayUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/webhook-replay', $embeddedParams));
+        $this->assign('wlsDeployManualPlanUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/manual-plan-run', $embeddedParams));
+        $this->assign('wlsDeployRollbackRunUrl', $this->_url->getBackendUrl('deploy/backend/wls-deploy/rollback-run', $embeddedParams));
         $this->assign('wlsDeployNotice', $this->resolveNotice((string)$this->request->getGet('deploy_notice', '')));
         $this->assign('wlsDeployError', trim((string)$this->request->getGet('deploy_error', '')));
         $this->assign('wlsDeployRuntime', is_array($currentRuntime) ? $currentRuntime : []);
@@ -74,8 +80,83 @@ class WlsDeploy extends BackendController
         $this->assign('wlsDeployWebhookReplay', $webhookReplay);
         $this->assign('wlsDeployManualPlan', $manualPlan);
         $this->assign('wlsDeployRollbackResult', $this->rollbackResultSummary());
+        $this->assign('wlsDeployEmbedded', $this->isEmbeddedPanelRequest());
 
         return $this->fetch('index');
+    }
+
+    #[Acl('Weline_Deploy::wls_deploy_overview', 'View WLS Deploy Overview', 'mdi mdi-view-dashboard-outline', 'View WLS Panel deploy overview')]
+    public function getOverview(): string
+    {
+        return $this->openPage('overview', 'deploy');
+    }
+
+    #[Acl('Weline_Deploy::wls_deploy_release_path', 'View WLS Deploy Release Path', 'mdi mdi-source-branch-sync', 'View WLS Panel deploy release path')]
+    public function getReleasePath(): string
+    {
+        return $this->openPage('release-path', 'release-path');
+    }
+
+    #[Acl('Weline_Deploy::wls_deploy_configuration', 'View WLS Deploy Configuration', 'mdi mdi-tune-variant', 'View WLS Panel deploy configuration')]
+    public function getConfiguration(): string
+    {
+        return $this->openPage('configuration', 'configuration');
+    }
+
+    #[Acl('Weline_Deploy::wls_deploy_project_profile', 'View WLS Deploy Project Profile', 'mdi mdi-clipboard-edit-outline', 'View WLS Panel deploy project profile')]
+    public function getProjectProfile(): string
+    {
+        return $this->openPage('project-profile', 'project-profile');
+    }
+
+    #[Acl('Weline_Deploy::wls_deploy_preflight', 'View WLS Deploy Preflight', 'mdi mdi-shield-check-outline', 'View WLS Panel deploy preflight')]
+    public function getPreflight(): string
+    {
+        return $this->openPage('preflight', 'preflight');
+    }
+
+    #[Acl('Weline_Deploy::wls_deploy_webhooks', 'View WLS Deploy Webhooks', 'mdi mdi-replay', 'View WLS Panel deploy webhooks')]
+    public function getWebhooks(): string
+    {
+        return $this->openPage('webhooks', 'webhook');
+    }
+
+    #[Acl('Weline_Deploy::wls_deploy_releases', 'View WLS Deploy Releases', 'mdi mdi-history', 'View WLS Panel deploy releases')]
+    public function getReleases(): string
+    {
+        return $this->openPage('releases', 'release-history');
+    }
+
+    #[Acl('Weline_Deploy::wls_deploy_manual_plan', 'View WLS Deploy Manual Plan', 'mdi mdi-clipboard-list-outline', 'View WLS Panel deploy manual plan')]
+    public function getManualPlan(): string
+    {
+        return $this->openPage('manual-plan', 'manual-release-plan');
+    }
+
+    private function openPage(string $pageKey, string $operation): string
+    {
+        $this->request->setGet('page_key', $pageKey);
+        $this->request->setGet('operation', $operation);
+        return $this->getIndex();
+    }
+
+    private function normalizePageKey(string $pageKey, string $operation): string
+    {
+        $pageKey = trim($pageKey);
+        if (in_array($pageKey, ['overview', 'release-path', 'configuration', 'project-profile', 'preflight', 'webhooks', 'releases', 'manual-plan'], true)) {
+            return $pageKey;
+        }
+
+        return match (trim($operation)) {
+            'release-path' => 'release-path',
+            'configuration' => 'configuration',
+            'project-profile' => 'project-profile',
+            'preflight' => 'preflight',
+            'webhook', 'webhook-replay' => 'webhooks',
+            'release-history', 'releases' => 'releases',
+            'manual-release-plan' => 'manual-plan',
+            default => 'overview',
+        };
     }
 
     #[Acl('Weline_Deploy::wls_deploy_profile_save', '保存 WLS 项目发布 Profile', 'mdi mdi-content-save', '保存 WLS 面板项目发布 Profile')]
@@ -361,6 +442,31 @@ class WlsDeploy extends BackendController
             'domain' => trim((string)$this->request->getGet('domain', '')),
             'project_type' => trim((string)$this->request->getGet('project_type', '')),
         ];
+    }
+
+    private function isEmbeddedPanelRequest(): bool
+    {
+        $value = strtolower(trim((string)$this->request->getGet('embedded', '')));
+        return in_array($value, ['1', 'true', 'yes', 'wls_panel'], true);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function embeddedUrlParams(): array
+    {
+        return $this->isEmbeddedPanelRequest() ? ['embedded' => '1'] : [];
+    }
+
+    private function shouldKeepEmbeddedMode(): bool
+    {
+        if ($this->isEmbeddedPanelRequest()) {
+            return true;
+        }
+
+        $post = $this->request->isPost() ? (array)$this->request->getPost() : [];
+        $value = strtolower(trim((string)($post['embedded'] ?? '')));
+        return in_array($value, ['1', 'true', 'yes', 'wls_panel'], true);
     }
 
     /**
@@ -936,12 +1042,25 @@ class WlsDeploy extends BackendController
                 $cleanParams[$key] = $value;
             }
         }
-
-        $url = $this->_url->getBackendUrl('deploy/backend/wls-deploy', $cleanParams);
-        if ($fragment !== '') {
-            $url .= $fragment;
+        if ($this->shouldKeepEmbeddedMode()) {
+            $cleanParams['embedded'] = '1';
         }
-        $this->redirect($url);
+
+        $this->redirect($this->_url->getBackendUrl($this->deployRouteForFragment($fragment), $cleanParams));
+    }
+
+    private function deployRouteForFragment(string $fragment): string
+    {
+        return match (ltrim(trim($fragment), '#')) {
+            'release-path' => 'deploy/backend/wls-deploy/release-path',
+            'configuration' => 'deploy/backend/wls-deploy/configuration',
+            'project-profile' => 'deploy/backend/wls-deploy/project-profile',
+            'preflight' => 'deploy/backend/wls-deploy/preflight',
+            'webhook-replay' => 'deploy/backend/wls-deploy/webhooks',
+            'releases' => 'deploy/backend/wls-deploy/releases',
+            'manual-release-plan' => 'deploy/backend/wls-deploy/manual-plan',
+            default => 'deploy/backend/wls-deploy/overview',
+        };
     }
 
     private function useStandaloneLayout(): void

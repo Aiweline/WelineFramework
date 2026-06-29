@@ -10,6 +10,8 @@ class WlsPanelSecurityDataService
 {
     private const DEFAULT_LIMIT = 10;
     private const MAX_LIMIT = 50;
+    private const DEFAULT_AUDIT_LIMIT = 20;
+    private const MAX_AUDIT_LIMIT = 50;
     private const POLICY_AUDIT_FILE = 'security-policy-audit.jsonl';
     private const DOMAIN_POLICY_REPLACE_LIST_FIELDS = [
         ['path_rate_limits', 'rules'],
@@ -62,7 +64,8 @@ class WlsPanelSecurityDataService
                 'domain_override_editor' => $this->buildDomainOverrideEditor($rules, $normalizedFilters),
                 'rule_change_preview' => $this->buildRuleChangePreview($rules, $rules),
                 'rule_summary' => $this->buildRuleSummary($rules),
-                'policy_audit' => $this->getPolicyAuditHistory($normalizedFilters, 20),
+                'policy_audit' => $this->getPolicyAuditHistory($normalizedFilters),
+                'policy_audit_filters' => $normalizedFilters['policy_audit_filters'],
                 'blocked_ips' => $detector->getBlockedIps(),
                 'instance' => $instance,
                 'error' => '',
@@ -84,6 +87,7 @@ class WlsPanelSecurityDataService
                 'rule_change_preview' => $this->buildRuleChangePreview([], []),
                 'rule_summary' => [],
                 'policy_audit' => [],
+                'policy_audit_filters' => $this->normalizeFilters($filters)['policy_audit_filters'] ?? [],
                 'blocked_ips' => [],
                 'instance' => (string)($filters['instance'] ?? $filters['security_instance'] ?? ''),
                 'error' => $throwable->getMessage(),
@@ -320,6 +324,7 @@ class WlsPanelSecurityDataService
             $scope = 'all';
         }
         $domain = $this->resolveScopeDomain($scope, $scopeOptions);
+        $policyAuditFilters = $this->normalizePolicyAuditFilters($filters, $domain);
 
         return [
             'instance' => $instance,
@@ -332,6 +337,29 @@ class WlsPanelSecurityDataService
             'page' => \max(1, $page),
             'limit' => \max(1, \min(self::MAX_LIMIT, $limit)),
             'scope_options' => $scopeOptions,
+            'policy_audit_filters' => $policyAuditFilters,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function normalizePolicyAuditFilters(array $filters, string $defaultDomain = ''): array
+    {
+        $domainInput = \trim((string)($filters['policy_audit_domain'] ?? ''));
+        $domain = $domainInput === ''
+            ? $this->normalizeDomain($defaultDomain)
+            : ($domainInput === '*' ? '' : $this->normalizeDomain($domainInput));
+
+        return [
+            'action' => $this->normalizeAuditToken((string)($filters['policy_audit_action'] ?? ''), 80),
+            'source' => $this->normalizeAuditToken((string)($filters['policy_audit_source'] ?? ''), 80),
+            'domain' => $domain,
+            'domain_input' => $domainInput === '*' ? '*' : $domain,
+            'section' => $this->normalizeAuditToken((string)($filters['policy_audit_section'] ?? ''), 80),
+            'keyword' => \mb_substr(\trim((string)($filters['policy_audit_keyword'] ?? '')), 0, 120),
+            'limit' => \max(1, \min(self::MAX_AUDIT_LIMIT, (int)($filters['policy_audit_limit'] ?? self::DEFAULT_AUDIT_LIMIT))),
         ];
     }
 
@@ -1362,7 +1390,7 @@ class WlsPanelSecurityDataService
      * @param array<string, mixed> $filters
      * @return array<int, array<string, mixed>>
      */
-    private function getPolicyAuditHistory(array $filters, int $limit): array
+    private function getPolicyAuditHistory(array $filters, ?int $limit = null): array
     {
         $path = $this->policyAuditPath();
         if (!\is_file($path) || !\is_readable($path)) {
@@ -1374,8 +1402,10 @@ class WlsPanelSecurityDataService
             return [];
         }
 
-        $limit = \max(1, \min(50, $limit));
-        $domain = $this->normalizeDomain((string)($filters['domain'] ?? ''));
+        $auditFilters = \is_array($filters['policy_audit_filters'] ?? null)
+            ? $filters['policy_audit_filters']
+            : $this->normalizePolicyAuditFilters($filters, (string)($filters['domain'] ?? ''));
+        $limit = \max(1, \min(self::MAX_AUDIT_LIMIT, (int)($auditFilters['limit'] ?? $limit ?? self::DEFAULT_AUDIT_LIMIT)));
         $records = [];
         foreach (\array_reverse(\array_slice($lines, -200)) as $line) {
             $decoded = \json_decode((string)$line, true);
@@ -1383,18 +1413,65 @@ class WlsPanelSecurityDataService
                 continue;
             }
 
-            $entryDomain = $this->normalizeDomain((string)($decoded['domain'] ?? ''));
-            if ($domain !== '' && $entryDomain !== '' && $entryDomain !== $domain) {
+            $record = $this->normalizePolicyAuditRecord($decoded);
+            if (!$this->policyAuditRecordMatches($record, $auditFilters)) {
                 continue;
             }
 
-            $records[] = $this->normalizePolicyAuditRecord($decoded);
+            $records[] = $record;
             if (\count($records) >= $limit) {
                 break;
             }
         }
 
         return $records;
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     * @param array<string, mixed> $filters
+     */
+    private function policyAuditRecordMatches(array $record, array $filters): bool
+    {
+        $action = (string)($filters['action'] ?? '');
+        if ($action !== '' && (string)($record['action'] ?? '') !== $action) {
+            return false;
+        }
+
+        $source = (string)($filters['source'] ?? '');
+        if ($source !== '' && (string)($record['source'] ?? '') !== $source) {
+            return false;
+        }
+
+        $domain = $this->normalizeDomain((string)($filters['domain'] ?? ''));
+        $recordDomain = $this->normalizeDomain((string)($record['domain'] ?? ''));
+        if ($domain !== '' && $recordDomain !== '' && $recordDomain !== $domain) {
+            return false;
+        }
+
+        $section = (string)($filters['section'] ?? '');
+        $sections = \is_array($record['changed_sections'] ?? null) ? $record['changed_sections'] : [];
+        if ($section !== '' && !\in_array($section, $sections, true)) {
+            return false;
+        }
+
+        $keyword = \mb_strtolower(\trim((string)($filters['keyword'] ?? '')));
+        if ($keyword === '') {
+            return true;
+        }
+
+        $haystack = \mb_strtolower(\implode(' ', \array_merge([
+            (string)($record['action'] ?? ''),
+            (string)($record['action_label'] ?? ''),
+            (string)($record['source'] ?? ''),
+            (string)($record['source_label'] ?? ''),
+            (string)($record['scope'] ?? ''),
+            (string)($record['domain'] ?? ''),
+            (string)($record['domain_label'] ?? ''),
+            (string)($record['label'] ?? ''),
+        ], \array_map('strval', $sections))));
+
+        return \str_contains($haystack, $keyword);
     }
 
     /**

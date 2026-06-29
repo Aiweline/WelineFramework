@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Controller;
 
+use Weline\Backend\Block\ThemeConfig;
+use Weline\Backend\Model\BackendUserConfig;
 use Weline\Backend\Service\BackendWarmupContext;
 use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\State;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Server\Service\MemoryStateFacade;
@@ -27,6 +30,22 @@ class BaseController extends BackendController
     private static ?MemoryStateFacade $adminRuntimeCache = null;
     private static bool $adminRuntimeCacheResolved = false;
     private static string $lastAdminRuntimeCacheGetStatus = 'none';
+
+    public static function clearRuntimeFullPageCache(): void
+    {
+        self::$adminFullPageCache = [];
+        $cache = self::adminRuntimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->clearNamespace(self::ADMIN_FULL_PAGE_CACHE_NS);
+        } catch (\Throwable) {
+            self::$adminRuntimeCache = null;
+            self::$adminRuntimeCacheResolved = true;
+        }
+    }
 
     public function __init()
     {
@@ -219,11 +238,23 @@ class BaseController extends BackendController
 
         try {
             if (isset($this->session)) {
+                $userId = (int)($this->session->getUserId() ?? 0);
+                if ($userId > 0) {
+                    return $userId;
+                }
+
                 $user = $this->session->getLoginUser();
                 if (\is_object($user) && \method_exists($user, 'getId')) {
                     return \max(0, (int)$user->getId());
                 }
             }
+        } catch (\Throwable) {
+        }
+
+        try {
+            /** @var BackendUserConfig $userConfig */
+            $userConfig = ObjectManager::getInstance(BackendUserConfig::class);
+            return $userConfig->getCurrentUserId();
         } catch (\Throwable) {
         }
 
@@ -235,19 +266,69 @@ class BaseController extends BackendController
         $host = \strtolower(\trim((string)($this->request->getServer('HTTP_HOST') ?? '')));
         $uri = (string)(\function_exists('w_env_request_uri') ? \w_env_request_uri() : ($this->request->getUri() ?? ''));
         $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: $uri);
+        $routePath = \trim((string)$this->request->getRouteUrlPath(), '/');
+        $requestScope = KeyBuilder::requestScopeHash([
+            'scope' => 'admin_full_page',
+            'file' => $fileName,
+            'route' => $routePath,
+            'path' => $path,
+        ], ['full_request_uri' => false]);
 
         return \sha1((string)\json_encode([
-            'v' => 3,
+            'v' => 4,
             'controller' => static::class,
             'file' => $fileName,
-            'route' => \trim((string)$this->request->getRouteUrlPath(), '/'),
+            'route' => $routePath,
             'path' => $path,
             'host' => $host,
+            'area' => (string)($this->request->getServer('WELINE_AREA') ?? ''),
+            'area_route' => (string)($this->request->getServer('WELINE_AREA_ROUTE') ?? ''),
+            'backend_prefix' => (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''),
+            'rest_backend_prefix' => (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?? ''),
+            'website_id' => (string)($this->request->getServer('WELINE_WEBSITE_ID') ?? ''),
+            'website_code' => (string)($this->request->getServer('WELINE_WEBSITE_CODE') ?? ''),
+            'website_url' => (string)($this->request->getServer('WELINE_WEBSITE_URL') ?? ''),
             'user_id' => $this->resolveAdminFullPageCacheUserId(),
             'lang' => State::getLang(),
             'lang_local' => State::getLangLocal(),
             'currency' => State::getCurrency(),
+            'theme_config_hash' => $this->resolveAdminThemeConfigHash(),
+            'request_scope' => $requestScope,
         ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    private function resolveAdminThemeConfigHash(): string
+    {
+        try {
+            $userId = $this->resolveAdminFullPageCacheUserId();
+            if ($userId <= 0) {
+                return '';
+            }
+
+            /** @var BackendUserConfig $configModel */
+            $configModel = ObjectManager::getInstance(BackendUserConfig::class);
+            $row = $configModel->clear()
+                ->where(BackendUserConfig::schema_fields_user_id, $userId)
+                ->where(BackendUserConfig::schema_fields_key, ThemeConfig::theme_Session_Config)
+                ->find()
+                ->fetchArray();
+            $rawConfig = (string)($row[BackendUserConfig::schema_fields_value] ?? '');
+            if ($rawConfig === '') {
+                return '';
+            }
+
+            $decoded = \json_decode($rawConfig, true);
+            if (\is_array($decoded)) {
+                return \sha1((string)\json_encode(
+                    $decoded,
+                    \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE
+                ));
+            }
+
+            return \sha1($rawConfig);
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function getAdminFullPageCache(string $key): ?string

@@ -96,6 +96,12 @@ class Core
     private static array $generatedRouterFileFrozen = [];
 
     private const GENERATED_ROUTER_SNAPSHOT_DIR = 'generated_router_snapshots';
+
+    /** @var array<string, array<string, array<string, array>>> */
+    private static array $generatedRouterLookupCache = [];
+
+    /** @var array<class-string, list<array{name:string, arguments:array}>> */
+    private static array $controllerAttributeMetadataCache = [];
     
     /**
      * @DESC         |任何时候都会初始化
@@ -813,28 +819,25 @@ class Core
             return $this->routeFrontendQueryBinApi();
         }
 
+        if ($is_api_admin && $this->isBackendFrameworkQueryApiUrl($url)) {
+            return $this->routeBackendFrameworkQueryApi();
+        }
+
         if ($is_api_admin) {
             $router_filepath = Env::path_BACKEND_REST_API_ROUTER_FILE;
         } else {
             // 检测api路由
             $router_filepath = Env::path_FRONTEND_REST_API_ROUTER_FILE;
         }
-        $routers = self::loadGeneratedRouterFile($router_filepath);
-            $requestMethod = strtoupper($this->request->getMethod());
-            $method = '::' . $requestMethod;
+        if (file_exists($router_filepath)) {
+            $routers = self::loadGeneratedRouterFile($router_filepath);
+            $requestMethod = strtoupper((string)($this->request->getMethod() ?: 'GET'));
+            $matchedRouter = self::matchGeneratedRouterEntry($router_filepath, $routers, $url, $requestMethod, 'index/index');
             // HEAD 请求应该回退到 GET 路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
-            $getFallback = $requestMethod === 'HEAD' ? '::GET' : '';
-            if (
-                isset($routers[$url]) || isset($routers[$url . $method]) || 
-                ($getFallback && isset($routers[$url . $getFallback])) ||
-                (empty($url) && (isset($routers['index/index']) || isset($routers['index/index' . $method]) || ($getFallback && isset($routers['index/index' . $getFallback]))))
-            ) {
+            if ($matchedRouter !== null) {
                 // 优先处理没有请求方法后缀的路由（如 save 而不是 save::POST），这样可以避免需要强制使用 postSave 这样的命名
                 // 对于 HEAD 请求，如果没有专门的 HEAD 路由，则回退到 GET 路由
-                $this->router = $routers[$url] ?? $routers[$url . $method] ?? 
-                    ($getFallback ? ($routers[$url . $getFallback] ?? null) : null) ??
-                    $routers['index/index'] ?? $routers['index/index' . $method] ?? 
-                    ($getFallback ? ($routers['index/index' . $getFallback] ?? null) : null);
+                $this->router = $matchedRouter;
                 # 缓存路由结果
                 $this->router['type'] = 'api';
                 if (!$is_api_admin) {
@@ -842,6 +845,7 @@ class Core
                 }
                 return $this->route();
             }
+        }
         // 如果是API后端请求，找不到路由就直接404
         if ($is_api_admin) {
             $this->request->getResponse()->noRouter();
@@ -868,6 +872,39 @@ class Core
 
         return $normalized === 'bin/query'
             || ($prefixedBinQuery !== '' && $normalized === $prefixedBinQuery);
+    }
+
+    private function isBackendFrameworkQueryApiUrl(string $url): bool
+    {
+        $normalized = \strtolower(\trim($url, '/'));
+        $restBackendPrefix = \strtolower(\trim((string)(Env::getAreaRoutePrefix('rest_backend') ?: 'api_admin'), '/'));
+
+        if ($restBackendPrefix !== '' && \str_starts_with($normalized, $restBackendPrefix . '/')) {
+            $normalized = \substr($normalized, \strlen($restBackendPrefix) + 1);
+        }
+
+        return $normalized === 'framework/query'
+            || $normalized === 'rest/v1/framework/query'
+            || $normalized === 'framework/rest/v1/query';
+    }
+
+    private function routeBackendFrameworkQueryApi()
+    {
+        $this->router = [
+            'module' => Env::MODULE_FRAMEWORK,
+            'module_path' => Env::framework_code_path,
+            'router' => 'framework',
+            'class' => [
+                'area' => \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND,
+                'name' => \Weline\Framework\Controller\Backend\Api\Query::class,
+                'controller_name' => 'Query',
+                'method' => 'postIndex',
+                'request_method' => 'POST',
+            ],
+            'type' => 'api',
+        ];
+
+        return $this->route();
     }
 
     private function routeExternalBinQueryApi()
@@ -913,6 +950,7 @@ class Core
         self::$generatedRouterFileCache = [];
         self::$generatedRouterFileMtimes = [];
         self::$generatedRouterFileFrozen = [];
+        self::$generatedRouterLookupCache = [];
     }
 
     public static function preloadGeneratedRouterFiles(): void
@@ -982,6 +1020,7 @@ class Core
             if (!$persistentRuntime) {
                 self::$generatedRouterFileCache[$routerFilepath] = [];
                 self::$generatedRouterFileMtimes[$routerFilepath] = 0;
+                unset(self::$generatedRouterLookupCache[$routerFilepath]);
             }
             return [];
         }
@@ -1031,7 +1070,8 @@ class Core
                 unset(
                     self::$generatedRouterFileCache[$routerFilepath],
                     self::$generatedRouterFileMtimes[$routerFilepath],
-                    self::$generatedRouterFileFrozen[$routerFilepath]
+                    self::$generatedRouterFileFrozen[$routerFilepath],
+                    self::$generatedRouterLookupCache[$routerFilepath]
                 );
                 return [];
             }
@@ -1042,6 +1082,7 @@ class Core
                 self::$generatedRouterFileFrozen[$routerFilepath] = true;
                 self::writeGeneratedRouterSnapshot($routerFilepath, $routers);
             }
+            unset(self::$generatedRouterLookupCache[$routerFilepath]);
         }
 
         return self::$generatedRouterFileCache[$routerFilepath];
@@ -1127,6 +1168,66 @@ class Core
             . DS . sha1($routerFilepath) . '-' . basename($routerFilepath);
     }
 
+    private static function matchGeneratedRouterEntry(
+        string $routerFilepath,
+        array $routers,
+        string $url,
+        string $requestMethod,
+        string $defaultRoute
+    ): ?array {
+        $index = self::getGeneratedRouterLookupIndex($routerFilepath, $routers);
+        $requestMethod = \strtoupper($requestMethod ?: 'GET');
+        $fallbackMethod = $requestMethod === 'HEAD' ? 'GET' : null;
+        $paths = [$url];
+        if ($url === '' && $defaultRoute !== '') {
+            $paths[] = $defaultRoute;
+        }
+
+        foreach ($paths as $path) {
+            $routesForPath = $index[$path] ?? null;
+            if ($routesForPath === null) {
+                continue;
+            }
+            if (isset($routesForPath['*'])) {
+                return $routesForPath['*'];
+            }
+            if (isset($routesForPath[$requestMethod])) {
+                return $routesForPath[$requestMethod];
+            }
+            if ($fallbackMethod !== null && isset($routesForPath[$fallbackMethod])) {
+                return $routesForPath[$fallbackMethod];
+            }
+        }
+
+        return null;
+    }
+
+    private static function getGeneratedRouterLookupIndex(string $routerFilepath, array $routers): array
+    {
+        if (isset(self::$generatedRouterLookupCache[$routerFilepath])) {
+            return self::$generatedRouterLookupCache[$routerFilepath];
+        }
+
+        $index = [];
+        foreach ($routers as $routeKey => $router) {
+            if (!\is_string($routeKey) || !\is_array($router)) {
+                continue;
+            }
+
+            $path = $routeKey;
+            $method = '*';
+            $methodSeparator = \strrpos($routeKey, '::');
+            if ($methodSeparator !== false) {
+                $path = \substr($routeKey, 0, $methodSeparator);
+                $method = \strtoupper(\substr($routeKey, $methodSeparator + 2));
+            }
+
+            $index[$path][$method] = $router;
+        }
+
+        return self::$generatedRouterLookupCache[$routerFilepath] = $index;
+    }
+
     /**
      * 将 path 各段规范为与路由表一致的「小写 + 连字符」形式（PC 与 REST API 路由表均如此注册）。
      *
@@ -1181,29 +1282,26 @@ class Core
         } catch (\Throwable $includeE) {
             throw $includeE;
         }
+        $requestMethod = strtoupper((string)($this->request->getMethod() ?: 'GET'));
+        // HEAD 请求应该回退到 GET 路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
+        // 处理空路径：后台请求使用 'admin' 作为默认路由，前端请求使用 'index/index'
+        $defaultRoute = $is_pc_admin ? 'admin' : 'index/index';
+
+        // URL 已经正确保留了 admin/ 前缀（如 admin/login），不再需要 adminPrefixedUrl 补丁
+        $matchedRouter = self::matchGeneratedRouterEntry($router_filepath, $routers, $url, $requestMethod, $defaultRoute);
+        if ($matchedRouter !== null) {
+            // 优先处理没有请求方法后缀的路由（如 save 而不是 save::POST），这样可以避免需要强制使用 postSave 这样的命名
+            // 对于 HEAD 请求，如果没有专门的 HEAD 路由，则回退到 GET 路由
+            $this->router = $matchedRouter;
             
-            $requestMethod = strtoupper($this->request->getMethod());
-            $method = '::' . $requestMethod;
-            // HEAD 请求应该回退到 GET 路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
-            $getFallback = $requestMethod === 'HEAD' ? '::GET' : '';
-            // 处理空路径：后台请求使用 'admin' 作为默认路由，前端请求使用 'index/index'
-            $defaultRoute = $is_pc_admin ? 'admin' : 'index/index';
-            $matchedRouter = self::resolveGeneratedRouterRule($routers, $url, $method, $getFallback, $defaultRoute);
-            
-            // URL 已经正确保留了 admin/ 前缀（如 admin/login），不再需要 adminPrefixedUrl 补丁
-            if ($matchedRouter !== null) {
-                // 优先处理没有请求方法后缀的路由（如 save 而不是 save::POST），这样可以避免需要强制使用 postSave 这样的命名
-                // 对于 HEAD 请求，如果没有专门的 HEAD 路由，则回退到 GET 路由
-                $this->router = $matchedRouter;
-                
-                # 缓存路由结果
-                $this->router['type'] = 'pc';
-                if (!$is_pc_admin) {
-                    $this->cache->set($this->_router_cache_key, $this->router);
-                }
-                
-                return $this->route();
+            # 缓存路由结果
+            $this->router['type'] = 'pc';
+            if (!$is_pc_admin) {
+                $this->cache->set($this->_router_cache_key, $this->router);
             }
+
+            return $this->route();
+        }
         // 如果是PC后端请求，找不到路由就直接404
         if ($is_pc_admin) {
             // 诊断日志：记录后台路由 404 的关键信息，便于排查间歇性 404 问题
@@ -1600,12 +1698,8 @@ class Core
         }
         
         // 解析注解
-        $dispatchReflection = ObjectManager::getReflectionInstance($dispatch);
-        
-        $attributes = $dispatchReflection->getAttributes();
-        
-        foreach ($attributes as $attribute) {
-            $dispatchAttribute = ObjectManager::getInstance($attribute->getName(), $attribute->getArguments());
+        foreach (self::getControllerAttributeMetadata((string)$dispatch) as $attribute) {
+            $dispatchAttribute = ObjectManager::getInstance($attribute['name'], $attribute['arguments']);
             if (method_exists($dispatchAttribute, 'execute')) {
                 $result = $dispatchAttribute->execute();
                 if ($result) {
@@ -1792,6 +1886,29 @@ class Core
         }
 
         return \trim((string)$fpcHit) === '1';
+    }
+
+    /**
+     * @return list<array{name:string, arguments:array}>
+     * @throws \ReflectionException
+     */
+    private static function getControllerAttributeMetadata(string $dispatch): array
+    {
+        if (isset(self::$controllerAttributeMetadataCache[$dispatch])) {
+            return self::$controllerAttributeMetadataCache[$dispatch];
+        }
+
+        $dispatchReflection = ObjectManager::getReflectionInstance($dispatch);
+        $metadata = [];
+
+        foreach ($dispatchReflection->getAttributes() as $attribute) {
+            $metadata[] = [
+                'name' => $attribute->getName(),
+                'arguments' => $attribute->getArguments(),
+            ];
+        }
+
+        return self::$controllerAttributeMetadataCache[$dispatch] = $metadata;
     }
 
     private function resolveRequestScopedResponse(mixed $result, string $output): Response

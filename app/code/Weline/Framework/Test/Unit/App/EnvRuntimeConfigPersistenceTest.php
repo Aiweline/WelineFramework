@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\App;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\App as FrameworkApp;
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\RuntimeInterface;
@@ -80,6 +81,23 @@ PHP);
 
         self::assertSame(4, $env->getConfig('queue.cron.max_concurrent'));
         self::assertSame('512M', $env->getConfig('queue.worker.memory_limit'));
+    }
+
+    public function testAppEnvWritesFalseyValuesInsteadOfTreatingThemAsReads(): void
+    {
+        \file_put_contents($this->envPath, <<<'PHP'
+<?php return [];
+PHP);
+        Env::getInstance()->reload();
+
+        self::assertTrue(FrameworkApp::Env('codex.falsey_bool', false));
+        self::assertFalse(FrameworkApp::Env('codex.falsey_bool'));
+
+        self::assertTrue(FrameworkApp::Env('codex.falsey_zero', 0));
+        self::assertSame(0, FrameworkApp::Env('codex.falsey_zero'));
+
+        self::assertTrue(FrameworkApp::Env('codex.falsey_empty_string', ''));
+        self::assertSame('', FrameworkApp::Env('codex.falsey_empty_string'));
     }
 
     public function testRuntimeMaintenanceModeDoesNotPersistEnvFile(): void

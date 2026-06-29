@@ -145,8 +145,8 @@ AI翻译,"AI Translate"
 取消,取消
 选择一个部件进行配置,"Select a widget to configure"
 请填写页面标题和标识,"Please fill in page title and handle"
-未知错误,"Unknown error"
-保存失败,"Save Failed"
+"Page preview","Page preview"
+"The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
 保存,Save
 页面标题,"Page Title"
 页面标识,"Page Handle"

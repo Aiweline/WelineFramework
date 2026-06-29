@@ -64,7 +64,7 @@ interface ChildControlClientInterface
 
     public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool;
 
-    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool;
+    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool;
 
     public function sendStatusReport(int $connections, int $memory, int $requests): bool;
 

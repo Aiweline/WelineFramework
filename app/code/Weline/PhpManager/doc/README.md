@@ -13,6 +13,7 @@ The module is discovered by the WLS Panel through typed Marketplace tags in
 - `capability:php-read`
 - `capability:php-profile-write`
 - `capability:php-ini-apply`
+- `capability:php-extension-guarded-adapter`
 - `capability:wls-reload-request`
 
 No WLS-specific PHP inheritance contract is required. The ordinary module
@@ -33,9 +34,13 @@ The first implementation slice provides:
 - PHP Profile inheritance map that compares runtime values, project Profile
   values, effective values, override/alignment state, and required-extension
   satisfaction before an operator applies php.ini;
-- extension lifecycle dry-run planning that normalizes install/remove intent,
-  checks loaded/core/profile-required state, and keeps execution disabled until
-  a future platform adapter slice supplies allowlisted commands;
+- extension lifecycle planning that normalizes install/remove intent, checks
+  loaded/core/profile-required state, and routes executable cases through a
+  guarded bundled Windows PHP ini adapter;
+- guarded extension execution for bundled Windows PHP: install means enabling
+  an already-present `extend/server/php/ext/php_*.dll` from an allowlist inside
+  a WLS-managed extension block; remove means deleting only a line previously
+  created inside that WLS-managed block;
 - php.ini apply plan with directive diff, target guard, and managed block
   detection;
 - backup-first php.ini apply to bundled project/sandbox ini paths;
@@ -51,14 +56,22 @@ The first implementation slice provides:
 - The target ini path must already exist, be readable/writable, and live under
   `extend/server/php` or a WLS PHP Manager sandbox directory.
 - PHP binary fields are saved as project Profile metadata only.
-- Extension lifecycle actions are dry-run only in this slice; they do not
-  install, remove, enable, disable, or reload PHP extensions yet.
+- Extension lifecycle actions never call `pecl`, package managers, shell
+  pipelines, or file downloads. The current adapter only writes/removes
+  allowlisted lines in PHP Manager's own extension block after creating a
+  backup.
+- Extension remove does not touch installer-managed or system-managed
+  `extension=` lines.
+- Extension execution requires the phrase `RUN_PHP_EXTENSION_ACTION`, an
+  explicit checkbox, an audit record, and an optional operator-selected WLS
+  reload request.
 - Runtime changes require an explicit runtime action and target instance.
 
 ## Future Slices
 
 - import the current `php.ini` into a versioned profile;
-- implement platform-specific extension install/remove adapters with explicit
-  allowlists, confirmation phrases, audit records, and WLS reload binding;
+- implement additional platform-specific extension install/remove adapters
+  such as narrow Linux `phpenmod`/`phpdismod` support with explicit allowlists,
+  confirmation phrases, audit records, and WLS reload binding;
 - bind PHP profiles to Gateway/worker restart plans;
 - extend drift evidence into historical profile snapshots.

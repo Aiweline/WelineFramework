@@ -1,5 +1,7 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
+$adminAppJsFile = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Admin' . DS . 'view' . DS . 'statics' . DS . 'assets' . DS . 'js' . DS . 'app.js';
+$adminAppJsVersion = (string)(@filemtime($adminAppJsFile) ?: '20260626-sidebar-toggle');
 ?>
 <div class="container-fluid">
     <div class="row-fluid">
@@ -19,5 +21,5 @@
 <script src="@static(Weline_Admin::assets/libs/simplebar/simplebar.min.js)"></script>
 <script src="@static(Weline_Admin::assets/libs/node-waves/waves.min.js)"></script>
 
-<script src="@static(Weline_Admin::assets/js/app.js)"></script>
+<script src="@static(Weline_Admin::assets/js/app.js)?v=<?= htmlspecialchars($adminAppJsVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 @template(Weline_Backend::templates/public/footer.phtml)

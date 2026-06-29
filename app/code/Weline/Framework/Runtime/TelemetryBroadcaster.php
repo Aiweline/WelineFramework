@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
@@ -20,6 +21,16 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class TelemetryBroadcaster
 {
+    private const REQUEST_COLLECTED_EVENT = 'Weline_Framework::telemetry::request_collected';
+
+    private const TRACE_MODE_OFF = 'off';
+
+    private const TRACE_MODE_SAMPLED = 'sampled';
+
+    private const TRACE_MODE_FULL = 'full';
+
+    private static int $sampleCounter = 0;
+
     /**
      * 广播请求遥测事件。
      *
@@ -30,13 +41,22 @@ class TelemetryBroadcaster
     public static function broadcast(string $result, ?Request $request = null, bool $forceResultMutation = false): string
     {
         $request ??= self::resolveRequest();
+        $hasDevToolContext = self::hasDevToolActivation($request) || self::containsDevToolMarkup($result);
         $allowResultMutation = $forceResultMutation
             || !(bool)\w_env('response.from_cache', false)
             || self::allowsDebugResponseDecoration()
-            || self::hasDevToolActivation($request)
-            || self::containsDevToolMarkup($result);
+            || $hasDevToolContext;
+        if (!self::shouldBroadcast($forceResultMutation || $hasDevToolContext)) {
+            return $result;
+        }
 
         // 遥测事件始终派发：即便未启用 RequestLifecycleTrace，监听者也可以拿到 request/runtime/result 等信息
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        if (!$eventsManager->hasObservers(self::REQUEST_COLLECTED_EVENT)) {
+            return $result;
+        }
+
         $spans = RequestLifecycleTrace::isEnabled()
             ? RequestLifecycleTrace::getSpansWithDbSummary()
             : [];
@@ -60,9 +80,7 @@ class TelemetryBroadcaster
             ],
         ];
 
-        /** @var EventsManager $eventsManager */
-        $eventsManager = ObjectManager::getInstance(EventsManager::class);
-        $eventsManager->dispatch('Weline_Framework::telemetry::request_collected', $eventData);
+        $eventsManager->dispatch(self::REQUEST_COLLECTED_EVENT, $eventData);
 
         if (!$allowResultMutation) {
             return $result;
@@ -104,6 +122,47 @@ class TelemetryBroadcaster
     {
         return \stripos($result, 'id="dev-tool-panel"') !== false
             || \stripos($result, 'window.__WELINE_REQUEST_ID__=') !== false;
+    }
+
+    public static function shouldBroadcast(bool $forceResultMutation = false): bool
+    {
+        if ($forceResultMutation) {
+            return true;
+        }
+
+        $mode = self::resolveTraceMode();
+        if ($mode === self::TRACE_MODE_OFF) {
+            return false;
+        }
+
+        if ($mode === self::TRACE_MODE_FULL) {
+            return true;
+        }
+
+        return self::shouldSampleCurrentRequest();
+    }
+
+    private static function resolveTraceMode(): string
+    {
+        $defaultMode = (\defined('PROD') && PROD) ? self::TRACE_MODE_SAMPLED : self::TRACE_MODE_FULL;
+        $configuredMode = \strtolower(\trim((string)Env::get('performance.telemetry.mode', $defaultMode)));
+
+        return match ($configuredMode) {
+            '0', 'false', 'disabled', self::TRACE_MODE_OFF => self::TRACE_MODE_OFF,
+            '1', 'true', 'enabled', 'on', self::TRACE_MODE_FULL => self::TRACE_MODE_FULL,
+            default => self::TRACE_MODE_SAMPLED,
+        };
+    }
+
+    private static function shouldSampleCurrentRequest(): bool
+    {
+        $rate = (int)Env::get('performance.telemetry.sample_rate', 100);
+        if ($rate <= 1) {
+            return true;
+        }
+
+        self::$sampleCounter = (self::$sampleCounter % $rate) + 1;
+        return self::$sampleCounter === 1;
     }
 
     private static function resolveRequest(): ?Request

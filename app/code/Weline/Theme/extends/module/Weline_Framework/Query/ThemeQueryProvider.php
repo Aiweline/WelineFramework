@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 
+use Weline\Admin\Controller\BaseController as AdminBaseController;
 use Weline\Backend\Block\ThemeConfig as BackendThemeConfig;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -98,6 +99,7 @@ class ThemeQueryProvider implements QueryProviderInterface
         $nextConfig['layouts'] = $layouts;
 
         $themeConfig->setThemeConfig($nextConfig);
+        AdminBaseController::clearRuntimeFullPageCache();
 
         return [
             'success' => true,

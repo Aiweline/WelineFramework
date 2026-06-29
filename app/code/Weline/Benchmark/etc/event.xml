@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
+        xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <event name="Weline_Benchmark::fixed_observer_chain">
+        <observer name="Weline_Benchmark::observer_01" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="10"/>
+        <observer name="Weline_Benchmark::observer_02" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="20"/>
+        <observer name="Weline_Benchmark::observer_03" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="30"/>
+        <observer name="Weline_Benchmark::observer_04" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="40"/>
+        <observer name="Weline_Benchmark::observer_05" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="50"/>
+        <observer name="Weline_Benchmark::observer_06" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="60"/>
+        <observer name="Weline_Benchmark::observer_07" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="70"/>
+        <observer name="Weline_Benchmark::observer_08" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="80"/>
+        <observer name="Weline_Benchmark::observer_09" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="90"/>
+        <observer name="Weline_Benchmark::observer_10" instance="Weline\Benchmark\Observer\CountingObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+</config>

@@ -4,6 +4,14 @@
  */
 $context = $this->getData('wlsDeployContext');
 $context = is_array($context) ? $context : [];
+$embedded = !empty($this->getData('wlsDeployEmbedded'));
+$pageKey = trim((string)($this->getData('wlsDeployPageKey') ?? 'overview'));
+if (!in_array($pageKey, ['overview', 'release-path', 'configuration', 'project-profile', 'preflight', 'webhooks', 'releases', 'manual-plan'], true)) {
+    $pageKey = 'overview';
+}
+$showDeployPage = static function (string|array $keys) use ($pageKey): bool {
+    return in_array($pageKey, (array)$keys, true);
+};
 $settings = $this->getData('wlsDeploySettings');
 $settings = is_array($settings) ? $settings : [];
 $runtime = $this->getData('wlsDeployRuntime');
@@ -76,17 +84,28 @@ $domain = trim((string)($context['domain'] ?? ''));
 $projectId = trim((string)($context['project_id'] ?? ''));
 $projectType = trim((string)($context['project_type'] ?? ''));
 $operation = trim((string)($context['operation'] ?? ''));
-$deployPanelUrl = $this->getBackendUrl('deploy/backend/wls-deploy');
-$buildDeployAnchorUrl = static function (string $anchor) use ($deployPanelUrl, $operation, $projectId, $domain, $projectType): string {
-    $query = array_filter([
-        'operation' => $operation,
+$deployRouteBaseUrls = [
+    'overview' => $this->getBackendUrl('deploy/backend/wls-deploy/overview'),
+    'release-path' => $this->getBackendUrl('deploy/backend/wls-deploy/release-path'),
+    'configuration' => $this->getBackendUrl('deploy/backend/wls-deploy/configuration'),
+    'project-profile' => $this->getBackendUrl('deploy/backend/wls-deploy/project-profile'),
+    'preflight' => $this->getBackendUrl('deploy/backend/wls-deploy/preflight'),
+    'webhooks' => $this->getBackendUrl('deploy/backend/wls-deploy/webhooks'),
+    'releases' => $this->getBackendUrl('deploy/backend/wls-deploy/releases'),
+    'manual-plan' => $this->getBackendUrl('deploy/backend/wls-deploy/manual-plan'),
+];
+$embeddedRouteParams = $embedded ? ['embedded' => '1'] : [];
+$buildDeployRouteUrl = static function (string $targetPage, array $params = []) use ($deployRouteBaseUrls, $embeddedRouteParams, $projectId, $domain, $projectType): string {
+    $query = array_filter($embeddedRouteParams + [
         'project_id' => $projectId,
         'domain' => $domain,
         'project_type' => $projectType,
-    ], static fn (mixed $value): bool => $value !== null && $value !== '');
+    ] + $params, static fn (mixed $value): bool => $value !== null && $value !== '');
 
-    return $deployPanelUrl . ($query !== [] ? '?' . http_build_query($query) : '') . '#' . ltrim($anchor, '#');
+    return ($deployRouteBaseUrls[$targetPage] ?? $deployRouteBaseUrls['overview']) . ($query !== [] ? '?' . http_build_query($query) : '');
 };
+$deployNavClass = static fn (string $targetPage): string => $pageKey === $targetPage ? 'is-active' : '';
+$deployNavCurrent = static fn (string $targetPage): string => $pageKey === $targetPage ? ' aria-current="location"' : '';
 $runtimeVersion = trim((string)($runtime['deploy_version'] ?? ''));
 $runtimeRefType = trim((string)($runtime['git_ref_type'] ?? ''));
 $runtimeRef = trim((string)($runtime['git_ref'] ?? ''));
@@ -105,6 +124,19 @@ $webhookTagPrefix = (string)($settings['webhook_tag_prefix'] ?? '');
 $webhookBranch = (string)($settings['webhook_branch'] ?? '');
 $rollbackRef = trim((string)($profile['rollback_ref'] ?? ''));
 $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty($profile['has_profile']) && !empty($profile['enabled']);
+$rollbackBlocked = !$rollbackReady || $rollbackRunUrl === '';
+$releasePathContextValue = $projectId !== '' ? $projectId : ($domain !== '' ? $domain : (string)__('当前 WLS'));
+$releasePathContextNote = $projectType !== '' ? $projectType : ($domain !== '' ? (string)__('域名上下文') : (string)__('本机面板'));
+$releasePathProfileState = !empty($profile['enabled'])
+    ? (string)__('已启用')
+    : (!empty($profile['has_profile']) ? (string)__('已保存未启用') : (string)__('继承全局'));
+$releasePathProfileClass = !empty($profile['enabled']) ? 'is-ok' : (!empty($profile['has_profile']) ? 'is-warning' : '');
+$releasePathProfileKey = trim((string)($profile['profile_key'] ?? ''));
+$releasePathProfileKey = $releasePathProfileKey !== '' ? $releasePathProfileKey : 'local';
+$releasePathRefSample = (string)($manualPlan['sample_tag_ref'] ?? ($webhookReplay['sample_tag_ref'] ?? 'refs/tags/v1.0.0'));
+$releasePathHistoryCount = count($records);
+$releasePathHistoryScopeType = $historyScopeScoped ? 'project' : 'global';
+$releasePathHistoryNote = $historyScopeDetail !== '' ? $historyScopeDetail : (string)__('当前 WLS 主项目');
 ?>
 
 <style>
@@ -231,6 +263,22 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
         min-width: 0;
         min-height: 100vh;
         padding: 28px 32px 42px;
+    }
+    .wls-deploy-shell.is-embedded {
+        min-height: auto;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .wls-deploy-shell.is-embedded .wdep-sidebar {
+        display: none;
+    }
+    .wls-deploy-shell.is-embedded .wdep-main {
+        grid-column: 1;
+        min-height: auto;
+        padding: 0;
+    }
+    .wls-deploy-shell.is-embedded .wdep-kicker,
+    .wls-deploy-shell.is-embedded .wdep-actions {
+        display: none;
     }
     .wdep-topbar {
         display: flex;
@@ -403,6 +451,90 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
         font-weight: 720;
         overflow-wrap: anywhere;
     }
+    .wdep-release-path-flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .wdep-release-path-step {
+        min-width: 0;
+        padding: 14px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+    }
+    .wdep-release-path-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .wdep-release-path-index {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        color: #ffffff;
+        background: var(--wdep-primary);
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .wdep-release-path-label {
+        margin: 0;
+        color: var(--wdep-muted);
+        font-size: 12px;
+        font-weight: 760;
+    }
+    .wdep-release-path-value {
+        margin: 0 0 6px;
+        color: var(--wdep-text);
+        font-size: 15px;
+        font-weight: 800;
+        overflow-wrap: anywhere;
+    }
+    .wdep-release-path-copy {
+        margin: 0;
+        color: var(--wdep-muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+    .wdep-release-path-actions {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .wdep-release-path-link {
+        min-height: 32px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 9px;
+        border: 1px solid var(--wdep-border);
+        border-radius: 8px;
+        background: var(--wdep-panel);
+        color: var(--wdep-text);
+        font-size: 12px;
+        font-weight: 760;
+        text-decoration: none;
+    }
+    .wdep-release-path-link:hover {
+        border-color: var(--wdep-primary);
+        color: var(--wdep-primary);
+        text-decoration: none;
+    }
+    .wdep-release-path-note {
+        margin: 14px 0 0;
+        padding: 12px 14px;
+        border-left: 3px solid var(--wdep-primary);
+        border-radius: 8px;
+        background: var(--wdep-panel-soft);
+        color: var(--wdep-muted);
+    }
     .wdep-pill {
         display: inline-flex;
         align-items: center;
@@ -528,6 +660,7 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
         font: inherit;
         outline: none;
         box-sizing: border-box;
+        text-overflow: ellipsis;
     }
     .wdep-field textarea {
         min-height: 82px;
@@ -662,8 +795,11 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+        min-width: 0;
     }
     .wdep-sample-button {
+        min-width: 0;
+        max-width: 100%;
         min-height: 34px;
         border: 1px solid var(--wdep-border);
         border-radius: 8px;
@@ -674,6 +810,9 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
         font-size: 12px;
         font-weight: 720;
         cursor: pointer;
+        text-align: left;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
     .wdep-sample-button:hover {
         border-color: var(--wdep-primary);
@@ -775,6 +914,7 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
         .wdep-grid.is-three,
         .wdep-grid.is-two,
         .wdep-summary,
+        .wdep-release-path-flow,
         .wdep-form-grid,
         .wdep-check-grid,
         .wdep-preflight-grid,
@@ -814,24 +954,32 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
     }
 </style>
 
-<div class="wls-deploy-shell" data-wls-deploy-shell data-theme="light">
+<div class="wls-deploy-shell<?= $embedded ? ' is-embedded' : '' ?>" data-wls-deploy-shell data-theme="light">
+    <?php if (!$embedded): ?>
     <aside class="wdep-sidebar" aria-label="<?= $escapeHtml(__('WLS 部署导航')) ?>">
         <div class="wdep-brand">
             <div class="wdep-brand-kicker"><?= $escapeHtml(__('WLS 插件面板')) ?></div>
             <div class="wdep-brand-title"><?= $escapeHtml(__('部署发布')) ?></div>
         </div>
-        <nav class="wdep-nav" aria-label="<?= $escapeHtml(__('部署发布菜单')) ?>">
-            <a class="is-active" href="<?= $escapeHtml($buildDeployAnchorUrl('overview')) ?>"><i class="mdi mdi-view-dashboard-outline"></i><?= $escapeHtml(__('总览')) ?></a>
-            <a href="<?= $escapeHtml($buildDeployAnchorUrl('configuration')) ?>"><i class="mdi mdi-tune-variant"></i><?= $escapeHtml(__('配置摘要')) ?></a>
-            <a href="<?= $escapeHtml($buildDeployAnchorUrl('project-profile')) ?>"><i class="mdi mdi-clipboard-edit-outline"></i><?= $escapeHtml(__('项目 Profile')) ?></a>
-            <a href="<?= $escapeHtml($buildDeployAnchorUrl('preflight')) ?>"><i class="mdi mdi-shield-check-outline"></i><?= $escapeHtml(__('发布预检')) ?></a>
-            <a href="<?= $escapeHtml($buildDeployAnchorUrl('webhook-replay')) ?>"><i class="mdi mdi-replay"></i><?= $escapeHtml(__('Webhook 回放')) ?></a>
-            <a href="<?= $escapeHtml($buildDeployAnchorUrl('releases')) ?>"><i class="mdi mdi-history"></i><?= $escapeHtml(__('发布记录')) ?></a>
+        <nav class="wdep-nav" data-wls-plugin-nav aria-label="<?= $escapeHtml(__('部署发布菜单')) ?>">
+            <a class="<?= $escapeHtml($deployNavClass('overview')) ?>"<?= $deployNavCurrent('overview') ?> href="<?= $escapeHtml($buildDeployRouteUrl('overview')) ?>"><i class="mdi mdi-view-dashboard-outline"></i><?= $escapeHtml(__('总览')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('release-path')) ?>"<?= $deployNavCurrent('release-path') ?> href="<?= $escapeHtml($buildDeployRouteUrl('release-path')) ?>"><i class="mdi mdi-source-branch-sync"></i><?= $escapeHtml(__('发布路径')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('configuration')) ?>"<?= $deployNavCurrent('configuration') ?> href="<?= $escapeHtml($buildDeployRouteUrl('configuration')) ?>"><i class="mdi mdi-tune-variant"></i><?= $escapeHtml(__('配置摘要')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('project-profile')) ?>"<?= $deployNavCurrent('project-profile') ?> href="<?= $escapeHtml($buildDeployRouteUrl('project-profile')) ?>"><i class="mdi mdi-clipboard-edit-outline"></i><?= $escapeHtml(__('项目 Profile')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('preflight')) ?>"<?= $deployNavCurrent('preflight') ?> href="<?= $escapeHtml($buildDeployRouteUrl('preflight')) ?>"><i class="mdi mdi-shield-check-outline"></i><?= $escapeHtml(__('发布预检')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('webhooks')) ?>"<?= $deployNavCurrent('webhooks') ?> href="<?= $escapeHtml($buildDeployRouteUrl('webhooks')) ?>"><i class="mdi mdi-replay"></i><?= $escapeHtml(__('Webhook 回放')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('releases')) ?>"<?= $deployNavCurrent('releases') ?> href="<?= $escapeHtml($buildDeployRouteUrl('releases')) ?>"><i class="mdi mdi-history"></i><?= $escapeHtml(__('发布记录')) ?></a>
             <a href="<?= $escapeHtml($marketplaceUrl) ?>"><i class="mdi mdi-store-outline"></i><?= $escapeHtml(__('插件商城')) ?></a>
-            <a href="<?= $escapeHtml($buildDeployAnchorUrl('manual-release-plan')) ?>"><i class="mdi mdi-clipboard-list-outline"></i><?= $escapeHtml(__('Manual Plan')) ?></a>
+            <a class="<?= $escapeHtml($deployNavClass('manual-plan')) ?>"<?= $deployNavCurrent('manual-plan') ?> href="<?= $escapeHtml($buildDeployRouteUrl('manual-plan')) ?>"><i class="mdi mdi-clipboard-list-outline"></i><?= $escapeHtml(__('Manual Plan')) ?></a>
         </nav>
         <div class="wdep-sidebar-spacer"></div>
-        <button type="button" class="wdep-theme-button" data-wdep-theme-toggle aria-label="<?= $escapeHtml(__('切换明暗色')) ?>">
+        <button type="button"
+                class="wdep-theme-button"
+                data-wdep-theme-toggle
+                data-wdep-theme-dark-label="<?= $escapeHtml(__('深色')) ?>"
+                data-wdep-theme-light-label="<?= $escapeHtml(__('浅色')) ?>"
+                aria-label="<?= $escapeHtml(__('切换明暗色')) ?>"
+                aria-pressed="false">
             <i class="mdi mdi-theme-light-dark"></i>
             <span data-wdep-theme-label><?= $escapeHtml(__('深色')) ?></span>
         </button>
@@ -840,6 +988,8 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             <?= $escapeHtml(__('返回 WLS Panel')) ?>
         </a>
     </aside>
+
+    <?php endif; ?>
 
     <main class="wdep-main">
         <header class="wdep-topbar" id="overview">
@@ -872,6 +1022,7 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             </div>
         <?php endif; ?>
 
+        <?php if ($showDeployPage('overview')): ?>
         <section class="wdep-section" aria-labelledby="wdep-context-title">
             <h2 class="wdep-section-title" id="wdep-context-title"><?= $escapeHtml(__('项目上下文')) ?></h2>
             <div class="wdep-grid">
@@ -898,6 +1049,97 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             </div>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showDeployPage('release-path')): ?>
+        <section
+            class="wdep-section"
+            aria-labelledby="wdep-release-path-title"
+            id="release-path"
+            data-wls-deploy-release-path
+            data-profile-key="<?= $escapeHtml($releasePathProfileKey) ?>"
+            data-history-scope="<?= $escapeHtml($releasePathHistoryScopeType) ?>"
+            data-history-count="<?= $escapeHtml((string)$releasePathHistoryCount) ?>"
+        >
+            <article class="wdep-panel">
+                <div class="wdep-panel-header">
+                    <div>
+                        <h2 class="wdep-panel-title" id="wdep-release-path-title"><?= $escapeHtml(__('项目发布路径')) ?></h2>
+                        <p class="wdep-panel-subtitle">
+                            <?= $escapeHtml(__('从项目卡片进入后，Profile、Webhook 回放、Manual Plan 和发布记录会共享同一组 WLS 项目上下文。')) ?>
+                        </p>
+                    </div>
+                    <span class="wdep-pill <?= $releasePathProfileClass ?>">
+                        <?= $escapeHtml($releasePathProfileState) ?>
+                    </span>
+                </div>
+                <div class="wdep-panel-body">
+                    <div class="wdep-release-path-flow" data-wls-deploy-release-path-flow>
+                        <article class="wdep-release-path-step" data-wls-deploy-release-path-context>
+                            <div class="wdep-release-path-head">
+                                <span class="wdep-release-path-index">1</span>
+                                <p class="wdep-release-path-label"><?= $escapeHtml(__('项目上下文')) ?></p>
+                            </div>
+                            <p class="wdep-release-path-value"><?= $escapeHtml($releasePathContextValue) ?></p>
+                            <p class="wdep-release-path-copy"><?= $escapeHtml($releasePathContextNote) ?></p>
+                        </article>
+                        <article class="wdep-release-path-step" data-wls-deploy-release-path-profile>
+                            <div class="wdep-release-path-head">
+                                <span class="wdep-release-path-index">2</span>
+                                <p class="wdep-release-path-label"><?= $escapeHtml(__('发布 Profile')) ?></p>
+                            </div>
+                            <p class="wdep-release-path-value wdep-code"><?= $escapeHtml($releasePathProfileKey) ?></p>
+                            <p class="wdep-release-path-copy"><?= $escapeHtml(($profile['source_label'] ?? __('继承全局配置')) . ' / ' . $releasePathProfileState) ?></p>
+                            <div class="wdep-release-path-actions">
+                                <a class="wdep-release-path-link" href="<?= $escapeHtml($buildDeployRouteUrl('project-profile')) ?>">
+                                    <i class="mdi mdi-clipboard-edit-outline"></i>
+                                    <?= $escapeHtml(__('配置 Profile')) ?>
+                                </a>
+                            </div>
+                        </article>
+                        <article class="wdep-release-path-step" data-wls-deploy-release-path-trigger>
+                            <div class="wdep-release-path-head">
+                                <span class="wdep-release-path-index">3</span>
+                                <p class="wdep-release-path-label"><?= $escapeHtml(__('触发与计划')) ?></p>
+                            </div>
+                            <p class="wdep-release-path-value"><?= $escapeHtml($settings['deploy_trigger_mode_label'] ?? __('仅 Tag Push')) ?></p>
+                            <p class="wdep-release-path-copy"><?= $escapeHtml(__('默认示例：%{1}', [$releasePathRefSample])) ?></p>
+                            <div class="wdep-release-path-actions">
+                                <a class="wdep-release-path-link" href="<?= $escapeHtml($buildDeployRouteUrl('webhooks')) ?>">
+                                    <i class="mdi mdi-replay"></i>
+                                    <?= $escapeHtml(__('Webhook 回放')) ?>
+                                </a>
+                                <a class="wdep-release-path-link" href="<?= $escapeHtml($buildDeployRouteUrl('manual-plan')) ?>">
+                                    <i class="mdi mdi-clipboard-list-outline"></i>
+                                    <?= $escapeHtml(__('Manual Plan')) ?>
+                                </a>
+                            </div>
+                        </article>
+                        <article class="wdep-release-path-step" data-wls-deploy-release-path-history>
+                            <div class="wdep-release-path-head">
+                                <span class="wdep-release-path-index">4</span>
+                                <p class="wdep-release-path-label"><?= $escapeHtml(__('发布历史')) ?></p>
+                            </div>
+                            <p class="wdep-release-path-value"><?= $escapeHtml(__('%{1} 条', [$releasePathHistoryCount])) ?></p>
+                            <p class="wdep-release-path-copy"><?= $escapeHtml($historyScopeLabel . ' / ' . $releasePathHistoryNote) ?></p>
+                            <div class="wdep-release-path-actions">
+                                <a class="wdep-release-path-link" href="<?= $escapeHtml($buildDeployRouteUrl('releases')) ?>">
+                                    <i class="mdi mdi-history"></i>
+                                    <?= $escapeHtml(__('查看当前范围')) ?>
+                                </a>
+                            </div>
+                        </article>
+                    </div>
+                    <p class="wdep-release-path-note">
+                        <?= $escapeHtml(__('真实发布成功后会记录 profile_key、project_id、domain 与 project_type；当前页面按这组上下文刷新发布历史。')) ?>
+                    </p>
+                </div>
+            </article>
+        </section>
+
+        <?php endif; ?>
+
+        <?php if ($showDeployPage('project-profile')): ?>
         <section class="wdep-section" aria-labelledby="wdep-profile-title" id="project-profile">
             <article class="wdep-panel">
                 <div class="wdep-panel-header">
@@ -1046,6 +1288,9 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             </article>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showDeployPage('preflight')): ?>
         <section class="wdep-section" aria-labelledby="wdep-preflight-title" id="preflight" data-wls-deploy-preflight data-wls-deploy-preflight-status="<?= $escapeHtml($preflightStatus) ?>">
             <article class="wdep-panel">
                 <div class="wdep-panel-header">
@@ -1124,7 +1369,14 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
                                 <input type="checkbox" name="confirm_rollback" value="1" data-wls-deploy-rollback-confirm>
                                 <span><?= $escapeHtml(__('Confirm rollback in the selected project context')) ?></span>
                             </label>
-                            <button type="submit" class="wdep-button" data-wls-deploy-rollback-run <?= $rollbackReady ? '' : 'disabled' ?>>
+                            <button
+                                type="submit"
+                                class="wdep-button <?= $rollbackBlocked ? 'disabled' : '' ?>"
+                                data-wls-deploy-rollback-run
+                                data-rollback-blocked="<?= $escapeHtml($rollbackBlocked ? '1' : '0') ?>"
+                                aria-disabled="true"
+                                disabled
+                            >
                                 <?= $escapeHtml(__('Run Rollback')) ?>
                             </button>
                         </form>
@@ -1133,6 +1385,9 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             </article>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showDeployPage('webhooks')): ?>
         <section class="wdep-section" aria-labelledby="wdep-webhook-replay-title" id="webhook-replay" data-wls-webhook-replay data-wls-webhook-replay-status="<?= $escapeHtml($webhookReplayStatus) ?>">
             <article class="wdep-panel">
                 <div class="wdep-panel-header">
@@ -1209,6 +1464,9 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             </article>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showDeployPage('manual-plan')): ?>
         <section class="wdep-section" aria-labelledby="wdep-manual-plan-title" id="manual-release-plan" data-wls-manual-plan data-wls-manual-plan-status="<?= $escapeHtml($manualPlanStatus) ?>">
             <article class="wdep-panel">
                 <div class="wdep-panel-header">
@@ -1341,6 +1599,9 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             </article>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showDeployPage('configuration')): ?>
         <section class="wdep-section" aria-labelledby="wdep-config-title" id="configuration">
             <div class="wdep-grid is-two">
                 <article class="wdep-panel">
@@ -1435,6 +1696,9 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             </div>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showDeployPage('overview')): ?>
         <section class="wdep-section" aria-labelledby="wdep-cap-title">
             <h2 class="wdep-section-title" id="wdep-cap-title"><?= $escapeHtml(__('能力阶段')) ?></h2>
             <div class="wdep-grid">
@@ -1453,7 +1717,17 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
             </div>
         </section>
 
-        <section class="wdep-section" aria-labelledby="wdep-release-title" id="releases">
+        <?php endif; ?>
+
+        <?php if ($showDeployPage('releases')): ?>
+        <section
+            class="wdep-section"
+            aria-labelledby="wdep-release-title"
+            id="releases"
+            data-wls-deploy-history-scope="<?= $escapeHtml($releasePathHistoryScopeType) ?>"
+            data-wls-deploy-history-count="<?= $escapeHtml((string)$releasePathHistoryCount) ?>"
+            data-wls-deploy-history-profile="<?= $escapeHtml($releasePathProfileKey) ?>"
+        >
             <article class="wdep-panel">
                 <div class="wdep-panel-header">
                     <div>
@@ -1534,6 +1808,7 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
                 </div>
             </article>
         </section>
+        <?php endif; ?>
     </main>
 </div>
 
@@ -1590,6 +1865,23 @@ $rollbackReady = $preflightStatus !== 'danger' && $rollbackRef !== '' && !empty(
                 replayInput.focus();
             });
         });
+
+        var rollbackConfirm = document.querySelector('[data-wls-deploy-rollback-confirm]');
+        var rollbackRun = document.querySelector('[data-wls-deploy-rollback-run]');
+        var syncRollbackButton = function () {
+            if (!rollbackRun) {
+                return;
+            }
+            var blocked = rollbackRun.getAttribute('data-rollback-blocked') === '1';
+            var confirmed = rollbackConfirm && rollbackConfirm.checked;
+            var disabled = blocked || !confirmed;
+            rollbackRun.disabled = disabled;
+            rollbackRun.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        };
+        if (rollbackConfirm) {
+            rollbackConfirm.addEventListener('change', syncRollbackButton);
+        }
+        syncRollbackButton();
 
         var manualPlanInput = document.querySelector('[data-wls-manual-plan-ref]');
         var manualReleaseConfirm = document.querySelector('[data-wls-manual-release-confirm]');
