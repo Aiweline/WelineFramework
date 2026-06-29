@@ -145,6 +145,10 @@ class HostsFileManager
     private static function tryAddDomainWithElevation(string $hostsFile, string $newContent, string $domain, string $ip): ?array
     {
         if (PHP_OS_FAMILY !== 'Windows') {
+            if (PHP_OS_FAMILY === 'Darwin') {
+                return self::tryAddDomainWithMacOsAuthorization($hostsFile, $newContent, $domain, $ip);
+            }
+
             return self::tryAddDomainWithSudo($hostsFile, $newContent, $domain, $ip);
         }
 
@@ -192,6 +196,57 @@ PS1;
                 'needs_admin' => false,
                 'elevated' => true,
             ];
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Administrator privileges are required to modify the hosts file',
+            'needs_admin' => true,
+            'command' => self::getAdminCommand($domain, $ip),
+        ];
+    }
+
+    private static function tryAddDomainWithMacOsAuthorization(string $hostsFile, string $newContent, string $domain, string $ip): ?array
+    {
+        if (!\function_exists('exec')) {
+            return null;
+        }
+
+        $osascriptPath = self::findUnixCommand('osascript');
+        if ($osascriptPath === '') {
+            return null;
+        }
+
+        $payloadPath = \tempnam(\sys_get_temp_dir(), 'wls-hosts-');
+        if ($payloadPath === false) {
+            return null;
+        }
+
+        if (\file_put_contents($payloadPath, $newContent) === false) {
+            @\unlink($payloadPath);
+            return null;
+        }
+        @\chmod($payloadPath, 0600);
+
+        $shellCommand = 'cat ' . \escapeshellarg($payloadPath) . ' > ' . \escapeshellarg($hostsFile);
+        $appleScript = 'do shell script ' . self::appleScriptString($shellCommand) . ' with administrator privileges';
+        $command = \escapeshellcmd($osascriptPath) . ' -e ' . \escapeshellarg($appleScript) . ' 2>&1';
+
+        $output = [];
+        $exitCode = 1;
+        @\exec($command, $output, $exitCode);
+        @\unlink($payloadPath);
+
+        if ($exitCode === 0) {
+            $content = \file_get_contents($hostsFile);
+            if ($content !== false && self::domainExists($content, $domain)) {
+                return [
+                    'success' => true,
+                    'message' => "Added {$domain} to hosts file",
+                    'needs_admin' => false,
+                    'elevated' => true,
+                ];
+            }
         }
 
         return [
@@ -334,6 +389,21 @@ PS1;
         }
 
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
+        if ($osFamily === 'Darwin') {
+            if (\defined('BP') && \is_file(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')) {
+                $shellCommand = \escapeshellarg($phpBinary) . ' ' . \escapeshellarg(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')
+                    . ' server:hosts:add ' . \escapeshellarg($domain) . ' --ip=' . \escapeshellarg($ip);
+            } else {
+                $shellCommand = '/bin/sh -c ' . \escapeshellarg(
+                    'printf ' . \escapeshellarg("\n{$ip} {$domain}\n") . ' >> ' . \escapeshellarg($hostsFile)
+                );
+            }
+
+            return 'osascript -e ' . \escapeshellarg(
+                'do shell script ' . self::appleScriptString($shellCommand) . ' with administrator privileges'
+            );
+        }
+
         if (\defined('BP') && \is_file(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')) {
             return 'sudo ' . \escapeshellarg($phpBinary) . ' ' . \escapeshellarg(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')
                 . ' server:hosts:add ' . \escapeshellarg($domain) . ' --ip=' . \escapeshellarg($ip);
@@ -342,5 +412,10 @@ PS1;
         return 'sudo /bin/sh -c ' . \escapeshellarg(
             'printf ' . \escapeshellarg("\n{$ip} {$domain}\n") . ' >> ' . \escapeshellarg($hostsFile)
         );
+    }
+
+    private static function appleScriptString(string $value): string
+    {
+        return '"' . \str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
     }
 }
