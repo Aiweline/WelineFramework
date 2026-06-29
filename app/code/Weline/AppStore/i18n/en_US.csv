@@ -278,3 +278,9 @@ Surface,Surface
 暂无许可证,"No licenses"
 当前官网账户还没有返回可管理的许可证。安装免费应用或购买付费应用后刷新本页。,"The current official account has not returned manageable licenses. Install a free app or buy a paid app, then refresh this page."
 去应用商城,"Go to App Store"
+应用商城端点,"App Store endpoint"
+生产商城,"Production App Store"
+本地商城,"Local App Store"
+已配置,Configured
+本地开发应使用 https://app.weline.test:9523，部署后测试应自动使用 https://app.aiweline.com。,"Local development should use https://app.weline.test:9523; deployed tests should automatically use https://app.aiweline.com."
+来源：,Source:

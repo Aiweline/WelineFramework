@@ -51,6 +51,7 @@ class Index extends BackendController
         $this->assign('tag_filter', $tagFilter);
         $this->assign('surface_filter', $surfaceFilter);
         $this->assign('platform_url', $accountService->getPlatformUrl());
+        $this->assign('platform_url_resolution', $accountService->getPlatformResolution());
         $this->assign('store_domain', $this->getCurrentDomain());
         $this->assign('account_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/account'));
         $this->assign('installed_url', $this->request->getUrlBuilder()->getBackendUrl('appstore/backend/installed', $returnParams));
@@ -117,19 +118,26 @@ class Index extends BackendController
             }
 
             $client = new \GuzzleHttp\Client($accountService->getHttpClientOptions());
+            $payload = array_merge($this->request->getPost(), [
+                'domain' => $this->getCurrentDomain(),
+                'token' => $token,
+            ]);
+            $listUrl = $accountService->getPlatformApiUrl('/api/v1/platform/module/list');
+            $listUrl .= (str_contains($listUrl, '?') ? '&' : '?') . 'token=' . rawurlencode($token);
             $response = $client->post(
-                $accountService->getPlatformApiUrl('/api/v1/platform/module/list'),
+                $listUrl,
                 [
-                    'headers' => ['Authorization' => 'Bearer ' . $token],
-                    'json' => array_merge($this->request->getPost(), [
-                        'domain' => $this->getCurrentDomain(),
-                    ]),
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $token,
+                        'X-Weline-Token' => $token,
+                    ],
+                    'form_params' => $payload,
                 ]
             );
 
             return $response->getBody()->getContents();
         } catch (\Throwable $e) {
-            return $this->jsonResponse(false, __('获取模块列表失败：') . $e->getMessage());
+            return $this->jsonResponse(false, __('获取模块列表失败：') . $this->sanitizeMarketplaceErrorMessage($e->getMessage()));
         }
     }
 
@@ -297,6 +305,14 @@ class Index extends BackendController
         ], JSON_UNESCAPED_UNICODE);
     }
 
+    private function sanitizeMarketplaceErrorMessage(string $message): string
+    {
+        $message = preg_replace('/([?&](?:token|access_token|refresh_token)=)[^&\s]+/i', '$1[redacted]', $message) ?? $message;
+        $message = preg_replace('/((?:Authorization:\s*Bearer|X-Weline-Token:)\s+)[^\s,;]+/i', '$1[redacted]', $message) ?? $message;
+
+        return $message;
+    }
+
     /**
      * @return array{items: array<int, array<string, mixed>>, error: string}
      */
@@ -314,6 +330,7 @@ class Index extends BackendController
             $payload = [
                 'page_size' => 50,
                 'domain' => $this->getCurrentDomain(),
+                'token' => $token,
             ];
             if (!empty($filters['q'])) {
                 $payload['q'] = (string)$filters['q'];
@@ -331,11 +348,16 @@ class Index extends BackendController
             }
 
             $client = new \GuzzleHttp\Client($accountService->getHttpClientOptions(['timeout' => 30]));
+            $listUrl = $accountService->getPlatformApiUrl('/api/v1/platform/module/list');
+            $listUrl .= (str_contains($listUrl, '?') ? '&' : '?') . 'token=' . rawurlencode($token);
             $response = $client->post(
-                $accountService->getPlatformApiUrl('/api/v1/platform/module/list'),
+                $listUrl,
                 [
-                    'headers' => ['Authorization' => 'Bearer ' . $token],
-                    'json' => $payload,
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $token,
+                        'X-Weline-Token' => $token,
+                    ],
+                    'form_params' => $payload,
                 ]
             );
 
@@ -355,7 +377,7 @@ class Index extends BackendController
         } catch (\Throwable $e) {
             return [
                 'items' => [],
-                'error' => __('获取模块列表失败：') . $e->getMessage(),
+                'error' => __('获取模块列表失败：') . $this->sanitizeMarketplaceErrorMessage($e->getMessage()),
             ];
         }
     }

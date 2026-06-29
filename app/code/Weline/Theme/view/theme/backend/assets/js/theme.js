@@ -127,6 +127,79 @@
     }
     const isDev = window.DEV || false;
 
+    function trimSlashes(value) {
+        if (!value) {
+            return '';
+        }
+        return String(value).replace(/^\/+|\/+$/g, '');
+    }
+
+    function buildUrl(base, path) {
+        const normalizedBase = String(base || window.location.origin || '').replace(/\/+$/, '');
+        const normalizedPath = trimSlashes(path);
+        return normalizedPath ? `${normalizedBase}/${normalizedPath}` : normalizedBase;
+    }
+
+    function urlPathHasSegment(url, segment) {
+        if (!url || !segment) {
+            return false;
+        }
+        try {
+            return new URL(url, window.location.origin).pathname
+                .split('/')
+                .filter(Boolean)
+                .some((part) => part.toLowerCase() === String(segment).toLowerCase());
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function buildAreaApiUrl(apiHost, apiArea, path) {
+        const cleanPath = trimSlashes(path);
+        const firstSegment = cleanPath.split('/').filter(Boolean)[0] || '';
+        const shouldPrefixArea = apiArea &&
+            !urlPathHasSegment(apiHost, apiArea) &&
+            firstSegment.toLowerCase() !== apiArea.toLowerCase();
+        return buildUrl(apiHost, shouldPrefixArea ? `${apiArea}/${cleanPath}` : cleanPath);
+    }
+
+    function buildBackendApiUrl(path) {
+        const urlConfig = runtimeConfig.url || {};
+        const apiHost = (window.site && window.site.api_host) || urlConfig.apiHost || urlConfig.origin || runtimeConfig.baseUrl || window.location.origin;
+        const apiArea = trimSlashes((window.site && window.site.api_admin_area) || urlConfig.apiAdminArea || 'api_admin');
+        return buildAreaApiUrl(apiHost, apiArea, path);
+    }
+
+    function buildFrontendApiUrl(path) {
+        const urlConfig = runtimeConfig.url || {};
+        const apiHost = (window.site && window.site.frontend_api_host) || urlConfig.frontendApiHost || urlConfig.origin || runtimeConfig.baseUrl || window.location.origin;
+        const apiArea = trimSlashes((window.site && window.site.api_area) || urlConfig.apiArea || 'api');
+        return buildAreaApiUrl(apiHost, apiArea, path);
+    }
+
+    function unwrapApiPayload(response) {
+        if (response && response.data && typeof response.data === 'object' && Object.prototype.hasOwnProperty.call(response.data, 'code')) {
+            return response.data;
+        }
+        return response;
+    }
+
+    function isApiPayloadOk(response, payload) {
+        if (!response || !payload) {
+            return false;
+        }
+        if (response.ok === false) {
+            return false;
+        }
+        if (typeof payload.code !== 'undefined') {
+            return Number(payload.code) === 200;
+        }
+        if (typeof payload.success !== 'undefined') {
+            return payload.success === true;
+        }
+        return true;
+    }
+
     /**
      * 静态资源路径解析器
      * 根据开发/生产模式将 Weline_Module::path/to/file.js 转换为实际URL
@@ -1225,8 +1298,8 @@
             request: async (provider, operation, params = {}, options = {}) => {
                 const area = options.area || 'backend';
                 const queryConfig = runtimeConfig.query || {};
-                const frontendUrl = queryConfig.frontendUrl || '/api/framework/query';
-                const backendUrl = queryConfig.backendUrl || '/api_admin/framework/query';
+                const frontendUrl = queryConfig.frontendUrl || buildFrontendApiUrl('framework/query');
+                const backendUrl = queryConfig.backendUrl || buildBackendApiUrl('framework/query');
                 const endpoint = area === 'frontend' ? frontendUrl : backendUrl;
                 const response = await Weline.Api.request(endpoint, {
                     method: 'POST',
@@ -1239,17 +1312,11 @@
                         params: params
                     })
                 });
-                const isResponseWrapper = response
-                    && typeof response === 'object'
-                    && !Array.isArray(response)
-                    && typeof response.ok === 'boolean'
-                    && Object.prototype.hasOwnProperty.call(response, 'status')
-                    && Object.prototype.hasOwnProperty.call(response, 'data');
-                const payload = isResponseWrapper ? response.data : response;
-                if (!payload || (payload.code !== 200 && payload.success !== true)) {
-                    throw new Error((payload && (payload.msg || payload.message)) ? (payload.msg || payload.message) : 'Query failed.');
+                const payload = unwrapApiPayload(response);
+                if (!isApiPayloadOk(response, payload)) {
+                    throw new Error((payload && (payload.msg || payload.message)) ? (payload.msg || payload.message) : __('查询失败'));
                 }
-                return payload.data !== undefined ? payload.data : payload;
+                return Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
             },
             help: async (provider = null, params = {}, options = {}) => {
                 if (provider == null || provider === '') {
@@ -1280,7 +1347,7 @@
              */
             send: async (topic, type, title, content, options = {}) => {
                 const msgConfig = runtimeConfig.message || {};
-                const endpoint = msgConfig.backendUrl || '/api_admin/backend/notification/send';
+                const endpoint = msgConfig.backendUrl || buildBackendApiUrl('backend/notification/send');
 
                 const response = await Weline.Api.request(endpoint, {
                     method: 'POST',
@@ -1297,10 +1364,11 @@
                     })
                 });
 
-                if (!response || response.code !== 200) {
-                    throw new Error((response && response.msg) ? response.msg : __('发送通知失败'));
+                const payload = unwrapApiPayload(response);
+                if (!isApiPayloadOk(response, payload)) {
+                    throw new Error((payload && (payload.msg || payload.message)) ? (payload.msg || payload.message) : __('发送通知失败'));
                 }
-                return response;
+                return payload;
             }
         },
 

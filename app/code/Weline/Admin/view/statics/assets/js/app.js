@@ -857,6 +857,7 @@ File: Main Js File
     function init() {
         initSettings();
         initMenuItem();
+        initLeftMenuCollapse();
         initFullScreen();
         initRightSidebar();
         initDropdownMenu();

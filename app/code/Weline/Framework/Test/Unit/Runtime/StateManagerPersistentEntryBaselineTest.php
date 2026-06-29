@@ -8,6 +8,7 @@ use ReflectionClass;
 use Weline\Framework\Hook\Config\HookReader;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Runtime\WlsConcurrency;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\View\Taglib;
 
 final class StateManagerPersistentEntryBaselineTest extends TestCase
@@ -17,6 +18,18 @@ final class StateManagerPersistentEntryBaselineTest extends TestCase
         StateManager::runWlsPersistentRequestEntryBaseline();
         StateManager::runWlsPersistentRequestEntryBaseline();
         $this->assertTrue(true);
+    }
+
+    public function testRunWlsPersistentRequestEntryBaselineClearsSessionRequestInstances(): void
+    {
+        SessionFactory::resetAll();
+        $factory = SessionFactory::getInstance();
+        $session = $factory->createSession();
+
+        StateManager::runWlsPersistentRequestEntryBaseline();
+
+        self::assertNotSame($session, SessionFactory::getInstance()->createSession());
+        SessionFactory::resetAll();
     }
 
     public function testOmitListMatchesEntryBaselineCoverage(): void

@@ -411,6 +411,17 @@ class WlsRequest extends Request
             'REDIRECT_STATUS' => '200',
             'FCGI_ROLE' => 'RESPONDER',
         ]);
+
+        foreach ($headers as $headerName => $headerValue) {
+            $normalizedHeader = \strtoupper(\str_replace('-', '_', (string)$headerName));
+            if (\in_array($normalizedHeader, ['CONTENT_TYPE', 'CONTENT_LENGTH'], true)) {
+                continue;
+            }
+            $serverKey = 'HTTP_' . $normalizedHeader;
+            if (!\array_key_exists($serverKey, $server)) {
+                $server[$serverKey] = $headerValue;
+            }
+        }
         
         // 保存 Host 信息（供 getBaseHost() 使用）
         

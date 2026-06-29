@@ -27,6 +27,8 @@ class EventRegistry implements EventRegistryInterface
 
     private ?array $cachedRegistry = null;
     private ?int $cachedFileMtime = null;
+    private static ?array $runtimeRegistryCache = null;
+    private static ?int $runtimeRegistryMtime = null;
     private EventScanner $scanner;
     private Config\XmlReader $xmlReader;
 
@@ -46,17 +48,32 @@ class EventRegistry implements EventRegistryInterface
      */
     public function getRegistry(bool $forceReload = false): array
     {
+        $trustRuntimeCache = $this->canTrustCachedRegistryForRuntime();
+
         // 内存缓存机制
         if (!$forceReload && $this->cachedRegistry !== null) {
+            if ($trustRuntimeCache) {
+                return $this->cachedRegistry;
+            }
             $currentMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
             if ($currentMtime === $this->cachedFileMtime) {
                 return $this->cachedRegistry;
             }
         }
 
+        if (!$forceReload && $trustRuntimeCache && self::$runtimeRegistryCache !== null) {
+            $this->cachedRegistry = self::$runtimeRegistryCache;
+            $this->cachedFileMtime = self::$runtimeRegistryMtime;
+            return self::$runtimeRegistryCache;
+        }
+
         if (!file_exists(self::REGISTRY_FILE)) {
             $this->cachedRegistry = ['events' => [], 'event_to_module' => []];
             $this->cachedFileMtime = 0;
+            if ($trustRuntimeCache) {
+                self::$runtimeRegistryCache = $this->cachedRegistry;
+                self::$runtimeRegistryMtime = 0;
+            }
             return $this->cachedRegistry;
         }
 
@@ -93,8 +110,19 @@ class EventRegistry implements EventRegistryInterface
 
         $this->cachedRegistry = $registry;
         $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        if ($trustRuntimeCache) {
+            self::$runtimeRegistryCache = $registry;
+            self::$runtimeRegistryMtime = $this->cachedFileMtime;
+        }
 
         return $registry;
+    }
+
+    private function canTrustCachedRegistryForRuntime(): bool
+    {
+        return (\defined('WLS_MODE') && WLS_MODE)
+            || (\class_exists(\Weline\Framework\Runtime\Runtime::class)
+                && \Weline\Framework\Runtime\Runtime::isPersistent());
     }
 
     /**
@@ -820,6 +848,8 @@ class EventRegistry implements EventRegistryInterface
             // 更新实例缓存
             $this->cachedRegistry = $registry;
             $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            self::$runtimeRegistryCache = $registry;
+            self::$runtimeRegistryMtime = $this->cachedFileMtime;
             
             // 清除 EventData 的静态缓存，确保其他使用 EventData 的代码能立即看到新生成的文件
             EventData::clearCache();

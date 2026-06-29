@@ -48,6 +48,29 @@ final class PassthroughCoreFirstByteTimeoutTest extends TestCase
         );
     }
 
+    public function testDefaultFirstByteTimeoutAllowsHeavyTemplateWarmupWindow(): void
+    {
+        $core = new PassthroughCore('127.0.0.1', 19981, 2);
+
+        self::assertFalse(
+            $this->invokePrivateMethod(
+                $core,
+                'shouldTreatSilentWorkerAsFailure',
+                ['request_sent_at' => \microtime(true) - 3.0],
+                0
+            )
+        );
+
+        self::assertTrue(
+            $this->invokePrivateMethod(
+                $core,
+                'shouldTreatSilentWorkerAsFailure',
+                ['request_sent_at' => \microtime(true) - 6.0],
+                0
+            )
+        );
+    }
+
     public function testWorkerTimeoutIsSkippedAfterResponseBytesAlreadyArrived(): void
     {
         $core = new PassthroughCore('127.0.0.1', 19981, 2);

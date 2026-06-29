@@ -211,6 +211,8 @@ class Event extends \Weline\Framework\DataObject\DataObject
         if ($needLog && !empty($observers)) {
             $this->initLogFile();
         }
+
+        $traceEnabled = RequestLifecycleTrace::isEnabled();
         
         // 遍历观察者配置，按需实例化并执行
         // 注意：模块激活状态已在 EventsManager::filterActiveObservers() 中过滤，此处不再重复检查
@@ -239,10 +241,10 @@ class Event extends \Weline\Framework\DataObject\DataObject
                     continue;
                 }
                 
-                $observerSpanStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
-                $observerName = str_replace('\\', '::', get_class($observer));
-                $observerSpanName = 'observer::' . $observerName;
-                if (RequestLifecycleTrace::isEnabled()) {
+                $observerSpanStart = $traceEnabled ? microtime(true) : 0.0;
+                $observerSpanName = null;
+                if ($traceEnabled) {
+                    $observerSpanName = 'observer::' . str_replace('\\', '::', get_class($observer));
                     RequestLifecycleTrace::pushCurrentParent($observerSpanName);
                 }
                 try {
@@ -253,11 +255,11 @@ class Event extends \Weline\Framework\DataObject\DataObject
                         $observer->execute($this);
                     }
                 } finally {
-                    if (RequestLifecycleTrace::isEnabled()) {
+                    if ($traceEnabled) {
                         RequestLifecycleTrace::popCurrentParent();
                     }
                 }
-                if ($observerSpanStart > 0) {
+                if ($observerSpanStart > 0 && $observerSpanName !== null) {
                     $observerDurationMs = (microtime(true) - $observerSpanStart) * 1000;
                     RequestLifecycleTrace::recordSpan($observerSpanName, $observerDurationMs, 'observer', 'event::' . $this->getName());
                 }

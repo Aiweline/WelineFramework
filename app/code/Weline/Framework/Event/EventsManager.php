@@ -116,7 +116,7 @@ class EventsManager
         return $this->eventsObservers;
     }
 
-    public function getEventObservers(string $eventName)
+    public function getEventObservers(string $eventName, bool $registryKnownToHaveObservers = false)
     {
         // 性能优化：检查缓存
         if (isset($this->observerCache[$eventName])) {
@@ -124,7 +124,7 @@ class EventsManager
         }
 
         // 性能优化：注册表明确无观察者时直接返回，避免 getRegistry + 动态模式匹配 + scanEvents 回退
-        if (!$this->eventRegistry->hasObservers($eventName)) {
+        if (!$registryKnownToHaveObservers && !$this->eventRegistry->hasObservers($eventName)) {
             $this->observerCache[$eventName] = [];
             return [];
         }
@@ -162,6 +162,15 @@ class EventsManager
         $this->observerCache[$eventName] = $filteredObservers;
         
         return $filteredObservers;
+    }
+
+    public function hasObservers(string $eventName): bool
+    {
+        if (isset($this->observerCache[$eventName])) {
+            return $this->observerCache[$eventName] !== [];
+        }
+
+        return $this->eventRegistry->hasObservers($eventName);
     }
     
     /**
@@ -232,7 +241,7 @@ class EventsManager
         $traceStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
 
         // 快速检测是否有观察者（仅基于注册表，避免为「无监听事件」触发昂贵的扫描）
-        if (!$this->eventRegistry->hasObservers($eventName)) {
+        if (!$this->hasObservers($eventName)) {
             if ($traceStart > 0) {
                 RequestLifecycleTrace::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
             }
@@ -240,7 +249,7 @@ class EventsManager
         }
 
         // 获取事件监听器（观察者）
-        $observers = $this->getEventObservers($eventName);
+        $observers = $this->getEventObservers($eventName, true);
 
         // 检查是否有监听器，没有则直接跳过
         if (empty($observers)) {
