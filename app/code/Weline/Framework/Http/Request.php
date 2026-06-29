@@ -11,6 +11,7 @@ namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Request\FileBag;
 use Weline\Framework\Http\Request\ParameterBag;
 use Weline\Framework\Http\Request\RequestFilter;
@@ -148,18 +149,26 @@ class Request extends Request\RequestAbstract implements RequestInterface
     public function getUrlPath(string $url = ''): string
     {
         if ($url) {
-            if (isset(self::$url_paths[$url])) {
-                return self::$url_paths[$url];
+            $cacheKey = KeyBuilder::requestScopeHash([
+                'scope' => 'request_url_path',
+                'url' => $url,
+            ], ['full_request_uri' => false]);
+            if (isset(self::$url_paths[$cacheKey])) {
+                return self::$url_paths[$cacheKey];
             }
-            self::$url_paths[$url] = parse_url($url)['path'] ?? '';
-            return self::$url_paths[$url];
+            self::$url_paths[$cacheKey] = parse_url($url)['path'] ?? '';
+            return self::$url_paths[$cacheKey];
         }
         $url = $this->getUri();
-        if (isset(self::$url_paths[$url])) {
-            return self::$url_paths[$url];
+        $cacheKey = KeyBuilder::requestScopeHash([
+            'scope' => 'request_url_path',
+            'url' => $url,
+        ], ['full_request_uri' => false]);
+        if (isset(self::$url_paths[$cacheKey])) {
+            return self::$url_paths[$cacheKey];
         }
-        self::$url_paths[$url] = $this->parse_url()['path'] ?? '';
-        return self::$url_paths[$url];
+        self::$url_paths[$cacheKey] = $this->parse_url()['path'] ?? '';
+        return self::$url_paths[$cacheKey];
     }
 
     public function getRouteUrlPath(string $url = ''): string

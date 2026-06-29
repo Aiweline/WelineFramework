@@ -12,14 +12,28 @@
     --weline-admin-shadow: 0 10px 28px rgba(20, 33, 61, 0.08);
 }
 
-[data-layout-mode="dark"] {
-    --weline-admin-bg: #0f1720;
-    --weline-admin-surface: var(--backend-color-card-bg, #17202b);
-    --weline-admin-surface-soft: #121b25;
+[data-theme-mode="dark"],
+[data-layout-mode="dark"],
+[data-bs-theme="dark"] {
+    --weline-admin-bg: var(--backend-color-bg-body, #0b1220);
+    --weline-admin-surface: var(--backend-color-card-bg, rgba(15, 23, 42, 0.92));
+    --weline-admin-surface-soft: var(--backend-color-bg-secondary, #172033);
     --weline-admin-line: var(--backend-color-border-default, #263340);
     --weline-admin-ink: var(--backend-color-text-primary, #eef3f7);
     --weline-admin-muted: var(--backend-color-text-secondary, #a8b3bf);
     --weline-admin-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+    --backend-theme-surface: var(--weline-admin-surface);
+    --backend-theme-surface-subtle: var(--weline-admin-surface-soft);
+    --backend-theme-border-color: var(--weline-admin-line);
+    --backend-theme-text: var(--weline-admin-ink);
+    --backend-theme-text-secondary: var(--weline-admin-muted);
+    --backend-component-card-bg: var(--weline-admin-surface);
+    --backend-component-card-border: var(--weline-admin-line);
+    --backend-component-text-primary: var(--weline-admin-ink);
+    --backend-component-text-secondary: var(--weline-admin-muted);
+    --bs-card-bg: var(--weline-admin-surface);
+    --bs-card-color: var(--weline-admin-ink);
+    --bs-card-border-color: var(--weline-admin-line);
 }
 
 body {
@@ -71,6 +85,7 @@ body {
     border: 1px solid var(--weline-admin-line);
     border-radius: 8px;
     background: var(--weline-admin-surface);
+    color: var(--weline-admin-ink);
     box-shadow: 0 1px 0 rgba(20, 33, 61, 0.04);
     overflow: hidden;
 }
@@ -83,6 +98,24 @@ body {
 .card-footer {
     border-color: var(--weline-admin-line);
     background: var(--weline-admin-surface-soft);
+}
+
+#page-topbar .header-item {
+    border-radius: 6px;
+}
+
+[data-theme-mode="dark"] #page-topbar .header-item,
+[data-layout-mode="dark"] #page-topbar .header-item,
+[data-bs-theme="dark"] #page-topbar .header-item {
+    background: var(--backend-topbar-surface, rgba(15, 23, 42, 0.78));
+    color: var(--backend-topbar-muted, var(--weline-admin-ink));
+}
+
+[data-theme-mode="dark"] #page-topbar .header-item:hover,
+[data-layout-mode="dark"] #page-topbar .header-item:hover,
+[data-bs-theme="dark"] #page-topbar .header-item:hover {
+    background: var(--backend-topbar-surface-hover, rgba(30, 41, 59, 0.74));
+    color: var(--backend-topbar-text, #ffffff);
 }
 
 .card-body {

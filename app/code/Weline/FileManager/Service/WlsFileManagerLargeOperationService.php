@@ -86,6 +86,333 @@ class WlsFileManagerLargeOperationService
     }
 
     /**
+     * @return array{success: bool, result: string, error_code: string, entries: int, bytes: int, target_path: string, items: array<int, array{path: string, local_name: string, type: string}>}
+     */
+    public function createSingleFileArchive(
+        string $sourcePath,
+        string $targetPath,
+        string $sourceRootPath,
+        string $archiveRootPath,
+        string $sourceRelativePath,
+        int $maxBytes
+    ): array {
+        if (!class_exists(\ZipArchive::class)) {
+            return $this->compressResult(false, 'failed', 'zip_extension_missing');
+        }
+
+        $sourceRelativePath = $this->normalizeRelativePath($sourceRelativePath);
+        if ($sourceRelativePath === '') {
+            return $this->compressResult(false, 'denied', 'entry_not_found');
+        }
+
+        $sourceRootRealPath = realpath($sourceRootPath);
+        $sourceRealPath = realpath($sourcePath);
+        if (
+            $sourceRootRealPath === false
+            || $sourceRealPath === false
+            || !$this->isCandidateWithinRoot($sourceRootRealPath, $sourceRealPath)
+        ) {
+            return $this->compressResult(false, 'denied', 'entry_not_found');
+        }
+
+        if (!is_file($sourceRealPath) || is_link($sourcePath) || is_link($sourceRealPath) || !is_readable($sourceRealPath)) {
+            return $this->compressResult(false, 'denied', 'entry_not_readable');
+        }
+
+        $bytes = filesize($sourceRealPath);
+        if ($bytes === false || $bytes > max(1, $maxBytes)) {
+            return $this->compressResult(false, 'denied', 'compress_source_too_large');
+        }
+
+        $target = $this->resolveTargetPath($targetPath, $archiveRootPath);
+        if ($target['error_code'] !== '') {
+            return $this->compressResult(false, 'denied', $target['error_code']);
+        }
+
+        $localName = $this->safeArchiveLocalName($sourceRelativePath);
+        if ($localName === '') {
+            return $this->compressResult(false, 'denied', 'entry_not_found');
+        }
+
+        $zip = new \ZipArchive();
+        $opened = $zip->open($target['path'], \ZipArchive::CREATE | \ZipArchive::EXCL);
+        if ($opened !== true) {
+            return $this->compressResult(false, 'failed', 'compress_failed');
+        }
+
+        $writeOk = $zip->addFile($sourceRealPath, $localName);
+        if (!$zip->close() || !$writeOk) {
+            if (is_file($target['path'])) {
+                @unlink($target['path']);
+            }
+            return $this->compressResult(false, 'failed', 'compress_failed');
+        }
+
+        return $this->compressResult(true, 'success', '', 1, (int)$bytes, [[
+            'path' => $sourceRealPath,
+            'local_name' => $localName,
+            'type' => 'file',
+        ]], $target['path']);
+    }
+
+    /**
+     * @return array{success: bool, result: string, error_code: string, entries: int, bytes: int, target_path: string, items: array<int, array{path: string, local_name: string, type: string}>}
+     */
+    public function createSourceTreeArchive(
+        string $sourcePath,
+        string $targetPath,
+        string $sourceRootPath,
+        string $archiveRootPath,
+        string $sourceRelativePath,
+        int $maxEntries,
+        int $maxBytes
+    ): array {
+        if (!class_exists(\ZipArchive::class)) {
+            return $this->compressResult(false, 'failed', 'zip_extension_missing');
+        }
+
+        $sourceRelativePath = $this->normalizeRelativePath($sourceRelativePath);
+        if ($sourceRelativePath === '') {
+            return $this->compressResult(false, 'denied', 'entry_not_found');
+        }
+
+        $sourceRootRealPath = realpath($sourceRootPath);
+        $sourceRealPath = realpath($sourcePath);
+        if (
+            $sourceRootRealPath === false
+            || $sourceRealPath === false
+            || !$this->isCandidateWithinRoot($sourceRootRealPath, $sourceRealPath)
+        ) {
+            return $this->compressResult(false, 'denied', 'entry_not_found');
+        }
+
+        if (!is_dir($sourceRealPath) || is_link($sourcePath) || is_link($sourceRealPath) || !is_readable($sourceRealPath)) {
+            return $this->compressResult(false, 'denied', 'entry_not_readable');
+        }
+
+        $target = $this->resolveTargetPath($targetPath, $archiveRootPath);
+        if ($target['error_code'] !== '') {
+            return $this->compressResult(false, 'denied', $target['error_code']);
+        }
+
+        $localRootName = $this->safeArchiveLocalName($sourceRelativePath);
+        if ($localRootName === '') {
+            return $this->compressResult(false, 'denied', 'entry_not_found');
+        }
+
+        $entries = $this->collectCompressEntries($sourceRealPath, $sourceRootRealPath, $maxEntries, $maxBytes);
+        if (!$entries['success']) {
+            return $entries;
+        }
+
+        $zip = new \ZipArchive();
+        $opened = $zip->open($target['path'], \ZipArchive::CREATE | \ZipArchive::EXCL);
+        if ($opened !== true) {
+            return $this->compressResult(false, 'failed', 'compress_failed');
+        }
+
+        $writeOk = true;
+        $items = [];
+        if ($entries['entries'] === 0) {
+            $writeOk = $zip->addEmptyDir($localRootName);
+        }
+
+        foreach ($entries['items'] as $item) {
+            $path = (string)($item['path'] ?? '');
+            $localName = $this->sourceTreeArchiveLocalName($sourceRealPath, $localRootName, $path);
+            if ($localName === '' || $path === '') {
+                $writeOk = false;
+                break;
+            }
+
+            $writeOk = (string)($item['type'] ?? '') === 'directory'
+                ? $zip->addEmptyDir($localName)
+                : $zip->addFile($path, $localName);
+
+            if (!$writeOk) {
+                break;
+            }
+
+            $items[] = [
+                'path' => $path,
+                'local_name' => $localName,
+                'type' => (string)($item['type'] ?? 'file'),
+            ];
+        }
+
+        if (!$zip->close() || !$writeOk) {
+            if (is_file($target['path'])) {
+                @unlink($target['path']);
+            }
+            return $this->compressResult(false, 'failed', 'compress_failed');
+        }
+
+        return $this->compressResult(
+            true,
+            'success',
+            '',
+            (int)$entries['entries'],
+            (int)$entries['bytes'],
+            $items,
+            $target['path']
+        );
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $sourceEntries
+     * @return array{success: bool, result: string, error_code: string, entries: int, bytes: int, target_path: string, items: array<int, array{path: string, local_name: string, type: string}>}
+     */
+    public function createSourceSelectionArchive(
+        string $sourceRootPath,
+        string $archiveRootPath,
+        string $targetPath,
+        array $sourceEntries,
+        int $maxEntries,
+        int $maxBytes
+    ): array {
+        if (!class_exists(\ZipArchive::class)) {
+            return $this->compressResult(false, 'failed', 'zip_extension_missing');
+        }
+
+        $sourceRootRealPath = realpath($sourceRootPath);
+        if ($sourceRootRealPath === false || $sourceEntries === []) {
+            return $this->compressResult(false, 'denied', 'entry_not_found');
+        }
+
+        $target = $this->resolveTargetPath($targetPath, $archiveRootPath);
+        if ($target['error_code'] !== '') {
+            return $this->compressResult(false, 'denied', $target['error_code']);
+        }
+
+        $items = [];
+        $bytes = 0;
+        $seenLocalNames = [];
+        foreach ($sourceEntries as $entry) {
+            $relativePath = $this->normalizeRelativePath((string)($entry['source_relative_path'] ?? ''));
+            $sourcePath = trim((string)($entry['source_path'] ?? ''));
+            if ($relativePath === '' || $sourcePath === '') {
+                return $this->compressResult(false, 'denied', 'entry_not_found');
+            }
+
+            $sourceRealPath = realpath($sourcePath);
+            $relativeCandidate = rtrim($sourceRootRealPath, "\\/") . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+            $relativeRealPath = realpath($relativeCandidate);
+            if (
+                $sourceRealPath === false
+                || $relativeRealPath === false
+                || !$this->isCandidateWithinRoot($sourceRootRealPath, $sourceRealPath)
+                || !$this->sameComparablePath($sourceRealPath, $relativeRealPath)
+                || is_link($sourcePath)
+                || is_link($sourceRealPath)
+                || !is_readable($sourceRealPath)
+            ) {
+                return $this->compressResult(false, 'denied', 'entry_not_readable');
+            }
+
+            $localRootName = $this->safeArchiveLocalName($relativePath);
+            if ($localRootName === '') {
+                return $this->compressResult(false, 'denied', 'entry_not_found');
+            }
+
+            if (is_file($sourceRealPath)) {
+                $fileBytes = filesize($sourceRealPath);
+                if ($fileBytes === false) {
+                    return $this->compressResult(false, 'denied', 'entry_not_readable');
+                }
+                $bytes += (int)$fileBytes;
+                if ($bytes > $maxBytes) {
+                    return $this->compressResult(false, 'denied', 'compress_source_too_large');
+                }
+
+                if (!$this->appendSelectionArchiveItem($items, $seenLocalNames, [
+                    'path' => $sourceRealPath,
+                    'local_name' => $localRootName,
+                    'type' => 'file',
+                ], $maxEntries)) {
+                    return $this->compressResult(false, 'denied', 'compress_entry_limit');
+                }
+                continue;
+            }
+
+            if (!is_dir($sourceRealPath)) {
+                return $this->compressResult(false, 'denied', 'entry_not_readable');
+            }
+
+            $remainingEntries = $maxEntries - count($items);
+            $remainingBytes = $maxBytes - $bytes;
+            if ($remainingEntries < 1 || $remainingBytes < 1) {
+                return $this->compressResult(false, 'denied', 'compress_entry_limit');
+            }
+
+            $treeEntries = $this->collectCompressEntries($sourceRealPath, $sourceRootRealPath, $remainingEntries, $remainingBytes);
+            if (!$treeEntries['success']) {
+                return $treeEntries;
+            }
+
+            $bytes += (int)$treeEntries['bytes'];
+            if ((int)$treeEntries['entries'] === 0) {
+                if (!$this->appendSelectionArchiveItem($items, $seenLocalNames, [
+                    'path' => $sourceRealPath,
+                    'local_name' => $localRootName,
+                    'type' => 'directory',
+                ], $maxEntries)) {
+                    return $this->compressResult(false, 'denied', 'compress_entry_limit');
+                }
+                continue;
+            }
+
+            foreach ($treeEntries['items'] as $item) {
+                $entryPath = (string)($item['path'] ?? '');
+                $localName = $this->sourceTreeArchiveLocalName($sourceRealPath, $localRootName, $entryPath);
+                if ($localName === '' || $entryPath === '') {
+                    return $this->compressResult(false, 'denied', 'entry_not_found');
+                }
+
+                if (!$this->appendSelectionArchiveItem($items, $seenLocalNames, [
+                    'path' => $entryPath,
+                    'local_name' => $localName,
+                    'type' => (string)($item['type'] ?? 'file'),
+                ], $maxEntries)) {
+                    return $this->compressResult(false, 'denied', 'compress_entry_limit');
+                }
+            }
+        }
+
+        $zip = new \ZipArchive();
+        $opened = $zip->open($target['path'], \ZipArchive::CREATE | \ZipArchive::EXCL);
+        if ($opened !== true) {
+            return $this->compressResult(false, 'failed', 'compress_failed');
+        }
+
+        $writeOk = true;
+        foreach ($items as $item) {
+            $localName = (string)($item['local_name'] ?? '');
+            $path = (string)($item['path'] ?? '');
+            if ($localName === '' || $path === '') {
+                $writeOk = false;
+                break;
+            }
+
+            $writeOk = (string)($item['type'] ?? '') === 'directory'
+                ? $zip->addEmptyDir($localName)
+                : $zip->addFile($path, $localName);
+
+            if (!$writeOk) {
+                break;
+            }
+        }
+
+        if (!$zip->close() || !$writeOk) {
+            if (is_file($target['path'])) {
+                @unlink($target['path']);
+            }
+            return $this->compressResult(false, 'failed', 'compress_failed');
+        }
+
+        return $this->compressResult(true, 'success', '', count($items), $bytes, $items, $target['path']);
+    }
+
+    /**
      * @return array{success: bool, result: string, error_code: string, entries: int, bytes: int, target_path: string, target_relative_path: string}
      */
     public function moveToTrash(
@@ -291,6 +618,65 @@ class WlsFileManagerLargeOperationService
         }
 
         return strtolower((string)pathinfo($name, PATHINFO_EXTENSION)) === 'zip' ? $name : '';
+    }
+
+    private function safeArchiveLocalName(string $sourceRelativePath): string
+    {
+        $sourceRelativePath = $this->normalizeRelativePath($sourceRelativePath);
+        if ($sourceRelativePath === '') {
+            return '';
+        }
+
+        return 'source/' . $sourceRelativePath;
+    }
+
+    private function sourceTreeArchiveLocalName(string $sourceRealPath, string $localRootName, string $entryPath): string
+    {
+        $sourcePrefix = rtrim(str_replace('\\', '/', $sourceRealPath), '/') . '/';
+        $entryRealPath = realpath($entryPath);
+        if ($entryRealPath === false) {
+            return '';
+        }
+
+        $entryNormalized = str_replace('\\', '/', $entryRealPath);
+        $relativeName = ltrim(str_starts_with($entryNormalized, $sourcePrefix)
+            ? substr($entryNormalized, strlen($sourcePrefix))
+            : basename($entryRealPath), '/');
+        if ($relativeName === '') {
+            return '';
+        }
+
+        return trim($localRootName . '/' . $relativeName, '/');
+    }
+
+    /**
+     * @param array<int, array{path: string, local_name: string, type: string}> $items
+     * @param array<string, bool> $seenLocalNames
+     * @param array{path: string, local_name: string, type: string} $item
+     */
+    private function appendSelectionArchiveItem(array &$items, array &$seenLocalNames, array $item, int $maxEntries): bool
+    {
+        $localName = trim((string)($item['local_name'] ?? ''));
+        if ($localName === '' || isset($seenLocalNames[$localName]) || count($items) >= max(1, $maxEntries)) {
+            return false;
+        }
+
+        $seenLocalNames[$localName] = true;
+        $items[] = $item;
+
+        return true;
+    }
+
+    private function sameComparablePath(string $left, string $right): bool
+    {
+        $left = rtrim(str_replace('\\', '/', $left), '/');
+        $right = rtrim(str_replace('\\', '/', $right), '/');
+        if (PHP_OS_FAMILY === 'Windows') {
+            $left = strtolower($left);
+            $right = strtolower($right);
+        }
+
+        return $left === $right;
     }
 
     /**

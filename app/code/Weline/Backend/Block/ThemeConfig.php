@@ -44,15 +44,16 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function __init()
     {
         $this->userSession = $this->resolveSession();
-        $this->userConfig = $this->userSession->getUserId() ? $this->userConfig->load($this->userSession->getUserId()) : $this->userConfig;
-        $this->userConfig->setId($this->userSession->getUserId());
+        $userId = $this->userConfig->getCurrentUserId();
+        $this->userConfig = $userId > 0 ? $this->userConfig->load($userId) : $this->userConfig;
+        $this->userConfig->setId($userId);
     }
 
     public function getOriginThemeConfig($key = '')
     {
         $this->userSession = $this->resolveSession();
         $sessionConfig = $this->userSession->getData(self::theme_Session_Config);
-        $userId = (int)($this->userSession->getUserId() ?? 0);
+        $userId = $this->userConfig->getCurrentUserId();
         $cacheKey = $userId . '|' . md5(json_encode($sessionConfig) ?: '');
         if (
             $this->originThemeConfigCacheKey === $cacheKey
@@ -63,7 +64,7 @@ class ThemeConfig extends \Weline\Framework\View\Block
         }
 
         $themeConfig = $sessionConfig;
-        if (empty($themeConfig) && $this->userSession->isLoggedIn()) {
+        if (empty($themeConfig) && $userId > 0) {
             $configValue = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
             if ($configValue) {
                 $themeConfig = json_decode($configValue, true);
@@ -149,9 +150,8 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function setThemeConfig(string|array $key, mixed $value = ''): static
     {
         $this->userSession = $this->resolveSession();
-        $this->originThemeConfigCacheKey = null;
-        $this->originThemeConfigCacheValue = null;
-        $this->originThemeConfigCacheExpiresAt = 0.0;
+        $userId = $this->userConfig->getCurrentUserId();
+        $this->resetOriginThemeConfigRuntimeCache();
         if (is_array($key)) {
             $originConfig = $this->getOriginThemeConfig();
             if (!\is_array($originConfig)) {
@@ -159,19 +159,27 @@ class ThemeConfig extends \Weline\Framework\View\Block
             }
             $key = \array_merge($originConfig, $key);
             $this->userSession->setData(self::theme_Session_Config, $key);
-            if ($this->userSession->isLoggedIn()) {
+            if ($userId > 0) {
                 $this->userConfig->setConfig(self::theme_Session_Config, json_encode($key), 'Weline_Backend', '主题设置');
             }
         } else {
             $theme_Config = $this->getOriginThemeConfig();
             $theme_Config[$key] = $value;
             $this->userSession->setData(self::theme_Session_Config, $theme_Config);
-            if ($this->userSession->isLoggedIn()) {
+            if ($userId > 0) {
                 $this->userConfig->setConfig(self::theme_Session_Config, json_encode($theme_Config), 'Weline_Backend', '主题设置');
             }
         }
 
+        $this->resetOriginThemeConfigRuntimeCache();
         return $this;
+    }
+
+    private function resetOriginThemeConfigRuntimeCache(): void
+    {
+        $this->originThemeConfigCacheKey = null;
+        $this->originThemeConfigCacheValue = null;
+        $this->originThemeConfigCacheExpiresAt = 0.0;
     }
 
 

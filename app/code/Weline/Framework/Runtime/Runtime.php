@@ -72,16 +72,16 @@ class Runtime
      */
     public static function isWls(): bool
     {
+        if (\defined('WLS_MODE') && WLS_MODE) {
+            self::$mode = RuntimeInterface::MODE_WLS;
+            return true;
+        }
+
         if (self::$mode !== null) {
             return self::$mode === RuntimeInterface::MODE_WLS;
         }
         
         // 通过 WLS_MODE 常量检测
-        if (\defined('WLS_MODE') && WLS_MODE) {
-            self::$mode = RuntimeInterface::MODE_WLS;
-            return true;
-        }
-        
         self::$mode = self::detectMode();
         return self::$mode === RuntimeInterface::MODE_WLS;
     }

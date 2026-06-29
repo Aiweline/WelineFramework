@@ -10,6 +10,15 @@ $accountUrl = (string)($account_url ?? '');
 $installedUrl = (string)($installed_url ?? '');
 $indexUrl = (string)($index_url ?? '');
 $platformUrl = rtrim((string)($platform_url ?? 'https://app.aiweline.com'), '/');
+$platformUrlResolution = is_array($platform_url_resolution ?? null) ? $platform_url_resolution : [];
+$platformUrlSource = trim((string)($platformUrlResolution['source'] ?? 'default:production'));
+$platformUrlEnvironment = trim((string)($platformUrlResolution['environment'] ?? 'production'));
+$platformUrlEnvironmentLabel = match ($platformUrlEnvironment) {
+    'production' => __('生产商城'),
+    'local' => __('本地商城'),
+    'configured' => __('已配置'),
+    default => $platformUrlEnvironment !== '' ? $platformUrlEnvironment : __('未知'),
+};
 $storeDomain = (string)($store_domain ?? '');
 $downloadResult = is_array($download_result ?? null) ? $download_result : null;
 $installResult = is_array($install_result ?? null) ? $install_result : null;
@@ -22,23 +31,95 @@ $wlsPanelUrl = (string)($wls_panel_url ?? '');
 $appUrl = static fn(array $module): string => $platformUrl . '/apps/' . rawurlencode((string)($module['slug'] ?? $module['module_id'] ?? ''));
 $moduleTags = static function (array $module): array {
     $tags = [];
-    foreach ((array)($module['tags_resolved'] ?? $module['tags'] ?? []) as $tag) {
-        if (is_string($tag)) {
-            $code = trim($tag);
-            if ($code !== '') {
+    $seen = [];
+    $resolveLabel = static function (mixed $value, string $code): string {
+        if (is_string($value) || is_numeric($value)) {
+            $label = trim((string)$value);
+            return $label !== '' ? $label : $code;
+        }
+
+        if (is_array($value)) {
+            foreach (['zh_Hans_CN', 'en_US', 'default', 'label', 'name', 'title'] as $key) {
+                if (is_string($value[$key] ?? null) || is_numeric($value[$key] ?? null)) {
+                    $label = trim((string)$value[$key]);
+                    return $label !== '' ? $label : $code;
+                }
+            }
+            foreach ($value as $item) {
+                if (is_string($item) || is_numeric($item)) {
+                    $label = trim((string)$item);
+                    return $label !== '' ? $label : $code;
+                }
+            }
+        }
+
+        return $code;
+    };
+
+    $appendTag = static function (mixed $tag) use (&$tags, &$seen, $resolveLabel): void {
+        if (is_string($tag) || is_numeric($tag) || is_bool($tag)) {
+            $code = \Weline\Framework\MarketplaceMeta\MarketplaceTag::normalizeCode((string)$tag);
+            if ($code !== '' && !isset($seen[$code])) {
+                $seen[$code] = true;
                 $tags[] = ['code' => $code, 'label' => $code];
             }
-            continue;
+            return;
         }
+
         if (!is_array($tag)) {
-            continue;
+            return;
         }
-        $code = trim((string)($tag['code'] ?? $tag['tag_code'] ?? ''));
-        $label = trim((string)($tag['label'] ?? $tag['name'] ?? $code));
-        if ($code !== '') {
-            $tags[] = ['code' => $code, 'label' => $label !== '' ? $label : $code];
+
+        $code = (string)($tag['code'] ?? $tag['tag_code'] ?? $tag['tag'] ?? '');
+        if ($code === '' && (is_string($tag['type'] ?? null) || is_numeric($tag['type'] ?? null))
+            && (is_string($tag['value'] ?? null) || is_numeric($tag['value'] ?? null) || is_bool($tag['value'] ?? null))
+        ) {
+            $code = (string)$tag['type'] . ':' . (string)$tag['value'];
         }
+
+        $code = \Weline\Framework\MarketplaceMeta\MarketplaceTag::normalizeCode($code);
+        if ($code === '' || isset($seen[$code])) {
+            return;
+        }
+
+        $seen[$code] = true;
+        $tags[] = [
+            'code' => $code,
+            'label' => $resolveLabel($tag['label'] ?? $tag['labels'] ?? $tag['name'] ?? $code, $code),
+        ];
+    };
+
+    $walkTags = static function (mixed $value) use (&$walkTags, $appendTag): void {
+        if (is_string($value) || is_numeric($value) || is_bool($value)) {
+            $appendTag($value);
+            return;
+        }
+
+        if (!is_array($value)) {
+            return;
+        }
+
+        if (array_key_exists('code', $value)
+            || array_key_exists('tag_code', $value)
+            || array_key_exists('tag', $value)
+            || (array_key_exists('type', $value) && array_key_exists('value', $value))
+        ) {
+            $appendTag($value);
+            return;
+        }
+
+        foreach ($value as $item) {
+            $walkTags($item);
+        }
+    };
+
+    $walkTags($module['tags_resolved'] ?? []);
+    $walkTags($module['tags'] ?? []);
+    if (is_array($module['marketplace_meta'] ?? null)) {
+        $walkTags($module['marketplace_meta']['tags'] ?? []);
+        $walkTags($module['marketplace_meta']['tags_resolved'] ?? []);
     }
+
     return $tags;
 };
 $moduleSurfaces = static function (array $module, array $tags): array {
@@ -49,8 +130,28 @@ $moduleSurfaces = static function (array $module, array $tags): array {
             $surfaces[$surface] = true;
         }
     }
+    $surface = trim((string)($module['surface'] ?? ''));
+    if ($surface !== '') {
+        $surfaces[$surface] = true;
+    }
+    if (is_array($module['marketplace_meta'] ?? null)) {
+        foreach ((array)($module['marketplace_meta']['surfaces'] ?? []) as $surface) {
+            $surface = trim((string)$surface);
+            if ($surface !== '') {
+                $surfaces[$surface] = true;
+            }
+        }
+        $surface = trim((string)($module['marketplace_meta']['surface'] ?? ''));
+        if ($surface !== '') {
+            $surfaces[$surface] = true;
+        }
+    }
+    $hasWlsTag = false;
     foreach ($tags as $tag) {
         $code = strtolower(trim((string)($tag['code'] ?? '')));
+        if ($code === 'module:wls') {
+            $hasWlsTag = true;
+        }
         if (str_starts_with($code, 'surface.')) {
             $surfaces[substr($code, strlen('surface.'))] = true;
         } elseif (str_starts_with($code, 'surface:')) {
@@ -59,6 +160,9 @@ $moduleSurfaces = static function (array $module, array $tags): array {
                 $surfaces[$surface] = true;
             }
         }
+    }
+    if (!$surfaces && $hasWlsTag) {
+        $surfaces['backend'] = true;
     }
     return array_keys($surfaces);
 };
@@ -73,6 +177,24 @@ $moduleSurfaces = static function (array $module, array $tags): array {
         <a class="btn btn-outline-primary" href="<?= htmlspecialchars($accountUrl, ENT_QUOTES, 'UTF-8') ?>">
             <i class="bi bi-person-check me-1"></i><?= __('账户授权') ?>
         </a>
+    </div>
+
+    <div class="alert alert-info d-flex align-items-start justify-content-between flex-wrap gap-3"
+         role="status"
+         data-appstore-platform-resolution
+         data-appstore-platform-url="<?= htmlspecialchars($platformUrl, ENT_QUOTES, 'UTF-8') ?>"
+         data-appstore-platform-source="<?= htmlspecialchars($platformUrlSource, ENT_QUOTES, 'UTF-8') ?>">
+        <div style="min-width: 0;">
+            <div class="fw-semibold"><?= __('应用商城端点') ?></div>
+            <code class="d-block text-break"><?= htmlspecialchars($platformUrl, ENT_QUOTES, 'UTF-8') ?></code>
+            <div class="small text-muted mt-1">
+                <?= __('本地开发应使用 https://app.weline.test:9523，部署后测试应自动使用 https://app.aiweline.com。') ?>
+            </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 justify-content-end">
+            <span class="badge text-bg-primary"><?= htmlspecialchars((string)$platformUrlEnvironmentLabel, ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="badge text-bg-light border"><?= __('来源：') ?><?= htmlspecialchars($platformUrlSource, ENT_QUOTES, 'UTF-8') ?></span>
+        </div>
     </div>
 
     <?php if ($downloadResult): ?>
@@ -297,13 +419,15 @@ $moduleSurfaces = static function (array $module, array $tags): array {
         var q = keyword.value.trim().toLowerCase();
         var price = pricing.value;
         var tagValue = tag.value.trim().toLowerCase();
-        var surfaceValue = surface.value.trim().toLowerCase();
+        var surfaceValue = normalizeSurface(surface.value);
         var visible = 0;
         cards.forEach(function (card) {
+            var tagTokens = tokens(card.getAttribute('data-tags') || '');
+            var surfaceTokens = tokens(card.getAttribute('data-surfaces') || '');
             var matchKeyword = q === '' || (card.getAttribute('data-search') || '').indexOf(q) !== -1;
             var matchPricing = price === '' || card.getAttribute('data-pricing') === price;
-            var matchTag = tagValue === '' || (card.getAttribute('data-tags') || '').indexOf(tagValue) !== -1;
-            var matchSurface = surfaceValue === '' || (card.getAttribute('data-surfaces') || '').indexOf(surfaceValue) !== -1;
+            var matchTag = tagValue === '' || tagTokens.indexOf(tagValue) !== -1;
+            var matchSurface = surfaceValue === '' || surfaceTokens.indexOf(surfaceValue) !== -1;
             var show = matchKeyword && matchPricing && matchTag && matchSurface;
             card.classList.toggle('d-none', !show);
             if (show) {
@@ -313,6 +437,18 @@ $moduleSurfaces = static function (array $module, array $tags): array {
         if (empty) {
             empty.classList.toggle('d-none', visible > 0);
         }
+    }
+
+    function tokens(value) {
+        return value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    }
+
+    function normalizeSurface(value) {
+        value = value.trim().toLowerCase();
+        if (value.indexOf('surface:') === 0 || value.indexOf('surface.') === 0) {
+            return value.substring(8);
+        }
+        return value;
     }
 
     applyFilter();

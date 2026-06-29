@@ -266,9 +266,9 @@ final class SupervisorChildClient implements ChildControlClientInterface
         return true;
     }
 
-    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool
+    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool
     {
-        unset($workerId, $port, $msgId);
+        unset($workerId, $port, $msgId, $reason);
         return true;
     }
 

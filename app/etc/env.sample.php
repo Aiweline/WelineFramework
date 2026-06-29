@@ -252,6 +252,16 @@ return [
         'worker_memory_limit' => '256M',
         // Dispatcher 子进程 PHP memory_limit；不配置时默认跟随 worker_memory_limit。
         'dispatcher_memory_limit' => '256M',
+        // WLS Panel mode keeps the independent server panel separate from the
+        // ordinary project backend. When enabled and the generic memory limit
+        // is still 256M, server:start raises worker/dispatcher memory to the
+        // panel worker_memory_limit below. Explicit worker/dispatcher memory
+        // values in env or CLI always win.
+        'panel' => [
+            'enabled' => false,
+            'mode' => 'standalone',
+            'worker_memory_limit' => '512M',
+        ],
         'ssl' => [
             'engine' => 'stream', // stream|event_buffer; native Windows only supports stream
             'event_buffer_enabled' => false,

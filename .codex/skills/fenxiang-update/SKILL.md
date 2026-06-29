@@ -3,7 +3,8 @@ name: fenxiang-update
 description: >-
   Load ONLY when the user says passphrase 分项. Commit and push the current core repo
   (default E:\WelineFramework\DEV-workspace), then run php bin/w core:update -b <branch>
-  in the configured child projects under E:\WelineFramework\Framework-Official; after each
+  in the configured child projects under E:\WelineFramework\Framework-Official plus
+  E:\公司\远程\src\weline; after each
   successful site update, reload WLS if it is running. If the user says only 分项, use dev;
   if the user says 分项 <branch>, use that branch. Canonical skill:
   dev/ai/skills/CI发布工程师-分项更新/SKILL.md
@@ -17,7 +18,7 @@ Codex alias for `CI发布工程师-分项更新`. **Do not run unless the user m
 
 `分项` means "sync core code by project":
 
-1. `E:\WelineFramework\Framework-Official` contains the child site projects; the default core repository is `E:\WelineFramework\DEV-workspace`.
+1. `E:\WelineFramework\Framework-Official` contains the child site projects, and the default target list also includes `E:\公司\远程\src\weline`; the default core repository is `E:\WelineFramework\DEV-workspace`.
 2. Resolve the target branch from the passphrase: `分项` defaults to `dev`; `分项 <branch>` targets `<branch>`.
 3. Commit and push the current core branch online to the target branch.
 4. Each configured site project updates its core code through `php bin/w core:update -b <branch>`.
@@ -78,6 +79,7 @@ Skip WLS reload:
 - `E:\WelineFramework\Framework-Official\Skill`
 - `E:\WelineFramework\Framework-Official\Tools`
 - `E:\WelineFramework\Framework-Official\WeShop`
+- `E:\公司\远程\src\weline`
 
 The script resolves either `<site>\bin\w` or `<site>\weline\bin\w`.
 

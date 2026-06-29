@@ -115,7 +115,7 @@
         "en_US": "Read Project Paths"
       },
       "status": "enabled",
-      "backend_route": "weline_filemanager/backend/wls-file-manager"
+      "backend_route": "weline_filemanager/backend/wls-file-manager/browser"
     },
     "files.write": {
       "label": {
@@ -123,7 +123,7 @@
         "en_US": "Controlled Project File Operations"
       },
       "status": "guarded",
-      "backend_route": "weline_filemanager/backend/wls-file-manager"
+      "backend_route": "weline_filemanager/backend/wls-file-manager/write-page"
     },
     "files.policy": {
       "label": {
@@ -131,7 +131,7 @@
         "en_US": "Project File Path Policy"
       },
       "status": "guarded",
-      "backend_route": "weline_filemanager/backend/wls-file-manager#path-policy"
+      "backend_route": "weline_filemanager/backend/wls-file-manager/policy-page"
     },
     "files.compress": {
       "label": {
@@ -139,7 +139,7 @@
         "en_US": "Bounded Project File Compression"
       },
       "status": "guarded",
-      "backend_route": "weline_filemanager/backend/wls-file-manager"
+      "backend_route": "weline_filemanager/backend/wls-file-manager/write-page"
     },
     "files.delete-tree": {
       "label": {
@@ -147,7 +147,7 @@
         "en_US": "Bounded Project Directory Delete"
       },
       "status": "guarded",
-      "backend_route": "weline_filemanager/backend/wls-file-manager"
+      "backend_route": "weline_filemanager/backend/wls-file-manager/write-page"
     },
     "files.trash": {
       "label": {
@@ -155,7 +155,7 @@
         "en_US": "Recoverable Project File Trash"
       },
       "status": "guarded",
-      "backend_route": "weline_filemanager/backend/wls-file-manager#queue-operations"
+      "backend_route": "weline_filemanager/backend/wls-file-manager/queue-page"
     },
     "project.path": {
       "label": {
@@ -179,7 +179,72 @@
         },
         "group": "tools",
         "order": 30,
-        "backend_route": "weline_filemanager/backend/wls-file-manager"
+        "backend_route": "weline_filemanager/backend/wls-file-manager",
+        "children": [
+          {
+            "key": "file-roots",
+            "label": {
+              "zh_Hans_CN": "根目录",
+              "en_US": "Roots"
+            },
+            "order": 5,
+            "backend_route": "weline_filemanager/backend/wls-file-manager/roots"
+          },
+          {
+            "key": "file-browser",
+            "label": {
+              "zh_Hans_CN": "文件浏览",
+              "en_US": "Browser"
+            },
+            "order": 10,
+            "backend_route": "weline_filemanager/backend/wls-file-manager/browser"
+          },
+          {
+            "key": "file-policy",
+            "label": {
+              "zh_Hans_CN": "路径策略",
+              "en_US": "Policy"
+            },
+            "order": 20,
+            "backend_route": "weline_filemanager/backend/wls-file-manager/policy-page"
+          },
+          {
+            "key": "file-write",
+            "label": {
+              "zh_Hans_CN": "写入操作",
+              "en_US": "Write"
+            },
+            "order": 30,
+            "backend_route": "weline_filemanager/backend/wls-file-manager/write-page"
+          },
+          {
+            "key": "file-queue",
+            "label": {
+              "zh_Hans_CN": "任务队列",
+              "en_US": "Queue"
+            },
+            "order": 40,
+            "backend_route": "weline_filemanager/backend/wls-file-manager/queue-page"
+          },
+          {
+            "key": "file-audit",
+            "label": {
+              "zh_Hans_CN": "操作审计",
+              "en_US": "Audit"
+            },
+            "order": 50,
+            "backend_route": "weline_filemanager/backend/wls-file-manager/log-page"
+          },
+          {
+            "key": "file-capabilities",
+            "label": {
+              "zh_Hans_CN": "能力",
+              "en_US": "Capabilities"
+            },
+            "order": 60,
+            "backend_route": "weline_filemanager/backend/wls-file-manager/capabilities-page"
+          }
+        ]
       }
     ]
   },

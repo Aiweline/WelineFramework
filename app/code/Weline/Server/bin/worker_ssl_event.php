@@ -777,7 +777,11 @@ $tickTimer = new \Event($base, -1, \Event::TIMEOUT | \Event::PERSIST, static fun
         wlsEventCloseConnection((int)$id, $connections, $stats);
     }
     if ($kernel !== null) {
-        $kernel->sendDrainingComplete();
+        $eventWorkerExitReason = $ipcReceivedShutdown
+            ? "shutdown_command:worker={$workerId}"
+            : "drain_or_reload:worker={$workerId}";
+        $kernel->sendExitReason($eventWorkerExitReason);
+        $kernel->sendDrainingComplete($eventWorkerExitReason);
         $kernel->sendExited();
         $kernel->flushWrites();
         $kernel->close();

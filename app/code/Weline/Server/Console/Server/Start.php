@@ -63,6 +63,8 @@ class Start extends CommandAbstract
      */
     private const WORKER_PORT_ALLOCATION_LOCK_TIMEOUT = 5;
 
+    private const PANEL_MODE_DEFAULT_MEMORY_LIMIT = '512M';
+
     private const PUBLIC_HOST_IP_PROBE_TIMEOUT_MS = 1200;
 
     private const PUBLIC_IPV4_PROBE_URLS = [
@@ -3226,6 +3228,14 @@ class Start extends CommandAbstract
             $hasCliOverride = true;
         }
         
+        $config = $this->applyPanelModeMemoryPolicy(
+            $config,
+            $envConfig,
+            $instanceName,
+            $workerMemoryLimitArg !== null,
+            $dispatcherMemoryLimitArg !== null
+        );
+
         // --no-ssl / --http-only：仅 HTTP，不启用 HTTPS（Windows 下可不装 event）
         if (isset($args['no-ssl']) || isset($args['no_ssl']) || isset($args['http-only'])) {
             $config['no_ssl'] = true;
@@ -3318,6 +3328,98 @@ class Start extends CommandAbstract
         $this->traceStartupPhase($instanceName, 'getServerConfig:done');
 
         return $config;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $envConfig
+     * @return array<string, mixed>
+     */
+    private function applyPanelModeMemoryPolicy(
+        array $config,
+        array $envConfig,
+        string $instanceName,
+        bool $workerCliExplicit,
+        bool $dispatcherCliExplicit
+    ): array {
+        if (!$this->isPanelModeEnabled($config)) {
+            return $config;
+        }
+
+        $panelConfig = \is_array($config['panel'] ?? null) ? $config['panel'] : [];
+        $panelWorkerMemoryLimit = ServiceContext::normalizeMemoryLimit(
+            $panelConfig['worker_memory_limit'] ?? self::PANEL_MODE_DEFAULT_MEMORY_LIMIT,
+            self::PANEL_MODE_DEFAULT_MEMORY_LIMIT
+        );
+        $workerMemoryExplicit = $workerCliExplicit
+            || $this->hasEnvWlsConfigKey($envConfig, $instanceName, 'worker_memory_limit');
+        $currentWorkerMemoryLimit = ServiceContext::normalizeMemoryLimit(
+            $config['worker_memory_limit'] ?? '256M'
+        );
+
+        if (!$workerMemoryExplicit && $currentWorkerMemoryLimit === '256M') {
+            $config['worker_memory_limit'] = $panelWorkerMemoryLimit;
+            $currentWorkerMemoryLimit = $panelWorkerMemoryLimit;
+        }
+
+        $dispatcherMemoryExplicit = $dispatcherCliExplicit
+            || $this->hasEnvWlsConfigKey($envConfig, $instanceName, 'dispatcher_memory_limit');
+        $currentDispatcherMemoryLimit = isset($config['dispatcher_memory_limit'])
+            ? ServiceContext::normalizeMemoryLimit($config['dispatcher_memory_limit'], $currentWorkerMemoryLimit)
+            : '';
+        if (!$dispatcherMemoryExplicit
+            && ($currentDispatcherMemoryLimit === '' || $currentDispatcherMemoryLimit === '256M')
+        ) {
+            $config['dispatcher_memory_limit'] = $config['worker_memory_limit'] ?? $currentWorkerMemoryLimit;
+        }
+
+        return $config;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function isPanelModeEnabled(array $config): bool
+    {
+        $panelEnabledEnv = \getenv('WLS_PANEL_ENABLED');
+        if ($panelEnabledEnv !== false && \trim((string)$panelEnabledEnv) !== '') {
+            return $this->isTruthyCliFlagValue($panelEnabledEnv);
+        }
+
+        $panelModeEnv = \getenv('WLS_PANEL_MODE');
+        if ($panelModeEnv !== false && \trim((string)$panelModeEnv) !== '') {
+            return $this->isTruthyCliFlagValue($panelModeEnv);
+        }
+
+        $panelConfig = \is_array($config['panel'] ?? null) ? $config['panel'] : [];
+        if (\array_key_exists('enabled', $panelConfig)) {
+            return $this->isTruthyCliFlagValue($panelConfig['enabled']);
+        }
+        if (\array_key_exists('mode', $panelConfig)) {
+            return $this->isTruthyCliFlagValue($panelConfig['mode']);
+        }
+        if (\array_key_exists('panel_mode', $config)) {
+            return $this->isTruthyCliFlagValue($config['panel_mode']);
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, mixed> $envConfig
+     */
+    private function hasEnvWlsConfigKey(array $envConfig, string $instanceName, string $key): bool
+    {
+        $wls = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $servers = \is_array($wls['servers'] ?? null) ? $wls['servers'] : [];
+        if ($instanceName !== 'default'
+            && isset($servers[$instanceName])
+            && \is_array($servers[$instanceName])
+        ) {
+            return \array_key_exists($key, $servers[$instanceName]);
+        }
+
+        return \array_key_exists($key, $wls);
     }
 
     /**
