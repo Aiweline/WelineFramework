@@ -212,8 +212,8 @@ PS1;
             return null;
         }
 
-        $osascriptPath = self::findUnixCommand('osascript');
-        if ($osascriptPath === '') {
+        $authopenPath = self::findMacOsAuthOpen();
+        if ($authopenPath === '') {
             return null;
         }
 
@@ -228,9 +228,8 @@ PS1;
         }
         @\chmod($payloadPath, 0600);
 
-        $shellCommand = 'cat ' . \escapeshellarg($payloadPath) . ' > ' . \escapeshellarg($hostsFile);
-        $appleScript = 'do shell script ' . self::appleScriptString($shellCommand) . ' with administrator privileges';
-        $command = \escapeshellcmd($osascriptPath) . ' -e ' . \escapeshellarg($appleScript) . ' 2>&1';
+        $command = '/bin/cat ' . \escapeshellarg($payloadPath)
+            . ' | ' . \escapeshellcmd($authopenPath) . ' -w ' . \escapeshellarg($hostsFile) . ' 2>&1';
 
         $output = [];
         $exitCode = 1;
@@ -339,6 +338,16 @@ PS1;
         return \trim((string)$output[0]);
     }
 
+    private static function findMacOsAuthOpen(): string
+    {
+        $authopenPath = '/usr/libexec/authopen';
+        if (\is_file($authopenPath) && \is_executable($authopenPath)) {
+            return $authopenPath;
+        }
+
+        return self::findUnixCommand('authopen');
+    }
+
     private static function domainExists(string $content, string $domain): bool
     {
         foreach (explode("\n", $content) as $line) {
@@ -390,18 +399,8 @@ PS1;
 
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         if ($osFamily === 'Darwin') {
-            if (\defined('BP') && \is_file(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')) {
-                $shellCommand = \escapeshellarg($phpBinary) . ' ' . \escapeshellarg(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')
-                    . ' server:hosts:add ' . \escapeshellarg($domain) . ' --ip=' . \escapeshellarg($ip);
-            } else {
-                $shellCommand = '/bin/sh -c ' . \escapeshellarg(
-                    'printf ' . \escapeshellarg("\n{$ip} {$domain}\n") . ' >> ' . \escapeshellarg($hostsFile)
-                );
-            }
-
-            return 'osascript -e ' . \escapeshellarg(
-                'do shell script ' . self::appleScriptString($shellCommand) . ' with administrator privileges'
-            );
+            return 'printf ' . \escapeshellarg("\n{$ip} {$domain}\n")
+                . ' | /usr/libexec/authopen -w -a ' . \escapeshellarg($hostsFile);
         }
 
         if (\defined('BP') && \is_file(BP . 'bin' . DIRECTORY_SEPARATOR . 'w')) {
@@ -414,8 +413,4 @@ PS1;
         );
     }
 
-    private static function appleScriptString(string $value): string
-    {
-        return '"' . \str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
-    }
 }
