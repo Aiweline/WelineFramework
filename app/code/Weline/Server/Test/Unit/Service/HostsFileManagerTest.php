@@ -58,7 +58,7 @@ HOSTS;
         self::assertStringContainsString('127.0.0.1', $command);
     }
 
-    public function testMacAdminCommandUsesSameHostsCommandEntryPoint(): void
+    public function testMacAdminCommandUsesAuthopenInsteadOfOsascript(): void
     {
         if (!\defined('BP')) {
             \define('BP', \getcwd() . DIRECTORY_SEPARATOR);
@@ -69,8 +69,9 @@ HOSTS;
 
         $command = $method->invoke(null, 'shop-a.weline.test', '127.0.0.1', 'Darwin');
 
-        self::assertStringContainsString('osascript', $command);
-        self::assertStringContainsString('with administrator privileges', $command);
-        self::assertStringContainsString('server:hosts:add', $command);
+        self::assertStringContainsString('/usr/libexec/authopen', $command);
+        self::assertStringContainsString('-w -a', $command);
+        self::assertStringContainsString('shop-a.weline.test', $command);
+        self::assertStringNotContainsString('osascript', $command);
     }
 }
