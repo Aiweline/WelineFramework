@@ -10,7 +10,7 @@ use Weline\AppStore\Service\ModuleUpdateService;
 
 class ModuleUpdateServiceTest extends TestCase
 {
-    public function testAvailableUpdateDownloadsInstallsAndRecordsUpgradeOptions(): void
+    public function testAvailableUpdateDownloadsInstallsAndRecordsRuntimeUpgradeOptions(): void
     {
         $installer = new class extends ModuleInstallerService {
             public array $downloads = [];
@@ -73,13 +73,13 @@ class ModuleUpdateServiceTest extends TestCase
         $this->assertCount(1, $installer->installs);
         $this->assertSame('/tmp/Weline_AppStore-1.2.0.zip', $installer->installs[0][0]);
         $this->assertSame('upgrade', $installer->installs[0][1]['action']);
-        $this->assertSame('1.1.0', $installer->installs[0][1]['previous_version']);
+        $this->assertSame('1.0.0', $installer->installs[0][1]['previous_version']);
         $this->assertSame(901, $installer->installs[0][1]['download_log_id']);
         $this->assertSame('hash-123', $installer->installs[0][1]['download_file_hash']);
         $this->assertSame(1234, $installer->installs[0][1]['download_file_size']);
         $this->assertSame('平台应用商城', $installer->installs[0][1]['display_name']);
         $this->assertSame('upgrade', $result['record_action']);
         $this->assertSame('1.2.0', $result['version']);
-        $this->assertSame('1.1.0', $result['previous_version']);
+        $this->assertSame('1.0.0', $result['previous_version']);
     }
 }

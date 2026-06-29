@@ -143,6 +143,7 @@ Layout assertions:
 +--------------------------------------------------------------------+
 | Security Policy Audit                                              |
 | Latest changes: action / source / scope / domain / changed sections |
+| Filters: action / source / domain / changed section / keyword / limit|
 +--------------------------------------------------------------------+
 | Common Rule Editor                         | Rule Summary          |
 | Rate / Path / SSL / Unknown / Whitelist    | Enabled switches      |
@@ -511,9 +512,18 @@ FileManager controlled-write rules:
   `SOURCE_RENAME` form. The next implemented layer moves one existing
   allowlisted source file into the same-root `.wls-trash` folder through the
   dedicated `SOURCE_TRASH` form; it stays synchronous, single-file only, capped
-  at 128 KB, and does not enable hard delete, purge, directories, or source
-  queue operations.
-- Source queue operations remain a future policy slice.
+  at 128 KB, and does not enable hard delete, purge, directories, or ordinary
+  source queue operations.
+- Source queue operations are now split into dedicated bounded slices:
+  `SOURCE_QUEUE_TRASH` for recoverable single-file trash,
+  `SOURCE_QUEUE_ARCHIVE` for a read-only single-file ZIP snapshot,
+  `SOURCE_QUEUE_ARCHIVE_TREE` for a read-only ZIP snapshot of one existing
+  child directory under the current enabled source-policy path, and
+  `SOURCE_QUEUE_ARCHIVE_SELECTION` for a read-only ZIP snapshot of up to 20
+  explicitly named direct child files or directories in the current source
+  policy directory. All source archive queues write only under
+  `var/wls-panel/file-manager/source-archives/`. Broader multi-directory,
+  multi-root, or source-write queue operations remain future policy slices.
 
 ### FileManager Source-Tree Policy Split
 
@@ -530,12 +540,18 @@ flowchart TD
   F --> G["Layer 3 implemented: SOURCE_RENAME same-folder source rename"]
   G --> H["Layer 4 implemented: SOURCE_TRASH recoverable single-file source trash"]
   H --> I["Layer 5 implemented: SOURCE_QUEUE_TRASH recoverable single-file source trash queue"]
-  I --> E{"Broader source action requested?"}
+  I --> M["Layer 6 implemented: SOURCE_QUEUE_ARCHIVE read-only single-file archive queue"]
+  M --> N["Layer 7 implemented: SOURCE_QUEUE_ARCHIVE_TREE read-only child-directory archive queue"]
+  N --> O["Layer 8 implemented: SOURCE_QUEUE_ARCHIVE_SELECTION read-only selected-entry archive queue"]
+  O --> E{"Broader source action requested?"}
   E --> L["SOURCE_QUEUE: disabled until separate policy exists"]
   F --> J["ACL + source policy + protected path + overwrite + audit"]
   G --> J
   H --> J
   I --> J
+  M --> J
+  N --> J
+  O --> J
   L --> K["Remain disabled"]
 ```
 
@@ -547,7 +563,10 @@ flowchart TD
 | 3 | Implemented | Same-folder source rename with `SOURCE_RENAME` | Cross-folder move, overwrite, extension change to unsafe type, protected paths |
 | 4 | Implemented | Recoverable single-file source trash with `SOURCE_TRASH` into same-root `.wls-trash` | Hard delete, recursive delete, purge, broad source queue, generated/vendor/env/lock paths |
 | 5 | Implemented | Recoverable single-file source trash queue with `SOURCE_QUEUE_TRASH` and `source_trash_entry` worker revalidation | Upload, batch, hard delete, purge, ordinary `QUEUE_TRASH`/`QUEUE_COMPRESS` against source roots |
-| 6 | Future blocked | Broader source queue operation only after a separate policy exists | Reusing ordinary ZIP/trash queue flows against source roots |
+| 6 | Implemented | Read-only single-file source archive queue with `SOURCE_QUEUE_ARCHIVE` and `source_archive_file` worker revalidation into `var/wls-panel/file-manager/source-archives/` | Source-root ZIP writes, upload, delete, overwrite, batch |
+| 7 | Implemented | Read-only child-directory source archive queue with `SOURCE_QUEUE_ARCHIVE_TREE` and `source_archive_tree` worker revalidation, capped at 200 entries and 10 MB, into `var/wls-panel/file-manager/source-archives/` | Multi-directory, recursive source writes, source-root ZIP writes, upload, delete, overwrite, batch |
+| 8 | Implemented | Read-only selected-entry source archive queue with `SOURCE_QUEUE_ARCHIVE_SELECTION` and `source_archive_selection` worker revalidation, capped at 20 direct children, 200 traversed entries, and 10 MB, into `var/wls-panel/file-manager/source-archives/` | Cross-directory selection, multi-root selection, source-root ZIP writes, upload, delete, overwrite, batch |
+| 9 | Future blocked | Broader source queue operation only after a separate policy exists | Reusing ordinary ZIP/trash queue flows against source roots |
 
 Source-tree writes must keep these no-go zones even when a future policy is
 enabled: `.env`, `app/etc/env.php`, lock files, `.git`, `.wls-trash`,
@@ -766,8 +785,20 @@ Third-slice database env apply rules:
 - Rollback requires the `ROLLBACK_DB_ENV` phrase plus an explicit confirmation
   checkbox, restores only backups from the DbManager backup directory, then
   calls `Env::reload()` so the current PHP process sees the restored config.
-- Richer database lifecycle actions and explicit slave create/remove flows
-  remain future slices.
+- Lifecycle planning now has a vendor-aware adapter preview: mysql/pgsql
+  create database, create user/role, and grant actions render allowlisted SQL,
+  verification queries, rollback/cleanup guidance, the
+  `db.lifecycle.plan_ready` audit event, and the disabled
+  `RUN_DB_LIFECYCLE` execution boundary. No DB connection or SQL execution is
+  performed from this shell yet.
+- MySQL and PostgreSQL `backup_database` now have guarded execution slices
+  behind `RUN_DB_BACKUP`, checkbox confirmation, enabled Project Profile,
+  `mysqldump`/`pg_dump`, artifact confinement, optional `.sql.gz` compression,
+  metadata, checksum, and audit. MySQL now has a real disposable
+  MariaDB-backed success-path harness that verifies seeded data, metadata,
+  checksum, sanitized audit, artifact cleanup, and container cleanup. Restore,
+  migration execution, and explicit slave create/remove flows remain future
+  slices.
 
 ```text
 +-----------------------------------------------------------------+
@@ -1431,11 +1462,19 @@ those capabilities.
 
 ```text
 +--------------------------------------------------------------------------------+
-| Project Config Center                                      3 projects / 2 ready |
+| Project Config Center                     3 projects / Ready / 8 slots ready   |
++--------------------------------------------------------------------------------+
+| All managed projects are ready for panel operations.       8 / 8 operations    |
 +--------------------------------------------------------------------------------+
 | Current Project                    Local project                                |
 | p11005ce4.weline.test:9828                                                    |
-| [Project Admin] [Child Panel] [Security] [Gateway]                              |
+| Safe Context: domain=p11005ce4.weline.test / type=current                      |
+|                                                                                |
+| [Ready]                                             8 / 8 checks ready          |
+| Core links and WLS operation plugins are ready.                                 |
+| + Core Links 4/4 + Operations 4/4 + Security Ready + Gateway Off               |
+|                                                                                |
+| [Project Admin] [Child Panel] [Attack Logs] [Security Policy] [Gateway]         |
 | +----------------------+ +----------------------+                               |
 | | PHP Config           | | Database Config      |                               |
 | | Runtime profile...   | | Database profile...  |                               |
@@ -1454,11 +1493,15 @@ flowchart LR
   A["WLS Panel dashboard"] --> B["WlsPanelProjectConfigCenterService"]
   B --> C["Dashboard project cards"]
   B --> D["Operation capability slots"]
+  B --> R["Read-only readiness summary"]
   D --> E["PHP / database / files / deploy links"]
   C --> F["Project Admin"]
   C --> G["Child WLS Panel"]
   C --> H["Security scoped logs"]
   C --> I["Gateway settings"]
+  R --> R1["Core links: admin / panel / path / security scope"]
+  R --> R2["Operation slots: installed WLS plugins"]
+  R --> R3["Gateway mode visibility"]
   E --> J["Installed plugin URL plus safe project context"]
   E --> K["Missing plugin AppStore URL with module:wls"]
 ```
@@ -1475,6 +1518,12 @@ Rules:
 - Security links reuse the native panel scope format:
   `current`, `project:<id>`, or `domain:<domain>`.
 - Gateway links stay inside the native Gateway Settings section.
+- Readiness is a read-only aggregation layer. It must not duplicate or bypass
+  PHP, database, file, deploy, security, or gateway plugin write rules.
+- Each project card exposes machine-readable DOM markers:
+  `data-wls-readiness-state`, `data-wls-config-readiness`, and
+  `data-wls-readiness-check` for browser smoke tests and future plugin
+  contributions.
 
 ## Deploy Standalone Plugin Page
 

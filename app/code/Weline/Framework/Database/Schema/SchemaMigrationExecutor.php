@@ -330,13 +330,14 @@ final class SchemaMigrationExecutor
             }
         }
         $hasCompositePk = count($pkColumns) > 1;
+        $isSqlite = $connector->getConfigProvider()->getDbType() === 'sqlite';
 
         foreach ($payload->columns as $col) {
             $opts = [];
             if ($col->primaryKey && !$hasCompositePk) {
                 $opts[] = 'PRIMARY KEY';
             }
-            if ($col->autoIncrement) {
+            if ($col->autoIncrement && !($isSqlite && $hasCompositePk)) {
                 $opts[] = 'AUTO_INCREMENT';
             }
             if (!$col->nullable && !$col->primaryKey) {

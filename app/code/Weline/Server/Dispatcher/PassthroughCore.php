@@ -67,6 +67,7 @@ class PassthroughCore
     private const IPC_READY_WARMUP_RETRY_GRACE_SEC = 1.0;
     private const IPC_READY_WARMUP_RETRY_DELAY_USEC = 50000;
     private const HEALTH_AUDIT_RECENT_SUCCESS_GRACE_SEC = 30.0;
+    private const RECENT_CONNECT_FAILURE_GRACE_SEC = 5.0;
     /**
      * 首页预热仅用于“提前点燃”应用栈，不参与入池成败判定；因此采用更短预算，避免拖慢维护接流。
      */
@@ -321,7 +322,7 @@ class PassthroughCore
      * Worker 首字节响应超时（秒）
      * 连接已建立但长时间无任何响应字节时，判定该 Worker 假活跃并触发故障转移黑名单
      */
-    private float $firstByteTimeoutSeconds = 2.5;
+    private float $firstByteTimeoutSeconds = 5.0;
 
     /**
      * In SSL passthrough mode the dispatcher cannot see HTTP, but it can see
@@ -339,7 +340,7 @@ class PassthroughCore
      */
     private float $workerHealthConnectTimeoutSec = 2.0;
     private float $workerHealthResponseTimeoutSec = 2.0;
-    private bool $workerHealthAuditEnabled = false;
+    private bool $workerHealthAuditEnabled = true;
 
     /**
      * Worker 全部不可用时的自旋等待总时长（秒）
@@ -758,7 +759,7 @@ class PassthroughCore
                     return $this->registerConnection($connId, $clientSocket, $workerSocket, $workerPort, $clientIp, $sni);
                 }
                 // 缓存的 Worker 连接失败，记录失败并继续尝试其他 Worker
-                $this->recordWorkerFailure($workerPort);
+                $this->recordWorkerFailure($workerPort, true);
             }
             // 清除缓存路由，让后续请求不再路由到失败的 Worker
             if ($fromCache) {
@@ -781,7 +782,7 @@ class PassthroughCore
                 );
                 return $this->registerConnection($connId, $clientSocket, $maintenanceSocket, $maintenancePort, $clientIp, $sni);
             }
-            $this->recordWorkerFailure($maintenancePort);
+            $this->recordWorkerFailure($maintenancePort, true);
             $this->logMaintenanceDecision(
                 'single_worker_maintenance_failed:' . $maintenancePort,
                 "单 Worker 维护直连失败：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
@@ -894,7 +895,7 @@ class PassthroughCore
                 return ['socket' => $maintenanceSocket, 'port' => $maintenancePort];
             }
 
-            $this->recordWorkerFailure($maintenancePort);
+            $this->recordWorkerFailure($maintenancePort, true);
             $this->logMaintenanceDecision(
                 'maintenance_route_failed:' . $maintenancePort,
                 "维护候选接管失败：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
@@ -1072,7 +1073,7 @@ class PassthroughCore
             }
             
             // 连接失败，记录
-            $this->recordWorkerFailure($port);
+            $this->recordWorkerFailure($port, true);
         }
         
         return false;
@@ -1119,7 +1120,7 @@ class PassthroughCore
 
                 return ['socket' => $workerSocket, 'port' => (int)$port];
             }
-            $this->recordWorkerFailure((int)$port);
+            $this->recordWorkerFailure((int)$port, true);
         }
 
         return false;
@@ -1369,27 +1370,47 @@ class PassthroughCore
      *
      * @param int $port Worker 端口
      */
-    private function recordWorkerFailure(int $port): void
+    private function recordWorkerFailure(int $port, bool $debounceRecentSuccess = false): void
     {
         $this->stats['worker_failures']++;
         
         if (!isset($this->workerHealth[$port])) {
             $this->workerHealth[$port] = [
-                'failures' => 1,
+                'failures' => 0,
                 'blacklisted_at' => 0.0,
                 'last_success' => 0.0,
-                'total_failures' => 1,
+                'total_failures' => 0,
             ];
-        } else {
-            $this->workerHealth[$port]['failures']++;
-            $this->workerHealth[$port]['total_failures']++;
         }
+
+        $this->workerHealth[$port]['total_failures']++;
+
+        if ($debounceRecentSuccess && $this->shouldDebounceRecentConnectFailure($port)) {
+            $this->workerHealth[$port]['failures'] = \min(
+                ((int)($this->workerHealth[$port]['failures'] ?? 0)) + 1,
+                self::WORKER_FAIL_THRESHOLD - 1
+            );
+            $this->workerHealth[$port]['blacklisted_at'] = 0.0;
+            return;
+        }
+
+        $this->workerHealth[$port]['failures']++;
         
         // 达到阈值，加入黑名单
         if ($this->workerHealth[$port]['failures'] >= self::WORKER_FAIL_THRESHOLD
             && $this->workerHealth[$port]['blacklisted_at'] <= 0) {
             $this->workerHealth[$port]['blacklisted_at'] = \microtime(true);
         }
+    }
+
+    private function shouldDebounceRecentConnectFailure(int $port): bool
+    {
+        $lastSuccessAt = (float)($this->workerHealth[$port]['last_success'] ?? 0.0);
+        if ($lastSuccessAt <= 0.0) {
+            return false;
+        }
+
+        return (\microtime(true) - $lastSuccessAt) <= self::RECENT_CONNECT_FAILURE_GRACE_SEC;
     }
 
     /**
@@ -3380,7 +3401,7 @@ class PassthroughCore
                     break;
                 }
                 $this->connectionTerminalReasons[$connId] = 'forward_to_worker_worker_write_error:' . (string)$errCode;
-                $this->recordWorkerFailure($workerPort);
+                $this->recordWorkerFailure($workerPort, true);
                 return $totalWritten > 0 ? $totalWritten : -1;
             }
             
@@ -3528,7 +3549,7 @@ class PassthroughCore
                     // 连接已建立但迟迟拿不到首字节：将该 Worker 视为假活跃（hung）
                     // 记录失败并让上层关闭当前连接，后续请求会逐步黑名单该 Worker。
                     if ($this->shouldTreatSilentWorkerAsFailure($conn, $totalBytesForwarded)) {
-                        $this->recordWorkerFailure($workerPort);
+                        $this->recordWorkerFailure($workerPort, true);
                         $this->connectionTerminalReasons[$connId] = 'forward_to_client_first_byte_timeout';
                         return -1;
                     }
@@ -3536,7 +3557,7 @@ class PassthroughCore
                 }
                 
                 // Worker 读取失败（Worker 掉线），记录到健康状态
-                $this->recordWorkerFailure($workerPort);
+                $this->recordWorkerFailure($workerPort, true);
                 $this->connectionTerminalReasons[$connId] = 'forward_to_client_worker_read_error:' . (string)$errCode;
                 return $totalBytesForwarded > 0 ? $totalBytesForwarded : -1;
             }

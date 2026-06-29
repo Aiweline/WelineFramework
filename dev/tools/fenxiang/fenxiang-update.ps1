@@ -13,7 +13,8 @@ param(
         'E:\WelineFramework\Framework-Official\Official',
         'E:\WelineFramework\Framework-Official\Skill',
         'E:\WelineFramework\Framework-Official\Tools',
-        'E:\WelineFramework\Framework-Official\WeShop'
+        'E:\WelineFramework\Framework-Official\WeShop',
+        ([string]::Concat('E:\', [char]0x516C, [char]0x53F8, '\', [char]0x8FDC, [char]0x7A0B, '\src\weline'))
     ),
     [switch]$SkipCommit,
     [switch]$SkipPush,

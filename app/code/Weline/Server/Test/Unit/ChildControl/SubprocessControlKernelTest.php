@@ -510,7 +510,7 @@ PHP);
                     public function markReadyState(bool $isReady = true): void {}
                     public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return false; }
                     public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return false; }
-                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return false; }
+                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool { return false; }
                     public function sendStatusReport(int $connections, int $memory, int $requests): bool { return false; }
                     public function sendLogLine(string $line, string $level, string $processTag): bool { return false; }
                     public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { return false; }
@@ -571,7 +571,7 @@ PHP);
                     public function markReadyState(bool $isReady = true): void {}
                     public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return false; }
                     public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return false; }
-                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return false; }
+                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool { return false; }
                     public function sendStatusReport(int $connections, int $memory, int $requests): bool { return false; }
                     public function sendLogLine(string $line, string $level, string $processTag): bool { return false; }
                     public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { return false; }

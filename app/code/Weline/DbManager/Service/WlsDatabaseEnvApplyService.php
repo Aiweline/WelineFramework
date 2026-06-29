@@ -13,6 +13,8 @@ class WlsDatabaseEnvApplyService
     private const AUDIT_FILE = 'db-manager-audit.jsonl';
     private const APPLY_PHRASE = 'APPLY_DB_ENV';
     private const ROLLBACK_PHRASE = 'ROLLBACK_DB_ENV';
+    private const SLAVE_CREATE_PHRASE = 'CREATE_DB_SLAVE';
+    private const SLAVE_REMOVE_PHRASE = 'REMOVE_DB_SLAVE';
 
     public function __construct(
         private readonly WlsDatabaseProfileService $profileService,
@@ -27,6 +29,212 @@ class WlsDatabaseEnvApplyService
     public function getEnvPlan(array $context): array
     {
         return $this->publicPlan($this->buildEnvPlan($context, false));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    public function getSlavePlan(array $context): array
+    {
+        return $this->publicSlavePlan($this->buildSlavePlan($context, false));
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array{success:bool,message:string,backup_path:string,slave_key:string,runtime_action:string,runtime_action_success:bool,runtime_action_message:string}
+     */
+    public function createSlaveFromPanel(array $input): array
+    {
+        $profileKey = '';
+        $targetPath = '';
+        $slaveKey = '';
+        try {
+            if ((string)($input['confirm_slave_create'] ?? '0') !== '1') {
+                throw new \InvalidArgumentException((string)__('Confirm the database slave create operation before submitting.'));
+            }
+            if (\trim((string)($input['confirm_phrase'] ?? '')) !== self::SLAVE_CREATE_PHRASE) {
+                throw new \InvalidArgumentException((string)__('Type CREATE_DB_SLAVE to create a database slave profile.'));
+            }
+
+            $rawSlaveKey = \trim((string)($input['slave_key'] ?? ''));
+            $slaveKey = $this->safeConnectionKey($rawSlaveKey);
+            $this->assertCreatableSlaveKey($rawSlaveKey, $slaveKey);
+
+            $context = $this->contextFromInput($input);
+            $plan = $this->buildSlavePlan($context, true);
+            if (empty($plan['can_create'])) {
+                throw new \InvalidArgumentException((string)($plan['reason'] ?? __('Database slave create is not available.')));
+            }
+
+            $profileKey = (string)($plan['profile_key'] ?? '');
+            $targetPath = (string)($plan['target_path'] ?? '');
+            $dbConfig = \is_array($plan['db_config'] ?? null) ? $plan['db_config'] : [];
+            $profileConfig = \is_array($plan['profile_config'] ?? null) ? $plan['profile_config'] : [];
+            if ($profileConfig === []) {
+                throw new \RuntimeException((string)__('No enabled project database profile was found.'));
+            }
+            if (!empty($this->resolveSlaveTargetConnection($dbConfig, $slaveKey)['success'])) {
+                throw new \InvalidArgumentException((string)__('The selected database slave key already exists in app/etc/env.php.'));
+            }
+
+            $original = \file_get_contents($targetPath);
+            if (!\is_string($original)) {
+                throw new \RuntimeException((string)__('Unable to read app/etc/env.php before applying database changes.'));
+            }
+
+            $changes = [[
+                'name' => 'slave',
+                'label' => (string)__('Slave Profile'),
+                'before' => (string)__('Missing'),
+                'after' => 'db.slaves.' . $slaveKey,
+            ]];
+            $backup = $this->createBackup($targetPath, $original, $profileKey, $changes);
+            $nextDb = $this->withCreatedSlave($dbConfig, $slaveKey, $profileConfig);
+            if (!Env::getInstance()->setConfig('db', $nextDb)) {
+                throw new \RuntimeException((string)__('Unable to write database config into app/etc/env.php.'));
+            }
+
+            $runtimeResult = $this->applyRuntimeFromInput($input);
+            $this->appendAudit('env_slave_created', [
+                'success' => true,
+                'profile_key' => $profileKey,
+                'slave_key' => $slaveKey,
+                'target_label' => 'db.slaves.' . $slaveKey,
+                'target_path' => $targetPath,
+                'backup_path' => $backup['path'],
+                'runtime_action' => $runtimeResult['action'],
+                'runtime_action_success' => $runtimeResult['success'],
+                'runtime_action_message' => $runtimeResult['message'],
+            ]);
+
+            return [
+                'success' => true,
+                'message' => (string)__('Database slave profile created and env backup created.'),
+                'backup_path' => $backup['path'],
+                'slave_key' => $slaveKey,
+                'runtime_action' => $runtimeResult['action'],
+                'runtime_action_success' => $runtimeResult['success'],
+                'runtime_action_message' => $runtimeResult['message'],
+            ];
+        } catch (\Throwable $throwable) {
+            $message = \mb_substr($throwable->getMessage(), 0, 220);
+            $this->appendAudit('env_slave_create_failed', [
+                'success' => false,
+                'profile_key' => $profileKey,
+                'slave_key' => $slaveKey,
+                'target_path' => $targetPath,
+                'message' => $message,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $message,
+                'backup_path' => '',
+                'slave_key' => $slaveKey,
+                'runtime_action' => WlsDatabaseProfile::RUNTIME_ACTION_NONE,
+                'runtime_action_success' => false,
+                'runtime_action_message' => '',
+            ];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array{success:bool,message:string,backup_path:string,slave_key:string,runtime_action:string,runtime_action_success:bool,runtime_action_message:string}
+     */
+    public function removeSlaveFromPanel(array $input): array
+    {
+        $profileKey = '';
+        $targetPath = '';
+        $slaveKey = '';
+        try {
+            if ((string)($input['confirm_slave_remove'] ?? '0') !== '1') {
+                throw new \InvalidArgumentException((string)__('Confirm the database slave remove operation before submitting.'));
+            }
+            if (\trim((string)($input['confirm_phrase'] ?? '')) !== self::SLAVE_REMOVE_PHRASE) {
+                throw new \InvalidArgumentException((string)__('Type REMOVE_DB_SLAVE to remove a database slave profile.'));
+            }
+
+            $slaveKey = $this->safeConnectionKey((string)($input['slave_key'] ?? ''));
+            if ($slaveKey === '') {
+                throw new \InvalidArgumentException((string)__('Select an existing database slave profile before removing it.'));
+            }
+
+            $context = $this->contextFromInput($input);
+            $plan = $this->buildSlavePlan($context, true);
+            if (empty($plan['can_remove'])) {
+                throw new \InvalidArgumentException((string)($plan['reason'] ?? __('No database slave profiles are available to remove.')));
+            }
+
+            $profileKey = (string)($plan['profile_key'] ?? '');
+            $targetPath = (string)($plan['target_path'] ?? '');
+            $dbConfig = \is_array($plan['db_config'] ?? null) ? $plan['db_config'] : [];
+            $targetConnection = $this->resolveSlaveTargetConnection($dbConfig, $slaveKey);
+            if (empty($targetConnection['success'])) {
+                throw new \InvalidArgumentException((string)($targetConnection['message'] ?? __('The selected database slave profile was not found in app/etc/env.php.')));
+            }
+
+            $original = \file_get_contents($targetPath);
+            if (!\is_string($original)) {
+                throw new \RuntimeException((string)__('Unable to read app/etc/env.php before applying database changes.'));
+            }
+
+            $label = (string)($targetConnection['label'] ?? ('db.slaves.' . $slaveKey));
+            $changes = [[
+                'name' => 'slave',
+                'label' => (string)__('Slave Profile'),
+                'before' => $label,
+                'after' => (string)__('Removed'),
+            ]];
+            $backup = $this->createBackup($targetPath, $original, $profileKey, $changes);
+            $nextDb = $this->withRemovedSlave($dbConfig, $targetConnection['slave_key'] ?? null);
+            if (!Env::getInstance()->setConfig('db', $nextDb)) {
+                throw new \RuntimeException((string)__('Unable to write database config into app/etc/env.php.'));
+            }
+
+            $runtimeResult = $this->applyRuntimeFromInput($input);
+            $this->appendAudit('env_slave_removed', [
+                'success' => true,
+                'profile_key' => $profileKey,
+                'slave_key' => $slaveKey,
+                'target_label' => $label,
+                'target_path' => $targetPath,
+                'backup_path' => $backup['path'],
+                'runtime_action' => $runtimeResult['action'],
+                'runtime_action_success' => $runtimeResult['success'],
+                'runtime_action_message' => $runtimeResult['message'],
+            ]);
+
+            return [
+                'success' => true,
+                'message' => (string)__('Database slave profile removed and env backup created.'),
+                'backup_path' => $backup['path'],
+                'slave_key' => $slaveKey,
+                'runtime_action' => $runtimeResult['action'],
+                'runtime_action_success' => $runtimeResult['success'],
+                'runtime_action_message' => $runtimeResult['message'],
+            ];
+        } catch (\Throwable $throwable) {
+            $message = \mb_substr($throwable->getMessage(), 0, 220);
+            $this->appendAudit('env_slave_remove_failed', [
+                'success' => false,
+                'profile_key' => $profileKey,
+                'slave_key' => $slaveKey,
+                'target_path' => $targetPath,
+                'message' => $message,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => $message,
+                'backup_path' => '',
+                'slave_key' => $slaveKey,
+                'runtime_action' => WlsDatabaseProfile::RUNTIME_ACTION_NONE,
+                'runtime_action_success' => false,
+                'runtime_action_message' => '',
+            ];
+        }
     }
 
     /**
@@ -294,6 +502,79 @@ class WlsDatabaseEnvApplyService
     }
 
     /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    private function buildSlavePlan(array $context, bool $includeSensitive): array
+    {
+        $latestBackup = null;
+        try {
+            $profile = $this->profileService->loadForContext($context);
+            if (!$profile instanceof WlsDatabaseProfile || (int)$profile->getData(WlsDatabaseProfile::schema_fields_ID) <= 0) {
+                return $this->emptySlavePlan((string)__('Save a Project Database Profile before creating or removing database slave profiles.'));
+            }
+            $profileKey = (string)$profile->getData(WlsDatabaseProfile::schema_fields_PROFILE_KEY);
+            if ((int)$profile->getData(WlsDatabaseProfile::schema_fields_ENABLED) !== 1) {
+                return $this->emptySlavePlan((string)__('Enable the Project Database Profile before creating or removing database slave profiles.'), $profileKey);
+            }
+
+            $target = $this->resolveEnvFilePath(Env::path_ENV_FILE);
+            if (empty($target['success'])) {
+                return $this->emptySlavePlan((string)$target['message'], $profileKey);
+            }
+            $targetPath = (string)$target['path'];
+            $latestBackup = $this->latestBackupFor($profileKey, $targetPath);
+            $dbConfig = (array)Env::getInstance()->getConfig('db', []);
+            $sourceKey = (string)$profile->getData(WlsDatabaseProfile::schema_fields_SOURCE_CONNECTION_KEY);
+            $sourceConnection = $this->resolveTargetConnection($dbConfig, $sourceKey);
+            $sourceProfile = !empty($sourceConnection['success']) && \is_array($sourceConnection['existing'] ?? null)
+                ? (array)$sourceConnection['existing']
+                : [];
+            $profileConfig = $this->profileService->buildConnectionConfigForContextWithSource($context, $sourceProfile);
+            if ($profileConfig === null) {
+                return $this->emptySlavePlan((string)__('No enabled project database profile was found.'), $profileKey, $latestBackup);
+            }
+
+            $slaves = $this->slaveSummaries($dbConfig);
+            $passwordSource = \trim((string)$profile->getData(WlsDatabaseProfile::schema_fields_PASSWORD_SECRET)) !== ''
+                ? 'profile'
+                : (\trim((string)($sourceProfile['password'] ?? '')) !== '' ? 'env' : 'empty');
+
+            $plan = [
+                'can_create' => true,
+                'can_remove' => $slaves !== [],
+                'reason' => '',
+                'target_path' => $targetPath,
+                'profile_key' => $profileKey,
+                'source_connection_key' => $this->safeConnectionKey($sourceKey),
+                'password_source' => $passwordSource,
+                'slaves' => $slaves,
+                'latest_backup' => $latestBackup,
+                'create_phrase' => self::SLAVE_CREATE_PHRASE,
+                'remove_phrase' => self::SLAVE_REMOVE_PHRASE,
+            ];
+            if ($includeSensitive) {
+                $plan['db_config'] = $dbConfig;
+                $plan['profile_config'] = $profileConfig;
+            }
+
+            return $plan;
+        } catch (\Throwable $throwable) {
+            return $this->emptySlavePlan(\mb_substr($throwable->getMessage(), 0, 220), '', $latestBackup);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $plan
+     * @return array<string, mixed>
+     */
+    private function publicSlavePlan(array $plan): array
+    {
+        unset($plan['db_config'], $plan['profile_config']);
+        return $plan;
+    }
+
+    /**
      * @param array<string, mixed> $input
      * @return array<string, string>
      */
@@ -414,6 +695,88 @@ class WlsDatabaseEnvApplyService
         }
 
         return \array_replace($dbConfig, $nextConnection);
+    }
+
+    /**
+     * @param array<string, mixed> $dbConfig
+     * @param array<string, mixed> $slaveConnection
+     * @return array<string, mixed>
+     */
+    private function withCreatedSlave(array $dbConfig, string $slaveKey, array $slaveConnection): array
+    {
+        $slaves = \is_array($dbConfig['slaves'] ?? null) ? (array)$dbConfig['slaves'] : [];
+        $slaves[$slaveKey] = $slaveConnection;
+        $dbConfig['slaves'] = $slaves;
+        return $dbConfig;
+    }
+
+    /**
+     * @param array<string, mixed> $dbConfig
+     * @return array<string, mixed>
+     */
+    private function withRemovedSlave(array $dbConfig, int|string|null $slaveKey): array
+    {
+        if (!\is_int($slaveKey) && !\is_string($slaveKey)) {
+            throw new \RuntimeException((string)__('The selected database slave profile was not found in app/etc/env.php.'));
+        }
+        $slaves = \is_array($dbConfig['slaves'] ?? null) ? (array)$dbConfig['slaves'] : [];
+        if (!\array_key_exists($slaveKey, $slaves)) {
+            throw new \RuntimeException((string)__('The selected database slave profile was not found in app/etc/env.php.'));
+        }
+
+        unset($slaves[$slaveKey]);
+        $dbConfig['slaves'] = $slaves;
+        return $dbConfig;
+    }
+
+    private function assertCreatableSlaveKey(string $rawSlaveKey, string $slaveKey): void
+    {
+        if ($slaveKey === '' || $rawSlaveKey !== $slaveKey || !\preg_match('/^[a-z][a-z0-9_.-]{0,79}$/', $slaveKey)) {
+            throw new \InvalidArgumentException((string)__('Use a lowercase slave key that starts with a letter and contains only letters, numbers, dot, underscore, or hyphen.'));
+        }
+        if (\in_array($slaveKey, ['master', 'default', 'db', 'slaves', 'project_profile'], true)) {
+            throw new \InvalidArgumentException((string)__('The selected database slave key is reserved.'));
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $dbConfig
+     * @return array<int, array<string, string>>
+     */
+    private function slaveSummaries(array $dbConfig): array
+    {
+        $slaves = \is_array($dbConfig['slaves'] ?? null) ? (array)$dbConfig['slaves'] : [];
+        $summaries = [];
+        $index = 1;
+        $seenKeys = [];
+        foreach ($slaves as $key => $slaveConfig) {
+            if (!\is_array($slaveConfig)) {
+                continue;
+            }
+            $profileKey = \is_string($key) && \trim($key) !== ''
+                ? $this->safeConnectionKey($key)
+                : 'slave_' . $index;
+            if ($profileKey === '' || isset($seenKeys[$profileKey])) {
+                $profileKey = 'slave_' . $index;
+            }
+            $seenKeys[$profileKey] = true;
+
+            $type = \strtolower(\trim((string)($slaveConfig['type'] ?? $slaveConfig['driver'] ?? '')));
+            if ($type === '') {
+                $type = \trim((string)($slaveConfig['path'] ?? '')) !== '' ? 'sqlite' : 'mysql';
+            }
+            $summaries[] = [
+                'key' => $profileKey,
+                'label' => $this->slaveTargetLabel($key),
+                'type' => $type,
+                'database' => \mb_substr(\trim((string)($slaveConfig['database'] ?? $slaveConfig['dbname'] ?? $slaveConfig['name'] ?? $slaveConfig['path'] ?? '')), 0, 120),
+                'username' => $this->maskValue((string)($slaveConfig['username'] ?? $slaveConfig['user'] ?? '')),
+                'password_state' => \trim((string)($slaveConfig['password'] ?? '')) !== '' ? (string)__('Configured') : (string)__('Empty'),
+            ];
+            $index++;
+        }
+
+        return $summaries;
     }
 
     /**
@@ -693,6 +1056,26 @@ class WlsDatabaseEnvApplyService
             'latest_backup' => $latestBackup,
             'apply_phrase' => self::APPLY_PHRASE,
             'rollback_phrase' => self::ROLLBACK_PHRASE,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptySlavePlan(string $reason, string $profileKey = '', ?array $latestBackup = null): array
+    {
+        return [
+            'can_create' => false,
+            'can_remove' => false,
+            'reason' => $reason,
+            'target_path' => '',
+            'profile_key' => $profileKey,
+            'source_connection_key' => '',
+            'password_source' => 'empty',
+            'slaves' => [],
+            'latest_backup' => $latestBackup,
+            'create_phrase' => self::SLAVE_CREATE_PHRASE,
+            'remove_phrase' => self::SLAVE_REMOVE_PHRASE,
         ];
     }
 
