@@ -13,6 +13,7 @@ namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
@@ -1083,13 +1084,49 @@ class Url implements UrlInterface
 
     public static array $parserUrlCache = [];
 
+    /**
+     * @param array<string, mixed> $context
+     */
+    private static function buildUrlRequestCacheKey(string $scope, string $url, array $context = []): string
+    {
+        $currentServer = self::currentServer();
+        $parserServer = self::$parserServer;
+        $contextValue = static function (string $key, string $fallback = '') use ($currentServer, $parserServer): string {
+            $value = (string)($parserServer[$key] ?? '');
+            if ($value !== '') {
+                return $value;
+            }
+            return (string)($currentServer[$key] ?? $fallback);
+        };
+        $scopeContext = [
+            'scope' => $scope,
+            'url' => $url,
+            'area' => $contextValue('WELINE_AREA'),
+            'area_route' => $contextValue('WELINE_AREA_ROUTE'),
+            'website_id' => $contextValue('WELINE_WEBSITE_ID'),
+            'website_code' => $contextValue('WELINE_WEBSITE_CODE'),
+            'website_url' => $contextValue('WELINE_WEBSITE_URL'),
+            'lang' => $contextValue('WELINE_USER_LANG'),
+            'currency' => $contextValue('WELINE_USER_CURRENCY'),
+            'host' => (string)($currentServer['HTTP_HOST'] ?? $currentServer['SERVER_NAME'] ?? $parserServer['HTTP_HOST'] ?? $parserServer['SERVER_NAME'] ?? ''),
+            'request_uri' => (string)($currentServer['WELINE_ORIGIN_REQUEST_URI'] ?? $currentServer['REQUEST_URI'] ?? $parserServer['WELINE_ORIGIN_REQUEST_URI'] ?? $parserServer['REQUEST_URI'] ?? ''),
+            'full_request_uri' => (string)($currentServer['WELINE_FULL_REQUEST_URI'] ?? $parserServer['WELINE_FULL_REQUEST_URI'] ?? ''),
+        ];
+
+        return KeyBuilder::requestScopeHash(
+            \array_replace($scopeContext, $context),
+            ['full_request_uri' => false]
+        );
+    }
+
     public static function parse_url(string $url, string $key = '', string $default = ''): array|string
     {
-        if (isset(self::$parserUrlCache[$url])) {
+        $cacheKey = self::buildUrlRequestCacheKey('parse_url', $url);
+        if (isset(self::$parserUrlCache[$cacheKey])) {
             if ($key) {
-                return self::$parserUrlCache[$url][$key] ?? $default;
+                return self::$parserUrlCache[$cacheKey][$key] ?? $default;
             }
-            return self::$parserUrlCache[$url];
+            return self::$parserUrlCache[$cacheKey];
         }
         try {
             $parsed = parse_url($url);
@@ -1099,22 +1136,23 @@ class Url implements UrlInterface
                 \w_log_warning('[Url] parse_url failed for malformed URL: ' . $e->getMessage());
             }
         }
-        self::$parserUrlCache[$url] = is_array($parsed) ? $parsed : [];
+        self::$parserUrlCache[$cacheKey] = is_array($parsed) ? $parsed : [];
         if ($key) {
-            return self::$parserUrlCache[$url][$key] ?? $default;
+            return self::$parserUrlCache[$cacheKey][$key] ?? $default;
         }
-        return self::$parserUrlCache[$url];
+        return self::$parserUrlCache[$cacheKey];
     }
 
     public static array $splitUrlCache = [];
 
     public static function split_url(string $url, string $key = '', string $default = ''): array|string
     {
-        if (isset(self::$splitUrlCache[$url])) {
+        $cacheKey = self::buildUrlRequestCacheKey('split_url', $url);
+        if (isset(self::$splitUrlCache[$cacheKey])) {
             if ($key) {
-                return self::$splitUrlCache[$url][$key] ?? $default;
+                return self::$splitUrlCache[$cacheKey][$key] ?? $default;
             }
-            return self::$splitUrlCache[$url];
+            return self::$splitUrlCache[$cacheKey];
         }
         $parse = self::parse_url($url);
         if (!is_array($parse)) {
@@ -1125,13 +1163,13 @@ class Url implements UrlInterface
         if ($path) {
             $paths = explode('/', trim($path, '/'));
         }
-        self::$splitUrlCache[$url]['path'] = $parse['path'] ?? '';
-        self::$splitUrlCache[$url]['split'] = $paths;
-        self::$splitUrlCache[$url]['query'] = $parse['query'] ?? '';
+        self::$splitUrlCache[$cacheKey]['path'] = $parse['path'] ?? '';
+        self::$splitUrlCache[$cacheKey]['split'] = $paths;
+        self::$splitUrlCache[$cacheKey]['query'] = $parse['query'] ?? '';
         if ($key) {
-            return self::$splitUrlCache[$url][$key] ?? $default;
+            return self::$splitUrlCache[$cacheKey][$key] ?? $default;
         }
-        return self::$splitUrlCache[$url];
+        return self::$splitUrlCache[$cacheKey];
     }
 
     public static array $parserCache = [];
@@ -1242,6 +1280,9 @@ class Url implements UrlInterface
             return $url;
         }
         $perfMark('request_url');
+        $parserCacheKey = self::buildUrlRequestCacheKey('parser', $url, [
+            'input_url' => $parse_url,
+        ]);
         // 如果 self::$parserSites 已经初始化，直接使用，避免重复事件分发
         if (empty(self::$parserSites)) {
             self::$parsingInProgress = true;
@@ -1487,11 +1528,11 @@ class Url implements UrlInterface
             }
         }
         # 完全url匹配  比如只有语言，或者只有货币的情况
-        if (isset(self::$parserCache[$url])) {
+        if (isset(self::$parserCache[$parserCacheKey])) {
             if ($key) {
-                return self::$parserCache[$url][$key] ?? '';
+                return self::$parserCache[$parserCacheKey][$key] ?? '';
             }
-            return self::$parserCache[$url];
+            return self::$parserCache[$parserCacheKey];
         }
         $perfMark('prefix_cache');
         # 如果还有路由
@@ -1801,7 +1842,7 @@ class Url implements UrlInterface
         }
         $perfMark('done');
         $data['_perf'] = $perfMarks;
-        self::$parserCache[$url] = $data;
+        self::$parserCache[$parserCacheKey] = $data;
         if ($key) {
             return $data[$key] ?? '';
         }
@@ -1831,17 +1872,20 @@ class Url implements UrlInterface
 
     public static function decode_url(string $url): string
     {
-        if (isset(self::$decode_urls[$url])) {
-            return self::$decode_urls[$url];
+        $decodeCacheKey = self::buildUrlRequestCacheKey('decode_url', $url);
+        if (isset(self::$decode_urls[$decodeCacheKey])) {
+            return self::$decode_urls[$decodeCacheKey];
         }
         # decode seo url
         if (Env::get('seo')) {
             $websiteId = (string)(self::currentServer()['WELINE_WEBSITE_ID'] ?? self::$parserServer['WELINE_WEBSITE_ID'] ?? '');
-            $processCacheKey = $websiteId . ':' . $url;
+            $processCacheKey = self::buildUrlRequestCacheKey('decode_url_process', $url, [
+                'website_id' => $websiteId,
+            ]);
             $expiresAt = self::$processDecodeUrlExpiresAt[$processCacheKey] ?? 0;
             if ($expiresAt >= \time() && \array_key_exists($processCacheKey, self::$processDecodeUrls)) {
                 $cachedUrl = (string)self::$processDecodeUrls[$processCacheKey];
-                self::$decode_urls[$url] = $cachedUrl;
+                self::$decode_urls[$decodeCacheKey] = $cachedUrl;
                 return $cachedUrl;
             }
             unset(self::$processDecodeUrls[$processCacheKey], self::$processDecodeUrlExpiresAt[$processCacheKey]);
@@ -1857,11 +1901,11 @@ class Url implements UrlInterface
             }
             
             // 缓存原始URL到解码后URL的映射
-            self::$decode_urls[$origin_url] = $url;
+            self::$decode_urls[self::buildUrlRequestCacheKey('decode_url', $origin_url)] = $url;
             
             // 关键：如果URL发生了变化，也缓存解码后的URL指向自己，避免二次解码
             if ($url !== $origin_url) {
-                self::$decode_urls[$url] = $url;
+                self::$decode_urls[self::buildUrlRequestCacheKey('decode_url', $url)] = $url;
             }
             if (\count(self::$processDecodeUrls) >= self::PROCESS_DECODE_CACHE_MAX_ITEMS) {
                 \array_shift(self::$processDecodeUrls);

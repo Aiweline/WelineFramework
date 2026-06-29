@@ -26,6 +26,8 @@ class Parser
 
     public static bool $loaded = false;
     public const PARSER_WORDS_CACHE_KEY = 'PARSER_WORDS_CACHE_KEY';
+    private const WLS_HEAVY_LOCALE_HEADROOM_BYTES = 100663296;
+    private const WLS_HEAVY_LOCALE_PRESSURE_THRESHOLD = 0.70;
     protected static array $words = [];
     protected static array $workerWordsCache = [];
     protected static array $workerLocaleWordsCache = [];
@@ -697,6 +699,10 @@ class Parser
         }
 
         $global_dictionary_words = $includeGlobalDictionary ? self::loadGlobalDictionaryWords($lang) : [];
+        if (self::shouldSkipHeavyLocaleDictionaryLoad()) {
+            return $global_dictionary_words;
+        }
+
         $words_file = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
         if (is_file($words_file)) {
             try {
@@ -769,6 +775,47 @@ class Parser
         }
 
         return $all_words;
+    }
+
+    private static function shouldSkipHeavyLocaleDictionaryLoad(): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return false;
+        }
+
+        $limitBytes = self::getMemoryLimitBytes();
+        if ($limitBytes <= 0) {
+            return false;
+        }
+
+        $usedBytes = \memory_get_usage(false);
+        $headroomBytes = $limitBytes - $usedBytes;
+        if ($headroomBytes < self::WLS_HEAVY_LOCALE_HEADROOM_BYTES) {
+            return true;
+        }
+
+        return ($usedBytes / $limitBytes) >= self::WLS_HEAVY_LOCALE_PRESSURE_THRESHOLD;
+    }
+
+    private static function getMemoryLimitBytes(): int
+    {
+        $limit = \trim((string)\ini_get('memory_limit'));
+        if ($limit === '' || $limit === '-1') {
+            return 0;
+        }
+
+        $unit = \strtolower(\substr($limit, -1));
+        $value = (float)$limit;
+        if ($value <= 0) {
+            return 0;
+        }
+
+        return match ($unit) {
+            'g' => (int)($value * 1024 * 1024 * 1024),
+            'm' => (int)($value * 1024 * 1024),
+            'k' => (int)($value * 1024),
+            default => (int)$value,
+        };
     }
 
     /**

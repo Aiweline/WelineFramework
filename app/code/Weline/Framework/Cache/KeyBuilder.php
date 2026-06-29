@@ -100,6 +100,76 @@ class KeyBuilder
     }
 
     /**
+     * Build a request-local scope for caches that depend on the active URL
+     * context. This keeps WLS long-lived workers from sharing values across
+     * language, currency, website, or area-prefix changes.
+     *
+     * @param array<string, mixed> $context
+     * @param array<string, bool> $dimensions
+     * @return array<string, mixed>
+     */
+    public static function requestScopeContext(array $context = [], array $dimensions = []): array
+    {
+        $dimensions = \array_merge([
+            'area' => true,
+            'area_route' => true,
+            'website' => true,
+            'website_url' => true,
+            'host' => true,
+            'base_url' => true,
+            'lang' => true,
+            'lang_local' => true,
+            'currency' => true,
+            'request_prefix' => true,
+            'full_request_uri' => false,
+        ], $dimensions);
+
+        $scope = self::environmentContext([], [
+            'area' => !empty($dimensions['area']),
+            'area_route' => !empty($dimensions['area_route']),
+            'website' => !empty($dimensions['website']),
+            'website_url' => !empty($dimensions['website_url']),
+            'host' => !empty($dimensions['host']),
+            'base_url' => !empty($dimensions['base_url']),
+            'lang' => !empty($dimensions['lang']),
+            'lang_local' => !empty($dimensions['lang_local']),
+            'currency' => !empty($dimensions['currency']),
+        ]);
+        $scope['schema'] = 'request-cache-v1';
+
+        if (!empty($dimensions['request_prefix'])) {
+            $scope['request_prefix'] = self::resolveRequestPathPrefix();
+        }
+        if (!empty($dimensions['full_request_uri'])) {
+            $scope['full_request_uri'] = self::resolveFullRequestUri();
+        }
+
+        return self::normalizeContextValue(\array_replace($scope, $context));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string, bool> $dimensions
+     */
+    public static function requestScopeHash(array $context = [], array $dimensions = []): string
+    {
+        return \sha1(self::stableEncode(self::requestScopeContext($context, $dimensions)));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @param array<string, bool> $dimensions
+     */
+    public static function buildRequestScoped(
+        string $identity,
+        string $key,
+        array $context = [],
+        array $dimensions = []
+    ): string {
+        return self::buildWithContext($identity, $key, self::requestScopeContext($context, $dimensions));
+    }
+
+    /**
      * Build the default environment context for rendered output.
      *
      * Dimensions are opt-out to keep the common output-cache path safe while
@@ -113,7 +183,9 @@ class KeyBuilder
     {
         $dimensions = \array_merge([
             'area' => true,
+            'area_route' => true,
             'website' => true,
+            'website_url' => true,
             'host' => true,
             'base_url' => true,
             'lang' => true,
@@ -125,11 +197,21 @@ class KeyBuilder
         if (!empty($dimensions['area'])) {
             $environment['area'] = self::getAreaKey();
         }
+        if (!empty($dimensions['area_route'])) {
+            $environment['area_route'] = (string)self::requestScopeValue('area_route', 'WELINE_AREA_ROUTE', '');
+        }
         if (!empty($dimensions['website'])) {
-            $environment['website'] = (string)(\w_env('website_code', '') ?: \w_env('website.id', '') ?: '');
+            $environment['website'] = (string)(
+                self::requestScopeValue('website_code', 'WELINE_WEBSITE_CODE', '')
+                ?: self::requestScopeValue('website.id', 'WELINE_WEBSITE_ID', '')
+                ?: self::requestScopeValue('website_id', 'WELINE_WEBSITE_ID', '')
+            );
+        }
+        if (!empty($dimensions['website_url'])) {
+            $environment['website_url'] = (string)self::requestScopeValue('website.url', 'WELINE_WEBSITE_URL', '');
         }
         if (!empty($dimensions['host'])) {
-            $environment['host'] = (string)\w_env('server.http_host', '');
+            $environment['host'] = (string)self::requestScopeValue('server.http_host', 'HTTP_HOST', '');
         }
         if (!empty($dimensions['base_url'])) {
             $environment['base_url'] = self::resolveBaseUrlForEnvironmentContext();
@@ -183,8 +265,22 @@ class KeyBuilder
         ?string $domain = null,
         ?string $area = null
     ): string {
+        $rawUri = $uri;
         $uri = self::normalizeUri($uri);
-        return self::buildWithDomain('router', $uri . ':' . $method, $domain, $area);
+        $context = ['raw_uri' => $rawUri];
+        if ($domain !== null) {
+            $context['host'] = $domain;
+        }
+        if ($area !== null) {
+            $context['area'] = $area;
+        }
+
+        return self::buildRequestScoped(
+            'router',
+            'route:' . $uri . ':' . \strtoupper($method ?: 'GET'),
+            $context,
+            ['full_request_uri' => false]
+        );
     }
 
     /**
@@ -211,8 +307,8 @@ class KeyBuilder
      */
     public static function getDomainKey(): string
     {
-        $websiteCode = \w_env('website_code', '');
-        $host = \w_env('server.http_host', '');
+        $websiteCode = (string)self::requestScopeValue('website_code', 'WELINE_WEBSITE_CODE', '');
+        $host = (string)self::requestScopeValue('server.http_host', 'HTTP_HOST', '');
 
         return $websiteCode ?: $host;
     }
@@ -224,23 +320,100 @@ class KeyBuilder
      */
     public static function getAreaKey(): string
     {
-        return \w_env('area', 'frontend');
+        return (string)self::requestScopeValue('area', 'WELINE_AREA', 'frontend');
     }
 
     private static function resolveBaseUrlForEnvironmentContext(): string
     {
-        $baseUrl = (string)\w_env('base_url', '');
+        $baseUrl = (string)self::requestScopeValue('base_url', '', '');
         if ($baseUrl !== '') {
             return $baseUrl;
         }
 
-        $scheme = (string)\w_env('request.scheme', '');
-        $host = (string)\w_env('server.http_host', '');
+        $scheme = (string)self::requestScopeValue('request.scheme', 'REQUEST_SCHEME', '');
+        $host = (string)self::requestScopeValue('server.http_host', 'HTTP_HOST', '');
         if ($scheme !== '' && $host !== '') {
             return $scheme . '://' . $host;
         }
 
         return $host;
+    }
+
+    private static function resolveFullRequestUri(): string
+    {
+        $fullUri = (string)self::requestScopeValue('full_request_uri', 'WELINE_FULL_REQUEST_URI', '');
+        if ($fullUri !== '' && \str_contains($fullUri, '://')) {
+            return $fullUri;
+        }
+
+        $scheme = (string)self::requestScopeValue('request.scheme', 'REQUEST_SCHEME', 'http');
+        $host = (string)self::requestScopeValue('server.http_host', 'HTTP_HOST', 'localhost');
+        $path = (string)self::requestScopeValue('request.uri', 'REQUEST_URI', '/');
+        if ($path !== '' && \str_contains($path, '://')) {
+            return $path;
+        }
+
+        return $scheme . '://' . $host . (\str_starts_with($path, '/') ? '' : '/') . ($path ?: '/');
+    }
+
+    private static function resolveRequestPathPrefix(): string
+    {
+        $uris = [
+            (string)self::requestScopeValue('origin_request_uri', 'WELINE_ORIGIN_REQUEST_URI', ''),
+            self::resolveFullRequestUri(),
+            (string)self::requestScopeValue('request.uri', 'REQUEST_URI', ''),
+        ];
+
+        foreach ($uris as $uri) {
+            if ($uri === '' || $uri === '/') {
+                continue;
+            }
+
+            try {
+                $path = (string)(\parse_url($uri, \PHP_URL_PATH) ?: $uri);
+            } catch (\ValueError) {
+                $path = $uri;
+            }
+            $segments = \array_values(\array_filter(
+                \explode('/', \trim($path, '/')),
+                static fn (string $segment): bool => $segment !== ''
+            ));
+            if ($segments !== []) {
+                return \implode('/', \array_slice($segments, 0, 3));
+            }
+        }
+
+        return '';
+    }
+
+    private static function requestScopeValue(string $envKey, string $serverKey = '', mixed $default = ''): mixed
+    {
+        $value = null;
+        if ($serverKey !== '' && isset($_SERVER[$serverKey]) && $_SERVER[$serverKey] !== '') {
+            return $_SERVER[$serverKey];
+        }
+
+        if ($envKey !== '' && \function_exists('w_env')) {
+            $value = \w_env($envKey, null);
+            if ($value !== null && $value !== '') {
+                return $value;
+            }
+        }
+
+        if ($serverKey !== '') {
+            try {
+                if (\class_exists(\Weline\Framework\Env\WelineEnv::class)) {
+                    $value = \Weline\Framework\Env\WelineEnv::server($serverKey, null);
+                    if ($value !== null && $value !== '') {
+                        return $value;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+
+        }
+
+        return $default;
     }
 
     /**
@@ -294,7 +467,7 @@ class KeyBuilder
     {
         $uri = self::normalizeUri($uri);
         $fullUri = \w_env('full_request_uri', $uri);
-        return self::build('router', 'url:' . $fullUri . ':' . $method);
+        return self::buildRouterScopedCacheKey('url', (string)$fullUri, $method);
     }
 
     /**
@@ -308,7 +481,7 @@ class KeyBuilder
     {
         $uri = self::normalizeUri($uri);
         $fullUri = \w_env('full_request_uri', $uri);
-        return self::build('router', 'rule:' . $fullUri . ':' . $method);
+        return self::buildRouterScopedCacheKey('rule', (string)$fullUri, $method);
     }
 
     /**
@@ -322,7 +495,7 @@ class KeyBuilder
     {
         $uri = self::normalizeUri($uri);
         $fullUri = \w_env('full_request_uri', $uri);
-        return self::build('router', 'start:' . $fullUri . ':' . $method);
+        return self::buildRouterScopedCacheKey('start', (string)$fullUri, $method);
     }
 
     /**
@@ -384,7 +557,17 @@ class KeyBuilder
             );
         }
 
-        return self::build('router', 'unified:' . $fullUri . ':' . $method);
+        return self::buildRouterScopedCacheKey('unified', $fullUri, $method);
+    }
+
+    private static function buildRouterScopedCacheKey(string $type, string $fullUri, string $method): string
+    {
+        return self::buildRequestScoped(
+            'router',
+            $type . ':' . $fullUri . ':' . \strtoupper($method ?: 'GET'),
+            [],
+            ['full_request_uri' => false]
+        );
     }
 
     /**
@@ -400,6 +583,10 @@ class KeyBuilder
         array $legacyFpcLangLocals = []
     ): array {
         $keys = [
+            self::buildRouterScopedCacheKey('unified', $fullUri, $method),
+            self::buildRouterScopedCacheKey('url', $fullUri, $method),
+            self::buildRouterScopedCacheKey('rule', $fullUri, $method),
+            self::buildRouterScopedCacheKey('start', $fullUri, $method),
             self::build('router', 'unified:' . $fullUri . ':' . $method),
             self::build('router', 'url:' . $fullUri . ':' . $method),
             self::build('router', 'rule:' . $fullUri . ':' . $method),
@@ -412,6 +599,6 @@ class KeyBuilder
             $keys[] = self::build('router', 'fpc:' . $fullUri . ':' . $lang);
         }
 
-        return $keys;
+        return \array_values(\array_unique($keys));
     }
 }

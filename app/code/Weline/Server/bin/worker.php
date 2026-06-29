@@ -1234,6 +1234,8 @@ $memoryCheckInterval = 5;
 $lastMemoryCheck = \time();
 $memoryWarningThreshold = 0.80;
 $memoryDrainThreshold = 0.88;
+$requestGcInterval = 50;
+$lastRequestGcCount = 0;
 
 // 最大请求数限制（可选的内存保护措施）
 $maxRequests = 10000; // 处理 10000 个请求后优雅重启（0=禁用）
@@ -1286,14 +1288,84 @@ $sessionReadyTimeout = 30.0;   // Session 连接超时（秒）
 $gracefulShutdownTimeout = 30; // 热重载时等待活跃请求的最大时间（秒）
 $stopShutdownTimeout = 3;      // server:stop 时等待连接的最大时间（秒）
 
-$gracefulExit = function (string $reason = '', bool $waitForRequests = true) use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, &$activeRequests, $processName, $gracefulShutdownTimeout, $stopShutdownTimeout, &$ipcClient, $workerId, $port, $isMaintenanceWorker) {
+$plannedExitReason = '';
+$exitReasonSent = false;
+$buildWorkerRuntimeSnapshot = static function (string $event = 'runtime') use (
+    &$connections,
+    &$activeRequests,
+    &$requestCount,
+    &$longLivedConnections,
+    &$activeFibers,
+    &$writableConnections,
+    &$pendingClose,
+    &$plannedExitReason,
+    &$shouldExit,
+    &$ipcDraining,
+    $workerId,
+    $port,
+    $startTime,
+    $wlsMemoryLimit,
+    &$maxMemoryBytes
+): array {
+    $memoryUsed = \memory_get_usage(false);
+    $memoryAllocated = \memory_get_usage(true);
+    $memoryPercent = $maxMemoryBytes > 0 ? \round($memoryUsed / $maxMemoryBytes, 4) : 0.0;
+
+    return [
+        'event' => $event,
+        'worker_id' => $workerId,
+        'port' => $port,
+        'pid' => \getmypid(),
+        'connections' => \count($connections),
+        'active_requests' => $activeRequests,
+        'requests' => $requestCount,
+        'long_lived_connections' => \count($longLivedConnections),
+        'active_fibers' => \count($activeFibers),
+        'writable_connections' => \count($writableConnections),
+        'pending_close' => \count($pendingClose),
+        'memory_used' => $memoryUsed,
+        'memory_allocated' => $memoryAllocated,
+        'memory_peak' => \memory_get_peak_usage(true),
+        'memory_peak_used' => \memory_get_peak_usage(false),
+        'memory_percent' => $memoryPercent,
+        'max_memory_bytes' => $maxMemoryBytes,
+        'memory_limit' => $wlsMemoryLimit,
+        'uptime' => \max(0, \time() - $startTime),
+        'planned_exit_reason' => $plannedExitReason,
+        'should_exit' => $shouldExit ? 1 : 0,
+        'ipc_draining' => $ipcDraining ? 1 : 0,
+        'ts' => \microtime(true),
+    ];
+};
+$sendExitReasonToMaster = static function (string $reason, int $code = 0, array $context = []) use (&$ipcClient, &$exitReasonSent, $buildWorkerRuntimeSnapshot): void {
+    $reason = \trim($reason);
+    if ($exitReasonSent || $reason === '' || !$ipcClient || !$ipcClient->isConnected()) {
+        return;
+    }
+
+    try {
+        $ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason(
+            \substr($reason, 0, 512),
+            $code,
+            \array_merge($buildWorkerRuntimeSnapshot('exit_reason'), $context)
+        ));
+        $ipcClient->flushPendingWrites(0.2);
+        $exitReasonSent = true;
+    } catch (\Throwable) {
+        // Best-effort observability only; exit must not be blocked by IPC state.
+    }
+};
+
+$gracefulExit = function (string $reason = '', bool $waitForRequests = true) use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, &$activeRequests, $processName, $gracefulShutdownTimeout, $stopShutdownTimeout, &$ipcClient, $workerId, $port, $isMaintenanceWorker, &$plannedExitReason, $sendExitReasonToMaster) {
     // 刷新日志缓冲区
     WlsLogger::flush_(true);
     
     // 记录退出原因
-    if ($reason) {
-        w_log_info("[WLS Worker] 退出原因: {$reason}");
-        WlsLogger::info_("优雅关闭: {$reason}");
+    $effectiveExitReason = $plannedExitReason !== '' ? $plannedExitReason : $reason;
+    if ($effectiveExitReason) {
+        $sendExitReasonToMaster($effectiveExitReason);
+        w_log_info("[WLS Worker] 退出原因: {$effectiveExitReason}");
+        WlsLogger::info_("优雅关闭: {$effectiveExitReason}");
     }
     
     // 停止接受新连接（关闭监听 socket；仅对有效 stream 调用 fclose，避免已关闭 resource 导致 TypeError）
@@ -1371,6 +1443,7 @@ $gracefulExit = function (string $reason = '', bool $waitForRequests = true) use
     if ($ipcClient && $ipcClient->isConnected()) {
         $exitRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
         $ipcClient->send(\Weline\Server\IPC\ControlMessage::exited($exitRole, \getmypid(), $port, $workerId));
+        $ipcClient->flushPendingWrites(0.2);
         WlsLogger::info_("已发送 exited 消息给 Master");
     }
     
@@ -1459,7 +1532,7 @@ while (true) {
     }
     if ($now - $lastGcTime >= 60) {
         $lastGcTime = $now;
-        $gcResult = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+        $gcResult = wlsCompactWorkerMemoryCaches('timer', $maxMemoryBytes, 0.70, 32 * 1024 * 1024);
         if ($gcResult['cycles'] > 0 || $gcResult['trimmed_bytes'] > 0) {
             WlsLogger::debug_("[GC] cycles={$gcResult['cycles']}, trimmed={$gcResult['trimmed_bytes']} bytes");
         }
@@ -1622,6 +1695,7 @@ while (true) {
                     }
                     if (isset($activeFibers[$cid])) {
                         $fiberScheduler->cancelTimersForFiber($activeFibers[$cid]['fiber']);
+                        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$cid]['fiber']);
                         $fiberScheduler->unregisterFiber();
                     }
                     unset(
@@ -1660,8 +1734,15 @@ while (true) {
 
             // 2. 所有连接已清空 → 排水完成（帝王令：若已收 shutdown，做完排水仍以 shutdown 名义退出）
             if (empty($connections)) {
+                if ($plannedExitReason === '') {
+                    $plannedExitReason = $ipcReceivedShutdown
+                        ? "shutdown_command:worker={$workerId}"
+                        : "drain_or_reload:worker={$workerId}";
+                }
+                $sendExitReasonToMaster($plannedExitReason);
                 if ($ipcClient && $ipcClient->isConnected()) {
-                    $ipcClient->sendDrainingComplete($workerId, $port);
+                    $ipcClient->sendDrainingComplete($workerId, $port, '', $plannedExitReason);
+                    $ipcClient->flushPendingWrites(0.2);
                 }
                 WlsLogger::info_("排水完成（{$drainElapsed}秒），Worker 退出");
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
@@ -1684,8 +1765,15 @@ while (true) {
                 $longLivedConnections = [];
                 $activeFibers = [];
                 
+                if ($plannedExitReason === '') {
+                    $plannedExitReason = $ipcReceivedShutdown
+                        ? "shutdown_command_timeout:worker={$workerId},remaining={$remaining}"
+                        : "drain_or_reload_timeout:worker={$workerId},remaining={$remaining}";
+                }
+                $sendExitReasonToMaster($plannedExitReason);
                 if ($ipcClient && $ipcClient->isConnected()) {
-                    $ipcClient->sendDrainingComplete($workerId, $port);
+                    $ipcClient->sendDrainingComplete($workerId, $port, '', $plannedExitReason);
+                    $ipcClient->flushPendingWrites(0.2);
                 }
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载（超时强制退出）');
             }
@@ -1717,6 +1805,7 @@ while (true) {
                 }
                 if (isset($activeFibers[$connId])) {
                     $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
                     $fiberScheduler->unregisterFiber();
                     unset($activeFibers[$connId]);
                 }
@@ -1728,19 +1817,34 @@ while (true) {
     if ($now - $lastMemoryCheck >= $memoryCheckInterval) {
         $lastMemoryCheck = $now;
         $currentMemory = \memory_get_usage(true);
-        $memoryPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
+        $currentMemoryUsed = \memory_get_usage(false);
+        $memoryPercent = $maxMemoryBytes > 0 ? $currentMemoryUsed / $maxMemoryBytes : 0.0;
 
         if ($memoryPercent >= $memoryDrainThreshold) {
-            $beforeMb = \round($currentMemory / 1024 / 1024, 1);
-            $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+            $beforeMb = \round($currentMemoryUsed / 1024 / 1024, 1);
+            $beforeAllocatedMb = \round($currentMemory / 1024 / 1024, 1);
+            $compaction = wlsCompactWorkerMemoryCaches('drain_threshold', $maxMemoryBytes, 0.0, 0, true);
             $currentMemory = \memory_get_usage(true);
-            $memoryPercent = $maxMemoryBytes > 0 ? $currentMemory / $maxMemoryBytes : 0.0;
-            $afterMb = \round($currentMemory / 1024 / 1024, 1);
+            $currentMemoryUsed = \memory_get_usage(false);
+            $memoryPercent = $maxMemoryBytes > 0 ? $currentMemoryUsed / $maxMemoryBytes : 0.0;
+            $afterMb = \round($currentMemoryUsed / 1024 / 1024, 1);
+            $afterAllocatedMb = \round($currentMemory / 1024 / 1024, 1);
 
             if ($memoryPercent >= $memoryDrainThreshold) {
                 WlsLogger::warning_(
-                    "Worker memory pressure {$afterMb}MB after compact (before={$beforeMb}MB), start drain to avoid OOM reset"
+                    "Worker memory pressure {$afterMb}MB used ({$afterAllocatedMb}MB allocated) after compact "
+                    . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB), start drain to avoid OOM reset"
                 );
+                $plannedExitReason = 'memory_pressure_drain'
+                    . ":worker={$workerId}"
+                    . ",memory={$afterMb}MB"
+                    . ",before={$beforeMb}MB"
+                    . ",allocated={$afterAllocatedMb}MB"
+                    . ",before_allocated={$beforeAllocatedMb}MB"
+                    . ",limit={$wlsMemoryLimit}"
+                    . ',threshold=' . \round($memoryDrainThreshold * 100, 1) . '%'
+                    . ",requests={$requestCount}";
+                $sendExitReasonToMaster($plannedExitReason);
                 $shouldExit = true;
                 $ipcDraining = true;
                 $drainStartTime = \time();
@@ -1751,15 +1855,32 @@ while (true) {
                 }
             } elseif ($memoryPercent >= $memoryWarningThreshold) {
                 WlsLogger::warning_(
-                    "Worker memory high {$afterMb}MB after compact (before={$beforeMb}MB, cycles="
+                    "Worker memory high {$afterMb}MB used ({$afterAllocatedMb}MB allocated) after compact "
+                    . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB, cycles="
                     . (int)($compaction['cycles'] ?? 0) . ")"
                 );
             }
         } elseif ($memoryPercent >= $memoryWarningThreshold) {
-            WlsLogger::warning_("Worker memory high: " . \round($currentMemory / 1024 / 1024, 1) . 'MB');
+            WlsLogger::warning_(
+                "Worker memory high: " . \round($currentMemoryUsed / 1024 / 1024, 1)
+                . 'MB used (' . \round($currentMemory / 1024 / 1024, 1) . 'MB allocated)'
+            );
         }
         
         // 定期记录 Worker 状态到数据库
+        if ($ipcClient && $ipcClient->isConnected()) {
+            try {
+                $ipcClient->send(\Weline\Server\IPC\ControlMessage::statusReport(
+                    \count($connections),
+                    $currentMemory,
+                    $requestCount,
+                    $buildWorkerRuntimeSnapshot('periodic_status')
+                ), false);
+            } catch (\Throwable) {
+                // Runtime diagnostics are best-effort and must not affect traffic.
+            }
+        }
+
         try {
             \Weline\Server\Service\StatusLogService::logWorkerStatus([
                 'instance' => $instanceName,
@@ -1782,6 +1903,8 @@ while (true) {
     // 最大请求数限制：处理超过指定请求数后优雅重启（可选的内存保护）
     if ($maxRequests > 0 && $requestCount >= $maxRequests && empty($connections)) {
         WlsLogger::info_("已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，触发优雅重启");
+        $plannedExitReason = "max_requests_recycle:worker={$workerId},requests={$requestCount},limit={$maxRequests}";
+        $sendExitReasonToMaster($plannedExitReason);
         $shouldExit = true;
     }
     
@@ -1962,7 +2085,35 @@ while (true) {
         }
         unset($requestLogged[$connId]); // 清理标记（如果不存在也不会报错）
         $activeRequests++;
-        
+
+        if ($requestGcInterval > 0 && $requestCount - $lastRequestGcCount >= $requestGcInterval) {
+            $lastRequestGcCount = $requestCount;
+            $compaction = wlsCompactWorkerMemoryCaches('request_interval', $maxMemoryBytes, 0.55, 16 * 1024 * 1024);
+            $currentMemory = \memory_get_usage(true);
+            $memoryPeak = \memory_get_peak_usage(true);
+            $runtimeCompactions = (array)($compaction['runtime_cache_compactions'] ?? []);
+            $staticCacheCompaction = (array)($compaction['static_file_cache'] ?? []);
+            if (
+                ($compaction['cycles'] ?? 0) > 0
+                || ($compaction['trimmed_bytes'] ?? 0) > 0
+                || (int)($runtimeCompactions['cleared_process_caches'] ?? 0) > 0
+                || ($staticCacheCompaction['cleared'] ?? false)
+                || $currentMemory > 150 * 1024 * 1024
+            ) {
+                WlsLogger::debug_(
+                    '[GC] request_compact worker=http requests=' . $requestCount
+                    . ' cycles=' . (int)($compaction['cycles'] ?? 0)
+                    . ' trimmed=' . (int)($compaction['trimmed_bytes'] ?? 0)
+                    . ' memory=' . \round($currentMemory / 1024 / 1024, 1) . 'MB'
+                    . ' peak=' . \round($memoryPeak / 1024 / 1024, 1) . 'MB'
+                    . ' static=' . (($staticCacheCompaction['cleared'] ?? false) ? 'cleared' : 'kept')
+                    . ':' . (int)($staticCacheCompaction['count'] ?? 0)
+                    . ':' . (int)($staticCacheCompaction['size'] ?? 0)
+                    . ' runtime=' . (\json_encode($runtimeCompactions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}')
+                );
+            }
+        }
+
         // 解析请求 URI（用于日志，如果前端模式已输出则跳过）
         if (!$isFrontend) {
             $uri = '/';
@@ -2094,6 +2245,8 @@ function wlsFinalizeTerminatedFiberResponseStep(
     try {
         $response = $fiber->getReturn() ?? '';
     } catch (\Throwable) {
+    } finally {
+        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($fiber);
     }
 
     $handleDuration = \round((\microtime(true) - $handleStartTime) * 1000, 2);
@@ -2252,6 +2405,7 @@ function wlsReleaseIdleFibersStep(
 
     foreach ($toRelease as $afConnId => $afData) {
         $fiberScheduler->cancelTimersForFiber($afData['fiber']);
+        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($afData['fiber']);
         if (isset($afData['conn']) && \is_resource($afData['conn'])) {
             @\fclose($afData['conn']);
         }
@@ -2610,6 +2764,7 @@ function wlsHttpReadStep(
         }
         if (isset($activeFibers[$connId])) {
             $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
             $fiberScheduler->unregisterFiber();
             unset($activeFibers[$connId]);
         }
@@ -2644,6 +2799,7 @@ function wlsHttpReadStep(
         }
         if (isset($activeFibers[$connId])) {
             $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
             $fiberScheduler->unregisterFiber();
             unset($activeFibers[$connId]);
             WlsLogger::info_("客户端断开，Fiber 已清理 (connId: {$connId}, 剩余活跃 Fiber: " . \count($activeFibers) . ")");
@@ -3139,6 +3295,10 @@ function isHealthAllowCookieValid(string $cookieValue, array $env): bool
  */
 function injectWlsProcessTimeHeader(string $response, float $durationMs): string
 {
+    if ($durationMs < 500 && !\Weline\Server\Log\LogConfig::isVerboseWlsLog()) {
+        return $response;
+    }
+
     $pos = \strpos($response, "\r\n\r\n");
     if ($pos === false) {
         return $response;
@@ -3714,6 +3874,9 @@ function handleRequest(
         // 完整信息可通过 /_wls/health?detail=1 获取；fibers=1 时附带每个 Fiber 的闲忙与协议
         $wantsDetail = \strpos($rawRequest, 'detail=1') !== false || \strpos($rawRequest, 'detail=true') !== false;
         $wantsFibers = \strpos($rawRequest, 'fibers=1') !== false || \strpos($rawRequest, 'fibers=true') !== false;
+        $wantsMemory = \strpos($rawRequest, 'memory=1') !== false || \strpos($rawRequest, 'memory=true') !== false;
+        $wantsStaticMemory = \strpos($rawRequest, 'static=1') !== false || \strpos($rawRequest, 'static=true') !== false;
+        $wantsObjectMemory = \strpos($rawRequest, 'objects=1') !== false || \strpos($rawRequest, 'objects=true') !== false;
         
         if ($wantsDetail) {
             // 详细模式：返回完整信息
@@ -3726,7 +3889,9 @@ function handleRequest(
                 'active_requests' => $activeRequests - 1,
                 'total_requests' => $requestCount,
                 'memory_usage' => \memory_get_usage(true),
+                'memory_usage_used' => \memory_get_usage(false),
                 'memory_peak' => \memory_get_peak_usage(true),
+                'memory_peak_used' => \memory_get_peak_usage(false),
                 'uptime' => \time() - $startTime,
                 'php_version' => PHP_VERSION,
                 'timestamp' => \time(),
@@ -3734,6 +3899,9 @@ function handleRequest(
             ];
             if ($wantsFibers) {
                 $health['fibers'] = \Weline\Server\Runtime\WorkerFiberSnapshot::getSnapshot();
+            }
+            if ($wantsMemory) {
+                $health['memory_diagnostics'] = wlsWorkerMemoryHealthDiagnostics($wantsStaticMemory, $wantsObjectMemory);
             }
             $body = \json_encode($health, JSON_UNESCAPED_UNICODE);
             $len = \strlen($body);
@@ -3988,8 +4156,7 @@ function handleRequest(
         $response->setHeader('X-WLS-Uptime', (string) (\time() - $startTime));
         
         // 添加性能数据到响应头（便于在浏览器开发者工具中查看）
-        $isDev = \defined('DEV') && DEV;
-        if ($handleDuration >= 500 || $isDev) {
+        if ($handleDuration >= 500 || \Weline\Server\Log\LogConfig::isVerboseWlsLog()) {
             $response->setHeader('X-WLS-Performance-Total', (string) \round($handleDuration, 2));
             $response->setHeader('X-WLS-Performance-Warning', $handleDuration >= 1000 ? 'SLOW' : 'OK');
         }
@@ -4245,6 +4412,185 @@ function extractUriFromRawRequest(string $rawRequest): string
     }
 
     return (string)$parts[1];
+}
+
+function wlsGetStaticFileCacheStatus(): array
+{
+    if (!\function_exists('handleStaticFile')) {
+        return [];
+    }
+
+    $rawStatus = handleStaticFile('__CACHE_STATUS__', '');
+    if (!\is_string($rawStatus) || $rawStatus === '') {
+        return [];
+    }
+
+    $decoded = \json_decode($rawStatus, true);
+    return \is_array($decoded) ? $decoded : [];
+}
+
+function wlsCompactWorkerMemoryCaches(
+    string $reason,
+    int $maxMemoryBytes = 0,
+    float $staticClearPressure = 0.55,
+    int $staticClearMinBytes = 16777216,
+    bool $forceStaticClear = false
+): array {
+    $beforeMemory = \memory_get_usage(true);
+    $pressure = $maxMemoryBytes > 0 ? $beforeMemory / $maxMemoryBytes : 0.0;
+    $status = wlsGetStaticFileCacheStatus();
+    $staticSize = (int)($status['size'] ?? 0);
+    $staticCount = (int)($status['count'] ?? 0);
+    $staticClear = [
+        'cleared' => false,
+        'reason' => $reason,
+        'count' => $staticCount,
+        'size' => $staticSize,
+        'pressure' => $pressure,
+    ];
+
+    if (
+        \function_exists('handleStaticFile')
+        && ($forceStaticClear || $staticSize >= $staticClearMinBytes || $pressure >= $staticClearPressure)
+        && ($staticSize > 0 || $staticCount > 0 || $forceStaticClear)
+    ) {
+        $rawClear = handleStaticFile('__CLEAR_CACHE__', '');
+        if (\is_string($rawClear) && \preg_match('/^cleared:(\d+):(\d+)$/', $rawClear, $matches) === 1) {
+            $staticClear['count'] = (int)$matches[1];
+            $staticClear['size'] = (int)$matches[2];
+        }
+        $staticClear['cleared'] = true;
+    }
+
+    $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+    $compaction['static_file_cache'] = $staticClear;
+    $compaction['memory_before_bytes'] = $beforeMemory;
+    $compaction['memory_after_bytes'] = \memory_get_usage(true);
+
+    return $compaction;
+}
+
+function wlsWorkerMemoryHealthDiagnostics(bool $includeStaticProperties = false, bool $includeObjectProperties = false): array
+{
+    $diagnostics = [
+        'memory_usage_allocated' => \memory_get_usage(true),
+        'memory_usage_used' => \memory_get_usage(false),
+        'memory_peak_allocated' => \memory_get_peak_usage(true),
+        'memory_peak_used' => \memory_get_peak_usage(false),
+        'static_file_cache' => wlsGetStaticFileCacheStatus(),
+        'gc_status' => \function_exists('gc_status') ? \gc_status() : [],
+        'object_manager' => [],
+        'state_manager' => [],
+    ];
+
+    if (\class_exists(\Weline\Framework\Manager\ObjectManager::class, false)) {
+        try {
+            $diagnostics['object_manager'] = \Weline\Framework\Manager\ObjectManager::getRuntimeMemoryDiagnostics(12, $includeObjectProperties);
+        } catch (\Throwable $throwable) {
+            $diagnostics['object_manager_error'] = $throwable->getMessage();
+        }
+    }
+
+    if (\class_exists(\Weline\Framework\Runtime\StateManager::class, false)) {
+        try {
+            $diagnostics['state_manager'] = \Weline\Framework\Runtime\StateManager::getStats();
+        } catch (\Throwable $throwable) {
+            $diagnostics['state_manager_error'] = $throwable->getMessage();
+        }
+    }
+
+    if ($includeStaticProperties) {
+        $diagnostics['static_properties'] = wlsWorkerStaticPropertyDiagnostics();
+    }
+
+    return $diagnostics;
+}
+
+function wlsWorkerStaticPropertyDiagnostics(int $limit = 25, int $thresholdBytes = 8192): array
+{
+    $limit = \max(1, \min(100, $limit));
+    $thresholdBytes = \max(0, $thresholdBytes);
+    $items = [];
+    $classesScanned = 0;
+    $propertiesScanned = 0;
+
+    foreach (\get_declared_classes() as $className) {
+        if (!\str_starts_with($className, 'Weline\\') && !\str_starts_with($className, 'GuoLaiRen\\')) {
+            continue;
+        }
+
+        try {
+            $reflection = new \ReflectionClass($className);
+            $properties = $reflection->getStaticProperties();
+        } catch (\Throwable) {
+            continue;
+        }
+
+        $classesScanned++;
+        foreach ($properties as $propertyName => $value) {
+            $propertiesScanned++;
+            $approxBytes = wlsApproxMemoryValueSize($value);
+            if ($approxBytes < $thresholdBytes) {
+                continue;
+            }
+            $items[] = [
+                'property' => $className . '::$' . (string)$propertyName,
+                'type' => \get_debug_type($value),
+                'count' => \is_countable($value) ? \count($value) : null,
+                'approx_bytes' => $approxBytes,
+            ];
+        }
+    }
+
+    \usort(
+        $items,
+        static fn(array $a, array $b): int => ((int)$b['approx_bytes']) <=> ((int)$a['approx_bytes'])
+    );
+
+    return [
+        'classes_scanned' => $classesScanned,
+        'properties_scanned' => $propertiesScanned,
+        'threshold_bytes' => $thresholdBytes,
+        'top' => \array_slice($items, 0, $limit),
+    ];
+}
+
+function wlsApproxMemoryValueSize(mixed $value, int $depth = 0, int &$visited = 0): int
+{
+    if ($visited > 50000) {
+        return 0;
+    }
+    $visited++;
+
+    if (\is_string($value)) {
+        return \strlen($value);
+    }
+    if (\is_int($value) || \is_float($value) || \is_bool($value) || $value === null) {
+        return 16;
+    }
+    if (\is_object($value)) {
+        return 128;
+    }
+    if (\is_resource($value)) {
+        return 32;
+    }
+    if (!\is_array($value)) {
+        return 0;
+    }
+    if ($depth >= 5) {
+        return \count($value) * 32;
+    }
+
+    $size = 16;
+    foreach ($value as $key => $item) {
+        $size += \is_string($key) ? \strlen($key) : 16;
+        $size += wlsApproxMemoryValueSize($item, $depth + 1, $visited);
+        if ($visited > 50000) {
+            break;
+        }
+    }
+
+    return $size;
 }
 
 function handleStaticFile(string $uri, string $rawRequest): ?string

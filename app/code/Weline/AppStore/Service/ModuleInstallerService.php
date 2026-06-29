@@ -24,7 +24,7 @@ class ModuleInstallerService
     /**
      * 平台 API 默认基础 URL（当配置存在但值为 null/空时兜底）
      */
-    private const DEFAULT_PLATFORM_URL = 'https://app.aiweline.com';
+    private const DEFAULT_PLATFORM_URL = AppStorePlatformUrlResolver::DEFAULT_PLATFORM_URL;
 
     /**
      * 临时目录
@@ -1543,13 +1543,7 @@ class ModuleInstallerService
 
     private function resolvePlatformUrl(): string
     {
-        $envPlatformUrl = getenv('WELINE_APPSTORE_PLATFORM_URL');
-        if (is_string($envPlatformUrl) && trim($envPlatformUrl) !== '') {
-            return rtrim(trim($envPlatformUrl), '/');
-        }
-
-        $platformUrl = Env::get('appstore.platform_url');
-        return (is_string($platformUrl) && $platformUrl !== '') ? rtrim($platformUrl, '/') : self::DEFAULT_PLATFORM_URL;
+        return (new AppStorePlatformUrlResolver())->resolveUrl();
     }
 
     private static function normalizePlatformApiBaseUrl(string $platformUrl): string

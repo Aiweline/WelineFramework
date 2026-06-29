@@ -173,6 +173,56 @@ final class StartCommandArgsSolidificationTest extends TestCase
         self::assertSame('768M', (string)($cliConfig['worker_memory_limit'] ?? ''));
     }
 
+    public function testPanelModeDefaultsMemoryTo512MWhenUnconfigured(): void
+    {
+        $config = $this->createProbe(null, ['wls' => ['panel' => ['enabled' => true]]])
+            ->resolveConfig('default', []);
+
+        self::assertSame('512M', (string)($config['worker_memory_limit'] ?? ''));
+        self::assertSame('512M', (string)($config['dispatcher_memory_limit'] ?? ''));
+    }
+
+    public function testPanelModeCanBeEnabledByProcessEnvironment(): void
+    {
+        $previousEnabled = \getenv('WLS_PANEL_ENABLED');
+        $previousMode = \getenv('WLS_PANEL_MODE');
+        \putenv('WLS_PANEL_ENABLED=1');
+        \putenv('WLS_PANEL_MODE');
+
+        try {
+            $config = $this->createProbe()
+                ->resolveConfig('default', []);
+
+            self::assertSame('512M', (string)($config['worker_memory_limit'] ?? ''));
+            self::assertSame('512M', (string)($config['dispatcher_memory_limit'] ?? ''));
+        } finally {
+            $this->restoreEnvValue('WLS_PANEL_ENABLED', $previousEnabled);
+            $this->restoreEnvValue('WLS_PANEL_MODE', $previousMode);
+        }
+    }
+
+    public function testPanelModePreservesExplicitMemoryLimits(): void
+    {
+        $envConfig = $this->createProbe(
+            null,
+            [
+                'wls' => [
+                    'panel' => ['enabled' => true],
+                    'worker_memory_limit' => '384m',
+                    'dispatcher_memory_limit' => '448m',
+                ],
+            ]
+        )->resolveConfig('default', []);
+
+        self::assertSame('384M', (string)($envConfig['worker_memory_limit'] ?? ''));
+        self::assertSame('448M', (string)($envConfig['dispatcher_memory_limit'] ?? ''));
+
+        $cliConfig = $this->createProbe(null, ['wls' => ['panel' => ['enabled' => true]]])
+            ->resolveConfig('default', ['worker-memory-limit' => '768']);
+        self::assertSame('768M', (string)($cliConfig['worker_memory_limit'] ?? ''));
+        self::assertSame('768M', (string)($cliConfig['dispatcher_memory_limit'] ?? ''));
+    }
+
     public function testDispatcherMemoryLimitDefaultsToWorkerWhenSolidified(): void
     {
         $manager = new StartInstanceManagerProbe();
@@ -335,6 +385,16 @@ final class StartCommandArgsSolidificationTest extends TestCase
         ObjectManager::setInstance(SslCertificateService::class, $sslServiceMock);
 
         return new StartConfigProbe($savedConfig, $envConfig, $publicHostIps, $currentServerIps);
+    }
+
+    private function restoreEnvValue(string $name, string|false $value): void
+    {
+        if ($value === false) {
+            \putenv($name);
+            return;
+        }
+
+        \putenv($name . '=' . $value);
     }
 }
 

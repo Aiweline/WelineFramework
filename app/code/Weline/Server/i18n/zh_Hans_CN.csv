@@ -1738,7 +1738,32 @@ Installed,已安装
 "Local project",本地项目
 "Gateway enabled",网关已启用
 "Gateway disabled",网关已停用
+"%{1} / %{2} checks ready","%{1} / %{2} 项检查就绪"
+"Core Links",核心链接
+"%{1} / %{2}","%{1} / %{2}"
+"Admin, panel, path, and security scope are ready.",后台、面板、路径和安全范围已就绪。
+"Some core project context still needs setup.",部分核心项目上下文仍需设置。
+"Operation Slots",操作位
+"All WLS operation plugins are installed.","所有 WLS 操作插件均已安装。"
+"%{1} WLS operation plugins need installation.","还有 %{1} 个 WLS 操作插件需要安装。"
+"Security Scope",安全范围
 Ready,就绪
+Review,检查
+"Policy and attack-log links can be scoped safely.",策略和攻击日志链接可以安全限定范围。
+"Security links need project identity first.",安全链接需要先识别项目身份。
+"Gateway Mode",网关模式
+Enabled,已启用
+Off,关闭
+"Gateway route management is enabled.",网关路由管理已启用。
+"Gateway route management can be enabled from the panel.",可以在面板中启用网关路由管理。
+"Needs setup",需要设置
+"Needs review",需要检查
+"All managed projects are ready for panel operations.",所有托管项目已准备好由面板操作。
+"Some projects need core context before operations are safe.",部分项目需要补齐核心上下文后才能安全操作。
+"%{1} of %{2} projects are fully ready.","%{1} / %{2} 个项目完全就绪。"
+"All core links and WLS operation plugins are ready.","核心链接和 WLS 操作插件均已就绪。"
+"%{1} core checks need setup before this project is fully manageable.","该项目还有 %{1} 个核心检查需要设置后才能完全管理。"
+"Project context needs review before it is fully ready.",项目上下文需要检查后才能完全就绪。
 "Scoped editor",项目编辑器
 Marketplace,商城
 "Install plugin",安装插件
@@ -1783,7 +1808,6 @@ Deploy,部署
 "Current project: %{1}",当前项目：%{1}
 "%{1} (%{2})",%{1}（%{2}）
 "Rate Limit",限流
-Enabled,已启用
 "Window Seconds",窗口秒数
 "Max Requests",最大请求数
 "Block Seconds",封禁秒数
@@ -2303,6 +2327,19 @@ Updated,Updated
 "Security Policy Audit",安全策略审计
 "Recent policy changes are recorded without storing the full rule payload in the panel audit list.",最近的策略变更会记录在面板审计中，但不会保存完整规则内容。
 "Latest changes",最新变更
+"Audit Action",审计动作
+"All actions",全部动作
+"Audit Source",审计来源
+"All sources",全部来源
+"Audit Domain",审计域名
+"Use * for all domains","输入 * 查看全部域名"
+"Changed Section",变更规则段
+"Any section",任意规则段
+"Search Audit",搜索审计
+"Action, source, domain, or section",动作、来源、域名或规则段
+"Audit Limit",审计数量
+"Apply Audit Filters",应用审计筛选
+"Reset Audit",重置审计
 "No policy changes recorded yet.",暂无策略变更记录。
 "Saving common rules or a project policy will create an audit entry here.",保存通用规则或项目策略后会在这里生成审计记录。
 "Unknown time","Unknown time"
@@ -2385,7 +2422,6 @@ Loaded,已加载
 "This installed plugin declared a WLS panel menu entry.","这个已安装插件声明了一个 WLS 面板菜单入口。"
 "Open Panel Entry",打开面板入口
 "Contributed by %{1}","由 %{1} 贡献"
-"Gateway Mode",网关模式
 "Gateway Settings",网关设置
 "Advanced Gateway",高级网关
 "Gateway instance discovery failed: %{1}","Gateway 实例发现失败：%{1}"
@@ -2452,6 +2488,8 @@ Description,描述
 "Project Config Center",项目配置中心
 "%{1} projects","%{1} 个项目"
 "%{1} plugin slots ready","%{1} 个插件槽位就绪"
+"%{1} ready projects","%{1} 个项目就绪"
+"%{1} / %{2} operation slots ready","%{1} / %{2} 个操作位就绪"
 "Safe Context",安全上下文
 "Child Panel",子面板
 "Security Policy",安全策略
@@ -2486,3 +2524,11 @@ Operations,操作
 "Weline Server 未运行","Weline Server 未运行"
 "Weline Server 正在运行，Master PID：%{1}","Weline Server 正在运行，Master PID：%{1}"
 "Weline Server 已停止","Weline Server 已停止"
+"Production AppStore","生产 AppStore"
+"Local AppStore","本地 AppStore"
+"Configured AppStore","已配置 AppStore"
+"Unknown AppStore","未知 AppStore"
+"AppStore endpoint","AppStore 端点"
+"Marketplace Endpoint","商城端点"
+"Local development uses https://app.weline.test:9523; deployed tests use https://app.aiweline.com from deploy current.json.","本地开发使用 https://app.weline.test:9523；部署后测试使用 deploy current.json 中的 https://app.aiweline.com。"
+Source,来源

@@ -372,7 +372,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
             public function markReadyState(bool $isReady = true): void {}
             public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return true; }
             public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return true; }
-            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return true; }
+            public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool { return true; }
             public function sendStatusReport(int $connections, int $memory, int $requests): bool { return true; }
             public function sendLogLine(string $line, string $level, string $processTag): bool { return true; }
             public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { $this->sent[] = $message; return true; }

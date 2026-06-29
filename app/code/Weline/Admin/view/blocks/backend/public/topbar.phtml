@@ -228,6 +228,28 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
     })();
 
     (function () {
+        'use strict';
+
+        var sidebarToggle = document.getElementById('vertical-menu-btn');
+        if (!sidebarToggle || sidebarToggle.dataset.welineSidebarToggleBound === '1') {
+            return;
+        }
+
+        sidebarToggle.dataset.welineSidebarToggleBound = '1';
+        sidebarToggle.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            document.body.classList.toggle('sidebar-enable');
+            if (window.innerWidth >= 992) {
+                document.body.classList.toggle('vertical-collpsed');
+            } else {
+                document.body.classList.remove('vertical-collpsed');
+            }
+        }, true);
+    })();
+
+    (function () {
         return;
 
         var topbar = document.getElementById('page-topbar');

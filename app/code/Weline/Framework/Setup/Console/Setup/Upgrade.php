@@ -325,6 +325,19 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
 
+        // 1. 检查项目根目录下的 composer.phar
+        // 注意：在 Windows 上，is_executable() 对 .phar 文件可能返回 false
+        // 所以只要文件存在，就尝试使用 PHP 执行它
+        $composerPhar = BP . 'composer.phar';
+        if (file_exists($composerPhar)) {
+            // 验证文件是否真的是 composer.phar（尝试执行 --version）
+            $testCommand = PHP_BINARY . ' ' . escapeshellarg($composerPhar) . ' --version 2>&1';
+            exec($testCommand, $testOutput, $testReturnCode);
+            if ($this->composerVersionCheckPassed($testOutput, (int)$testReturnCode)) {
+                return PHP_BINARY . ' ' . escapeshellarg($composerPhar);
+            }
+        }
+
         // 1. 检查 extend/server/composer.phar（安装脚本按 composer.json 自动下载，与 php/pgsql 同目录）
         $serverPhar = BP . 'extend' . DS . 'server' . DS . 'composer.phar';
         if (file_exists($serverPhar)) {
@@ -384,7 +397,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             return true;
         }
 
-        return $this->composerOutputContains($output, 'Generated autoload files');
+        return $this->composerOutputContains($output, 'Generated autoload files')
+            || $this->composerOutputContains($output, 'Generating autoload files');
     }
 
     private function composerOutputContains(array $output, string $needle): bool
@@ -398,6 +412,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         return false;
     }
     
+
     /**
      * 清理 generated/code 目录
      * 在运行 composer dump-autoload 之前清理，避免扫描不存在的拦截器文件
@@ -450,7 +465,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // ========== 准备阶段 ==========
             $this->prepareUpgrade($lockFile, $lockHandle, $args);
             // 检查系统是否已安装
-            if (!$this->checkSystemInstalled()) {
+            if (!$this->checkSystemInstalled() && !$this->isRouteOnlyUpgradeRequest($args)) {
                 $this->releaseLock($lockHandle, $lockFile);
                 $this->handleSystemNotInstalled($args);
                 return;
@@ -535,6 +550,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             implode(', ', $unknownArgs),
             implode(', ', self::SUPPORTED_ARGS_DISPLAY),
         ]));
+    }
+
+    private function isRouteOnlyUpgradeRequest(array $args): bool
+    {
+        return isset($args['route']) && !isset($args['model']);
     }
 
     private function normalizeArgKey(string $argKey): string

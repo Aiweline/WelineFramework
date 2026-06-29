@@ -73,6 +73,14 @@
       }
     },
     {
+      "code": "capability:php-extension-guarded-adapter",
+      "type": "capability",
+      "labels": {
+        "en_US": "Guarded PHP Extension Adapter",
+        "zh_Hans_CN": "Guarded PHP Extension Adapter"
+      }
+    },
+    {
       "code": "capability:wls-reload-request",
       "type": "capability",
       "labels": {
@@ -106,7 +114,8 @@
         "en_US": "PHP Extensions",
         "zh_Hans_CN": "PHP Extensions"
       },
-      "status": "readout",
+      "status": "guarded-adapter",
+      "adapter": "windows-bundled-php-ini",
       "backend_route": "weline_phpmanager/backend/wls-php-manager"
     },
     "project.php_profile": {
@@ -148,7 +157,72 @@
         },
         "group": "tools",
         "order": 10,
-        "backend_route": "weline_phpmanager/backend/wls-php-manager"
+        "backend_route": "weline_phpmanager/backend/wls-php-manager",
+        "children": [
+          {
+            "key": "php-summary",
+            "label": {
+              "en_US": "Summary",
+              "zh_Hans_CN": "概览"
+            },
+            "order": 5,
+            "backend_route": "weline_phpmanager/backend/wls-php-manager/summary"
+          },
+          {
+            "key": "php-profiles",
+            "label": {
+              "en_US": "Profiles",
+              "zh_Hans_CN": "配置档案"
+            },
+            "order": 10,
+            "backend_route": "weline_phpmanager/backend/wls-php-manager/project-profile"
+          },
+          {
+            "key": "php-runtime",
+            "label": {
+              "en_US": "Runtime",
+              "zh_Hans_CN": "运行时"
+            },
+            "order": 20,
+            "backend_route": "weline_phpmanager/backend/wls-php-manager/runtime"
+          },
+          {
+            "key": "php-inheritance",
+            "label": {
+              "en_US": "Inheritance",
+              "zh_Hans_CN": "继承"
+            },
+            "order": 30,
+            "backend_route": "weline_phpmanager/backend/wls-php-manager/inheritance"
+          },
+          {
+            "key": "php-ini",
+            "label": {
+              "en_US": "php.ini",
+              "zh_Hans_CN": "php.ini"
+            },
+            "order": 40,
+            "backend_route": "weline_phpmanager/backend/wls-php-manager/ini"
+          },
+          {
+            "key": "php-extensions",
+            "label": {
+              "en_US": "Extensions",
+              "zh_Hans_CN": "扩展检查"
+            },
+            "order": 50,
+            "backend_route": "weline_phpmanager/backend/wls-php-manager/extensions"
+          },
+          {
+            "key": "php-audit",
+            "label": {
+              "en_US": "Audit",
+              "zh_Hans_CN": "审计"
+            },
+            "order": 60,
+            "backend_route": "weline_phpmanager/backend/wls-php-manager/audit"
+          }
+        ]
       }
     ]
   },

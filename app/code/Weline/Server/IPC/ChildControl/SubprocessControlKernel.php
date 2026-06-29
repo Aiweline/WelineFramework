@@ -398,14 +398,21 @@ final class SubprocessControlKernel
             return;
         }
         $this->client->send(\Weline\Server\IPC\ControlMessage::exitReason($reason, $code));
+        $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
     }
 
-    public function sendDrainingComplete(): void
+    public function sendDrainingComplete(string $reason = 'kernel_drain_complete'): void
     {
         if ($this->client === null || !$this->client->isConnected()) {
             return;
         }
-        $this->client->sendDrainingComplete($this->identity->workerId, $this->identity->port, $this->identity->launchId !== '' ? $this->identity->launchId : '');
+        $this->client->sendDrainingComplete(
+            $this->identity->workerId,
+            $this->identity->port,
+            $this->identity->launchId !== '' ? $this->identity->launchId : '',
+            $reason
+        );
+        $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
     }
 
     public function close(): void

@@ -18,6 +18,11 @@ $panelPluginContributions = is_array($panelPluginContributions) ? $panelPluginCo
 $panelPluginMenuItems = is_array($panelPluginContributions['items'] ?? null) ? array_values($panelPluginContributions['items']) : [];
 $panelPluginMenuCount = (int)($panelPluginContributions['count'] ?? count($panelPluginMenuItems));
 $panelPluginMenuError = trim((string)($panelPluginContributions['error'] ?? ''));
+$panelPluginViewerContext = $this->getData('panelPluginViewerContext');
+$panelPluginViewerContext = is_array($panelPluginViewerContext) ? $panelPluginViewerContext : [];
+$activePanelPluginKey = trim((string)($panelPluginViewerContext['plugin_key'] ?? ''));
+$activePanelPluginChildKey = trim((string)($panelPluginViewerContext['child_key'] ?? ''));
+$panelPluginViewerLabel = trim((string)($panelPluginViewerContext['label'] ?? ''));
 $panelDashboardData = $this->getData('panelDashboardData');
 $panelDashboardData = is_array($panelDashboardData) ? $panelDashboardData : [];
 $dashboardMetrics = is_array($panelDashboardData['metrics'] ?? null) ? $panelDashboardData['metrics'] : [];
@@ -29,6 +34,7 @@ $projectCards = is_array($panelDashboardData['projects'] ?? null) ? array_values
 $panelProjectConfigCenter = $this->getData('panelProjectConfigCenter');
 $panelProjectConfigCenter = is_array($panelProjectConfigCenter) ? $panelProjectConfigCenter : [];
 $projectConfigItems = is_array($panelProjectConfigCenter['items'] ?? null) ? array_values($panelProjectConfigCenter['items']) : [];
+$projectConfigReadinessSummary = is_array($panelProjectConfigCenter['readiness_summary'] ?? null) ? $panelProjectConfigCenter['readiness_summary'] : [];
 $panelProjectFormData = $this->getData('panelProjectFormData');
 $panelProjectFormData = is_array($panelProjectFormData) ? $panelProjectFormData : [];
 $panelGatewaySettings = $this->getData('panelGatewaySettings');
@@ -40,6 +46,7 @@ $securityRuleSummary = is_array($panelSecurityData['rule_summary'] ?? null) ? ar
 $securityProjectSummaries = is_array($panelSecurityData['project_security_summaries'] ?? null) ? array_values($panelSecurityData['project_security_summaries']) : [];
 $securityRecentAttacks = is_array($panelSecurityData['recent_attacks'] ?? null) ? array_values($panelSecurityData['recent_attacks']) : [];
 $securityPolicyAudit = is_array($panelSecurityData['policy_audit'] ?? null) ? array_values($panelSecurityData['policy_audit']) : [];
+$securityPolicyAuditFilters = is_array($panelSecurityData['policy_audit_filters'] ?? null) ? $panelSecurityData['policy_audit_filters'] : [];
 $securityRulesJson = (string)($panelSecurityData['rules_json'] ?? '{}');
 $securityRuleEditor = is_array($panelSecurityData['rule_editor'] ?? null) ? $panelSecurityData['rule_editor'] : [];
 $domainOverrideEditor = is_array($panelSecurityData['domain_override_editor'] ?? null) ? $panelSecurityData['domain_override_editor'] : [];
@@ -101,8 +108,15 @@ $panelPluginRefreshRouteCount = (int)($panelPluginRefreshResult['route_count'] ?
 $panelPluginRefreshPluginCount = (int)($panelPluginRefreshResult['plugin_count'] ?? 0);
 $panelPluginRefreshContributionCount = (int)($panelPluginRefreshResult['contribution_count'] ?? 0);
 $dashboardUrl = $this->getBackendUrl('*/backend/wls-panel');
+$projectsUrl = $this->getBackendUrl('*/backend/wls-panel/projects');
+$gatewayUrl = $this->getBackendUrl('*/backend/wls-panel/gateway');
+$pluginViewerUrl = $this->getBackendUrl('*/backend/wls-panel/plugin');
 $marketplaceUrl = $this->getBackendUrl('*/backend/wls-panel/marketplace');
 $securityUrl = $this->getBackendUrl('*/backend/wls-panel/security');
+$securityLogsUrl = $this->getBackendUrl('*/backend/wls-panel/security-logs');
+$securityRulesPanelUrl = $this->getBackendUrl('*/backend/wls-panel/security-rules');
+$securityPolicyUrl = $this->getBackendUrl('*/backend/wls-panel/security-policy');
+$securityAuditUrl = $this->getBackendUrl('*/backend/wls-panel/security-audit');
 $projectSaveUrl = $this->getBackendUrl('*/backend/wls-panel/project-save');
 $projectDeleteUrl = $this->getBackendUrl('*/backend/wls-panel/project-delete');
 $gatewayApplyUrl = $this->getBackendUrl('*/backend/wls-panel/gateway-apply');
@@ -112,10 +126,21 @@ $pluginRefreshUrl = $this->getBackendUrl('*/backend/wls-panel/plugin-refresh');
 $projectAdminUrl = $this->getBackendUrl('admin');
 $appStoreIndexUrl = $this->getBackendUrl('appstore/backend');
 $appStoreInstalledUrl = $this->getBackendUrl('appstore/backend/installed');
+$appStorePlatformResolution = $this->getData('appStorePlatformResolution');
+$appStorePlatformResolution = is_array($appStorePlatformResolution) ? $appStorePlatformResolution : [];
+$appStorePlatformUrl = rtrim((string)($appStorePlatformResolution['platform_url'] ?? 'https://app.aiweline.com'), '/');
+$appStorePlatformSource = trim((string)($appStorePlatformResolution['source'] ?? 'default:production'));
+$appStorePlatformEnvironment = trim((string)($appStorePlatformResolution['environment'] ?? 'production'));
+$appStorePlatformEnvironmentLabel = match ($appStorePlatformEnvironment) {
+    'production' => __('Production AppStore'),
+    'local' => __('Local AppStore'),
+    'configured' => __('Configured AppStore'),
+    default => $appStorePlatformEnvironment !== '' ? $appStorePlatformEnvironment : __('Unknown AppStore'),
+};
+$appStorePlatformEnvironmentClass = $appStorePlatformEnvironment === 'production' ? 'is-on' : '';
 $serverManagerUrl = $this->getBackendUrl('*/backend/server-manager');
 $gatewayLegacyUrl = $this->getBackendUrl('*/backend/reverse-proxy-manager');
-$gatewayUrl = $dashboardUrl . '#gateway-settings';
-$securityRulesUrl = $this->getBackendUrl('*/backend/server-monitor/security-rules');
+$securityAdvancedRulesUrl = $this->getBackendUrl('*/backend/server-monitor/security-rules');
 $attackLogUrl = $this->getBackendUrl('*/backend/server-monitor/attack-log');
 $sslUrl = $this->getBackendUrl('*/backend/ssl-certificate');
 $optimizationUrl = $this->getBackendUrl('*/backend/optimization-guide');
@@ -134,6 +159,13 @@ $blockedSecurityEvents = (int)($securityData['blocked_7d'] ?? 0);
 $panelTitle = match ($activePage) {
     'marketplace' => __('Plugin Marketplace'),
     'security' => __('Security'),
+    'security_logs' => __('Attack Logs'),
+    'security_rules' => __('Security Rules'),
+    'security_policy' => __('Project Security Policy'),
+    'security_audit' => __('Policy Audit'),
+    'projects' => __('Projects'),
+    'gateway' => __('Gateway'),
+    'plugin' => $panelPluginViewerLabel !== '' ? $panelPluginViewerLabel : __('Plugin Capability'),
     default => __('Dashboard'),
 };
 $darkThemeLabel = (string)__('Dark');
@@ -151,11 +183,12 @@ $projectFormId = (int)($panelProjectFormData['project_id'] ?? 0);
 $projectFormStatus = $projectFormValue('status', 'active');
 $projectFormGatewayEnabled = (int)($panelProjectFormData['gateway_enabled'] ?? 1) === 1;
 $projectFormBackendSsl = (int)($panelProjectFormData['backend_ssl'] ?? 0) === 1;
-$buildPanelProjectUrl = static function (array $params = []) use ($dashboardUrl): string {
+$projectFormShowEditor = $projectFormId > 0 || (int)($this->request->getParam('new_project', 0)) === 1;
+$buildPanelProjectUrl = static function (array $params = []) use ($projectsUrl): string {
     if ($params === []) {
-        return $dashboardUrl . '#projects';
+        return $projectsUrl;
     }
-    return $dashboardUrl . (str_contains($dashboardUrl, '?') ? '&' : '?') . http_build_query($params) . '#projects';
+    return $projectsUrl . (str_contains($projectsUrl, '?') ? '&' : '?') . http_build_query($params);
 };
 $buildWlsMarketplaceUrl = static function (string $query = '') use ($appStoreIndexUrl, $wlsPluginTag, $wlsPluginSurface): string {
     $params = [
@@ -172,15 +205,128 @@ $buildWlsMarketplaceUrl = static function (string $query = '') use ($appStoreInd
 $template = $this;
 $buildPanelEntryUrl = static function (string $url) use ($template): string {
     $url = trim($url);
-    if ($url === ''
-        || str_starts_with($url, '#')
-        || str_starts_with($url, '/')
-        || preg_match('/^[a-z][a-z0-9+.-]*:/i', $url) === 1
-    ) {
-        return $url;
+    if ($url === '' || str_starts_with($url, '#')) {
+        return '';
+    }
+    if (preg_match('/^(javascript|data|vbscript):/i', ltrim($url)) === 1) {
+        return '';
+    }
+    $isAbsoluteUrl = preg_match('/^[a-z][a-z0-9+.-]*:/i', $url) === 1;
+    $entryUrl = $isAbsoluteUrl || str_starts_with($url, '/') ? $url : $template->getBackendUrl($url);
+    $fragmentPosition = strpos($entryUrl, '#');
+    if ($fragmentPosition !== false) {
+        $entryUrl = substr($entryUrl, 0, $fragmentPosition);
+    }
+    if ($isAbsoluteUrl) {
+        return $entryUrl;
+    }
+    if (!str_contains($entryUrl, 'embedded=') && !str_contains($entryUrl, 'wls_panel=')) {
+        $entryUrl .= (str_contains($entryUrl, '?') ? '&' : '?') . http_build_query(['embedded' => 1]);
     }
 
-    return $template->getBackendUrl($url);
+    return $entryUrl;
+};
+$buildPanelEntryUrlWithParams = static function (string $url, array $params = []) use ($buildPanelEntryUrl): string {
+    $entryUrl = $buildPanelEntryUrl($url);
+    if ($entryUrl === '') {
+        return '';
+    }
+    $safeParams = [];
+    foreach ($params as $key => $value) {
+        $key = trim((string)$key);
+        if ($key === '' || !is_scalar($value)) {
+            continue;
+        }
+        $value = trim((string)$value);
+        if ($value !== '' && !str_contains($entryUrl, rawurlencode($key) . '=')) {
+            $safeParams[$key] = $value;
+        }
+    }
+    if ($safeParams === []) {
+        return $entryUrl;
+    }
+
+    return $entryUrl . (str_contains($entryUrl, '?') ? '&' : '?') . http_build_query($safeParams);
+};
+$normalizePanelPluginKey = static function (string $key): string {
+    $key = trim(strtolower($key));
+    if ($key === '') {
+        return '';
+    }
+    $key = (string)preg_replace('/[^a-z0-9:_-]+/', '-', $key);
+    return trim($key, '-_');
+};
+$buildPluginShellUrl = static function (array $parent, ?array $child = null, array $params = []) use ($pluginViewerUrl, $normalizePanelPluginKey): string {
+    $parentKey = $normalizePanelPluginKey((string)($parent['key'] ?? ''));
+    $childKey = $child !== null ? $normalizePanelPluginKey((string)($child['key'] ?? '')) : '';
+    $moduleName = trim((string)($parent['module_name'] ?? $child['module_name'] ?? ''));
+    if ($parentKey === '' && $moduleName === '') {
+        return '';
+    }
+    $query = [
+        'plugin_key' => $parentKey,
+    ];
+    if ($childKey !== '') {
+        $query['child_key'] = $childKey;
+    }
+    if ($moduleName !== '') {
+        $query['plugin_module'] = $moduleName;
+    }
+    foreach ($params as $key => $value) {
+        $key = trim((string)$key);
+        if ($key === '' || array_key_exists($key, $query) || !is_scalar($value)) {
+            continue;
+        }
+        $value = trim((string)$value);
+        if ($value !== '') {
+            $query[$key] = $value;
+        }
+    }
+
+    return $pluginViewerUrl . (str_contains($pluginViewerUrl, '?') ? '&' : '?') . http_build_query($query);
+};
+$panelPluginMenuByModule = [];
+foreach ($panelPluginMenuItems as $panelPluginMenuItemForMap) {
+    if (!is_array($panelPluginMenuItemForMap)) {
+        continue;
+    }
+    $moduleKeyForMap = strtolower(trim((string)($panelPluginMenuItemForMap['module_name'] ?? '')));
+    if ($moduleKeyForMap !== '') {
+        $panelPluginMenuByModule[$moduleKeyForMap] = $panelPluginMenuItemForMap;
+    }
+}
+$buildPluginShellUrlForModule = static function (string $moduleName, string $childKey = '', array $params = []) use (
+    $panelPluginMenuByModule,
+    $normalizePanelPluginKey,
+    $buildPluginShellUrl
+): string {
+    $moduleKey = strtolower(trim($moduleName));
+    if ($moduleKey === '' || !is_array($panelPluginMenuByModule[$moduleKey] ?? null)) {
+        return '';
+    }
+    $parent = $panelPluginMenuByModule[$moduleKey];
+    $normalizedChildKey = $normalizePanelPluginKey($childKey);
+    $children = is_array($parent['children'] ?? null) ? array_values($parent['children']) : [];
+    $selectedChild = null;
+    foreach ($children as $child) {
+        if (!is_array($child)) {
+            continue;
+        }
+        if ($normalizedChildKey !== '' && $normalizePanelPluginKey((string)($child['key'] ?? '')) === $normalizedChildKey) {
+            $selectedChild = $child;
+            break;
+        }
+    }
+    if ($selectedChild === null && $children !== []) {
+        foreach ($children as $child) {
+            if (is_array($child) && trim((string)($child['url'] ?? '')) !== '') {
+                $selectedChild = $child;
+                break;
+            }
+        }
+    }
+
+    return $buildPluginShellUrl($parent, $selectedChild, $params);
 };
 $operationCapabilityByKey = [];
 foreach ($operationCapabilityItems as $operationCapability) {
@@ -210,11 +356,15 @@ $buildProjectOperationContext = static function (array $project, string $operati
     }
     return $params;
 };
-$buildOperationCapabilityUrl = static function (string $key, string $installQuery, array $context = []) use ($operationCapabilityByKey, $buildWlsMarketplaceUrl, $buildPanelEntryUrl): string {
+$buildOperationCapabilityUrl = static function (string $key, string $installQuery, array $context = []) use ($operationCapabilityByKey, $buildWlsMarketplaceUrl, $buildPanelEntryUrl, $buildPluginShellUrlForModule): string {
     $capability = is_array($operationCapabilityByKey[$key] ?? null) ? $operationCapabilityByKey[$key] : [];
     $installed = !empty($capability['installed']);
-                            $actionUrl = trim((string)($capability['action_url'] ?? ''));
+    $actionUrl = trim((string)($capability['action_url'] ?? ''));
     if ($installed && $actionUrl !== '') {
+        $pluginShellUrl = $buildPluginShellUrlForModule((string)($capability['plugin_module'] ?? ''), $key, $context);
+        if ($pluginShellUrl !== '') {
+            return $pluginShellUrl;
+        }
         $actionUrl = $buildPanelEntryUrl($actionUrl);
         $params = [];
         foreach ($context as $contextKey => $contextValue) {
@@ -232,7 +382,7 @@ $buildOperationCapabilityUrl = static function (string $key, string $installQuer
     $query = trim((string)($capability['install_query'] ?? $installQuery));
     return $buildWlsMarketplaceUrl($query !== '' ? $query : $installQuery);
 };
-$buildSecurityLogUrl = static function (array $overrides = []) use ($securityUrl, $securityFilters): string {
+$buildSecurityLogUrl = static function (array $overrides = []) use ($securityLogsUrl, $securityFilters): string {
     $params = [
         'security_scope' => trim((string)($securityFilters['scope'] ?? 'all')),
         'security_instance' => trim((string)($securityFilters['instance'] ?? '')),
@@ -252,11 +402,11 @@ $buildSecurityLogUrl = static function (array $overrides = []) use ($securityUrl
         }
     }
     if ($params === []) {
-        return $securityUrl . '#security-logs';
+        return $securityLogsUrl;
     }
-    return $securityUrl . (str_contains($securityUrl, '?') ? '&' : '?') . http_build_query($params) . '#security-logs';
+    return $securityLogsUrl . (str_contains($securityLogsUrl, '?') ? '&' : '?') . http_build_query($params);
 };
-$buildSecurityPolicyUrl = static function (array $overrides = []) use ($securityUrl, $securityFilters): string {
+$buildSecurityPolicyUrl = static function (array $overrides = []) use ($securityPolicyUrl, $securityFilters): string {
     $params = [
         'security_scope' => trim((string)($securityFilters['scope'] ?? 'all')),
         'security_instance' => trim((string)($securityFilters['instance'] ?? '')),
@@ -276,9 +426,9 @@ $buildSecurityPolicyUrl = static function (array $overrides = []) use ($security
         }
     }
     if ($params === []) {
-        return $securityUrl . '#project-security-policy';
+        return $securityPolicyUrl;
     }
-    return $securityUrl . (str_contains($securityUrl, '?') ? '&' : '?') . http_build_query($params) . '#project-security-policy';
+    return $securityPolicyUrl . (str_contains($securityPolicyUrl, '?') ? '&' : '?') . http_build_query($params);
 };
 $resolveProjectSecurityScope = static function (array $project): string {
     $type = trim((string)($project['type'] ?? 'project'));
@@ -351,9 +501,20 @@ $wlsInstalledPluginsUrl = $appStoreInstalledUrl . '?' . http_build_query([
 
 $navItems = [
     ['key' => 'dashboard', 'label' => __('Dashboard'), 'url' => $dashboardUrl],
-    ['key' => 'projects', 'label' => __('Projects'), 'url' => $dashboardUrl . '#projects'],
+    ['key' => 'projects', 'label' => __('Projects'), 'url' => $projectsUrl],
     ['key' => 'gateway', 'label' => __('Gateway'), 'url' => $gatewayUrl],
-    ['key' => 'security', 'label' => __('Security'), 'url' => $securityUrl],
+    [
+        'key' => 'security',
+        'label' => __('Security'),
+        'url' => $securityUrl,
+        'children' => [
+            ['key' => 'security', 'label' => __('Overview'), 'url' => $securityUrl],
+            ['key' => 'security_logs', 'label' => __('Attack Logs'), 'url' => $securityLogsUrl],
+            ['key' => 'security_rules', 'label' => __('Rules'), 'url' => $securityRulesPanelUrl],
+            ['key' => 'security_policy', 'label' => __('Project Policy'), 'url' => $securityPolicyUrl],
+            ['key' => 'security_audit', 'label' => __('Policy Audit'), 'url' => $securityAuditUrl],
+        ],
+    ],
     ['key' => 'marketplace', 'label' => __('Marketplace'), 'url' => $marketplaceUrl],
 ];
 
@@ -375,7 +536,7 @@ $quickActions = [
     [
         'title' => __('Security Rules'),
         'meta' => __('Attack rules and protection logs'),
-        'url' => $securityUrl,
+        'url' => $securityRulesPanelUrl,
         'status' => __('%{1} blocked in 7d', [$blockedSecurityEvents]),
         'tone' => 'amber',
     ],
@@ -388,37 +549,7 @@ $quickActions = [
     ],
 ];
 
-$plugins = [
-    [
-        'name' => 'WLS File Manager',
-        'module' => 'Weline_FileManager',
-        'summary' => __('Manage project paths from the WLS panel plugin area.'),
-        'tags' => ['module:wls', 'custom:wls-file-manager', 'category:server-tools', 'system:false'],
-        'status' => __('Pending'),
-    ],
-    [
-        'name' => 'WLS Deploy',
-        'module' => 'Weline_Deploy',
-        'summary' => __('Webhook and tag driven release workflow for child projects.'),
-        'tags' => ['module:wls', 'custom:wls-deploy', 'feature:tag-deploy', 'system:false'],
-        'status' => __('Pending'),
-    ],
-    [
-        'name' => 'WLS PHP Manager',
-        'module' => 'Weline_PhpManager',
-        'summary' => __('Configure PHP runtime profiles and extension checks.'),
-        'tags' => ['module:wls', 'custom:wls-php-manager', 'feature:php-config', 'system:false'],
-        'status' => __('Pending'),
-    ],
-    [
-        'name' => 'WLS Database Manager',
-        'module' => 'Weline_DbManager',
-        'summary' => __('Store project database profiles for panel-managed sites.'),
-        'tags' => ['module:wls', 'custom:wls-database-manager', 'feature:database-profile', 'system:false'],
-        'status' => __('Pending'),
-    ],
-];
-$panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), count($operationCapabilityItems), $panelPluginMenuCount);
+$panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapabilityItems), $panelPluginMenuCount);
 ?>
 
 <div class="wls-standalone-shell"
@@ -432,29 +563,112 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
         </div>
         <nav class="wls-shell-nav">
             <?php foreach ($navItems as $item): ?>
-                <?php $isActive = $item['key'] === $activePage || ($activePage === 'dashboard' && $item['key'] === 'dashboard'); ?>
-                <a class="<?= $isActive ? 'is-active' : '' ?>"
-                   href="<?= $item['url'] ?>"
-                   <?= $isActive ? 'aria-current="page"' : '' ?>>
-                    <span><?= $item['label'] ?></span>
-                </a>
+                <?php
+                $navChildren = is_array($item['children'] ?? null) ? array_values($item['children']) : [];
+                $navChildKeys = array_map(static fn (array $child): string => (string)($child['key'] ?? ''), $navChildren);
+                $isActive = $item['key'] === $activePage
+                    || ($activePage === 'dashboard' && $item['key'] === 'dashboard')
+                    || in_array($activePage, $navChildKeys, true);
+                ?>
+                <div class="wls-nav-group">
+                    <a class="<?= $isActive ? 'is-active' : '' ?>"
+                       href="<?= $item['url'] ?>"
+                       <?= $isActive && $item['key'] === $activePage ? 'aria-current="page"' : '' ?>>
+                        <span><?= $item['label'] ?></span>
+                    </a>
+                    <?php if ($navChildren !== [] && $isActive): ?>
+                        <div class="wls-nav-subnav" aria-label="<?= $escapeHtml(__('%{1} secondary menu', [$item['label']])) ?>">
+                            <?php foreach ($navChildren as $navChild): ?>
+                                <?php
+                                $navChildKey = (string)($navChild['key'] ?? '');
+                                $navChildUrl = trim((string)($navChild['url'] ?? ''));
+                                if ($navChildKey === '' || $navChildUrl === '') {
+                                    continue;
+                                }
+                                $navChildActive = $navChildKey === $activePage;
+                                ?>
+                                <a class="wls-nav-subnav-item <?= $navChildActive ? 'is-active' : '' ?>"
+                                   href="<?= $escapeHtml($navChildUrl) ?>"
+                                   <?= $navChildActive ? 'aria-current="page"' : '' ?>>
+                                    <?= $escapeHtml((string)($navChild['label'] ?? $navChildKey)) ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
             <?php endforeach; ?>
             <?php if ($panelPluginMenuItems !== []): ?>
                 <div class="wls-shell-nav-divider"><?= __('Plugin Capabilities') ?></div>
                 <?php foreach ($panelPluginMenuItems as $pluginMenuItem): ?>
                     <?php
-                    $pluginMenuUrl = $buildPanelEntryUrl((string)($pluginMenuItem['url'] ?? ''));
                     $pluginMenuLabel = (string)($pluginMenuItem['label'] ?? __('Plugin Panel'));
-                    if ($pluginMenuUrl === '') {
+                    $pluginMenuModule = (string)($pluginMenuItem['module_name'] ?? '');
+                    $pluginMenuKey = $normalizePanelPluginKey((string)($pluginMenuItem['key'] ?? ''));
+                    $pluginMenuChildren = is_array($pluginMenuItem['children'] ?? null) ? array_values($pluginMenuItem['children']) : [];
+                    $pluginMenuUrl = $buildPluginShellUrl($pluginMenuItem);
+                    $pluginMenuActive = $activePage === 'plugin' && $activePanelPluginKey !== '' && $activePanelPluginKey === $pluginMenuKey;
+                    if ($pluginMenuUrl === '' && $pluginMenuChildren === []) {
                         continue;
                     }
                     ?>
-                    <a class="is-plugin"
-                       href="<?= $escapeHtml($pluginMenuUrl) ?>"
-                       data-wls-plugin-nav
-                       data-plugin-module="<?= $escapeHtml((string)($pluginMenuItem['module_name'] ?? '')) ?>">
-                        <span><?= $escapeHtml($pluginMenuLabel) ?></span>
-                    </a>
+                    <?php
+                    $pluginSubnavId = 'wls-plugin-subnav-' . ($pluginMenuKey !== '' ? $pluginMenuKey : substr(md5($pluginMenuModule . $pluginMenuLabel), 0, 10));
+                    ?>
+                    <div class="wls-plugin-nav-group <?= $pluginMenuActive ? 'is-active is-open' : '' ?>"
+                         data-wls-plugin-nav-group
+                         data-plugin-key="<?= $escapeHtml($pluginMenuKey) ?>"
+                         data-plugin-active="<?= $pluginMenuActive ? '1' : '0' ?>">
+                        <div class="wls-plugin-nav-row">
+                            <?php if ($pluginMenuUrl !== ''): ?>
+                                <a class="wls-plugin-nav-trigger is-plugin <?= $pluginMenuChildren !== [] ? 'is-group' : '' ?> <?= $pluginMenuActive ? 'is-active' : '' ?>"
+                                   href="<?= $escapeHtml($pluginMenuUrl) ?>"
+                                   <?= $pluginMenuActive && $activePanelPluginChildKey === '' ? 'aria-current="page"' : '' ?>
+                                   data-plugin-module="<?= $escapeHtml($pluginMenuModule) ?>">
+                                    <span><?= $escapeHtml($pluginMenuLabel) ?></span>
+                                </a>
+                            <?php else: ?>
+                                <span class="wls-plugin-nav-trigger is-plugin <?= $pluginMenuChildren !== [] ? 'is-group' : '' ?> <?= $pluginMenuActive ? 'is-active' : '' ?>">
+                                    <span><?= $escapeHtml($pluginMenuLabel) ?></span>
+                                </span>
+                            <?php endif; ?>
+                            <?php if ($pluginMenuChildren !== []): ?>
+                                <button class="wls-plugin-nav-toggle"
+                                        type="button"
+                                        aria-expanded="<?= $pluginMenuActive ? 'true' : 'false' ?>"
+                                        aria-controls="<?= $escapeHtml($pluginSubnavId) ?>"
+                                        aria-label="<?= $escapeHtml(__('Toggle %{1} menu', [$pluginMenuLabel])) ?>"
+                                        data-wls-plugin-nav-toggle>
+                                    <span aria-hidden="true">&gt;</span>
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($pluginMenuChildren !== []): ?>
+                            <div class="wls-plugin-subnav"
+                                 id="<?= $escapeHtml($pluginSubnavId) ?>"
+                                 aria-label="<?= $escapeHtml(__('Plugin secondary menu')) ?>"
+                                 data-wls-plugin-subnav
+                                 <?= $pluginMenuActive ? '' : 'hidden' ?>>
+                                <?php foreach ($pluginMenuChildren as $pluginChild): ?>
+                                    <?php
+                                    $pluginChildRawUrl = trim((string)($pluginChild['url'] ?? ''));
+                                    $pluginChildUrl = $pluginChildRawUrl !== '' ? $buildPluginShellUrl($pluginMenuItem, $pluginChild) : '';
+                                    $pluginChildLabel = (string)($pluginChild['label'] ?? __('Plugin Panel'));
+                                    $pluginChildKey = $normalizePanelPluginKey((string)($pluginChild['key'] ?? ''));
+                                    $pluginChildActive = $pluginMenuActive && $activePanelPluginChildKey !== '' && $activePanelPluginChildKey === $pluginChildKey;
+                                    if ($pluginChildUrl === '') {
+                                        continue;
+                                    }
+                                    ?>
+                                    <a class="wls-plugin-subnav-item <?= $pluginChildActive ? 'is-active' : '' ?>"
+                                       href="<?= $escapeHtml($pluginChildUrl) ?>"
+                                       <?= $pluginChildActive ? 'aria-current="page"' : '' ?>
+                                       data-plugin-module="<?= $escapeHtml((string)($pluginChild['module_name'] ?? $pluginMenuModule)) ?>">
+                                        <?= $escapeHtml($pluginChildLabel) ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 <?php endforeach; ?>
             <?php endif; ?>
         </nav>
@@ -463,8 +677,11 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
     <main class="wls-shell-main" data-wls-main>
         <header class="wls-shell-header">
             <div>
-                <span class="wls-shell-kicker"><?= __('Independent Server Panel') ?></span>
-                <h1><?= $panelTitle ?></h1>
+                <span class="wls-shell-kicker"
+                      data-wls-page-kicker
+                      data-wls-page-kicker-default="<?= $escapeHtml(__('Independent Server Panel')) ?>"><?= __('Independent Server Panel') ?></span>
+                <h1 data-wls-page-title
+                    data-wls-page-title-default="<?= $escapeHtml((string)$panelTitle) ?>"><?= $panelTitle ?></h1>
             </div>
             <div class="wls-shell-actions">
                 <button type="button"
@@ -486,7 +703,9 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
             <section class="wls-marketplace-page"
                      aria-labelledby="wls-marketplace-title"
                      data-wls-marketplace-source="appstore"
-                     data-wls-marketplace-tag="<?= htmlspecialchars($wlsPluginTag, ENT_QUOTES, 'UTF-8') ?>">
+                     data-wls-marketplace-tag="<?= htmlspecialchars($wlsPluginTag, ENT_QUOTES, 'UTF-8') ?>"
+                     data-wls-marketplace-platform-url="<?= $escapeHtml($appStorePlatformUrl) ?>"
+                     data-wls-marketplace-platform-source="<?= $escapeHtml($appStorePlatformSource) ?>">
                 <h2 class="wls-visually-hidden" id="wls-marketplace-title"><?= __('Plugin Marketplace') ?></h2>
                 <?php if ($panelNotice !== ''): ?>
                     <section class="wls-inline-success" aria-label="<?= __('Panel operation result') ?>">
@@ -498,6 +717,24 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         <?= $escapeHtml($panelError) ?>
                     </section>
                 <?php endif; ?>
+                <section class="wls-market-endpoint-strip"
+                         aria-label="<?= __('AppStore endpoint') ?>"
+                         data-wls-marketplace-endpoint>
+                    <div class="wls-market-endpoint-main">
+                        <span class="wls-shell-kicker"><?= __('Marketplace Endpoint') ?></span>
+                        <code><?= $escapeHtml($appStorePlatformUrl) ?></code>
+                        <p><?= __('Local development uses https://app.weline.test:9523; deployed tests use https://app.aiweline.com from deploy current.json.') ?></p>
+                    </div>
+                    <div class="wls-market-endpoint-meta">
+                        <span class="wls-status-pill <?= $escapeHtml($appStorePlatformEnvironmentClass) ?>">
+                            <?= $escapeHtml($appStorePlatformEnvironmentLabel) ?>
+                        </span>
+                        <span>
+                            <?= __('Source') ?>:
+                            <code><?= $escapeHtml($appStorePlatformSource) ?></code>
+                        </span>
+                    </div>
+                </section>
                 <?php if ($hasPanelPluginRefreshResult): ?>
                     <section class="wls-plugin-refresh-summary"
                              aria-label="<?= __('Plugin refresh summary') ?>"
@@ -536,42 +773,29 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </div>
                     </section>
                 <?php endif; ?>
-                <div class="wls-market-source-grid">
-                    <article class="wls-market-source-card">
-                        <span class="wls-status-pill"><?= __('Online source') ?></span>
-                        <h3><?= __('Online WLS Plugins') ?></h3>
-                        <p><?= __('Open the AppStore with the WLS plugin tag filter applied.') ?></p>
+                <section class="wls-marketplace-console"
+                         aria-label="<?= __('Marketplace controls') ?>">
+                    <div class="wls-marketplace-console-main">
+                        <span class="wls-shell-kicker"><?= __('WLS Plugin Source') ?></span>
+                        <h3><?= __('AppStore filtered by WLS module tags') ?></h3>
+                        <p>
+                            <?= __('Marketplace installation opens the AppStore with %{1} and backend surface filters. Installed modules are listed below after they declare WLS panel capability metadata.', [$wlsPluginTag]) ?>
+                        </p>
+                        <div class="wls-inline-chip-list">
+                            <span><?= $escapeHtml($wlsPluginTag) ?></span>
+                            <span><?= $escapeHtml('surface:' . $wlsPluginSurface) ?></span>
+                            <span><?= __('Installed: %{1}', [$installedWlsPluginCount]) ?></span>
+                        </div>
+                    </div>
+                    <div class="wls-marketplace-console-actions">
                         <a class="wls-primary-button"
                            href="<?= htmlspecialchars($wlsOnlineMarketplaceUrl, ENT_QUOTES, 'UTF-8') ?>">
-                            <?= __('Open Online Marketplace') ?>
+                            <?= __('Open AppStore') ?>
                         </a>
-                    </article>
-                    <article class="wls-market-source-card">
-                        <span class="wls-status-pill"><?= __('Installed') ?></span>
-                        <h3><?= __('Installed WLS Plugins') ?></h3>
-                        <strong class="wls-market-source-count"><?= $installedWlsPluginCount ?></strong>
-                        <p><?= __('Review installed modules that declared module:wls.') ?></p>
                         <a class="wls-secondary-button"
                            href="<?= htmlspecialchars($wlsInstalledPluginsUrl, ENT_QUOTES, 'UTF-8') ?>">
-                            <?= __('Installed Plugins') ?>
+                            <?= __('AppStore Installed') ?>
                         </a>
-                    </article>
-                    <article class="wls-market-source-card">
-                        <span class="wls-status-pill"><?= __('Contract') ?></span>
-                        <h3><?= __('Tag Contract') ?></h3>
-                        <p><?= __('Only modules declaring module:wls appear in this panel marketplace flow.') ?></p>
-                        <code><?= htmlspecialchars($wlsPluginTag, ENT_QUOTES, 'UTF-8') ?></code>
-                    </article>
-                </div>
-                <section class="wls-installed-plugin-section"
-                         id="installed-plugins"
-                         aria-labelledby="wls-installed-plugins-title"
-                         data-wls-installed-plugin-count="<?= $installedWlsPluginCount ?>">
-                    <div class="wls-section-head">
-                        <div>
-                            <span class="wls-shell-kicker"><?= __('Panel Capabilities') ?></span>
-                            <h3 id="wls-installed-plugins-title"><?= __('Installed Panel Plugins') ?></h3>
-                        </div>
                         <form class="wls-inline-action-form"
                               method="post"
                               action="<?= htmlspecialchars($pluginRefreshUrl, ENT_QUOTES, 'UTF-8') ?>"
@@ -583,6 +807,18 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                             </button>
                         </form>
                     </div>
+                </section>
+                <section class="wls-installed-plugin-section"
+                         id="installed-plugins"
+                         aria-labelledby="wls-installed-plugins-title"
+                         data-wls-installed-plugin-count="<?= $installedWlsPluginCount ?>">
+                    <div class="wls-section-head">
+                        <div>
+                            <span class="wls-shell-kicker"><?= __('Panel Capabilities') ?></span>
+                            <h3 id="wls-installed-plugins-title"><?= __('Installed Panel Plugins') ?></h3>
+                        </div>
+                        <span class="wls-status-pill"><?= __('%{1} installed', [$installedWlsPluginCount]) ?></span>
+                    </div>
                     <?php if ($installedWlsPluginError !== ''): ?>
                         <p class="wls-inline-warning">
                             <?= __('Installed plugin discovery failed: %{1}', [$installedWlsPluginError]) ?>
@@ -593,7 +829,18 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                             <span><?= __('Install modules tagged module:wls to extend this standalone panel.') ?></span>
                         </div>
                     <?php else: ?>
-                        <div class="wls-installed-plugin-grid">
+                        <div class="wls-project-table-wrap wls-installed-plugin-table-wrap">
+                            <table class="wls-project-table wls-installed-plugin-table">
+                                <thead>
+                                <tr>
+                                    <th><?= __('Plugin') ?></th>
+                                    <th><?= __('Module') ?></th>
+                                    <th><?= __('Tags') ?></th>
+                                    <th><?= __('Panel Entry') ?></th>
+                                    <th><?= __('Action') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
                             <?php foreach ($installedWlsPlugins as $plugin): ?>
                                 <?php
                                 $pluginName = (string)($plugin['display_name'] ?? $plugin['module_name'] ?? '');
@@ -601,99 +848,118 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                                 $pluginDescription = (string)($plugin['description'] ?? '');
                                 $pluginTags = is_array($plugin['tag_codes'] ?? null) ? $plugin['tag_codes'] : [];
                                 $pluginSurfaces = is_array($plugin['surface_codes'] ?? null) ? $plugin['surface_codes'] : [];
-                                $pluginPanelUrl = trim((string)($plugin['wls_panel_url']
+                                $pluginPanelUrl = trim((string)($plugin['panel_entry_url']
+                                    ?? $plugin['wls_panel_url']
                                     ?? $plugin['panel_url']
                                     ?? $plugin['backend_url']
                                     ?? $plugin['capability_url']
                                     ?? $plugin['url']
                                     ?? ''));
+                                $installedPluginOpenUrl = $buildPluginShellUrlForModule($pluginModule) ?: ($pluginPanelUrl !== '' ? $buildPanelEntryUrl($pluginPanelUrl) : '');
+                                $pluginTagsForTable = [];
+                                foreach (array_merge($pluginTags, $pluginSurfaces) as $tag) {
+                                    $tagCode = trim((string)$tag);
+                                    if ($tagCode === '' || in_array($tagCode, $pluginTagsForTable, true)) {
+                                        continue;
+                                    }
+                                    $pluginTagsForTable[] = $tagCode;
+                                }
                                 ?>
-                                <article class="wls-installed-plugin-card">
-                                    <div class="wls-card-head">
-                                        <div>
-                                            <h4><?= htmlspecialchars($pluginName !== '' ? $pluginName : $pluginModule, ENT_QUOTES, 'UTF-8') ?></h4>
-                                            <code><?= htmlspecialchars($pluginModule, ENT_QUOTES, 'UTF-8') ?></code>
+                                <tr>
+                                    <td>
+                                        <div class="wls-list-primary">
+                                            <strong><?= htmlspecialchars($pluginName !== '' ? $pluginName : $pluginModule, ENT_QUOTES, 'UTF-8') ?></strong>
+                                            <?php if ($pluginDescription !== ''): ?>
+                                                <span><?= htmlspecialchars($pluginDescription, ENT_QUOTES, 'UTF-8') ?></span>
+                                            <?php endif; ?>
                                         </div>
-                                        <span class="wls-status-pill"><?= __('Installed') ?></span>
-                                    </div>
-                                    <?php if ($pluginDescription !== ''): ?>
-                                        <p><?= htmlspecialchars($pluginDescription, ENT_QUOTES, 'UTF-8') ?></p>
-                                    <?php endif; ?>
-                                     <div class="wls-tag-list">
-                                         <?php foreach (array_slice(array_merge($pluginTags, $pluginSurfaces), 0, 8) as $tag): ?>
-                                             <span><?= htmlspecialchars((string)$tag, ENT_QUOTES, 'UTF-8') ?></span>
-                                         <?php endforeach; ?>
-                                     </div>
-                                     <div class="wls-card-footer">
-                                         <?php if ($pluginPanelUrl !== ''): ?>
-                                             <a class="wls-primary-button"
-                                                data-wls-installed-plugin-open
-                                                href="<?= htmlspecialchars($buildPanelEntryUrl($pluginPanelUrl), ENT_QUOTES, 'UTF-8') ?>">
-                                                 <?= __('Open Plugin Panel') ?>
-                                             </a>
-                                         <?php else: ?>
-                                             <span class="wls-secondary-button is-disabled" aria-disabled="true">
-                                                 <?= __('No panel entry declared') ?>
-                                             </span>
-                                         <?php endif; ?>
-                                     </div>
-                                 </article>
+                                    </td>
+                                    <td>
+                                        <code><?= htmlspecialchars($pluginModule, ENT_QUOTES, 'UTF-8') ?></code>
+                                    </td>
+                                    <td>
+                                        <?php if ($pluginTagsForTable === []): ?>
+                                            <span class="wls-muted-text"><?= __('No tags') ?></span>
+                                        <?php else: ?>
+                                            <div class="wls-tag-list">
+                                                <?php foreach (array_slice($pluginTagsForTable, 0, 8) as $tag): ?>
+                                                    <span><?= htmlspecialchars((string)$tag, ENT_QUOTES, 'UTF-8') ?></span>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <span class="wls-status-pill <?= $installedPluginOpenUrl !== '' ? 'is-on' : 'is-off' ?>">
+                                            <?= $installedPluginOpenUrl !== '' ? __('Ready') : __('Not declared') ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($installedPluginOpenUrl !== ''): ?>
+                                            <a class="wls-primary-button"
+                                               data-wls-installed-plugin-open
+                                               href="<?= htmlspecialchars($installedPluginOpenUrl, ENT_QUOTES, 'UTF-8') ?>">
+                                                <?= __('Open Panel') ?>
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="wls-secondary-button is-disabled" aria-disabled="true">
+                                                <?= __('No panel entry') ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
                             <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     <?php endif; ?>
                 </section>
-                <div class="wls-filter-bar">
-                    <label>
-                        <span><?= __('Type Tag') ?></span>
-                        <input type="text" value="<?= htmlspecialchars($wlsPluginTag, ENT_QUOTES, 'UTF-8') ?>" readonly>
-                    </label>
-                    <label>
-                        <span><?= __('Search') ?></span>
-                        <input type="text" value="wls-file-manager" aria-label="<?= __('Search WLS plugins') ?>">
-                    </label>
-                    <a class="wls-secondary-button"
-                       href="<?= htmlspecialchars($wlsOnlineMarketplaceUrl, ENT_QUOTES, 'UTF-8') ?>">
-                        <?= __('Filter') ?>
-                    </a>
-                </div>
-
-                <div class="wls-plugin-grid">
-                    <?php foreach ($plugins as $plugin): ?>
-                        <article class="wls-plugin-card">
-                            <div class="wls-card-head">
-                                <div>
-                                    <h2><?= $plugin['name'] ?></h2>
-                                    <code><?= $plugin['module'] ?></code>
-                                </div>
-                                <span class="wls-status-pill"><?= $plugin['status'] ?></span>
-                            </div>
-                            <p><?= $plugin['summary'] ?></p>
-                            <div class="wls-tag-list">
-                                <?php foreach ($plugin['tags'] as $tag): ?>
-                                    <span><?= $tag ?></span>
-                                <?php endforeach; ?>
-                            </div>
-                            <div class="wls-card-footer">
-                                <a class="wls-primary-button"
-                                   href="<?= htmlspecialchars($buildWlsMarketplaceUrl((string)$plugin['name']), ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= __('Open Install Flow') ?>
-                                </a>
-                                <small><?= __('AppStore keeps the signature, hash, dependency, and permission checks.') ?></small>
-                            </div>
-                        </article>
-                    <?php endforeach; ?>
-                </div>
             </section>
-        <?php elseif ($activePage === 'security'): ?>
+        <?php elseif ($activePage === 'plugin'): ?>
+            <?php
+            $pluginFrameUrl = $buildPanelEntryUrlWithParams(
+                (string)($panelPluginViewerContext['url'] ?? ''),
+                is_array($panelPluginViewerContext['forward_params'] ?? null) ? $panelPluginViewerContext['forward_params'] : []
+            );
+            ?>
+            <section class="wls-plugin-host-page"
+                     aria-label="<?= $escapeHtml($panelPluginViewerLabel !== '' ? $panelPluginViewerLabel : (string)__('Plugin Capability')) ?>">
+                <?php if ($pluginFrameUrl === ''): ?>
+                    <div class="wls-empty-state">
+                        <strong><?= __('No plugin page selected.') ?></strong>
+                        <span><?= __('Choose a plugin capability from the sidebar, or refresh panel plugins after installing a WLS module.') ?></span>
+                    </div>
+                <?php else: ?>
+                    <iframe class="wls-plugin-host-frame"
+                            src="<?= $escapeHtml($pluginFrameUrl) ?>"
+                            title="<?= $escapeHtml($panelPluginViewerLabel !== '' ? $panelPluginViewerLabel : (string)__('Plugin Capability')) ?>"
+                            loading="eager"></iframe>
+                <?php endif; ?>
+            </section>
+        <?php elseif (in_array($activePage, ['security', 'security_logs', 'security_rules', 'security_policy', 'security_audit'], true)): ?>
+            <?php
+            $securityPageIsOverview = $activePage === 'security';
+            $securityPageIsLogs = $activePage === 'security_logs';
+            $securityPageIsRules = $activePage === 'security_rules';
+            $securityPageIsPolicy = $activePage === 'security_policy';
+            $securityPageIsAudit = $activePage === 'security_audit';
+            $securityPageHeading = match ($activePage) {
+                'security_logs' => __('Attack Logs'),
+                'security_rules' => __('Security Rules'),
+                'security_policy' => __('Project Security Policy'),
+                'security_audit' => __('Policy Audit'),
+                default => __('Security Overview'),
+            };
+            ?>
             <section class="wls-security-page" id="security-rules" aria-labelledby="wls-security-title">
                 <div class="wls-section-head">
                     <div>
                         <span class="wls-shell-kicker"><?= __('Protection') ?></span>
-                        <h2 id="wls-security-title"><?= __('Security Rules And Attack Logs') ?></h2>
+                        <h2 id="wls-security-title"><?= $escapeHtml($securityPageHeading) ?></h2>
                     </div>
                     <div class="wls-section-actions">
-                        <a class="wls-secondary-button" href="<?= $escapeHtml($securityRulesUrl) ?>"><?= __('Advanced Rules') ?></a>
-                        <a class="wls-secondary-button" href="<?= $escapeHtml($attackLogUrl) ?>"><?= __('Attack Logs') ?></a>
+                        <a class="wls-secondary-button" href="<?= $escapeHtml($securityRulesPanelUrl) ?>"><?= __('Rules') ?></a>
+                        <a class="wls-secondary-button" href="<?= $escapeHtml($securityLogsUrl) ?>"><?= __('Attack Logs') ?></a>
+                        <a class="wls-secondary-button" href="<?= $escapeHtml($securityAdvancedRulesUrl) ?>"><?= __('Advanced Rules') ?></a>
                     </div>
                 </div>
                 <?php if ($panelNotice !== ''): ?>
@@ -711,6 +977,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         <?= $escapeHtml($securityPanelError) ?>
                     </section>
                 <?php endif; ?>
+                <?php if ($securityPageIsOverview): ?>
                 <div class="wls-security-metric-grid">
                     <article>
                         <span><?= __('Events In 7d') ?></span>
@@ -819,6 +1086,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </div>
                     <?php endif; ?>
                 </section>
+                <?php endif; ?>
                 <?php
                 $domainPolicyAvailable = !empty($domainOverrideEditor['available']);
                 $domainPolicyRuleEditor = is_array($domainOverrideEditor['rule_editor'] ?? null) ? $domainOverrideEditor['rule_editor'] : [];
@@ -837,6 +1105,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                 $domainPolicyInheritanceRows = is_array($domainPolicyInheritance['rows'] ?? null) ? array_values($domainPolicyInheritance['rows']) : [];
                 $domainPolicyInheritanceCounts = is_array($domainPolicyInheritance['counts'] ?? null) ? $domainPolicyInheritance['counts'] : [];
                 ?>
+                <?php if ($securityPageIsPolicy): ?>
                 <section class="wls-domain-policy"
                          id="project-security-policy"
                          data-wls-domain-policy
@@ -1244,6 +1513,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </form>
                     <?php endif; ?>
                 </section>
+                <?php endif; ?>
+                <?php if ($securityPageIsAudit): ?>
                 <section class="wls-security-policy-audit"
                          id="security-policy-audit"
                          data-wls-security-policy-audit
@@ -1258,6 +1529,81 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </div>
                         <span class="wls-status-pill"><?= __('Latest changes') ?></span>
                     </div>
+                    <form class="wls-filter-bar wls-security-audit-filter" method="get" action="<?= $escapeHtml($securityAuditUrl) ?>">
+                        <input type="hidden" name="security_scope" value="<?= $escapeHtml((string)($securityFilters['scope'] ?? 'all')) ?>">
+                        <input type="hidden" name="security_instance" value="<?= $escapeHtml((string)($securityFilters['instance'] ?? '')) ?>">
+                        <input type="hidden" name="security_ip" value="<?= $escapeHtml((string)($securityFilters['ip'] ?? '')) ?>">
+                        <input type="hidden" name="security_severity" value="<?= $escapeHtml((string)($securityFilters['severity'] ?? '')) ?>">
+                        <input type="hidden" name="security_type" value="<?= $escapeHtml((string)($securityFilters['type'] ?? '')) ?>">
+                        <input type="hidden" name="security_blocked" value="<?= $escapeHtml((string)($securityFilters['blocked'] ?? '')) ?>">
+                        <input type="hidden" name="security_limit" value="<?= (int)($securityFilters['limit'] ?? 10) ?>">
+                        <label>
+                            <span><?= __('Audit Action') ?></span>
+                            <select name="policy_audit_action">
+                                <option value=""><?= __('All actions') ?></option>
+                                <?php foreach ([
+                                    'common_rules_saved' => __('Common rules saved'),
+                                    'domain_policy_saved' => __('Project policy saved'),
+                                    'domain_policy_removed' => __('Project policy removed'),
+                                    'rules_json_saved' => __('Rules JSON saved'),
+                                ] as $auditActionValue => $auditActionLabel): ?>
+                                    <option value="<?= $escapeHtml($auditActionValue) ?>" <?= (string)($securityPolicyAuditFilters['action'] ?? '') === $auditActionValue ? 'selected' : '' ?>>
+                                        <?= $escapeHtml((string)$auditActionLabel) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label>
+                            <span><?= __('Audit Source') ?></span>
+                            <select name="policy_audit_source">
+                                <option value=""><?= __('All sources') ?></option>
+                                <?php foreach ([
+                                    'visual_panel' => __('Visual editor'),
+                                    'domain_override_panel' => __('Project policy editor'),
+                                    'advanced_json' => __('Advanced JSON'),
+                                ] as $auditSourceValue => $auditSourceLabel): ?>
+                                    <option value="<?= $escapeHtml($auditSourceValue) ?>" <?= (string)($securityPolicyAuditFilters['source'] ?? '') === $auditSourceValue ? 'selected' : '' ?>>
+                                        <?= $escapeHtml((string)$auditSourceLabel) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label>
+                            <span><?= __('Audit Domain') ?></span>
+                            <input type="text"
+                                   name="policy_audit_domain"
+                                   value="<?= $escapeHtml((string)($securityPolicyAuditFilters['domain_input'] ?? $securityPolicyAuditFilters['domain'] ?? '')) ?>"
+                                   placeholder="<?= __('Use * for all domains') ?>">
+                        </label>
+                        <label>
+                            <span><?= __('Changed Section') ?></span>
+                            <input type="text"
+                                   name="policy_audit_section"
+                                   value="<?= $escapeHtml((string)($securityPolicyAuditFilters['section'] ?? '')) ?>"
+                                   placeholder="<?= __('Any section') ?>">
+                        </label>
+                        <label>
+                            <span><?= __('Search Audit') ?></span>
+                            <input type="text"
+                                   name="policy_audit_keyword"
+                                   value="<?= $escapeHtml((string)($securityPolicyAuditFilters['keyword'] ?? '')) ?>"
+                                   placeholder="<?= __('Action, source, domain, or section') ?>">
+                        </label>
+                        <label>
+                            <span><?= __('Audit Limit') ?></span>
+                            <select name="policy_audit_limit">
+                                <?php foreach ([10, 20, 50] as $auditLimitOption): ?>
+                                    <option value="<?= $auditLimitOption ?>" <?= (int)($securityPolicyAuditFilters['limit'] ?? 20) === $auditLimitOption ? 'selected' : '' ?>>
+                                        <?= $auditLimitOption ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <div class="wls-filter-actions">
+                            <button class="wls-primary-button" type="submit"><?= __('Apply Audit Filters') ?></button>
+                            <a class="wls-secondary-button" href="<?= $escapeHtml($securityAuditUrl) ?>"><?= __('Reset Audit') ?></a>
+                        </div>
+                    </form>
                     <?php if ($securityPolicyAudit === []): ?>
                         <div class="wls-empty-state">
                             <strong><?= __('No policy changes recorded yet.') ?></strong>
@@ -1277,7 +1623,9 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                                 ?>
                                 <article data-wls-security-audit-entry
                                          data-audit-action="<?= $escapeHtml((string)($audit['action'] ?? '')) ?>"
-                                         data-audit-domain="<?= $escapeHtml((string)($audit['domain'] ?? '')) ?>">
+                                         data-audit-source="<?= $escapeHtml((string)($audit['source'] ?? '')) ?>"
+                                         data-audit-domain="<?= $escapeHtml((string)($audit['domain'] ?? '')) ?>"
+                                         data-audit-sections="<?= $escapeHtml(implode(',', array_map('strval', $auditSections))) ?>">
                                     <div class="wls-security-audit-head">
                                         <div>
                                             <strong><?= $escapeHtml((string)($audit['action_label'] ?? __('Policy updated'))) ?></strong>
@@ -1317,6 +1665,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </div>
                     <?php endif; ?>
                 </section>
+                <?php endif; ?>
+                <?php if ($securityPageIsRules): ?>
                 <div class="wls-security-layout">
                     <?php
                     $rateLimitRule = $ruleEditor('rate_limit');
@@ -1688,6 +2038,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </div>
                     </section>
                 </div>
+                <?php endif; ?>
+                <?php if ($securityPageIsLogs): ?>
                 <section class="wls-security-events" id="security-logs" aria-label="<?= __('Recent attack events') ?>">
                     <div class="wls-section-head">
                         <div>
@@ -1696,7 +2048,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </div>
                         <a class="wls-secondary-button" href="<?= $escapeHtml($attackLogUrl) ?>"><?= __('Open Full Log') ?></a>
                     </div>
-                    <form class="wls-filter-bar wls-security-log-filter" method="get" action="<?= $escapeHtml($securityUrl) ?>">
+                    <form class="wls-filter-bar wls-security-log-filter" method="get" action="<?= $escapeHtml($securityLogsUrl) ?>">
                         <label>
                             <span><?= __('Project Scope') ?></span>
                             <select name="security_scope">
@@ -1766,7 +2118,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </label>
                         <div class="wls-filter-actions">
                             <button class="wls-primary-button" type="submit"><?= __('Apply Filters') ?></button>
-                            <a class="wls-secondary-button" href="<?= $escapeHtml($securityUrl . '#security-logs') ?>"><?= __('Reset') ?></a>
+                            <a class="wls-secondary-button" href="<?= $escapeHtml($securityLogsUrl) ?>"><?= __('Reset') ?></a>
                         </div>
                     </form>
                     <?php if ($securityRecentAttacks === []): ?>
@@ -1827,8 +2179,9 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </div>
                     </div>
                 </section>
+                <?php endif; ?>
             </section>
-        <?php else: ?>
+        <?php elseif ($activePage === 'dashboard'): ?>
             <section class="wls-metric-grid" aria-label="<?= __('Panel summary') ?>">
                 <article>
                     <span><?= __('Managed Projects') ?></span>
@@ -1900,7 +2253,18 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         <span><?= __('WLS will show PHP, database, file manager, and deploy plugin slots here.') ?></span>
                     </div>
                 <?php else: ?>
-                    <div class="wls-operation-grid">
+                    <div class="wls-operation-table-wrap">
+                        <table class="wls-operation-table">
+                            <thead>
+                            <tr>
+                                <th><?= __('Capability') ?></th>
+                                <th><?= __('Plugin') ?></th>
+                                <th><?= __('Required Signal') ?></th>
+                                <th><?= __('Status') ?></th>
+                                <th><?= __('Action') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
                         <?php foreach ($operationCapabilityItems as $capability): ?>
                             <?php
                             $capabilityKey = (string)($capability['key'] ?? '');
@@ -1913,8 +2277,10 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                             $capabilityStatusLabel = (string)($capability['status_label'] ?? '');
                             $capabilityActionLabel = (string)($capability['action_label'] ?? '');
                             $capabilityActionUrl = trim((string)($capability['action_url'] ?? ''));
-                            $capabilityPanelActionUrl = $capabilityActionUrl !== '' ? $buildPanelEntryUrl($capabilityActionUrl) : '';
                             $capabilityInstallQuery = (string)($capability['install_query'] ?? $capabilityTitle);
+                            $capabilityPanelActionUrl = $capabilityInstalled && $capabilityActionUrl !== ''
+                                ? $buildOperationCapabilityUrl($capabilityKey, $capabilityInstallQuery)
+                                : '';
                             $capabilityInstallUrl = $buildWlsMarketplaceUrl($capabilityInstallQuery);
                             $capabilityTags = array_values(array_filter([
                                 $wlsPluginTag,
@@ -1923,58 +2289,60 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                             ]));
                             $capabilityCodes = is_array($capability['capabilities'] ?? null) ? array_values($capability['capabilities']) : [];
                             ?>
-                            <article class="wls-operation-card <?= $capabilityInstalled ? 'is-installed' : 'is-missing' ?>"
-                                     data-wls-operation-card
-                                     data-operation-key="<?= $escapeHtml($capabilityKey) ?>"
-                                     data-required-tag="<?= $escapeHtml($capabilityRequiredTag) ?>">
-                                <div class="wls-card-head">
-                                    <div>
-                                        <h3><?= $escapeHtml($capabilityTitle) ?></h3>
-                                        <code><?= $escapeHtml($capabilityModule) ?></code>
+                            <tr class="<?= $capabilityInstalled ? 'is-installed' : 'is-missing' ?>"
+                                data-wls-operation-row
+                                data-operation-key="<?= $escapeHtml($capabilityKey) ?>"
+                                data-required-tag="<?= $escapeHtml($capabilityRequiredTag) ?>">
+                                <td>
+                                    <div class="wls-list-primary">
+                                        <strong><?= $escapeHtml($capabilityTitle) ?></strong>
+                                        <span><?= $escapeHtml($capabilityDescription) ?></span>
                                     </div>
+                                </td>
+                                <td>
+                                    <code><?= $escapeHtml($capabilityModule) ?></code>
+                                </td>
+                                <td>
+                                    <div class="wls-inline-chip-list">
+                                        <?php foreach (array_slice($capabilityTags, 0, 3) as $tag): ?>
+                                            <span><?= $escapeHtml($tag) ?></span>
+                                        <?php endforeach; ?>
+                                        <?php foreach (array_slice($capabilityCodes, 0, 2) as $code): ?>
+                                            <span><?= $escapeHtml((string)$code) ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </td>
+                                <td>
                                     <span class="wls-status-pill <?= $capabilityInstalled ? 'is-on' : 'is-off' ?>">
                                         <?= $escapeHtml($capabilityStatusLabel) ?>
                                     </span>
-                                </div>
-                                <p><?= $escapeHtml($capabilityDescription) ?></p>
-                                <div class="wls-operation-meta">
-                                    <div>
-                                        <span><?= __('Required Tag') ?></span>
-                                        <code><?= $escapeHtml($capabilityRequiredTag) ?></code>
+                                </td>
+                                <td>
+                                    <div class="wls-row-action-cell">
+                                        <?php if ($capabilityInstalled && $capabilityPanelActionUrl === ''): ?>
+                                            <span class="wls-secondary-button is-disabled" aria-disabled="true">
+                                                <?= $escapeHtml($capabilityActionLabel) ?>
+                                            </span>
+                                            <small><?= __('No WLS panel page declared yet.') ?></small>
+                                        <?php elseif ($capabilityInstalled): ?>
+                                            <a class="wls-primary-button"
+                                               href="<?= $escapeHtml($capabilityPanelActionUrl) ?>"
+                                               data-plugin-module="<?= $escapeHtml($capabilityModule) ?>">
+                                                <?= $escapeHtml($capabilityActionLabel) ?>
+                                            </a>
+                                            <small><?= __('Opens inside WLS panel shell.') ?></small>
+                                        <?php else: ?>
+                                            <a class="wls-secondary-button" href="<?= $escapeHtml($capabilityInstallUrl) ?>">
+                                                <?= __('Install Plugin') ?>
+                                            </a>
+                                            <small><?= __('AppStore opens with WLS tags prefilled.') ?></small>
+                                        <?php endif; ?>
                                     </div>
-                                    <div>
-                                        <span><?= __('Feature Tag') ?></span>
-                                        <code><?= $escapeHtml($capabilityFeatureTag) ?></code>
-                                    </div>
-                                </div>
-                                <div class="wls-tag-list">
-                                    <?php foreach ($capabilityTags as $tag): ?>
-                                        <span><?= $escapeHtml($tag) ?></span>
-                                    <?php endforeach; ?>
-                                    <?php foreach (array_slice($capabilityCodes, 0, 3) as $code): ?>
-                                        <span><?= $escapeHtml((string)$code) ?></span>
-                                    <?php endforeach; ?>
-                                </div>
-                                <div class="wls-card-footer">
-                                    <?php if ($capabilityInstalled && $capabilityActionUrl === ''): ?>
-                                        <span class="wls-secondary-button is-disabled" aria-disabled="true">
-                                            <?= $escapeHtml($capabilityActionLabel) ?>
-                                        </span>
-                                        <small><?= __('Installed plugin has not exposed a WLS panel URL yet.') ?></small>
-                                    <?php else: ?>
-                                        <a class="<?= $capabilityInstalled ? 'wls-primary-button' : 'wls-secondary-button' ?>"
-                                           href="<?= $escapeHtml($capabilityInstalled ? $capabilityPanelActionUrl : $capabilityInstallUrl) ?>">
-                                            <?= $escapeHtml($capabilityInstalled ? $capabilityActionLabel : (string)__('Install Plugin')) ?>
-                                        </a>
-                                        <small>
-                                            <?= $capabilityInstalled
-                                                ? __('Open the contributed WLS panel page when the plugin exposes it.')
-                                                : __('Install flow stays inside AppStore with WLS tags prefilled.') ?>
-                                        </small>
-                                    <?php endif; ?>
-                                </div>
-                            </article>
+                                </td>
+                            </tr>
                         <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 <?php endif; ?>
             </section>
@@ -1989,7 +2357,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         <span class="wls-shell-kicker"><?= __('Plugin Menu') ?></span>
                         <h2 id="wls-plugin-contributions-title"><?= __('WLS Panel Plugin Entries') ?></h2>
                     </div>
-                    <a class="wls-secondary-button" href="<?= $escapeHtml($marketplaceUrl . '#installed-plugins') ?>">
+                    <a class="wls-secondary-button" href="<?= $escapeHtml($marketplaceUrl) ?>">
                         <?= __('Manage Plugins') ?>
                     </a>
                 </div>
@@ -2004,56 +2372,124 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         <span><?= __('Installed WLS plugins can declare wls_panel.menu entries in module meta to extend this standalone panel.') ?></span>
                     </div>
                 <?php else: ?>
-                    <div class="wls-plugin-contribution-grid">
+                    <div class="wls-plugin-menu-table-wrap">
+                        <table class="wls-plugin-menu-table">
+                            <thead>
+                            <tr>
+                                <th><?= __('Plugin Entry') ?></th>
+                                <th><?= __('Module') ?></th>
+                                <th><?= __('Secondary Menu') ?></th>
+                                <th><?= __('Action') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
                         <?php foreach ($panelPluginMenuItems as $pluginEntry): ?>
                             <?php
-                            $pluginEntryUrl = $buildPanelEntryUrl((string)($pluginEntry['url'] ?? ''));
+                            $pluginEntryUrl = $buildPluginShellUrl($pluginEntry);
                             $pluginEntryLabel = (string)($pluginEntry['label'] ?? __('Plugin Panel'));
                             $pluginEntryDescription = (string)($pluginEntry['description'] ?? '');
                             $pluginEntryModule = (string)($pluginEntry['module_name'] ?? '');
                             $pluginEntryName = (string)($pluginEntry['plugin_name'] ?? $pluginEntryModule);
                             $pluginEntryTags = is_array($pluginEntry['tag_codes'] ?? null) ? array_values($pluginEntry['tag_codes']) : [];
+                            $pluginEntryChildren = is_array($pluginEntry['children'] ?? null) ? array_values($pluginEntry['children']) : [];
                             ?>
-                            <article class="wls-plugin-contribution-card"
-                                     data-wls-plugin-contribution-card
-                                     data-plugin-module="<?= $escapeHtml($pluginEntryModule) ?>">
-                                <div class="wls-card-head">
-                                    <div>
-                                        <h3><?= $escapeHtml($pluginEntryLabel) ?></h3>
-                                        <code><?= $escapeHtml($pluginEntryModule) ?></code>
-                                    </div>
-                                    <span class="wls-status-pill is-on"><?= __('Loaded') ?></span>
-                                </div>
-                                <?php if ($pluginEntryDescription !== ''): ?>
-                                    <p><?= $escapeHtml($pluginEntryDescription) ?></p>
-                                <?php else: ?>
-                                    <p><?= __('This installed plugin declared a WLS panel menu entry.') ?></p>
-                                <?php endif; ?>
-                                <div class="wls-tag-list">
-                                    <?php foreach (array_slice($pluginEntryTags, 0, 6) as $tag): ?>
-                                        <span><?= $escapeHtml((string)$tag) ?></span>
-                                    <?php endforeach; ?>
-                                </div>
-                                <div class="wls-card-footer">
-                                    <?php if ($pluginEntryUrl !== ''): ?>
-                                        <a class="wls-primary-button"
-                                           href="<?= $escapeHtml($pluginEntryUrl) ?>"
-                                           data-wls-plugin-contribution-open>
-                                            <?= __('Open Panel Entry') ?>
-                                        </a>
-                                    <?php else: ?>
-                                        <span class="wls-secondary-button is-disabled" aria-disabled="true">
-                                            <?= __('No panel entry declared') ?>
+                            <tr data-wls-plugin-contribution-row
+                                data-plugin-module="<?= $escapeHtml($pluginEntryModule) ?>">
+                                <td>
+                                    <div class="wls-list-primary">
+                                        <strong><?= $escapeHtml($pluginEntryLabel) ?></strong>
+                                        <span>
+                                            <?= $pluginEntryDescription !== ''
+                                                ? $escapeHtml($pluginEntryDescription)
+                                                : __('This installed plugin declared a WLS panel menu entry.') ?>
                                         </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="wls-list-primary is-compact">
+                                        <code><?= $escapeHtml($pluginEntryModule) ?></code>
+                                        <span><?= __('Contributed by %{1}', [$pluginEntryName !== '' ? $pluginEntryName : $pluginEntryModule]) ?></span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <?php if ($pluginEntryChildren === []): ?>
+                                        <span class="wls-muted-text"><?= __('No secondary menu declared') ?></span>
+                                    <?php else: ?>
+                                        <div class="wls-inline-chip-list">
+                                            <?php foreach (array_slice($pluginEntryChildren, 0, 5) as $pluginChild): ?>
+                                                <?php
+                                                if (!is_array($pluginChild)) {
+                                                    continue;
+                                                }
+                                                $pluginChildLabel = (string)($pluginChild['label'] ?? __('Plugin Page'));
+                                                $pluginChildUrl = $buildPluginShellUrl($pluginEntry, $pluginChild);
+                                                ?>
+                                                <?php if ($pluginChildUrl !== ''): ?>
+                                                    <a href="<?= $escapeHtml($pluginChildUrl) ?>">
+                                                        <?= $escapeHtml($pluginChildLabel) ?>
+                                                    </a>
+                                                <?php else: ?>
+                                                    <span><?= $escapeHtml($pluginChildLabel) ?></span>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                            <?php if (count($pluginEntryChildren) > 5): ?>
+                                                <span><?= __('+%{1} more', [count($pluginEntryChildren) - 5]) ?></span>
+                                            <?php endif; ?>
+                                        </div>
                                     <?php endif; ?>
-                                    <small><?= __('Contributed by %{1}', [$pluginEntryName !== '' ? $pluginEntryName : $pluginEntryModule]) ?></small>
-                                </div>
-                            </article>
+                                    <?php if ($pluginEntryTags !== []): ?>
+                                        <div class="wls-inline-chip-list is-muted">
+                                            <?php foreach (array_slice($pluginEntryTags, 0, 3) as $tag): ?>
+                                                <span><?= $escapeHtml((string)$tag) ?></span>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="wls-row-action-cell">
+                                        <?php if ($pluginEntryUrl !== ''): ?>
+                                            <a class="wls-primary-button"
+                                               href="<?= $escapeHtml($pluginEntryUrl) ?>"
+                                               data-wls-plugin-contribution-open
+                                               data-plugin-module="<?= $escapeHtml($pluginEntryModule) ?>">
+                                                <?= __('Open') ?>
+                                            </a>
+                                            <small><?= __('Uses WLS sidebar menu and native shell.') ?></small>
+                                        <?php else: ?>
+                                            <span class="wls-secondary-button is-disabled" aria-disabled="true">
+                                                <?= __('No panel entry declared') ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
                         <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 <?php endif; ?>
             </section>
 
+            <section class="wls-section">
+                <div class="wls-section-head">
+                    <div>
+                        <span class="wls-shell-kicker"><?= __('Operations') ?></span>
+                        <h2><?= __('Gateway, Security, Runtime') ?></h2>
+                    </div>
+                    <a class="wls-secondary-button" href="<?= $escapeHtml($attackLogUrl) ?>"><?= __('Attack Logs') ?></a>
+                </div>
+                <div class="wls-action-grid">
+                    <?php foreach ($quickActions as $action): ?>
+                        <a class="wls-action-card tone-<?= $action['tone'] ?>" href="<?= $action['url'] ?>">
+                            <span><?= $action['status'] ?></span>
+                            <strong><?= $action['title'] ?></strong>
+                            <small><?= $action['meta'] ?></small>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+
+        <?php elseif ($activePage === 'gateway'): ?>
             <section class="wls-section" id="gateway-settings">
                 <div class="wls-section-head">
                     <div>
@@ -2223,8 +2659,45 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         <span><?= __('Start a WLS instance with Gateway enabled to apply routes from this panel.') ?></span>
                     </div>
                 <?php else: ?>
-                    <div class="wls-instance-grid">
-                        <?php foreach ($gatewayInstances as $instance): ?>
+                    <div class="wls-project-list wls-instance-list"
+                         data-wls-instance-list
+                         data-wls-instance-page="1"
+                         data-wls-instance-page-size="10"
+                         data-empty-label="<?= $escapeHtml(__('No matching WLS instances.')) ?>"
+                         data-summary-label="<?= $escapeHtml(__('Showing %{1}-%{2} of %{3} instances')) ?>">
+                        <div class="wls-project-list-toolbar wls-instance-list-toolbar" aria-label="<?= __('Gateway instance list tools') ?>">
+                            <label class="wls-form-field">
+                                <span><?= __('Search WLS instances') ?></span>
+                                <input type="search"
+                                       data-wls-instance-search
+                                       placeholder="<?= $escapeHtml(__('Search name, listen, topology, status')) ?>">
+                            </label>
+                            <label class="wls-form-field">
+                                <span><?= __('Rows per page') ?></span>
+                                <select data-wls-instance-page-size>
+                                    <option value="10" selected>10</option>
+                                    <option value="20">20</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </label>
+                            <div class="wls-project-list-summary wls-instance-list-summary"
+                                 data-wls-instance-summary
+                                 aria-live="polite"></div>
+                        </div>
+                        <div class="wls-project-table-wrap">
+                            <table class="wls-project-table wls-instance-table">
+                                <thead>
+                                <tr>
+                                    <th><?= __('Instance') ?></th>
+                                    <th><?= __('Gateway Listen') ?></th>
+                                    <th><?= __('State') ?></th>
+                                    <th><?= __('Main Listen') ?></th>
+                                    <th><?= __('Topology') ?></th>
+                                    <th><?= __('Actions') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                        <?php foreach ($gatewayInstances as $instanceIndex => $instance): ?>
                             <?php
                             $instanceName = (string)($instance['name'] ?? '');
                             $listenLabel = trim((string)($instance['listen'] ?? ''));
@@ -2237,54 +2710,128 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                             $gatewayReadyCount = (int)($instance['gateway_ready_count'] ?? 0);
                             $gatewayProcessCount = (int)($instance['gateway_process_count'] ?? 0);
                             $instanceRunning = !empty($instance['instance_running']);
+                            $instanceStatusLabel = $gatewayRunning ? __('Ready') : ($gatewayEnabled ? __('Enabled') : __('Disabled'));
+                            $instanceMasterLabel = $instanceRunning ? __('Running') : __('Stopped');
+                            $instanceTopologyLabel = $topologyLabel !== '' ? $topologyLabel : (string)__('Unknown');
+                            $instanceTopologyDisplay = $instanceTopologyLabel . ($directReusePort ? ' / ' . (string)__('SO_REUSEPORT') : '');
+                            $instanceProcessLabel = __('%{1}/%{2} ready', [$gatewayReadyCount, $gatewayProcessCount]);
+                            $instanceDetailId = 'wls-gateway-instance-detail-' . $instanceIndex;
+                            $instanceSearchText = strtolower(trim(implode(' ', [
+                                $instanceName,
+                                $listenLabel,
+                                $mainListenLabel,
+                                $instanceTopologyDisplay,
+                                (string)$instanceStatusLabel,
+                                (string)$instanceMasterLabel,
+                                (string)$controlPort,
+                                (string)$instanceProcessLabel,
+                            ])));
                             ?>
-                            <article class="wls-instance-card <?= $selectedGatewayInstance === $instanceName ? 'is-selected' : '' ?>">
-                                <div class="wls-card-head">
-                                    <div>
-                                        <h3><?= $escapeHtml($instanceName) ?></h3>
-                                        <code><?= $escapeHtml($listenLabel !== '' ? $listenLabel : __('Gateway listen not configured')) ?></code>
+                            <tr class="wls-project-row wls-instance-row <?= $selectedGatewayInstance === $instanceName ? 'is-selected' : '' ?>"
+                                data-wls-instance-row
+                                data-wls-instance-search="<?= $escapeHtml($instanceSearchText) ?>"
+                                data-wls-instance-detail="<?= $escapeHtml($instanceDetailId) ?>">
+                                <td>
+                                    <div class="wls-project-instance-cell">
+                                        <strong><?= $escapeHtml($instanceName !== '' ? $instanceName : __('Unnamed WLS')) ?></strong>
+                                        <?php if ($selectedGatewayInstance === $instanceName): ?>
+                                            <span><?= __('Selected target') ?></span>
+                                        <?php else: ?>
+                                            <span><?= __('WLS runtime') ?></span>
+                                        <?php endif; ?>
                                     </div>
-                                    <span class="wls-status-pill"><?= $gatewayRunning ? __('Ready') : ($gatewayEnabled ? __('Enabled') : __('Disabled')) ?></span>
-                                </div>
-                                <div class="wls-instance-meta">
-                                    <div>
-                                        <span class="wls-instance-meta-label"><?= __('Main Listen') ?></span>
-                                        <span class="wls-instance-meta-value"><?= $escapeHtml($mainListenLabel) ?></span>
+                                </td>
+                                <td>
+                                    <span class="wls-project-path-cell wls-instance-listen-cell">
+                                        <small><?= __('Gateway') ?></small>
+                                        <code><?= $escapeHtml($listenLabel !== '' ? $listenLabel : __('Not configured')) ?></code>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="wls-status-pill <?= $gatewayRunning ? 'is-on' : ($gatewayEnabled ? '' : 'is-off') ?>">
+                                        <?= $escapeHtml((string)$instanceStatusLabel) ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <code><?= $escapeHtml($mainListenLabel !== '' ? $mainListenLabel : __('Unavailable')) ?></code>
+                                </td>
+                                <td>
+                                    <span class="wls-project-path-cell">
+                                        <small><?= $escapeHtml($directReusePort ? __('Direct listen') : __('Proxy/runtime')) ?></small>
+                                        <code><?= $escapeHtml($instanceTopologyDisplay) ?></code>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="wls-project-row-actions">
+                                        <button class="wls-link-button"
+                                                type="button"
+                                                data-wls-instance-detail-toggle
+                                                aria-controls="<?= $escapeHtml($instanceDetailId) ?>"
+                                                aria-expanded="false"><?= __('Details') ?></button>
                                     </div>
-                                    <div>
-                                        <span class="wls-instance-meta-label"><?= __('Topology') ?></span>
-                                        <span class="wls-instance-meta-value">
-                                            <?= $escapeHtml($topologyLabel !== '' ? $topologyLabel : __('Unknown')) ?>
-                                            <?= $directReusePort ? ' / ' . $escapeHtml(__('SO_REUSEPORT')) : '' ?>
-                                        </span>
+                                </td>
+                            </tr>
+                            <tr class="wls-project-detail-row wls-instance-detail-row"
+                                data-wls-instance-detail-row
+                                id="<?= $escapeHtml($instanceDetailId) ?>"
+                                hidden>
+                                <td colspan="6">
+                                    <div class="wls-project-detail-panel wls-instance-detail-panel">
+                                        <div class="wls-project-meta wls-instance-meta">
+                                            <div>
+                                                <span class="wls-meta-label"><?= __('Gateway Listen') ?></span>
+                                                <span class="wls-meta-value"><?= $escapeHtml($listenLabel !== '' ? $listenLabel : __('Gateway listen not configured')) ?></span>
+                                            </div>
+                                            <div>
+                                                <span class="wls-meta-label"><?= __('Main Listen') ?></span>
+                                                <span class="wls-meta-value"><?= $escapeHtml($mainListenLabel !== '' ? $mainListenLabel : __('Unavailable')) ?></span>
+                                            </div>
+                                            <div>
+                                                <span class="wls-meta-label"><?= __('Topology') ?></span>
+                                                <span class="wls-meta-value"><?= $escapeHtml($instanceTopologyDisplay) ?></span>
+                                            </div>
+                                            <div>
+                                                <span class="wls-meta-label"><?= __('Control Port') ?></span>
+                                                <span class="wls-meta-value"><?= $controlPort > 0 ? $controlPort : __('Unavailable') ?></span>
+                                            </div>
+                                            <div>
+                                                <span class="wls-meta-label"><?= __('Master') ?></span>
+                                                <span class="wls-meta-value"><?= $escapeHtml((string)$instanceMasterLabel) ?></span>
+                                            </div>
+                                            <div>
+                                                <span class="wls-meta-label"><?= __('Gateway Processes') ?></span>
+                                                <span class="wls-meta-value"><?= $escapeHtml((string)$instanceProcessLabel) ?></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <span class="wls-instance-meta-label"><?= __('Control Port') ?></span>
-                                        <span class="wls-instance-meta-value"><?= $controlPort > 0 ? $controlPort : __('Unavailable') ?></span>
-                                    </div>
-                                    <div>
-                                        <span class="wls-instance-meta-label"><?= __('Master') ?></span>
-                                        <span class="wls-instance-meta-value"><?= $instanceRunning ? __('Running') : __('Stopped') ?></span>
-                                    </div>
-                                    <div>
-                                        <span class="wls-instance-meta-label"><?= __('Gateway Processes') ?></span>
-                                        <span class="wls-instance-meta-value"><?= __('%{1}/%{2} ready', [$gatewayReadyCount, $gatewayProcessCount]) ?></span>
-                                    </div>
-                                </div>
-                            </article>
+                                </td>
+                            </tr>
                         <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="wls-project-list-empty" data-wls-instance-empty hidden>
+                            <?= __('No matching WLS instances.') ?>
+                        </div>
+                        <div class="wls-project-pagination" data-wls-instance-pagination>
+                            <button class="wls-secondary-button" type="button" data-wls-instance-page-prev><?= __('Previous') ?></button>
+                            <span data-wls-instance-page-label></span>
+                            <button class="wls-secondary-button" type="button" data-wls-instance-page-next><?= __('Next') ?></button>
+                        </div>
                     </div>
                 <?php endif; ?>
             </section>
 
-            <section class="wls-section" id="projects">
+        <?php elseif ($activePage === 'projects'): ?>
+            <section class="wls-section wls-projects-page">
                 <div class="wls-section-head">
                     <div>
                         <span class="wls-shell-kicker"><?= __('Project Switching') ?></span>
                         <h2><?= __('Managed WLS Projects') ?></h2>
                     </div>
-                    <a class="wls-secondary-button" href="<?= $buildPanelProjectUrl() ?>"><?= __('New Project') ?></a>
+                    <a class="wls-secondary-button" href="<?= $buildPanelProjectUrl(['new_project' => 1]) ?>"><?= __('New Project') ?></a>
                 </div>
+                <?php if ($projectFormShowEditor): ?>
                 <div class="wls-project-editor" data-wls-project-form>
                     <div class="wls-form-title-row">
                         <h3 id="wls-project-editor-title"><?= $projectFormId > 0 ? __('Edit Managed Project') : __('Add Managed Project') ?></h3>
@@ -2375,6 +2922,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         </div>
                     </form>
                 </div>
+                <?php endif; ?>
                 <?php if ($projectConfigItems !== []): ?>
                     <div class="wls-project-config-center"
                          data-wls-project-config-center
@@ -2387,14 +2935,45 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                             <div class="wls-config-counts">
                                 <span><?= __('%{1} projects', [count($projectConfigItems)]) ?></span>
                                 <span><?= __('%{1} plugin slots ready', [(int)($panelProjectConfigCenter['installed_operation_count'] ?? 0)]) ?></span>
+                                <?php if ($projectConfigReadinessSummary !== []): ?>
+                                    <span class="wls-readiness-count is-<?= $escapeHtml((string)($projectConfigReadinessSummary['state'] ?? 'attention')) ?>">
+                                        <?= $escapeHtml((string)($projectConfigReadinessSummary['label'] ?? __('Needs review'))) ?>
+                                    </span>
+                                    <span><?= __('%{1} ready projects', [(int)($projectConfigReadinessSummary['ready_project_count'] ?? 0)]) ?></span>
+                                <?php endif; ?>
                             </div>
                         </div>
-                        <div class="wls-project-config-grid">
+                        <?php if ($projectConfigReadinessSummary !== []): ?>
+                            <div class="wls-project-readiness-summary"
+                                 data-wls-project-readiness-summary
+                                 data-wls-readiness-state="<?= $escapeHtml((string)($projectConfigReadinessSummary['state'] ?? 'attention')) ?>">
+                                <strong><?= $escapeHtml((string)($projectConfigReadinessSummary['summary'] ?? '')) ?></strong>
+                                <span><?= __('%{1} / %{2} operation slots ready', [
+                                    (int)($projectConfigReadinessSummary['ready_operation_count'] ?? 0),
+                                    (int)($projectConfigReadinessSummary['total_operation_count'] ?? 0),
+                                ]) ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <div class="wls-project-table-wrap wls-project-config-table-wrap">
+                            <table class="wls-project-table wls-project-config-table">
+                                <thead>
+                                <tr>
+                                    <th><?= __('Project') ?></th>
+                                    <th><?= __('Readiness') ?></th>
+                                    <th><?= __('Context') ?></th>
+                                    <th><?= __('Operations') ?></th>
+                                    <th><?= __('Quick Links') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
                             <?php foreach ($projectConfigItems as $configItem): ?>
                                 <?php
                                 $configProject = is_array($configItem['project'] ?? null) ? $configItem['project'] : [];
                                 $configLinks = $resolveProjectActionLinks($configProject);
                                 $configOperations = is_array($configItem['operations'] ?? null) ? array_values($configItem['operations']) : [];
+                                $configReadiness = is_array($configItem['readiness'] ?? null) ? $configItem['readiness'] : [];
+                                $configReadinessChecks = is_array($configReadiness['checks'] ?? null) ? array_values($configReadiness['checks']) : [];
+                                $configReadinessState = (string)($configReadiness['state'] ?? 'attention');
                                 $configName = (string)($configProject['name'] ?? __('Project'));
                                 $configIdentity = (string)($configItem['identity'] ?? ($configProject['domain'] ?? ''));
                                 $configTypeLabel = (string)($configItem['type_label'] ?? __('Managed project'));
@@ -2402,73 +2981,134 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                                 $configSafeContext = (string)($configItem['safe_context_label'] ?? __('local context'));
                                 $configSecurityPolicyReady = !empty($configItem['security_policy_ready']);
                                 ?>
-                                <article class="wls-project-config-card"
-                                         data-wls-project-config-card
-                                         data-project-config-key="<?= $escapeHtml((string)($configItem['key'] ?? '')) ?>">
-                                    <div class="wls-project-config-title">
-                                        <div>
-                                            <h4><?= $escapeHtml($configName) ?></h4>
+                                <tr class="wls-project-row wls-project-config-row"
+                                    data-wls-project-config-row
+                                    data-project-config-key="<?= $escapeHtml((string)($configItem['key'] ?? '')) ?>"
+                                    data-wls-readiness-state="<?= $escapeHtml($configReadinessState) ?>">
+                                    <td>
+                                        <div class="wls-list-primary">
+                                            <strong><?= $escapeHtml($configName) ?></strong>
                                             <code><?= $escapeHtml($configIdentity) ?></code>
+                                            <span><?= $escapeHtml($configTypeLabel) ?></span>
                                         </div>
-                                        <span class="wls-status-pill"><?= $escapeHtml($configTypeLabel) ?></span>
-                                    </div>
-                                    <div class="wls-project-config-context">
-                                        <span><?= __('Safe Context') ?></span>
-                                        <code><?= $escapeHtml($configSafeContext) ?></code>
-                                    </div>
-                                    <div class="wls-config-jump-row">
-                                        <?php if ($configLinks['admin'] !== ''): ?>
-                                            <a href="<?= $escapeHtml($configLinks['admin']) ?>" data-wls-config-action="admin"><?= __('Project Admin') ?></a>
+                                    </td>
+                                    <td>
+                                        <?php if ($configReadiness !== []): ?>
+                                            <div class="wls-config-readiness-inline"
+                                                 data-wls-config-readiness="<?= $escapeHtml($configReadinessState) ?>">
+                                                <span class="wls-readiness-pill is-<?= $escapeHtml($configReadinessState) ?>">
+                                                    <?= $escapeHtml((string)($configReadiness['label'] ?? __('Needs review'))) ?>
+                                                </span>
+                                                <strong><?= $escapeHtml((string)($configReadiness['score_label'] ?? '')) ?></strong>
+                                                <small><?= $escapeHtml((string)($configReadiness['summary'] ?? '')) ?></small>
+                                            </div>
+                                            <?php if ($configReadinessChecks !== []): ?>
+                                                <div class="wls-inline-chip-list wls-config-check-list">
+                                                    <?php foreach ($configReadinessChecks as $readinessCheck): ?>
+                                                        <?php
+                                                        $readinessCheckState = (string)($readinessCheck['state'] ?? 'neutral');
+                                                        ?>
+                                                        <span class="is-<?= $escapeHtml($readinessCheckState) ?>"
+                                                              data-wls-readiness-check="<?= $escapeHtml((string)($readinessCheck['key'] ?? '')) ?>">
+                                                            <?= $escapeHtml((string)($readinessCheck['label'] ?? '')) ?>:
+                                                            <?= $escapeHtml((string)($readinessCheck['value'] ?? '')) ?>
+                                                        </span>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <span class="wls-muted-text"><?= __('No readiness data') ?></span>
                                         <?php endif; ?>
-                                        <?php if ($configLinks['panel'] !== ''): ?>
-                                            <a href="<?= $escapeHtml($configLinks['panel']) ?>" data-wls-config-action="panel"><?= __('Child Panel') ?></a>
-                                        <?php endif; ?>
-                                        <a href="<?= $escapeHtml($configLinks['security-logs']) ?>" data-wls-config-action="security"><?= __('Attack Logs') ?></a>
-                                        <?php if ($configSecurityPolicyReady): ?>
-                                            <a href="<?= $escapeHtml($configLinks['security-policy']) ?>" data-wls-config-action="security-policy"><?= __('Security Policy') ?></a>
-                                        <?php endif; ?>
-                                        <a href="<?= $escapeHtml($configLinks['gateway']) ?>" data-wls-config-action="gateway"><?= __('Gateway') ?></a>
-                                    </div>
-                                    <div class="wls-config-operation-list">
-                                        <?php foreach ($configOperations as $operation): ?>
-                                            <?php
-                                            $operationKey = (string)($operation['key'] ?? '');
-                                            $operationUrl = (string)($configLinks[$operationKey] ?? '');
-                                            $operationInstalled = !empty($operation['installed']);
-                                            $operationStatus = $operationInstalled ? 'ready' : 'missing';
-                                            ?>
-                                            <a class="<?= $operationInstalled ? 'is-ready' : 'is-missing' ?>"
-                                               href="<?= $escapeHtml($operationUrl) ?>"
-                                               data-wls-config-operation="<?= $escapeHtml($operationKey) ?>"
-                                               data-wls-config-status="<?= $escapeHtml($operationStatus) ?>"
-                                               data-wls-config-target="<?= $escapeHtml((string)($operation['target_label'] ?? '')) ?>"
-                                               data-wls-config-context="<?= $escapeHtml($configSafeContext) ?>">
-                                                <span class="wls-config-operation-head">
-                                                    <strong><?= $escapeHtml((string)($operation['label'] ?? $operationKey)) ?></strong>
+                                    </td>
+                                    <td>
+                                        <div class="wls-list-primary is-compact">
+                                            <span><?= __('Safe Context') ?></span>
+                                            <code><?= $escapeHtml($configSafeContext) ?></code>
+                                            <span><?= $escapeHtml($configGatewayLabel) ?></span>
+                                            <span><?= !empty($configItem['path_ready']) ? __('Path ready') : __('Path missing') ?></span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="wls-config-operation-inline">
+                                            <?php foreach ($configOperations as $operation): ?>
+                                                <?php
+                                                $operationKey = (string)($operation['key'] ?? '');
+                                                $operationUrl = (string)($configLinks[$operationKey] ?? '');
+                                                $operationInstalled = !empty($operation['installed']);
+                                                $operationStatus = $operationInstalled ? 'ready' : 'missing';
+                                                ?>
+                                                <a class="<?= $operationInstalled ? 'is-ready' : 'is-missing' ?>"
+                                                   href="<?= $escapeHtml($operationUrl) ?>"
+                                                   title="<?= $escapeHtml((string)($operation['summary'] ?? '')) ?>"
+                                                   data-wls-config-operation="<?= $escapeHtml($operationKey) ?>"
+                                                   data-wls-config-status="<?= $escapeHtml($operationStatus) ?>"
+                                                   data-wls-config-target="<?= $escapeHtml((string)($operation['target_label'] ?? '')) ?>"
+                                                   data-wls-config-context="<?= $escapeHtml($configSafeContext) ?>">
+                                                    <span><?= $escapeHtml((string)($operation['label'] ?? $operationKey)) ?></span>
                                                     <em><?= $escapeHtml((string)($operation['status_label'] ?? '')) ?></em>
-                                                </span>
-                                                <small><?= $escapeHtml((string)($operation['summary'] ?? '')) ?></small>
-                                                <span class="wls-config-operation-meta">
-                                                    <b><?= $escapeHtml((string)($operation['action_label'] ?? __('Open editor'))) ?></b>
-                                                    <span><?= $escapeHtml((string)($operation['target_label'] ?? '')) ?></span>
-                                                </span>
-                                                <?php if (!empty($operation['required_tag'])): ?>
-                                                    <code><?= $escapeHtml((string)$operation['required_tag']) ?></code>
-                                                <?php endif; ?>
-                                            </a>
-                                        <?php endforeach; ?>
-                                    </div>
-                                    <div class="wls-project-config-foot">
-                                        <span><?= $escapeHtml($configGatewayLabel) ?></span>
-                                        <span><?= !empty($configItem['path_ready']) ? __('Path ready') : __('Path missing') ?></span>
-                                    </div>
-                                </article>
+                                                </a>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="wls-config-jump-row is-table">
+                                            <?php if ($configLinks['admin'] !== ''): ?>
+                                                <a href="<?= $escapeHtml($configLinks['admin']) ?>" data-wls-config-action="admin"><?= __('Admin') ?></a>
+                                            <?php endif; ?>
+                                            <?php if ($configLinks['panel'] !== ''): ?>
+                                                <a href="<?= $escapeHtml($configLinks['panel']) ?>" data-wls-config-action="panel"><?= __('Panel') ?></a>
+                                            <?php endif; ?>
+                                            <a href="<?= $escapeHtml($configLinks['security-logs']) ?>" data-wls-config-action="security"><?= __('Attack Logs') ?></a>
+                                            <?php if ($configSecurityPolicyReady): ?>
+                                                <a href="<?= $escapeHtml($configLinks['security-policy']) ?>" data-wls-config-action="security-policy"><?= __('Policy') ?></a>
+                                            <?php endif; ?>
+                                            <a href="<?= $escapeHtml($configLinks['gateway']) ?>" data-wls-config-action="gateway"><?= __('Gateway') ?></a>
+                                        </div>
+                                    </td>
+                                </tr>
                             <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 <?php endif; ?>
-                <div class="wls-project-grid">
-                    <?php foreach ($projectCards as $project): ?>
+                <div class="wls-project-list"
+                     data-wls-project-list
+                     data-wls-project-page="1"
+                     data-wls-project-page-size="10"
+                     data-empty-label="<?= $escapeHtml(__('No matching WLS instances.')) ?>"
+                     data-summary-label="<?= $escapeHtml(__('Showing %{1}-%{2} of %{3} instances')) ?>">
+                    <div class="wls-project-list-toolbar" aria-label="<?= __('WLS instance list tools') ?>">
+                        <label class="wls-form-field">
+                            <span><?= __('Search WLS instances') ?></span>
+                            <input type="search"
+                                   data-wls-project-search
+                                   placeholder="<?= $escapeHtml(__('Search name, domain, path, status')) ?>">
+                        </label>
+                        <label class="wls-form-field">
+                            <span><?= __('Rows per page') ?></span>
+                            <select data-wls-project-page-size>
+                                <option value="10" selected>10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                        </label>
+                        <div class="wls-project-list-summary" data-wls-project-summary aria-live="polite"></div>
+                    </div>
+                    <div class="wls-project-table-wrap">
+                        <table class="wls-project-table">
+                            <thead>
+                            <tr>
+                                <th><?= __('Instance') ?></th>
+                                <th><?= __('Domain') ?></th>
+                                <th><?= __('Status') ?></th>
+                                <th><?= __('Gateway') ?></th>
+                                <th><?= __('Path') ?></th>
+                                <th><?= __('Actions') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                    <?php foreach ($projectCards as $projectIndex => $project): ?>
                         <?php
                         $projectType = (string)($project['type'] ?? '');
                         $projectId = (int)($project['id'] ?? 0);
@@ -2500,40 +3140,89 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                         if ($projectDbLink === '' || $projectDbLink === '#database-profile') {
                             $projectDbLink = $projectDbOperationUrl;
                         }
+                        $projectSearchText = strtolower(trim(implode(' ', [
+                            $projectName,
+                            $projectDomain,
+                            $projectStatus,
+                            $projectPathLabel,
+                            $projectPath,
+                            $projectPhpLabel,
+                            $projectDbLabel,
+                            $projectGatewayEnabled === 1 ? 'gateway enabled' : 'gateway disabled',
+                        ])));
+                        $projectDetailId = 'wls-project-detail-' . $projectIndex;
                         ?>
-                        <article class="wls-project-card">
-                            <div class="wls-project-title-row">
-                                <div>
-                                    <h3><?= htmlspecialchars($projectName, ENT_QUOTES, 'UTF-8') ?></h3>
-                                    <code><?= htmlspecialchars($projectDomain, ENT_QUOTES, 'UTF-8') ?></code>
+                        <tr class="wls-project-row"
+                            data-wls-project-row
+                            data-wls-project-search="<?= $escapeHtml($projectSearchText) ?>"
+                            data-wls-project-detail="<?= $escapeHtml($projectDetailId) ?>">
+                            <td>
+                                <div class="wls-project-instance-cell">
+                                    <strong><?= htmlspecialchars($projectName, ENT_QUOTES, 'UTF-8') ?></strong>
+                                    <span><?= $escapeHtml($projectType !== '' ? $projectType : __('Managed')) ?></span>
                                 </div>
+                            </td>
+                            <td><code><?= htmlspecialchars($projectDomain, ENT_QUOTES, 'UTF-8') ?></code></td>
+                            <td>
                                 <?php if ($projectStatus !== ''): ?>
                                     <span class="wls-status-pill"><?= htmlspecialchars($projectStatus, ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php else: ?>
+                                    <span class="wls-status-pill is-off"><?= __('Unknown') ?></span>
                                 <?php endif; ?>
-                            </div>
-                            <div class="wls-project-meta">
-                                <div>
-                                    <span class="wls-meta-label"><?= htmlspecialchars($projectPathLabel, ENT_QUOTES, 'UTF-8') ?></span>
-                                    <span class="wls-meta-value"><?= htmlspecialchars($projectPath, ENT_QUOTES, 'UTF-8') ?></span>
+                            </td>
+                            <td>
+                                <span class="wls-status-pill <?= $projectGatewayEnabled === 1 ? 'is-on' : 'is-off' ?>">
+                                    <?= $projectGatewayEnabled === 1 ? __('Enabled') : __('Disabled') ?>
+                                </span>
+                            </td>
+                            <td>
+                                <span class="wls-project-path-cell">
+                                    <small><?= htmlspecialchars($projectPathLabel, ENT_QUOTES, 'UTF-8') ?></small>
+                                    <code><?= htmlspecialchars($projectPath, ENT_QUOTES, 'UTF-8') ?></code>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="wls-project-row-actions">
+                                    <button class="wls-link-button"
+                                            type="button"
+                                            data-wls-project-detail-toggle
+                                            aria-controls="<?= $escapeHtml($projectDetailId) ?>"
+                                            aria-expanded="false"><?= __('Details') ?></button>
+                                    <?php if ($projectAdminLink !== ''): ?>
+                                        <a href="<?= htmlspecialchars($projectAdminLink, ENT_QUOTES, 'UTF-8') ?>"><?= __('Admin') ?></a>
+                                    <?php endif; ?>
+                                    <?php if ($projectPanelLink !== ''): ?>
+                                        <a href="<?= htmlspecialchars($projectPanelLink, ENT_QUOTES, 'UTF-8') ?>"><?= __('Panel') ?></a>
+                                    <?php endif; ?>
                                 </div>
-                                <div data-wls-project-meta="database-profile">
-                                    <span class="wls-meta-label"><?= __('Database') ?></span>
-                                    <a class="wls-meta-value" href="<?= htmlspecialchars($projectDbLink, ENT_QUOTES, 'UTF-8') ?>">
-                                        <?= $escapeHtml($projectDbLabel) ?>
-                                    </a>
-                                </div>
-                                <div>
-                                    <span class="wls-meta-label"><?= __('PHP') ?></span>
-                                    <a class="wls-meta-value" href="<?= htmlspecialchars($projectPhpLink, ENT_QUOTES, 'UTF-8') ?>">
-                                        <?= $escapeHtml($projectPhpLabel) ?>
-                                    </a>
-                                </div>
-                                <div>
-                                    <span class="wls-meta-label"><?= __('Gateway') ?></span>
-                                    <span class="wls-meta-value"><?= $projectGatewayEnabled === 1 ? __('Enabled') : __('Disabled') ?></span>
-                                </div>
-                            </div>
-                            <div class="wls-project-actions">
+                            </td>
+                        </tr>
+                        <tr class="wls-project-detail-row" data-wls-project-detail-row id="<?= $escapeHtml($projectDetailId) ?>" hidden>
+                            <td colspan="6">
+                                <div class="wls-project-detail-panel">
+                                    <div class="wls-project-meta">
+                                        <div>
+                                            <span class="wls-meta-label"><?= htmlspecialchars($projectPathLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                                            <span class="wls-meta-value"><?= htmlspecialchars($projectPath, ENT_QUOTES, 'UTF-8') ?></span>
+                                        </div>
+                                        <div data-wls-project-meta="database-profile">
+                                            <span class="wls-meta-label"><?= __('Database') ?></span>
+                                            <a class="wls-meta-value" href="<?= htmlspecialchars($projectDbLink, ENT_QUOTES, 'UTF-8') ?>">
+                                                <?= $escapeHtml($projectDbLabel) ?>
+                                            </a>
+                                        </div>
+                                        <div>
+                                            <span class="wls-meta-label"><?= __('PHP') ?></span>
+                                            <a class="wls-meta-value" href="<?= htmlspecialchars($projectPhpLink, ENT_QUOTES, 'UTF-8') ?>">
+                                                <?= $escapeHtml($projectPhpLabel) ?>
+                                            </a>
+                                        </div>
+                                        <div>
+                                            <span class="wls-meta-label"><?= __('Gateway') ?></span>
+                                            <span class="wls-meta-value"><?= $projectGatewayEnabled === 1 ? __('Enabled') : __('Disabled') ?></span>
+                                        </div>
+                                    </div>
+                                    <div class="wls-project-actions">
                                 <?php if ($projectAdminLink !== ''): ?>
                                     <a href="<?= htmlspecialchars($projectAdminLink, ENT_QUOTES, 'UTF-8') ?>"><?= __('Project Admin') ?></a>
                                 <?php endif; ?>
@@ -2556,30 +3245,25 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($plugins), cou
                                         <button class="wls-link-button" type="submit"><?= __('Remove') ?></button>
                                     </form>
                                 <?php endif; ?>
-                            </div>
-                        </article>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
                     <?php endforeach; ?>
-                </div>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="wls-project-list-empty" data-wls-project-empty hidden>
+                        <?= __('No matching WLS instances.') ?>
+                    </div>
+                    <div class="wls-project-pagination" data-wls-project-pagination>
+                        <button class="wls-secondary-button" type="button" data-wls-project-page-prev><?= __('Previous') ?></button>
+                        <span data-wls-project-page-label></span>
+                        <button class="wls-secondary-button" type="button" data-wls-project-page-next><?= __('Next') ?></button>
+                    </div>
+                            </div>
             </section>
 
-            <section class="wls-section">
-                <div class="wls-section-head">
-                    <div>
-                        <span class="wls-shell-kicker"><?= __('Operations') ?></span>
-                        <h2><?= __('Gateway, Security, Runtime') ?></h2>
-                    </div>
-                    <a class="wls-secondary-button" href="<?= $attackLogUrl ?>"><?= __('Attack Logs') ?></a>
-                </div>
-                <div class="wls-action-grid">
-                    <?php foreach ($quickActions as $action): ?>
-                        <a class="wls-action-card tone-<?= $action['tone'] ?>" href="<?= $action['url'] ?>">
-                            <span><?= $action['status'] ?></span>
-                            <strong><?= $action['title'] ?></strong>
-                            <small><?= $action['meta'] ?></small>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-            </section>
         <?php endif; ?>
     </main>
 </div>
@@ -2707,7 +3391,10 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     display: grid;
     gap: 8px;
 }
-.wls-shell-nav a {
+.wls-shell-nav a,
+.wls-plugin-nav-trigger,
+.wls-plugin-subnav-item,
+.wls-nav-subnav-item {
     color: var(--wls-sidebar-text);
     display: flex;
     min-height: 42px;
@@ -2715,9 +3402,25 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     border-radius: 8px;
     padding: 0 12px;
     text-decoration: none;
+    width: 100%;
+}
+.wls-plugin-nav-trigger,
+.wls-plugin-subnav-item,
+.wls-nav-subnav-item {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
 }
 .wls-shell-nav a:hover,
-.wls-shell-nav a.is-active {
+.wls-shell-nav a.is-active,
+.wls-plugin-nav-trigger:hover,
+.wls-plugin-nav-trigger.is-active,
+.wls-plugin-subnav-item:hover,
+.wls-plugin-subnav-item.is-active,
+.wls-nav-subnav-item:hover,
+.wls-nav-subnav-item.is-active {
     background: rgba(72, 193, 232, 0.18);
     color: var(--wls-sidebar-text);
 }
@@ -2729,11 +3432,111 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     padding: 12px 12px 2px;
     text-transform: uppercase;
 }
-.wls-shell-nav a.is-plugin {
+.wls-plugin-nav-group,
+.wls-nav-group {
+    display: grid;
+    gap: 6px;
+}
+.wls-plugin-nav-row {
+    align-items: center;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    min-width: 0;
+}
+.wls-plugin-nav-row .wls-plugin-nav-trigger {
+    min-width: 0;
+}
+.wls-plugin-nav-trigger span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wls-shell-nav a.is-plugin,
+.wls-plugin-nav-trigger.is-plugin {
     min-height: 38px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
     font-size: 13px;
+    font-weight: 800;
+}
+.wls-plugin-nav-trigger.is-group {
+    cursor: pointer;
+}
+.wls-plugin-nav-toggle {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    color: var(--wls-sidebar-muted);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 900;
+    height: 32px;
+    justify-content: center;
+    padding: 0;
+    transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+    width: 32px;
+}
+.wls-plugin-nav-toggle:hover,
+.wls-plugin-nav-toggle:focus-visible {
+    background: rgba(72, 193, 232, 0.18);
+    border-color: rgba(72, 193, 232, 0.34);
+    color: var(--wls-sidebar-text);
+}
+.wls-plugin-nav-toggle span {
+    display: block;
+    line-height: 1;
+    transition: transform 180ms ease;
+}
+.wls-plugin-nav-toggle[aria-expanded="true"] span {
+    transform: rotate(90deg);
+}
+.wls-plugin-nav-group.is-active .wls-plugin-nav-trigger.is-plugin {
+    background: rgba(72, 193, 232, 0.2);
+    border-color: rgba(72, 193, 232, 0.42);
+}
+.wls-plugin-nav-group.is-active .wls-plugin-nav-toggle {
+    border-color: rgba(72, 193, 232, 0.34);
+    color: var(--wls-sidebar-text);
+}
+.wls-plugin-subnav,
+.wls-nav-subnav {
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    display: grid;
+    gap: 4px;
+    margin-left: 12px;
+    padding-left: 9px;
+}
+.wls-plugin-subnav[hidden] {
+    display: none;
+}
+.wls-plugin-subnav-item,
+.wls-nav-subnav-item {
+    color: var(--wls-sidebar-muted);
+    font-size: 12px;
+    min-height: 30px;
+    padding: 0 10px;
+}
+.wls-plugin-subnav-item.is-active {
+    box-shadow: inset 3px 0 0 var(--wls-accent);
+    color: var(--wls-sidebar-text);
+    font-weight: 800;
+}
+.wls-plugin-host-page {
+    display: grid;
+    gap: 0;
+    min-height: calc(100vh - 128px);
+}
+.wls-plugin-host-frame {
+    background: var(--wls-bg);
+    border: 0;
+    display: block;
+    min-height: calc(100vh - 128px);
+    width: 100%;
 }
 .wls-shell-main {
     grid-column: 2;
@@ -2769,7 +3572,7 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-section h2,
 .wls-security-page h2,
 .wls-project-card h3,
-.wls-plugin-card h2 {
+.wls-marketplace-console h3 {
     margin: 0;
     color: var(--wls-text);
     letter-spacing: 0;
@@ -2831,24 +3634,19 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-icon-button:focus-visible,
 .wls-shell-nav a:focus-visible,
 .wls-project-actions a:focus-visible,
+.wls-project-row-actions a:focus-visible,
+.wls-project-row-actions .wls-link-button:focus-visible,
 .wls-config-jump-row a:focus-visible,
-.wls-config-operation-list a:focus-visible,
-.wls-action-card:focus-visible {
+.wls-action-card:focus-visible,
+.wls-inline-chip-list a:focus-visible {
     outline: 3px solid rgba(50, 185, 169, 0.42);
     outline-offset: 2px;
 }
 .wls-metric-grid,
 .wls-action-grid,
 .wls-project-grid,
-.wls-project-config-grid,
-.wls-plugin-grid,
-.wls-operation-grid,
-.wls-plugin-contribution-grid,
-.wls-installed-plugin-grid,
 .wls-plugin-refresh-grid,
-.wls-market-source-grid,
-.wls-gateway-summary-grid,
-.wls-instance-grid {
+.wls-gateway-summary-grid {
     display: grid;
     gap: 16px;
     min-width: 0;
@@ -2861,12 +3659,8 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-gateway-summary-grid article,
 .wls-section,
 .wls-project-card,
-.wls-project-config-card,
-.wls-plugin-card,
-.wls-operation-card,
-.wls-installed-plugin-card,
-.wls-instance-card,
-.wls-market-source-card,
+.wls-project-list,
+.wls-marketplace-console,
 .wls-plugin-refresh-summary,
 .wls-filter-bar {
     background: var(--wls-surface);
@@ -2885,8 +3679,7 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-gateway-summary-grid span,
 .wls-action-card small,
 .wls-meta-label,
-.wls-plugin-card p,
-.wls-market-source-card p,
+.wls-marketplace-console p,
 .wls-card-footer small,
 .wls-filter-bar span {
     color: var(--wls-muted);
@@ -2900,24 +3693,320 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     padding: 22px;
     margin-bottom: 20px;
 }
-.wls-project-grid,
-.wls-project-config-grid,
-.wls-operation-grid,
-.wls-plugin-contribution-grid,
-.wls-installed-plugin-grid,
-.wls-instance-grid {
+.wls-projects-page {
+    display: grid;
+    gap: 16px;
+}
+.wls-projects-page > .wls-section-head {
+    order: 0;
+}
+.wls-projects-page > .wls-project-list {
+    order: 1;
+}
+.wls-projects-page > .wls-project-editor {
+    order: 2;
+}
+.wls-projects-page > .wls-project-config-center {
+    order: 3;
+}
+.wls-project-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.wls-plugin-grid {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+.wls-project-config-table-wrap {
+    min-width: 0;
+}
+.wls-project-config-table td {
+    vertical-align: top;
+}
+.wls-config-readiness-inline {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-width: 0;
+}
+.wls-config-readiness-inline strong {
+    color: var(--wls-text);
+    font-size: 13px;
+    line-height: 1.5;
+}
+.wls-config-readiness-inline small {
+    color: var(--wls-muted);
+    flex-basis: 100%;
+    font-size: 12px;
+    line-height: 1.35;
+}
+.wls-config-check-list {
+    margin-top: 8px;
+}
+.wls-config-operation-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-width: 0;
+}
+.wls-config-operation-inline a {
+    align-items: center;
+    border: 1px solid var(--wls-border);
+    border-radius: 999px;
+    color: var(--wls-text);
+    display: inline-flex;
+    gap: 6px;
+    min-height: 30px;
+    padding: 4px 9px;
+    text-decoration: none;
+}
+.wls-config-operation-inline a:hover,
+.wls-config-operation-inline a:focus-visible {
+    border-color: var(--wls-accent);
+    color: var(--wls-accent);
+}
+.wls-config-operation-inline a.is-missing {
+    color: var(--wls-warning);
+}
+.wls-config-operation-inline em {
+    color: var(--wls-muted);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 800;
+}
+.wls-config-jump-row.is-table {
+    align-items: flex-start;
+    gap: 7px;
+}
+.wls-config-jump-row.is-table a {
+    min-height: 30px;
+    padding: 5px 9px;
+}
+.wls-project-list {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+    padding: 14px;
+}
+.wls-project-list-toolbar {
+    align-items: end;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(220px, 1fr) minmax(140px, 170px) auto;
+}
+.wls-project-list-toolbar .wls-form-field {
+    margin: 0;
+}
+.wls-project-list-summary {
+    color: var(--wls-muted);
+    font-size: 13px;
+    font-weight: 700;
+    justify-self: end;
+    white-space: nowrap;
+}
+.wls-project-table-wrap {
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+    min-width: 0;
+    overflow-x: auto;
+}
+.wls-operation-table-wrap,
+.wls-plugin-menu-table-wrap {
+    background: var(--wls-surface);
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+    min-width: 0;
+    overflow-x: auto;
+}
+.wls-project-table {
+    border-collapse: collapse;
+    min-width: 920px;
+    width: 100%;
+}
+.wls-operation-table,
+.wls-plugin-menu-table {
+    border-collapse: collapse;
+    min-width: 980px;
+    width: 100%;
+}
+.wls-project-table th,
+.wls-project-table td,
+.wls-operation-table th,
+.wls-operation-table td,
+.wls-plugin-menu-table th,
+.wls-plugin-menu-table td {
+    border-bottom: 1px solid var(--wls-border);
+    padding: 12px 14px;
+    text-align: left;
+    vertical-align: middle;
+}
+.wls-project-table th,
+.wls-operation-table th,
+.wls-plugin-menu-table th {
+    background: var(--wls-surface-2);
+    color: var(--wls-muted);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+.wls-project-row:hover td {
+    background: rgba(33, 158, 188, 0.06);
+}
+.wls-operation-table tr:hover td,
+.wls-plugin-menu-table tr:hover td {
+    background: rgba(33, 158, 188, 0.05);
+}
+.wls-project-row.is-expanded td {
+    background: rgba(15, 143, 134, 0.08);
+}
+.wls-operation-table tr.is-missing td {
+    background: rgba(176, 108, 0, 0.05);
+}
+.wls-project-table code,
+.wls-operation-table code,
+.wls-plugin-menu-table code {
+    color: var(--wls-accent-2);
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.wls-list-primary,
+.wls-row-action-cell {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+.wls-list-primary.is-compact {
+    gap: 4px;
+}
+.wls-list-primary strong {
+    color: var(--wls-text);
+    font-size: 15px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+.wls-list-primary span,
+.wls-row-action-cell small,
+.wls-muted-text {
+    color: var(--wls-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+.wls-row-action-cell {
+    justify-items: start;
+}
+.wls-inline-chip-list {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+.wls-inline-chip-list + .wls-inline-chip-list {
+    margin-top: 8px;
+}
+.wls-inline-chip-list span,
+.wls-inline-chip-list a {
+    background: var(--wls-surface-2);
+    border: 1px solid var(--wls-border);
+    border-radius: 999px;
+    color: var(--wls-muted);
+    font-size: 12px;
+    line-height: 1.2;
+    max-width: 220px;
+    overflow: hidden;
+    padding: 4px 8px;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.wls-inline-chip-list a {
+    color: var(--wls-accent-2);
+    font-weight: 700;
+}
+.wls-inline-chip-list a:hover {
+    border-color: rgba(33, 158, 188, 0.42);
+    color: var(--wls-accent);
+}
+.wls-inline-chip-list.is-muted span {
+    opacity: 0.82;
+}
+.wls-project-instance-cell,
+.wls-project-path-cell {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+.wls-project-instance-cell strong {
+    color: var(--wls-text);
+    font-size: 15px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+.wls-project-instance-cell span,
+.wls-project-path-cell small {
+    color: var(--wls-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+.wls-project-row-actions,
+.wls-project-pagination {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.wls-project-row-actions a,
+.wls-project-row-actions .wls-link-button {
+    align-items: center;
+    background: var(--wls-surface-2);
+    border: 1px solid var(--wls-border);
+    border-radius: 999px;
+    color: var(--wls-accent-2);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 12px;
+    font-weight: 800;
+    min-height: 28px;
+    padding: 4px 10px;
+    text-decoration: none;
+}
+.wls-project-row-actions a:hover,
+.wls-project-row-actions .wls-link-button:hover,
+.wls-project-row-actions a:focus-visible,
+.wls-project-row-actions .wls-link-button:focus-visible {
+    background: rgba(33, 158, 188, 0.1);
+}
+.wls-project-detail-row td {
+    background: var(--wls-surface-2);
+    padding: 0;
+}
+.wls-project-detail-panel {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+}
+.wls-project-list-empty {
+    border: 1px dashed var(--wls-border);
+    border-radius: 8px;
+    color: var(--wls-muted);
+    font-weight: 700;
+    padding: 18px;
+    text-align: center;
+}
+.wls-project-pagination {
+    justify-content: flex-end;
+}
+.wls-project-pagination span {
+    color: var(--wls-muted);
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 72px;
+    text-align: center;
+}
+.wls-project-pagination button:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
 }
 .wls-gateway-summary-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     margin: 16px 0;
-}
-.wls-market-source-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin-bottom: 18px;
 }
 .wls-action-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3494,12 +4583,7 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 }
 .wls-action-card,
 .wls-project-card,
-.wls-project-config-card,
-.wls-plugin-card,
-.wls-operation-card,
-.wls-plugin-contribution-card,
-.wls-installed-plugin-card,
-.wls-instance-card {
+.wls-marketplace-console {
     min-width: 0;
 }
 .wls-action-card {
@@ -3526,45 +4610,10 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-action-card.tone-blue span { color: var(--wls-accent-2); }
 .wls-action-card.tone-amber span { color: var(--wls-warning); }
 .wls-action-card.tone-violet span { color: #8b6bd6; }
-.wls-project-card,
-.wls-plugin-card,
-.wls-operation-card,
-.wls-plugin-contribution-card,
-.wls-installed-plugin-card,
-.wls-instance-card {
+.wls-project-card {
     display: grid;
     gap: 16px;
     padding: 18px;
-}
-.wls-plugin-contribution-card {
-    align-content: start;
-    background: var(--wls-surface);
-    border: 1px solid var(--wls-border);
-    border-left: 4px solid var(--wls-accent-2);
-    border-radius: 8px;
-}
-.wls-plugin-contribution-card h3 {
-    color: var(--wls-text);
-    font-size: 18px;
-    line-height: 1.3;
-    margin: 0;
-}
-.wls-plugin-contribution-card p {
-    color: var(--wls-muted);
-    line-height: 1.45;
-    margin: 0;
-}
-.wls-plugin-contribution-card code {
-    color: var(--wls-accent-2);
-    overflow-wrap: anywhere;
-    white-space: normal;
-}
-.wls-operation-card {
-    align-content: start;
-    background: var(--wls-surface);
-    border: 1px solid var(--wls-border);
-    border-left: 4px solid var(--wls-warning);
-    border-radius: 8px;
 }
 .wls-project-config-center {
     border: 1px solid var(--wls-border);
@@ -3576,16 +4625,14 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     padding: 18px;
 }
 .wls-project-config-head,
-.wls-project-config-title,
-.wls-project-config-foot {
+.wls-project-config-title {
     align-items: flex-start;
     display: flex;
     gap: 12px;
     justify-content: space-between;
     min-width: 0;
 }
-.wls-project-config-head h3,
-.wls-project-config-card h4 {
+.wls-project-config-head h3 {
     color: var(--wls-text);
     line-height: 1.25;
     margin: 0;
@@ -3593,32 +4640,7 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-project-config-head h3 {
     font-size: 20px;
 }
-.wls-project-config-card h4 {
-    font-size: 17px;
-}
-.wls-project-config-card code,
-.wls-config-operation-list code {
-    color: var(--wls-accent-2);
-    overflow-wrap: anywhere;
-    white-space: normal;
-}
-.wls-project-config-context {
-    align-items: flex-start;
-    border: 1px dashed var(--wls-border);
-    border-radius: 8px;
-    background: var(--wls-surface);
-    display: grid;
-    gap: 4px;
-    padding: 9px 10px;
-}
-.wls-project-config-context span {
-    color: var(--wls-muted);
-    font-size: 12px;
-    font-weight: 800;
-    text-transform: uppercase;
-}
-.wls-config-counts,
-.wls-project-config-foot {
+.wls-config-counts {
     color: var(--wls-muted);
     display: flex;
     flex-wrap: wrap;
@@ -3626,11 +4648,57 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     font-size: 13px;
     font-weight: 700;
 }
-.wls-config-counts span,
-.wls-project-config-foot span {
+.wls-config-counts span {
     border: 1px solid var(--wls-border);
     border-radius: 999px;
     background: var(--wls-surface);
+    padding: 5px 9px;
+}
+.wls-readiness-count.is-ready,
+.wls-readiness-pill.is-ready {
+    border-color: rgba(50, 185, 169, 0.34);
+    color: var(--wls-accent);
+}
+.wls-readiness-count.is-attention,
+.wls-readiness-pill.is-attention {
+    border-color: rgba(224, 173, 72, 0.42);
+    color: var(--wls-warning);
+}
+.wls-readiness-count.is-blocked,
+.wls-readiness-pill.is-blocked {
+    border-color: rgba(248, 113, 113, 0.44);
+    color: var(--wls-danger);
+}
+.wls-project-readiness-summary {
+    align-items: center;
+    background: var(--wls-surface);
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    justify-content: space-between;
+    min-width: 0;
+    padding: 10px 12px;
+}
+.wls-project-readiness-summary strong {
+    color: var(--wls-text);
+    font-size: 13px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+.wls-project-readiness-summary span {
+    color: var(--wls-muted);
+    font-size: 13px;
+    font-weight: 800;
+}
+.wls-readiness-pill {
+    border: 1px solid var(--wls-border);
+    border-radius: 999px;
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1.2;
     padding: 5px 9px;
 }
 .wls-config-jump-row {
@@ -3652,124 +4720,6 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
 .wls-config-jump-row a:hover {
     border-color: var(--wls-accent);
     color: var(--wls-accent);
-}
-.wls-config-operation-list {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.wls-config-operation-list a {
-    border: 1px solid var(--wls-border);
-    border-left: 4px solid var(--wls-warning);
-    border-radius: 8px;
-    background: var(--wls-surface);
-    color: var(--wls-text);
-    display: grid;
-    gap: 4px;
-    min-width: 0;
-    padding: 10px;
-    text-decoration: none;
-    transition: border-color 180ms ease, box-shadow 180ms ease;
-}
-.wls-config-operation-list a.is-ready {
-    border-left-color: var(--wls-accent);
-}
-.wls-config-operation-list a:hover {
-    border-color: var(--wls-accent);
-    box-shadow: var(--wls-shadow-soft);
-}
-.wls-config-operation-list span {
-    font-size: 13px;
-    font-weight: 900;
-}
-.wls-config-operation-list small {
-    color: var(--wls-muted);
-    line-height: 1.35;
-}
-.wls-config-operation-head,
-.wls-config-operation-meta {
-    align-items: flex-start;
-    display: flex;
-    gap: 8px;
-    justify-content: space-between;
-    min-width: 0;
-}
-.wls-config-operation-head strong,
-.wls-config-operation-meta b {
-    color: var(--wls-text);
-    font-size: 13px;
-    line-height: 1.25;
-    overflow-wrap: anywhere;
-}
-.wls-config-operation-head em {
-    border: 1px solid rgba(50, 185, 169, 0.28);
-    border-radius: 999px;
-    color: var(--wls-accent);
-    flex: 0 0 auto;
-    font-size: 11px;
-    font-style: normal;
-    font-weight: 900;
-    padding: 3px 7px;
-    white-space: nowrap;
-}
-.wls-config-operation-list a.is-missing .wls-config-operation-head em {
-    border-color: rgba(245, 158, 11, 0.36);
-    color: var(--wls-warning);
-}
-.wls-config-operation-meta {
-    border-top: 1px solid var(--wls-border);
-    padding-top: 8px;
-}
-.wls-config-operation-meta span {
-    color: var(--wls-muted);
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1.25;
-    text-align: right;
-}
-.wls-operation-card.is-installed {
-    border-left-color: var(--wls-accent);
-}
-.wls-operation-card h3 {
-    color: var(--wls-text);
-    font-size: 18px;
-    line-height: 1.3;
-    margin: 0;
-}
-.wls-operation-card p {
-    color: var(--wls-muted);
-    line-height: 1.45;
-    margin: 0;
-}
-.wls-operation-card code,
-.wls-operation-meta code {
-    color: var(--wls-accent-2);
-    overflow-wrap: anywhere;
-    white-space: normal;
-}
-.wls-operation-meta {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.wls-operation-meta div {
-    border: 1px solid var(--wls-border);
-    border-radius: 8px;
-    background: var(--wls-surface-2);
-    display: grid;
-    gap: 4px;
-    min-width: 0;
-    padding: 10px;
-}
-.wls-operation-meta span {
-    color: var(--wls-muted);
-    font-size: 12px;
-    font-weight: 800;
-    text-transform: uppercase;
-}
-.wls-instance-card.is-selected {
-    border-color: rgba(18, 103, 168, 0.52);
-    box-shadow: 0 0 0 3px rgba(18, 103, 168, 0.08);
 }
 .wls-gateway-config-form {
     border-bottom: 1px solid var(--wls-border);
@@ -3840,25 +4790,11 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     gap: 16px;
     margin-bottom: 18px;
 }
-.wls-installed-plugin-card {
+.wls-installed-plugin-table-wrap {
     background: var(--wls-surface);
-    border: 1px solid var(--wls-border);
-    border-radius: 8px;
 }
-.wls-installed-plugin-card h4 {
-    margin: 0;
-    color: var(--wls-text);
-    font-size: 18px;
-    line-height: 1.3;
-}
-.wls-installed-plugin-card p {
-    margin: 0;
-    color: var(--wls-muted);
-}
-.wls-market-source-count {
-    color: var(--wls-text);
-    font-size: 30px;
-    line-height: 1;
+.wls-installed-plugin-table {
+    min-width: 1040px;
 }
 .wls-empty-state,
 .wls-inline-warning,
@@ -4031,28 +4967,77 @@ body:has(.wls-standalone-shell[data-wls-theme="dark"]) {
     line-height: 1.2;
     overflow-wrap: anywhere;
 }
-.wls-market-source-card {
-    display: grid;
-    gap: 10px;
-    align-content: start;
+.wls-market-endpoint-strip {
+    align-items: flex-start;
+    background: var(--wls-surface);
+    border: 1px solid var(--wls-border);
+    border-radius: 8px;
+    box-shadow: var(--wls-shadow-soft);
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    margin-bottom: 18px;
     min-width: 0;
-    padding: 18px;
+    padding: 16px;
 }
-.wls-market-source-card h3 {
-    margin: 0;
-    color: var(--wls-text);
-    font-size: 18px;
-    line-height: 1.3;
+.wls-market-endpoint-main {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
 }
-.wls-market-source-card p {
-    margin: 0;
-}
-.wls-market-source-card code {
+.wls-market-endpoint-main code,
+.wls-market-endpoint-meta code {
     color: var(--wls-accent-2);
     overflow-wrap: anywhere;
 }
+.wls-market-endpoint-main p {
+    color: var(--wls-muted);
+    margin: 0;
+}
+.wls-market-endpoint-meta {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    min-width: min(100%, 260px);
+}
+.wls-marketplace-console {
+    align-items: flex-start;
+    display: flex;
+    gap: 18px;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    padding: 18px;
+}
+.wls-marketplace-console-main {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+.wls-marketplace-console h3 {
+    margin: 0;
+    color: var(--wls-text);
+    font-size: 20px;
+    line-height: 1.25;
+}
+.wls-marketplace-console p {
+    margin: 0;
+    max-width: 780px;
+}
+.wls-marketplace-console-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    min-width: min(100%, 360px);
+}
+.wls-marketplace-console-actions .wls-inline-action-form {
+    display: inline-flex;
+}
 .wls-project-card code,
-.wls-plugin-card code {
+.wls-installed-plugin-table code {
     color: var(--wls-accent-2);
     white-space: normal;
     overflow-wrap: anywhere;
@@ -4118,6 +5103,12 @@ a.wls-meta-value:hover {
 .wls-security-log-filter {
     grid-template-columns: repeat(7, minmax(0, 1fr)) auto;
 }
+.wls-security-audit-filter {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+}
+.wls-security-audit-filter .wls-filter-actions {
+    min-width: min(100%, 190px);
+}
 .wls-filter-bar label {
     display: grid;
     gap: 7px;
@@ -4126,6 +5117,7 @@ a.wls-meta-value:hover {
 }
 .wls-filter-bar input,
 .wls-filter-bar select {
+    box-sizing: border-box;
     width: 100%;
     min-height: 42px;
     border: 1px solid var(--wls-border);
@@ -4221,11 +5213,7 @@ a.wls-meta-value:hover {
     }
     .wls-metric-grid,
     .wls-action-grid,
-    .wls-market-source-grid,
     .wls-plugin-refresh-grid,
-    .wls-project-config-grid,
-    .wls-operation-grid,
-    .wls-plugin-contribution-grid,
     .wls-gateway-summary-grid,
     .wls-security-project-grid,
     .wls-domain-policy-summary,
@@ -4234,7 +5222,8 @@ a.wls-meta-value:hover {
     .wls-security-audit-meta {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .wls-security-log-filter {
+    .wls-security-log-filter,
+    .wls-security-audit-filter {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .wls-rule-editor-grid {
@@ -4278,6 +5267,20 @@ a.wls-meta-value:hover {
         align-items: flex-start;
         flex-direction: column;
     }
+    .wls-market-endpoint-strip {
+        flex-direction: column;
+    }
+    .wls-marketplace-console {
+        flex-direction: column;
+    }
+    .wls-market-endpoint-meta {
+        justify-content: flex-start;
+        min-width: 0;
+    }
+    .wls-marketplace-console-actions {
+        justify-content: flex-start;
+        min-width: 0;
+    }
     .wls-shell-actions {
         justify-content: flex-start;
         width: 100%;
@@ -4290,12 +5293,6 @@ a.wls-meta-value:hover {
     .wls-metric-grid,
     .wls-action-grid,
     .wls-project-grid,
-    .wls-project-config-grid,
-    .wls-plugin-grid,
-    .wls-operation-grid,
-    .wls-plugin-contribution-grid,
-    .wls-installed-plugin-grid,
-    .wls-market-source-grid,
     .wls-plugin-refresh-grid,
     .wls-gateway-summary-grid,
     .wls-security-metric-grid,
@@ -4306,7 +5303,6 @@ a.wls-meta-value:hover {
     .wls-domain-policy-grid,
     .wls-security-audit-meta,
     .wls-security-layout,
-    .wls-instance-grid,
     .wls-gateway-apply-form,
     .wls-filter-bar {
         grid-template-columns: minmax(0, 1fr);
@@ -4321,7 +5317,6 @@ a.wls-meta-value:hover {
     .wls-path-rate-row,
     .wls-rule-field-grid,
     .wls-domain-protected-paths,
-    .wls-config-operation-list,
     .wls-operation-meta,
     .wls-form-wide {
         grid-column: auto;
@@ -4355,15 +5350,9 @@ a.wls-meta-value:hover {
     .wls-section-actions,
     .wls-project-config-head,
     .wls-project-config-title,
-    .wls-project-config-foot,
-    .wls-config-operation-head,
-    .wls-config-operation-meta,
     .wls-gateway-effective-row {
         align-items: flex-start;
         flex-direction: column;
-    }
-    .wls-config-operation-meta span {
-        text-align: left;
     }
     .wls-filter-actions,
     .wls-security-log-footer,
@@ -4411,6 +5400,18 @@ a.wls-meta-value:hover {
         return;
     }
     const storageKey = 'wls_panel_theme';
+    const syncHostThemeAttributes = function (theme) {
+        document.documentElement.setAttribute('data-wls-panel-theme', theme);
+        document.documentElement.setAttribute('data-theme-mode', theme);
+        document.documentElement.setAttribute('data-bs-theme', theme);
+        document.documentElement.style.colorScheme = theme;
+        if (document.body) {
+            document.body.setAttribute('data-wls-panel-theme', theme);
+            document.body.setAttribute('data-bs-theme', theme);
+            document.body.setAttribute('data-sidebar', theme);
+            document.body.setAttribute('data-topbar', theme);
+        }
+    };
     const applyTheme = function (theme) {
         const normalized = theme === 'dark' ? 'dark' : 'light';
         const darkLabel = button.getAttribute('data-wls-theme-dark-label') || label.textContent || '';
@@ -4418,9 +5419,7 @@ a.wls-meta-value:hover {
         const nextLabel = normalized === 'dark' ? lightLabel : darkLabel;
         shell.setAttribute('data-wls-theme', normalized);
         shell.setAttribute('data-wls-theme-ready', '1');
-        document.documentElement.setAttribute('data-wls-panel-theme', normalized);
-        document.body && document.body.setAttribute('data-wls-panel-theme', normalized);
-        document.documentElement.style.colorScheme = normalized;
+        syncHostThemeAttributes(normalized);
         button.setAttribute('aria-pressed', normalized === 'dark' ? 'true' : 'false');
         label.textContent = nextLabel;
         try {
@@ -4428,6 +5427,11 @@ a.wls-meta-value:hover {
         } catch (error) {
             // Local storage can be unavailable in hardened browser contexts.
         }
+        document.dispatchEvent(new CustomEvent('wls-panel-theme-change', {
+            detail: {
+                theme: normalized
+            }
+        }));
     };
     let initialTheme = 'light';
     try {
@@ -4442,6 +5446,57 @@ a.wls-meta-value:hover {
     button.addEventListener('click', function () {
         applyTheme(shell.getAttribute('data-wls-theme') === 'dark' ? 'light' : 'dark');
     });
+})();
+
+(function () {
+    const shell = document.querySelector('[data-wls-shell="standalone"]');
+    if (!shell) {
+        return;
+    }
+
+    const groups = Array.from(shell.querySelectorAll('[data-wls-plugin-nav-group]'));
+    if (groups.length === 0) {
+        return;
+    }
+
+    const setOpen = function (group, open) {
+        const subnav = group.querySelector('[data-wls-plugin-subnav]');
+        const toggle = group.querySelector('[data-wls-plugin-nav-toggle]');
+        group.classList.toggle('is-open', open);
+        if (subnav) {
+            subnav.hidden = !open;
+        }
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+    };
+
+    groups.forEach(function (group) {
+        setOpen(group, group.getAttribute('data-plugin-active') === '1');
+        const toggle = group.querySelector('[data-wls-plugin-nav-toggle]');
+        if (!toggle) {
+            return;
+        }
+        toggle.addEventListener('click', function () {
+            const willOpen = !group.classList.contains('is-open');
+            groups.forEach(function (otherGroup) {
+                setOpen(otherGroup, false);
+            });
+            if (willOpen) {
+                setOpen(group, true);
+            }
+        });
+    });
+
+    const activeItem = shell.querySelector('.wls-plugin-subnav-item.is-active, .wls-plugin-nav-trigger.is-active');
+    if (activeItem && typeof activeItem.scrollIntoView === 'function') {
+        window.requestAnimationFrame(function () {
+            activeItem.scrollIntoView({
+                block: 'nearest',
+                inline: 'nearest'
+            });
+        });
+    }
 })();
 
 (function () {
@@ -4461,6 +5516,316 @@ a.wls-meta-value:hover {
         return;
     }
     form.submit();
+})();
+
+(function () {
+    const list = document.querySelector('[data-wls-project-list]');
+    if (!list) {
+        return;
+    }
+
+    const searchInput = list.querySelector('[data-wls-project-search]');
+    const pageSizeSelect = list.querySelector('[data-wls-project-page-size]');
+    const summary = list.querySelector('[data-wls-project-summary]');
+    const empty = list.querySelector('[data-wls-project-empty]');
+    const pageLabel = list.querySelector('[data-wls-project-page-label]');
+    const prevButton = list.querySelector('[data-wls-project-page-prev]');
+    const nextButton = list.querySelector('[data-wls-project-page-next]');
+    const rows = Array.from(list.querySelectorAll('[data-wls-project-row]'));
+    const detailRows = new Map();
+
+    list.querySelectorAll('[data-wls-project-detail-row]').forEach(function (row) {
+        if (row.id) {
+            detailRows.set(row.id, row);
+        }
+    });
+
+    let state = {
+        page: 1,
+        pageSize: Number.parseInt(list.getAttribute('data-wls-project-page-size') || '10', 10) || 10,
+        query: '',
+    };
+
+    const collapseAll = function () {
+        rows.forEach(function (row) {
+            row.classList.remove('is-expanded');
+            const toggle = row.querySelector('[data-wls-project-detail-toggle]');
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        detailRows.forEach(function (row) {
+            row.hidden = true;
+        });
+    };
+
+    const matchingRows = function () {
+        const query = state.query.trim().toLowerCase();
+        if (!query) {
+            return rows;
+        }
+        return rows.filter(function (row) {
+            return String(row.getAttribute('data-wls-project-search') || '').includes(query);
+        });
+    };
+
+    const render = function () {
+        const matches = matchingRows();
+        const total = matches.length;
+        const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
+        state.page = Math.max(1, Math.min(state.page, totalPages));
+        const start = (state.page - 1) * state.pageSize;
+        const end = start + state.pageSize;
+        const visible = new Set(matches.slice(start, end));
+
+        rows.forEach(function (row) {
+            const detailId = row.getAttribute('data-wls-project-detail') || '';
+            const detailRow = detailRows.get(detailId);
+            const isVisible = visible.has(row);
+            row.hidden = !isVisible;
+            if (!isVisible && detailRow) {
+                detailRow.hidden = true;
+                row.classList.remove('is-expanded');
+                const toggle = row.querySelector('[data-wls-project-detail-toggle]');
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', 'false');
+                }
+            }
+        });
+
+        const from = total === 0 ? 0 : start + 1;
+        const to = Math.min(end, total);
+        const summaryLabel = list.getAttribute('data-summary-label') || 'Showing %{1}-%{2} of %{3} instances';
+        if (summary) {
+            summary.textContent = summaryLabel
+                .replace('%{1}', String(from))
+                .replace('%{2}', String(to))
+                .replace('%{3}', String(total));
+        }
+        if (empty) {
+            empty.hidden = total !== 0;
+        }
+        if (pageLabel) {
+            pageLabel.textContent = String(state.page) + ' / ' + String(totalPages);
+        }
+        if (prevButton) {
+            prevButton.disabled = state.page <= 1;
+        }
+        if (nextButton) {
+            nextButton.disabled = state.page >= totalPages;
+        }
+    };
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            state.query = searchInput.value || '';
+            state.page = 1;
+            collapseAll();
+            render();
+        });
+    }
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', function () {
+            state.pageSize = Number.parseInt(pageSizeSelect.value || '10', 10) || 10;
+            state.page = 1;
+            collapseAll();
+            render();
+        });
+    }
+    if (prevButton) {
+        prevButton.addEventListener('click', function () {
+            state.page -= 1;
+            collapseAll();
+            render();
+        });
+    }
+    if (nextButton) {
+        nextButton.addEventListener('click', function () {
+            state.page += 1;
+            collapseAll();
+            render();
+        });
+    }
+
+    list.addEventListener('click', function (event) {
+        const toggle = event.target.closest('[data-wls-project-detail-toggle]');
+        if (!toggle) {
+            return;
+        }
+        const row = toggle.closest('[data-wls-project-row]');
+        if (!row) {
+            return;
+        }
+        const detailId = row.getAttribute('data-wls-project-detail') || '';
+        const detailRow = detailRows.get(detailId);
+        if (!detailRow) {
+            return;
+        }
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        collapseAll();
+        if (!expanded) {
+            row.classList.add('is-expanded');
+            detailRow.hidden = false;
+            toggle.setAttribute('aria-expanded', 'true');
+        }
+    });
+
+    render();
+})();
+
+(function () {
+    const list = document.querySelector('[data-wls-instance-list]');
+    if (!list) {
+        return;
+    }
+
+    const searchInput = list.querySelector('[data-wls-instance-search]');
+    const pageSizeSelect = list.querySelector('[data-wls-instance-page-size]');
+    const summary = list.querySelector('[data-wls-instance-summary]');
+    const empty = list.querySelector('[data-wls-instance-empty]');
+    const pageLabel = list.querySelector('[data-wls-instance-page-label]');
+    const prevButton = list.querySelector('[data-wls-instance-page-prev]');
+    const nextButton = list.querySelector('[data-wls-instance-page-next]');
+    const rows = Array.from(list.querySelectorAll('[data-wls-instance-row]'));
+    const detailRows = new Map();
+
+    list.querySelectorAll('[data-wls-instance-detail-row]').forEach(function (row) {
+        if (row.id) {
+            detailRows.set(row.id, row);
+        }
+    });
+
+    let state = {
+        page: 1,
+        pageSize: Number.parseInt(list.getAttribute('data-wls-instance-page-size') || '10', 10) || 10,
+        query: '',
+    };
+
+    const collapseAll = function () {
+        rows.forEach(function (row) {
+            row.classList.remove('is-expanded');
+            const toggle = row.querySelector('[data-wls-instance-detail-toggle]');
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        detailRows.forEach(function (row) {
+            row.hidden = true;
+        });
+    };
+
+    const matchingRows = function () {
+        const query = state.query.trim().toLowerCase();
+        if (!query) {
+            return rows;
+        }
+        return rows.filter(function (row) {
+            return String(row.getAttribute('data-wls-instance-search') || '').includes(query);
+        });
+    };
+
+    const render = function () {
+        const matches = matchingRows();
+        const total = matches.length;
+        const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
+        state.page = Math.max(1, Math.min(state.page, totalPages));
+        const start = (state.page - 1) * state.pageSize;
+        const end = start + state.pageSize;
+        const visible = new Set(matches.slice(start, end));
+
+        rows.forEach(function (row) {
+            const detailId = row.getAttribute('data-wls-instance-detail') || '';
+            const detailRow = detailRows.get(detailId);
+            const isVisible = visible.has(row);
+            row.hidden = !isVisible;
+            if (!isVisible && detailRow) {
+                detailRow.hidden = true;
+                row.classList.remove('is-expanded');
+                const toggle = row.querySelector('[data-wls-instance-detail-toggle]');
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', 'false');
+                }
+            }
+        });
+
+        const from = total === 0 ? 0 : start + 1;
+        const to = Math.min(end, total);
+        const summaryLabel = list.getAttribute('data-summary-label') || 'Showing %{1}-%{2} of %{3} instances';
+        if (summary) {
+            summary.textContent = summaryLabel
+                .replace('%{1}', String(from))
+                .replace('%{2}', String(to))
+                .replace('%{3}', String(total));
+        }
+        if (empty) {
+            empty.hidden = total !== 0;
+        }
+        if (pageLabel) {
+            pageLabel.textContent = String(state.page) + ' / ' + String(totalPages);
+        }
+        if (prevButton) {
+            prevButton.disabled = state.page <= 1;
+        }
+        if (nextButton) {
+            nextButton.disabled = state.page >= totalPages;
+        }
+    };
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            state.query = searchInput.value || '';
+            state.page = 1;
+            collapseAll();
+            render();
+        });
+    }
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', function () {
+            state.pageSize = Number.parseInt(pageSizeSelect.value || '10', 10) || 10;
+            state.page = 1;
+            collapseAll();
+            render();
+        });
+    }
+    if (prevButton) {
+        prevButton.addEventListener('click', function () {
+            state.page -= 1;
+            collapseAll();
+            render();
+        });
+    }
+    if (nextButton) {
+        nextButton.addEventListener('click', function () {
+            state.page += 1;
+            collapseAll();
+            render();
+        });
+    }
+
+    list.addEventListener('click', function (event) {
+        const toggle = event.target.closest('[data-wls-instance-detail-toggle]');
+        if (!toggle) {
+            return;
+        }
+        const row = toggle.closest('[data-wls-instance-row]');
+        if (!row) {
+            return;
+        }
+        const detailId = row.getAttribute('data-wls-instance-detail') || '';
+        const detailRow = detailRows.get(detailId);
+        if (!detailRow) {
+            return;
+        }
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        collapseAll();
+        if (!expanded) {
+            row.classList.add('is-expanded');
+            detailRow.hidden = false;
+            toggle.setAttribute('aria-expanded', 'true');
+        }
+    });
+
+    render();
 })();
 
 (function () {

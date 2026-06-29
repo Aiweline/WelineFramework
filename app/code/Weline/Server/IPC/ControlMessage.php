@@ -658,7 +658,7 @@ class ControlMessage
     /**
      * 构建 draining_complete 消息
      */
-    public static function drainingComplete(int $workerId, int $port, string $msgId = ''): string
+    public static function drainingComplete(int $workerId, int $port, string $msgId = '', string $reason = ''): string
     {
         $data = [
             'type'      => self::TYPE_DRAINING_COMPLETE,
@@ -668,20 +668,37 @@ class ControlMessage
         if ($msgId !== '') {
             $data['msg_id'] = $msgId;
         }
+        if ($reason !== '') {
+            $data['reason'] = $reason;
+        }
         return self::encode($data);
     }
 
     /**
      * 构建 status_report 消息
      */
-    public static function statusReport(int $connections, int $memory, int $requests): string
+    public static function statusReport(int $connections, int $memory, int $requests, array $context = []): string
     {
-        return self::encode([
+        $data = [
             'type'        => self::TYPE_STATUS_REPORT,
             'connections' => $connections,
             'memory'      => $memory,
             'requests'    => $requests,
-        ]);
+        ];
+
+        foreach ($context as $key => $value) {
+            if (!\is_string($key) || \preg_match('/^[a-zA-Z0-9_]{1,64}$/', $key) !== 1) {
+                continue;
+            }
+            if (\in_array($key, ['type', 'connections', 'memory', 'requests'], true)) {
+                continue;
+            }
+            if (\is_scalar($value) || $value === null) {
+                $data[$key] = $value;
+            }
+        }
+
+        return self::encode($data);
     }
 
     /**
@@ -836,11 +853,22 @@ class ControlMessage
      * @param string $reason 退出原因
      * @param int $code 可选退出码
      */
-    public static function exitReason(string $reason, int $code = 0): string
+    public static function exitReason(string $reason, int $code = 0, array $context = []): string
     {
         $data = ['type' => self::TYPE_EXIT_REASON, 'reason' => $reason];
         if ($code !== 0) {
             $data['code'] = $code;
+        }
+        foreach ($context as $key => $value) {
+            if (!\is_string($key) || \preg_match('/^[a-zA-Z0-9_]{1,64}$/', $key) !== 1) {
+                continue;
+            }
+            if (\in_array($key, ['type', 'reason', 'code'], true)) {
+                continue;
+            }
+            if (\is_scalar($value) || $value === null) {
+                $data[$key] = $value;
+            }
         }
         return self::encode($data);
     }

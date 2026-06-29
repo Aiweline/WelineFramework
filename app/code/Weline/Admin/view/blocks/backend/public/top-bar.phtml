@@ -136,6 +136,22 @@ $logoLight = $resolveBackendLogo('logo_light', 'Weline_Admin::assets/images/logo
             return;
         }
 
+        var sidebarToggle = document.getElementById('vertical-menu-btn');
+        if (sidebarToggle && sidebarToggle.dataset.welineSidebarToggleBound !== '1') {
+            sidebarToggle.dataset.welineSidebarToggleBound = '1';
+            sidebarToggle.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+
+                document.body.classList.toggle('sidebar-enable');
+                if (window.innerWidth >= 992) {
+                    document.body.classList.toggle('vertical-collpsed');
+                } else {
+                    document.body.classList.remove('vertical-collpsed');
+                }
+            }, true);
+        }
+
         var triggers = topbar.querySelectorAll('[data-bs-toggle="dropdown"]');
         if (!triggers.length) {
             return;
@@ -220,8 +236,11 @@ $logoLight = $resolveBackendLogo('logo_light', 'Weline_Admin::assets/images/logo
 
             body.setAttribute('data-topbar', normalizedMode);
             body.setAttribute('data-sidebar', normalizedMode);
+            body.setAttribute('data-theme-mode', normalizedMode);
+            body.setAttribute('data-layout-mode', normalizedMode);
             body.setAttribute('data-bs-theme', normalizedMode);
             root.setAttribute('data-theme-mode', normalizedMode);
+            root.setAttribute('data-layout-mode', normalizedMode);
             root.setAttribute('data-bs-theme', normalizedMode);
 
             updateThemeToggleIcon(normalizedMode);
@@ -239,7 +258,9 @@ $logoLight = $resolveBackendLogo('logo_light', 'Weline_Admin::assets/images/logo
                 window.setThemeConfig({
                     layouts: {
                         'data-topbar': nextMode,
-                        'data-sidebar': nextMode
+                        'data-sidebar': nextMode,
+                        'data-theme-mode': nextMode,
+                        'data-layout-mode': nextMode
                     },
                     'theme-mode-switch': nextMode,
                     'rtl-mode-switch': false

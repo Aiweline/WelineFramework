@@ -1,4 +1,4 @@
-﻿"ElFinder main.js 加载失败，请确认已通过 Composer 安装 studio-42/elfinder。","ElFinder main.js could not be loaded. Please make sure studio-42/elfinder is installed via Composer."
+﻿"ElFinder main.js 加载失败，请确认已通过 Composer 安装 studio-42/elfinder。","ElFinder main.js 加载失败，请确认已通过 Composer 安装 studio-42/elfinder。"
 "ElFinder main.js 生成失败，请检查文件权限。","ElFinder main.js could not be generated. Please check file permissions."
 "ElFinder 依赖加载失败，请通过 Composer 安装依赖后重试。","ElFinder dependencies could not be loaded. Please install dependencies via Composer and try again."
 前台文件管理器未启用。,"Frontend file manager is disabled."

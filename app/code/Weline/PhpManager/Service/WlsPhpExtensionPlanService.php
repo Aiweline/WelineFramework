@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\PhpManager\Service;
 
+use Weline\PhpManager\Service\Adapter\WindowsBundledPhpExtensionAdapter;
+
 class WlsPhpExtensionPlanService
 {
     private const CORE_EXTENSIONS = [
@@ -20,6 +22,14 @@ class WlsPhpExtensionPlanService
         'standard' => true,
         'tokenizer' => true,
     ];
+
+    private readonly WindowsBundledPhpExtensionAdapter $windowsAdapter;
+
+    public function __construct(
+        ?WindowsBundledPhpExtensionAdapter $windowsAdapter = null
+    ) {
+        $this->windowsAdapter = $windowsAdapter ?? new WindowsBundledPhpExtensionAdapter();
+    }
 
     /**
      * @param array<string, mixed> $input
@@ -64,9 +74,15 @@ class WlsPhpExtensionPlanService
             $warnings[] = (string)__('This extension is listed in the selected Project Profile required extensions.');
         }
 
-        $state = !$selected ? 'idle' : ($errors !== [] ? 'blocked' : 'dry_run_only');
+        $adapterPlan = $this->windowsAdapter->buildPlan($action, $extension, $runtime, $projectProfile, $isLoaded, $errors);
+        $adapterReasons = \is_array($adapterPlan['adapter_reasons'] ?? null) ? $adapterPlan['adapter_reasons'] : [];
+        foreach ($adapterReasons as $reason) {
+            $warnings[] = (string)$reason;
+        }
 
-        return [
+        $state = !$selected ? 'idle' : ($errors !== [] ? 'blocked' : (!empty($adapterPlan['can_execute']) ? 'ready_to_execute' : 'adapter_blocked'));
+
+        return \array_merge($adapterPlan, [
             'selected' => $selected,
             'action' => $action,
             'action_label' => $this->actionLabel($action),
@@ -76,13 +92,11 @@ class WlsPhpExtensionPlanService
             'platform' => (string)($runtime['os'] ?? \PHP_OS_FAMILY),
             'state' => $state,
             'state_label' => $this->stateLabel($state),
-            'can_execute' => false,
-            'execution_label' => (string)__('Execution disabled in this slice'),
             'errors' => $errors,
             'warnings' => $warnings,
-            'checks' => $this->buildChecks($action, $extension, $runtime, $isLoaded, $isRequired, $isCore, $errors),
+            'checks' => $this->buildChecks($action, $extension, $runtime, $isLoaded, $isRequired, $isCore, $errors, $adapterPlan),
             'steps' => $this->buildSteps($action),
-        ];
+        ]);
     }
 
     private function normalizeAction(string $action): string
@@ -113,7 +127,8 @@ class WlsPhpExtensionPlanService
     private function stateLabel(string $state): string
     {
         return match ($state) {
-            'dry_run_only' => (string)__('Dry-run Only'),
+            'ready_to_execute' => (string)__('Ready to Execute'),
+            'adapter_blocked' => (string)__('Adapter Blocked'),
             'blocked' => (string)__('Blocked'),
             default => (string)__('Waiting for Input'),
         };
@@ -156,6 +171,7 @@ class WlsPhpExtensionPlanService
     /**
      * @param array<string, mixed> $runtime
      * @param array<int, string> $errors
+     * @param array<string, mixed> $adapterPlan
      * @return array<int, array<string, string>>
      */
     private function buildChecks(
@@ -165,7 +181,8 @@ class WlsPhpExtensionPlanService
         bool $isLoaded,
         bool $isRequired,
         bool $isCore,
-        array $errors
+        array $errors,
+        array $adapterPlan
     ): array {
         return [
             [
@@ -194,9 +211,15 @@ class WlsPhpExtensionPlanService
             ],
             [
                 'label' => (string)__('Execution Adapter'),
-                'value' => (string)__('Not Installed'),
-                'detail' => (string)__('This slice only previews the future adapter plan and never runs package commands.'),
-                'state' => $errors !== [] ? 'blocked' : 'dry_run_only',
+                'value' => (string)($adapterPlan['adapter_label'] ?? __('Windows bundled PHP ini adapter')),
+                'detail' => (string)($adapterPlan['execution_label'] ?? __('Guarded Adapter Waiting')),
+                'state' => !empty($adapterPlan['can_execute']) ? 'ok' : ($errors !== [] ? 'blocked' : 'warning'),
+            ],
+            [
+                'label' => (string)__('Target php.ini'),
+                'value' => (string)(($adapterPlan['target_ini_path'] ?? '') !== '' ? $adapterPlan['target_ini_path'] : __('Missing')),
+                'detail' => (string)($adapterPlan['managed_block_state'] ?? __('Not Evaluated')),
+                'state' => !empty($adapterPlan['can_execute']) ? 'ok' : 'attention',
             ],
         ];
     }
@@ -216,10 +239,10 @@ class WlsPhpExtensionPlanService
 
         return [
             (string)__('Resolve the selected project PHP Profile and current runtime extension state.'),
-            (string)__('Select a future platform adapter for the current operating system.'),
+            (string)__('Select the guarded bundled Windows PHP adapter when the runtime and php.ini path are allowlisted.'),
             (string)__('Map the extension to an allowlisted %{1} operation.', $verb),
-            (string)__('Preview php.ini and runtime reload effects before any write.'),
-            (string)__('Require explicit operator confirmation in a later execution slice.'),
+            (string)__('Create a php.ini backup, then update only the WLS-managed extension block.'),
+            (string)__('Require explicit operator phrase, checkbox confirmation, audit record, and optional WLS reload request.'),
         ];
     }
 }

@@ -265,6 +265,14 @@ class WlsDatabaseProfileService
     }
 
     /**
+     * @param array<string, mixed> $payload
+     */
+    public function appendAuditEvent(string $event, array $payload): void
+    {
+        $this->appendAudit($event, $payload);
+    }
+
+    /**
      * @param array<string, mixed> $context
      */
     public function loadForContext(array $context): ?WlsDatabaseProfile

@@ -97,13 +97,13 @@ if ($previewContextService->shouldUseStoredContext()) {
     }
 }
 ?>
-<css>Weline_Admin::css/modern-admin-polish.css</css>
 <!--JS-->
 <js>Weline_Backend::/backend/lib/jquery/3.6.0/jquery.js</js>
 <?php
 // 注入主题配置（必须在 theme.js 加载前）
 $isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
+$baseHost = rtrim($this->request->getBaseHost(), '/');
 
 // 根据环境设置模块配置URL和基础URL（weline-api.js 位于 Weline_Backend 模块）
 if ($isDev) {
@@ -131,9 +131,14 @@ $themeConfigPayload = [
     'currentCurrency' => $currentCurrency,
     'debug' => DEV,
     'url' => [
+        'origin' => $baseHost,
+        'apiHost' => rtrim($this->request->getUrlBuilder()->getBackendApiUrl('/', [], false), '/'),
+        'frontendApiHost' => rtrim($this->request->getUrlBuilder()->getFrontendApiUrl('', [], false), '/'),
         'adminArea' => $backendRoutePrefix,
         'apiArea' => $restFrontendRoutePrefix,
         'apiAdminArea' => $restBackendRoutePrefix,
+        'defaultCurrency' => $currentCurrency,
+        'defaultLocale' => $currentLang,
     ],
     'i18n' => [
         'confirm' => __('确定'),
@@ -180,3 +185,4 @@ if($this->getHeader()){
     echo $this->getHeader()->getHtml();
 }
 ?>
+<css>Weline_Admin::css/modern-admin-polish.css</css>

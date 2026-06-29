@@ -145,8 +145,8 @@ AI翻译,AI翻译
 取消,取消
 选择一个部件进行配置,选择一个部件进行配置
 请填写页面标题和标识,请填写页面标题和标识
-未知错误,未知错误
-保存失败,保存失败
+"Page preview","Page preview"
+"The w:widget tags in this preview need server-side rendering before actual widget content is shown.","The w:widget tags in this preview need server-side rendering before actual widget content is shown."
 保存,保存
 页面标题,页面标题
 页面标识,页面标识

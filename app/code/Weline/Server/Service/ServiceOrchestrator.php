@@ -5024,9 +5024,24 @@ class ServiceOrchestrator
             $displayName = $provider?->getDisplayName() ?? $instance->role;
             $pidListForLog[] = "{$displayName}(PID:{$trackingPid})";
             if ($instance->ipcClientId !== null) {
+                $shutdownExitReason = \trim((string)$instance->getMeta('exit_reason', ''));
+                if ($shutdownExitReason === '') {
+                    $shutdownExitReason = "shutdown_command:role={$instance->role},instance_id={$instance->instanceId},pid={$trackingPid}";
+                    $instance->setMeta('exit_reason', $shutdownExitReason);
+                    $this->traceStartup('child_exit_reason', [
+                        'role' => $instance->role,
+                        'instance_id' => $instance->instanceId,
+                        'pid' => $instance->pid,
+                        'tracking_pid' => $trackingPid,
+                        'port' => $instance->port,
+                        'state' => ServiceInstance::STATE_STOPPING,
+                        'reason' => $shutdownExitReason,
+                        'source' => 'master_shutdown',
+                    ]);
+                }
                 $instance->state = ServiceInstance::STATE_STOPPING;
                 $this->registry->updateInstance($instance);
-                $this->controlServer?->sendTo($instance->ipcClientId, ControlMessage::shutdown());
+                $this->controlServer?->sendTo($instance->ipcClientId, ControlMessage::shutdown($shutdownExitReason));
             }
         }
 
@@ -10036,6 +10051,10 @@ class ServiceOrchestrator
                 $cid = $inst->ipcClientId;
                 if (!$this->controlServer->clientExists($cid)) {
                     WlsLogger::warning_("[Orchestrator] Worker#{$inst->instanceId} IPC 槽位失效，同步注册表");
+                    WlsLogger::warning_(
+                        "[Orchestrator] Worker#{$inst->instanceId} ipc invalid diagnostics="
+                        . $this->formatInstanceRuntimeDiagnostics($inst)
+                    );
                     $inst->ipcClientId = null;
                     $this->registry->updateInstance($inst);
                     if (!\in_array($inst->state, [
@@ -10051,6 +10070,10 @@ class ServiceOrchestrator
                 if ($inst->pid > 0 && $cachedRunning === false) {
                     WlsLogger::warning_(
                         "[Orchestrator] Worker#{$inst->instanceId} 进程 PID {$inst->pid} 已退出，摘除 IPC 并复活"
+                    );
+                    WlsLogger::warning_(
+                        "[Orchestrator] Worker#{$inst->instanceId} pid dead diagnostics="
+                        . $this->formatInstanceRuntimeDiagnostics($inst)
                     );
                     $this->controlServer?->closeClient($cid);
                     if ($inst->ipcClientId !== null) {
@@ -10077,9 +10100,13 @@ class ServiceOrchestrator
                     ServiceInstance::STATE_READY,
                     ServiceInstance::STATE_REGISTERED,
                     ServiceInstance::STATE_STARTING,
-                ], true)) {
+            ], true)) {
                 WlsLogger::warning_(
                     "[Orchestrator] Worker#{$inst->instanceId} 长期无 IPC（state={$inst->state}），触发复活"
+                );
+                WlsLogger::warning_(
+                    "[Orchestrator] Worker#{$inst->instanceId} no ipc diagnostics="
+                    . $this->formatInstanceRuntimeDiagnostics($inst)
                 );
                 $this->scheduleResurrectionWithDelay($inst, 0.5);
             }
@@ -10517,7 +10544,22 @@ class ServiceOrchestrator
         }
 
         $instance->state = ServiceInstance::STATE_STOPPING;
+        $reason = \trim((string)($msg['reason'] ?? ''));
+        if ($reason !== '') {
+            $instance->setMeta('exit_reason', $reason);
+        }
         $this->registry->updateInstance($instance);
+        if ($reason !== '') {
+            $this->traceStartup('child_exit_reason', [
+                'role' => $instance->role,
+                'instance_id' => $instance->instanceId,
+                'pid' => $instance->pid,
+                'port' => $instance->port,
+                'state' => $instance->state,
+                'reason' => $reason,
+                'source' => ControlMessage::TYPE_DRAINING_COMPLETE,
+            ]);
+        }
 
         WlsLogger::info_("[Orchestrator] 排水完成: {$instance->role}#{$instance->instanceId}");
     }
@@ -10538,7 +10580,21 @@ class ServiceOrchestrator
         if ($code !== 0) {
             $instance->setMeta('exit_code', $code);
         }
+        $snapshot = $this->sanitizeChildRuntimeSnapshot($msg);
+        if ($snapshot !== []) {
+            $instance->setMeta('last_exit_snapshot', $snapshot);
+        }
         $this->registry->updateInstance($instance);
+        $this->traceStartup('child_exit_reason', [
+            'role' => $instance->role,
+            'instance_id' => $instance->instanceId,
+            'pid' => $instance->pid,
+            'port' => $instance->port,
+            'state' => $instance->state,
+            'reason' => $reason,
+            'code' => $code,
+            'snapshot' => $snapshot,
+        ]);
         WlsLogger::info_("[Orchestrator] 退出原因: {$instance->role}#{$instance->instanceId} reason={$reason}" . ($code !== 0 ? " code={$code}" : ''));
         if ($code !== 0) {
             WlsLogger::error_(
@@ -11422,6 +11478,11 @@ class ServiceOrchestrator
         $conn = (int) ($msg['connections'] ?? 0);
         $mem = (int) ($msg['memory'] ?? 0);
         $req = (int) ($msg['requests'] ?? 0);
+        if ($instance !== null) {
+            $instance->setMeta('last_status_report', $this->sanitizeChildRuntimeSnapshot($msg));
+            $instance->setMeta('last_status_report_at', \microtime(true));
+            $this->registry->updateInstance($instance);
+        }
         if ($conn < 0 || $conn > 500_000) {
             WlsLogger::error_("[Master自检] status_report 异常 connections={$conn} {$tag}");
         }
@@ -11431,6 +11492,108 @@ class ServiceOrchestrator
         if ($req < 0 || $req > 2_000_000_000) {
             WlsLogger::error_("[Master自检] status_report 异常 requests={$req} {$tag}");
         }
+    }
+
+    /**
+     * @return array<string, bool|float|int|string|null>
+     */
+    private function sanitizeChildRuntimeSnapshot(array $msg): array
+    {
+        $snapshot = [];
+        foreach ($msg as $key => $value) {
+            if (!\is_string($key) || \preg_match('/^[a-zA-Z0-9_]{1,64}$/', $key) !== 1) {
+                continue;
+            }
+            if ($key === 'type') {
+                continue;
+            }
+            if (\is_bool($value) || \is_int($value) || \is_float($value) || $value === null) {
+                $snapshot[$key] = $value;
+                continue;
+            }
+            if (\is_string($value)) {
+                $snapshot[$key] = \substr($value, 0, 240);
+            }
+        }
+
+        return $snapshot;
+    }
+
+    private function formatInstanceRuntimeDiagnostics(ServiceInstance $instance): string
+    {
+        $parts = [
+            'state=' . $instance->state,
+            'pid=' . (string)$instance->pid,
+            'port=' . (string)($instance->port ?? 0),
+        ];
+
+        $exitReason = \trim((string)$instance->getMeta('exit_reason', ''));
+        if ($exitReason !== '') {
+            $parts[] = 'exit_reason=' . \substr($exitReason, 0, 120);
+        }
+        $exitCode = $instance->getMeta('exit_code', null);
+        if ($exitCode !== null && $exitCode !== '') {
+            $parts[] = 'exit_code=' . (string)$exitCode;
+        }
+
+        $snapshot = $instance->getMeta('last_exit_snapshot', []);
+        if (!\is_array($snapshot) || $snapshot === []) {
+            $snapshot = $instance->getMeta('last_status_report', []);
+        }
+        if (\is_array($snapshot) && $snapshot !== []) {
+            $parts[] = 'event=' . (string)($snapshot['event'] ?? 'status');
+            $parts[] = 'requests=' . (string)($snapshot['requests'] ?? '?');
+            $parts[] = 'active=' . (string)($snapshot['active_requests'] ?? '?');
+            $parts[] = 'connections=' . (string)($snapshot['connections'] ?? '?');
+
+            $memory = (int)($snapshot['memory_used'] ?? $snapshot['memory'] ?? $snapshot['memory_allocated'] ?? 0);
+            if ($memory > 0) {
+                $parts[] = 'memory_mb=' . (string)\round($memory / 1024 / 1024, 1);
+            }
+            $peak = (int)($snapshot['memory_peak_used'] ?? $snapshot['memory_peak'] ?? 0);
+            if ($peak > 0) {
+                $parts[] = 'peak_mb=' . (string)\round($peak / 1024 / 1024, 1);
+            }
+            if (isset($snapshot['memory_percent'])) {
+                $parts[] = 'memory_percent=' . (string)$snapshot['memory_percent'];
+            }
+            if (isset($snapshot['uptime'])) {
+                $parts[] = 'uptime=' . (string)$snapshot['uptime'];
+            }
+            if (isset($snapshot['ts']) && \is_numeric($snapshot['ts'])) {
+                $parts[] = 'snapshot_age=' . (string)\round(\max(0.0, \microtime(true) - (float)$snapshot['ts']), 1) . 's';
+            }
+        }
+
+        $dispatcherReason = \trim((string)$instance->getMeta('dispatcher_health_failed_reason', ''));
+        if ($dispatcherReason !== '') {
+            $parts[] = 'dispatcher_reason=' . \substr($dispatcherReason, 0, 120);
+        }
+
+        return \implode(', ', \array_slice($parts, 0, 14));
+    }
+
+    private function formatRoleSlotDiagnostics(string $role, int $desired): string
+    {
+        $rows = [];
+        for ($slot = 1; $slot <= $desired; $slot++) {
+            $instance = $this->registry->getInstance($role, $slot);
+            if ($instance === null) {
+                $rows[] = "{$role}#{$slot}{missing}";
+                continue;
+            }
+
+            $ipcHealthy = $instance->ipcClientId !== null
+                && ($this->controlServer === null || $this->controlServer->clientExists($instance->ipcClientId));
+            $pidHealthy = $this->isInstanceServiceAlive($instance);
+            $rows[] = "{$role}#{$slot}{"
+                . $this->formatInstanceRuntimeDiagnostics($instance)
+                . ',ipc=' . ($ipcHealthy ? 'ok' : 'bad')
+                . ',pid=' . ($pidHealthy ? 'ok' : 'bad')
+                . '}';
+        }
+
+        return \implode(' | ', $rows);
     }
 
     /**
@@ -11484,6 +11647,10 @@ class ServiceOrchestrator
                     "[Master自检] {$role} 槽位不齐: 期望 {$desired}，就绪 {$ready}，尝试补齐"
                 );
             }
+            WlsLogger::warning_(
+                "[MasterSelfAudit] {$role} slot diagnostics expected={$desired} ready={$ready}: "
+                . $this->formatRoleSlotDiagnostics($role, $desired)
+            );
             $this->reconcileRoleSlotGaps($role);
         }
     }
@@ -11584,6 +11751,10 @@ class ServiceOrchestrator
                     WlsLogger::warning_(
                         '[Master自检] ' . $role . '#' . (string) $slot . ' 标记 READY 但失效 ipc='
                         . ($ipcBad ? '断' : '通') . ' pid=' . ($pidBad ? '死' : '活') . '，回收重启'
+                    );
+                    WlsLogger::warning_(
+                        '[MasterSelfAudit] stale slot diagnostics '
+                        . $role . '#' . (string)$slot . ': ' . $this->formatInstanceRuntimeDiagnostics($instance)
                     );
                     $this->stopInstanceWithProtocol($instance);
                     $this->registry->removeInstance($role, $slot);

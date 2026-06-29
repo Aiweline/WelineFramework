@@ -306,6 +306,28 @@ https://你的域名/~wh~随机路径?project_id=12&domain=shop.example.com&proj
   `var/deploy/current.json` 和 `server:reload` 都会在该目录下运行。
 - 配置了 `deploy_root` 时必须是已存在的绝对路径；相对路径或不存在的目录会让发布失败，避免误跑到宿主 WLS 项目。
 - 未传项目上下文或未命中启用 Profile 时，保持原来的全局 Deploy 配置行为。
+- WLS Panel 插件商城的环境地址按发布环境区分：本地开发使用 App 商城项目
+  `E:\WelineFramework\Framework-Official\App` 的
+  `https://app.weline.test:9523`；部署后和生产探测使用
+  `https://app.aiweline.com`。发布自动化和部署探测不要使用
+  `www.weline.test:9518` 或 `www.aiweline.com` 作为应用商城地址。
+- 发布成功写入 `var/deploy/current.json` 时会固化
+  `deploy_mode_source`、`appstore_environment`、`appstore_platform_url` 和
+  `appstore_platform_url_source`。只有 `app/etc/env.php` 显式配置
+  `system.deploy=dev/local` 或根级 `deploy=dev/local` 时，才读取本地
+  `WELINE_APPSTORE_PLATFORM_URL` 或 `appstore.platform_url`，且归一化后必须
+  等于 `https://app.weline.test:9523`；非本地部署模式或未显式配置
+  `deploy` 模式时固定写入 `https://app.aiweline.com`，供部署后测试自动
+  选择线上应用商城。
+- AppStore 客户端运行时也按同一规则读取：显式本地模式只接受锁定的
+  `https://app.weline.test:9523`；否则当 `var/deploy/current.json` 标记
+  `appstore_environment=production` 时，优先使用其中的
+  `appstore_platform_url`。生产部署信息只有同时记录
+  `appstore_platform_url=https://app.aiweline.com` 和
+  `appstore_platform_url_source=production_default` 才会被运行时当作有效
+  AppStore 根地址；否则运行时回退到锁定的线上商城根地址，部署验收门禁
+  会拒绝该漂移，避免部署后残留的本地配置继续影响 WLS Panel 插件商城、
+  授权和下载安装链路。
 
 安全验证建议：
 

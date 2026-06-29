@@ -131,6 +131,34 @@ class HeadRendererSeoProfileTest extends TestCase
         self::assertStringContainsString('"@id": "https://blog.test/related#webpage"', $html);
     }
 
+    public function testFooterSlotIncludesDefaultInspectorBootstrapWithoutProviderPayload(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->method('resolve')->willReturn([
+            'page_type' => 'home',
+            'title' => 'Home',
+            'canonical_url' => 'https://shop.test/',
+            'url' => 'https://shop.test/',
+        ]);
+        $template = new SeoProfileHeadTemplateStub();
+
+        $html = (new HeadRenderer(
+            $resolver,
+            new EmptySeoStructureRegistry(),
+            new SeoSlotProviderRegistryStub([])
+        ))->render($template, ['slot' => 'footer']);
+
+        self::assertStringContainsString('data-weline-seo-bootstrap="true"', $html);
+        self::assertStringContainsString('data-weline-seo-source="footer-slot"', $html);
+        self::assertStringContainsString('window.__WELINE_SEO__', $html);
+        self::assertStringContainsString('/assets/seo-inspector/inspector.css', $html);
+        self::assertStringContainsString('/assets/seo-inspector/inspector.js', $html);
+        self::assertStringNotContainsString('@static(', $html);
+    }
+
     public function testCustomSlotWithoutProviderPayloadRendersEmptyString(): void
     {
         $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
@@ -167,6 +195,15 @@ final class SeoProfileHeadTemplateStub
     public function setData(string $key, mixed $value): void
     {
         $this->data[$key] = $value;
+    }
+
+    public function fetchTagSourceFile(string $type, string $source): string
+    {
+        if ($type !== 'statics') {
+            return '';
+        }
+
+        return '/assets/' . ltrim(str_replace('Weline_Seo::', '', $source), '/');
     }
 }
 

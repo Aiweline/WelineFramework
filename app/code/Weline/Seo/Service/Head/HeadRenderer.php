@@ -9,6 +9,9 @@ use Weline\Seo\Structure\SeoStructureRegistry;
 
 class HeadRenderer
 {
+    private const INSPECTOR_CSS_SOURCE = 'Weline_Seo::seo-inspector/inspector.css';
+    private const INSPECTOR_JS_SOURCE = 'Weline_Seo::seo-inspector/inspector.js';
+
     public function __construct(
         private readonly PageSeoContextResolver $resolver,
         private readonly ?SeoStructureRegistry $structureRegistry = null,
@@ -48,6 +51,7 @@ class HeadRenderer
                 $slot === 'head' ? $this->renderSocial($context) : '',
                 $slot === 'head' ? $this->renderStructuredData($context) : '',
                 $slot !== 'head' ? $this->renderCustomSlot($slot, $template, $context, $options) : '',
+                $slot === 'footer' ? $this->renderSeoInspectorBootstrap($template) : '',
             ])),
         };
     }
@@ -218,6 +222,235 @@ class HeadRenderer
             $this->renderSlotBlocks($slot, $slotContext),
             $this->renderSlotStructuredData($providedContext, $slotContext),
         ]));
+    }
+
+    private function renderSeoInspectorBootstrap($template): string
+    {
+        if ($this->claimTemplateRender($template, '__weline_seo_inspector_bootstrap_rendered')) {
+            return '';
+        }
+
+        $cssUrl = $this->jsonString($this->resolveStaticUrl($template, self::INSPECTOR_CSS_SOURCE));
+        $jsUrl = $this->jsonString($this->resolveStaticUrl($template, self::INSPECTOR_JS_SOURCE));
+
+        return <<<HTML
+<script data-no-extract="true" data-load-order="last" data-weline-seo-bootstrap="true" data-weline-seo-source="footer-slot">
+(function () {
+  "use strict";
+
+  if (window.__WELINE_SEO_BOOTSTRAPPED__) {
+    return;
+  }
+
+  window.__WELINE_SEO_BOOTSTRAPPED__ = true;
+
+  var PASSWORD = "weline";
+  var INSPECTOR_CSS_URL = {$cssUrl};
+  var INSPECTOR_JS_URL = {$jsUrl};
+  var buffer = "";
+  var inspectorPromise = null;
+  var stylesheetPromise = null;
+
+  function isPasswordLikeTarget(target) {
+    if (!target) {
+      return false;
+    }
+
+    var tag = (target.tagName || "").toLowerCase();
+    if (tag !== "input") {
+      return false;
+    }
+
+    var type = (target.getAttribute("type") || "text").toLowerCase();
+    var autocomplete = (target.getAttribute("autocomplete") || "").toLowerCase();
+
+    return type === "password" || autocomplete.indexOf("password") !== -1;
+  }
+
+  function appendToHead(node) {
+    (document.head || document.documentElement).appendChild(node);
+  }
+
+  function waitForInspector() {
+    return new Promise(function (resolve, reject) {
+      var attempts = 0;
+      var timer = window.setInterval(function () {
+        attempts += 1;
+
+        if (window.__WELINE_SEO_INSPECTOR__) {
+          window.clearInterval(timer);
+          resolve(window.__WELINE_SEO_INSPECTOR__);
+          return;
+        }
+
+        if (attempts >= 200) {
+          window.clearInterval(timer);
+          reject(new Error("Timed out while loading SEO inspector"));
+        }
+      }, 50);
+    });
+  }
+
+  function loadStylesheet() {
+    if (document.querySelector('link[data-weline-seo-inspector="true"]')) {
+      return Promise.resolve();
+    }
+
+    if (stylesheetPromise) {
+      return stylesheetPromise;
+    }
+
+    stylesheetPromise = new Promise(function (resolve, reject) {
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = INSPECTOR_CSS_URL;
+      link.setAttribute("data-weline-seo-inspector", "true");
+      link.onload = function () { resolve(); };
+      link.onerror = function () { reject(new Error("Failed to load SEO inspector CSS")); };
+      appendToHead(link);
+    });
+
+    return stylesheetPromise;
+  }
+
+  function ensureInspectorScript() {
+    if (window.__WELINE_SEO_INSPECTOR__) {
+      return Promise.resolve(window.__WELINE_SEO_INSPECTOR__);
+    }
+
+    if (inspectorPromise) {
+      return inspectorPromise;
+    }
+
+    if (document.querySelector('script[data-weline-seo-inspector="true"]')) {
+      inspectorPromise = waitForInspector();
+      return inspectorPromise;
+    }
+
+    inspectorPromise = new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = INSPECTOR_JS_URL;
+      script.async = true;
+      script.defer = true;
+      script.setAttribute("data-weline-seo-inspector", "true");
+      script.onload = function () {
+        if (window.__WELINE_SEO_INSPECTOR__) {
+          resolve(window.__WELINE_SEO_INSPECTOR__);
+          return;
+        }
+        reject(new Error("SEO inspector loaded without registering API"));
+      };
+      script.onerror = function () { reject(new Error("Failed to load SEO inspector script")); };
+      appendToHead(script);
+    });
+
+    return inspectorPromise;
+  }
+
+  function reportError(error) {
+    if (typeof console !== "undefined" && typeof console.error === "function") {
+      console.error("[seo-inspector]", error);
+    }
+  }
+
+  function openInspector() {
+    return loadStylesheet()
+      .then(ensureInspectorScript)
+      .then(function (inspector) {
+        if (inspector && typeof inspector.open === "function") {
+          inspector.open();
+        }
+      })
+      .catch(reportError);
+  }
+
+  window.__WELINE_SEO__ = {
+    version: "1.0.0",
+    command: "weline-seo",
+    getReport: function () {
+      return ensureInspectorScript().then(function (inspector) {
+        if (inspector && typeof inspector.publish === "function") {
+          return inspector.publish();
+        }
+        if (inspector && typeof inspector.report === "function") {
+          return inspector.report();
+        }
+        return null;
+      });
+    },
+    open: openInspector,
+    readReport: function () {
+      return window.__WELINE_SEO_REPORT__ || null;
+    }
+  };
+
+  window.welineSeo = function () {
+    return window.__WELINE_SEO__.getReport().then(function (report) {
+      if (typeof console !== "undefined" && typeof console.info === "function") {
+        console.info("[weline-seo]", report);
+      }
+      return report;
+    });
+  };
+
+  function installKeyListener() {
+    document.addEventListener("keydown", function (event) {
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      if (event.isComposing || isPasswordLikeTarget(event.target)) {
+        return;
+      }
+      if (!event.key || event.key.length !== 1) {
+        return;
+      }
+
+      buffer = (buffer + event.key.toLowerCase()).slice(-PASSWORD.length);
+      if (buffer !== PASSWORD) {
+        return;
+      }
+
+      buffer = "";
+      openInspector();
+    }, true);
+  }
+
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(installKeyListener, { timeout: 1500 });
+    return;
+  }
+
+  window.setTimeout(installKeyListener, 0);
+})();
+</script>
+HTML;
+    }
+
+    private function resolveStaticUrl($template, string $source): string
+    {
+        if (is_object($template) && method_exists($template, 'fetchTagSourceFile')) {
+            try {
+                $url = trim((string) $template->fetchTagSourceFile('statics', $source));
+                if ($url !== '') {
+                    return $url;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $normalizedSource = str_replace('\\', '/', $source);
+        if (str_contains($normalizedSource, '::')) {
+            [$module, $path] = explode('::', $normalizedSource, 2);
+            return '/' . trim(str_replace('_', '/', $module), '/') . '/view/statics/' . ltrim($path, '/');
+        }
+
+        return '/' . ltrim($normalizedSource, '/');
+    }
+
+    private function jsonString(string $value): string
+    {
+        $encoded = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return is_string($encoded) ? $encoded : '""';
     }
 
     /**

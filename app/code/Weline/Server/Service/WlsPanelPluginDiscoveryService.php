@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\MarketplaceMeta\MarketplaceMetaReader;
+
 class WlsPanelPluginDiscoveryService
 {
     public const WLS_PLUGIN_TAG = 'module:wls';
@@ -113,11 +116,16 @@ class WlsPanelPluginDiscoveryService
                 continue;
             }
             foreach ($this->extractPluginPanelContributions($plugin, $locale) as $item) {
-                $identity = (string)$item['url'];
-                if (isset($seen[$identity])) {
+                $identity = $this->resolvePanelContributionIdentity($item);
+                if ($identity === '') {
+                    $items[] = $item;
                     continue;
                 }
-                $seen[$identity] = true;
+                if (isset($seen[$identity])) {
+                    $items[$seen[$identity]] = $this->mergePanelContributionItems($items[$seen[$identity]], $item);
+                    continue;
+                }
+                $seen[$identity] = \count($items);
                 $items[] = $item;
             }
         }
@@ -136,6 +144,92 @@ class WlsPanelPluginDiscoveryService
             'count' => \count($items),
             'error' => (string)($pluginState['error'] ?? ''),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function resolvePanelContributionIdentity(array $item): string
+    {
+        foreach (['url', 'key'] as $key) {
+            $value = \trim((string)($item[$key] ?? ''));
+            if ($value !== '') {
+                return $key . ':' . $value;
+            }
+        }
+
+        $moduleName = \trim((string)($item['module_name'] ?? ''));
+        $label = \trim((string)($item['label'] ?? ''));
+        return $moduleName !== '' && $label !== '' ? 'module-label:' . $moduleName . ':' . $label : '';
+    }
+
+    /**
+     * @param array<string, mixed> $existing
+     * @param array<string, mixed> $incoming
+     * @return array<string, mixed>
+     */
+    private function mergePanelContributionItems(array $existing, array $incoming): array
+    {
+        $existingChildren = \is_array($existing['children'] ?? null) ? \array_values($existing['children']) : [];
+        $incomingChildren = \is_array($incoming['children'] ?? null) ? \array_values($incoming['children']) : [];
+        if ($existingChildren !== [] || $incomingChildren !== []) {
+            $existing['children'] = $this->mergePanelContributionChildren($existingChildren, $incomingChildren);
+        }
+
+        foreach (['description', 'group', 'module_name', 'plugin_name'] as $key) {
+            if (\trim((string)($existing[$key] ?? '')) === '' && \trim((string)($incoming[$key] ?? '')) !== '') {
+                $existing[$key] = $incoming[$key];
+            }
+        }
+
+        if ((int)($incoming['order'] ?? 500) < (int)($existing['order'] ?? 500)) {
+            $existing['order'] = (int)$incoming['order'];
+        }
+
+        return $existing;
+    }
+
+    /**
+     * @param array<int, mixed> $existingChildren
+     * @param array<int, mixed> $incomingChildren
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergePanelContributionChildren(array $existingChildren, array $incomingChildren): array
+    {
+        $merged = [];
+        $seen = [];
+        foreach ([$existingChildren, $incomingChildren] as $children) {
+            foreach ($children as $child) {
+                if (!\is_array($child)) {
+                    continue;
+                }
+                $identity = \trim((string)($child['url'] ?? ''));
+                if ($identity === '') {
+                    $identity = \trim((string)($child['key'] ?? ''));
+                }
+                if ($identity === '') {
+                    $merged[] = $child;
+                    continue;
+                }
+                if (isset($seen[$identity])) {
+                    $merged[$seen[$identity]] = $this->mergePanelContributionItems($merged[$seen[$identity]], $child);
+                    continue;
+                }
+                $seen[$identity] = \count($merged);
+                $merged[] = $child;
+            }
+        }
+
+        \usort($merged, static function (array $left, array $right): int {
+            $order = ((int)($left['order'] ?? 500)) <=> ((int)($right['order'] ?? 500));
+            if ($order !== 0) {
+                return $order;
+            }
+
+            return \strnatcasecmp((string)($left['label'] ?? ''), (string)($right['label'] ?? ''));
+        });
+
+        return $merged;
     }
 
     /**
@@ -178,6 +272,7 @@ class WlsPanelPluginDiscoveryService
                 continue;
             }
 
+            $item = $this->withLocalMarketplaceMeta($item);
             $panelUrl = $this->resolvePluginPanelUrl($item);
             if ($panelUrl !== '') {
                 $hasPrimaryUrl = false;
@@ -198,6 +293,56 @@ class WlsPanelPluginDiscoveryService
         }
 
         return $normalized;
+    }
+
+    /**
+     * Installed AppStore snapshots can lag behind the local module during panel
+     * development. The WLS shell should honor the module's latest local
+     * wls_panel.menu declaration so secondary menu changes appear after refresh.
+     *
+     * @param array<string, mixed> $plugin
+     * @return array<string, mixed>
+     */
+    private function withLocalMarketplaceMeta(array $plugin): array
+    {
+        $moduleName = \trim((string)($plugin['module_name'] ?? ''));
+        if ($moduleName === '') {
+            return $plugin;
+        }
+
+        $localMeta = $this->loadLocalMarketplaceMeta($moduleName);
+        if ($localMeta === []) {
+            return $plugin;
+        }
+
+        $currentMeta = \is_array($plugin['marketplace_meta'] ?? null) ? $plugin['marketplace_meta'] : [];
+        $plugin['marketplace_meta'] = $currentMeta === []
+            ? $localMeta
+            : \array_replace_recursive($currentMeta, $localMeta);
+
+        return $plugin;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadLocalMarketplaceMeta(string $moduleName): array
+    {
+        try {
+            $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+            $moduleDir = \trim((string)($moduleInfo['base_path'] ?? $moduleInfo['path'] ?? ''));
+            if ($moduleDir === '' && \defined('APP_CODE_PATH')) {
+                $moduleDir = \rtrim((string)APP_CODE_PATH, "\\/") . DIRECTORY_SEPARATOR . \str_replace('_', DIRECTORY_SEPARATOR, $moduleName);
+            }
+            if ($moduleDir === '') {
+                return [];
+            }
+
+            $result = (new MarketplaceMetaReader())->readFromModuleDir($moduleDir, $moduleName);
+            return \is_array($result['meta'] ?? null) ? $result['meta'] : [];
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**
@@ -368,7 +513,8 @@ class WlsPanelPluginDiscoveryService
     private function normalizePanelContribution(array $entry, array $plugin, ?string $locale, int $index): ?array
     {
         $url = $this->resolvePluginPanelUrlFromContainer($entry);
-        if ($url === '') {
+        $children = $this->normalizePanelContributionChildren($entry, $plugin, $locale, $index);
+        if ($url === '' && $children === []) {
             return null;
         }
 
@@ -404,7 +550,48 @@ class WlsPanelPluginDiscoveryService
             'module_name' => $moduleName,
             'plugin_name' => $pluginName,
             'tag_codes' => $tagCodes,
+            'children' => $children,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     * @param array<string, mixed> $plugin
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizePanelContributionChildren(array $entry, array $plugin, ?string $locale, int $parentIndex): array
+    {
+        $children = $entry['children'] ?? $entry['items'] ?? $entry['submenu'] ?? null;
+        if (!\is_array($children)) {
+            return [];
+        }
+
+        if (!\array_is_list($children)) {
+            $children = \array_values(\array_filter(
+                $children,
+                static fn (mixed $child): bool => \is_array($child)
+            ));
+        }
+
+        $normalized = [];
+        foreach ($children as $childIndex => $child) {
+            if (!\is_array($child)) {
+                continue;
+            }
+
+            $child['group'] ??= $entry['group'] ?? 'tools';
+            $item = $this->normalizePanelContribution($child, $plugin, $locale, ($parentIndex * 100) + $childIndex + 1);
+            if ($item !== null && (string)($item['url'] ?? '') !== '') {
+                $normalized[] = $item;
+            }
+        }
+
+        \usort(
+            $normalized,
+            static fn (array $left, array $right): int => ((int)($left['order'] ?? 0)) <=> ((int)($right['order'] ?? 0))
+        );
+
+        return $normalized;
     }
 
     private function resolveLocalizedText(mixed $value, ?string $locale): string
