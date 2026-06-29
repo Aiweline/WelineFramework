@@ -2524,14 +2524,19 @@ class WlsRuntime implements RuntimeInterface
      */
     public function handle(?Request $request = null): string
     {
+        if ($request === null) {
+            throw new \LogicException('WLS: WlsRuntime::handle() requires a Request instance for fiber-local context isolation.');
+        }
+
+        if ($this->isRawBenchmarkRequest($request)) {
+            return self::buildRawBenchmarkResponse();
+        }
+
         // 确保已初始化
         if (!$this->bootstrapped) {
             $this->bootstrap();
         }
-
-        if ($request === null) {
-            throw new \LogicException('WLS: WlsRuntime::handle() requires a Request instance for fiber-local context isolation.');
-        }
+        $this->bindProcessScopedServicesForCurrentRequest();
 
         FiberOutputBuffer::ensureInstalled('request_start');
 
@@ -2633,11 +2638,9 @@ class WlsRuntime implements RuntimeInterface
                 \Weline\Acl\Observer\RouteBefore::resetRequestCache();
             }
             try {
-                $ref = new \ReflectionClass(\Weline\Framework\Router\Cache\ProcessUrlCache::class);
-                if ($ref->hasProperty('staticCache')) {
-                    $prop = $ref->getProperty('staticCache');
-                    $prop->setAccessible(true);
-                    $prop->setValue(null, null);
+                $processUrlCacheClass = 'Weline\\Framework\\Router\\Cache\\ProcessUrlCache';
+                if (\class_exists($processUrlCacheClass, false) && \method_exists($processUrlCacheClass, 'resetRequestState')) {
+                    $processUrlCacheClass::resetRequestState();
                 }
             } catch (\Throwable) {
                 // 忽略：模块未加载或非 WLS 路由缓存
@@ -3566,6 +3569,36 @@ class WlsRuntime implements RuntimeInterface
         }
     }
 
+    private function isRawBenchmarkRequest(Request $request): bool
+    {
+        try {
+            $uri = (string)$request->getUri();
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $path = \parse_url($uri, \PHP_URL_PATH);
+        if (!\is_string($path) || $path === '') {
+            return false;
+        }
+
+        return \rtrim($path, '/') === '/__bench/raw';
+    }
+
+    private static function buildRawBenchmarkResponse(): string
+    {
+        $body = 'ok';
+
+        return "HTTP/1.1 200 OK\r\n"
+            . "Content-Type: text/plain; charset=utf-8\r\n"
+            . 'Content-Length: ' . \strlen($body) . "\r\n"
+            . "Connection: keep-alive\r\n"
+            . 'Server: ' . Response::SERVER_SIGNATURE . "\r\n"
+            . 'X-Powered-By: WLS/' . Response::SERVER_VERSION . ' PHP/' . \PHP_VERSION . "\r\n"
+            . "\r\n"
+            . $body;
+    }
+
     /**
      * 处理 URL 解析结果
      */
@@ -4155,7 +4188,7 @@ class WlsRuntime implements RuntimeInterface
         $verbose = LogConfig::isVerboseWlsLog();
         $this->performanceConfig = \array_merge([
             'slow_request_threshold_ms' => 500,
-            'response_headers_enabled' => true,
+            'response_headers_enabled' => $verbose,
             // 以下项默认随「全量日志」(-log) 开启；未开启时仅保留慢请求 timing 落盘（见 recordPerformanceTiming）
             'file_log_enabled' => $verbose,
             'debug_log_enabled' => $verbose,
@@ -4619,22 +4652,28 @@ class WlsRuntime implements RuntimeInterface
         // 重置超全局变量
         
         // 触发状态重置事件（允许其他模块清理状态）
-        $eventManager = $this->eventManager;
-        if (Runtime::isPersistent()) {
+        if ($this->eventManager !== null) {
             try {
-                $eventManager = ObjectManager::getInstance(EventsManager::class);
-            } catch (\Throwable) {
-            }
-        }
-        if ($eventManager !== null) {
-            try {
-                $eventManager->dispatch('Weline_Framework::Runtime::reset');
+                $this->eventManager->resetRequestState();
+                $this->eventManager->dispatch('Weline_Framework::Runtime::reset');
             } catch (\Throwable $e) {
                 w_log_error('[WlsRuntime] Reset event error: ' . $e->getMessage());
             }
         }
 
         ObjectManager::clearCurrentFiberInstances();
+        if (Runtime::isPersistent()) {
+            ObjectManager::clearCurrentRequestScope();
+        }
+        FiberOutputBuffer::resetCurrent();
+    }
+
+    private function bindProcessScopedServicesForCurrentRequest(): void
+    {
+        if ($this->eventManager !== null) {
+            $eventManager = $this->eventManager;
+            ObjectManager::setInstance(EventsManager::class, $eventManager);
+        }
     }
     
     /**

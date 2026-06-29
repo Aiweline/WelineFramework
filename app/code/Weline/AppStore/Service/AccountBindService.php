@@ -19,12 +19,17 @@ class AccountBindService
     /**
      * 平台 API 默认基础 URL（当配置存在但值为 null/空时兜底）
      */
-    private const DEFAULT_PLATFORM_URL = 'https://app.aiweline.com';
+    private const DEFAULT_PLATFORM_URL = AppStorePlatformUrlResolver::DEFAULT_PLATFORM_URL;
 
     /**
      * 平台 API 基础 URL
      */
     private string $platformUrl;
+
+    /**
+     * @var array{platform_url?:string,source?:string,environment?:string}
+     */
+    private array $platformResolution = [];
 
     private string $platformApiUrl;
 
@@ -64,6 +69,22 @@ class AccountBindService
     public function getPlatformUrl(): string
     {
         return $this->platformUrl;
+    }
+
+    /**
+     * @return array{platform_url:string,source:string,environment:string}
+     */
+    public function getPlatformResolution(): array
+    {
+        if ($this->platformResolution === []) {
+            $this->platformResolution = (new AppStorePlatformUrlResolver())->resolve();
+        }
+
+        return [
+            'platform_url' => $this->platformUrl,
+            'source' => (string)($this->platformResolution['source'] ?? ''),
+            'environment' => (string)($this->platformResolution['environment'] ?? ''),
+        ];
     }
 
     public function getPlatformApiUrl(string $path = ''): string
@@ -713,14 +734,8 @@ class AccountBindService
 
     private function resolvePlatformUrl(): string
     {
-        $envPlatformUrl = getenv('WELINE_APPSTORE_PLATFORM_URL');
-        if (is_string($envPlatformUrl) && trim($envPlatformUrl) !== '') {
-            return rtrim(trim($envPlatformUrl), '/');
-        }
-
-        $platformUrl = Env::get('appstore.platform_url');
-        // Env::get 濡傛灉閰嶇疆椤瑰瓨鍦ㄤ絾鏄惧紡涓?null锛屼細鐩存帴杩斿洖 null锛堜笉浼氳蛋 default锛夛紝鍥犳杩欓噷鍋氶潪绌哄厹搴曘€?
-        return (is_string($platformUrl) && $platformUrl !== '') ? rtrim($platformUrl, '/') : self::DEFAULT_PLATFORM_URL;
+        $this->platformResolution = (new AppStorePlatformUrlResolver())->resolve();
+        return (string)($this->platformResolution['platform_url'] ?? AppStorePlatformUrlResolver::DEFAULT_PLATFORM_URL);
     }
 
     private function resolveHttpVerifyOption(mixed $default): mixed
@@ -731,6 +746,10 @@ class AccountBindService
         }
 
         if (!is_string($caBundle) || trim($caBundle) === '') {
+            if ($this->shouldTrustLocalSelfSignedPlatformCertificate()) {
+                return false;
+            }
+
             return $default;
         }
 
@@ -741,6 +760,16 @@ class AccountBindService
 
         Env::log_warning('appstore', 'AppStore: configured CA bundle is not readable: ' . $path);
         return $default;
+    }
+
+    private function shouldTrustLocalSelfSignedPlatformCertificate(): bool
+    {
+        if (($this->platformResolution['environment'] ?? '') !== 'local') {
+            return false;
+        }
+
+        $host = strtolower((string)parse_url($this->platformUrl, PHP_URL_HOST));
+        return in_array($host, ['app.weline.test', '127.0.0.1', 'localhost'], true);
     }
 
     private function normalizeCaBundlePath(string $path): string

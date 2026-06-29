@@ -52,6 +52,12 @@ class DeployWebhookReleaseService
                     $health[$key] = $value;
                 }
             }
+            foreach (['deploy_mode_source', 'appstore_environment', 'appstore_platform_url', 'appstore_platform_url_source'] as $key) {
+                $value = (string)($currentContext[$key] ?? '');
+                if ($value !== '') {
+                    $health[$key] = $value;
+                }
+            }
         } catch (\Throwable) {
         }
 

@@ -44,6 +44,11 @@ class App
     private Context $context;
 
     /**
+     * @var array<string, array>
+     */
+    private static array $moduleConfigByRouteAndKey = [];
+
+    /**
      * App 不再负责创建请求上下文。
      * 上下文必须由 Runtime 在构造 App 之前完成 Context::enter()。
      */
@@ -115,7 +120,10 @@ class App
             return;
         }
 
-        $this->resolveEventManager()->dispatch('Weline_Framework::App::run_before');
+        $eventManager = $this->resolveEventManager();
+        if ($eventManager->hasObservers('Weline_Framework::App::run_before')) {
+            $eventManager->dispatch('Weline_Framework::App::run_before');
+        }
     }
 
     private function shouldDispatchRunBefore(): bool
@@ -383,7 +391,7 @@ class App
 
     public function startSessionIfNeeded(): void
     {
-        if (WelineEnv::get('is_static_file', false)) {
+        if (!$this->shouldEagerStartSessionForCurrentRequest()) {
             return;
         }
 
@@ -426,6 +434,98 @@ class App
         return true;
     }
 
+    private function shouldEagerStartSessionForCurrentRequest(): bool
+    {
+        if (WelineEnv::get('is_static_file', false)) {
+            return false;
+        }
+
+        $path = $this->normalizeRequestPath($this->getCurrentRequestUri());
+        $sessionConfig = $this->getSessionConfigForRequestPath($path);
+        if (!\is_array($sessionConfig)) {
+            $sessionConfig = [];
+        }
+
+        if (($sessionConfig['eager_start'] ?? true) === false) {
+            return false;
+        }
+
+        $excludedPaths = $sessionConfig['eager_start_excluded_paths'] ?? [];
+        if (\is_string($excludedPaths)) {
+            $excludedPaths = \array_filter(\array_map('trim', \explode(',', $excludedPaths)));
+        }
+        if (!\is_array($excludedPaths) || $excludedPaths === []) {
+            return true;
+        }
+
+        foreach ($excludedPaths as $excludedPath) {
+            if (!\is_string($excludedPath) || $excludedPath === '') {
+                continue;
+            }
+
+            $excludedPath = $this->normalizeRequestPath($excludedPath);
+            if (\str_ends_with($excludedPath, '/*')) {
+                $prefix = \rtrim(\substr($excludedPath, 0, -2), '/');
+                if ($prefix === '' || $path === $prefix || \str_starts_with($path, $prefix . '/')) {
+                    return false;
+                }
+                continue;
+            }
+
+            if ($path === $excludedPath) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function getSessionConfigForRequestPath(string $path): array
+    {
+        $sessionConfig = Env::getInstance()->getConfig('session', []);
+        if (!\is_array($sessionConfig)) {
+            $sessionConfig = [];
+        }
+
+        $moduleSessionConfig = $this->getModuleSessionConfigForRequestPath($path);
+        if ($moduleSessionConfig !== []) {
+            $sessionConfig = \array_replace_recursive($sessionConfig, $moduleSessionConfig);
+        }
+
+        return $sessionConfig;
+    }
+
+    private function getModuleSessionConfigForRequestPath(string $path): array
+    {
+        return $this->getModuleConfigForRequestPath($path, 'session');
+    }
+
+    private function getModuleConfigForRequestPath(string $path, string $configKey): array
+    {
+        $route = \strtolower((string)(\explode('/', \trim($path, '/'))[0] ?? ''));
+        if ($route === '') {
+            return [];
+        }
+
+        $cacheKey = $configKey . "\0" . $route;
+        if (!\array_key_exists($cacheKey, self::$moduleConfigByRouteAndKey)) {
+            self::$moduleConfigByRouteAndKey[$cacheKey] = [];
+            foreach (Env::getInstance()->getActiveModules() as $moduleName => $module) {
+                $router = \strtolower(\trim((string)($module['router'] ?? ''), '/'));
+                $backendRouter = \strtolower(\trim((string)($module['backend_router'] ?? ''), '/'));
+                if ($route !== $router && $route !== $backendRouter) {
+                    continue;
+                }
+
+                $moduleConfig = Env::module_env((string)$moduleName, $configKey) ?? [];
+                self::$moduleConfigByRouteAndKey[$cacheKey] = \is_array($moduleConfig) ? $moduleConfig : [];
+                break;
+            }
+        }
+
+        return self::$moduleConfigByRouteAndKey[$cacheKey] ?? [];
+    }
+
     public function runRouter(?Router $router = null): mixed
     {
         $router ??= $this->initializeRouter();
@@ -443,8 +543,13 @@ class App
 
     public function dispatchRunAfter(mixed $result): mixed
     {
+        $eventManager = $this->resolveEventManager();
+        if (!$eventManager->hasObservers('Weline_Framework::App::run_after')) {
+            return $result;
+        }
+
         $data = new DataObject(['result' => $result]);
-        $this->resolveEventManager()->dispatch('Weline_Framework::App::run_after', $data);
+        $eventManager->dispatch('Weline_Framework::App::run_after', $data);
         return $data->getData('result');
     }
 
@@ -482,14 +587,16 @@ class App
         if (!isset(self::$_env)) {
             self::$_env = Env::getInstance();
         }
-        if ($key && empty($value)) {
-            return self::$_env->getConfig($key);
-        }
-        if ($key && $value) {
-            return self::$_env->setConfig($key, $value);
+
+        if ($key === '') {
+            return self::$_env;
         }
 
-        return self::$_env;
+        if (\func_num_args() === 1) {
+            return self::$_env->getConfig($key);
+        }
+
+        return self::$_env->setConfig($key, $value);
     }
 
     /**
@@ -625,11 +732,7 @@ class App
         // ############################# 环境配置 #####################
         // 先加载环境配置，以便判断是否为开发者模式
         // 环境
-        $config = [];
-        $env_filename = APP_PATH . 'etc/env.php';
-        if (is_file($env_filename)) {
-            $config = require $env_filename;
-        }
+        $config = (array) Env::getInstance()->getConfig();
         
         // 提前加载辅助函数，以便使用 w_array_get 点号语法访问配置
         require_once __DIR__ . '/Common/functions.php';
@@ -929,6 +1032,10 @@ class App
             return;
         }
 
+        if ($this->shouldSuppressResponseCookiesForCurrentRequest()) {
+            return;
+        }
+
         $defaultCookies = [
             'WELINE_USER_LANG',
             'WELINE_USER_CURRENCY',
@@ -956,6 +1063,49 @@ class App
         foreach ($cookiesToSet as $key => $value) {
             Cookie::set($key, $value, 3600 * 24 * 30, []);
         }
+    }
+
+    private function shouldSuppressResponseCookiesForCurrentRequest(): bool
+    {
+        $path = $this->normalizeRequestPath($this->getCurrentRequestUri());
+        $cookieConfig = Env::getInstance()->getConfig('cookie', []);
+        if (!\is_array($cookieConfig)) {
+            $cookieConfig = [];
+        }
+
+        $moduleCookieConfig = $this->getModuleConfigForRequestPath($path, 'cookie');
+        if ($moduleCookieConfig !== []) {
+            $cookieConfig = \array_replace_recursive($cookieConfig, $moduleCookieConfig);
+        }
+
+        $suppressedPaths = $cookieConfig['suppress_response_paths'] ?? [];
+        if (\is_string($suppressedPaths)) {
+            $suppressedPaths = \array_filter(\array_map('trim', \explode(',', $suppressedPaths)));
+        }
+        if (!\is_array($suppressedPaths) || $suppressedPaths === []) {
+            return false;
+        }
+
+        foreach ($suppressedPaths as $suppressedPath) {
+            if (!\is_string($suppressedPath) || $suppressedPath === '') {
+                continue;
+            }
+
+            $suppressedPath = $this->normalizeRequestPath($suppressedPath);
+            if (\str_ends_with($suppressedPath, '/*')) {
+                $prefix = \rtrim(\substr($suppressedPath, 0, -2), '/');
+                if ($prefix === '' || $path === $prefix || \str_starts_with($path, $prefix . '/')) {
+                    return true;
+                }
+                continue;
+            }
+
+            if ($path === $suppressedPath) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function invalidateCurrentRequestUriCache(): void
@@ -990,6 +1140,20 @@ class App
     private function getCurrentRequestUri(): string
     {
         return (string)WelineEnv::get('request.uri', Context::current()->get('input.uri', '/'));
+    }
+
+    private function normalizeRequestPath(string $uri): string
+    {
+        $path = \parse_url($uri, \PHP_URL_PATH);
+        if (!\is_string($path) || $path === '') {
+            $path = $uri === '' ? '/' : $uri;
+        }
+
+        if (!\str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+
+        return \rtrim($path, '/') ?: '/';
     }
 
     private function getContextServerValue(string $key, mixed $default = null): mixed

@@ -12,7 +12,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Server\Model\ServerStatusLog;
 
 /**
@@ -25,7 +27,9 @@ class StatusLogService
     /**
      * 是否启用
      */
-    private static bool $enabled = true;
+    private static ?bool $enabledOverride = null;
+
+    private static ?bool $configuredEnabled = null;
     
     /**
      * 上次记录时间
@@ -60,7 +64,7 @@ class StatusLogService
      */
     public static function logWorkerStatus(array $workerInfo, bool $force = false): void
     {
-        if (!self::$enabled) {
+        if (!self::isEnabled()) {
             return;
         }
 
@@ -119,7 +123,7 @@ class StatusLogService
      */
     public static function logDispatcherStatus(array $dispatcherInfo): void
     {
-        if (!self::$enabled) {
+        if (!self::isEnabled()) {
             return;
         }
 
@@ -171,7 +175,7 @@ class StatusLogService
      */
     public static function logMasterStatus(array $masterInfo): void
     {
-        if (!self::$enabled) {
+        if (!self::isEnabled()) {
             return;
         }
 
@@ -272,7 +276,7 @@ class StatusLogService
      */
     public static function setEnabled(bool $enabled): void
     {
-        self::$enabled = $enabled;
+        self::$enabledOverride = $enabled;
     }
     
     /**
@@ -280,7 +284,57 @@ class StatusLogService
      */
     public static function isEnabled(): bool
     {
-        return self::$enabled;
+        if (self::$enabledOverride !== null) {
+            return self::$enabledOverride;
+        }
+
+        return self::isConfiguredEnabled();
+    }
+
+    private static function isConfiguredEnabled(): bool
+    {
+        if (self::$configuredEnabled !== null) {
+            return self::$configuredEnabled;
+        }
+
+        $default = Runtime::isPersistent() ? false : true;
+
+        try {
+            $configured = Env::get('wls.status_log.enabled', $default);
+        } catch (\Throwable) {
+            $configured = $default;
+        }
+
+        self::$configuredEnabled = self::normalizeBool($configured, $default);
+        return self::$configuredEnabled;
+    }
+
+    private static function normalizeBool(mixed $value, bool $default): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+
+        if (\is_int($value)) {
+            return $value !== 0;
+        }
+
+        if (\is_float($value)) {
+            return $value !== 0.0;
+        }
+
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+            if (\in_array($normalized, ['1', 'true', 'yes', 'on', 'enable', 'enabled'], true)) {
+                return true;
+            }
+
+            if (\in_array($normalized, ['0', 'false', 'no', 'off', 'disable', 'disabled'], true)) {
+                return false;
+            }
+        }
+
+        return $default;
     }
     
     /**
@@ -304,7 +358,10 @@ class StatusLogService
      */
     public static function reset(): void
     {
+        self::$enabledOverride = null;
+        self::$configuredEnabled = null;
         self::$lastLogTime = 0;
+        self::$failureCooldownUntil = 0;
         self::$model = null;
     }
 }

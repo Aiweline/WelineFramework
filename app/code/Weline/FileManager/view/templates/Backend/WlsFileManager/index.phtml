@@ -4,6 +4,15 @@
  */
 $context = $this->getData('wlsFileManagerContext');
 $context = is_array($context) ? $context : [];
+$embedded = !empty($this->getData('wlsFileManagerEmbedded'));
+$embeddedRouteParams = $embedded ? ['embedded' => '1'] : [];
+$pageKey = trim((string)($this->getData('wlsFileManagerPageKey') ?? 'roots'));
+if (!in_array($pageKey, ['roots', 'browser', 'policy', 'write', 'queue', 'audit', 'capabilities'], true)) {
+    $pageKey = 'roots';
+}
+$showFilePage = static function (string|array $keys) use ($pageKey): bool {
+    return in_array($pageKey, (array)$keys, true);
+};
 $roots = $this->getData('wlsFileManagerRoots');
 $roots = is_array($roots) ? array_values($roots) : [];
 $browse = $this->getData('wlsFileManagerBrowse');
@@ -29,24 +38,27 @@ $escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$valu
 $panelUrl = $this->getBackendUrl('server/backend/wls-panel');
 $projectAdminUrl = $this->getBackendUrl('admin');
 $marketplaceUrl = $this->getBackendUrl('server/backend/wls-panel/marketplace');
-$browseBaseUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager');
+$browseBaseUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/browser');
 $downloadBaseUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/download');
-$createDirectoryUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/create-directory');
-$saveTextUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/save-text');
-$sourceCreateUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-create');
-$sourceRenameUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-rename');
-$sourceTrashUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-trash');
-$sourceTrashQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-trash-queue');
-$uploadUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/upload');
-$renameUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/rename');
-$deleteUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/delete');
-$compressUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/compress');
-$compressQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/compress-queue');
-$trashQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-queue');
-$trashRestoreUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-restore');
-$trashPurgeUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-purge');
-$pathPolicySaveUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/path-policy-save');
-$pathPolicyResetUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/path-policy-reset');
+$createDirectoryUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/create-directory', $embeddedRouteParams);
+$saveTextUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/save-text', $embeddedRouteParams);
+$sourceCreateUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-create', $embeddedRouteParams);
+$sourceRenameUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-rename', $embeddedRouteParams);
+$sourceTrashUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-trash', $embeddedRouteParams);
+$sourceTrashQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-trash-queue', $embeddedRouteParams);
+$sourceArchiveQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-archive-queue', $embeddedRouteParams);
+$sourceArchiveTreeQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-archive-tree-queue', $embeddedRouteParams);
+$sourceArchiveSelectionQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-archive-selection-queue', $embeddedRouteParams);
+$uploadUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/upload', $embeddedRouteParams);
+$renameUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/rename', $embeddedRouteParams);
+$deleteUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/delete', $embeddedRouteParams);
+$compressUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/compress', $embeddedRouteParams);
+$compressQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/compress-queue', $embeddedRouteParams);
+$trashQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-queue', $embeddedRouteParams);
+$trashRestoreUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-restore', $embeddedRouteParams);
+$trashPurgeUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-purge', $embeddedRouteParams);
+$pathPolicySaveUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/path-policy-save', $embeddedRouteParams);
+$pathPolicyResetUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/path-policy-reset', $embeddedRouteParams);
 $formKey = (string)$this->getFormKeyValue();
 $notice = trim((string)$this->getData('wlsFileManagerNotice'));
 $error = trim((string)$this->getData('wlsFileManagerError'));
@@ -127,6 +139,9 @@ $logActionOptions = [
     'source_rename' => __('Rename source file'),
     'source_trash' => __('Trash source file'),
     'source_trash_queue' => __('Queued source trash move'),
+    'source_archive_queue' => __('Queued source archive'),
+    'source_archive_tree_queue' => __('Queued source directory archive'),
+    'source_archive_selection_queue' => __('Queued source selection archive'),
     'upload_file' => __('Upload file'),
     'rename_entry' => __('Rename entry'),
     'delete_entry' => __('Delete entry'),
@@ -153,8 +168,39 @@ foreach ($roots as $root) {
     }
 }
 $logRootOptions['policy'] = __('Policy');
-$buildBrowseUrl = static function (array $params) use ($browseBaseUrl, $operation, $projectId, $domain, $projectType): string {
-    $query = array_merge([
+$fileRouteBaseUrls = [
+    'roots' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/roots'),
+    'browser' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/browser'),
+    'policy' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/policy-page'),
+    'write' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/write-page'),
+    'queue' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/queue-page'),
+    'audit' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/log-page'),
+    'capabilities' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/capabilities-page'),
+];
+$buildFileManagerRouteUrl = static function (string $targetPage, array $params = []) use (
+    $fileRouteBaseUrls,
+    $embeddedRouteParams,
+    $selectedRootKey,
+    $currentRelativePath,
+    $projectId,
+    $domain,
+    $projectType
+): string {
+    $query = array_merge($embeddedRouteParams, [
+        'project_id' => $projectId,
+        'domain' => $domain,
+        'project_type' => $projectType,
+        'root' => $selectedRootKey,
+        'path' => $currentRelativePath,
+    ], $params);
+    $query = array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
+
+    return ($fileRouteBaseUrls[$targetPage] ?? $fileRouteBaseUrls['browser']) . ($query !== [] ? '?' . http_build_query($query) : '');
+};
+$fileNavClass = static fn (string $targetPage): string => $pageKey === $targetPage ? 'is-active' : '';
+$fileNavCurrent = static fn (string $targetPage): string => $pageKey === $targetPage ? ' aria-current="location"' : '';
+$buildBrowseUrl = static function (array $params) use ($browseBaseUrl, $embeddedRouteParams, $operation, $projectId, $domain, $projectType): string {
+    $query = array_merge($embeddedRouteParams, [
         'operation' => $operation !== '' ? $operation : 'files.read',
         'project_id' => $projectId,
         'domain' => $domain,
@@ -164,14 +210,8 @@ $buildBrowseUrl = static function (array $params) use ($browseBaseUrl, $operatio
 
     return $browseBaseUrl . ($query !== [] ? '?' . http_build_query($query) : '');
 };
-$buildFileManagerAnchorUrl = static function (string $anchor) use ($buildBrowseUrl, $selectedRootKey, $currentRelativePath): string {
-    return $buildBrowseUrl([
-        'root' => $selectedRootKey,
-        'path' => $currentRelativePath,
-    ]) . '#' . ltrim($anchor, '#');
-};
-$buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $operation, $projectId, $domain, $projectType): string {
-    $query = array_merge([
+$buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embeddedRouteParams, $operation, $projectId, $domain, $projectType): string {
+    $query = array_merge($embeddedRouteParams, [
         'operation' => $operation !== '' ? $operation : 'files.read',
         'project_id' => $projectId,
         'domain' => $domain,
@@ -203,6 +243,21 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
         background: var(--wfm-bg);
         color: var(--wfm-text);
         font-size: 14px;
+    }
+    .wls-file-manager-shell.is-embedded {
+        min-height: auto;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .wls-file-manager-shell.is-embedded .wfm-sidebar {
+        display: none;
+    }
+    .wls-file-manager-shell.is-embedded .wfm-main {
+        min-height: auto;
+        padding: 0;
+    }
+    .wls-file-manager-shell.is-embedded .wfm-eyebrow,
+    .wls-file-manager-shell.is-embedded .wfm-actions {
+        display: none;
     }
     body:has(.wls-file-manager-shell) {
         margin: 0;
@@ -1198,42 +1253,43 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
     }
 </style>
 
-<div class="wls-file-manager-shell" data-wls-file-manager-shell data-theme="light">
+<div class="wls-file-manager-shell<?= $embedded ? ' is-embedded' : '' ?>" data-wls-file-manager-shell data-theme="light">
+    <?php if (!$embedded): ?>
     <aside class="wfm-sidebar" aria-label="<?= $escapeHtml(__('WLS 文件管理器导航')) ?>">
         <div class="wfm-brand">
             <div class="wfm-brand-kicker"><?= $escapeHtml(__('WLS Panel Plugin')) ?></div>
             <div class="wfm-brand-title"><?= $escapeHtml(__('文件管理器')) ?></div>
         </div>
-        <nav class="wfm-nav">
+        <nav class="wfm-nav" data-wls-plugin-nav>
             <a href="<?= $escapeHtml($panelUrl) ?>">
                 <i class="mdi mdi-view-dashboard-outline"></i>
                 <span><?= $escapeHtml(__('WLS 面板')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('roots')) ?>" class="is-active">
+            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('roots')) ?>" class="<?= $escapeHtml($fileNavClass('roots')) ?>"<?= $fileNavCurrent('roots') ?>>
                 <i class="mdi mdi-folder-outline"></i>
                 <span><?= $escapeHtml(__('路径')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('browser')) ?>">
+            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('browser')) ?>" class="<?= $escapeHtml($fileNavClass('browser')) ?>"<?= $fileNavCurrent('browser') ?>>
                 <i class="mdi mdi-file-tree-outline"></i>
                 <span><?= $escapeHtml(__('浏览')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('path-policy')) ?>">
+            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('policy')) ?>" class="<?= $escapeHtml($fileNavClass('policy')) ?>"<?= $fileNavCurrent('policy') ?>>
                 <i class="mdi mdi-shield-edit-outline"></i>
                 <span><?= $escapeHtml(__('策略')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('write-operations')) ?>">
+            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('write')) ?>" class="<?= $escapeHtml($fileNavClass('write')) ?>"<?= $fileNavCurrent('write') ?>>
                 <i class="mdi mdi-file-edit-outline"></i>
                 <span><?= $escapeHtml(__('写入')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('queue-operations')) ?>">
+            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('queue')) ?>" class="<?= $escapeHtml($fileNavClass('queue')) ?>"<?= $fileNavCurrent('queue') ?>>
                 <i class="mdi mdi-progress-clock"></i>
                 <span><?= $escapeHtml(__('队列')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('operation-log')) ?>">
+            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('audit')) ?>" class="<?= $escapeHtml($fileNavClass('audit')) ?>"<?= $fileNavCurrent('audit') ?>>
                 <i class="mdi mdi-clipboard-text-clock-outline"></i>
                 <span><?= $escapeHtml(__('日志')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerAnchorUrl('capabilities')) ?>">
+            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('capabilities')) ?>" class="<?= $escapeHtml($fileNavClass('capabilities')) ?>"<?= $fileNavCurrent('capabilities') ?>>
                 <i class="mdi mdi-puzzle-outline"></i>
                 <span><?= $escapeHtml(__('能力')) ?></span>
             </a>
@@ -1243,11 +1299,19 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
             </a>
         </nav>
         <div class="wfm-sidebar-spacer"></div>
-        <button type="button" class="wfm-theme-button" data-wfm-theme-toggle aria-label="<?= $escapeHtml(__('切换明暗色')) ?>">
+        <button type="button"
+                class="wfm-theme-button"
+                data-wfm-theme-toggle
+                data-wfm-theme-dark-label="<?= $escapeHtml(__('深色')) ?>"
+                data-wfm-theme-light-label="<?= $escapeHtml(__('浅色')) ?>"
+                aria-label="<?= $escapeHtml(__('切换明暗色')) ?>"
+                aria-pressed="false">
             <i class="mdi mdi-theme-light-dark"></i>
             <span data-wfm-theme-label><?= $escapeHtml(__('深色')) ?></span>
         </button>
     </aside>
+
+    <?php endif; ?>
 
     <main class="wfm-main">
         <header class="wfm-topbar">
@@ -1276,6 +1340,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
             <div class="wfm-browser-alert"><?= $escapeHtml($error) ?></div>
         <?php endif; ?>
 
+        <?php if ($showFilePage('roots')): ?>
         <section class="wfm-section" aria-labelledby="wfm-context-title">
             <h2 class="wfm-section-title" id="wfm-context-title"><?= $escapeHtml(__('项目上下文')) ?></h2>
             <div class="wfm-context">
@@ -1329,6 +1394,9 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
             <?php endif; ?>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showFilePage('policy')): ?>
         <section class="wfm-section" id="path-policy" aria-labelledby="wfm-path-policy-title">
             <h2 class="wfm-section-title" id="wfm-path-policy-title"><?= $escapeHtml(__('路径策略')) ?></h2>
             <div class="wfm-browser">
@@ -1489,6 +1557,9 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
             </div>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showFilePage('browser')): ?>
         <section class="wfm-section" id="browser" aria-labelledby="wfm-browser-title">
             <h2 class="wfm-section-title" id="wfm-browser-title"><?= $escapeHtml(__('目录浏览')) ?></h2>
             <div class="wfm-browser" data-wfm-browser>
@@ -1547,7 +1618,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
                         <?php else: ?>
                             <div class="wfm-preview-actions">
                                 <?php if ($previewCanEdit): ?>
-                                    <a class="wfm-preview-edit-action" href="#wfm-save-text-card">
+                                    <a class="wfm-preview-edit-action" href="<?= $escapeHtml($buildFileManagerRouteUrl('write', ['preview' => (string)($preview['relative_path'] ?? '')])) ?>">
                                         <i class="mdi mdi-file-edit-outline"></i>
                                         <span><?= $escapeHtml(__('编辑此文本')) ?></span>
                                     </a>
@@ -1640,6 +1711,9 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
             </div>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showFilePage('write')): ?>
         <section class="wfm-section" id="write-operations" aria-labelledby="wfm-write-title">
             <h2 class="wfm-section-title" id="wfm-write-title"><?= $escapeHtml(__('受控写入')) ?></h2>
             <div class="wfm-browser">
@@ -1958,6 +2032,9 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
             </div>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showFilePage('queue')): ?>
         <section class="wfm-section" id="queue-operations" aria-labelledby="wfm-queue-title">
             <h2 class="wfm-section-title" id="wfm-queue-title"><?= $escapeHtml(__('大文件队列')) ?></h2>
             <div class="wfm-browser">
@@ -2224,6 +2301,120 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
                     </article>
                     <article class="wfm-card">
                         <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source archive')) ?></h3>
+                            <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceArchiveQueueUrl) ?>" data-wfm-source-archive-queue-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-source-archive-queue-name"><?= $escapeHtml(__('Source file name')) ?></label>
+                                <input id="wfm-source-archive-queue-name" name="source_file_name" maxlength="128" autocomplete="off" placeholder="component.php">
+                                <div class="wfm-help">
+                                    <?= $escapeHtml(__('Queues one existing source-policy file into a server-side archive under var/wls-panel/file-manager/source-archives. Single file only, max 128 KB; directories, source-root zip writes, upload, delete, and overwrite stay disabled.')) ?>
+                                </div>
+                                <?php if ($selectedSourceEditExtensions !== ''): ?>
+                                    <div class="wfm-help">
+                                        <?= $escapeHtml(__('Allowed source extensions')) ?>:
+                                        <?= $escapeHtml($selectedSourceEditExtensions) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this source file should be archived through a read-only queue.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-source-archive-queue-confirm"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-source-archive-queue-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_QUEUE_ARCHIVE">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-archive-arrow-down-outline"></i>
+                                <span><?= $escapeHtml(__('Create source archive queue')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source directory archive')) ?></h3>
+                            <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceArchiveTreeQueueUrl) ?>" data-wfm-source-archive-tree-queue-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-source-archive-tree-queue-name"><?= $escapeHtml(__('Source directory name')) ?></label>
+                                <input id="wfm-source-archive-tree-queue-name" name="source_directory_name" maxlength="128" autocomplete="off" placeholder="Service">
+                                <div class="wfm-help">
+                                    <?= $escapeHtml(__('Queues one existing source-policy child directory into a server-side archive under var/wls-panel/file-manager/source-archives. Max 200 entries and 10 MB; the source tree is only read by the worker.')) ?>
+                                </div>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm this source directory should be archived through a read-only queue.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-source-archive-tree-queue-confirm"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-source-archive-tree-queue-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_QUEUE_ARCHIVE_TREE">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-folder-zip-outline"></i>
+                                <span><?= $escapeHtml(__('Create source directory archive queue')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
+                            <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source selection archive')) ?></h3>
+                            <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
+                        </div>
+                        <form class="wfm-write-form" method="post" action="<?= $escapeHtml($sourceArchiveSelectionQueueUrl) ?>" data-wfm-source-archive-selection-queue-form>
+                            <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                            <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
+                            <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                            <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                            <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                            <input type="hidden" name="root" value="<?= $escapeHtml($selectedRootKey) ?>">
+                            <input type="hidden" name="path" value="<?= $escapeHtml($currentRelativePath) ?>">
+                            <div class="wfm-field">
+                                <label for="wfm-source-archive-selection-queue-names"><?= $escapeHtml(__('Source entry names')) ?></label>
+                                <textarea id="wfm-source-archive-selection-queue-names" name="source_entry_names" rows="4" maxlength="2000" autocomplete="off" placeholder="Controller.php&#10;Service"></textarea>
+                                <div class="wfm-help">
+                                    <?= $escapeHtml(__('Queues up to 20 files or child directories from the current source-policy directory into one read-only archive under var/wls-panel/file-manager/source-archives. Max 200 archived entries and 10 MB; no source-root ZIP writes, upload, delete, or overwrite.')) ?>
+                                </div>
+                                <?php if ($selectedSourceEditExtensions !== ''): ?>
+                                    <div class="wfm-help">
+                                        <?= $escapeHtml(__('Selected files must use allowed source extensions')) ?>:
+                                        <?= $escapeHtml($selectedSourceEditExtensions) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <label class="wfm-check">
+                                <input type="checkbox" name="confirm_write" value="1">
+                                <span><?= $escapeHtml(__('I confirm these selected source entries should be archived through a read-only queue.')) ?></span>
+                            </label>
+                            <div class="wfm-field">
+                                <label for="wfm-source-archive-selection-queue-confirm"><?= $escapeHtml(__('Confirmation phrase')) ?></label>
+                                <input id="wfm-source-archive-selection-queue-confirm" name="confirm_phrase" autocomplete="off" placeholder="SOURCE_QUEUE_ARCHIVE_SELECTION">
+                            </div>
+                            <button type="submit" class="wfm-submit secondary" <?= $selectedSourceEditEnabled ? '' : 'disabled' ?>>
+                                <i class="mdi mdi-archive-check-outline"></i>
+                                <span><?= $escapeHtml(__('Create source selection archive queue')) ?></span>
+                            </button>
+                        </form>
+                    </article>
+                    <article class="wfm-card">
+                        <div class="wfm-card-head">
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue recoverable trash')) ?></h3>
                             <span class="wfm-status warning"><?= $escapeHtml(__('Recoverable')) ?></span>
                         </div>
@@ -2411,6 +2602,9 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
             </div>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showFilePage('audit')): ?>
         <section class="wfm-section" id="operation-log" aria-labelledby="wfm-log-title">
             <h2 class="wfm-section-title" id="wfm-log-title"><?= $escapeHtml(__('Operation Logs')) ?></h2>
             <div class="wfm-log-summary" aria-label="<?= $escapeHtml(__('Audit Summary')) ?>">
@@ -2435,7 +2629,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
                     <strong><?= (int)($operationLogSummary['failed'] ?? 0) ?></strong>
                 </div>
             </div>
-            <form class="wfm-log-filters" method="get" action="<?= $escapeHtml($browseBaseUrl) ?>#operation-log" aria-label="<?= $escapeHtml(__('Audit Filters')) ?>">
+            <form class="wfm-log-filters" method="get" action="<?= $escapeHtml($buildFileManagerRouteUrl('audit')) ?>" aria-label="<?= $escapeHtml(__('Audit Filters')) ?>">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.read') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                 <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -2483,7 +2677,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
                         <i class="mdi mdi-filter-outline"></i>
                         <span><?= $escapeHtml(__('Filter Logs')) ?></span>
                     </button>
-                    <a class="wfm-log-reset" href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $currentRelativePath])) ?>#operation-log">
+                    <a class="wfm-log-reset" href="<?= $escapeHtml($buildFileManagerRouteUrl('audit')) ?>">
                         <?= $escapeHtml(__('Reset Filters')) ?>
                     </a>
                     <?php if (!empty($operationLogSummary['latest_time'])): ?>
@@ -2526,6 +2720,9 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
             <?php endif; ?>
         </section>
 
+        <?php endif; ?>
+
+        <?php if ($showFilePage('capabilities')): ?>
         <section class="wfm-section" id="capabilities" aria-labelledby="wfm-capabilities-title">
             <h2 class="wfm-section-title" id="wfm-capabilities-title"><?= $escapeHtml(__('能力阶段')) ?></h2>
             <div class="wfm-capabilities">
@@ -2540,6 +2737,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $oper
                 <?php endforeach; ?>
             </div>
         </section>
+        <?php endif; ?>
     </main>
 </div>
 

@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\DbManager\Service;
 
+use Weline\DbManager\Service\Adapter\WlsDatabaseLifecycleSqlPlanAdapter;
+
 class WlsDatabaseLifecyclePlanService
 {
     private const ACTION_CREATE_DATABASE = 'create_database';
@@ -20,12 +22,14 @@ class WlsDatabaseLifecyclePlanService
      */
     public function buildPlan(array $input, array $projectProfile, array $selectedProfile = []): array
     {
+        $adapter = new WlsDatabaseLifecycleSqlPlanAdapter();
         $action = $this->normalizeAction((string)($input['lifecycle_action'] ?? ''));
         $driver = $this->normalizeDriver((string)($projectProfile['type'] ?? ($selectedProfile['type'] ?? '')));
         $database = $this->normalizeIdentifier((string)($input['lifecycle_database'] ?? ($projectProfile['database'] ?? '')));
         $username = $this->normalizeUsername((string)($input['lifecycle_username'] ?? ($projectProfile['username'] ?? '')));
         $host = $this->normalizeHost((string)($input['lifecycle_host'] ?? ($projectProfile['hostname'] ?? ($selectedProfile['hostname'] ?? ''))));
         $grantMode = $this->normalizeGrantMode((string)($input['lifecycle_grant_mode'] ?? 'read_write'));
+        $hasPasswordSecret = !empty($projectProfile['password_configured']) || !empty($projectProfile['env_password_configured']);
 
         $errors = [];
         $warnings = [];
@@ -42,6 +46,7 @@ class WlsDatabaseLifecyclePlanService
                 'state_label' => (string)__('Waiting for Input'),
                 'errors' => [],
                 'warnings' => [],
+                'adapter_plan' => $adapter->emptyPlan(),
             ]);
         }
 
@@ -77,7 +82,40 @@ class WlsDatabaseLifecyclePlanService
             $warnings[] = (string)__('Grant preview assumes the database and user already exist; future execution must verify both before applying privileges.');
         }
 
+        $adapterPlan = $adapter->build($action, $driver, $database, $username, $host, $grantMode, $hasPasswordSecret);
+        foreach ((array)($adapterPlan['errors'] ?? []) as $adapterError) {
+            if ($adapterError !== '' && !\in_array($adapterError, $errors, true)) {
+                $errors[] = (string)$adapterError;
+            }
+        }
+        foreach ((array)($adapterPlan['warnings'] ?? []) as $adapterWarning) {
+            if ($adapterWarning !== '' && !\in_array($adapterWarning, $warnings, true)) {
+                $warnings[] = (string)$adapterWarning;
+            }
+        }
+
         $blocked = $errors !== [];
+        $adapterReady = (string)($adapterPlan['state'] ?? '') === 'planned';
+        $profileExecutionReady = !empty($projectProfile['has_profile']) && !empty($projectProfile['enabled']);
+        $canExecute = !$blocked && $adapterReady && $profileExecutionReady;
+        if ($blocked) {
+            $state = 'blocked';
+            $stateLabel = (string)__('Blocked');
+            $executionLabel = (string)__('Execution blocked until the lifecycle plan is valid.');
+        } elseif (!$adapterReady) {
+            $state = 'dry_run_only';
+            $stateLabel = (string)__('Dry Run Only');
+            $executionLabel = (string)__('Execution is unavailable until the adapter SQL plan is ready.');
+        } elseif (!$profileExecutionReady) {
+            $state = 'dry_run_only';
+            $stateLabel = (string)__('Dry Run Only');
+            $executionLabel = (string)__('Save and enable the Project Profile before lifecycle execution.');
+        } else {
+            $state = 'ready_to_execute';
+            $stateLabel = (string)__('Ready To Execute');
+            $executionLabel = (string)__('Guarded POST execution is available after confirmation.');
+        }
+
         return $this->plan([
             'action' => $action,
             'action_label' => $this->actionLabel($action),
@@ -87,10 +125,14 @@ class WlsDatabaseLifecyclePlanService
             'driver' => $driver,
             'grant_mode' => $grantMode,
             'grant_label' => $this->grantModeLabel($grantMode),
-            'state' => $blocked ? 'blocked' : 'dry_run_only',
-            'state_label' => $blocked ? (string)__('Blocked') : (string)__('Dry Run Only'),
+            'state' => $state,
+            'state_label' => $stateLabel,
+            'execution_label' => $executionLabel,
+            'can_execute' => $canExecute,
+            'profile_execution_ready' => $profileExecutionReady,
             'errors' => $errors,
             'warnings' => $warnings,
+            'adapter_plan' => $adapterPlan,
         ]);
     }
 
@@ -107,6 +149,8 @@ class WlsDatabaseLifecyclePlanService
         $username = (string)($data['username'] ?? '');
         $host = (string)($data['host'] ?? '');
         $grantMode = (string)($data['grant_mode'] ?? 'read_write');
+        $canExecute = (bool)($data['can_execute'] ?? false);
+        $profileExecutionReady = (bool)($data['profile_execution_ready'] ?? false);
 
         return [
             'action' => $action,
@@ -119,32 +163,55 @@ class WlsDatabaseLifecyclePlanService
             'grant_label' => (string)($data['grant_label'] ?? $this->grantModeLabel($grantMode)),
             'state' => $state,
             'state_label' => (string)($data['state_label'] ?? __('Waiting for Input')),
-            'execution_label' => (string)__('Execution disabled in this slice'),
-            'can_execute' => false,
+            'execution_label' => (string)($data['execution_label'] ?? __('Execution disabled in this slice')),
+            'can_execute' => $canExecute,
+            'profile_execution_ready' => $profileExecutionReady,
             'errors' => \array_values((array)($data['errors'] ?? [])),
             'warnings' => \array_values((array)($data['warnings'] ?? [])),
-            'checks' => $this->checks($action, $driver, $database, $username, $host, $grantMode, $state),
+            'checks' => $this->checks($action, $driver, $database, $username, $host, $grantMode, $state, $canExecute, $profileExecutionReady),
             'steps' => $this->steps($action, $driver),
+            'adapter_plan' => (array)($data['adapter_plan'] ?? []),
         ];
     }
 
     /**
      * @return array<int, array<string, string>>
      */
-    private function checks(string $action, string $driver, string $database, string $username, string $host, string $grantMode, string $state): array
+    private function checks(
+        string $action,
+        string $driver,
+        string $database,
+        string $username,
+        string $host,
+        string $grantMode,
+        string $state,
+        bool $canExecute,
+        bool $profileExecutionReady
+    ): array
     {
+        $executionState = $canExecute ? 'ready' : ($state === 'blocked' ? 'blocked' : 'attention');
+        $executionValue = $canExecute
+            ? (string)__('Ready')
+            : ($profileExecutionReady ? (string)__('Guarded') : (string)__('Profile Required'));
+        $executionDetail = match (true) {
+            $canExecute => (string)__('POST execution will rebuild this plan, require RUN_DB_LIFECYCLE, write an audit record, and run verification queries.'),
+            !$profileExecutionReady => (string)__('Save and enable the Project Profile before lifecycle SQL can execute.'),
+            $state === 'blocked' => (string)__('Fix blocked plan inputs before execution can run.'),
+            default => (string)__('Execution remains unavailable until the adapter SQL plan is ready.'),
+        };
+
         return [
             [
                 'label' => (string)__('Lifecycle Action'),
                 'value' => $this->actionLabel($action),
-                'detail' => $action === '' ? (string)__('Select an action to build a guarded DBA plan.') : (string)__('The action is normalized before any future execution adapter can run.'),
+                'detail' => $action === '' ? (string)__('Select an action to build a guarded DBA plan.') : (string)__('The action is normalized before the execution adapter can run.'),
                 'state' => $action === '' ? 'idle' : 'ready',
             ],
             [
                 'label' => (string)__('Driver Support'),
                 'value' => $driver !== '' ? $driver : '-',
                 'detail' => \in_array($driver, [self::DRIVER_MYSQL, self::DRIVER_PGSQL], true)
-                    ? (string)__('A future adapter may map this driver to vendor-specific SQL.')
+                    ? (string)__('The adapter maps this driver to vendor-specific SQL.')
                     : (string)__('This driver is not supported for lifecycle DBA actions.'),
                 'state' => \in_array($driver, [self::DRIVER_MYSQL, self::DRIVER_PGSQL], true) ? 'ready' : 'blocked',
             ],
@@ -163,14 +230,14 @@ class WlsDatabaseLifecyclePlanService
             [
                 'label' => (string)__('Grant Scope'),
                 'value' => $this->grantModeLabel($grantMode),
-                'detail' => $host !== '' ? (string)__('Host scope is captured for future adapter verification.') : (string)__('Host scope is not selected in this dry run.'),
+                'detail' => $host !== '' ? (string)__('Host scope is captured for adapter verification.') : (string)__('Host scope is not selected in this dry run.'),
                 'state' => $state === 'blocked' ? 'attention' : 'dry_run_only',
             ],
             [
                 'label' => (string)__('Execution Adapter'),
-                'value' => (string)__('Disabled'),
-                'detail' => (string)__('No database, user, grant, backup, or reload operation is executed by this slice.'),
-                'state' => 'dry_run_only',
+                'value' => $executionValue,
+                'detail' => $executionDetail,
+                'state' => $executionState,
             ],
         ];
     }
@@ -190,8 +257,8 @@ class WlsDatabaseLifecyclePlanService
             (string)__('Reload the enabled Project Database Profile and selected source env profile.'),
             (string)__('Verify driver support, identifier allowlists, credential state, and operator confirmation phrase.'),
             (string)__('%{1} adapter builds vendor-specific SQL with identifier quoting inside the adapter boundary.', [$driver !== '' ? $driver : 'database']),
-            (string)__('Execute only after a later slice adds allowlisted adapter execution, audit records, and rollback or verification hooks.'),
-            (string)__('Run a guarded connection test and optional WLS reload only after the database operation succeeds.'),
+            (string)__('Execute only through the guarded POST route after the plan is rebuilt server-side and RUN_DB_LIFECYCLE is confirmed.'),
+            (string)__('Append an audit record and run adapter verification queries after the database operation succeeds.'),
         ];
     }
 

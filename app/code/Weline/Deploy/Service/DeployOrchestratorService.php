@@ -13,6 +13,9 @@ use Weline\Framework\Manager\ObjectManager;
 
 class DeployOrchestratorService
 {
+    private const LOCAL_APPSTORE_PLATFORM_URL = 'https://app.weline.test:9523';
+    private const PRODUCTION_APPSTORE_PLATFORM_URL = 'https://app.aiweline.com';
+
     private bool $isWindows;
 
     public function __construct(
@@ -95,6 +98,9 @@ class DeployOrchestratorService
             }
 
             $workerBuildId = $this->runtimeService->generateWorkerBuildId();
+            $deployModeInfo = $this->resolveDeployModeInfo();
+            $deployMode = $deployModeInfo['mode'];
+            $appStoreInfo = $this->resolveAppStoreMarketplaceInfo($deployMode, (bool)$deployModeInfo['explicit']);
             $currentPayload = [
                 'release_id' => $releaseId,
                 'deploy_version' => $deployVersion,
@@ -105,7 +111,11 @@ class DeployOrchestratorService
                 'git_tag' => $gitTag,
                 'git_branch' => $gitBranch,
                 'deployed_at' => time(),
-                'deploy_mode' => Env::system('deploy', 'dev'),
+                'deploy_mode' => $deployMode,
+                'deploy_mode_source' => $deployModeInfo['source'],
+                'appstore_environment' => $appStoreInfo['environment'],
+                'appstore_platform_url' => $appStoreInfo['platform_url'],
+                'appstore_platform_url_source' => $appStoreInfo['source'],
                 'deploy_root' => $deployRoot,
             ];
             foreach ($releaseContext as $contextKey => $contextValue) {
@@ -209,6 +219,9 @@ class DeployOrchestratorService
             }
 
             $workerBuildId = $this->runtimeService->generateWorkerBuildId();
+            $deployModeInfo = $this->resolveDeployModeInfo();
+            $deployMode = $deployModeInfo['mode'];
+            $appStoreInfo = $this->resolveAppStoreMarketplaceInfo($deployMode, (bool)$deployModeInfo['explicit']);
             $currentPayload = [
                 'release_id' => $releaseId,
                 'deploy_version' => $deployVersion,
@@ -219,7 +232,11 @@ class DeployOrchestratorService
                 'git_tag' => $gitTag,
                 'git_branch' => $gitBranch,
                 'deployed_at' => time(),
-                'deploy_mode' => Env::system('deploy', 'dev'),
+                'deploy_mode' => $deployMode,
+                'deploy_mode_source' => $deployModeInfo['source'],
+                'appstore_environment' => $appStoreInfo['environment'],
+                'appstore_platform_url' => $appStoreInfo['platform_url'],
+                'appstore_platform_url_source' => $appStoreInfo['source'],
                 'deploy_root' => $deployRoot,
                 'rollback_ref' => $rollbackRef,
             ];
@@ -519,6 +536,145 @@ class DeployOrchestratorService
         if ($exitCode !== 0) {
             w_log_warning('Deploy: server:reload 失败（exit ' . $exitCode . '）：' . implode("\n", $output));
         }
+    }
+
+    /**
+     * @return array{mode:string,source:string,explicit:bool}
+     */
+    private function resolveDeployModeInfo(): array
+    {
+        $explicit = $this->readExplicitDeployModeFromEnvFile();
+        if ($explicit['mode'] !== '') {
+            return [
+                'mode' => $explicit['mode'],
+                'source' => $explicit['source'],
+                'explicit' => true,
+            ];
+        }
+
+        $effectiveMode = \strtolower(\trim((string)Env::system('deploy', '')));
+        if ($effectiveMode !== '' && !\in_array($effectiveMode, ['dev', 'local'], true)) {
+            return [
+                'mode' => $effectiveMode,
+                'source' => 'effective:system.deploy',
+                'explicit' => true,
+            ];
+        }
+
+        return [
+            'mode' => 'prod',
+            'source' => 'production_default_missing_config',
+            'explicit' => false,
+        ];
+    }
+
+    /**
+     * @return array{mode:string,source:string}
+     */
+    private function readExplicitDeployModeFromEnvFile(): array
+    {
+        $envFile = Env::path_ENV_FILE;
+        if (!\is_file($envFile)) {
+            return ['mode' => '', 'source' => ''];
+        }
+
+        try {
+            $config = include $envFile;
+        } catch (\Throwable) {
+            return ['mode' => '', 'source' => ''];
+        }
+
+        if (!\is_array($config)) {
+            return ['mode' => '', 'source' => ''];
+        }
+
+        $system = \is_array($config['system'] ?? null) ? $config['system'] : [];
+        foreach ([
+            'config:system.deploy' => $system['deploy'] ?? null,
+            'config:deploy' => $config['deploy'] ?? null,
+        ] as $source => $mode) {
+            $mode = \strtolower(\trim((string)$mode));
+            if ($mode !== '') {
+                return [
+                    'mode' => $mode,
+                    'source' => $source,
+                ];
+            }
+        }
+
+        return ['mode' => '', 'source' => ''];
+    }
+
+    /**
+     * @return array{environment:string,platform_url:string,source:string}
+     */
+    private function resolveAppStoreMarketplaceInfo(string $deployMode, bool $explicitDeployMode): array
+    {
+        $normalizedMode = strtolower(trim($deployMode));
+        if ($explicitDeployMode && ($normalizedMode === 'dev' || $normalizedMode === 'local')) {
+            $envPlatformUrl = getenv('WELINE_APPSTORE_PLATFORM_URL');
+            $normalizedEnvPlatformUrl = is_string($envPlatformUrl) ? $this->normalizeLocalAppStoreMarketplacePlatformUrl($envPlatformUrl) : '';
+            if ($normalizedEnvPlatformUrl !== '') {
+                return [
+                    'environment' => 'local',
+                    'platform_url' => $normalizedEnvPlatformUrl,
+                    'source' => 'env:WELINE_APPSTORE_PLATFORM_URL',
+                ];
+            }
+
+            $configuredPlatformUrl = Env::get('appstore.platform_url');
+            $normalizedConfigPlatformUrl = is_string($configuredPlatformUrl) ? $this->normalizeLocalAppStoreMarketplacePlatformUrl($configuredPlatformUrl) : '';
+            if ($normalizedConfigPlatformUrl !== '') {
+                return [
+                    'environment' => 'local',
+                    'platform_url' => $normalizedConfigPlatformUrl,
+                    'source' => 'config:appstore.platform_url',
+                ];
+            }
+
+            return [
+                'environment' => 'local',
+                'platform_url' => self::LOCAL_APPSTORE_PLATFORM_URL,
+                'source' => 'local_default',
+            ];
+        }
+
+        return [
+            'environment' => 'production',
+            'platform_url' => self::PRODUCTION_APPSTORE_PLATFORM_URL,
+            'source' => 'production_default',
+        ];
+    }
+
+    private function normalizeAppStoreMarketplacePlatformUrl(string $url): string
+    {
+        $url = rtrim(trim($url), '/');
+        if ($url === '' || $this->isOfficialWebsiteAppStorePlatformUrl($url)) {
+            return '';
+        }
+
+        return $url;
+    }
+
+    private function normalizeLocalAppStoreMarketplacePlatformUrl(string $url): string
+    {
+        $url = $this->normalizeAppStoreMarketplacePlatformUrl($url);
+        if ($url !== self::LOCAL_APPSTORE_PLATFORM_URL) {
+            return '';
+        }
+
+        return $url;
+    }
+
+    private function isOfficialWebsiteAppStorePlatformUrl(string $url): bool
+    {
+        $host = strtolower((string)parse_url($url, PHP_URL_HOST));
+        if ($host === '') {
+            return false;
+        }
+
+        return str_starts_with($host, 'www.')
+            && (str_ends_with($host, 'weline.test') || str_ends_with($host, 'aiweline.com'));
     }
 
     /**

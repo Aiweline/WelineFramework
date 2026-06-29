@@ -32,6 +32,34 @@ final class WlsRuntimeRequestLogConfigTest extends TestCase
         self::assertTrue($this->getPerformanceConfig()['request_log_enabled']);
     }
 
+    public function testResponseHeadersDefaultToDisabledWhenVerboseLoggingIsOff(): void
+    {
+        LogConfig::bootstrapVerbose(false);
+
+        self::assertFalse($this->getPerformanceConfig()['response_headers_enabled']);
+    }
+
+    public function testResponseHeadersDefaultToEnabledWhenVerboseLoggingIsOn(): void
+    {
+        LogConfig::bootstrapVerbose(true);
+
+        self::assertTrue($this->getPerformanceConfig()['response_headers_enabled']);
+    }
+
+    public function testResponseHeadersCanBeExplicitlyEnabled(): void
+    {
+        LogConfig::bootstrapVerbose(false);
+        Env::getInstance()->applyRuntimeConfig([
+            'wls' => [
+                'performance' => [
+                    'response_headers_enabled' => true,
+                ],
+            ],
+        ]);
+
+        self::assertTrue($this->getPerformanceConfig()['response_headers_enabled']);
+    }
+
     /**
      * @return array<string, mixed>
      */

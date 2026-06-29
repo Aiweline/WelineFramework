@@ -1491,7 +1491,13 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             return String(instance.getValue() || '');
         }
         var hidden = document.getElementById(id + '_value');
-        return hidden ? String(hidden.value || '') : '';
+        if (hidden) {
+            return String(hidden.value || '');
+        }
+        var nativeSelect = document.getElementById(id);
+        return nativeSelect && String(nativeSelect.tagName || '').toLowerCase() === 'select'
+            ? String(nativeSelect.value || '')
+            : '';
     }
 
     function setRegistrarSelectValue(id, value, onSelectFnName) {
@@ -1504,13 +1510,31 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
         if (hidden) {
             hidden.value = String(value || '');
         }
+        var nativeSelect = document.getElementById(id);
+        if (nativeSelect && String(nativeSelect.tagName || '').toLowerCase() === 'select') {
+            nativeSelect.value = String(value || '');
+        }
     }
 
     function setRegistrarSelectOptions(id, options, onSelectFnName) {
+        var normalizedOptions = normalizeRegistrarOptions(options);
         var instance = ensureRegistrarSelectInstance(id, onSelectFnName);
         if (instance && typeof instance.setOptions === 'function') {
-            instance.setOptions(Array.isArray(options) ? options : []);
+            instance.setOptions(normalizedOptions);
+            return true;
         }
+        var nativeSelect = document.getElementById(id);
+        if (!nativeSelect || String(nativeSelect.tagName || '').toLowerCase() !== 'select') {
+            return false;
+        }
+        nativeSelect.innerHTML = '';
+        normalizedOptions.forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label;
+            nativeSelect.appendChild(option);
+        });
+        return true;
     }
 
     window.handleDomainFilterAccountChange = function () {
@@ -1555,21 +1579,64 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             .replace(/'/g, '&#039;');
     }
 
+    function unwrapApiResponse(response) {
+        if (response && typeof response === 'object' && response.data !== undefined
+            && (response.ok !== undefined || response.status !== undefined || response.statusText !== undefined)
+        ) {
+            return response.data || {};
+        }
+
+        return response || {};
+    }
+
+    function getDnsAccountsPayload(body) {
+        var queue = [body];
+        var visited = [];
+        var depth = 0;
+        while (queue.length > 0 && depth < 12) {
+            depth += 1;
+            var current = queue.shift();
+            if (!current || typeof current !== 'object') {
+                continue;
+            }
+            if (visited.indexOf(current) > -1) {
+                continue;
+            }
+            visited.push(current);
+            if (Array.isArray(current.dns_accounts) || Array.isArray(current.cdn_accounts)) {
+                return {
+                    dns_accounts: Array.isArray(current.dns_accounts) ? current.dns_accounts : [],
+                    cdn_accounts: Array.isArray(current.cdn_accounts) ? current.cdn_accounts : []
+                };
+            }
+            ['data', 'body', 'result', 'payload', 'response'].forEach(function (key) {
+                if (current[key] && typeof current[key] === 'object') {
+                    queue.push(current[key]);
+                }
+            });
+        }
+
+        return null;
+    }
+
+    function requestDnsAccounts() {
+        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.request !== 'function') {
+            return Promise.reject(new Error('Weline.Api is not ready'));
+        }
+
+        return window.Weline.Api.request(urls.getDnsAccounts, { method: 'GET', silent: true })
+            .then(unwrapApiResponse);
+    }
+
     function loadImportDnsCdnSelects(callback) {
-        fetch(urls.getDnsAccounts)
-            .then(function(r) { return r.json(); })
+        requestDnsAccounts()
             .then(function(data) {
-                if (!document.getElementById('weline-import-bind-dns_wrapper') || !document.getElementById('weline-import-bind-cdn_wrapper')) {
-                    if (callback) callback();
-                    return;
-                }
                 var extraOptions = [{ value: '0', label: '<?= addslashes((string)__('不指定')) ?>', group: '', meta: '' }];
-                if (data.code === 200 && data.data) {
-                    setRegistrarSelectOptions('weline-import-bind-dns', buildRegistrarAccountOptions(data.data.dns_accounts || [], extraOptions), null);
-                    setRegistrarSelectOptions('weline-import-bind-cdn', buildRegistrarAccountOptions(data.data.cdn_accounts || [], extraOptions), null);
-                    setRegistrarSelectValue('weline-import-bind-dns', '0', null);
-                    setRegistrarSelectValue('weline-import-bind-cdn', '0', null);
-                }
+                var payload = getDnsAccountsPayload(data) || { dns_accounts: [], cdn_accounts: [] };
+                setRegistrarSelectOptions('weline-import-bind-dns', buildRegistrarAccountOptions(payload.dns_accounts || [], extraOptions), null);
+                setRegistrarSelectOptions('weline-import-bind-cdn', buildRegistrarAccountOptions(payload.cdn_accounts || [], extraOptions), null);
+                setRegistrarSelectValue('weline-import-bind-dns', '0', null);
+                setRegistrarSelectValue('weline-import-bind-cdn', '0', null);
                 if (callback) callback();
             })
             .catch(function() {
@@ -3125,23 +3192,23 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function loadManualCreateAccounts() {
-        fetch(urls.getDnsAccounts)
-            .then(function(r) { return r.json(); })
+        requestDnsAccounts()
             .then(function(data) {
-                if (!data || data.code !== 200 || !data.data) {
+                var payload = getDnsAccountsPayload(data);
+                if (!payload) {
                     return;
                 }
                 var dnsSelect = document.getElementById('weline-manual-dns-account');
                 var cdnSelect = document.getElementById('weline-manual-cdn-account');
                 dnsSelect.innerHTML = '<option value="0"><?= __('默认不设置') ?></option>';
                 cdnSelect.innerHTML = '<option value="0"><?= __('默认不设置') ?></option>';
-                (data.data.dns_accounts || []).forEach(function(acc) {
+                (payload.dns_accounts || []).forEach(function(acc) {
                     var opt = document.createElement('option');
                     opt.value = acc.account_id;
                     opt.textContent = (acc.name || acc.account_name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
                     dnsSelect.appendChild(opt);
                 });
-                (data.data.cdn_accounts || []).forEach(function(acc) {
+                (payload.cdn_accounts || []).forEach(function(acc) {
                     var opt = document.createElement('option');
                     opt.value = acc.account_id;
                     opt.textContent = (acc.name || acc.account_name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
@@ -3298,13 +3365,13 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function loadDnsAccountsForSwitch() {
-        fetch(urls.getDnsAccounts)
-            .then(function(r) { return r.json(); })
+        requestDnsAccounts()
             .then(function(data) {
-                if (data.code !== 200 || !data.data || !data.data.dns_accounts) {
+                var payload = getDnsAccountsPayload(data);
+                if (!payload || !payload.dns_accounts) {
                     return;
                 }
-                var accounts = data.data.dns_accounts;
+                var accounts = payload.dns_accounts;
                 var seen = {};
                 var providers = [];
                 accounts.forEach(function(acc) {
@@ -3544,10 +3611,10 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function loadDnsAccountsForBatchSet() {
-        fetch(urls.getDnsAccounts)
-            .then(function(r) { return r.json(); })
+        requestDnsAccounts()
             .then(function(data) {
-                if (data.code === 200 && data.data) {
+                var payload = getDnsAccountsPayload(data);
+                if (payload) {
                     var dnsSelect = document.getElementById('weline-batch-set-dns-account');
                     var cdnSelect = document.getElementById('weline-batch-set-cdn-account');
 
@@ -3560,7 +3627,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     }
 
                     // 添加 DNS 账户选项
-                    (data.data.dns_accounts || []).forEach(function(acc) {
+                    (payload.dns_accounts || []).forEach(function(acc) {
                         var opt = document.createElement('option');
                         opt.value = acc.account_id;
                         opt.textContent = acc.name + ' (' + acc.registrar_name + ')';
@@ -3568,7 +3635,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                     });
 
                     // 添加 CDN 账户选项
-                    (data.data.cdn_accounts || []).forEach(function(acc) {
+                    (payload.cdn_accounts || []).forEach(function(acc) {
                         var opt = document.createElement('option');
                         opt.value = acc.account_id;
                         opt.textContent = acc.name + ' (' + acc.registrar_name + ')';
@@ -3732,16 +3799,16 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function loadManualCreateAccounts() {
-        fetch(urls.getDnsAccounts)
-            .then(function (r) { return r.json(); })
+        requestDnsAccounts()
             .then(function (data) {
-                if (!data || data.code !== 200 || !data.data) {
+                var payload = getDnsAccountsPayload(data);
+                if (!payload) {
                     return;
                 }
 
                 var defaultOption = [{ value: '0', label: '<?= addslashes((string)__('默认不设置')) ?>', group: '', meta: '' }];
-                setRegistrarSelectOptions('weline-manual-dns-account', buildRegistrarAccountOptions(data.data.dns_accounts || [], defaultOption), null);
-                setRegistrarSelectOptions('weline-manual-cdn-account', buildRegistrarAccountOptions(data.data.cdn_accounts || [], defaultOption), null);
+                setRegistrarSelectOptions('weline-manual-dns-account', buildRegistrarAccountOptions(payload.dns_accounts || [], defaultOption), null);
+                setRegistrarSelectOptions('weline-manual-cdn-account', buildRegistrarAccountOptions(payload.cdn_accounts || [], defaultOption), null);
                 setRegistrarSelectValue('weline-manual-dns-account', '0', null);
                 setRegistrarSelectValue('weline-manual-cdn-account', '0', null);
             })
@@ -3749,13 +3816,13 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function loadDnsAccountsForSwitch() {
-        fetch(urls.getDnsAccounts)
-            .then(function (r) { return r.json(); })
+        requestDnsAccounts()
             .then(function (data) {
-                if (data.code !== 200 || !data.data || !data.data.dns_accounts) {
+                var payload = getDnsAccountsPayload(data);
+                if (!payload || !payload.dns_accounts) {
                     return;
                 }
-                var accounts = data.data.dns_accounts;
+                var accounts = payload.dns_accounts;
                 var seen = {};
                 var providers = [];
                 accounts.forEach(function (acc) {
@@ -3795,15 +3862,15 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
     }
 
     function loadDnsAccountsForBatchSet() {
-        fetch(urls.getDnsAccounts)
-            .then(function (r) { return r.json(); })
+        requestDnsAccounts()
             .then(function (data) {
-                if (data.code === 200 && data.data) {
+                var payload = getDnsAccountsPayload(data);
+                if (payload) {
                     var dnsExtra = [{ value: '0', label: '<?= addslashes((string)__('清除（使用注册商账户）')) ?>', group: '', meta: '' }];
                     var cdnExtra = [{ value: '0', label: '<?= addslashes((string)__('清除')) ?>', group: '', meta: '' }];
 
-                    setRegistrarSelectOptions('weline-batch-set-dns-account', buildRegistrarAccountOptions(data.data.dns_accounts || [], dnsExtra), null);
-                    setRegistrarSelectOptions('weline-batch-set-cdn-account', buildRegistrarAccountOptions(data.data.cdn_accounts || [], cdnExtra), null);
+                    setRegistrarSelectOptions('weline-batch-set-dns-account', buildRegistrarAccountOptions(payload.dns_accounts || [], dnsExtra), null);
+                    setRegistrarSelectOptions('weline-batch-set-cdn-account', buildRegistrarAccountOptions(payload.cdn_accounts || [], cdnExtra), null);
                     setRegistrarSelectValue('weline-batch-set-dns-account', '', null);
                     setRegistrarSelectValue('weline-batch-set-cdn-account', '', null);
                 }
