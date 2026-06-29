@@ -69,7 +69,8 @@ HOSTS;
 
         $command = $method->invoke(null, 'shop-a.weline.test', '127.0.0.1', 'Darwin');
 
-        self::assertStringContainsString('sudo', $command);
+        self::assertStringContainsString('osascript', $command);
+        self::assertStringContainsString('with administrator privileges', $command);
         self::assertStringContainsString('server:hosts:add', $command);
     }
 }
