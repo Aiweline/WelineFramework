@@ -1550,27 +1550,111 @@ CNF;
             return false;
         }
 
+        if (!$this->isMacosCaRootTrustedForSsl($caCertPath)) {
+            return false;
+        }
+
+        $leafPath = $this->resolveLocalDevelopmentProbeLeafPath();
+        if ($leafPath === '') {
+            return true;
+        }
+
+        return $this->isLocalDevelopmentSslChainCryptographicallyValid($caCertPath, $leafPath);
+    }
+
+    protected function isMacosCaRootTrustedForSsl(string $caCertPath): bool
+    {
         $exitCode = 1;
         $output = $this->runTrustCommand(
             '/usr/bin/security verify-cert -c ' . \escapeshellarg($caCertPath) . ' -p ssl 2>&1',
             $exitCode
         );
-        if ($exitCode === 0 && !\preg_match('/CSSMERR_|failed|error/i', $output)) {
-            return true;
-        }
 
-        $thumb = $this->getCertificateSha1Fingerprint($caCertPath);
-        if ($thumb === '') {
+        return $exitCode === 0 && !\preg_match('/CSSMERR_|failed|error/i', (string) $output);
+    }
+
+    /**
+     * 用已签发的本地叶子证书验证整条 SSL 链是否被 macOS 信任。
+     * 仅检查 CA 文件或 find-certificate 会误判「已在钥匙串但未设为信任根」。
+     */
+    protected function isLocalDevelopmentSslChainTrustedOnMacos(): bool
+    {
+        $caPath = $this->getLocalCaCertPath();
+        if (!\is_file($caPath) || !$this->isMacosCaRootTrustedForSsl($caPath)) {
             return false;
         }
 
-        $findExit = 1;
-        $findOutput = $this->runTrustCommand(
-            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
-            $findExit
+        $leafPath = $this->resolveLocalDevelopmentProbeLeafPath();
+        if ($leafPath === '') {
+            return true;
+        }
+
+        return $this->isLocalDevelopmentSslChainCryptographicallyValid($caPath, $leafPath);
+    }
+
+    protected function isLocalDevelopmentSslChainCryptographicallyValid(string $caCertPath, string $leafPath): bool
+    {
+        if (!$this->commandExists('openssl')) {
+            return false;
+        }
+
+        $exitCode = 1;
+        $output = $this->runTrustCommand(
+            'openssl verify -CAfile ' . \escapeshellarg($caCertPath) . ' '
+            . \escapeshellarg($leafPath) . ' 2>&1',
+            $exitCode
         );
 
-        return $findExit === 0 && \str_contains($this->normalizeCertificateFingerprint($findOutput), $thumb);
+        return $exitCode === 0 && \str_contains((string) $output, ': OK');
+    }
+
+    protected function resolveLocalDevelopmentProbeLeafPath(): string
+    {
+        if (!\is_dir($this->certBaseDir)) {
+            return '';
+        }
+
+        foreach (\scandir($this->certBaseDir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $logical = self::logicalDomainFromStorageSegment($entry);
+            if (!LocalDomainPolicy::isManagedLocalDomain($logical)
+                || LocalDomainPolicy::isManagedWildcardDomain($logical)) {
+                continue;
+            }
+            $leafPath = $this->certBaseDir . $entry . DS . 'fullchain.pem';
+            if (\is_file($leafPath) && $this->isCertificateValid($leafPath)) {
+                return $leafPath;
+            }
+        }
+
+        $wildcard = LocalDomainPolicy::currentWildcardDomain();
+        $wildcardPath = $this->getCertificateDir($wildcard) . 'fullchain.pem';
+        if (\is_file($wildcardPath) && $this->isCertificateValid($wildcardPath)) {
+            return $wildcardPath;
+        }
+
+        return '';
+    }
+
+    /**
+     * 确保本地开发 CA 已写入系统信任库（macOS Keychain / Windows / Linux）。
+     *
+     * @return array{success:bool,trusted:bool,message:string}
+     */
+    public function ensureLocalDevelopmentCaTrusted(): array
+    {
+        $ca = $this->ensureLocalCertificateAuthority();
+        if (!($ca['success'] ?? false)) {
+            return [
+                'success' => false,
+                'trusted' => false,
+                'message' => (string) ($ca['message'] ?? __('Failed to prepare local CA')),
+            ];
+        }
+
+        return $this->trustLocalCertificateAuthority((string) $ca['cert_path']);
     }
 
     protected function isLocalCertificateAuthorityTrustedOnLinux(string $caCertPath): bool
@@ -1731,17 +1815,11 @@ CNF;
             return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by macOS Keychain')];
         }
 
-        $loginKeychain = $this->resolveMacosLoginKeychain();
-        $loginCommand = '/usr/bin/security add-trusted-cert -r trustRoot -p ssl -p basic -k '
-            . \escapeshellarg($loginKeychain) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
-        $exitCode = 1;
-        $output = $this->runInteractiveTrustCommand($loginCommand, $exitCode);
-        if ($exitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
-            return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
-        }
-
+        $output = '';
         $manual = 'sudo /usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain '
             . \escapeshellarg($caCertPath);
+
+        // Safari / Chrome 主要读取系统钥匙串；优先写入 System，再回退 login。
         if ($this->commandExists('sudo')) {
             $sudoArgs = $this->canUseInteractivePrivilegePrompt()
                 ? ' -p ' . \escapeshellarg('[WLS] sudo password for macOS CA trust: ')
@@ -1753,8 +1831,18 @@ CNF;
             if ($systemExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
                 return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS System Keychain')];
             }
-            $output = \trim($output . "\n" . $systemOutput);
+            $output = \trim($systemOutput);
         }
+
+        $loginKeychain = $this->resolveMacosLoginKeychain();
+        $loginCommand = '/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k '
+            . \escapeshellarg($loginKeychain) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
+        $loginExitCode = 1;
+        $loginOutput = $this->runInteractiveTrustCommand($loginCommand, $loginExitCode);
+        if ($loginExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+            return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
+        }
+        $output = \trim($output . "\n" . $loginOutput);
 
         return [
             'success' => false,

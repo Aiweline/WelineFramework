@@ -622,6 +622,7 @@ class SslCertificateServiceTest extends TestCase
         $this->assertTrue((bool)($result['trusted'] ?? false));
         $this->assertNotEmpty($service->commands);
         $this->assertStringContainsString('/usr/bin/security add-trusted-cert', $service->commands[0]);
+        $this->assertStringContainsString('-d', $service->commands[0]);
         $this->assertStringContainsString('/Users/unit/Library/Keychains/login.keychain-db', $service->commands[0]);
     }
 
