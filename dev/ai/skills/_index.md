@@ -20,6 +20,7 @@
 - 轻量路由、HTTP、Browser 冒烟仍可按验证需要加载 `E2E自动化工程师-路由与UI冒烟验证`，但不得创建或更新 E2E/Playwright 用例文件。
 - WLS、Worker、reload/restart、Session Server、SSE：加载 `WLS运行时工程师-*`。
 - WLS 面板、输入 `wls`、WLS Performance、query-bin 卡慢、静态资源缓存、明确预览才绕过缓存：加载 `WLS运行时工程师-WLS面板性能诊断`。
+- SEO 面板、输入 `weline`、SEO inspector、SEO 解析器、head/meta/canonical/hreflang/JSON-LD/GA4、控制台 SEO 报告：加载 `SEO面板诊断`。
 - ACL、后台安全、会话、数据保护：加载 `安全权限工程师-*`。
 - README、API、架构、索引、规则沉淀、复盘：加载 `文档知识库工程师-*`。
 - CI、发布、部署、环境兼容、Windows 命令安全：加载 `CI发布工程师-*`。涉及已配置 SAAS 部署目标时，默认使用发布目标仓库 `E:\公司\远程\src\weline` 的本机 OpenSSH 与 Windows 凭据中的部署 key；无本机 SSH 凭据时停止并报告阻塞；禁止内联私钥、禁止 Codex 内置浏览器部署、禁止 OS 层抢占用户鼠标或窗口焦点。
@@ -47,6 +48,7 @@
 | i18n、用户提示、可见文案 | `通用工程师-国际化与用户提示` |
 | WLS 进程稳定 | `WLS运行时工程师-WLS进程稳定` |
 | WLS 面板性能诊断、输入 `wls`、框架性能瓶颈、静态资源缓存、明确预览绕过缓存 | `WLS运行时工程师-WLS面板性能诊断` |
+| SEO 面板诊断、输入 `weline`、SEO inspector、控制台 SEO 报告 | `SEO面板诊断` |
 | Session / SSE 运行时 | `WLS运行时工程师-Session与SSE运行时` |
 | ACL 与后台安全 | `安全权限工程师-ACL与后台安全` |
 | 会话配置与数据保护 | `安全权限工程师-会话配置与数据保护` |
