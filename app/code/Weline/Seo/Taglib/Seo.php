@@ -61,6 +61,6 @@ class Seo implements TaglibInterface
 
     public static function document(): string
     {
-        return htmlentities('<w:seo slot="head"/> outputs SEO head tags. Supported slot values: head, meta, canonical, social, schema.');
+        return htmlentities('<w:seo slot="head"/> outputs SEO head tags. Supported slot values: head, meta, canonical, social, schema, inspector.');
     }
 }
