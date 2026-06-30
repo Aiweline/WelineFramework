@@ -5,8 +5,6 @@
     return;
   }
 
-  var apiBootstrapPromise = null;
-  var apiPromise = null;
   var state = {
     activeTab: "overview",
     isOpen: false,
@@ -76,117 +74,91 @@
     return node;
   }
 
-  function ensureApiRuntime() {
-    var cfg;
-    var apiCfg;
-    var scriptUrl;
-    var existingScript;
-
-    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== "function") {
-      if (window.WelineApiModule && window.WelineApiModule.__full && typeof window.WelineApiModule.resource === "function") {
-        window.Weline = window.Weline || {};
-        window.Weline.Api = window.WelineApiModule;
-        return Promise.resolve(window.WelineApiModule);
-      }
-    } else {
-      return Promise.resolve(window.Weline.Api);
+  function readableError(error) {
+    var message = String((error && error.message) || error || "");
+    if (message.indexOf("Invalid Weline binary magic") !== -1) {
+      return "WLS API 响应格式异常，请刷新页面后重试。";
     }
-
-    if (apiBootstrapPromise) {
-      return apiBootstrapPromise;
+    if (message.indexOf("Unexpected end of Weline binary packet") !== -1) {
+      return "WLS API 响应不完整，请刷新页面后重试。";
     }
+    if (message.indexOf("Unsupported Weline binary") !== -1 || message.indexOf("Unknown Weline binary") !== -1) {
+      return "WLS API 响应版本不兼容，请刷新页面后重试。";
+    }
+    return message || "未知错误";
+  }
 
-    cfg = getConfig();
-    apiCfg = cfg.api || {};
-    scriptUrl = cfg.apiScriptUrl || "/Weline/Frontend/view/statics/js/weline-api.js";
+  function endpointBase() {
+    var cfg = getConfig();
+    return String(cfg.endpointUrl || cfg.performanceEndpointUrl || "/server/test/wls-performance-panel").replace(/\/+$/, "");
+  }
 
-    apiBootstrapPromise = new Promise(function (resolve, reject) {
-      function finish() {
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === "function") {
-          resolve(window.Weline.Api);
-          return;
-        }
-        if (window.WelineApiModule && window.WelineApiModule.__full && typeof window.WelineApiModule.resource === "function") {
-          window.Weline = window.Weline || {};
-          window.Weline.Api = window.WelineApiModule;
-          resolve(window.WelineApiModule);
-          return;
-        }
-        reject(new Error("Weline.Api.resource 不可用。"));
-      }
+  function operationPath(operation) {
+    var map = {
+      wlsPerformanceSummary: "summary",
+      wlsPerformanceRequests: "requests",
+      wlsPerformanceRequestDetail: "request-detail",
+      wlsPerformanceServices: "services",
+      wlsPerformanceClear: "clear"
+    };
 
-      window.Weline = window.Weline || {};
-      window.Weline.config = window.Weline.config || {};
-      window.Weline.config.api = Object.assign({ area: "frontend" }, window.Weline.config.api || {}, apiCfg);
-      window.WelineApiConfig = Object.assign({}, window.Weline.config.api || {}, window.WelineApiConfig || {}, apiCfg);
+    return map[operation] || operation;
+  }
 
-      existingScript = document.querySelector('script[data-weline-wls-panel-api="1"]');
-      if (existingScript) {
-        if (existingScript.getAttribute("data-loaded") === "1") {
-          finish();
-          return;
-        }
-        existingScript.addEventListener("load", finish, { once: true });
-        existingScript.addEventListener("error", function () {
-          reject(new Error("Weline.Api 脚本加载失败。"));
-        }, { once: true });
+  function requestUrl(operation, params) {
+    var url = new URL(endpointBase() + "/" + operationPath(operation), window.location.origin);
+    Object.keys(params || {}).forEach(function (key) {
+      var value = params[key];
+      if (value === undefined || value === null || value === "") {
         return;
       }
-
-      existingScript = document.createElement("script");
-      existingScript.src = scriptUrl;
-      existingScript.async = true;
-      existingScript.setAttribute("data-weline-wls-panel-api", "1");
-      existingScript.addEventListener("load", function () {
-        existingScript.setAttribute("data-loaded", "1");
-        finish();
-      }, { once: true });
-      existingScript.addEventListener("error", function () {
-          reject(new Error("Weline.Api 脚本加载失败。"));
-      }, { once: true });
-      (document.head || document.documentElement).appendChild(existingScript);
+      url.searchParams.set(key, String(value));
     });
-
-    return apiBootstrapPromise;
+    url.searchParams.set("_", String(Date.now()));
+    return url.toString();
   }
 
-  function serverApi() {
-    if (!apiPromise) {
-      apiPromise = ensureApiRuntime().then(function (api) {
-        return api.resource("server");
-      });
-    }
-    return apiPromise;
-  }
-
-  function wait(msValue) {
-    return new Promise(function (resolve) {
-      window.setTimeout(resolve, msValue);
-    });
-  }
-
-  function isBinaryBootstrapError(error) {
-    return String((error && error.message) || error || "").indexOf("Invalid Weline binary magic") !== -1;
-  }
-
-  function callOnce(operation, params) {
-    return serverApi().then(function (api) {
-      if (!api || typeof api[operation] !== "function") {
-        throw new Error("Server API 操作不可用：" + operation);
+  function parseJsonResponse(response) {
+    return response.text().then(function (text) {
+      var payload;
+      var trimmed = String(text || "").trim();
+      if (!trimmed) {
+        payload = {};
+      } else {
+        try {
+          payload = JSON.parse(trimmed);
+        } catch (error) {
+          throw new Error("WLS 面板端点返回了非 JSON 响应。");
+        }
       }
-      return api[operation](params || {});
+      if (!response.ok) {
+        throw new Error((payload && payload.message) || ("WLS 面板端点请求失败：" + response.status));
+      }
+      return payload;
     });
   }
 
   function call(operation, params) {
-    return callOnce(operation, params).catch(function (error) {
-      if (!isBinaryBootstrapError(error)) {
-        throw error;
+    var isClear = operation === "wlsPerformanceClear";
+    return window.fetch(requestUrl(operation, isClear ? {} : (params || {})), {
+      method: isClear ? "POST" : "GET",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+        "X-Weline-Wls-Panel": "1",
+        "X-WLS-FPC-Bypass": "1"
       }
-      apiPromise = null;
-      return wait(160).then(function () {
-        return callOnce(operation, params);
-      });
+    }).then(parseJsonResponse).then(function (payload) {
+      if (payload && payload.success === false && operation !== "wlsPerformanceRequestDetail") {
+        throw new Error(payload.message || "WLS 面板请求失败。");
+      }
+      return payload;
+    }).catch(function (error) {
+      if (error && error.name === "TypeError") {
+        throw new Error("WLS 面板端点暂不可用，请确认 WLS 已重载路由。");
+      }
+      throw error;
     });
   }
 
@@ -264,7 +236,7 @@
         });
       })
       .catch(function (error) {
-        state.error = error && error.message ? error.message : String(error);
+        state.error = readableError(error);
       })
       .finally(function () {
         setLoading(false);
@@ -282,7 +254,7 @@
         state.services = null;
       })
       .catch(function (error) {
-        state.error = error && error.message ? error.message : String(error);
+        state.error = readableError(error);
       })
       .finally(function () {
         setLoading(false);
@@ -302,7 +274,7 @@
         state.activeTab = "waterfall";
       })
       .catch(function (error) {
-        state.error = error && error.message ? error.message : String(error);
+        state.error = readableError(error);
       })
       .finally(function () {
         setLoading(false);
