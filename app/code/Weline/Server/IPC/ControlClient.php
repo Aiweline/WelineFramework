@@ -701,7 +701,15 @@ class ControlClient implements ChildControlClientInterface
         if ($changed > 0) {
             $data = @\fread($this->socket, 65536);
 
-            if ($data === false || ($data === '' && @\feof($this->socket))) {
+            if ($data === false) {
+                if (!@\feof($this->socket)) {
+                    return $this->flushBufferedControlMessages();
+                }
+                $this->handleDisconnect();
+                return [];
+            }
+
+            if ($data === '' && @\feof($this->socket)) {
                 $this->handleDisconnect();
                 return [];
             }

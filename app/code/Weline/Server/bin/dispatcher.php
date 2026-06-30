@@ -475,7 +475,7 @@ $dispatcher->configure([
     'worker_connect_select_timeout_sec' => (float)($dispatcherConfig['worker_connect_select_timeout_sec'] ?? 0.02),
     'worker_busy_penalty_after_ms' => (float)($dispatcherConfig['worker_busy_penalty_after_ms'] ?? 120),
     'ssl_backend_preconnect_per_worker' => (int)($dispatcherConfig['ssl_backend_preconnect_per_worker'] ?? 0),
-    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? false),
+    'homepage_warmup_enabled' => (bool)($dispatcherConfig['homepage_warmup_enabled'] ?? true),
     'homepage_warmup_hosts' => \array_values($warmupHosts),
     'homepage_warmup_paths' => $homepageWarmupPaths,
     'homepage_warmup_variants' => $homepageWarmupVariants,

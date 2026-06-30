@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
@@ -21,6 +22,7 @@ use Weline\Server\Service\HostsFileManager;
 use Weline\Server\Service\LocalDomainPolicy;
 use Weline\Server\Service\OptimizationGuideService;
 use Weline\Server\Service\SslCertificateService;
+use Weline\Server\Service\WlsPerformanceTraceStore;
 use Weline\Server\Service\WlsPanelProjectRegistryService;
 
 /**
@@ -39,7 +41,8 @@ class ServerQueryProvider implements QueryProviderInterface
         private readonly SharedStateAdminService $sharedStateAdminService,
         private readonly CertModel $sslCertModel,
         private readonly ?AttackLog $attackLog = null,
-        private readonly ?HealthAllowCookieService $healthAllowCookieService = null
+        private readonly ?HealthAllowCookieService $healthAllowCookieService = null,
+        private readonly ?WlsPerformanceTraceStore $wlsPerformanceTraceStore = null
     ) {
     }
 
@@ -78,6 +81,11 @@ class ServerQueryProvider implements QueryProviderInterface
             'memoryGc' => $this->memoryGc($params),
             'attackStats' => $this->attackStats($params),
             'wlsPanelProject' => $this->wlsPanelProject($params),
+            'wlsPerformanceSummary' => $this->wlsPerformanceSummary($params),
+            'wlsPerformanceRequests' => $this->wlsPerformanceRequests($params),
+            'wlsPerformanceRequestDetail' => $this->wlsPerformanceRequestDetail($params),
+            'wlsPerformanceServices' => $this->wlsPerformanceServices($params),
+            'wlsPerformanceClear' => $this->wlsPerformanceClear(),
             'setHealthAllowCookie' => $this->setHealthAllowCookie(),
             'optimizationData' => $this->optimizationData(),
             'listCertificates' => $this->listCertificates(),
@@ -252,6 +260,75 @@ class ServerQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Resolve WLS Panel project context',
+                ],
+                [
+                    'name' => 'wlsPerformanceSummary',
+                    'description' => __('Read WLS performance summary for the development panel'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'instance', 'type' => 'string', 'required' => false],
+                        ['name' => 'window_sec', 'type' => 'int', 'required' => false],
+                        ['name' => 'host', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Read WLS performance summary',
+                ],
+                [
+                    'name' => 'wlsPerformanceRequests',
+                    'description' => __('Read recent WLS performance requests for the development panel'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'instance', 'type' => 'string', 'required' => false],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
+                        ['name' => 'since', 'type' => 'int', 'required' => false],
+                        ['name' => 'slow_only', 'type' => 'bool', 'required' => false],
+                        ['name' => 'host', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Read recent WLS performance requests',
+                ],
+                [
+                    'name' => 'wlsPerformanceRequestDetail',
+                    'description' => __('Read one WLS performance request detail'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'request_id', 'type' => 'string', 'required' => true],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Read one WLS performance request detail',
+                ],
+                [
+                    'name' => 'wlsPerformanceServices',
+                    'description' => __('Read SessionServer and MemoryServer timing snapshots'),
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'instance', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Read WLS service timing snapshots',
+                ],
+                [
+                    'name' => 'wlsPerformanceClear',
+                    'description' => __('Clear short-lived WLS performance panel traces'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Clear WLS performance panel traces',
                 ],
                 [
                     'name' => 'setHealthAllowCookie',
@@ -802,6 +879,83 @@ class ServerQueryProvider implements QueryProviderInterface
         }
     }
 
+    private function wlsPerformanceSummary(array $params): array
+    {
+        if (!$this->isWlsPerformancePanelAllowed()) {
+            return $this->wlsPerformanceDenied();
+        }
+
+        return $this->wlsPerformanceTraceStore()->summary(
+            $this->boundedInt($params['window_sec'] ?? 300, 30, 3600, 300),
+            $this->safeString($params['instance'] ?? ''),
+            $this->safeString($params['host'] ?? '')
+        );
+    }
+
+    private function wlsPerformanceRequests(array $params): array
+    {
+        if (!$this->isWlsPerformancePanelAllowed()) {
+            return $this->wlsPerformanceDenied();
+        }
+
+        $requests = $this->wlsPerformanceTraceStore()->requests(
+            $this->boundedInt($params['limit'] ?? 50, 1, 200, 50),
+            $this->boundedInt($params['since'] ?? 0, 0, \PHP_INT_MAX, 0),
+            (bool)($params['slow_only'] ?? false),
+            $this->safeString($params['instance'] ?? ''),
+            $this->safeString($params['host'] ?? '')
+        );
+
+        return [
+            'success' => true,
+            'requests' => $requests,
+            'count' => \count($requests),
+            'generated_at' => \time(),
+        ];
+    }
+
+    private function wlsPerformanceRequestDetail(array $params): array
+    {
+        if (!$this->isWlsPerformancePanelAllowed()) {
+            return $this->wlsPerformanceDenied();
+        }
+
+        $requestId = $this->safeString($params['request_id'] ?? '');
+        if (!\preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $requestId)) {
+            return [
+                'success' => false,
+                'message' => (string)__('Invalid request id'),
+                'request' => [],
+            ];
+        }
+
+        $detail = $this->wlsPerformanceTraceStore()->getDetail($requestId);
+
+        return [
+            'success' => $detail !== [],
+            'message' => $detail !== [] ? (string)__('WLS request trace loaded') : (string)__('WLS request trace was not found'),
+            'request' => $detail,
+        ];
+    }
+
+    private function wlsPerformanceServices(array $params): array
+    {
+        if (!$this->isWlsPerformancePanelAllowed()) {
+            return $this->wlsPerformanceDenied();
+        }
+
+        return $this->wlsPerformanceTraceStore()->services($this->safeString($params['instance'] ?? ''));
+    }
+
+    private function wlsPerformanceClear(): array
+    {
+        if (!$this->isWlsPerformancePanelAllowed()) {
+            return $this->wlsPerformanceDenied();
+        }
+
+        return $this->wlsPerformanceTraceStore()->clear();
+    }
+
     private function setHealthAllowCookie(): array
     {
         return $this->healthAllowCookieService()->issue();
@@ -1157,6 +1311,61 @@ class ServerQueryProvider implements QueryProviderInterface
     private function isBackendLoggedIn(): bool
     {
         return SessionFactory::getInstance()->createBackendSession()->isLoggedIn();
+    }
+
+    private function isWlsPerformancePanelAllowed(): bool
+    {
+        if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
+            return true;
+        }
+        if ((bool)Env::get('wls.debug.performance_panel', false)) {
+            return true;
+        }
+        if ((bool)Env::get('wls.performance_panel.enable_in_prod', false)) {
+            $cookieName = (string)Env::get('wls.performance_panel.cookie_name', 'w_wls_perf');
+
+            return $cookieName !== '' && Cookie::get($cookieName) === '1';
+        }
+
+        return false;
+    }
+
+    private function wlsPerformanceDenied(): array
+    {
+        return [
+            'success' => false,
+            'message' => (string)__('WLS performance panel is only available in development or authorized debug mode'),
+        ];
+    }
+
+    private function wlsPerformanceTraceStore(): WlsPerformanceTraceStore
+    {
+        return $this->wlsPerformanceTraceStore ?? ObjectManager::getInstance(WlsPerformanceTraceStore::class);
+    }
+
+    private function boundedInt(mixed $value, int $min, int $max, int $default): int
+    {
+        if (\is_array($value)) {
+            return $default;
+        }
+        $int = (int)$value;
+        if ($int < $min) {
+            return $min;
+        }
+        if ($int > $max) {
+            return $max;
+        }
+
+        return $int;
+    }
+
+    private function safeString(mixed $value): string
+    {
+        if (!\is_scalar($value)) {
+            return '';
+        }
+
+        return \trim((string)$value);
     }
 
     private function attackLog(): AttackLog
