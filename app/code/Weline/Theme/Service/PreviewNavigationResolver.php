@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
-use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 
 final class PreviewNavigationResolver
@@ -17,7 +17,6 @@ final class PreviewNavigationResolver
         private readonly PreviewContextService $previewContextService,
         private readonly PreviewTokenService $previewTokenService,
         private readonly ThemePageTypeResolver $themePageTypeResolver,
-        private readonly Page $pageModel,
     ) {
     }
 
@@ -62,7 +61,7 @@ final class PreviewNavigationResolver
         return $this->buildPreviewResult($candidate, $context, $page);
     }
 
-    private function buildThemeEditorPageResult(Page $page, array $context): array
+    private function buildThemeEditorPageResult(object $page, array $context): array
     {
         $pageId = (int)$page->getId();
         $responseContext = \array_replace($context, [
@@ -85,7 +84,7 @@ final class PreviewNavigationResolver
             $this->url->getBackendUrl('pagebuilder/backend/page/edit', $params),
             PreviewContextService::TARGET_TYPE_PAGE,
             (string)$pageId,
-            (string)$page->getData(Page::schema_fields_TYPE),
+            (string)$page->getData($this->pageTypeField()),
             $pageId,
             $responseContext
         );
@@ -124,7 +123,7 @@ final class PreviewNavigationResolver
         );
     }
 
-    private function buildPageBuilderEditorResult(Page $page, array $context): array
+    private function buildPageBuilderEditorResult(object $page, array $context): array
     {
         $pageId = (int)$page->getId();
         $responseContext = \array_replace($context, [
@@ -152,13 +151,13 @@ final class PreviewNavigationResolver
             $this->url->getBackendUrl('pagebuilder/backend/preview/full', $params),
             PreviewContextService::TARGET_TYPE_PAGE,
             (string)$pageId,
-            (string)$page->getData(Page::schema_fields_TYPE),
+            (string)$page->getData($this->pageTypeField()),
             $pageId,
             $responseContext
         );
     }
 
-    private function buildPreviewResult(array $candidate, array $context, ?Page $page): array
+    private function buildPreviewResult(array $candidate, array $context, ?object $page): array
     {
         $responseContext = $context;
         $responseContext['shell'] = PreviewContextService::SHELL_PREVIEW;
@@ -167,7 +166,7 @@ final class PreviewNavigationResolver
         $pageType = $this->resolveThemePageType($candidate['path']);
         if ($page?->getId()) {
             $pageId = (int)$page->getId();
-            $pageType = (string)($page->getData(Page::schema_fields_TYPE) ?: $pageType);
+            $pageType = (string)($page->getData($this->pageTypeField()) ?: $pageType);
             $responseContext['target_type'] = PreviewContextService::TARGET_TYPE_PAGE;
             $responseContext['target_value'] = (string)$pageId;
         } else {
@@ -302,11 +301,17 @@ final class PreviewNavigationResolver
         ];
     }
 
-    private function resolvePage(array $candidate): ?Page
+    private function resolvePage(array $candidate): ?object
     {
+        $pageModel = $this->pageModel();
+        if ($pageModel === null) {
+            return null;
+        }
+
+        $pageClass = \GuoLaiRen\PageBuilder\Model\Page::class;
         $pageId = (int)($candidate['query']['page_id'] ?? 0);
         if ($pageId > 0) {
-            $page = clone $this->pageModel;
+            $page = clone $pageModel;
             $page->clear()->load($pageId);
             return $page->getId() ? $page : null;
         }
@@ -318,11 +323,11 @@ final class PreviewNavigationResolver
 
         $websiteId = $this->detectCurrentWebsiteId();
         if ($handle === '') {
-            $page = clone $this->pageModel;
+            $page = clone $pageModel;
             if ($websiteId > 0) {
                 $page->clear()
-                    ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
-                    ->where(Page::schema_fields_TYPE, Page::TYPE_HOME)
+                    ->where($pageClass::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where($pageClass::schema_fields_TYPE, $pageClass::TYPE_HOME)
                     ->find()
                     ->fetch();
                 if ($page->getId()) {
@@ -331,17 +336,17 @@ final class PreviewNavigationResolver
             }
 
             $page->clear()
-                ->where(Page::schema_fields_TYPE, Page::TYPE_HOME)
+                ->where($pageClass::schema_fields_TYPE, $pageClass::TYPE_HOME)
                 ->find()
                 ->fetch();
             return $page->getId() ? $page : null;
         }
 
-        $page = clone $this->pageModel;
+        $page = clone $pageModel;
         if ($websiteId > 0) {
             $page->clear()
-                ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
-                ->where(Page::schema_fields_HANDLE, $handle)
+                ->where($pageClass::schema_fields_WEBSITE_ID, $websiteId)
+                ->where($pageClass::schema_fields_HANDLE, $handle)
                 ->find()
                 ->fetch();
             if ($page->getId()) {
@@ -350,11 +355,25 @@ final class PreviewNavigationResolver
         }
 
         $page->clear()
-            ->where(Page::schema_fields_HANDLE, $handle)
+            ->where($pageClass::schema_fields_HANDLE, $handle)
             ->find()
             ->fetch();
 
         return $page->getId() ? $page : null;
+    }
+
+    private function pageModel(): ?object
+    {
+        if (!\class_exists(\GuoLaiRen\PageBuilder\Model\Page::class)) {
+            return null;
+        }
+
+        return ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Model\Page::class);
+    }
+
+    private function pageTypeField(): string
+    {
+        return \GuoLaiRen\PageBuilder\Model\Page::schema_fields_TYPE;
     }
 
     private function extractHandle(array $candidate): ?string
