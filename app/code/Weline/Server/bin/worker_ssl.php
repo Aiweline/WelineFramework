@@ -4285,10 +4285,15 @@ function wlsDecorateFormattedFpcFastResponseForPerformancePanel(
     $response = wlsSetFormattedHttpResponseHeader($response, 'X-Weline-Request-Id', $requestId);
     wlsRecordFormattedFpcFastResponseForPerformancePanel($rawRequest, $requestId, $elapsedMs, $workerId, $port);
 
-    if (!wlsCanInjectPerformancePanelIntoFormattedResponse($rawRequest, $response)) {
+    return wlsInjectPerformancePanelIntoFormattedResponse($rawRequest, $response, $requestId);
+}
+
+function wlsInjectPerformancePanelIntoFormattedResponse(string $rawRequest, string $response, string $requestId): string
+{
+    [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
+    if ($method === 'HEAD' || wlsPerformancePanelIsAjaxOrApiRequest($rawRequest, $target)) {
         return $response;
     }
-
     $headerEnd = \strpos($response, "\r\n\r\n");
     if ($headerEnd === false) {
         return $response;
@@ -4296,7 +4301,37 @@ function wlsDecorateFormattedFpcFastResponseForPerformancePanel(
 
     $headersPart = \substr($response, 0, $headerEnd);
     $bodyPart = \substr($response, $headerEnd + 4);
-    if (\stripos($bodyPart, 'data-weline-wls-performance-bootstrap') !== false) {
+    if ($bodyPart === ''
+        || \preg_match('/^HTTP\/\d(?:\.\d)?\s+(204|205|304)\b/i', $headersPart)) {
+        return $response;
+    }
+
+    $contentType = '';
+    if (\preg_match('/^Content-Type:\s*([^\r\n]+)/mi', $headersPart, $typeMatch)) {
+        $contentType = \strtolower(\trim((string)$typeMatch[1]));
+    }
+    if ($contentType !== '' && !\str_contains($contentType, 'text/html')) {
+        return $response;
+    }
+
+    $isGzip = \preg_match('/^Content-Encoding:\s*gzip\b/mi', $headersPart) === 1;
+    if ($isGzip) {
+        $decoded = \gzdecode($bodyPart);
+        if (!\is_string($decoded)) {
+            return $response;
+        }
+        $bodyPart = $decoded;
+    } elseif (\preg_match('/^Content-Encoding:/mi', $headersPart)) {
+        return $response;
+    }
+
+    if (\stripos($bodyPart, 'data-weline-wls-performance-bootstrap') !== false
+        || !wlsPerformancePanelBodyLooksInjectable($bodyPart)) {
+        return $response;
+    }
+
+    $limit = (int)\Weline\Framework\App\Env::get('wls.performance_panel.max_response_bytes', 1048576);
+    if ($limit > 0 && \strlen($bodyPart) > $limit) {
         return $response;
     }
 
@@ -4305,6 +4340,13 @@ function wlsDecorateFormattedFpcFastResponseForPerformancePanel(
     $bodyPart = $bodyClosePos === false
         ? $bodyPart . $bootstrap
         : \substr($bodyPart, 0, $bodyClosePos) . $bootstrap . \substr($bodyPart, $bodyClosePos);
+    if ($isGzip) {
+        $encoded = \gzencode($bodyPart, 6);
+        if (!\is_string($encoded)) {
+            return $response;
+        }
+        $bodyPart = $encoded;
+    }
     $headersPart = wlsSetFormattedHeader($headersPart, 'Content-Length', (string)\strlen($bodyPart));
 
     return $headersPart . "\r\n\r\n" . $bodyPart;
@@ -4359,14 +4401,6 @@ function wlsDecorateFrameworkResponseForPerformancePanel(
         return;
     }
 
-    $body = $response->getBody();
-    if ($body === ''
-        || \stripos($body, 'data-weline-wls-performance-bootstrap') !== false
-        || !wlsPerformancePanelBodyLooksInjectable($body)
-    ) {
-        return;
-    }
-
     $contentTypeHeader = $response->getHeader('Content-Type');
     $contentType = \strtolower(\is_array($contentTypeHeader)
         ? (string)($contentTypeHeader[0] ?? '')
@@ -4375,7 +4409,31 @@ function wlsDecorateFrameworkResponseForPerformancePanel(
     if ($contentType !== '' && !\str_contains($contentType, 'text/html')) {
         return;
     }
-    if ($response->getHeader('Content-Encoding') !== null) {
+
+    $body = $response->getBody();
+    if ($body === '') {
+        return;
+    }
+
+    $contentEncodingHeader = $response->getHeader('Content-Encoding');
+    $contentEncoding = \strtolower(\trim(\is_array($contentEncodingHeader)
+        ? (string)($contentEncodingHeader[0] ?? '')
+        : (string)($contentEncodingHeader ?? '')
+    ));
+    $isGzip = $contentEncoding === 'gzip';
+    if ($isGzip) {
+        $decoded = \gzdecode($body);
+        if (!\is_string($decoded)) {
+            return;
+        }
+        $body = $decoded;
+    } elseif ($contentEncoding !== '') {
+        return;
+    }
+
+    if (\stripos($body, 'data-weline-wls-performance-bootstrap') !== false
+        || !wlsPerformancePanelBodyLooksInjectable($body)
+    ) {
         return;
     }
 
@@ -4398,6 +4456,13 @@ function wlsDecorateFrameworkResponseForPerformancePanel(
     $body = $bodyClosePos === false
         ? $body . $bootstrap
         : \substr($body, 0, $bodyClosePos) . $bootstrap . \substr($body, $bodyClosePos);
+    if ($isGzip) {
+        $encoded = \gzencode($body, 6);
+        if (!\is_string($encoded)) {
+            return;
+        }
+        $body = $encoded;
+    }
     $response->setBody($body);
     if ($response->getHeader('Content-Length') !== null) {
         $response->setHeader('Content-Length', (string)\strlen($body));
@@ -4578,17 +4643,15 @@ function wlsPerformancePanelRequestLine(string $rawRequest): array
 
 function wlsRenderPerformancePanelBootstrap(string $requestId): string
 {
-    $assetVersion = '20260630-wls-performance-panel-zh-1';
+    $assetVersion = '20260630-wls-performance-panel-json-2';
     $requestIdJson = wlsJsonString($requestId);
     $cssUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.css?v=' . $assetVersion);
     $jsUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.js?v=' . $assetVersion);
-    $apiScriptUrl = wlsJsonString('/Weline/Frontend/view/statics/js/weline-api.js?v=' . $assetVersion);
-    $apiWorkerUrl = wlsJsonString('/Weline/Frontend/view/statics/js/weline-api-worker.js?v=' . $assetVersion);
-    $apiEndpoint = wlsJsonString(\Weline\Framework\App\Env::getFrontendQueryBinPath());
+    $endpointUrl = wlsJsonString('/server/test/wls-performance-panel');
 
     return <<<HTML
 <script data-no-extract="true" data-load-order="last" data-weline-wls-performance-bootstrap="true">
-(function(d,w){"use strict";if(w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__)return;w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__=true;var command="wls";var buffer="";var cssUrl={$cssUrl};var jsUrl={$jsUrl};var requestId={$requestIdJson};var cssLoaded=false;var jsPromise=null;w.__WELINE_WLS_PANEL_CONFIG__=Object.assign({},w.__WELINE_WLS_PANEL_CONFIG__||{},{requestId:requestId,command:command,apiScriptUrl:{$apiScriptUrl},api:{workerUrl:{$apiWorkerUrl},endpoint:{$apiEndpoint},queryBinUrl:{$apiEndpoint},area:"frontend"}});function ignoredTarget(t){if(!t)return false;var tag=(t.tagName||"").toLowerCase();return tag==="input"||tag==="textarea"||tag==="select"||t.isContentEditable===true}function head(n){(d.head||d.documentElement).appendChild(n)}function loadCss(){if(cssLoaded||d.querySelector('link[data-weline-wls-panel="css"]')){cssLoaded=true;return Promise.resolve()}return new Promise(function(resolve,reject){var link=d.createElement("link");link.rel="stylesheet";link.href=cssUrl;link.setAttribute("data-weline-wls-panel","css");link.onload=function(){cssLoaded=true;resolve()};link.onerror=function(){reject(new Error("WLS 面板样式加载失败"))};head(link)})}function loadJs(){if(w.__WELINE_WLS_PANEL__){return Promise.resolve(w.__WELINE_WLS_PANEL__)}if(jsPromise)return jsPromise;jsPromise=new Promise(function(resolve,reject){var script=d.createElement("script");script.src=jsUrl;script.defer=true;script.setAttribute("data-weline-wls-panel","js");script.onload=function(){w.__WELINE_WLS_PANEL__?resolve(w.__WELINE_WLS_PANEL__):reject(new Error("WLS 面板 API 不存在"))};script.onerror=function(){reject(new Error("WLS 面板脚本加载失败"))};head(script)});return jsPromise}function openPanel(){loadCss().then(loadJs).then(function(panel){if(panel&&typeof panel.open==="function")panel.open({requestId:requestId})}).catch(function(error){if(w.console&&console.warn)console.warn("[wls-panel]",error)})}w.wlsPanel=openPanel;d.addEventListener("keydown",function(event){if(event.ctrlKey||event.metaKey||event.altKey||event.isComposing||ignoredTarget(event.target))return;if(!event.key||event.key.length!==1)return;buffer=(buffer+event.key.toLowerCase()).slice(-command.length);if(buffer!==command)return;buffer="";openPanel()},true)})(document,window);
+(function(d,w){"use strict";if(w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__)return;w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__=true;var command="wls";var buffer="";var cssUrl={$cssUrl};var jsUrl={$jsUrl};var endpointUrl={$endpointUrl};var requestId={$requestIdJson};var cssLoaded=false;var jsPromise=null;w.__WELINE_WLS_PANEL_CONFIG__=Object.assign({},w.__WELINE_WLS_PANEL_CONFIG__||{},{requestId:requestId,command:command,endpointUrl:endpointUrl});function ignoredTarget(t){if(!t)return false;var tag=(t.tagName||"").toLowerCase();return tag==="input"||tag==="textarea"||tag==="select"||t.isContentEditable===true}function head(n){(d.head||d.documentElement).appendChild(n)}function loadCss(){if(cssLoaded||d.querySelector('link[data-weline-wls-panel="css"]')){cssLoaded=true;return Promise.resolve()}return new Promise(function(resolve,reject){var link=d.createElement("link");link.rel="stylesheet";link.href=cssUrl;link.setAttribute("data-weline-wls-panel","css");link.onload=function(){cssLoaded=true;resolve()};link.onerror=function(){reject(new Error("WLS 面板样式加载失败"))};head(link)})}function loadJs(){if(w.__WELINE_WLS_PANEL__){return Promise.resolve(w.__WELINE_WLS_PANEL__)}if(jsPromise)return jsPromise;jsPromise=new Promise(function(resolve,reject){var script=d.createElement("script");script.src=jsUrl;script.defer=true;script.setAttribute("data-weline-wls-panel","js");script.onload=function(){w.__WELINE_WLS_PANEL__?resolve(w.__WELINE_WLS_PANEL__):reject(new Error("WLS 面板 API 不存在"))};script.onerror=function(){reject(new Error("WLS 面板脚本加载失败"))};head(script)});return jsPromise}function openPanel(){loadCss().then(loadJs).then(function(panel){if(panel&&typeof panel.open==="function")panel.open({requestId:requestId})}).catch(function(error){if(w.console&&console.warn)console.warn("[wls-panel]",error)})}function markEvent(event){try{Object.defineProperty(event,"__wlsPanelSeen",{value:true})}catch(error){event.__wlsPanelSeen=true}}function onKeydown(event){if(event.__wlsPanelSeen)return;markEvent(event);if(event.ctrlKey||event.metaKey||event.altKey||event.isComposing||ignoredTarget(event.target))return;if(!event.key||event.key.length!==1)return;buffer=(buffer+event.key.toLowerCase()).slice(-command.length);if(buffer!==command)return;buffer="";openPanel()}w.wlsPanel=openPanel;w.addEventListener("keydown",onKeydown,true);d.addEventListener("keydown",onKeydown,true)})(document,window);
 </script>
 HTML;
 }
