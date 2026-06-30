@@ -1,53 +1,31 @@
 # AGENTS.md
 
-Repository AI entry point. This file is an index only; do not duplicate rule text here.
+⚠️ **IMPORTANT:** This is a quick reference. Full rules in `AI-ENTRY.md` (read it first if you haven't).
 
-1. Read `AI-ENTRY.md`.
-2. Follow the single source of truth: `dev/ai/global-constraints.md`.
-3. Load diagrams, module docs, and skills from the indexes named in `AI-ENTRY.md` only when relevant.
+**For other AIs (GPT/Gemini/Cursor):** Start with `AI-README.md` → `AI-ENTRY.md`
 
-Quick commands and resource links are maintained in `AI-ENTRY.md`.
+## Quick Commands
+```bash
+php bin/w setup:upgrade [--route]  # Schema/route sync
+php bin/w http:request / [-b|-api] # Route test
+php bin/w server:start -p 9502 -n ai-test-{unique-id}  # Start test instance (REQUIRED)
+php bin/w server:reload|restart -r # WLS lifecycle (test instance only)
+php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (REQUIRED after testing)
+```
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+## Core Patterns (see AI-ENTRY.md for details)
+- ORM: chains end with `.fetch()`/`.fetchArray()` | Pagination: `.pagination($p,$s)`
+- Schema: `#[Col]` + `setup:upgrade` (NEVER edit `generated/` or `Setup/Upgrade.php`)
+- WLS Testing: **ALWAYS** start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`) | Default port 9501 is PRODUCTION (DO NOT TOUCH) | **MUST stop test instance after testing**
+- WLS Lifecycle: code→`reload` | master→`restart -r` | NO `sleep/die/exit`
+- I18n: `__('text')` or `<lang>text</lang>` | Placeholders: `%{1}` or `%{name}`
 
-This project is indexed by GitNexus as **dev-workspace** (114976 symbols, 295379 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+## Critical Constraints
+**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | **Test on default port 9501 or reuse instance names** | **Leave test instances running after session ends**
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
-
-## Always Do
-
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
-
-## Never Do
-
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+**ALWAYS:** Start dedicated test instance with unique name (`-p 9502+ -n ai-test-{unique-id}`) | **Stop test instance after testing (`server:stop -n {instance-name}`)**
 
 ## Resources
-
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/dev-workspace/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/dev-workspace/clusters` | All functional areas |
-| `gitnexus://repo/dev-workspace/processes` | All execution flows |
-| `gitnexus://repo/dev-workspace/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->
+- Diagrams: `dev/ai/diagrams/00-INDEX.txt`
+- Skills: `dev/ai/skills/_index.md`
+- Full guide: `AI-ENTRY.md`
