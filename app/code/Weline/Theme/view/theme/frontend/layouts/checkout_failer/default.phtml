@@ -21,20 +21,146 @@
  */
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <style>
+        body.checkout-failer-layout {
+            margin: 0;
+            background: var(--weline-layout-surface-secondary);
+            color: var(--weline-layout-text-primary);
+        }
+
+        .checkout-failer-main {
+            width: min(960px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: var(--weline-layout-spacing-3xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
+        }
+
+        .checkout-failer-content {
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+            border-radius: var(--weline-layout-radius-lg);
+            background: var(--weline-layout-surface-primary);
+            padding: var(--weline-layout-spacing-3xl) var(--weline-layout-spacing-xl);
+            text-align: center;
+            box-shadow: var(--weline-theme-shadow-md);
+        }
+
+        .failer-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto var(--weline-layout-spacing-lg);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--weline-layout-radius-full);
+            background: var(--weline-theme-danger-subtle);
+            color: var(--weline-theme-danger);
+            font-size: var(--weline-layout-font-size-4xl);
+        }
+
+        .failer-title {
+            margin: 0;
+            font-size: var(--weline-layout-font-size-4xl);
+            line-height: var(--weline-layout-line-height-tight);
+        }
+
+        .error-message,
+        .error-code,
+        .help-tips {
+            margin-top: var(--weline-layout-spacing-md);
+            color: var(--weline-layout-text-secondary);
+            line-height: var(--weline-layout-line-height-relaxed);
+        }
+
+        .error-code code {
+            margin-left: var(--weline-layout-spacing-xs);
+            padding: var(--weline-layout-spacing-xs) var(--weline-layout-spacing-sm);
+            border-radius: var(--weline-layout-radius-md);
+            background: var(--weline-layout-surface-secondary);
+            color: var(--weline-layout-text-primary);
+        }
+
+        .failer-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--weline-layout-spacing-sm);
+            justify-content: center;
+            margin-top: var(--weline-layout-spacing-lg);
+        }
+
+        .w-btn {
+            min-height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--weline-layout-spacing-xs);
+            padding: 0 var(--weline-layout-spacing-lg);
+            border-radius: var(--weline-layout-radius-md);
+            text-decoration: none;
+            font-weight: var(--weline-layout-font-weight-bold);
+        }
+
+        .w-btn-primary {
+            color: var(--weline-theme-on-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-link-color);
+            background: var(--weline-layout-link-color);
+        }
+
+        .w-btn-secondary,
+        .w-btn-outline {
+            color: var(--weline-layout-text-primary);
+            border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-strong);
+            background: var(--weline-layout-surface-primary);
+        }
+
+        .help-tips {
+            max-width: 620px;
+            margin-left: auto;
+            margin-right: auto;
+            text-align: left;
+        }
+
+        .help-tips ul {
+            margin: var(--weline-layout-spacing-sm) 0 0;
+            padding-left: 20px;
+        }
+
+        @media (max-width: 640px) {
+            .checkout-failer-main {
+                width: min(100% - 28px, 960px);
+                padding: 40px 0 56px;
+            }
+        }
+    </style>
+    <w:hook>seo::head</w:hook>
 </head>
-<body>
-    @template(Weline_Frontend::templates/public/header.phtml)
+<body class="checkout-failer-layout">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     
     <main class="checkout-failer-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="checkout-failer-main" data-layout="checkout_failer">
-        <div class="checkout-failer-container">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-checkout-failer-content,layout-default-content,content,checkout-failer-content,checkout-status,order-summary,support-panel"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-failer-main__content-root-slot">
+        <w:slot id="checkout-failer-content"
+                name="结算失败内容"
+                accept="layout-checkout-failer-content,checkout-failer,checkout-error,content"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="checkout-failer-container">
             <div class="checkout-failer-content">
                 <div class="failer-icon">
-                    <i class="fas fa-times-circle"></i>
+                    <i class="ri-close-line"></i>
                 </div>
                 <h1 class="failer-title"><?= htmlspecialchars($meta['title'] ?? __('订单提交失败')) ?></h1>
                 
@@ -50,16 +176,16 @@
                 
                 <div class="failer-actions">
                     <if condition="meta.retryUrl">
-                        <a href="<?= htmlspecialchars($meta['retryUrl'] ?? '') ?>" class="btn btn-primary">
-                            <i class="fas fa-redo"></i> <?= __('重试提交') ?>
+                        <a href="<?= htmlspecialchars($meta['retryUrl'] ?? '') ?>" class="w-btn w-btn-primary">
+                            <i class="ri-refresh-line"></i> <?= __('重试提交') ?>
                         </a>
                     </if>
-                    <a href="<?= htmlspecialchars($meta['backToCart'] ?? '/cart') ?>" class="btn btn-secondary">
-                        <i class="fas fa-shopping-cart"></i> <?= __('返回购物车') ?>
+                    <a href="<?= htmlspecialchars($meta['backToCart'] ?? '/cart') ?>" class="w-btn w-btn-secondary">
+                        <i class="ri-shopping-cart-2-line"></i> <?= __('返回购物车') ?>
                     </a>
                     <if condition="meta.contactSupport">
-                        <a href="<?= htmlspecialchars($meta['contactSupport'] ?? '') ?>" class="btn btn-outline">
-                            <i class="fas fa-headset"></i> <?= __('联系客服') ?>
+                        <a href="<?= htmlspecialchars($meta['contactSupport'] ?? '') ?>" class="w-btn w-btn-outline">
+                            <i class="ri-customer-service-2-line"></i> <?= __('联系客服') ?>
                         </a>
                     </if>
                 </div>
@@ -73,10 +199,14 @@
                     </ul>
                 </div>
             </div>
-        </div>
+        </w:slot>
+        </w:slot>
     </main>
     
-    @template(Weline_Frontend::templates/public/footer.phtml)
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
 

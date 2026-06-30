@@ -680,9 +680,58 @@ File: Main Js File
         });
     }
 
+    function resolveThemeModeConfig(layout) {
+        if (!layout || typeof layout !== 'object' || typeof layout['theme-mode-switch'] !== 'string') {
+            return null;
+        }
+        const mode = layout['theme-mode-switch'].trim().toLowerCase();
+        if (mode !== 'light' && mode !== 'dark') {
+            return null;
+        }
+        return {
+            mode: mode,
+            rtl_mode: layout['rtl-mode-switch'] === true
+        };
+    }
+
+    function applyThemeModeToDocument(mode) {
+        const normalizedMode = mode === 'dark' ? 'dark' : 'light';
+        const targets = [document.body, document.documentElement].filter(Boolean);
+        targets.forEach(function (target) {
+            target.setAttribute('data-topbar', normalizedMode);
+            target.setAttribute('data-sidebar', normalizedMode);
+            target.setAttribute('data-bs-theme', normalizedMode);
+            target.setAttribute('data-theme-mode', normalizedMode);
+            target.setAttribute('data-layout-mode', normalizedMode);
+        });
+    }
+
     async function setThemeConfig(layout, reload = true) {
         if (typeof showLoading === 'function') {
             showLoading();
+        }
+
+        const themeModeConfig = resolveThemeModeConfig(layout);
+        if (themeModeConfig && typeof window.w_query === 'function') {
+            try {
+                await window.w_query('theme', 'setBackendThemeMode', themeModeConfig, { area: 'backend' });
+                applyThemeModeToDocument(themeModeConfig.mode);
+                if (reload) {
+                    window.location.reload();
+                }
+            } catch (error) {
+                if (typeof BackendToast !== 'undefined' && BackendToast && typeof BackendToast.error === 'function') {
+                    BackendToast.error(error && error.message ? error.message : 'Theme mode switch failed.');
+                }
+                if (window.DEV === true || window.WELINE_ENV === 'DEV') {
+                    console.error('[Weline.Theme] theme mode switch failed', error);
+                }
+            } finally {
+                if (typeof hideLoading === 'function') {
+                    hideLoading();
+                }
+            }
+            return;
         }
         
         var themeConfigUrl;
@@ -701,26 +750,31 @@ File: Main Js File
             themeConfigUrl = baseUrl + '/system/theme-config/set';
         }
         
-        $.ajax({
-            url: themeConfigUrl,
-            data: JSON.stringify(layout),
-            dataType: 'json',
-            type: 'post',
-            contentType: 'application/json',
-            success: async function (res) {
-                if ((200 === res.code) && reload) {
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
+            try {
+                const res = await window.Weline.Api.request(themeConfigUrl, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(layout)
+                });
+                if ((200 === res.code || res.success === true) && reload) {
                     window.location.reload();
                 }
-                if (typeof hideLoading === 'function') {
-                    hideLoading();
+            } catch (error) {
+                if (typeof BackendToast !== 'undefined' && BackendToast && typeof BackendToast.error === 'function') {
+                    BackendToast.error(error && error.message ? error.message : 'Theme config save failed.');
                 }
-            },
-            error: function () {
+            } finally {
                 if (typeof hideLoading === 'function') {
                     hideLoading();
                 }
             }
-        });
+            return;
+        }
+
+        if (typeof hideLoading === 'function') {
+            hideLoading();
+        }
     }
 
     // 将 setThemeConfig 暴露到全局作用域，供 right-sidebar.phtml 使用
@@ -803,6 +857,7 @@ File: Main Js File
     function init() {
         initSettings();
         initMenuItem();
+        initLeftMenuCollapse();
         initFullScreen();
         initRightSidebar();
         initDropdownMenu();

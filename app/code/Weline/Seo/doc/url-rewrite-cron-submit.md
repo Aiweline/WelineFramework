@@ -1,0 +1,21 @@
+# URL rewrite cron submission
+
+SEO URL submission is sourced from the canonical `url_rewrite` table, not from business save events.
+
+## Flow
+
+1. `Weline\Seo\Cron\UrlRewriteSubmitSync` runs every 5 minutes.
+2. `UrlRewriteSubmitSyncService` reads public rows from `url_rewrite`, resolves the target website through `SeoWebsiteDirectory`, expands relative rewrites to absolute website URLs, and builds a route fingerprint from `rewrite_id`, source `website_id`, target website, `path`, `rewrite`, and final URL.
+3. The service compares those fingerprints against `weline_seo_task` records with `task_type=push_urls` and `subject_type=url_rewrite`.
+4. Missing fingerprints are written as pending `push_urls` tasks only for SEO accounts bound to the resolved website through `weline_seo_website_account`.
+5. `Weline\Seo\Cron\UrlPusher` also runs every 5 minutes and only consumes pending URL push tasks.
+
+## Website resolution rules
+
+- `url_rewrite.website_id > 0`: submit only for that website.
+- Relative rewrite with `website_id = 0`: expand to every website that has a base URL.
+- Absolute rewrite URL: match the URL host to a website. Unmatched hosts are skipped.
+- The account-level switch `SeoAccount.enable_cron_push_urls`, website binding switch `SeoWebsiteAccount.enable_url_push`, and platform capability `supports_url_push` must all be enabled before a URL push task is created.
+- Catalog-only platforms such as DuckDuckGo, Brave, Qwant, Ecosia, Startpage and similar discovery-only engines do not create URL push tasks. They rely on sitemap/robots discovery.
+
+The old SEO event path is not registered in `Weline_Seo/etc/event.xml`; product/category save events no longer enqueue SEO URL push tasks directly.

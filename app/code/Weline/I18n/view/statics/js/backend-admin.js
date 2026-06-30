@@ -22,7 +22,8 @@
             });
         }
 
-        return Promise.resolve(true);
+        console.warn('[Weline I18n] Confirmation component is unavailable; action cancelled.');
+        return Promise.resolve(false);
     }
 
     function toast(type, message) {

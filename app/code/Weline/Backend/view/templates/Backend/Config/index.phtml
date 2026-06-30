@@ -34,7 +34,7 @@ $configs = $configs ?? [];
                 <h4 class="card-title mb-4"><lang>外观与 Logo</lang></h4>
                 <p class="text-muted mb-4"><lang>配置后台 Logo（深色/浅色/小图）及站点名称、描述，将显示在顶部栏等位置。</lang></p>
                 
-                <form id="configForm" onsubmit="saveConfig(event)">
+                <form id="configForm">
                     <!-- Logo配置 -->
                     <div class="mb-4">
                         <h5 class="mb-3"><lang>Logo配置</lang></h5>
@@ -168,7 +168,7 @@ $configs = $configs ?? [];
                         <button type="submit" class="btn btn-primary">
                             <i class="mdi mdi-content-save me-2"></i><lang>保存配置</lang>
                         </button>
-                        <button type="button" class="btn btn-secondary ms-2" onclick="resetForm()">
+                        <button type="button" class="btn btn-secondary ms-2" data-config-action="reset">
                             <i class="mdi mdi-refresh me-2"></i><lang>重置</lang>
                         </button>
                     </div>
@@ -224,5 +224,20 @@ $configs = $configs ?? [];
             }
         });
     };
+
+    var configForm = document.getElementById('configForm');
+    if (configForm) {
+        configForm.addEventListener('submit', window.saveConfig);
+    }
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-config-action="reset"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        window.resetForm();
+    });
 })();
 </script>

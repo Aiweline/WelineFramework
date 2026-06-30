@@ -29,11 +29,18 @@
 $meta = $this->getData('meta') ?? [];
 $colors = $this->getData('colors') ?? [];
 
-// 新增参数
 $showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
 $showToolbar = $meta['showToolbar'] ?? $this->getData('showToolbar') ?? true;
-$filterDrawerTitle = $meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? __('筛选条件');
+$filterDrawerTitle = \Weline\Theme\Helper\WidgetI18n::label(
+    (string)($meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? '筛选条件')
+);
 $gridColumns = $meta['gridColumns'] ?? $this->getData('gridColumns') ?? 4;
+$isSearchLayout = (bool) $this->getData('is_search_layout');
+
+if ($isSearchLayout) {
+    $showFilters = false;
+    $showToolbar = false;
+}
 
 $meta['showFilters'] = $showFilters;
 $meta['showToolbar'] = $showToolbar;
@@ -42,14 +49,16 @@ $meta['gridColumns'] = $gridColumns;
 $this->assign('meta', $meta);
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product_list::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product_list::body-start</w:hook>
     
@@ -80,7 +89,25 @@ $this->assign('meta', $meta);
             <w:hook>Weline_Theme::frontend::layouts::product_list::content-before</w:hook>
 
             <!-- ========== 商品列表页主体区域 ========== -->
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-product-list-content,layout-default-content,content,product-list,product-filter,product-grid,product-toolbar,pagination,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="product-list-layout__content-root-slot">
             <main class="product-list-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-list-main" data-layout="product-list" data-columns="<?= (int)$gridColumns ?>">
+                <?php if ($isSearchLayout): ?>
+                    <div class="product-list-layout__container product-list-layout__container--search">
+                        <section class="product-list-layout__search-content">
+                            <if condition="meta.content">
+                                {{meta.content}}
+                            <elseif condition="meta.contentTemplate"/>
+                                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                            </if>
+                        </section>
+                    </div>
+                <?php else: ?>
                 <div class="product-list-layout__container">
                     <!-- ========== 筛选器侧边栏区域 ========== -->
                     <if condition="meta.showFilters">
@@ -96,7 +123,7 @@ $this->assign('meta', $meta);
                             <div class="product-list-layout__sidebar-content">
                                 <w:slot id="list-filters"
                                         name="筛选器区域"
-                                        accept="attribute-filter,price-filter,category-filter,rating-filter"
+                                        accept="layout-product-list-filters,category-filters,attribute-filter,price-filter,category-filter,rating-filter"
                                         multiple="true"
                                         position="sidebar">
                                     <w:hook>Weline_Theme::frontend::layouts::product_list::filters-before</w:hook>
@@ -130,12 +157,14 @@ $this->assign('meta', $meta);
                         <if condition="meta.showToolbar">
                             <w:slot id="list-toolbar"
                                     name="工具栏区域"
-                                    accept="sort-options,view-switcher,page-size-selector,active-filters"
+                                    accept="layout-product-list-toolbar,sort-options,view-switcher,page-size-selector,active-filters"
                                     multiple="true"
                                     position="content"
                                     class="product-list-layout__toolbar">
                                 <w:hook>Weline_Theme::frontend::layouts::product_list::toolbar-before</w:hook>
-                                <w:hook>WeShop_Product::frontend::layouts::product_list::toolbar-content<else/>
+                                <w:hook>
+                                    Weline_Theme::frontend::layouts::product_list::toolbar-content
+                                    <else/>
                                     <div class="product-list-layout__placeholder" data-placeholder="list-toolbar">
                                         <div class="product-list-layout__placeholder-icon">
                                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -153,12 +182,15 @@ $this->assign('meta', $meta);
                         <!-- ========== 产品网格区域 ========== -->
                         <w:slot id="list-grid"
                                 name="产品网格区域"
-                                accept="product-grid,product-list-view"
+                                accept="layout-product-list-grid,product-grid,product-list-view"
                                 exclusive="true"
+                                multiple="false"
                                 position="content"
                                 class="product-list-layout__grid">
                             <w:hook>Weline_Theme::frontend::layouts::product_list::grid-before</w:hook>
-                            <w:hook>WeShop_Product::frontend::layouts::product_list::grid-content<else/>
+                            <w:hook>
+                                Weline_Theme::frontend::layouts::product_list::grid-content
+                                <else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
                                 <else/>
@@ -178,12 +210,15 @@ $this->assign('meta', $meta);
                         <!-- ========== 分页区域 ========== -->
                         <w:slot id="list-pagination"
                                 name="分页区域"
-                                accept="pagination,load-more"
+                                accept="layout-product-list-pagination,pagination,load-more"
                                 exclusive="true"
+                                multiple="false"
                                 position="content"
                                 class="product-list-layout__pagination">
                             <w:hook>Weline_Theme::frontend::layouts::product_list::pagination-before</w:hook>
-                            <w:hook>WeShop_Product::frontend::layouts::product_list::pagination-content<else/>
+                            <w:hook>
+                                Weline_Theme::frontend::layouts::product_list::pagination-content
+                                <else/>
                                 <div class="product-list-layout__placeholder" data-placeholder="list-pagination">
                                     <span class="product-list-layout__placeholder-text"><lang>分页区域 - 控制器渲染分页组件</lang></span>
                                 </div>
@@ -192,12 +227,14 @@ $this->assign('meta', $meta);
                         </w:slot>
                     </div>
                 </div>
+                <?php endif; ?>
             </main>
 
             <!-- ========== 推荐产品区域 ========== -->
+            <?php if (!$isSearchLayout): ?>
             <w:slot id="list-recommendations"
                     name="推荐产品区域"
-                    accept="featured-products,bestsellers,new-arrivals,recently-viewed,product-carousel"
+                    accept="layout-product-list-recommendations,featured-products,bestsellers,new-arrivals,recently-viewed,you-may-like,product-carousel"
                     multiple="true"
                     position="content"
                     wrapper="section"
@@ -215,9 +252,12 @@ $this->assign('meta', $meta);
                 </div>
                 <w:hook>Weline_Theme::frontend::layouts::product_list::recommendations-after</w:hook>
             </w:slot>
+            <?php endif; ?>
 
             <!-- 移动端遮罩层 -->
             <div class="product-list-layout__overlay" id="product-list-overlay" data-overlay hidden></div>
+
+            </w:slot>
 
             <w:hook>Weline_Theme::frontend::layouts::product_list::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -238,65 +278,9 @@ $this->assign('meta', $meta);
 
     <w:hook>Weline_Theme::frontend::layouts::product_list::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <pixel name="weshop_product_list_behavior" enabled="yes" />
 
-    <script>
-    (function() {
-        'use strict';
 
-        // 移动端筛选抽屉功能
-        const filterToggle = document.querySelector('[data-filter-toggle]');
-        const filterSidebar = document.querySelector('[data-sidebar]');
-        const filterOverlay = document.querySelector('[data-overlay]');
-        const filterClose = document.querySelector('[data-sidebar-close]');
-
-        function openSidebar() {
-            if (!filterSidebar || !filterOverlay) return;
-            filterSidebar.classList.add('is-open');
-            filterOverlay.classList.add('is-visible');
-            filterToggle?.setAttribute('aria-expanded', 'true');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeSidebar() {
-            if (!filterSidebar || !filterOverlay) return;
-            filterSidebar.classList.remove('is-open');
-            filterOverlay.classList.remove('is-visible');
-            filterToggle?.setAttribute('aria-expanded', 'false');
-            document.body.style.overflow = '';
-        }
-
-        filterToggle?.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (filterSidebar?.classList.contains('is-open')) {
-                closeSidebar();
-            } else {
-                openSidebar();
-            }
-        });
-
-        filterClose?.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            closeSidebar();
-        });
-
-        filterOverlay?.addEventListener('click', function(e) {
-            e.preventDefault();
-            closeSidebar();
-        });
-
-        filterSidebar?.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && filterSidebar?.classList.contains('is-open')) {
-                closeSidebar();
-            }
-        });
-    })();
-    </script>
 
     <style>
     /* ========================================
@@ -311,21 +295,30 @@ $this->assign('meta', $meta);
 
     .product-list-layout__container {
         width: 100%;
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
         display: grid;
         grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
         gap: var(--spacing-6, 1.5rem);
         align-items: flex-start;
     }
 
+    .product-list-layout__container--search {
+        display: block;
+    }
+
+    .product-list-layout__search-content {
+        width: 100%;
+    }
+
     /* ---- 筛选侧边栏 ---- */
     .product-list-layout__sidebar {
         background-color: var(--color-bg-primary);
-        border: 1px solid var(--color-border-light);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         border-radius: var(--radius-lg, 12px);
-        box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+        box-shadow: var(--weline-theme-shadow-sm);
         position: sticky;
         top: calc(var(--header-height, 70px) + var(--spacing-4, 1rem));
         max-height: calc(100vh - var(--header-height, 70px) - var(--spacing-8, 4rem));
@@ -338,7 +331,7 @@ $this->assign('meta', $meta);
         align-items: center;
         justify-content: space-between;
         padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
-        border-bottom: 1px solid var(--color-border-light);
+        border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         background-color: var(--color-bg-primary);
         position: sticky;
         top: 0;
@@ -388,20 +381,20 @@ $this->assign('meta', $meta);
         gap: var(--spacing-2, 0.5rem);
         padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
         background-color: var(--color-bg-primary);
-        border: 1px solid var(--color-border-light);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
         border-radius: var(--radius-full, 9999px);
         cursor: pointer;
         color: var(--color-text-primary);
         font-size: var(--font-size-sm, 0.875rem);
         font-weight: var(--font-weight-medium, 500);
-        box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+        box-shadow: var(--weline-theme-shadow-md);
         transition: all 0.2s ease;
         margin-bottom: var(--spacing-4, 1rem);
     }
 
     .product-list-layout__filter-toggle:hover {
         background-color: var(--color-bg-secondary);
-        box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+        box-shadow: var(--weline-theme-shadow-lg);
     }
 
     .product-list-layout__filter-toggle[aria-expanded="true"] {
@@ -422,7 +415,7 @@ $this->assign('meta', $meta);
         padding: var(--spacing-4, 1rem);
         background-color: var(--color-bg-secondary);
         border-radius: var(--radius-lg, 12px);
-        border: 1px solid var(--color-border-light);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
     }
 
     /* ---- 产品网格 ---- */
@@ -444,16 +437,17 @@ $this->assign('meta', $meta);
     }
 
     .product-list-layout__recommendations-container {
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
     }
 
     /* ---- 遮罩层 ---- */
     .product-list-layout__overlay {
         position: fixed;
         inset: 0;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: color-mix(in srgb, var(--weline-theme-text) 50%, transparent);
         z-index: var(--z-index-overlay, 998);
         opacity: 0;
         visibility: hidden;
@@ -505,9 +499,9 @@ $this->assign('meta', $meta);
             width: min(85%, 360px);
             height: 100vh;
             max-height: 100vh;
-            border-radius: 0;
+            border-radius: var(--border-radius-none);
             border: none;
-            border-right: 1px solid var(--color-border-light);
+            border-right: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--color-border-light);
             z-index: var(--z-index-drawer, 999);
             transform: translateX(-100%);
             transition: transform 0.3s ease;
@@ -558,5 +552,6 @@ $this->assign('meta', $meta);
     </style>
 
     <!-- 编辑模式脚本由 ThemeEditor 控制器注入 -->
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

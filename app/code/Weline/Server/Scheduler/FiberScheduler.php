@@ -67,13 +67,12 @@ class FiberScheduler
     /**
      * 注册 yield 定时器（让出控制权，下一轮事件循环立即 resume）
      *
-     * 通过设置极小的延迟（约 0.000001 秒 = 1 微秒），确保在下一轮事件循环中
-     * getNextTimerDelay() 返回接近 0 的值，使 stream_select 几乎立即返回，
-     * 从而让 Worker 可以处理其他请求后再 resume 该 Fiber。
+     * Yield timers must be immediately due. On Windows, tiny non-zero waits can
+     * be rounded up by stream_select() to about 10-15ms and become render stalls.
      */
     public function addYieldTimer(\Fiber $fiber): void
     {
-        $this->addTimer($fiber, 0.000001);  // 1 微秒延迟，确保下一轮 tick
+        $this->addTimer($fiber, 0.0);
     }
 
     /**

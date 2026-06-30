@@ -79,6 +79,7 @@ class Request extends CommandAbstract
         $overridePort = isset($args['port']) || isset($args['P']) ? (int)($args['port'] ?? $args['P']) : null;
         // --https 强制 HTTPS，--http 强制 HTTP
         $overrideHttps = isset($args['https']) ? true : (isset($args['http']) ? false : null);
+        $instanceName = (string)($args['instance'] ?? $args['I'] ?? 'default');
         $isSse = isset($args['sse']) || isset($args['S']);
         $sessionId = $args['session'] ?? $args['sid'] ?? '';
 
@@ -120,7 +121,7 @@ class Request extends CommandAbstract
         }
 
         // 构建完整URL
-        $url = $this->buildUrl($path, $isBackend, $isApiBackend, $overridePort, $overrideHttps);
+        $url = $this->buildUrl($path, $isBackend, $isApiBackend, $overridePort, $overrideHttps, $instanceName);
         
         $this->printer->note(__('正在请求: %{1}', [$url]));
         $this->printer->note(__('请求方法: %{1}', [$method]));
@@ -143,8 +144,8 @@ class Request extends CommandAbstract
             return;
         }
         
-        // 发送HTTP请求（使用Guzzle）
-        $response = $this->sendGuzzleRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
+        // 发送HTTP请求
+        $response = $this->sendRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
         
         if ($response === false) {
             $this->printer->error(__('请求失败！'));
@@ -387,26 +388,40 @@ class Request extends CommandAbstract
      * WLS 模式下 server:start 默认启用 HTTPS，故请求默认使用 https；
      * 可通过 wls.https = false 改为 http。
      */
-    private function buildUrl(string $path, bool $isBackend, bool $isApiBackend = false, ?int $overridePort = null, ?bool $overrideHttps = null): string
+    private function buildUrl(
+        string $path,
+        bool $isBackend,
+        bool $isApiBackend = false,
+        ?int $overridePort = null,
+        ?bool $overrideHttps = null,
+        string $instanceName = 'default'
+    ): string
     {
         $env = Env::getInstance();
         $serverConfig = $env->get('wls') ?? [];
+        if (!\is_array($serverConfig)) {
+            $serverConfig = [];
+        }
+        $runtimeTarget = $this->resolveWlsRuntimeHttpTarget($instanceName);
         
         // 获取服务器配置（默认 0.0.0.0 监听所有网卡，支持公网访问）
-        $host = $serverConfig['host'] ?? '0.0.0.0';
-        $port = (int) ($serverConfig['port'] ?? 9981);
+        $host = (string) ($runtimeTarget['host'] ?? ($serverConfig['host'] ?? '0.0.0.0'));
+        $port = (int) ($runtimeTarget['port'] ?? ($serverConfig['port'] ?? 9981));
         // 命令行 --port/-P 覆盖
         if ($overridePort !== null) {
             $port = $overridePort;
         }
         // 若未显式配置 https，则根据端口推断：80 用 http，443 用 https，避免 https://host:80 导致 TLS 错误
-        $useHttps = \array_key_exists('https', $serverConfig)
-            ? (bool) $serverConfig['https']
-            : ($port === 443);
+        $useHttps = \array_key_exists('https', $runtimeTarget)
+            ? (bool) $runtimeTarget['https']
+            : (\array_key_exists('https', $serverConfig)
+                ? (bool) $serverConfig['https']
+                : ($port === 443));
         // 命令行 --https 覆盖
         if ($overrideHttps !== null) {
             $useHttps = $overrideHttps;
         }
+        $host = $this->normalizeCliTargetHost($host);
         $scheme = $useHttps ? 'https' : 'http';
         
         // 处理路径
@@ -454,18 +469,92 @@ class Request extends CommandAbstract
     }
 
     /**
+     * @return array{host?: string, port?: int, https?: bool}
+     */
+    private function resolveWlsRuntimeHttpTarget(string $instanceName): array
+    {
+        $instanceName = \trim($instanceName);
+        if ($instanceName === '') {
+            $instanceName = 'default';
+        }
+        $safeName = (string) \preg_replace('/[^A-Za-z0-9_.-]/', '', $instanceName);
+        if ($safeName === '' || $safeName !== $instanceName) {
+            return [];
+        }
+
+        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR
+            . 'instances' . DIRECTORY_SEPARATOR . $safeName . '.json';
+        if (!\is_file($instanceFile)) {
+            return [];
+        }
+
+        $raw = \file_get_contents($instanceFile);
+        if (!\is_string($raw) || \trim($raw) === '') {
+            return [];
+        }
+
+        $data = \json_decode($raw, true);
+        if (!\is_array($data)) {
+            return [];
+        }
+
+        $lifecycleState = \strtolower((string)($data['lifecycle_state'] ?? ''));
+        if (\in_array($lifecycleState, ['stopped', 'failed', 'master_exited'], true)) {
+            return [];
+        }
+
+        $port = (int)($data['port'] ?? ($data['main_port'] ?? 0));
+        if ($port <= 0) {
+            return [];
+        }
+
+        return [
+            'host' => $this->normalizeCliTargetHost((string)($data['host'] ?? '127.0.0.1')),
+            'port' => $port,
+            'https' => (bool)($data['ssl_enabled'] ?? false),
+        ];
+    }
+
+    private function normalizeCliTargetHost(string $host): string
+    {
+        $host = \trim($host);
+        $lowerHost = \strtolower($host);
+        if ($host === '' || $lowerHost === '0.0.0.0' || $host === '*') {
+            return '127.0.0.1';
+        }
+        if ($host === '::') {
+            return '[::1]';
+        }
+        if (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
+            return '[' . $host . ']';
+        }
+
+        return $host;
+    }
+
+    /**
      * 发送HTTP请求（支持HTTP/2）
      */
     private function sendRequest(
         string $url, 
         string $method = 'GET', 
         array $headers = [], 
-        string $body = '',
-        bool $verifyTls = false
+        string|array $body = '',
+        bool $verifyTls = false,
+        string $cookieFile = '',
+        bool $saveCookie = true
     ): array|false {
+        if (is_array($body)) {
+            $body = json_encode($body, JSON_UNESCAPED_UNICODE) ?: '';
+        }
+
         // 优先尝试使用cURL（支持HTTP/2）
         if (function_exists('curl_init')) {
-            return $this->sendCurlRequest($url, $method, $headers, $body, $verifyTls);
+            return $this->sendCurlRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
+        }
+
+        if (class_exists(\GuzzleHttp\Client::class)) {
+            return $this->sendGuzzleRequest($url, $method, $headers, $body, $verifyTls, $cookieFile, $saveCookie);
         }
         
         // 降级到file_get_contents
@@ -1369,6 +1458,7 @@ class Request extends CommandAbstract
                 '-H, header=<头>' => '添加HTTP请求头',
                 '-d, data=<数据>' => '发送POST/PUT数据',
                 '-P, --port=<端口>' => '指定服务器端口（覆盖wls.port）',
+                '-I, --instance=<name>' => 'Select WLS runtime instance metadata (default: default)',
                 '--https' => '强制使用HTTPS协议（覆盖wls.https）',
                 '-S, --sse' => '启用 SSE (Server-Sent Events) 模式，实时输出事件流',
                 '-C, --concurrent' => '启用并发请求模式（需配合-t使用）',

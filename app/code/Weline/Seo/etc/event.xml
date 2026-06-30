@@ -2,19 +2,30 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <!-- Store 保存后事件：入队 Feed 生成任务 -->
+    <!-- Store save still queues SEO feed generation. -->
     <event name="WeShop_Store::store_save_after">
         <observer name="Weline_Seo::store_save_after" instance="Weline\Seo\Observer\StoreSaveAfter" />
     </event>
 
-    <!-- 统一 URL 提交入口事件 -->
-    <event name="Weline_Seo::integration::url_submit_request">
-        <observer name="Weline_Seo::url_submit_request" instance="Weline\Seo\Observer\UrlSubmitRequest" />
-    </event>
-
-    <!-- 站点绑定SEO账户事件 -->
+    <!-- Website-account binding remains event driven. URL push submission is sourced from url_rewrite cron diff. -->
     <event name="Weline_Seo::domain::website_account_bind">
         <observer name="Weline_Seo::website_account_bind" instance="Weline\Seo\Observer\WebsiteAccountBind" />
     </event>
-</config>
 
+    <!-- Protocol file generation for /robots.txt and /sitemap.xml. -->
+    <event name="Weline_Websites::website_save_after">
+        <observer name="Weline_Seo::website_save_after" instance="Weline\Seo\Observer\WebsiteSaveAfter" disabled="false" shared="true" sort="20" />
+    </event>
+
+    <event name="Weline_Framework_Router::process_uri_before">
+        <observer name="Weline_Seo::protocol_route_rewrite" instance="Weline\Seo\Observer\ProtocolRouteRewrite" disabled="false" shared="true" sort="-100" />
+    </event>
+
+    <event name="Weline_Seo::integration::head_context_resolve">
+        <observer name="Weline_Theme::seo_faq_head_context_resolve"
+                  instance="Weline\Theme\Observer\SeoFaqHeadContextResolve"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
+</config>

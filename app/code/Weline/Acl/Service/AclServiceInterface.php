@@ -30,6 +30,25 @@ interface AclServiceInterface
     public function isRouteAllowed(int $roleId, string $routePath, string $httpMethod): bool;
 
     /**
+     * 鍒ゆ柇缁欏畾 ACL 璁板綍鍒楄〃鏄惁瀵硅矾鐢?HTTP 鏂规硶鏈夋潈闄愩€?
+     *
+     * @param array $entries ACL rows with route/method/access_mode fields.
+     * @param string $routePath
+     * @param string $httpMethod
+     * @param bool $enforceAccessMode true 时 read source 仅允许 GET/HEAD.
+     * @return bool
+     */
+    public function isRouteAllowedByEntries(array $entries, string $routePath, string $httpMethod, bool $enforceAccessMode = false): bool;
+
+    /**
+     * 给定 ACL 记录列表是否至少有一条权限。
+     *
+     * @param array $entries
+     * @return bool
+     */
+    public function hasAnyAclEntries(array $entries): bool;
+
+    /**
      * 判断给定路由是否存在 ACL 定义。
      *
      * 不存在 ACL 定义的路由视为“白色 ACL”，不参与权限控制。

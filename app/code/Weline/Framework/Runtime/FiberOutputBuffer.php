@@ -13,19 +13,23 @@ namespace Weline\Framework\Runtime;
  */
 final class FiberOutputBuffer
 {
+    private const MAX_CAPTURE_BYTES = 16777216;
+
+    private const MIN_MEMORY_HEADROOM_BYTES = 16777216;
+
     private static bool $installed = false;
 
     private static int $installedLevel = 0;
 
-    /** @var \WeakMap<\Fiber, string>|null */
-    private static ?\WeakMap $fiberBuffers = null;
+    /** @var \WeakMap<\Fiber, list<FiberOutputCaptureFrame>>|null */
+    private static ?\WeakMap $fiberBufferStacks = null;
 
-    /** @var \WeakMap<\Fiber, int>|null */
-    private static ?\WeakMap $fiberDepths = null;
+    /** @var list<FiberOutputCaptureFrame> */
+    private static array $mainBufferStack = [];
 
-    private static string $mainBuffer = '';
+    private static ?int $memoryLimitBytes = null;
 
-    private static int $mainDepth = 0;
+    private static int $missingFrameWarnings = 0;
 
     public static function install(): void
     {
@@ -46,7 +50,7 @@ final class FiberOutputBuffer
         $previousLevel = self::$installedLevel;
 
         if ($wasMarkedInstalled) {
-            self::resetInstalledState();
+            self::resetInstalledState(false);
         }
 
         \ob_start([self::class, 'handleOutputChunk'], 1);
@@ -78,7 +82,7 @@ final class FiberOutputBuffer
             && self::$installedLevel > 0
             && \ob_get_level() === self::$installedLevel;
 
-        self::resetInstalledState();
+        self::resetInstalledState(true);
 
         if ($shouldCloseActiveBuffer) {
             \ob_end_clean();
@@ -93,22 +97,17 @@ final class FiberOutputBuffer
         }
 
         self::ensureInstalled('begin_capture');
+        self::flushInstalledBufferIntoCurrentFrame();
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            if (self::$mainDepth === 0) {
-                self::$mainBuffer = '';
-            }
-            self::$mainDepth++;
+            self::$mainBufferStack[] = new FiberOutputCaptureFrame();
             return;
         }
 
-        self::$fiberBuffers ??= new \WeakMap();
-        self::$fiberDepths ??= new \WeakMap();
-        if (!isset(self::$fiberDepths[$fiber]) || self::$fiberDepths[$fiber] === 0) {
-            self::$fiberBuffers[$fiber] = '';
-            self::$fiberDepths[$fiber] = 0;
-        }
-        self::$fiberDepths[$fiber] = (int)self::$fiberDepths[$fiber] + 1;
+        self::$fiberBufferStacks ??= new \WeakMap();
+        $stack = self::$fiberBufferStacks[$fiber] ?? [];
+        $stack[] = new FiberOutputCaptureFrame();
+        self::$fiberBufferStacks[$fiber] = $stack;
     }
 
     public static function endCapture(): string
@@ -117,32 +116,38 @@ final class FiberOutputBuffer
             return (string)\ob_get_clean();
         }
 
+        self::flushInstalledBufferIntoCurrentFrame();
+
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            $result = self::$mainBuffer;
-            if (self::$mainDepth > 0) {
-                self::$mainDepth--;
+            if (self::$mainBufferStack === []) {
+                self::logMissingFrame('end_capture_main_empty');
+                return '';
             }
-            if (self::$mainDepth <= 0) {
-                self::$mainDepth = 0;
-                self::$mainBuffer = '';
-            }
-            return $result;
+
+            return self::finishFrame(\array_pop(self::$mainBufferStack));
         }
 
-        if (self::$fiberDepths === null || !isset(self::$fiberDepths[$fiber])) {
+        if (self::$fiberBufferStacks === null || !isset(self::$fiberBufferStacks[$fiber])) {
+            self::logMissingFrame('end_capture_fiber_missing');
             return '';
         }
 
-        $result = (string)(self::$fiberBuffers[$fiber] ?? '');
-        self::$fiberDepths[$fiber] = (int)self::$fiberDepths[$fiber] - 1;
-        if (self::$fiberDepths[$fiber] <= 0) {
-            unset(self::$fiberDepths[$fiber], self::$fiberBuffers[$fiber]);
-        } else {
-            self::$fiberBuffers[$fiber] = '';
+        $stack = self::$fiberBufferStacks[$fiber];
+        if ($stack === []) {
+            unset(self::$fiberBufferStacks[$fiber]);
+            self::logMissingFrame('end_capture_fiber_empty');
+            return '';
         }
 
-        return $result;
+        $frame = \array_pop($stack);
+        if ($stack === []) {
+            unset(self::$fiberBufferStacks[$fiber]);
+        } else {
+            self::$fiberBufferStacks[$fiber] = $stack;
+        }
+
+        return self::finishFrame($frame);
     }
 
     public static function discardCapture(): void
@@ -156,16 +161,24 @@ final class FiberOutputBuffer
 
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            self::$mainDepth = 0;
-            self::$mainBuffer = '';
+            if (self::$mainBufferStack !== []) {
+                \array_pop(self::$mainBufferStack);
+            }
             return;
         }
 
-        if (self::$fiberDepths !== null && isset(self::$fiberDepths[$fiber])) {
-            unset(self::$fiberDepths[$fiber]);
+        if (self::$fiberBufferStacks === null || !isset(self::$fiberBufferStacks[$fiber])) {
+            return;
         }
-        if (self::$fiberBuffers !== null && isset(self::$fiberBuffers[$fiber])) {
-            unset(self::$fiberBuffers[$fiber]);
+
+        $stack = self::$fiberBufferStacks[$fiber];
+        if ($stack !== []) {
+            \array_pop($stack);
+        }
+        if ($stack === []) {
+            unset(self::$fiberBufferStacks[$fiber]);
+        } else {
+            self::$fiberBufferStacks[$fiber] = $stack;
         }
     }
 
@@ -175,7 +188,76 @@ final class FiberOutputBuffer
             return;
         }
 
-        self::discardCapture();
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            self::$mainBufferStack = [];
+            return;
+        }
+
+        if (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+            unset(self::$fiberBufferStacks[$fiber]);
+        }
+    }
+
+    public static function flushBeforeYield(): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return true;
+        }
+
+        return self::flushInstalledBufferIntoCurrentFrame();
+    }
+
+    public static function hasActiveCapture(): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return \ob_get_level() > 0;
+        }
+
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return self::$mainBufferStack !== [];
+        }
+
+        return self::$fiberBufferStacks !== null
+            && isset(self::$fiberBufferStacks[$fiber])
+            && self::$fiberBufferStacks[$fiber] !== [];
+    }
+
+    public static function debugState(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        $stackDepth = 0;
+        $topBytes = 0;
+        if ($fiber === null) {
+            $stackDepth = \count(self::$mainBufferStack);
+            if (self::$mainBufferStack !== []) {
+                $topBytes = self::$mainBufferStack[\array_key_last(self::$mainBufferStack)]->bytes;
+            }
+        } elseif (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+            $stack = self::$fiberBufferStacks[$fiber];
+            $stackDepth = \count($stack);
+            if ($stack !== []) {
+                $topBytes = $stack[\array_key_last($stack)]->bytes;
+            }
+        }
+
+        $statuses = \ob_get_status(true);
+        $topStatus = $statuses !== [] ? $statuses[\array_key_last($statuses)] : [];
+
+        return [
+            'persistent' => Runtime::isPersistent(),
+            'installed' => self::$installed,
+            'installed_level' => self::$installedLevel,
+            'installed_active' => self::isInstalledBufferActive(),
+            'ob_level' => \ob_get_level(),
+            'ob_length' => \ob_get_length(),
+            'ob_top_name' => \is_array($topStatus) ? (string)($topStatus['name'] ?? '') : '',
+            'fiber_id' => $fiber instanceof \Fiber ? \spl_object_id($fiber) : null,
+            'stack_depth' => $stackDepth,
+            'top_bytes' => $topBytes,
+            'main_depth' => \count(self::$mainBufferStack),
+        ];
     }
 
     private static function handleChunk(string $chunk): string
@@ -186,19 +268,203 @@ final class FiberOutputBuffer
 
         $fiber = \Fiber::getCurrent();
         if ($fiber === null) {
-            if (self::$mainDepth > 0) {
-                self::$mainBuffer .= $chunk;
+            if (self::$mainBufferStack !== []) {
+                self::appendToFrame(self::$mainBufferStack[\array_key_last(self::$mainBufferStack)], $chunk);
             }
             return '';
         }
 
-        if (self::$fiberDepths !== null && isset(self::$fiberDepths[$fiber]) && self::$fiberDepths[$fiber] > 0) {
-            self::$fiberBuffers ??= new \WeakMap();
-            $current = self::$fiberBuffers[$fiber] ?? '';
-            self::$fiberBuffers[$fiber] = $current . $chunk;
+        if (self::$fiberBufferStacks !== null && isset(self::$fiberBufferStacks[$fiber])) {
+            $stack = self::$fiberBufferStacks[$fiber];
+            if ($stack !== []) {
+                self::appendToFrame($stack[\array_key_last($stack)], $chunk);
+            }
         }
 
         return '';
+    }
+
+    private static function flushInstalledBufferIntoCurrentFrame(): bool
+    {
+        if (!self::isInstalledBufferActive()) {
+            return true;
+        }
+
+        // Only flush when our process-level handler is the top buffer. If a
+        // legacy native ob_start() is above it, flushing here would drain that
+        // caller's private buffer into the wrong template capture.
+        if (\ob_get_level() !== self::$installedLevel) {
+            return false;
+        }
+
+        @\ob_flush();
+        return true;
+    }
+
+    private static function appendToFrame(FiberOutputCaptureFrame $frame, string $chunk): void
+    {
+        if ($chunk === '' || $frame->overflowed) {
+            return;
+        }
+
+        $chunkBytes = \strlen($chunk);
+        $overflowContext = self::buildAppendOverflowContext($frame->bytes, $chunkBytes);
+        if ($overflowContext !== null) {
+            $frame->buffer = '';
+            $frame->bytes = 0;
+            $frame->overflowed = true;
+            $frame->overflowContext = $overflowContext;
+            return;
+        }
+
+        $frame->buffer .= $chunk;
+        $frame->bytes += $chunkBytes;
+    }
+
+    private static function finishFrame(FiberOutputCaptureFrame $frame): string
+    {
+        if ($frame->overflowed) {
+            self::logOverflow($frame->overflowContext);
+            throw new \OverflowException(
+                'WLS output capture exceeded safe memory limits; request output was discarded before it could crash the worker.'
+                . self::formatOverflowContext($frame->overflowContext)
+            );
+        }
+
+        return $frame->buffer;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function buildAppendOverflowContext(int $currentBytes, int $chunkBytes): ?array
+    {
+        if ($chunkBytes <= 0) {
+            return null;
+        }
+
+        if ($currentBytes > self::MAX_CAPTURE_BYTES - $chunkBytes) {
+            return self::buildOverflowContext(
+                'capture_limit',
+                $currentBytes,
+                $chunkBytes,
+                0,
+                0,
+                0
+            );
+        }
+
+        $memoryLimit = self::getMemoryLimitBytes();
+        if ($memoryLimit <= 0) {
+            return null;
+        }
+
+        $projectedAppendBytes = $currentBytes + $chunkBytes + self::MIN_MEMORY_HEADROOM_BYTES;
+        // In persistent workers memory_get_usage(true) includes arena pages that
+        // PHP may reuse after previous large requests. Guard against live memory
+        // pressure, while logging real usage separately for diagnostics.
+        $memoryUsage = \memory_get_usage(false);
+        $realMemoryUsage = \memory_get_usage(true);
+
+        if ($memoryUsage + $projectedAppendBytes >= $memoryLimit) {
+            return self::buildOverflowContext(
+                'memory_headroom',
+                $currentBytes,
+                $chunkBytes,
+                $memoryUsage,
+                $memoryLimit,
+                $projectedAppendBytes,
+                $realMemoryUsage
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function buildOverflowContext(
+        string $reason,
+        int $currentBytes,
+        int $chunkBytes,
+        int $memoryUsage,
+        int $memoryLimit,
+        int $projectedAppendBytes,
+        int $realMemoryUsage = 0
+    ): array {
+        $fiber = \Fiber::getCurrent();
+        $memoryUsage = $memoryUsage > 0 ? $memoryUsage : \memory_get_usage(false);
+        $realMemoryUsage = $realMemoryUsage > 0 ? $realMemoryUsage : \memory_get_usage(true);
+
+        return [
+            'reason' => $reason,
+            'request_id' => (string)(RequestContext::getId() ?? ''),
+            'uri' => (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '(none)'),
+            'fiber_id' => $fiber instanceof \Fiber ? \spl_object_id($fiber) : null,
+            'current_bytes' => $currentBytes,
+            'chunk_bytes' => $chunkBytes,
+            'max_capture_bytes' => self::MAX_CAPTURE_BYTES,
+            'memory_usage' => $memoryUsage,
+            'memory_real_usage' => $realMemoryUsage,
+            'memory_limit' => $memoryLimit,
+            'min_memory_headroom' => self::MIN_MEMORY_HEADROOM_BYTES,
+            'projected_append_bytes' => $projectedAppendBytes,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private static function formatOverflowContext(array $context): string
+    {
+        if ($context === []) {
+            return '';
+        }
+
+        $fields = [];
+        foreach ([
+            'reason',
+            'current_bytes',
+            'chunk_bytes',
+            'max_capture_bytes',
+            'memory_usage',
+            'memory_real_usage',
+            'memory_limit',
+            'min_memory_headroom',
+            'projected_append_bytes',
+            'request_id',
+            'uri',
+        ] as $key) {
+            if (!\array_key_exists($key, $context)) {
+                continue;
+            }
+            $value = $context[$key];
+            if (\is_scalar($value) || $value === null) {
+                $fields[] = $key . '=' . (string)$value;
+            }
+        }
+
+        return $fields === [] ? '' : ' (' . \implode(', ', $fields) . ')';
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private static function logOverflow(array $context): void
+    {
+        $message = '[FiberOutputBufferOverflow] '
+            . (\json_encode($context, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}');
+
+        if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
+            try {
+                \Weline\Server\Log\WlsLogger::warning_($message);
+                return;
+            } catch (\Throwable) {
+            }
+        }
+
+        \error_log($message);
     }
 
     private static function isInstalledBufferActive(): bool
@@ -220,14 +486,37 @@ final class FiberOutputBuffer
         return (string)($status['name'] ?? '') === self::handlerName();
     }
 
-    private static function resetInstalledState(): void
+    private static function resetInstalledState(bool $clearCaptureStacks = true): void
     {
         self::$installed = false;
         self::$installedLevel = 0;
-        self::$fiberBuffers = null;
-        self::$fiberDepths = null;
-        self::$mainBuffer = '';
-        self::$mainDepth = 0;
+        if ($clearCaptureStacks) {
+            self::$fiberBufferStacks = null;
+            self::$mainBufferStack = [];
+        }
+    }
+
+    private static function getMemoryLimitBytes(): int
+    {
+        if (self::$memoryLimitBytes !== null) {
+            return self::$memoryLimitBytes;
+        }
+
+        $raw = \trim((string)\ini_get('memory_limit'));
+        if ($raw === '' || $raw === '-1') {
+            return self::$memoryLimitBytes = 0;
+        }
+
+        $unit = \strtolower($raw[-1]);
+        $value = (float)$raw;
+        self::$memoryLimitBytes = (int)match ($unit) {
+            'g' => $value * 1024 * 1024 * 1024,
+            'm' => $value * 1024 * 1024,
+            'k' => $value * 1024,
+            default => $value,
+        };
+
+        return self::$memoryLimitBytes;
     }
 
     private static function handlerName(): string
@@ -244,7 +533,7 @@ final class FiberOutputBuffer
         try {
             \Weline\Server\Log\WlsLogger::warning_(
                 '[FiberOutputBufferRecovered] reason=' . ($reason !== '' ? $reason : 'unknown')
-                . ' uri=' . (string)($_SERVER['REQUEST_URI'] ?? '(none)')
+                . ' uri=' . (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '(none)')
                 . ' previous_level=' . $previousLevel
                 . ' current_ob_level=' . \ob_get_level()
                 . ' new_level=' . self::$installedLevel
@@ -253,4 +542,39 @@ final class FiberOutputBuffer
             // Recovery must not fail because diagnostics are unavailable.
         }
     }
+
+    private static function logMissingFrame(string $reason): void
+    {
+        if (self::$missingFrameWarnings >= 50) {
+            return;
+        }
+        self::$missingFrameWarnings++;
+
+        $message = '[FiberOutputBufferMissingFrame] reason=' . $reason
+            . ' request_id=' . (string)(RequestContext::getId() ?? '')
+            . ' uri=' . (string)\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '(none)')
+            . ' state=' . (\json_encode(self::debugState(), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) ?: '{}');
+
+        if (\class_exists(\Weline\Server\Log\WlsLogger::class, false)) {
+            try {
+                \Weline\Server\Log\WlsLogger::warning_($message);
+                return;
+            } catch (\Throwable) {
+            }
+        }
+
+        \error_log($message);
+    }
+}
+
+final class FiberOutputCaptureFrame
+{
+    public string $buffer = '';
+
+    public int $bytes = 0;
+
+    public bool $overflowed = false;
+
+    /** @var array<string, mixed> */
+    public array $overflowContext = [];
 }

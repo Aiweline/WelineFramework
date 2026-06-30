@@ -7,6 +7,24 @@ final class EventExtLoop implements EventLoopInterface
 {
     private \EventBase $base;
 
+    /** @var array<int, \Event> */
+    private array $readWatchers = [];
+
+    /** @var array<int, \Event> */
+    private array $writeWatchers = [];
+
+    /** @var array<int, resource> */
+    private array $readResources = [];
+
+    /** @var array<int, resource> */
+    private array $writeResources = [];
+
+    /** @var array<int, resource> */
+    private array $readyRead = [];
+
+    /** @var array<int, resource> */
+    private array $readyWrite = [];
+
     public function __construct()
     {
         if (!\extension_loaded('event') || !\class_exists(\EventBase::class) || !\class_exists(\Event::class)) {
@@ -22,50 +40,14 @@ final class EventExtLoop implements EventLoopInterface
         int $timeoutSec,
         int $timeoutUsec
     ): int|false {
-        $base = $this->base;
-        $readyRead = [];
-        $readyWrite = [];
-        $watchers = [];
         $timeout = $this->normalizeTimeout($timeoutSec, $timeoutUsec);
+        $this->readyRead = [];
+        $this->readyWrite = [];
 
-        foreach ($read as $resource) {
-            if (!\is_resource($resource)) {
-                continue;
-            }
-            $rid = \get_resource_id($resource);
-            $event = new \Event(
-                $base,
-                $resource,
-                \Event::READ,
-                static function () use (&$readyRead, $rid, $resource): void {
-                    $readyRead[$rid] = $resource;
-                }
-            );
-            if ($event->add($timeout)) {
-                $watchers[] = $event;
-            }
-        }
+        $this->syncWatchers($read, true);
+        $this->syncWatchers($write, false);
 
-        foreach ($write as $resource) {
-            if (!\is_resource($resource)) {
-                continue;
-            }
-            $rid = \get_resource_id($resource);
-            $event = new \Event(
-                $base,
-                $resource,
-                \Event::WRITE,
-                static function () use (&$readyWrite, $rid, $resource): void {
-                    $readyWrite[$rid] = $resource;
-                }
-            );
-            if ($event->add($timeout)) {
-                $watchers[] = $event;
-            }
-        }
-
-        // 无 watcher 时，退化为定时等待，保持 wait 语义一致。
-        if ($watchers === []) {
+        if ($this->readWatchers === [] && $this->writeWatchers === []) {
             if ($timeout > 0.0) {
                 \usleep((int) \round($timeout * 1_000_000));
             }
@@ -75,10 +57,27 @@ final class EventExtLoop implements EventLoopInterface
             return 0;
         }
 
-        $loopResult = $base->loop(\EventBase::LOOP_ONCE);
-        foreach ($watchers as $watcher) {
-            $watcher->del();
-            $watcher->free();
+        $timer = null;
+        if ($timeout > 0.0) {
+            $timer = new \Event(
+                $this->base,
+                -1,
+                \Event::TIMEOUT,
+                static function (): void {
+                }
+            );
+            $timer->add($timeout);
+        }
+
+        $flags = \EventBase::LOOP_ONCE;
+        if ($timeout <= 0.0) {
+            $flags |= \EventBase::LOOP_NONBLOCK;
+        }
+
+        $loopResult = $this->base->loop($flags);
+        if ($timer instanceof \Event) {
+            $timer->del();
+            $timer->free();
         }
 
         if ($loopResult === false || $loopResult < 0) {
@@ -88,8 +87,8 @@ final class EventExtLoop implements EventLoopInterface
             return false;
         }
 
-        $read = \array_values($readyRead);
-        $write = \array_values($readyWrite);
+        $read = \array_values(\array_intersect_key($this->readyRead, $this->readWatchers));
+        $write = \array_values(\array_intersect_key($this->readyWrite, $this->writeWatchers));
         $except = [];
 
         return \count($read) + \count($write);
@@ -111,5 +110,85 @@ final class EventExtLoop implements EventLoopInterface
 
         return ((float) $timeoutSec) + (((float) $timeoutUsec) / 1_000_000.0);
     }
-}
 
+    private function syncWatchers(array $resources, bool $read): void
+    {
+        $requested = [];
+        foreach ($resources as $resource) {
+            if (!\is_resource($resource)) {
+                continue;
+            }
+            $rid = \get_resource_id($resource);
+            $requested[$rid] = $resource;
+            $stored = $read ? ($this->readResources[$rid] ?? null) : ($this->writeResources[$rid] ?? null);
+            if (\is_resource($stored) && $stored === $resource) {
+                continue;
+            }
+
+            $this->removeWatcher($rid, $read);
+            $this->addWatcher($rid, $resource, $read);
+        }
+
+        $watchers = $read ? $this->readWatchers : $this->writeWatchers;
+        foreach (\array_keys($watchers) as $rid) {
+            if (!isset($requested[$rid])) {
+                $this->removeWatcher((int) $rid, $read);
+            }
+        }
+    }
+
+    private function addWatcher(int $rid, mixed $resource, bool $read): void
+    {
+        if (!\is_resource($resource)) {
+            return;
+        }
+
+        $event = new \Event(
+            $this->base,
+            $resource,
+            ($read ? \Event::READ : \Event::WRITE) | \Event::PERSIST,
+            function (mixed $fd, int $what) use ($rid, $resource, $read): void {
+                $expected = $read ? \Event::READ : \Event::WRITE;
+                if (($what & $expected) === 0 || !\is_resource($resource)) {
+                    return;
+                }
+                if ($read) {
+                    $this->readyRead[$rid] = $resource;
+                    return;
+                }
+                $this->readyWrite[$rid] = $resource;
+            }
+        );
+
+        if (!$event->add()) {
+            $event->free();
+            return;
+        }
+
+        if ($read) {
+            $this->readWatchers[$rid] = $event;
+            $this->readResources[$rid] = $resource;
+            return;
+        }
+
+        $this->writeWatchers[$rid] = $event;
+        $this->writeResources[$rid] = $resource;
+    }
+
+    private function removeWatcher(int $rid, bool $read): void
+    {
+        $watchers = $read ? $this->readWatchers : $this->writeWatchers;
+        if (!isset($watchers[$rid])) {
+            return;
+        }
+
+        $watchers[$rid]->del();
+        $watchers[$rid]->free();
+        if ($read) {
+            unset($this->readWatchers[$rid], $this->readResources[$rid], $this->readyRead[$rid]);
+            return;
+        }
+
+        unset($this->writeWatchers[$rid], $this->writeResources[$rid], $this->readyWrite[$rid]);
+    }
+}

@@ -13,6 +13,8 @@
     // 存储键名
     const COOKIE_KEY = 'weline_delivery_location';
     const STORAGE_KEY = 'weline_delivery_location';
+    const SYNC_FLAG_KEY = 'weline_delivery_location_synced';
+    let deliveryAddressApiPromise = null;
     const MANUAL_SELECT_FLAG_KEY = 'weline_shipping_address_manual_selected'; // 用户是否手动选择过地址
     
     /**
@@ -92,27 +94,25 @@
             console.error('设置手动选择标志失败:', e);
         }
     }
+
+    function getDeliveryAddressApi() {
+        if (!deliveryAddressApiPromise) {
+            deliveryAddressApiPromise = window.Weline && window.Weline.Api
+                ? window.Weline.Api.resource('deliveryAddress')
+                : Promise.reject(new Error('Weline.Api is unavailable.'));
+        }
+        return deliveryAddressApiPromise;
+    }
     
     /**
      * 更新地址到session（通过API）
      */
     async function updateToSession(address) {
         try {
-            const response = await fetch('/shipping/rest/v1/frontend/delivery-address/update-session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(address)
-            });
-            
-            if (!response.ok) {
-                throw new Error('更新session失败');
-            }
-            
-            const result = await response.json();
-            if (result.code !== 200) {
-                throw new Error(result.msg || '更新session失败');
+            const DeliveryAddressApi = await getDeliveryAddressApi();
+            const result = await DeliveryAddressApi.updateSession(address, {silent: true});
+            if (!result || result.success === false) {
+                throw new Error((result && (result.message || result.msg)) || '更新session失败');
             }
             
             return result.data;
@@ -138,22 +138,11 @@
                 return; // 没有存储的地址
             }
             
-            // 调用同步API
-            const response = await fetch('/shipping/rest/v1/frontend/delivery-address/sync-from-browser', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ address: address })
-            });
-            
-            if (!response.ok) {
-                throw new Error('同步失败');
-            }
-            
-            const result = await response.json();
-            if (result.code !== 200) {
-                throw new Error(result.msg || '同步失败');
+            // 调用 worker API 同步
+            const DeliveryAddressApi = await getDeliveryAddressApi();
+            const result = await DeliveryAddressApi.syncFromBrowser({ address: address }, {silent: true});
+            if (!result || result.success === false) {
+                throw new Error((result && (result.message || result.msg)) || '同步失败');
             }
             
             // 标记为已同步
@@ -255,27 +244,16 @@
                 }
             }
             
-            // 调用接口获取配送信息
-            const response = await fetch('/shipping/rest/v1/frontend/shipping-info/get-by-location', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    country_code: location.countryCode || 'CN',
-                    province: location.province || '',
-                    city: location.city || '',
-                    district: location.district || ''
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('获取配送信息失败');
-            }
-            
-            const result = await response.json();
-            if (result.code !== 200) {
-                throw new Error(result.msg || '获取配送信息失败');
+            // 调用 worker API 获取配送信息
+            const DeliveryAddressApi = await getDeliveryAddressApi();
+            const result = await DeliveryAddressApi.shippingInfoByLocation({
+                country_code: location.countryCode || location.country_code || 'CN',
+                province: location.province || '',
+                city: location.city || '',
+                district: location.district || ''
+            }, {silent: true});
+            if (!result || result.success === false) {
+                throw new Error((result && (result.message || result.msg)) || '获取配送信息失败');
             }
             
             const shippingInfo = result.data;

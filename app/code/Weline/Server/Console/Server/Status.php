@@ -18,10 +18,10 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Framework\App\Env;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\ServerInstanceManager;
-use Weline\Server\Service\SharedStateServiceManager;
 
 /**
  * server:status - 查看服务器状态
@@ -37,6 +37,18 @@ class Status extends CommandAbstract
         $instanceName = $this->parseInstanceName($args);
         $showAll = isset($args['all']) || isset($args['a']) || $instanceName === '';
         $watchMode = isset($args['w']) || isset($args['watch']);
+        $doctorMode = isset($args['doctor']);
+        $jsonMode = isset($args['json']);
+
+        if ($doctorMode) {
+            $diagnostics = (new Doctor())->buildDiagnostics($instanceName);
+            if ($jsonMode) {
+                echo \json_encode($diagnostics, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+                return;
+            }
+            (new Doctor())->execute(['server:doctor', $instanceName], []);
+            return;
+        }
 
         if ($watchMode) {
             $this->runWatchMode($instanceName, $showAll);
@@ -99,7 +111,7 @@ class Status extends CommandAbstract
     {
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        return $manager->isInstanceRunning($name);
+        return $manager->hasInstance($name);
     }
     
     /**
@@ -109,7 +121,7 @@ class Status extends CommandAbstract
     {
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        $allInstances = $manager->getAllInstanceInfo(false);
+        $allInstances = $manager->getAllPersistedInstanceInfo();
         $processInfoMap = $this->buildProcessInfoMap($allInstances);
         $allInstances = $this->filterActiveInstances($allInstances, $processInfoMap);
 
@@ -202,10 +214,10 @@ class Status extends CommandAbstract
             $index++;
         }
 
-        $this->showSharedDependencies();
 
         $this->printer->note(__('使用 server:status <name> 查看详细状态'));
         $this->printer->note(__('使用 server:stop <name> 停止实例'));
+        $this->printer->note(__('如有残留 endpoint 文件，可执行 server:clean 清理未运行记录'));
     }
     
     /**
@@ -216,7 +228,7 @@ class Status extends CommandAbstract
     protected function showInstanceStatus(string $name): void
     {
         $manager = $this->getInstanceManager();
-        $info = $manager->getInstanceInfo($name, false);
+        $info = $manager->getInstanceInfoWithIpcTimeout($name, false, 0.5);
 
         if ($info === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
@@ -226,7 +238,8 @@ class Status extends CommandAbstract
         }
         
         $processInfoMap = $this->buildProcessInfoMap([$name => $info]);
-        $masterRunning = $this->isMasterRunning($info, $processInfoMap);
+        $masterRuntimeState = $this->resolveMasterRuntimeState($info, $processInfoMap);
+        $masterRunning = (bool) $masterRuntimeState['running'];
         
         $this->printer->setup(__('实例 [%{1}] 状态', [$name]));
         echo "\n";
@@ -246,6 +259,10 @@ class Status extends CommandAbstract
         $selfHealMode = $this->resolveSelfHealMode();
         $this->printer->note(\sprintf('║  ' . __('Master 自愈：') . '%-46s║', $selfHealMode));
         $this->printer->note('╚══════════════════════════════════════════════════════════════╝');
+        if ((string) ($masterRuntimeState['message'] ?? '') !== '') {
+            $this->printer->warning((string) $masterRuntimeState['message']);
+        }
+        $this->showStartupFailureSummary($info);
         echo "\n";
         
         // 进程架构展示
@@ -266,7 +283,6 @@ class Status extends CommandAbstract
         
         // 显示所有服务实例（按优先级排序，使用预取的内存信息）
         $this->showServicesTree($info, $processInfoMap);
-        $this->showSharedDependencies();
 
         // 总结
         $stats = $this->getServiceStats($info, $processInfoMap);
@@ -282,8 +298,86 @@ class Status extends CommandAbstract
         }
         
         echo "\n";
-        $this->printer->note(__('测试请求：curl %{1}/', [$info->getListenAddress()]));
+        $this->printer->note(__('测试请求：curl %{1}/', [$this->buildTestCurlTarget($info)]));
         $this->printer->note(__('停止服务：php bin/w server:stop %{1}', [$name]));
+    }
+
+    protected function showStartupFailureSummary(ServerInstanceInfo $info): void
+    {
+        if ($info->startupFailureReason === ''
+            && $info->startupFailureCode === ''
+            && $info->startupFailureDiagnostics === []) {
+            return;
+        }
+
+        echo "\n";
+        $this->printer->error(__('启动失败详情：'));
+        if ($info->startupFailureCode !== '') {
+            $this->printer->warning('  code: ' . $info->startupFailureCode);
+        }
+        if ($info->startupFailureClass !== '') {
+            $this->printer->note('  class: ' . $info->startupFailureClass);
+        }
+        if ($info->startupFailureReason !== '') {
+            $this->printer->warning('  reason: ' . $info->startupFailureReason);
+        }
+
+        $context = $this->formatStartupFailureContextSummary($info->startupFailureContext);
+        if ($context !== '') {
+            $this->printer->note('  context: ' . $context);
+        }
+
+        $diagnostics = \array_slice($info->startupFailureDiagnostics, 0, 8);
+        foreach ($diagnostics as $diagnostic) {
+            $diagnostic = \trim((string)$diagnostic);
+            if ($diagnostic !== '') {
+                $this->printer->note('  diagnostic: ' . $diagnostic);
+            }
+        }
+    }
+
+    protected function formatStartupFailureContextSummary(array $context): string
+    {
+        $parts = [];
+        foreach ([
+            'instance',
+            'main_port',
+            'control_port',
+            'worker_count',
+            'dispatcher_enabled',
+            'ssl_enabled',
+            'startup_timeout_sec',
+            'elapsed_sec',
+        ] as $key) {
+            if (!\array_key_exists($key, $context)) {
+                continue;
+            }
+            $value = $context[$key];
+            if (\is_bool($value)) {
+                $value = $value ? 'true' : 'false';
+            } elseif (\is_array($value)) {
+                continue;
+            }
+            $parts[] = $key . '=' . (string)$value;
+        }
+
+        return \implode(', ', $parts);
+    }
+
+    protected function buildTestCurlTarget(ServerInstanceInfo $info): string
+    {
+        $scheme = $info->sslEnabled ? 'https' : 'http';
+        $host = \strtolower(\trim($info->host));
+        if ($host === '' || $host === '0.0.0.0' || $host === '*') {
+            $host = '127.0.0.1';
+        } elseif ($host === '::') {
+            $host = '[::1]';
+        } elseif (\str_contains($host, ':') && !\str_starts_with($host, '[')) {
+            $host = '[' . $host . ']';
+        }
+
+        $target = $scheme . '://' . $host . ':' . $info->port;
+        return $info->sslEnabled ? '-k ' . $target : $target;
     }
 
     /**
@@ -363,14 +457,24 @@ class Status extends CommandAbstract
         $color = $isRunning ? 'success' : 'error';
         $prefix = $isLast ? '└─' : '├─';
         
-        $portStr = $service->port !== null && $service->port > 0 ? (__('端口：') . $service->port) : '';
+        $details = [];
+        $trackingPid = $service->getTrackingPid();
+        if ($trackingPid > 0) {
+            $details[] = 'PID: ' . $trackingPid;
+        }
+        if ($service->pid > 0 && $trackingPid > 0 && $service->pid !== $trackingPid) {
+            $details[] = 'child: ' . $service->pid;
+        }
+        if ($service->port !== null && $service->port > 0) {
+            $details[] = __('端口：') . $service->port;
+        }
 
-        $label = $service->displayName . ' #' . $service->instanceId . ' (' . $portStr . ')';
+        $detailStr = $details === [] ? '' : ' (' . \implode(', ', $details) . ')';
+        $label = $service->displayName . ' #' . $service->instanceId . $detailStr;
         
         $this->printer->$color("  │");
         $this->printer->$color("  {$prefix} {$label} {$icon} {$statusStr}");
         
-        $trackingPid = $service->getTrackingPid();
         if ($isRunning && $trackingPid > 0) {
             $memPrefix = $isLast ? '   ' : '│  ';
             // 使用预取的内存信息（避免逐个查询）
@@ -389,22 +493,8 @@ class Status extends CommandAbstract
     protected function filterActiveInstances(array $instances, array $processInfoMap): array
     {
         $active = [];
-        $manager = $this->getInstanceManager();
         foreach ($instances as $name => $info) {
-            $rawData = $manager->getRawInstanceData($name) ?? [];
-            $masterRunning = $this->isMasterRunning($info, $processInfoMap);
-            $state = (string)($rawData['lifecycle_state'] ?? $rawData['startup_phase'] ?? '');
-            $starterPid = (int)($rawData['pid'] ?? 0);
-            $serviceStats = $this->getServiceStats($info, $processInfoMap, false);
-            if (!$masterRunning
-                && $serviceStats['running'] <= 0
-                && (
-                    \in_array($state, ['stopped', 'stale_cleanup'], true)
-                    || (empty($rawData['services']) && empty($rawData['master_enabled']) && ($starterPid <= 0 || !Processer::processExists($starterPid)))
-                )) {
-                continue;
-            }
-            if ($masterRunning || $serviceStats['running'] > 0) {
+            if ($this->isMasterRunning($info, $processInfoMap)) {
                 $active[$name] = $info;
             }
         }
@@ -420,17 +510,30 @@ class Status extends CommandAbstract
     {
         $pids = [];
         foreach ($instances as $info) {
+            if (!$info instanceof ServerInstanceInfo) {
+                continue;
+            }
             if ($info->masterPid > 0) {
-                $pids[$info->masterPid] = $info->masterPid;
+                $pids[$info->masterPid] = true;
             }
             foreach ($info->services as $service) {
                 foreach ($service->getManagedPids() as $pid) {
-                    $pids[$pid] = $pid;
+                    if ($pid > 0) {
+                        $pids[$pid] = true;
+                    }
+                }
+                $trackingPid = $service->getTrackingPid();
+                if ($trackingPid > 0) {
+                    $pids[$trackingPid] = true;
                 }
             }
         }
 
-        return $pids === [] ? [] : Processer::batchGetProcessInfo(\array_values($pids));
+        if ($pids === []) {
+            return [];
+        }
+
+        return Processer::batchGetProcessInfo(\array_map('intval', \array_keys($pids)));
     }
 
     /**
@@ -438,11 +541,63 @@ class Status extends CommandAbstract
      */
     protected function isMasterRunning(ServerInstanceInfo $info, array $processInfoMap): bool
     {
+        return (bool) $this->resolveMasterRuntimeState($info, $processInfoMap)['running'];
+    }
+
+    /**
+     * IPC is the primary health signal. If it times out, fall back to the
+     * managed Master PID check so a busy control plane is not reported as
+     * stopped while the process is still alive.
+     *
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     * @return array{running: bool, ipc_ok: bool, source: string, message: string}
+     */
+    protected function resolveMasterRuntimeState(ServerInstanceInfo $info, array $processInfoMap): array
+    {
         if ($info->masterPid <= 0) {
-            return false;
+            return [
+                'running' => false,
+                'ipc_ok' => false,
+                'source' => 'metadata',
+                'message' => '',
+            ];
         }
 
-        return (bool) ($processInfoMap[$info->masterPid]['exists'] ?? false);
+        $pidRunning = (bool) ($processInfoMap[$info->masterPid]['exists'] ?? false);
+        if (!$pidRunning && $processInfoMap === []) {
+            $pidRunning = $info->isMasterRunning();
+        }
+
+        if ($info->controlPort > 0) {
+            $gateway = new IpcControlGateway();
+            $status = $gateway->getStatusBrief($info->name, 0.5);
+            if ($status['success'] && (bool)($status['data']['running'] ?? false)) {
+                return [
+                    'running' => true,
+                    'ipc_ok' => true,
+                    'source' => 'ipc',
+                    'message' => '',
+                ];
+            }
+        }
+
+        if ($pidRunning) {
+            return [
+                'running' => true,
+                'ipc_ok' => false,
+                'source' => 'pid',
+                'message' => __(
+                    'Master PID is running, but IPC status did not respond within 0.5s; the control plane may be busy or in an orchestrator full-restart cycle.'
+                ),
+            ];
+        }
+
+        return [
+            'running' => false,
+            'ipc_ok' => false,
+            'source' => 'pid',
+            'message' => '',
+        ];
     }
 
     /**
@@ -452,6 +607,10 @@ class Status extends CommandAbstract
     {
         $trackingPid = $service->getTrackingPid();
         if ($trackingPid > 0) {
+            if ($processInfoMap === []) {
+                return $service->isExpectedRunningState();
+            }
+
             if ((bool) ($processInfoMap[$trackingPid]['exists'] ?? false)) {
                 return true;
             }
@@ -474,14 +633,11 @@ class Status extends CommandAbstract
      * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
      * @return array{total: int, running: int, stopped: int}
      */
-    protected function getServiceStats(ServerInstanceInfo $info, array $processInfoMap, bool $includeSharedExternal = true): array
+    protected function getServiceStats(ServerInstanceInfo $info, array $processInfoMap): array
     {
         $total = 0;
         $running = 0;
         foreach ($info->services as $service) {
-            if (!$includeSharedExternal && $this->isSharedExternalService($service)) {
-                continue;
-            }
             if ($this->isSharedDependencyService($service)) {
                 continue;
             }
@@ -499,11 +655,6 @@ class Status extends CommandAbstract
         ];
     }
 
-    protected function isSharedExternalService(ServiceInfo $service): bool
-    {
-        return (bool) ($service->metadata['shared_external'] ?? false);
-    }
-
     /**
      * @param ServiceInfo[] $services
      * @return ServiceInfo[]
@@ -519,88 +670,12 @@ class Status extends CommandAbstract
             || $service->role === ControlMessage::ROLE_MEMORY_SERVER;
     }
 
-    protected function showSharedDependencies(): void
-    {
-        $manager = new SharedStateServiceManager();
-
-        echo "\n";
-        $this->printer->note(__('全局共享依赖：'));
-        $this->showSharedDependencyStatus(
-            __('Session Server'),
-            $manager->status(ControlMessage::ROLE_SESSION_SERVER)
-        );
-        $this->showSharedDependencyStatus(
-            __('Memory Service'),
-            $manager->status(ControlMessage::ROLE_MEMORY_SERVER)
-        );
-    }
-
-    /**
-     * @param array<string, mixed> $status
-     */
-    protected function showSharedDependencyStatus(string $label, array $status): void
-    {
-        if (($status['enabled'] ?? true) === false) {
-            $this->printer->note('  ' . $label . ': ' . __('disabled'));
-
-            return;
-        }
-
-        $healthy = (bool) ($status['healthy'] ?? false);
-        $color = $healthy ? 'success' : 'warning';
-        $summary = $label
-            . ': '
-            . ($healthy ? __('运行中') : __('不可用'))
-            . ' '
-            . (string) ($status['host'] ?? '127.0.0.1')
-            . ':'
-            . (int) ($status['port'] ?? 0)
-            . ' (PID:'
-            . (int) ($status['pid'] ?? 0)
-            . ', token:'
-            . (string) ($status['token_file_name'] ?? '')
-            . ')';
-
-        $this->printer->$color('  ' . $summary);
-    }
-
     /**
      * 获取实例管理器
      */
     protected function getInstanceManager(): ServerInstanceManager
     {
         return ObjectManager::getInstance(ServerInstanceManager::class);
-    }
-    
-    /**
-     * 显示 Worker 内存占用（通过端口查找 PID）
-     */
-    protected function showWorkerMemory(int $port, string $prefix): void
-    {
-        $pid = Processer::getProcessIdByPort($port);
-        if ($pid <= 0) {
-            return;
-        }
-        $info = Processer::getProcessInfo($pid);
-        $memory = (string)($info['memory'] ?? '');
-        if ($memory !== '') {
-            $this->printer->note('  ' . $prefix . '  └─ ' . __('内存：') . $memory . ' (PID: ' . $pid . ')');
-        }
-    }
-    
-    /**
-     * 显示进程内存占用（通过 PID 直接获取）
-     */
-    protected function showProcessMemory(int $pid, string $prefix): void
-    {
-        if ($pid <= 0) {
-            return;
-        }
-        $info = Processer::getProcessInfo($pid);
-        $memory = (string)($info['memory'] ?? '');
-        if ($memory !== '') {
-            $this->printer->note($prefix . '└─ ' . __('内存：') . $memory);
-        }
     }
     
     /**
@@ -632,6 +707,8 @@ class Status extends CommandAbstract
                 '[name]' => __('实例名称（默认显示所有实例）'),
                 '-a, --all' => __('显示所有实例'),
                 '-w, --watch' => __('Watch 模式：每 3 秒自动刷新，Ctrl+C 退出'),
+                '--doctor' => __('显示 WLS 运行时策略、降级原因和优化建议'),
+                '--json' => __('与 --doctor 同用时输出 JSON'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
@@ -639,6 +716,8 @@ class Status extends CommandAbstract
                 __('查看所有实例') => 'php bin/w server:status',
                 __('查看指定实例') => 'php bin/w server:status api-server',
                 __('实时监控（watch 模式）') => 'php bin/w server:status -w',
+                __('运行时诊断') => 'php bin/w server:status --doctor --json',
+                __('清理未运行实例记录') => 'php bin/w server:clean',
             ]
         );
     }

@@ -1,0 +1,2615 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+$context = $this->getData('wlsDbManagerContext');
+$context = is_array($context) ? $context : [];
+$embedded = !empty($this->getData('wlsDbManagerEmbedded'));
+$pageKey = trim((string)$this->getData('wlsDbManagerPageKey'));
+$pageUrls = $this->getData('wlsDbManagerPageUrls');
+$pageUrls = is_array($pageUrls) ? $pageUrls : [];
+$profiles = $this->getData('wlsDbManagerProfiles');
+$profiles = is_array($profiles) ? array_values($profiles) : [];
+$capabilities = $this->getData('wlsDbManagerCapabilities');
+$capabilities = is_array($capabilities) ? array_values($capabilities) : [];
+$source = $this->getData('wlsDbManagerSource');
+$source = is_array($source) ? $source : [];
+$selectedKey = trim((string)$this->getData('wlsDbManagerSelectedKey'));
+$requestedConnectionKey = trim((string)$this->getData('wlsDbManagerRequestedConnectionKey'));
+$projectProfile = $this->getData('wlsDbManagerProjectProfile');
+$projectProfile = is_array($projectProfile) ? $projectProfile : [];
+$envPlan = $this->getData('wlsDbManagerEnvPlan');
+$envPlan = is_array($envPlan) ? $envPlan : [];
+$envChanges = is_array($envPlan['changes'] ?? null) ? array_values($envPlan['changes']) : [];
+$envLatestBackup = is_array($envPlan['latest_backup'] ?? null) ? $envPlan['latest_backup'] : [];
+$slavePlan = $this->getData('wlsDbManagerSlavePlan');
+$slavePlan = is_array($slavePlan) ? $slavePlan : [];
+$slaveProfiles = is_array($slavePlan['slaves'] ?? null) ? array_values($slavePlan['slaves']) : [];
+$slaveLatestBackup = is_array($slavePlan['latest_backup'] ?? null) ? $slavePlan['latest_backup'] : [];
+$lifecyclePlan = $this->getData('wlsDbManagerLifecyclePlan');
+$lifecyclePlan = is_array($lifecyclePlan) ? $lifecyclePlan : [];
+$lifecycleChecks = is_array($lifecyclePlan['checks'] ?? null) ? array_values($lifecyclePlan['checks']) : [];
+$lifecycleSteps = is_array($lifecyclePlan['steps'] ?? null) ? array_values($lifecyclePlan['steps']) : [];
+$lifecycleErrors = is_array($lifecyclePlan['errors'] ?? null) ? array_values($lifecyclePlan['errors']) : [];
+$lifecycleWarnings = is_array($lifecyclePlan['warnings'] ?? null) ? array_values($lifecyclePlan['warnings']) : [];
+$lifecycleAdapterPlan = is_array($lifecyclePlan['adapter_plan'] ?? null) ? $lifecyclePlan['adapter_plan'] : [];
+$lifecycleSqlStatements = is_array($lifecycleAdapterPlan['statements'] ?? null) ? array_values($lifecycleAdapterPlan['statements']) : [];
+$lifecycleVerificationQueries = is_array($lifecycleAdapterPlan['verification_queries'] ?? null) ? array_values($lifecycleAdapterPlan['verification_queries']) : [];
+$lifecycleRollbackGuidance = is_array($lifecycleAdapterPlan['rollback_guidance'] ?? null) ? array_values($lifecycleAdapterPlan['rollback_guidance']) : [];
+$lifecycleCanExecute = !empty($lifecyclePlan['can_execute']);
+$lifecycleConfirmationPhrase = (string)($lifecycleAdapterPlan['confirmation_phrase'] ?? 'RUN_DB_LIFECYCLE');
+$backupPlan = $this->getData('wlsDbManagerBackupPlan');
+$backupPlan = is_array($backupPlan) ? $backupPlan : [];
+$backupChecks = is_array($backupPlan['checks'] ?? null) ? array_values($backupPlan['checks']) : [];
+$backupSteps = is_array($backupPlan['steps'] ?? null) ? array_values($backupPlan['steps']) : [];
+$backupErrors = is_array($backupPlan['errors'] ?? null) ? array_values($backupPlan['errors']) : [];
+$backupWarnings = is_array($backupPlan['warnings'] ?? null) ? array_values($backupPlan['warnings']) : [];
+$backupCanExecute = !empty($backupPlan['can_execute']);
+$backupCanPreflight = !empty($backupPlan['can_preflight']);
+$backupCanRestoreExecute = !empty($backupPlan['can_restore_execute']);
+$backupCanMigrationPreflight = !empty($backupPlan['can_migration_preflight']);
+$backupCanMigrationExecute = !empty($backupPlan['can_migration_execute']);
+$backupCanSqlApplyExecute = !empty($backupPlan['can_sql_apply_execute']);
+$restoreRollbackPlan = $this->getData('wlsDbManagerRestoreRollbackPlan');
+$restoreRollbackPlan = is_array($restoreRollbackPlan) ? $restoreRollbackPlan : [];
+$restoreRollbackCanExecute = !empty($restoreRollbackPlan['can_rollback_execute']);
+$restoreRollbackPhrase = (string)($restoreRollbackPlan['confirmation_phrase'] ?? 'ROLLBACK_DB_RESTORE');
+$restoreRollbackArtifact = (string)($restoreRollbackPlan['artifact'] ?? '');
+$restoreRollbackResetRequired = !empty($restoreRollbackPlan['requires_pg_schema_reset']);
+$restoreRollbackResetPhrase = (string)($restoreRollbackPlan['reset_confirmation_phrase'] ?? 'RESET_PG_SCHEMA');
+$backupConfirmationPhrase = (string)($backupPlan['confirmation_phrase'] ?? 'RUN_DB_BACKUP');
+$restorePreflightPhrase = (string)($backupPlan['preflight_confirmation_phrase'] ?? 'CHECK_DB_RESTORE');
+$restoreExecutionPhrase = (string)($backupPlan['restore_execution_confirmation_phrase'] ?? 'RUN_DB_RESTORE');
+$restoreResetRequired = !empty($backupPlan['restore_reset_required']);
+$restoreResetPhrase = (string)($backupPlan['restore_reset_confirmation_phrase'] ?? 'RESET_PG_SCHEMA');
+$restoreResetMode = (string)($backupPlan['restore_reset_mode'] ?? '');
+$restoreResetModeLabel = match ($restoreResetMode) {
+    'public_schema' => (string)__('Public schema only'),
+    default => (string)__('Not required'),
+};
+$migrationPreflightPhrase = (string)($backupPlan['migration_preflight_confirmation_phrase'] ?? 'CHECK_DB_MIGRATION');
+$migrationExecutionPhrase = (string)($backupPlan['migration_execution_confirmation_phrase'] ?? 'RUN_DB_MIGRATION');
+$sqlApplyPhrase = (string)($backupPlan['sql_apply_confirmation_phrase'] ?? 'RUN_DB_SQL_APPLY');
+$healthPlan = $this->getData('wlsDbManagerHealthPlan');
+$healthPlan = is_array($healthPlan) ? $healthPlan : [];
+$healthChecks = is_array($healthPlan['checks'] ?? null) ? array_values($healthPlan['checks']) : [];
+$healthActions = is_array($healthPlan['actions'] ?? null) ? array_values($healthPlan['actions']) : [];
+$auditRecords = $this->getData('wlsDbManagerAuditRecords');
+$auditRecords = is_array($auditRecords) ? array_values($auditRecords) : [];
+$testConnectionUrl = (string)$this->getData('wlsDbManagerTestConnectionUrl');
+$healthProbeUrl = (string)$this->getData('wlsDbManagerHealthProbeUrl');
+$profileSaveUrl = (string)$this->getData('wlsDbManagerProfileSaveUrl');
+$envApplyUrl = (string)$this->getData('wlsDbManagerEnvApplyUrl');
+$envRollbackUrl = (string)$this->getData('wlsDbManagerEnvRollbackUrl');
+$slaveCreateUrl = (string)$this->getData('wlsDbManagerSlaveCreateUrl');
+$slaveRemoveUrl = (string)$this->getData('wlsDbManagerSlaveRemoveUrl');
+$lifecycleExecuteUrl = (string)$this->getData('wlsDbManagerLifecycleExecuteUrl');
+$backupExecuteUrl = (string)$this->getData('wlsDbManagerBackupExecuteUrl');
+$notice = trim((string)$this->getData('wlsDbManagerNotice'));
+$error = trim((string)$this->getData('wlsDbManagerError'));
+$formKey = (string)$this->getFormKeyValue();
+$operation = trim((string)($context['operation'] ?? 'database-profile'));
+if ($pageKey === '') {
+    $pageKey = match ($operation) {
+        'summary' => 'summary',
+        'database-health' => 'health',
+        'project-profile' => 'project-profile',
+        'lifecycle' => 'lifecycle',
+        'backup-plan' => 'backup-plan',
+        'env-apply' => 'env-apply',
+        'slave-management' => 'slaves',
+        'connection-test' => 'test',
+        default => 'profiles',
+    };
+}
+$showPage = static fn (string ...$keys): bool => in_array($pageKey, $keys, true);
+$navClass = static fn (string $key): string => $key === $pageKey ? 'is-active' : '';
+$projectId = trim((string)($context['project_id'] ?? ''));
+$domain = trim((string)($context['domain'] ?? ''));
+$projectType = trim((string)($context['project_type'] ?? ''));
+$panelUrl = $this->getBackendUrl('server/backend/wls-panel');
+$marketplaceUrl = $this->getBackendUrl('server/backend/wls-panel/marketplace');
+$projectAdminUrl = $this->getBackendUrl('admin');
+$browseBaseUrl = $this->getBackendUrl('weline_dbmanager/backend/wls-db-manager');
+$dbPageUrl = static fn (string $key): string => (string)($pageUrls[$key] ?? $browseBaseUrl);
+$escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$profileValue = static fn (string $key, mixed $default = ''): string => htmlspecialchars((string)($projectProfile[$key] ?? $default), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$profileChecked = static fn (string $key): string => !empty($projectProfile[$key]) ? 'checked' : '';
+$selected = static fn (string $value, mixed $current): string => $value === (string)$current ? 'selected' : '';
+$lifecycleActionSelected = static fn (string $value, array $plan): string => $value === (string)($plan['action'] ?? '') ? 'selected' : '';
+$lifecycleGrantSelected = static fn (string $value, array $plan): string => $value === (string)($plan['grant_mode'] ?? '') ? 'selected' : '';
+$backupActionSelected = static fn (string $value, array $plan): string => $value === (string)($plan['action'] ?? '') ? 'selected' : '';
+$backupScopeSelected = static fn (string $value, array $plan): string => $value === (string)($plan['scope'] ?? '') ? 'selected' : '';
+$selectedProfile = [];
+foreach ($profiles as $profile) {
+    if ((string)($profile['key'] ?? '') === $selectedKey) {
+        $selectedProfile = $profile;
+        break;
+    }
+}
+$buildProfileUrl = static function (string $connectionKey) use ($dbPageUrl, $operation, $projectId, $domain, $projectType): string {
+    $query = array_filter([
+        'operation' => $operation !== '' ? $operation : 'database-profile',
+        'project_id' => $projectId,
+        'domain' => $domain,
+        'project_type' => $projectType,
+        'connection_key' => $connectionKey,
+    ], static fn (mixed $value): bool => $value !== null && $value !== '');
+
+    $profilesUrl = explode('?', $dbPageUrl('profiles'), 2)[0];
+    return $profilesUrl . ($query !== [] ? '?' . http_build_query($query) : '');
+};
+$hasProjectProfile = !empty($projectProfile['has_profile']);
+$projectProfileEnabled = !empty($projectProfile['enabled']);
+$passwordSource = (string)($projectProfile['password_source'] ?? 'empty');
+$passwordSourceLabel = match ($passwordSource) {
+    'profile' => (string)__('Stored in Profile'),
+    'env' => (string)__('Only in source env profile'),
+    default => (string)__('Not configured'),
+};
+$envPasswordSource = (string)($envPlan['password_source'] ?? 'empty');
+$envPasswordSourceLabel = match ($envPasswordSource) {
+    'profile' => (string)__('Project Profile secret'),
+    'env' => (string)__('Existing env password'),
+    default => (string)__('Empty password'),
+};
+$envTargetMode = (string)($envPlan['target_mode'] ?? '');
+$envTargetModeLabel = match ($envTargetMode) {
+    'slave' => (string)__('Existing slave'),
+    'direct' => (string)__('Direct db'),
+    default => (string)__('Master/default'),
+};
+$slavePasswordSource = (string)($slavePlan['password_source'] ?? 'empty');
+$slavePasswordSourceLabel = match ($slavePasswordSource) {
+    'profile' => (string)__('Project Profile secret'),
+    'env' => (string)__('Existing env password'),
+    default => (string)__('Empty password'),
+};
+$envPasswordImportPhrase = \Weline\DbManager\Service\WlsDatabaseProfileService::ENV_PASSWORD_IMPORT_PHRASE;
+$canTestSelected = $requestedConnectionKey === 'project_profile'
+    ? ($hasProjectProfile && $projectProfileEnabled)
+    : !empty($selectedProfile['can_test']);
+$healthProbeConnectionKey = $requestedConnectionKey !== '' ? $requestedConnectionKey : $selectedKey;
+$canHealthProbe = $healthProbeConnectionKey === 'project_profile'
+    ? ($hasProjectProfile && $projectProfileEnabled)
+    : ($profiles !== [] && !empty($selectedProfile['can_test']));
+$healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService::HEALTH_PROBE_PHRASE;
+?>
+
+<style>
+    .wls-db-manager-shell {
+        --wdb-bg: #edf5f8;
+        --wdb-panel: #ffffff;
+        --wdb-panel-soft: #f7fafc;
+        --wdb-text: #142232;
+        --wdb-muted: #5c6b78;
+        --wdb-border: #d8e4ec;
+        --wdb-primary: #0277a8;
+        --wdb-primary-strong: #075b80;
+        --wdb-success: #0c8760;
+        --wdb-warning: #ad6b12;
+        --wdb-danger: #b42318;
+        --wdb-shadow: 0 12px 28px rgba(20, 34, 50, .08);
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        background: var(--wdb-bg);
+        color: var(--wdb-text);
+        font-size: 14px;
+    }
+    .wls-db-manager-shell.is-embedded {
+        min-height: auto;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .wls-db-manager-shell.is-embedded .wdb-sidebar {
+        display: none;
+    }
+    .wls-db-manager-shell.is-embedded .wdb-main {
+        min-height: auto;
+        padding: 0;
+    }
+    .wls-db-manager-shell.is-embedded .wdb-eyebrow,
+    .wls-db-manager-shell.is-embedded .wdb-actions {
+        display: none;
+    }
+    body:has(.wls-db-manager-shell) {
+        margin: 0;
+        background: #101922;
+        font-size: 0;
+    }
+    body:has(.wls-db-manager-shell[data-theme="light"]) {
+        background: #edf5f8;
+    }
+    body[data-bs-theme="dark"]:has(.wls-db-manager-shell),
+    body[data-sidebar="dark"]:has(.wls-db-manager-shell),
+    body[data-topbar="dark"]:has(.wls-db-manager-shell),
+    html[data-bs-theme="dark"] body:has(.wls-db-manager-shell),
+    html[data-theme-mode="dark"] body:has(.wls-db-manager-shell),
+    body:has(.wls-db-manager-shell[data-theme="dark"]) {
+        background: #101922;
+    }
+    .wls-db-manager-fullscreen,
+    .wls-db-manager-fullscreen .backend-main-content {
+        background: var(--wdb-bg, #101922);
+    }
+    body[data-bs-theme="dark"] .wls-db-manager-shell,
+    body[data-sidebar="dark"] .wls-db-manager-shell,
+    body[data-topbar="dark"] .wls-db-manager-shell,
+    html[data-bs-theme="dark"] .wls-db-manager-shell,
+    html[data-theme-mode="dark"] .wls-db-manager-shell,
+    .wls-db-manager-shell[data-theme="dark"] {
+        --wdb-bg: #101922;
+        --wdb-panel: #172331;
+        --wdb-panel-soft: #1e2d3c;
+        --wdb-text: #edf5f8;
+        --wdb-muted: #a0afbd;
+        --wdb-border: #2d4050;
+        --wdb-primary: #2aa6d6;
+        --wdb-primary-strong: #83d4ef;
+        --wdb-success: #3fc78e;
+        --wdb-warning: #f2b84b;
+        --wdb-danger: #ff8a7d;
+        --wdb-shadow: 0 18px 36px rgba(0, 0, 0, .24);
+    }
+    .wdb-sidebar {
+        background: #082336;
+        color: #dff3fb;
+        padding: 24px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+    .wdb-brand-kicker {
+        color: #5fc4e7;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .wdb-brand-title {
+        margin-top: 4px;
+        font-size: 22px;
+        line-height: 1.25;
+        font-weight: 850;
+        white-space: nowrap;
+    }
+    .wdb-nav {
+        display: grid;
+        gap: 8px;
+    }
+    .wdb-nav a,
+    .wdb-action,
+    .wdb-theme-button,
+    .wdb-test-button {
+        border: 1px solid transparent;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 9px 12px;
+        font-weight: 750;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .wdb-nav a {
+        color: #dff3fb;
+        justify-content: flex-start;
+    }
+    .wdb-nav a.is-active,
+    .wdb-nav a:hover {
+        background: rgba(42, 166, 214, .18);
+        border-color: rgba(95, 196, 231, .35);
+    }
+    .wdb-sidebar-spacer {
+        flex: 1;
+    }
+    .wdb-theme-button {
+        width: 100%;
+        color: #dff3fb;
+        background: rgba(255, 255, 255, .08);
+        border-color: rgba(255, 255, 255, .16);
+    }
+    .wdb-main {
+        min-width: 0;
+        padding: 28px;
+    }
+    .wdb-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .wdb-eyebrow {
+        margin: 0 0 6px;
+        color: var(--wdb-primary);
+        font-size: 12px;
+        font-weight: 850;
+        text-transform: uppercase;
+    }
+    .wdb-title {
+        margin: 0;
+        color: var(--wdb-text) !important;
+        font-size: 30px;
+        line-height: 1.2;
+        font-weight: 850;
+    }
+    .wdb-subtitle {
+        margin: 8px 0 0;
+        color: var(--wdb-muted) !important;
+        max-width: 780px;
+        line-height: 1.6;
+    }
+    .wdb-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .wdb-action {
+        color: var(--wdb-primary-strong);
+        background: var(--wdb-panel);
+        border-color: var(--wdb-border);
+        box-shadow: var(--wdb-shadow);
+    }
+    .wdb-action.is-primary {
+        color: #ffffff;
+        background: var(--wdb-primary);
+        border-color: var(--wdb-primary);
+    }
+    .wdb-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+    }
+    .wdb-card,
+    .wdb-panel {
+        background: var(--wdb-panel);
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        box-shadow: var(--wdb-shadow);
+    }
+    .wdb-card {
+        padding: 18px;
+    }
+    .wdb-card-label,
+    .wdb-field-label {
+        color: var(--wdb-muted);
+        font-size: 12px;
+        font-weight: 750;
+        text-transform: uppercase;
+    }
+    .wdb-card-value {
+        margin-top: 8px;
+        color: var(--wdb-text);
+        font-size: 24px;
+        font-weight: 850;
+        overflow-wrap: anywhere;
+    }
+    .wdb-panel {
+        margin-top: 18px;
+        padding: 20px;
+    }
+    .wdb-panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .wdb-panel-title {
+        margin: 0;
+        color: var(--wdb-text) !important;
+        font-size: 18px;
+        line-height: 1.35;
+        font-weight: 850;
+    }
+    .wdb-panel-note {
+        margin: 5px 0 0;
+        color: var(--wdb-muted) !important;
+        line-height: 1.5;
+    }
+    .wdb-alert {
+        margin-bottom: 16px;
+        border-radius: 8px;
+        padding: 12px 14px;
+        line-height: 1.5;
+        font-weight: 700;
+    }
+    .wdb-alert.is-success {
+        color: var(--wdb-success);
+        background: color-mix(in srgb, var(--wdb-success) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--wdb-success) 28%, transparent);
+    }
+    .wdb-alert.is-danger {
+        color: var(--wdb-danger);
+        background: color-mix(in srgb, var(--wdb-danger) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--wdb-danger) 28%, transparent);
+    }
+    .wdb-alert.is-warning {
+        color: var(--wdb-warning);
+        background: color-mix(in srgb, var(--wdb-warning) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--wdb-warning) 28%, transparent);
+    }
+    .wdb-context {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-context-item,
+    .wdb-field,
+    .wdb-test-box {
+        background: var(--wdb-panel-soft);
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        padding: 12px;
+        min-width: 0;
+    }
+    .wdb-context-value,
+    .wdb-field-value {
+        margin-top: 6px;
+        color: var(--wdb-text);
+        font-weight: 750;
+        overflow-wrap: anywhere;
+    }
+    .wdb-profile-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .wdb-profile-tab {
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        color: var(--wdb-text);
+        min-height: 38px;
+        padding: 9px 12px;
+        text-decoration: none;
+        font-weight: 750;
+    }
+    .wdb-profile-tab.is-active {
+        color: #ffffff;
+        background: var(--wdb-primary);
+        border-color: var(--wdb-primary);
+    }
+    .wdb-profile-detail {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--wdb-border);
+    }
+    .wdb-profile-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        border: 1px solid var(--wdb-border);
+        color: var(--wdb-muted);
+        min-height: 26px;
+        padding: 4px 9px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .wdb-badge.is-ready {
+        color: var(--wdb-success);
+        border-color: color-mix(in srgb, var(--wdb-success) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-success) 9%, transparent);
+    }
+    .wdb-badge.is-attention {
+        color: var(--wdb-warning);
+        border-color: color-mix(in srgb, var(--wdb-warning) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-warning) 10%, transparent);
+    }
+    .wdb-test-form {
+        display: grid;
+        gap: 12px;
+    }
+    .wdb-test-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+    }
+    .wdb-select {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel);
+        color: var(--wdb-text);
+        padding: 8px 10px;
+    }
+    .wdb-test-button {
+        color: #ffffff;
+        background: var(--wdb-primary);
+        border-color: var(--wdb-primary);
+        min-width: 148px;
+    }
+    .wdb-form {
+        display: grid;
+        gap: 16px;
+    }
+    .wdb-form-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .wdb-form-field {
+        min-width: 0;
+        display: grid;
+        gap: 7px;
+    }
+    .wdb-form-field.is-wide {
+        grid-column: span 2;
+    }
+    .wdb-form-field.is-full {
+        grid-column: 1 / -1;
+    }
+    .wdb-form-field label,
+    .wdb-check span {
+        color: var(--wdb-muted);
+        font-size: 12px;
+        font-weight: 760;
+    }
+    .wdb-form-field input,
+    .wdb-form-field select,
+    .wdb-form-field textarea {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        color: var(--wdb-text);
+        padding: 9px 11px;
+        font: inherit;
+        box-sizing: border-box;
+        outline: none;
+    }
+    .wdb-form-field textarea {
+        min-height: 82px;
+        resize: vertical;
+    }
+    .wdb-form-field input:focus,
+    .wdb-form-field select:focus,
+    .wdb-form-field textarea:focus {
+        border-color: var(--wdb-primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--wdb-primary) 16%, transparent);
+    }
+    .wdb-field-help,
+    .wdb-audit-meta {
+        margin: 0;
+        color: var(--wdb-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .wdb-check-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-check {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 12px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        cursor: pointer;
+    }
+    .wdb-check input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--wdb-primary);
+    }
+    .wdb-save-button {
+        justify-self: start;
+        border: 1px solid var(--wdb-primary);
+        border-radius: 8px;
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 14px;
+        color: #ffffff;
+        background: var(--wdb-primary);
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .wdb-secondary-button {
+        justify-self: start;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 14px;
+        color: var(--wdb-primary-strong);
+        background: var(--wdb-panel);
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .wdb-danger-button {
+        justify-self: start;
+        border: 1px solid var(--wdb-danger);
+        border-radius: 8px;
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 14px;
+        color: #ffffff;
+        background: var(--wdb-danger);
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .wdb-save-button:disabled,
+    .wdb-secondary-button:disabled,
+    .wdb-danger-button:disabled,
+    .wdb-test-button:disabled {
+        cursor: not-allowed;
+        opacity: .55;
+    }
+    .wdb-lifecycle-grid,
+    .wdb-lifecycle-checks {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-lifecycle-grid {
+        align-items: end;
+    }
+    .wdb-lifecycle-check {
+        background: var(--wdb-panel-soft);
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        padding: 12px;
+        min-width: 0;
+    }
+    .wdb-lifecycle-check[data-wdb-check-state="blocked"] .wdb-badge {
+        color: var(--wdb-danger);
+        border-color: color-mix(in srgb, var(--wdb-danger) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-danger) 10%, transparent);
+    }
+    .wdb-lifecycle-check[data-wdb-check-state="attention"] .wdb-badge {
+        color: var(--wdb-warning);
+        border-color: color-mix(in srgb, var(--wdb-warning) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-warning) 10%, transparent);
+    }
+    .wdb-lifecycle-check[data-wdb-check-state="dry_run_only"] .wdb-badge,
+    .wdb-lifecycle-check[data-wdb-check-state="ready_to_execute"] .wdb-badge,
+    .wdb-lifecycle-check[data-wdb-check-state="ready"] .wdb-badge {
+        color: var(--wdb-success);
+        border-color: color-mix(in srgb, var(--wdb-success) 38%, var(--wdb-border));
+        background: color-mix(in srgb, var(--wdb-success) 9%, transparent);
+    }
+    .wdb-plan-list {
+        display: grid;
+        gap: 8px;
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: wdb-plan-step;
+    }
+    .wdb-plan-list li {
+        counter-increment: wdb-plan-step;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        padding: 11px 12px;
+        background: var(--wdb-panel-soft);
+        color: var(--wdb-text);
+        line-height: 1.45;
+    }
+    .wdb-plan-list li::before {
+        content: counter(wdb-plan-step);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        margin-right: 8px;
+        border-radius: 50%;
+        color: #ffffff;
+        background: var(--wdb-primary);
+        font-size: 12px;
+        font-weight: 850;
+    }
+    .wdb-sql-plan {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--wdb-border);
+    }
+    .wdb-sql-summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-sql-list {
+        display: grid;
+        gap: 10px;
+    }
+    .wdb-sql-item {
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        padding: 12px;
+        min-width: 0;
+    }
+    .wdb-sql-item pre {
+        margin: 8px 0 0;
+        padding: 10px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel);
+        color: var(--wdb-text);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+    .wdb-env-summary,
+    .wdb-env-toolbar {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wdb-env-toolbar {
+        margin-top: 14px;
+        align-items: end;
+    }
+    .wdb-slave-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .wdb-slave-row {
+        display: grid;
+        grid-template-columns: minmax(160px, .8fr) repeat(3, minmax(0, .55fr)) minmax(260px, 1.4fr);
+        gap: 10px;
+        align-items: end;
+        padding: 12px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+        min-width: 0;
+    }
+    .wdb-inline-form {
+        display: grid;
+        grid-template-columns: minmax(120px, 1fr) minmax(150px, .8fr) auto;
+        gap: 10px;
+        align-items: end;
+        min-width: 0;
+    }
+    .wdb-inline-form .wdb-form-field,
+    .wdb-inline-form .wdb-check {
+        min-width: 0;
+    }
+    .wdb-execution-guard {
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px solid color-mix(in srgb, var(--wdb-warning) 36%, var(--wdb-border));
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--wdb-warning) 8%, var(--wdb-panel));
+    }
+    .wdb-execution-guard .wdb-form-field input[type="text"] {
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        letter-spacing: 0;
+    }
+    .wdb-diff-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .wdb-diff-row {
+        display: grid;
+        grid-template-columns: minmax(120px, .7fr) minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+    }
+    .wdb-diff-row code {
+        color: var(--wdb-text);
+        overflow-wrap: anywhere;
+    }
+    .wdb-audit-list {
+        display: grid;
+        gap: 10px;
+    }
+    .wdb-audit-row {
+        display: grid;
+        grid-template-columns: minmax(120px, .5fr) minmax(120px, .6fr) minmax(0, 1fr);
+        gap: 10px;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid var(--wdb-border);
+        border-radius: 8px;
+        background: var(--wdb-panel-soft);
+    }
+    .wdb-code {
+        font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        overflow-wrap: anywhere;
+    }
+    .wdb-empty {
+        color: var(--wdb-muted);
+        border: 1px dashed var(--wdb-border);
+        border-radius: 8px;
+        padding: 18px;
+    }
+    @media (max-width: 1024px) {
+        .wls-db-manager-shell {
+            grid-template-columns: 1fr;
+        }
+        .wdb-sidebar {
+            position: static;
+            padding: 16px;
+        }
+        .wdb-nav {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .wdb-sidebar-spacer {
+            display: none;
+        }
+        .wdb-grid,
+        .wdb-context,
+        .wdb-profile-grid,
+        .wdb-form-grid,
+        .wdb-check-grid,
+        .wdb-lifecycle-grid,
+        .wdb-lifecycle-checks,
+        .wdb-sql-summary,
+        .wdb-env-summary,
+        .wdb-env-toolbar,
+        .wdb-slave-row,
+        .wdb-inline-form {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 640px) {
+        .wdb-main {
+            padding: 18px 14px;
+        }
+        .wdb-topbar,
+        .wdb-panel-head,
+        .wdb-test-row {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        .wdb-actions {
+            justify-content: stretch;
+        }
+        .wdb-action,
+        .wdb-test-button {
+            width: 100%;
+        }
+        .wdb-grid,
+        .wdb-context,
+        .wdb-profile-grid,
+        .wdb-form-grid,
+        .wdb-check-grid,
+        .wdb-lifecycle-grid,
+        .wdb-lifecycle-checks,
+        .wdb-sql-summary,
+        .wdb-env-summary,
+        .wdb-env-toolbar,
+        .wdb-diff-row,
+        .wdb-slave-row,
+        .wdb-inline-form,
+        .wdb-audit-row,
+        .wdb-nav {
+            grid-template-columns: 1fr;
+        }
+        .wdb-form-field.is-wide {
+            grid-column: 1 / -1;
+        }
+        .wdb-title {
+            font-size: 24px;
+        }
+    }
+</style>
+
+<div class="wls-db-manager-shell<?= $embedded ? ' is-embedded' : '' ?>" data-wls-db-manager-shell data-theme="light">
+    <?php if (!$embedded): ?>
+    <aside class="wdb-sidebar">
+        <div>
+            <div class="wdb-brand-kicker"><?= $escapeHtml(__('WLS Standalone Backend')) ?></div>
+            <div class="wdb-brand-title"><?= $escapeHtml(__('Database Manager')) ?></div>
+        </div>
+        <nav class="wdb-nav" data-wls-plugin-nav aria-label="<?= $escapeHtml(__('Database manager navigation')) ?>">
+            <a href="<?= $escapeHtml($dbPageUrl('summary')) ?>" class="<?= $escapeHtml($navClass('summary')) ?>"<?= $pageKey === 'summary' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-view-dashboard-outline"></span><?= $escapeHtml(__('Summary')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('health')) ?>" class="<?= $escapeHtml($navClass('health')) ?>"<?= $pageKey === 'health' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-heart-pulse"></span><?= $escapeHtml(__('Health')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('profiles')) ?>" class="<?= $escapeHtml($navClass('profiles')) ?>"<?= $pageKey === 'profiles' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-search-outline"></span><?= $escapeHtml(__('Profiles')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('project-profile')) ?>" class="<?= $escapeHtml($navClass('project-profile')) ?>"<?= $pageKey === 'project-profile' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-edit-outline"></span><?= $escapeHtml(__('Project Profile')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('lifecycle')) ?>" class="<?= $escapeHtml($navClass('lifecycle')) ?>"<?= $pageKey === 'lifecycle' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-plus-outline"></span><?= $escapeHtml(__('Lifecycle')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('backup-plan')) ?>" class="<?= $escapeHtml($navClass('backup-plan')) ?>"<?= $pageKey === 'backup-plan' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-arrow-down-outline"></span><?= $escapeHtml(__('Backup Plan')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('env-apply')) ?>" class="<?= $escapeHtml($navClass('env-apply')) ?>"<?= $pageKey === 'env-apply' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-file-cog-outline"></span><?= $escapeHtml(__('Env Apply')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('slaves')) ?>" class="<?= $escapeHtml($navClass('slaves')) ?>"<?= $pageKey === 'slaves' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-cog-outline"></span><?= $escapeHtml(__('Slaves')) ?></a>
+            <a href="<?= $escapeHtml($dbPageUrl('test')) ?>" class="<?= $escapeHtml($navClass('test')) ?>"<?= $pageKey === 'test' ? ' aria-current="page"' : '' ?>><span class="mdi mdi-database-check-outline"></span><?= $escapeHtml(__('Test')) ?></a>
+            <a href="<?= $escapeHtml($marketplaceUrl) ?>"><span class="mdi mdi-puzzle-outline"></span><?= $escapeHtml(__('Marketplace')) ?></a>
+        </nav>
+        <div class="wdb-sidebar-spacer"></div>
+        <button type="button"
+                class="wdb-theme-button"
+                data-wdb-theme-toggle
+                data-wdb-theme-dark-label="<?= $escapeHtml(__('Dark')) ?>"
+                data-wdb-theme-light-label="<?= $escapeHtml(__('Light')) ?>"
+                aria-pressed="false">
+            <span class="mdi mdi-theme-light-dark"></span>
+            <span data-wdb-theme-label><?= $escapeHtml(__('Dark')) ?></span>
+        </button>
+    </aside>
+    <?php endif; ?>
+
+    <main class="wdb-main">
+        <section class="wdb-topbar" id="summary">
+            <div>
+                <p class="wdb-eyebrow"><?= $escapeHtml(__('WLS Panel Plugin')) ?></p>
+                <h1 class="wdb-title"><?= $escapeHtml(__('WLS Database Manager')) ?></h1>
+                <p class="wdb-subtitle"><?= $escapeHtml(__('Database profile readout and guarded connection checks for the selected WLS project context.')) ?></p>
+            </div>
+            <div class="wdb-actions">
+                <a class="wdb-action is-primary" href="<?= $escapeHtml($panelUrl) ?>"><span class="mdi mdi-server"></span><?= $escapeHtml(__('WLS Panel')) ?></a>
+                <a class="wdb-action" href="<?= $escapeHtml($projectAdminUrl) ?>"><span class="mdi mdi-open-in-new"></span><?= $escapeHtml(__('Project Admin')) ?></a>
+            </div>
+        </section>
+
+        <?php if ($notice !== ''): ?>
+            <div class="wdb-alert is-success"><?= $escapeHtml($notice) ?></div>
+        <?php endif; ?>
+        <?php if ($error !== ''): ?>
+            <div class="wdb-alert is-danger"><?= $escapeHtml($error) ?></div>
+        <?php endif; ?>
+
+        <?php if ($showPage('summary')): ?>
+        <section class="wdb-grid" data-wdb-summary>
+            <?php foreach ($capabilities as $capability): ?>
+                <article class="wdb-card">
+                    <div class="wdb-card-label"><?= $escapeHtml($capability['label'] ?? '') ?></div>
+                    <div class="wdb-card-value"><?= $escapeHtml($capability['value'] ?? '') ?></div>
+                </article>
+            <?php endforeach; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('health')): ?>
+        <section class="wdb-panel"
+                 id="project-health"
+                 data-wdb-project-health
+                 data-wdb-health-state="<?= $escapeHtml($healthPlan['state'] ?? 'attention') ?>">
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Project Health')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml(__('Read-only readiness summary for the selected WLS database context. The guarded probe below only runs SELECT 1 and never runs migrations, applies SQL, restores data, or reloads WLS.')) ?></p>
+                </div>
+                <span class="wdb-badge <?= ($healthPlan['state'] ?? '') === 'ready' ? 'is-ready' : 'is-attention' ?>">
+                    <?= $escapeHtml($healthPlan['state_label'] ?? __('Needs attention')) ?>
+                </span>
+            </div>
+
+            <div class="wdb-grid">
+                <article class="wdb-card">
+                    <div class="wdb-card-label"><?= $escapeHtml(__('Ready')) ?></div>
+                    <div class="wdb-card-value"><?= $escapeHtml($healthPlan['ready'] ?? 0) ?></div>
+                </article>
+                <article class="wdb-card">
+                    <div class="wdb-card-label"><?= $escapeHtml(__('Attention')) ?></div>
+                    <div class="wdb-card-value"><?= $escapeHtml($healthPlan['attention'] ?? 0) ?></div>
+                </article>
+                <article class="wdb-card">
+                    <div class="wdb-card-label"><?= $escapeHtml(__('Blocked')) ?></div>
+                    <div class="wdb-card-value"><?= $escapeHtml($healthPlan['blocked'] ?? 0) ?></div>
+                </article>
+            </div>
+
+            <?php if ($healthChecks !== []): ?>
+                <div class="wdb-lifecycle-checks" data-wdb-health-checks>
+                    <?php foreach ($healthChecks as $check): ?>
+                        <article class="wdb-lifecycle-check" data-wdb-check-state="<?= $escapeHtml($check['state'] ?? '') ?>">
+                            <div class="wdb-field-label"><?= $escapeHtml($check['label'] ?? '') ?></div>
+                            <h3><?= $escapeHtml($check['value'] ?? '') ?></h3>
+                            <p><?= $escapeHtml($check['detail'] ?? '') ?></p>
+                            <span class="wdb-badge"><?= $escapeHtml($check['state'] ?? '') ?></span>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($healthActions !== []): ?>
+                <ol class="wdb-plan-list" data-wdb-health-actions>
+                    <?php foreach ($healthActions as $action): ?>
+                        <li><?= $escapeHtml($action) ?></li>
+                    <?php endforeach; ?>
+                </ol>
+            <?php endif; ?>
+
+            <?php if ($profiles === []): ?>
+                <div class="wdb-empty"><?= $escapeHtml(__('A database profile is required before running a health probe.')) ?></div>
+            <?php else: ?>
+                <form class="wdb-test-form"
+                      method="post"
+                      action="<?= $escapeHtml($healthProbeUrl) ?>"
+                      data-wdb-health-probe-form>
+                    <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                    <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                    <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                    <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                    <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                    <div class="wdb-test-row">
+                        <label class="wdb-test-box">
+                            <span class="wdb-field-label"><?= $escapeHtml(__('Probe Profile')) ?></span>
+                            <select class="wdb-select" name="connection_key" data-wdb-health-probe-select>
+                                <?php if ($hasProjectProfile && $projectProfileEnabled): ?>
+                                    <option value="project_profile" <?= $healthProbeConnectionKey === 'project_profile' ? 'selected' : '' ?>>
+                                        <?= $escapeHtml(__('Project Profile')) ?>
+                                    </option>
+                                <?php endif; ?>
+                                <?php foreach ($profiles as $profile): ?>
+                                    <?php $connectionKey = (string)($profile['key'] ?? ''); ?>
+                                    <option value="<?= $escapeHtml($connectionKey) ?>" <?= $healthProbeConnectionKey !== 'project_profile' && $connectionKey === $selectedKey ? 'selected' : '' ?>>
+                                        <?= $escapeHtml($profile['label'] ?? $connectionKey) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <label class="wdb-check-row">
+                            <input type="checkbox" name="confirm_health_probe" value="1">
+                            <span><?= $escapeHtml(__('I understand this health probe opens a short read-only database connection.')) ?></span>
+                        </label>
+                        <label class="wdb-test-box">
+                            <span class="wdb-field-label"><?= $escapeHtml(__('Health Probe Phrase')) ?></span>
+                            <input class="wdb-input" name="health_probe_phrase" placeholder="<?= $escapeHtml($healthProbePhrase) ?>">
+                        </label>
+                        <button class="wdb-test-button" type="submit" <?= $canHealthProbe ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-heart-pulse"></span><?= $escapeHtml(__('Run Health Probe')) ?>
+                        </button>
+                    </div>
+                    <p class="wdb-field-help"><?= $escapeHtml(__('The active health probe executes one SELECT 1 check, records a sanitized audit event, and never writes schema, data, env.php, or WLS runtime state.')) ?></p>
+                </form>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('summary')): ?>
+        <section class="wdb-panel" data-wdb-context>
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Project Context')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml($source['note'] ?? '') ?></p>
+                </div>
+                <span class="wdb-badge"><?= $escapeHtml($source['label'] ?? '') ?></span>
+            </div>
+            <div class="wdb-context">
+                <div class="wdb-context-item">
+                    <div class="wdb-field-label"><?= $escapeHtml(__('Operation')) ?></div>
+                    <div class="wdb-context-value"><?= $escapeHtml($operation ?: 'database-profile') ?></div>
+                </div>
+                <div class="wdb-context-item">
+                    <div class="wdb-field-label"><?= $escapeHtml(__('Project ID')) ?></div>
+                    <div class="wdb-context-value"><?= $escapeHtml($projectId ?: '-') ?></div>
+                </div>
+                <div class="wdb-context-item">
+                    <div class="wdb-field-label"><?= $escapeHtml(__('Domain')) ?></div>
+                    <div class="wdb-context-value"><?= $escapeHtml($domain ?: '-') ?></div>
+                </div>
+                <div class="wdb-context-item">
+                    <div class="wdb-field-label"><?= $escapeHtml(__('Project Type')) ?></div>
+                    <div class="wdb-context-value"><?= $escapeHtml($projectType ?: '-') ?></div>
+                </div>
+            </div>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('profiles')): ?>
+        <section class="wdb-panel" id="profiles" data-wdb-profiles data-wdb-profile-count="<?= $escapeHtml(count($profiles)) ?>">
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Database Profiles')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml(__('Connection details are masked. Use Project Profile below to save a guarded database configuration for this WLS project.')) ?></p>
+                </div>
+            </div>
+
+            <?php if ($profiles === []): ?>
+                <div class="wdb-empty"><?= $escapeHtml(__('No database profiles were found.')) ?></div>
+            <?php else: ?>
+                <div class="wdb-profile-tabs">
+                    <?php foreach ($profiles as $profile): ?>
+                        <?php $connectionKey = (string)($profile['key'] ?? ''); ?>
+                        <a
+                            class="wdb-profile-tab <?= $connectionKey === $selectedKey ? 'is-active' : '' ?>"
+                            href="<?= $escapeHtml($buildProfileUrl($connectionKey)) ?>"
+                            data-wdb-profile-tab="<?= $escapeHtml($connectionKey) ?>"
+                        >
+                            <?= $escapeHtml($profile['label'] ?? $connectionKey) ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+
+                <?php if ($selectedProfile !== []): ?>
+                    <div class="wdb-profile-detail" data-wdb-selected-profile="<?= $escapeHtml($selectedProfile['key'] ?? '') ?>">
+                        <div class="wdb-panel-head">
+                            <div>
+                                <h3 class="wdb-panel-title"><?= $escapeHtml($selectedProfile['label'] ?? '') ?></h3>
+                                <p class="wdb-panel-note"><?= $escapeHtml($selectedProfile['dsn_display'] ?? '') ?></p>
+                            </div>
+                            <span class="wdb-badge <?= ($selectedProfile['status'] ?? '') === 'ready' ? 'is-ready' : 'is-attention' ?>">
+                                <?= $escapeHtml($selectedProfile['status_label'] ?? '') ?>
+                            </span>
+                        </div>
+
+                        <div class="wdb-profile-grid">
+                            <div class="wdb-field">
+                                <div class="wdb-field-label"><?= $escapeHtml(__('Driver')) ?></div>
+                                <div class="wdb-field-value"><?= $escapeHtml($selectedProfile['type'] ?? '') ?></div>
+                            </div>
+                            <div class="wdb-field">
+                                <div class="wdb-field-label"><?= $escapeHtml(__('Host')) ?></div>
+                                <div class="wdb-field-value"><?= $escapeHtml(($selectedProfile['hostname'] ?? '') ?: ($selectedProfile['path'] ?? '-')) ?></div>
+                            </div>
+                            <div class="wdb-field">
+                                <div class="wdb-field-label"><?= $escapeHtml(__('Port')) ?></div>
+                                <div class="wdb-field-value"><?= $escapeHtml(($selectedProfile['hostport'] ?? '') ?: '-') ?></div>
+                            </div>
+                            <div class="wdb-field">
+                                <div class="wdb-field-label"><?= $escapeHtml(__('Database')) ?></div>
+                                <div class="wdb-field-value"><?= $escapeHtml(($selectedProfile['database'] ?? '') ?: '-') ?></div>
+                            </div>
+                            <div class="wdb-field">
+                                <div class="wdb-field-label"><?= $escapeHtml(__('Username')) ?></div>
+                                <div class="wdb-field-value"><?= $escapeHtml(($selectedProfile['username'] ?? '') ?: '-') ?></div>
+                            </div>
+                            <div class="wdb-field">
+                                <div class="wdb-field-label"><?= $escapeHtml(__('Password')) ?></div>
+                                <div class="wdb-field-value"><?= $escapeHtml($selectedProfile['password_state'] ?? '') ?></div>
+                            </div>
+                            <div class="wdb-field">
+                                <div class="wdb-field-label"><?= $escapeHtml(__('Prefix')) ?></div>
+                                <div class="wdb-field-value"><?= $escapeHtml(($selectedProfile['prefix'] ?? '') ?: '-') ?></div>
+                            </div>
+                            <div class="wdb-field">
+                                <div class="wdb-field-label"><?= $escapeHtml(__('Charset')) ?></div>
+                                <div class="wdb-field-value"><?= $escapeHtml(($selectedProfile['charset'] ?? '') ?: '-') ?></div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('project-profile')): ?>
+        <section class="wdb-panel" id="project-profile" data-wdb-project-profile data-wdb-project-profile-state="<?= $escapeHtml($hasProjectProfile ? 'saved' : 'inherited') ?>">
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Project Database Profile')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml(__('Save a database profile for the selected WLS project. Secrets are encrypted at rest, masked in the UI, and omitted from audit logs.')) ?></p>
+                </div>
+                <span class="wdb-badge <?= $projectProfileEnabled ? 'is-ready' : ($hasProjectProfile ? 'is-attention' : '') ?>">
+                    <?= $escapeHtml($hasProjectProfile ? ($projectProfileEnabled ? __('Enabled Profile') : __('Saved Disabled')) : __('Inherited')) ?>
+                </span>
+            </div>
+
+            <form class="wdb-form" method="post" action="<?= $escapeHtml($profileSaveUrl) ?>" data-wdb-project-profile-form>
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+
+                <div class="wdb-check-grid">
+                    <label class="wdb-check">
+                        <input type="hidden" name="enabled" value="0">
+                        <input type="checkbox" name="enabled" value="1" <?= $profileChecked('enabled') ?>>
+                        <span><?= $escapeHtml(__('Enable project database profile')) ?></span>
+                    </label>
+                    <label class="wdb-check">
+                        <input type="hidden" name="persistent" value="0">
+                        <input type="checkbox" name="persistent" value="1" <?= $profileChecked('persistent') ?>>
+                        <span><?= $escapeHtml(__('Persistent connection')) ?></span>
+                    </label>
+                    <label class="wdb-check">
+                        <input type="hidden" name="confirm_profile_save" value="0">
+                        <input type="checkbox" name="confirm_profile_save" value="1" data-wdb-confirm-profile-save>
+                        <span><?= $escapeHtml(__('Confirm guarded save')) ?></span>
+                    </label>
+                </div>
+
+                <div class="wdb-form-grid">
+                    <div class="wdb-form-field">
+                        <label for="wdb-source-profile"><?= $escapeHtml(__('Source profile')) ?></label>
+                        <select id="wdb-source-profile" name="source_connection_key">
+                            <?php if ($profiles === []): ?>
+                                <option value=""><?= $escapeHtml(__('No env profile')) ?></option>
+                            <?php else: ?>
+                                <?php foreach ($profiles as $profile): ?>
+                                    <?php $connectionKey = (string)($profile['key'] ?? ''); ?>
+                                    <option value="<?= $escapeHtml($connectionKey) ?>" <?= $selected($connectionKey, $projectProfile['source_connection_key'] ?? $selectedKey) ?>>
+                                        <?= $escapeHtml($profile['label'] ?? $connectionKey) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </select>
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Used as the inherited baseline before this project saves overrides.')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-driver"><?= $escapeHtml(__('Driver')) ?></label>
+                        <select id="wdb-profile-driver" name="type">
+                            <option value="mysql" <?= $selected('mysql', $projectProfile['type'] ?? 'mysql') ?>>mysql</option>
+                            <option value="pgsql" <?= $selected('pgsql', $projectProfile['type'] ?? '') ?>>pgsql</option>
+                            <option value="sqlite" <?= $selected('sqlite', $projectProfile['type'] ?? '') ?>>sqlite</option>
+                        </select>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-hostport"><?= $escapeHtml(__('Port')) ?></label>
+                        <input id="wdb-profile-hostport" type="text" name="hostport" value="<?= $profileValue('hostport') ?>" placeholder="3306">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-host"><?= $escapeHtml(__('Host')) ?></label>
+                        <input id="wdb-profile-host" type="text" name="hostname" value="<?= $profileValue('hostname') ?>" placeholder="127.0.0.1">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-database"><?= $escapeHtml(__('Database')) ?></label>
+                        <input id="wdb-profile-database" type="text" name="database" value="<?= $profileValue('database') ?>" placeholder="weline">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-username"><?= $escapeHtml(__('Username')) ?></label>
+                        <input id="wdb-profile-username" type="text" name="username" value="<?= $profileValue('username') ?>" autocomplete="off">
+                    </div>
+                    <div class="wdb-form-field is-wide">
+                        <label for="wdb-profile-path"><?= $escapeHtml(__('SQLite path')) ?></label>
+                        <input id="wdb-profile-path" type="text" name="path" value="<?= $profileValue('path') ?>" placeholder="/absolute/path/database.sqlite">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-password"><?= $escapeHtml(__('Password')) ?></label>
+                        <input id="wdb-profile-password" type="password" name="password" value="" autocomplete="new-password" placeholder="<?= $escapeHtml(!empty($projectProfile['password_configured']) ? __('Configured, leave blank to keep') : __('Not saved in Profile')) ?>">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('State')) ?>: <?= $escapeHtml($passwordSourceLabel) ?></p>
+                    </div>
+                    <label class="wdb-check" data-wdb-env-password-import>
+                        <input type="hidden" name="import_env_password" value="0">
+                        <input type="checkbox" name="import_env_password" value="1">
+                        <span><?= $escapeHtml(__('Copy source env password into Profile')) ?></span>
+                    </label>
+                    <div class="wdb-form-field">
+                        <label for="wdb-import-env-password-phrase"><?= $escapeHtml(__('Copy confirmation')) ?></label>
+                        <input id="wdb-import-env-password-phrase" type="text" name="import_env_password_phrase" value="" autocomplete="off" placeholder="<?= $escapeHtml($envPasswordImportPhrase) ?>">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Copies the selected source env profile password into this Project Profile without showing it.')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-prefix"><?= $escapeHtml(__('Prefix')) ?></label>
+                        <input id="wdb-profile-prefix" type="text" name="prefix" value="<?= $profileValue('prefix') ?>" placeholder="w_">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-charset"><?= $escapeHtml(__('Charset')) ?></label>
+                        <input id="wdb-profile-charset" type="text" name="charset" value="<?= $profileValue('charset') ?>" placeholder="utf8mb4">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-profile-collate"><?= $escapeHtml(__('Collation')) ?></label>
+                        <input id="wdb-profile-collate" type="text" name="collate" value="<?= $profileValue('collate') ?>" placeholder="utf8mb4_general_ci">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-runtime-action"><?= $escapeHtml(__('Runtime action')) ?></label>
+                        <select id="wdb-runtime-action" name="runtime_action">
+                            <option value="none"><?= $escapeHtml(__('Save only')) ?></option>
+                            <option value="reload"><?= $escapeHtml(__('Request WLS reload')) ?></option>
+                        </select>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-runtime-instance"><?= $escapeHtml(__('Target WLS instance')) ?></label>
+                        <input id="wdb-runtime-instance" type="text" name="runtime_instance" value="<?= $profileValue('last_runtime_instance') ?>" placeholder="default">
+                    </div>
+                    <div class="wdb-form-field is-full">
+                        <label for="wdb-profile-pre-sql"><?= $escapeHtml(__('Pre SQL')) ?></label>
+                        <textarea id="wdb-profile-pre-sql" name="pre_sql" placeholder="SET NAMES utf8mb4"><?= $profileValue('pre_sql') ?></textarea>
+                    </div>
+                    <div class="wdb-form-field is-full">
+                        <label for="wdb-profile-description"><?= $escapeHtml(__('Description')) ?></label>
+                        <textarea id="wdb-profile-description" name="description" placeholder="<?= $escapeHtml(__('Optional operator note for this WLS project database profile.')) ?>"><?= $profileValue('description') ?></textarea>
+                    </div>
+                    <label class="wdb-check">
+                        <input type="hidden" name="clear_password" value="0">
+                        <input type="checkbox" name="clear_password" value="1">
+                        <span><?= $escapeHtml(__('Clear stored password')) ?></span>
+                    </label>
+                </div>
+
+                <?php if (!empty($projectProfile['last_runtime_message']) || !empty($projectProfile['last_test_message'])): ?>
+                    <div class="wdb-context">
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('Last runtime action')) ?></div>
+                            <div class="wdb-context-value"><?= $escapeHtml(($projectProfile['last_runtime_action'] ?? 'none') . ' / ' . (($projectProfile['last_runtime_instance'] ?? '') ?: '-')) ?></div>
+                        </div>
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('Runtime result')) ?></div>
+                            <div class="wdb-context-value"><?= $escapeHtml(($projectProfile['last_runtime_message'] ?? '') ?: '-') ?></div>
+                        </div>
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('Last test')) ?></div>
+                            <div class="wdb-context-value"><?= $escapeHtml(($projectProfile['last_test_status'] ?? '') ?: '-') ?></div>
+                        </div>
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('Test message')) ?></div>
+                            <div class="wdb-context-value"><?= $escapeHtml(($projectProfile['last_test_message'] ?? '') ?: '-') ?></div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <button class="wdb-save-button" type="submit">
+                    <span class="mdi mdi-content-save-cog-outline"></span><?= $escapeHtml(__('Save Project Profile')) ?>
+                </button>
+            </form>
+
+            <?php if ($auditRecords !== []): ?>
+                <div class="wdb-profile-detail" data-wdb-audit-log>
+                    <div class="wdb-panel-head">
+                        <div>
+                            <h3 class="wdb-panel-title"><?= $escapeHtml(__('Recent Audit')) ?></h3>
+                            <p class="wdb-panel-note"><?= $escapeHtml(__('Latest DbManager profile save and connection-test audit entries.')) ?></p>
+                        </div>
+                    </div>
+                    <div class="wdb-audit-list">
+                        <?php foreach ($auditRecords as $record): ?>
+                            <?php
+                            $payload = is_array($record['payload'] ?? null) ? $record['payload'] : [];
+                            $profilePayload = is_array($payload['profile'] ?? null) ? $payload['profile'] : [];
+                            $auditDomain = (string)($profilePayload['domain'] ?? ($payload['profile_key'] ?? ''));
+                            $auditMessage = (string)($payload['runtime_action_message'] ?? ($payload['message'] ?? ''));
+                            ?>
+                            <article class="wdb-audit-row">
+                                <div>
+                                    <div class="wdb-field-label"><?= $escapeHtml(__('Time')) ?></div>
+                                    <div class="wdb-code"><?= $escapeHtml($record['time'] ?? '') ?></div>
+                                </div>
+                                <div>
+                                    <div class="wdb-field-label"><?= $escapeHtml(__('Event')) ?></div>
+                                    <div class="wdb-context-value"><?= $escapeHtml($record['event'] ?? '') ?></div>
+                                </div>
+                                <div>
+                                    <div class="wdb-field-label"><?= $escapeHtml(__('Scope')) ?></div>
+                                    <div class="wdb-audit-meta">
+                                        <?= $escapeHtml($auditDomain !== '' ? $auditDomain : '-') ?>
+                                        <?php if ($auditMessage !== ''): ?>
+                                            <span class="wdb-code"><?= $escapeHtml(' / ' . $auditMessage) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('lifecycle')): ?>
+        <section class="wdb-panel"
+                 id="lifecycle"
+                 data-wdb-lifecycle-plan
+                 data-wdb-lifecycle-state="<?= $escapeHtml($lifecyclePlan['state'] ?? 'idle') ?>">
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Database Lifecycle Plan')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml(__('Preview create database, create user, or grant intent before any future DBA adapter is allowed to execute vendor-specific SQL.')) ?></p>
+                </div>
+                <span class="wdb-badge <?= ($lifecyclePlan['state'] ?? '') === 'blocked' ? 'is-attention' : (in_array((string)($lifecyclePlan['state'] ?? ''), ['dry_run_only', 'ready_to_execute'], true) ? 'is-ready' : '') ?>">
+                    <?= $escapeHtml($lifecyclePlan['state_label'] ?? __('Waiting for Input')) ?>
+                </span>
+            </div>
+
+            <form class="wdb-form" method="get" action="<?= $escapeHtml($dbPageUrl('lifecycle')) ?>" data-wdb-lifecycle-plan-form>
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+
+                <div class="wdb-lifecycle-grid">
+                    <div class="wdb-form-field">
+                        <label for="wdb-lifecycle-action"><?= $escapeHtml(__('Lifecycle Action')) ?></label>
+                        <select id="wdb-lifecycle-action" name="lifecycle_action">
+                            <option value=""><?= $escapeHtml(__('Select Action')) ?></option>
+                            <option value="create_database" <?= $lifecycleActionSelected('create_database', $lifecyclePlan) ?>><?= $escapeHtml(__('Create Database')) ?></option>
+                            <option value="create_user" <?= $lifecycleActionSelected('create_user', $lifecyclePlan) ?>><?= $escapeHtml(__('Create User')) ?></option>
+                            <option value="grant_user" <?= $lifecycleActionSelected('grant_user', $lifecyclePlan) ?>><?= $escapeHtml(__('Grant User')) ?></option>
+                        </select>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-lifecycle-database"><?= $escapeHtml(__('Database')) ?></label>
+                        <input id="wdb-lifecycle-database" type="text" name="lifecycle_database" value="<?= $escapeHtml($lifecyclePlan['database'] ?? ($projectProfile['database'] ?? '')) ?>" placeholder="weline_project">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-lifecycle-username"><?= $escapeHtml(__('Username')) ?></label>
+                        <input id="wdb-lifecycle-username" type="text" name="lifecycle_username" value="<?= $escapeHtml($lifecyclePlan['username'] ?? ($projectProfile['username'] ?? '')) ?>" autocomplete="off" placeholder="weline_user">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-lifecycle-host"><?= $escapeHtml(__('Host Scope')) ?></label>
+                        <input id="wdb-lifecycle-host" type="text" name="lifecycle_host" value="<?= $escapeHtml($lifecyclePlan['host'] ?? ($projectProfile['hostname'] ?? '')) ?>" placeholder="127.0.0.1">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-lifecycle-grant-mode"><?= $escapeHtml(__('Grant Mode')) ?></label>
+                        <select id="wdb-lifecycle-grant-mode" name="lifecycle_grant_mode">
+                            <option value="read_write" <?= $lifecycleGrantSelected('read_write', $lifecyclePlan) ?>><?= $escapeHtml(__('Read Write')) ?></option>
+                            <option value="read_only" <?= $lifecycleGrantSelected('read_only', $lifecyclePlan) ?>><?= $escapeHtml(__('Read Only')) ?></option>
+                            <option value="schema_owner" <?= $lifecycleGrantSelected('schema_owner', $lifecyclePlan) ?>><?= $escapeHtml(__('Schema Owner')) ?></option>
+                        </select>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Driver')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($lifecyclePlan['driver'] ?? ($projectProfile['type'] ?? 'mysql')) ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Execution')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($lifecyclePlan['execution_label'] ?? __('Execution disabled in this slice')) ?></div>
+                    </div>
+                    <button class="wdb-secondary-button" type="submit">
+                        <span class="mdi mdi-clipboard-search-outline"></span><?= $escapeHtml(__('Preview Lifecycle Plan')) ?>
+                    </button>
+                </div>
+            </form>
+
+            <?php foreach ($lifecycleErrors as $lifecycleError): ?>
+                <div class="wdb-alert is-danger" style="margin-top:16px"><?= $escapeHtml($lifecycleError) ?></div>
+            <?php endforeach; ?>
+            <?php foreach ($lifecycleWarnings as $lifecycleWarning): ?>
+                <div class="wdb-alert is-warning" style="margin-top:16px"><?= $escapeHtml($lifecycleWarning) ?></div>
+            <?php endforeach; ?>
+
+            <div class="wdb-lifecycle-checks" data-wdb-lifecycle-checks>
+                <?php foreach ($lifecycleChecks as $check): ?>
+                    <article class="wdb-lifecycle-check" data-wdb-check-state="<?= $escapeHtml($check['state'] ?? '') ?>">
+                        <div class="wdb-field-label"><?= $escapeHtml($check['label'] ?? '') ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($check['value'] ?? '') ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($check['detail'] ?? '') ?></p>
+                        <span class="wdb-badge"><?= $escapeHtml($check['state'] ?? '') ?></span>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+
+            <ol class="wdb-plan-list" data-wdb-lifecycle-steps>
+                <?php foreach ($lifecycleSteps as $step): ?>
+                    <li><?= $escapeHtml($step) ?></li>
+                <?php endforeach; ?>
+            </ol>
+
+            <?php if (($lifecyclePlan['action'] ?? '') !== ''): ?>
+                <div class="wdb-sql-plan" data-wdb-lifecycle-adapter-plan>
+                    <div class="wdb-panel-head">
+                        <div>
+                            <h3 class="wdb-panel-title"><?= $escapeHtml(__('适配器 SQL 计划')) ?></h3>
+                            <p class="wdb-panel-note"><?= $escapeHtml(__('SQL is shown as the adapter plan; execution is only available through the guarded form below after the Project Profile and confirmation are ready.')) ?></p>
+                        </div>
+                        <span class="wdb-badge <?= ($lifecycleAdapterPlan['state'] ?? '') === 'blocked' ? 'is-attention' : (($lifecycleAdapterPlan['state'] ?? '') === 'planned' ? 'is-ready' : '') ?>">
+                            <?= $escapeHtml($lifecycleAdapterPlan['state_label'] ?? __('等待生命周期动作')) ?>
+                        </span>
+                    </div>
+                    <div class="wdb-sql-summary">
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('适配器')) ?></div>
+                            <div class="wdb-context-value"><?= $escapeHtml($lifecycleAdapterPlan['adapter_label'] ?? '-') ?></div>
+                        </div>
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('执行状态')) ?></div>
+                            <div class="wdb-context-value"><?= $escapeHtml($lifecycleAdapterPlan['execution_label'] ?? __('仅预览，不执行 SQL')) ?></div>
+                        </div>
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('确认短语')) ?></div>
+                            <div class="wdb-context-value wdb-code"><?= $escapeHtml($lifecycleAdapterPlan['confirmation_phrase'] ?? 'RUN_DB_LIFECYCLE') ?></div>
+                        </div>
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('审计事件')) ?></div>
+                            <div class="wdb-context-value wdb-code"><?= $escapeHtml($lifecycleAdapterPlan['audit_event'] ?? '-') ?></div>
+                        </div>
+                    </div>
+
+                    <?php if ($lifecycleSqlStatements !== []): ?>
+                        <div class="wdb-sql-list" aria-label="<?= $escapeHtml(__('SQL 语句预览')) ?>">
+                            <?php foreach ($lifecycleSqlStatements as $statement): ?>
+                                <article class="wdb-sql-item">
+                                    <div class="wdb-field-label"><?= $escapeHtml($statement['label'] ?? __('SQL 语句')) ?></div>
+                                    <pre><?= $escapeHtml($statement['sql'] ?? '') ?></pre>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="wdb-empty"><?= $escapeHtml(__('当前输入还不能生成安全 SQL 计划。')) ?></div>
+                    <?php endif; ?>
+
+                    <?php if ($lifecycleVerificationQueries !== []): ?>
+                        <div>
+                            <div class="wdb-field-label"><?= $escapeHtml(__('验证查询')) ?></div>
+                            <ol class="wdb-plan-list">
+                                <?php foreach ($lifecycleVerificationQueries as $query): ?>
+                                    <li><span class="wdb-code"><?= $escapeHtml($query) ?></span></li>
+                                <?php endforeach; ?>
+                            </ol>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($lifecycleRollbackGuidance !== []): ?>
+                        <div>
+                            <div class="wdb-field-label"><?= $escapeHtml(__('回滚或清理指引')) ?></div>
+                            <ol class="wdb-plan-list">
+                                <?php foreach ($lifecycleRollbackGuidance as $guidance): ?>
+                                    <li><?= $escapeHtml($guidance) ?></li>
+                                <?php endforeach; ?>
+                            </ol>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+
+            <form class="wdb-form wdb-execution-guard"
+                  method="post"
+                  action="<?= $escapeHtml($lifecycleExecuteUrl) ?>"
+                  data-wdb-lifecycle-execute-form
+                  data-wdb-lifecycle-can-execute="<?= $lifecycleCanExecute ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+                <input type="hidden" name="lifecycle_action" value="<?= $escapeHtml($lifecyclePlan['action'] ?? '') ?>">
+                <input type="hidden" name="lifecycle_database" value="<?= $escapeHtml($lifecyclePlan['database'] ?? '') ?>">
+                <input type="hidden" name="lifecycle_username" value="<?= $escapeHtml($lifecyclePlan['username'] ?? '') ?>">
+                <input type="hidden" name="lifecycle_host" value="<?= $escapeHtml($lifecyclePlan['host'] ?? '') ?>">
+                <input type="hidden" name="lifecycle_grant_mode" value="<?= $escapeHtml($lifecyclePlan['grant_mode'] ?? 'read_write') ?>">
+
+                <div class="wdb-panel-head" style="margin-bottom:0">
+                    <div>
+                        <h3 class="wdb-panel-title"><?= $escapeHtml(__('Lifecycle Execution Boundary')) ?></h3>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Execution connects to the selected source DBA profile, runs only the rebuilt adapter SQL plan, appends an audit record, and never renders stored passwords.')) ?></p>
+                    </div>
+                    <span class="wdb-badge <?= $lifecycleCanExecute ? 'is-ready' : 'is-attention' ?>">
+                        <?= $escapeHtml($lifecycleCanExecute ? __('Ready') : __('Guarded')) ?>
+                    </span>
+                </div>
+
+                <div class="wdb-env-toolbar">
+                    <div class="wdb-form-field">
+                        <label for="wdb-lifecycle-confirm-phrase"><?= $escapeHtml(__('Confirmation Phrase')) ?></label>
+                        <input id="wdb-lifecycle-confirm-phrase"
+                               type="text"
+                               name="confirm_lifecycle_phrase"
+                               placeholder="<?= $escapeHtml($lifecycleConfirmationPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$lifecycleConfirmationPhrase])) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_lifecycle_execute" value="1">
+                            <span><?= $escapeHtml(__('I understand WLS Database Manager will execute lifecycle SQL against the selected source DBA profile.')) ?></span>
+                        </label>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Execution Guard')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($lifecyclePlan['execution_label'] ?? __('Execution disabled in this slice')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <button class="wdb-danger-button" type="submit" <?= $lifecycleCanExecute ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-arrow-up-outline"></span><?= $escapeHtml(__('Run Lifecycle Action')) ?>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('backup-plan')): ?>
+        <section class="wdb-panel"
+                 id="backup-plan"
+                 data-wdb-backup-plan
+                 data-wdb-backup-state="<?= $escapeHtml($backupPlan['state'] ?? 'idle') ?>">
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Backup Restore And Migration Plan')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml(__('Preview backup, destructive restore, guarded MySQL/MariaDB migration import, or guarded SQL apply intent. Migration import and SQL apply both create a fresh safety backup before execution.')) ?></p>
+                </div>
+                <span class="wdb-badge <?= ($backupPlan['state'] ?? '') === 'blocked' ? 'is-attention' : (in_array((string)($backupPlan['state'] ?? ''), ['dry_run_only', 'ready_to_execute', 'ready_to_preflight', 'ready_to_restore_execute', 'ready_to_migration_preflight', 'ready_to_migration_execute', 'ready_to_sql_apply'], true) ? 'is-ready' : '') ?>">
+                    <?= $escapeHtml($backupPlan['state_label'] ?? __('Waiting for Input')) ?>
+                </span>
+            </div>
+
+            <form class="wdb-form" method="get" action="<?= $escapeHtml($dbPageUrl('backup-plan')) ?>" data-wdb-backup-plan-form>
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+
+                <div class="wdb-lifecycle-grid">
+                    <div class="wdb-form-field">
+                        <label for="wdb-backup-action"><?= $escapeHtml(__('Backup Action')) ?></label>
+                        <select id="wdb-backup-action" name="backup_action">
+                            <option value=""><?= $escapeHtml(__('Select Action')) ?></option>
+                            <option value="backup_database" <?= $backupActionSelected('backup_database', $backupPlan) ?>><?= $escapeHtml(__('Backup Database')) ?></option>
+                            <option value="restore_database" <?= $backupActionSelected('restore_database', $backupPlan) ?>><?= $escapeHtml(__('Restore Database')) ?></option>
+                            <option value="migration_dry_run" <?= $backupActionSelected('migration_dry_run', $backupPlan) ?>><?= $escapeHtml(__('Migration Dry Run')) ?></option>
+                            <option value="sql_apply" <?= $backupActionSelected('sql_apply', $backupPlan) ?>><?= $escapeHtml(__('SQL Apply')) ?></option>
+                        </select>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-backup-scope"><?= $escapeHtml(__('Backup Scope')) ?></label>
+                        <select id="wdb-backup-scope" name="backup_scope">
+                            <option value="schema_and_data" <?= $backupScopeSelected('schema_and_data', $backupPlan) ?>><?= $escapeHtml(__('Schema And Data')) ?></option>
+                            <option value="schema_only" <?= $backupScopeSelected('schema_only', $backupPlan) ?>><?= $escapeHtml(__('Schema Only')) ?></option>
+                            <option value="data_only" <?= $backupScopeSelected('data_only', $backupPlan) ?>><?= $escapeHtml(__('Data Only')) ?></option>
+                        </select>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-backup-artifact"><?= $escapeHtml(__('Backup Artifact')) ?></label>
+                        <input id="wdb-backup-artifact" type="text" name="backup_artifact" value="<?= $escapeHtml($backupPlan['artifact'] ?? '') ?>" placeholder="project-backup.sql" autocomplete="off">
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-migration-target"><?= $escapeHtml(__('Migration Target')) ?></label>
+                        <input id="wdb-migration-target" type="text" name="migration_target" value="<?= $escapeHtml($backupPlan['migration_target'] ?? '') ?>" placeholder="release-2026-06" autocomplete="off">
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Profile Source')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($backupPlan['profile_source_label'] ?? __('No Profile')) ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Driver')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($backupPlan['driver'] ?? ($projectProfile['type'] ?? 'mysql')) ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Artifact Directory')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($backupPlan['artifact_dir_label'] ?? 'var/backups/wls/db-manager/database') ?></div>
+                    </div>
+                    <button class="wdb-secondary-button" type="submit">
+                        <span class="mdi mdi-clipboard-search-outline"></span><?= $escapeHtml(__('Preview Backup Plan')) ?>
+                    </button>
+                </div>
+            </form>
+
+            <?php foreach ($backupErrors as $backupError): ?>
+                <div class="wdb-alert is-danger" style="margin-top:16px"><?= $escapeHtml($backupError) ?></div>
+            <?php endforeach; ?>
+            <?php foreach ($backupWarnings as $backupWarning): ?>
+                <div class="wdb-alert is-warning" style="margin-top:16px"><?= $escapeHtml($backupWarning) ?></div>
+            <?php endforeach; ?>
+
+            <div class="wdb-lifecycle-checks" data-wdb-backup-checks>
+                <?php foreach ($backupChecks as $check): ?>
+                    <article class="wdb-lifecycle-check" data-wdb-check-state="<?= $escapeHtml($check['state'] ?? '') ?>">
+                        <div class="wdb-field-label"><?= $escapeHtml($check['label'] ?? '') ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($check['value'] ?? '') ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($check['detail'] ?? '') ?></p>
+                        <span class="wdb-badge"><?= $escapeHtml($check['state'] ?? '') ?></span>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+
+            <ol class="wdb-plan-list" data-wdb-backup-steps>
+                <?php foreach ($backupSteps as $step): ?>
+                    <li><?= $escapeHtml($step) ?></li>
+                <?php endforeach; ?>
+            </ol>
+
+            <form class="wdb-form wdb-execution-guard"
+                  method="post"
+                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  data-wdb-backup-execute-form
+                  data-wdb-backup-can-execute="<?= $backupCanExecute ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+                <input type="hidden" name="backup_action" value="<?= $escapeHtml($backupPlan['action'] ?? '') ?>">
+                <input type="hidden" name="backup_scope" value="<?= $escapeHtml($backupPlan['scope'] ?? 'schema_and_data') ?>">
+                <input type="hidden" name="backup_artifact" value="<?= $escapeHtml($backupPlan['artifact'] ?? '') ?>">
+                <input type="hidden" name="migration_target" value="<?= $escapeHtml($backupPlan['migration_target'] ?? '') ?>">
+
+                <div class="wdb-panel-head" style="margin-bottom:0">
+                    <div>
+                        <h3 class="wdb-panel-title"><?= $escapeHtml(__('Database Backup Execution Boundary')) ?></h3>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Execution runs pg_dump or mysqldump only for backup_database, writes inside the WLS backup directory, stores metadata, and appends sanitized audit records.')) ?></p>
+                    </div>
+                    <span class="wdb-badge <?= $backupCanExecute ? 'is-ready' : 'is-attention' ?>">
+                        <?= $escapeHtml($backupCanExecute ? __('Ready') : __('Guarded')) ?>
+                    </span>
+                </div>
+
+                <div class="wdb-env-toolbar">
+                    <div class="wdb-form-field">
+                        <label for="wdb-backup-confirm-phrase"><?= $escapeHtml(__('Confirmation Phrase')) ?></label>
+                        <input id="wdb-backup-confirm-phrase"
+                               type="text"
+                               name="confirm_backup_phrase"
+                               placeholder="<?= $escapeHtml($backupConfirmationPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$backupConfirmationPhrase])) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_backup_execute" value="1">
+                            <span><?= $escapeHtml(__('I understand WLS Database Manager will run the matching database dump adapter against the enabled Project Profile.')) ?></span>
+                        </label>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Execution Guard')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($backupPlan['execution_label'] ?? __('Execution disabled in this slice')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <button class="wdb-danger-button" type="submit" <?= $backupCanExecute ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-export-outline"></span><?= $escapeHtml(__('Run Database Backup')) ?>
+                        </button>
+                    </div>
+                </div>
+                <p class="wdb-field-help"><?= $escapeHtml(__('Restore, migration import, and SQL apply use their own confirmation cards; this backup button only writes a database dump and audit metadata.')) ?></p>
+            </form>
+
+            <form class="wdb-form wdb-execution-guard"
+                  method="post"
+                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  data-wdb-restore-rollback-form
+                  data-wdb-restore-can-rollback="<?= $restoreRollbackCanExecute ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+                <input type="hidden" name="backup_action" value="restore_rollback">
+                <input type="hidden" name="rollback_artifact" value="<?= $escapeHtml($restoreRollbackArtifact) ?>">
+
+                <div class="wdb-panel-head" style="margin-bottom:0">
+                    <div>
+                        <h3 class="wdb-panel-title"><?= $escapeHtml(__('Database Restore Rollback')) ?></h3>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Rollback restores only a pre-restore backup recorded by a previous guarded restore, then creates a fresh safety backup and verifies the target connection.')) ?></p>
+                    </div>
+                    <span class="wdb-badge <?= $restoreRollbackCanExecute ? 'is-ready' : 'is-attention' ?>">
+                        <?= $escapeHtml($restoreRollbackCanExecute ? __('Ready') : __('Guarded')) ?>
+                    </span>
+                </div>
+
+                <div class="wdb-env-toolbar">
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Rollback Artifact')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($restoreRollbackArtifact !== '' ? $restoreRollbackArtifact : __('No rollback backup is ready.')) ?></p>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Original Restore')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($restoreRollbackPlan['source_restore_artifact'] ?? '-') ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-restore-rollback-phrase"><?= $escapeHtml(__('Rollback Phrase')) ?></label>
+                        <input id="wdb-restore-rollback-phrase"
+                               type="text"
+                               name="confirm_restore_rollback_phrase"
+                               placeholder="<?= $escapeHtml($restoreRollbackPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$restoreRollbackPhrase])) ?></p>
+                    </div>
+                    <?php if ($restoreRollbackResetRequired): ?>
+                        <div class="wdb-form-field">
+                            <label for="wdb-restore-rollback-reset-phrase"><?= $escapeHtml(__('PostgreSQL Reset Phrase')) ?></label>
+                            <input id="wdb-restore-rollback-reset-phrase"
+                                   type="text"
+                                   name="confirm_pg_schema_reset_phrase"
+                                   placeholder="<?= $escapeHtml($restoreRollbackResetPhrase) ?>"
+                                   autocomplete="off">
+                            <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$restoreRollbackResetPhrase])) ?></p>
+                        </div>
+                    <?php endif; ?>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_restore_rollback" value="1">
+                            <span><?= $escapeHtml(__('I understand rollback is destructive and will restore the recorded pre-restore backup.')) ?></span>
+                        </label>
+                    </div>
+                    <?php if ($restoreRollbackResetRequired): ?>
+                        <div class="wdb-form-field">
+                            <label class="wdb-check">
+                                <input type="checkbox" name="confirm_pg_schema_reset" value="1">
+                                <span><?= $escapeHtml(__('I understand PostgreSQL rollback will reset the public schema before replaying the backup.')) ?></span>
+                            </label>
+                        </div>
+                    <?php endif; ?>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Rollback Guard')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($restoreRollbackPlan['execution_label'] ?? __('No rollback backup is ready.')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <button class="wdb-danger-button" type="submit" <?= $restoreRollbackCanExecute ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-refresh-outline"></span><?= $escapeHtml(__('Run Restore Rollback')) ?>
+                        </button>
+                    </div>
+                </div>
+                <p class="wdb-field-help"><?= $escapeHtml(__('Rollback never accepts arbitrary paths; WLS checks the audit record, artifact metadata, checksum, driver, and database before executing.')) ?></p>
+            </form>
+
+            <form class="wdb-form wdb-execution-guard"
+                  method="post"
+                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  data-wdb-restore-preflight-form
+                  data-wdb-restore-can-preflight="<?= $backupCanPreflight ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+                <input type="hidden" name="backup_action" value="<?= $escapeHtml($backupPlan['action'] ?? '') ?>">
+                <input type="hidden" name="backup_scope" value="<?= $escapeHtml($backupPlan['scope'] ?? 'schema_and_data') ?>">
+                <input type="hidden" name="backup_artifact" value="<?= $escapeHtml($backupPlan['artifact'] ?? '') ?>">
+                <input type="hidden" name="migration_target" value="<?= $escapeHtml($backupPlan['migration_target'] ?? '') ?>">
+
+                <div class="wdb-panel-head" style="margin-bottom:0">
+                    <div>
+                        <h3 class="wdb-panel-title"><?= $escapeHtml(__('Database Restore Preflight Boundary')) ?></h3>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Preflight verifies the selected backup artifact, metadata, checksum, driver, database, and readability; it never restores data or runs SQL.')) ?></p>
+                    </div>
+                    <span class="wdb-badge <?= $backupCanPreflight ? 'is-ready' : 'is-attention' ?>">
+                        <?= $escapeHtml($backupCanPreflight ? __('Ready') : __('Guarded')) ?>
+                    </span>
+                </div>
+
+                <div class="wdb-env-toolbar">
+                    <div class="wdb-form-field">
+                        <label for="wdb-restore-confirm-phrase"><?= $escapeHtml(__('Confirmation Phrase')) ?></label>
+                        <input id="wdb-restore-confirm-phrase"
+                               type="text"
+                               name="confirm_restore_phrase"
+                               placeholder="<?= $escapeHtml($restorePreflightPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$restorePreflightPhrase])) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_restore_preflight" value="1">
+                            <span><?= $escapeHtml(__('I understand WLS Database Manager will only verify the selected backup artifact and will not restore data.')) ?></span>
+                        </label>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Preflight Guard')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($backupPlan['execution_label'] ?? __('Execution disabled in this slice')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <button class="wdb-secondary-button" type="submit" <?= $backupCanPreflight ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-check-outline"></span><?= $escapeHtml(__('Run Restore Preflight')) ?>
+                        </button>
+                    </div>
+                </div>
+                <p class="wdb-field-help"><?= $escapeHtml(__('Use this preflight before restore execution; it never modifies the target database.')) ?></p>
+            </form>
+
+            <form class="wdb-form wdb-execution-guard"
+                  method="post"
+                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  data-wdb-restore-execute-form
+                  data-wdb-restore-can-execute="<?= $backupCanRestoreExecute ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+                <input type="hidden" name="backup_action" value="<?= $escapeHtml($backupPlan['action'] ?? '') ?>">
+                <input type="hidden" name="backup_scope" value="<?= $escapeHtml($backupPlan['scope'] ?? 'schema_and_data') ?>">
+                <input type="hidden" name="backup_artifact" value="<?= $escapeHtml($backupPlan['artifact'] ?? '') ?>">
+                <input type="hidden" name="migration_target" value="<?= $escapeHtml($backupPlan['migration_target'] ?? '') ?>">
+
+                <div class="wdb-panel-head" style="margin-bottom:0">
+                    <div>
+                        <h3 class="wdb-panel-title"><?= $escapeHtml(__('Database Restore Execution Boundary')) ?></h3>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Execution re-runs restore preflight, creates a fresh pre-restore backup, restores through the selected driver adapter, verifies the target connection, and writes sanitized audit records.')) ?></p>
+                    </div>
+                    <span class="wdb-badge <?= $backupCanRestoreExecute ? 'is-ready' : 'is-attention' ?>">
+                        <?= $escapeHtml($backupCanRestoreExecute ? __('Ready') : __('Guarded')) ?>
+                    </span>
+                </div>
+
+                <div class="wdb-env-toolbar">
+                    <div class="wdb-form-field">
+                        <label for="wdb-restore-execute-preflight-phrase"><?= $escapeHtml(__('Preflight Phrase')) ?></label>
+                        <input id="wdb-restore-execute-preflight-phrase"
+                               type="text"
+                               name="confirm_restore_phrase"
+                               placeholder="<?= $escapeHtml($restorePreflightPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$restorePreflightPhrase])) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-restore-execute-phrase"><?= $escapeHtml(__('Restore Phrase')) ?></label>
+                        <input id="wdb-restore-execute-phrase"
+                               type="text"
+                               name="confirm_restore_execute_phrase"
+                               placeholder="<?= $escapeHtml($restoreExecutionPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$restoreExecutionPhrase])) ?></p>
+                    </div>
+                    <?php if ($restoreResetRequired): ?>
+                        <div class="wdb-form-field">
+                            <label for="wdb-restore-reset-phrase"><?= $escapeHtml(__('PostgreSQL Reset Phrase')) ?></label>
+                            <input id="wdb-restore-reset-phrase"
+                                   type="text"
+                                   name="confirm_pg_schema_reset_phrase"
+                                   placeholder="<?= $escapeHtml($restoreResetPhrase) ?>"
+                                   autocomplete="off">
+                            <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$restoreResetPhrase])) ?></p>
+                        </div>
+                    <?php endif; ?>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_restore_preflight" value="1">
+                            <span><?= $escapeHtml(__('I understand WLS Database Manager will verify the artifact again before restore execution.')) ?></span>
+                        </label>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_restore_execute" value="1">
+                            <span><?= $escapeHtml(__('I understand this restore is destructive and a fresh pre-restore backup will be created first.')) ?></span>
+                        </label>
+                    </div>
+                    <?php if ($restoreResetRequired): ?>
+                        <div class="wdb-form-field">
+                            <label class="wdb-check">
+                                <input type="checkbox" name="confirm_pg_schema_reset" value="1">
+                                <span><?= $escapeHtml(__('I understand PostgreSQL plain SQL restore will reset the public schema before replaying the artifact.')) ?></span>
+                            </label>
+                        </div>
+                        <div class="wdb-context-item">
+                            <div class="wdb-field-label"><?= $escapeHtml(__('Reset Mode')) ?></div>
+                            <p class="wdb-panel-note"><?= $escapeHtml($restoreResetModeLabel) ?></p>
+                        </div>
+                    <?php endif; ?>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Restore Guard')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($backupPlan['execution_label'] ?? __('Execution disabled in this slice')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <button class="wdb-danger-button" type="submit" <?= $backupCanRestoreExecute ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-import-outline"></span><?= $escapeHtml(__('Run Database Restore')) ?>
+                        </button>
+                    </div>
+                </div>
+                <p class="wdb-field-help"><?= $escapeHtml(__('Restore execution supports MySQL/MariaDB .sql and .sql.gz artifacts, PostgreSQL .dump and .backup artifacts, and PostgreSQL plain SQL artifacts only behind RESET_PG_SCHEMA public-schema reset. Migration import and WLS reload are separate guarded paths; project health probes are read-only.')) ?></p>
+            </form>
+
+            <form class="wdb-form wdb-execution-guard"
+                  method="post"
+                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  data-wdb-migration-preflight-form
+                  data-wdb-migration-can-preflight="<?= $backupCanMigrationPreflight ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+                <input type="hidden" name="backup_action" value="<?= $escapeHtml($backupPlan['action'] ?? '') ?>">
+                <input type="hidden" name="backup_scope" value="<?= $escapeHtml($backupPlan['scope'] ?? 'schema_and_data') ?>">
+                <input type="hidden" name="backup_artifact" value="<?= $escapeHtml($backupPlan['artifact'] ?? '') ?>">
+                <input type="hidden" name="migration_target" value="<?= $escapeHtml($backupPlan['migration_target'] ?? '') ?>">
+
+                <div class="wdb-panel-head" style="margin-bottom:0">
+                    <div>
+                        <h3 class="wdb-panel-title"><?= $escapeHtml(__('Database Migration Preflight Boundary')) ?></h3>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Preflight verifies the migration target, enabled Project Profile, backup evidence, metadata, checksum, and risk classification; it never runs migrations or SQL.')) ?></p>
+                    </div>
+                    <span class="wdb-badge <?= $backupCanMigrationPreflight ? 'is-ready' : 'is-attention' ?>">
+                        <?= $escapeHtml($backupCanMigrationPreflight ? __('Ready') : __('Guarded')) ?>
+                    </span>
+                </div>
+
+                <div class="wdb-env-toolbar">
+                    <div class="wdb-form-field">
+                        <label for="wdb-migration-confirm-phrase"><?= $escapeHtml(__('Confirmation Phrase')) ?></label>
+                        <input id="wdb-migration-confirm-phrase"
+                               type="text"
+                               name="confirm_migration_phrase"
+                               placeholder="<?= $escapeHtml($migrationPreflightPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$migrationPreflightPhrase])) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_migration_preflight" value="1">
+                            <span><?= $escapeHtml(__('I understand WLS Database Manager will only verify migration readiness and will not run migration scripts.')) ?></span>
+                        </label>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Migration Preflight Guard')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($backupPlan['execution_label'] ?? __('Execution disabled in this slice')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <button class="wdb-secondary-button" type="submit" <?= $backupCanMigrationPreflight ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-sync-outline"></span><?= $escapeHtml(__('Run Migration Preflight')) ?>
+                        </button>
+                    </div>
+                </div>
+                <p class="wdb-field-help"><?= $escapeHtml(__('Preflight is read-only. MySQL/MariaDB migration import is offered in a separate card and requires RUN_DB_MIGRATION before any database change can happen.')) ?></p>
+            </form>
+
+            <form class="wdb-form wdb-execution-guard"
+                  method="post"
+                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  data-wdb-migration-execute-form
+                  data-wdb-migration-can-execute="<?= $backupCanMigrationExecute ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+                <input type="hidden" name="backup_action" value="<?= $escapeHtml($backupPlan['action'] ?? '') ?>">
+                <input type="hidden" name="backup_scope" value="<?= $escapeHtml($backupPlan['scope'] ?? 'schema_and_data') ?>">
+                <input type="hidden" name="backup_artifact" value="<?= $escapeHtml($backupPlan['artifact'] ?? '') ?>">
+                <input type="hidden" name="migration_target" value="<?= $escapeHtml($backupPlan['migration_target'] ?? '') ?>">
+
+                <div class="wdb-panel-head" style="margin-bottom:0">
+                    <div>
+                        <h3 class="wdb-panel-title"><?= $escapeHtml(__('Database Migration Execution Boundary')) ?></h3>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Execution re-runs migration preflight, creates a fresh pre-migration backup, imports the verified MySQL/MariaDB .sql artifact, verifies the target, and writes sanitized audit records.')) ?></p>
+                    </div>
+                    <span class="wdb-badge <?= $backupCanMigrationExecute ? 'is-ready' : 'is-attention' ?>">
+                        <?= $escapeHtml($backupCanMigrationExecute ? __('Ready') : __('Guarded')) ?>
+                    </span>
+                </div>
+
+                <div class="wdb-env-toolbar">
+                    <div class="wdb-form-field">
+                        <label for="wdb-migration-execute-preflight-phrase"><?= $escapeHtml(__('Preflight Phrase')) ?></label>
+                        <input id="wdb-migration-execute-preflight-phrase"
+                               type="text"
+                               name="confirm_migration_phrase"
+                               placeholder="<?= $escapeHtml($migrationPreflightPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$migrationPreflightPhrase])) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label for="wdb-migration-execute-phrase"><?= $escapeHtml(__('Migration Phrase')) ?></label>
+                        <input id="wdb-migration-execute-phrase"
+                               type="text"
+                               name="confirm_migration_execute_phrase"
+                               placeholder="<?= $escapeHtml($migrationExecutionPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$migrationExecutionPhrase])) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_migration_preflight" value="1">
+                            <span><?= $escapeHtml(__('I understand WLS Database Manager will verify the artifact again before migration import.')) ?></span>
+                        </label>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_migration_execute" value="1">
+                            <span><?= $escapeHtml(__('I understand migration import modifies the target database after creating a fresh pre-migration backup.')) ?></span>
+                        </label>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Migration Import Guard')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($backupPlan['execution_label'] ?? __('Execution disabled in this slice')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <button class="wdb-danger-button" type="submit" <?= $backupCanMigrationExecute ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-sync-outline"></span><?= $escapeHtml(__('Run Migration Import')) ?>
+                        </button>
+                    </div>
+                </div>
+                <p class="wdb-field-help"><?= $escapeHtml(__('This slice does not run project code migrations, schema diff generators, WLS reload, or arbitrary SQL; it imports only a verified .sql or .sql.gz backup artifact from the WLS backup directory.')) ?></p>
+            </form>
+
+            <form class="wdb-form wdb-execution-guard"
+                  method="post"
+                  action="<?= $escapeHtml($backupExecuteUrl) ?>"
+                  data-wdb-sql-apply-form
+                  data-wdb-sql-can-apply="<?= $backupCanSqlApplyExecute ? '1' : '0' ?>">
+                <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key') ?>">
+                <input type="hidden" name="connection_key" value="<?= $escapeHtml($selectedKey) ?>">
+                <input type="hidden" name="backup_action" value="<?= $escapeHtml($backupPlan['action'] ?? '') ?>">
+                <input type="hidden" name="backup_scope" value="<?= $escapeHtml($backupPlan['scope'] ?? 'schema_and_data') ?>">
+                <input type="hidden" name="backup_artifact" value="<?= $escapeHtml($backupPlan['artifact'] ?? '') ?>">
+                <input type="hidden" name="migration_target" value="<?= $escapeHtml($backupPlan['migration_target'] ?? '') ?>">
+
+                <div class="wdb-panel-head" style="margin-bottom:0">
+                    <div>
+                        <h3 class="wdb-panel-title"><?= $escapeHtml(__('Database SQL Apply Boundary')) ?></h3>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Execution resolves a reviewed .sql artifact from the WLS backup directory, creates a fresh pre-apply backup, blocks destructive or data-touching SQL, runs additive DDL only, verifies the target, and appends audit evidence.')) ?></p>
+                    </div>
+                    <span class="wdb-badge <?= $backupCanSqlApplyExecute ? 'is-ready' : 'is-attention' ?>">
+                        <?= $escapeHtml($backupCanSqlApplyExecute ? __('Ready') : __('Guarded')) ?>
+                    </span>
+                </div>
+
+                <div class="wdb-env-toolbar">
+                    <div class="wdb-form-field">
+                        <label for="wdb-sql-apply-phrase"><?= $escapeHtml(__('SQL Apply Phrase')) ?></label>
+                        <input id="wdb-sql-apply-phrase"
+                               type="text"
+                               name="confirm_sql_apply_phrase"
+                               placeholder="<?= $escapeHtml($sqlApplyPhrase) ?>"
+                               autocomplete="off">
+                        <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$sqlApplyPhrase])) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <label class="wdb-check">
+                            <input type="checkbox" name="confirm_sql_apply_execute" value="1">
+                            <span><?= $escapeHtml(__('I understand SQL apply will modify the target database after creating a fresh pre-apply backup.')) ?></span>
+                        </label>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('SQL Allowlist')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml(__('Allowed: CREATE TABLE, CREATE INDEX, ALTER TABLE ADD. Blocked: DROP, TRUNCATE, DELETE, UPDATE, GRANT, REVOKE, LOAD, COPY, and database-level SQL.')) ?></p>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('SQL Apply Guard')) ?></div>
+                        <p class="wdb-panel-note"><?= $escapeHtml($backupPlan['execution_label'] ?? __('Execution disabled in this slice')) ?></p>
+                    </div>
+                    <div class="wdb-form-field">
+                        <button class="wdb-danger-button" type="submit" <?= $backupCanSqlApplyExecute ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-arrow-up-outline"></span><?= $escapeHtml(__('Run SQL Apply')) ?>
+                        </button>
+                    </div>
+                </div>
+                <p class="wdb-field-help"><?= $escapeHtml(__('SQL apply never accepts arbitrary paths or inline SQL; it only reads safe artifact names inside var/backups/wls/db-manager/database.')) ?></p>
+            </form>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('env-apply')): ?>
+        <section class="wdb-panel"
+                 id="env-apply"
+                 data-wdb-env-plan
+                 data-wdb-env-can-apply="<?= !empty($envPlan['can_apply']) ? '1' : '0' ?>"
+                 data-wdb-env-change-count="<?= (int)($envPlan['change_count'] ?? 0) ?>">
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Env Apply And Rollback')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml(__('Apply writes the enabled Project Database Profile into app/etc/env.php after creating a backup, then optional WLS reload can be requested.')) ?></p>
+                </div>
+                <span class="wdb-badge <?= !empty($envPlan['can_apply']) ? 'is-ready' : 'is-attention' ?>">
+                    <?= $escapeHtml(!empty($envPlan['can_apply']) ? __('Ready') : __('Guarded')) ?>
+                </span>
+            </div>
+
+            <?php if (empty($envPlan['can_apply'])): ?>
+                <div class="wdb-empty"><?= $escapeHtml($envPlan['reason'] ?? __('Database env apply is not available.')) ?></div>
+            <?php else: ?>
+                <div class="wdb-env-summary">
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Write Target')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($envPlan['target_label'] ?? 'db.master') ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Write Mode')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($envTargetModeLabel) ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Profile Key')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($envPlan['profile_key'] ?? '-') ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Password Source')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($envPasswordSourceLabel) ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Latest Backup')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml(($envLatestBackup['time'] ?? '') ?: '-') ?></div>
+                    </div>
+                </div>
+
+                <?php if ($envTargetMode === 'slave'): ?>
+                    <div class="wdb-alert is-warning" data-wdb-slave-write-guard style="margin-top:16px;margin-bottom:0">
+                        <?= $escapeHtml(__('This apply updates only the existing slave profile shown above. Use Slave Create / Remove for db.slaves list changes.')) ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($envChanges === []): ?>
+                    <div class="wdb-alert is-success" style="margin-top:16px">
+                        <?= $escapeHtml(__('No database env changes are pending for this profile.')) ?>
+                    </div>
+                <?php else: ?>
+                    <div class="wdb-diff-grid" data-wdb-env-diff>
+                        <?php foreach ($envChanges as $change): ?>
+                            <div class="wdb-diff-row">
+                                <div>
+                                    <p class="wdb-field-label"><?= $escapeHtml(__('Field')) ?></p>
+                                    <code><?= $escapeHtml($change['label'] ?? $change['name'] ?? '') ?></code>
+                                </div>
+                                <div>
+                                    <p class="wdb-field-label"><?= $escapeHtml(__('Current env.php')) ?></p>
+                                    <code><?= $escapeHtml(($change['before'] ?? '') !== '' ? ($change['before'] ?? '') : '-') ?></code>
+                                </div>
+                                <div>
+                                    <p class="wdb-field-label"><?= $escapeHtml(__('Project Profile')) ?></p>
+                                    <code><?= $escapeHtml(($change['after'] ?? '') !== '' ? ($change['after'] ?? '') : '-') ?></code>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+
+                <form class="wdb-form" method="post" action="<?= $escapeHtml($envApplyUrl) ?>" data-wdb-env-apply-form>
+                    <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                    <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                    <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                    <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                    <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                    <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key', $envPlan['profile_key'] ?? '') ?>">
+
+                    <div class="wdb-env-toolbar">
+                        <div class="wdb-form-field">
+                            <label for="wdb-env-runtime-action"><?= $escapeHtml(__('Runtime action')) ?></label>
+                            <select id="wdb-env-runtime-action" name="runtime_action">
+                                <option value="none"><?= $escapeHtml(__('Apply only')) ?></option>
+                                <option value="reload"><?= $escapeHtml(__('Request WLS reload')) ?></option>
+                            </select>
+                        </div>
+                        <div class="wdb-form-field">
+                            <label for="wdb-env-runtime-instance"><?= $escapeHtml(__('Target WLS instance')) ?></label>
+                            <input id="wdb-env-runtime-instance" type="text" name="runtime_instance" value="<?= $profileValue('last_runtime_instance') ?>" placeholder="default">
+                        </div>
+                        <div class="wdb-form-field">
+                            <label for="wdb-env-confirm-phrase"><?= $escapeHtml(__('Confirmation Phrase')) ?></label>
+                            <input id="wdb-env-confirm-phrase" type="text" name="confirm_phrase" placeholder="<?= $escapeHtml($envPlan['apply_phrase'] ?? 'APPLY_DB_ENV') ?>">
+                        </div>
+                        <div class="wdb-form-field">
+                            <label class="wdb-check">
+                                <input type="checkbox" name="confirm_env_apply" value="1">
+                                <span><?= $escapeHtml(__('I understand Database Manager will update app/etc/env.php after creating a backup.')) ?></span>
+                            </label>
+                            <button class="wdb-save-button" type="submit" <?= empty($envPlan['can_apply']) ? 'disabled' : '' ?>>
+                                <span class="mdi mdi-file-cog-outline"></span><?= $escapeHtml(__('Apply env.php')) ?>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <?php if ($envLatestBackup !== []): ?>
+                    <form class="wdb-form" method="post" action="<?= $escapeHtml($envRollbackUrl) ?>" data-wdb-env-rollback-form>
+                        <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                        <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                        <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                        <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                        <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                        <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key', $envPlan['profile_key'] ?? '') ?>">
+                        <input type="hidden" name="backup_path" value="<?= $escapeHtml($envLatestBackup['path'] ?? '') ?>">
+
+                        <div class="wdb-env-toolbar">
+                            <div class="wdb-form-field">
+                                <label for="wdb-env-rollback-target"><?= $escapeHtml(__('Backup')) ?></label>
+                                <input id="wdb-env-rollback-target" type="text" value="<?= $escapeHtml($envLatestBackup['time'] ?? '') ?>" readonly>
+                            </div>
+                            <div class="wdb-form-field">
+                                <label for="wdb-env-rollback-runtime-action"><?= $escapeHtml(__('Runtime action')) ?></label>
+                                <select id="wdb-env-rollback-runtime-action" name="runtime_action">
+                                    <option value="none"><?= $escapeHtml(__('Restore only')) ?></option>
+                                    <option value="reload"><?= $escapeHtml(__('Request WLS reload')) ?></option>
+                                </select>
+                            </div>
+                            <div class="wdb-form-field">
+                                <label for="wdb-env-rollback-confirm-phrase"><?= $escapeHtml(__('Confirmation Phrase')) ?></label>
+                                <input id="wdb-env-rollback-confirm-phrase" type="text" name="confirm_phrase" placeholder="<?= $escapeHtml($envPlan['rollback_phrase'] ?? 'ROLLBACK_DB_ENV') ?>">
+                            </div>
+                            <div class="wdb-form-field">
+                                <label class="wdb-check">
+                                    <input type="checkbox" name="confirm_env_rollback" value="1">
+                                    <span><?= $escapeHtml(__('I understand Database Manager will restore the selected app/etc/env.php backup.')) ?></span>
+                                </label>
+                                <button class="wdb-danger-button" type="submit">
+                                    <span class="mdi mdi-file-restore-outline"></span><?= $escapeHtml(__('Rollback env.php')) ?>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                <?php endif; ?>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('slaves')): ?>
+        <section class="wdb-panel"
+                 id="slave-management"
+                 data-wdb-slave-management
+                 data-wdb-slave-can-create="<?= !empty($slavePlan['can_create']) ? '1' : '0' ?>"
+                 data-wdb-slave-count="<?= count($slaveProfiles) ?>">
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Slave Create / Remove')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml(__('Create or remove explicit db.slaves entries after an env backup; normal Env Apply only updates an already selected target.')) ?></p>
+                </div>
+                <span class="wdb-badge <?= !empty($slavePlan['can_create']) ? 'is-ready' : 'is-attention' ?>">
+                    <?= $escapeHtml(!empty($slavePlan['can_create']) ? __('Ready') : __('Guarded')) ?>
+                </span>
+            </div>
+
+            <?php if (empty($slavePlan['can_create']) && $slaveProfiles === []): ?>
+                <div class="wdb-empty"><?= $escapeHtml($slavePlan['reason'] ?? __('Database slave management is not available.')) ?></div>
+            <?php else: ?>
+                <div class="wdb-env-summary">
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Profile Key')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($slavePlan['profile_key'] ?? '-') ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Source Profile')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml(($slavePlan['source_connection_key'] ?? '') ?: '-') ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Password Source')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml($slavePasswordSourceLabel) ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Existing Slaves')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml((string)count($slaveProfiles)) ?></div>
+                    </div>
+                    <div class="wdb-context-item">
+                        <div class="wdb-field-label"><?= $escapeHtml(__('Latest Backup')) ?></div>
+                        <div class="wdb-context-value"><?= $escapeHtml(($slaveLatestBackup['time'] ?? '') ?: '-') ?></div>
+                    </div>
+                </div>
+
+                <?php if (empty($slavePlan['can_create'])): ?>
+                    <div class="wdb-alert is-warning" style="margin-top:16px;margin-bottom:0">
+                        <?= $escapeHtml($slavePlan['reason'] ?? __('Database slave create is not available.')) ?>
+                    </div>
+                <?php endif; ?>
+
+                <form class="wdb-form" method="post" action="<?= $escapeHtml($slaveCreateUrl) ?>" data-wdb-slave-create-form>
+                    <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                    <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                    <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                    <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                    <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                    <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key', $slavePlan['profile_key'] ?? '') ?>">
+
+                    <div class="wdb-env-toolbar">
+                        <div class="wdb-form-field">
+                            <label for="wdb-slave-key"><?= $escapeHtml(__('New slave key')) ?></label>
+                            <input id="wdb-slave-key" type="text" name="slave_key" placeholder="reporting_slave" autocomplete="off">
+                            <p class="wdb-field-help"><?= $escapeHtml(__('Lowercase key, for example reporting_slave.')) ?></p>
+                        </div>
+                        <div class="wdb-form-field">
+                            <label for="wdb-slave-runtime-action"><?= $escapeHtml(__('Runtime action')) ?></label>
+                            <select id="wdb-slave-runtime-action" name="runtime_action">
+                                <option value="none"><?= $escapeHtml(__('Create only')) ?></option>
+                                <option value="reload"><?= $escapeHtml(__('Request WLS reload')) ?></option>
+                            </select>
+                        </div>
+                        <div class="wdb-form-field">
+                            <label for="wdb-slave-runtime-instance"><?= $escapeHtml(__('Target WLS instance')) ?></label>
+                            <input id="wdb-slave-runtime-instance" type="text" name="runtime_instance" value="<?= $profileValue('last_runtime_instance') ?>" placeholder="default">
+                        </div>
+                        <div class="wdb-form-field">
+                            <label for="wdb-slave-create-phrase"><?= $escapeHtml(__('Confirmation Phrase')) ?></label>
+                            <input id="wdb-slave-create-phrase" type="text" name="confirm_phrase" placeholder="<?= $escapeHtml($slavePlan['create_phrase'] ?? 'CREATE_DB_SLAVE') ?>">
+                            <p class="wdb-field-help"><?= $escapeHtml(__('Type exactly: %{1}', [$slavePlan['create_phrase'] ?? 'CREATE_DB_SLAVE'])) ?></p>
+                        </div>
+                        <div class="wdb-form-field">
+                            <label class="wdb-check">
+                                <input type="checkbox" name="confirm_slave_create" value="1">
+                                <span><?= $escapeHtml(__('I understand Database Manager will add a db.slaves entry after creating an env backup.')) ?></span>
+                            </label>
+                            <button class="wdb-save-button" type="submit" <?= empty($slavePlan['can_create']) ? 'disabled' : '' ?>>
+                                <span class="mdi mdi-database-plus-outline"></span><?= $escapeHtml(__('Create Slave')) ?>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <div class="wdb-execution-guard">
+                    <h3 class="wdb-panel-title"><?= $escapeHtml(__('Existing Slave Profiles')) ?></h3>
+                    <?php if ($slaveProfiles === []): ?>
+                        <div class="wdb-empty" style="margin-top:12px"><?= $escapeHtml(__('No database slave profiles are configured in app/etc/env.php.')) ?></div>
+                    <?php else: ?>
+                        <div class="wdb-slave-list">
+                            <?php foreach ($slaveProfiles as $slaveProfile): ?>
+                                <?php $slaveKey = (string)($slaveProfile['key'] ?? ''); ?>
+                                <div class="wdb-slave-row">
+                                    <div>
+                                        <p class="wdb-field-label"><?= $escapeHtml(__('Slave')) ?></p>
+                                        <code class="wdb-code"><?= $escapeHtml($slaveProfile['label'] ?? $slaveKey) ?></code>
+                                    </div>
+                                    <div>
+                                        <p class="wdb-field-label"><?= $escapeHtml(__('Driver')) ?></p>
+                                        <div class="wdb-context-value"><?= $escapeHtml($slaveProfile['type'] ?? '-') ?></div>
+                                    </div>
+                                    <div>
+                                        <p class="wdb-field-label"><?= $escapeHtml(__('Database')) ?></p>
+                                        <div class="wdb-context-value"><?= $escapeHtml(($slaveProfile['database'] ?? '') ?: '-') ?></div>
+                                    </div>
+                                    <div>
+                                        <p class="wdb-field-label"><?= $escapeHtml(__('User')) ?></p>
+                                        <div class="wdb-context-value"><?= $escapeHtml(($slaveProfile['username'] ?? '') ?: '-') ?></div>
+                                    </div>
+                                    <form class="wdb-inline-form" method="post" action="<?= $escapeHtml($slaveRemoveUrl) ?>" data-wdb-slave-remove-form>
+                                        <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                                        <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                                        <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                                        <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                                        <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                                        <input type="hidden" name="profile_key" value="<?= $profileValue('profile_key', $slavePlan['profile_key'] ?? '') ?>">
+                                        <input type="hidden" name="slave_key" value="<?= $escapeHtml($slaveKey) ?>">
+                                        <div class="wdb-form-field">
+                                            <label for="wdb-slave-remove-phrase-<?= $escapeHtml($slaveKey) ?>"><?= $escapeHtml(__('Confirmation Phrase')) ?></label>
+                                            <input id="wdb-slave-remove-phrase-<?= $escapeHtml($slaveKey) ?>" type="text" name="confirm_phrase" placeholder="<?= $escapeHtml($slavePlan['remove_phrase'] ?? 'REMOVE_DB_SLAVE') ?>">
+                                        </div>
+                                        <label class="wdb-check">
+                                            <input type="checkbox" name="confirm_slave_remove" value="1">
+                                            <span><?= $escapeHtml(__('Remove after backup')) ?></span>
+                                        </label>
+                                        <button class="wdb-danger-button" type="submit" <?= empty($slavePlan['can_remove']) ? 'disabled' : '' ?>>
+                                            <span class="mdi mdi-database-minus-outline"></span><?= $escapeHtml(__('Remove')) ?>
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($showPage('test')): ?>
+        <section class="wdb-panel" id="connection-test" data-wdb-connection-test>
+            <div class="wdb-panel-head">
+                <div>
+                    <h2 class="wdb-panel-title"><?= $escapeHtml(__('Connection Test')) ?></h2>
+                    <p class="wdb-panel-note"><?= $escapeHtml(__('Runs a single POST-only SELECT 1 check and returns a sanitized result.')) ?></p>
+                </div>
+            </div>
+
+            <?php if ($profiles === []): ?>
+                <div class="wdb-empty"><?= $escapeHtml(__('A database profile is required before testing.')) ?></div>
+            <?php else: ?>
+                <form class="wdb-test-form" method="post" action="<?= $escapeHtml($testConnectionUrl) ?>">
+                    <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
+                    <input type="hidden" name="operation" value="<?= $escapeHtml($operation ?: 'database-profile') ?>">
+                    <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
+                    <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
+                    <input type="hidden" name="project_type" value="<?= $escapeHtml($projectType) ?>">
+                    <div class="wdb-test-row">
+                        <label class="wdb-test-box">
+                            <span class="wdb-field-label"><?= $escapeHtml(__('Profile')) ?></span>
+                            <select class="wdb-select" name="connection_key" data-wdb-connection-select>
+                                <?php if ($hasProjectProfile && $projectProfileEnabled): ?>
+                                    <option value="project_profile" <?= $requestedConnectionKey === 'project_profile' ? 'selected' : '' ?>>
+                                        <?= $escapeHtml(__('Project Profile')) ?>
+                                    </option>
+                                <?php endif; ?>
+                                <?php foreach ($profiles as $profile): ?>
+                                    <?php $connectionKey = (string)($profile['key'] ?? ''); ?>
+                                    <option value="<?= $escapeHtml($connectionKey) ?>" <?= $requestedConnectionKey !== 'project_profile' && $connectionKey === $selectedKey ? 'selected' : '' ?>>
+                                        <?= $escapeHtml($profile['label'] ?? $connectionKey) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <button class="wdb-test-button" type="submit" <?= $canTestSelected ? '' : 'disabled' ?>>
+                            <span class="mdi mdi-database-check-outline"></span><?= $escapeHtml(__('Test Connection')) ?>
+                        </button>
+                    </div>
+                    <?php if (!empty($selectedProfile['missing_fields'])): ?>
+                        <div class="wdb-alert is-danger">
+                            <?= $escapeHtml(__('Missing fields: %{1}', [implode(', ', (array)$selectedProfile['missing_fields'])])) ?>
+                        </div>
+                    <?php elseif (!empty($selectedProfile['driver_status']['message']) && empty($selectedProfile['driver_status']['ready'])): ?>
+                        <div class="wdb-alert is-danger">
+                            <?= $escapeHtml($selectedProfile['driver_status']['message'] ?? '') ?>
+                            <?= $escapeHtml($selectedProfile['driver_status']['extension'] ?? '') ?>
+                        </div>
+                    <?php endif; ?>
+                </form>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+    </main>
+</div>
+
+<script>
+    (function () {
+        var storageKeys = ['wls_panel_theme', 'wls_db_manager_theme'];
+        var lightLabel = <?= json_encode((string)__('Light'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+        var darkLabel = <?= json_encode((string)__('Dark'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+
+        function normalizeTheme(theme) {
+            return theme === 'dark' ? 'dark' : 'light';
+        }
+
+        function readSavedTheme() {
+            var savedTheme = 'light';
+            try {
+                storageKeys.some(function (storageKey) {
+                    var stored = normalizeTheme(localStorage.getItem(storageKey));
+                    if (stored === 'dark') {
+                        savedTheme = stored;
+                        return true;
+                    }
+                    return false;
+                });
+            } catch (error) {
+                savedTheme = 'light';
+            }
+            return savedTheme;
+        }
+
+        function persistTheme(theme) {
+            try {
+                storageKeys.forEach(function (storageKey) {
+                    localStorage.setItem(storageKey, theme);
+                });
+            } catch (error) {
+                return false;
+            }
+            return true;
+        }
+
+        function applyTheme(shell, toggle, label, theme) {
+            var nextTheme = theme === 'dark' ? 'dark' : 'light';
+            shell.setAttribute('data-theme', nextTheme);
+            if (toggle) {
+                toggle.setAttribute('aria-pressed', nextTheme === 'dark' ? 'true' : 'false');
+            }
+            if (label) {
+                label.textContent = nextTheme === 'dark' ? lightLabel : darkLabel;
+            }
+        }
+
+        function bootTheme() {
+            var shell = document.querySelector('[data-wls-db-manager-shell]');
+            var toggle = document.querySelector('[data-wdb-theme-toggle]');
+            var label = document.querySelector('[data-wdb-theme-label]');
+
+            if (!shell) {
+                return false;
+            }
+
+            applyTheme(shell, toggle, label, readSavedTheme());
+
+            if (toggle && toggle.getAttribute('data-wdb-theme-bound') !== '1') {
+                toggle.setAttribute('data-wdb-theme-bound', '1');
+                toggle.addEventListener('click', function () {
+                    var currentTheme = shell.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                    var nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    if (!persistTheme(nextTheme)) {
+                        return;
+                    }
+                    applyTheme(shell, toggle, label, nextTheme);
+                });
+            }
+
+            return true;
+        }
+
+        if (!bootTheme()) {
+            document.addEventListener('DOMContentLoaded', bootTheme, { once: true });
+        }
+    })();
+</script>

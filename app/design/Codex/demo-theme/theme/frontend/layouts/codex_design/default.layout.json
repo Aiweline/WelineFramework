@@ -1,0 +1,17 @@
+{
+  "page_type": "codex_design",
+  "source": "design",
+  "widgets": [
+    {
+      "area": "content",
+      "slot_id": "codex-design-main",
+      "widget_code": "hero-slider",
+      "widget_module": "Weline_Theme",
+      "widget_type": "banner",
+      "config": {
+        "title": "Design theme layout widget"
+      },
+      "sort_order": 5
+    }
+  ]
+}

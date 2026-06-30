@@ -240,7 +240,87 @@
 <script>
 (function() {
     'use strict';
-    
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderTestImagesHtml(images) {
+        if (!Array.isArray(images) || images.length === 0) {
+            return '';
+        }
+        var items = images.map(function(image) {
+            var src = (image && image.url)
+                ? image.url
+                : (image && image.b64_json ? ('data:' + ((image.mime_type) || 'image/png') + ';base64,' + image.b64_json) : '');
+            if (!src) return '';
+            var safeSrc = escapeHtml(src);
+            var revised = image && image.revised_prompt ? '<div class="small text-muted mt-1">' + escapeHtml(image.revised_prompt) + '</div>' : '';
+            return '<div class="col-12 col-md-6 mb-2">'
+                + '<a href="' + safeSrc + '" target="_blank" rel="noopener">'
+                + '<img src="' + safeSrc + '" class="img-fluid rounded border" style="max-height: 260px; width: 100%; object-fit: contain; background: #fff;" alt="test image">'
+                + '</a>' + revised + '</div>';
+        }).join('');
+        if (!items) return '';
+        return '<div class="row g-2 mt-3">'
+            + '<div class="col-12 fw-bold mb-1"><i class="mdi mdi-image-multiple me-1"></i><?= __('返回的测试图片') ?></div>'
+            + items
+            + '</div>';
+    }
+
+    function showProviderTestResult(type, title, data, images) {
+        var modal = document.createElement('div');
+        modal.className = 'modal fade show';
+        modal.style.display = 'block';
+        modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+
+        var iconClass = type === 'success' ? 'mdi-check-circle text-success' : 'mdi-alert-circle text-danger';
+        var lines = [];
+        if (data && data.message) lines.push(String(data.message));
+        if (data && data.model_code) lines.push('<?= __('使用的测试模型') ?>: ' + data.model_code);
+        if (data && data.primary_modality) lines.push('<?= __('模态') ?>: ' + data.primary_modality);
+        if (data && data.duration) lines.push('<?= __('耗时') ?>: ' + data.duration + ' ms');
+        if (data && data.response) lines.push('<?= __('响应') ?>: ' + String(data.response).slice(0, 500));
+        if (data && data.request_url) lines.push('<?= __('请求地址') ?>: ' + data.request_url);
+        if (data && data.base_url) lines.push('<?= __('基础 URL') ?>: ' + data.base_url);
+
+        var imagesHtml = renderTestImagesHtml(images);
+        var dialogClass = imagesHtml !== '' ? 'modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable' : 'modal-dialog modal-dialog-centered';
+
+        modal.innerHTML = '<div class="' + dialogClass + '">'
+            + '<div class="modal-content">'
+            + '<div class="modal-header">'
+            + '<h5 class="modal-title">' + escapeHtml(title) + '</h5>'
+            + '<button type="button" class="btn-close" data-test-close></button>'
+            + '</div>'
+            + '<div class="modal-body py-3">'
+            + '<div class="text-center mb-3"><i class="mdi ' + iconClass + '" style="font-size: 3rem;"></i></div>'
+            + '<div class="message-content" style="white-space: pre-line; text-align: left;">' + escapeHtml(lines.join('\n')) + '</div>'
+            + imagesHtml
+            + '</div>'
+            + '<div class="modal-footer">'
+            + '<button type="button" class="btn btn-primary" data-test-close><?= __('确定') ?></button>'
+            + '</div>'
+            + '</div></div>';
+
+        document.body.appendChild(modal);
+        var closers = modal.querySelectorAll('[data-test-close]');
+        closers.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.body.removeChild(modal);
+                if (type === 'success') {
+                    window.location.reload();
+                }
+            });
+        });
+        return modal;
+    }
+
     var WelineAiProvider = {
         form: null,
         
@@ -403,33 +483,111 @@
             var originalHtml = btn.innerHTML;
             btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __('测试中...') ?>';
             btn.disabled = true;
-            
+
+            var accountId = <?= isset($account) ? $account->getId() : 'null' ?>;
+            var providerCode = '<?= isset($account) ? addslashes((string)$account->getData('provider_code')) : '' ?>';
+            var chooseModel = Promise.resolve('');
+            if (typeof Swal !== 'undefined' && accountId && providerCode) {
+                var modelUrl = '<?= $this->getBackendUrl('*/backend/provider/getRemoteModelsForSelect') ?>';
+                var modelForm = new FormData();
+                modelForm.set('provider_code', providerCode);
+                modelForm.set('account_id', accountId);
+                chooseModel = window.Weline.Api.request(modelUrl, {
+                    method: 'POST',
+                    body: modelForm,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                }).then(function(res) {
+                    var data = (res && res.data) || res;
+                    if (!data || !data.success || !Array.isArray(data.data) || !data.data.length) {
+                        throw new Error((data && data.message) || 'models endpoint unavailable');
+                    }
+                    var options = {};
+                    window.__welineProviderTestModelMeta = {};
+                    var modalityShortMap = {
+                        'text2text': '文生文',
+                        'text2image': '文生图',
+                        'text2video': '文生视频',
+                        'image2text': '图生文',
+                        'embedding': '向量',
+                        'audio2text': '语音转写',
+                        'text2audio': '语音合成',
+                        'multimodal': '多模态'
+                    };
+                    data.data.forEach(function(model) {
+                        var code = model.code || model.value || '';
+                        if (!code) return;
+                        var label = model.label || model.name || code;
+                        var modality = String(model.primary_modality || '').toLowerCase();
+                        if (modality && label.indexOf('[') === -1) {
+                            label += '  ·  [' + (modalityShortMap[modality] || modality) + ']';
+                        }
+                        options[code] = label;
+                        window.__welineProviderTestModelMeta[code] = model;
+                    });
+                    return Swal.fire({
+                        title: '选择测试模型',
+                        input: 'select',
+                        inputOptions: options,
+                        inputPlaceholder: '请选择模型',
+                        showCancelButton: true,
+                        confirmButtonText: '开始测试',
+                        cancelButtonText: '取消',
+                        inputValidator: function(value) {
+                            if (!value) return '请选择一个模型';
+                        }
+                    }).then(function(result) {
+                        return result.isConfirmed ? (result.value || '') : null;
+                    });
+                }).catch(function(error) {
+                    return Swal.fire({
+                        icon: 'warning',
+                        title: '无法拉取模型列表',
+                        text: error.message || '该供应商不支持 models 接口。',
+                        showCancelButton: true,
+                        confirmButtonText: '使用默认测试模型',
+                        cancelButtonText: '取消'
+                    }).then(function(result) {
+                        return result.isConfirmed ? '' : null;
+                    });
+                });
+            }
+
+            chooseModel.then(function(modelCode) {
+                if (modelCode === null) {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                    return;
+                }
+
             var url = '<?= $this->getBackendUrl('*/backend/provider/testConnection') ?>';
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: <?= isset($account) ? $account->getId() : 'null' ?> }) };
+            var payload = { id: accountId };
+            if (modelCode) payload.model_code = modelCode;
+            var selectedMeta = modelCode && window.__welineProviderTestModelMeta ? window.__welineProviderTestModelMeta[modelCode] : null;
+            if (selectedMeta && selectedMeta.primary_modality) payload.primary_modality = selectedMeta.primary_modality;
+            if (selectedMeta && Array.isArray(selectedMeta.capabilities)) payload.capabilities = selectedMeta.capabilities;
+            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) };
             var req = window.Weline.Api.request(url, opts);
             req.then(function(res) {
                 var data = (res && res.data) || res;
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
-                
-                if (data.success) {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.success(data.message || '<?= __('连接测试成功') ?>');
+
+                var images = Array.isArray(data && data.images) ? data.images : [];
+                if (data && data.success) {
+                    showProviderTestResult('success', '<?= __('连接测试成功') ?>', data, images);
+                    if (!images.length) {
+                        setTimeout(function() { window.location.reload(); }, 1500);
                     }
-                    setTimeout(function() { window.location.reload(); }, 1500);
                 } else {
-                    if (typeof BackendToast !== 'undefined') {
-                        BackendToast.error(data.message || '<?= __('连接测试失败') ?>');
-                    }
+                    showProviderTestResult('error', '<?= __('连接测试失败') ?>', data || {}, []);
                 }
             })
             .catch(function(error) {
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
                 console.error('Error:', error);
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error('<?= __('测试失败，请重试') ?>');
-                }
+                showProviderTestResult('error', '<?= __('连接测试失败') ?>', { message: '<?= __('测试失败，请重试') ?>' }, []);
+            });
             });
         }
     };

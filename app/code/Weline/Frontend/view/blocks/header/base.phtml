@@ -24,6 +24,13 @@ if($area === 'frontend') {
 }
 $api_area = \Weline\Framework\App\Env::getInstance()->getConfig('api');
 $api_admin_area = \Weline\Framework\App\Env::getInstance()->getConfig('api_admin');
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 
 // 仅输出当前请求周期及 Theme 声明 JS 模块中实际用到的翻译
 $i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
@@ -81,9 +88,10 @@ endif;
         currency: '<?= \w_env_currency() ?>',
         lang: '<?= \w_env_lang() ?>',
         api_host: '{{api_host}}',
+        api_area: '{{api_area}}',
         base_router: '{{base_router}}',
-        i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
-        themeConfig: <?=json_encode($themeConfig->getThemeConfig()) ?? '{}';?>,
+        i18n: <?= json_encode($i18nWords, $jsonForScriptFlags) ?>,
+        themeConfig: <?= json_encode($themeConfig->getThemeConfig(), $jsonForScriptFlags) ?: '{}'; ?>,
     }
     window.path = (path) => {
         path = path.replace('*', '{{base_router}}')
@@ -177,6 +185,25 @@ endif;
 
     // path: 路径 url
     // code: 代码 如区域代码
+    function normalizeWebsiteBaseUrl(url) {
+        const rawUrl = String(url || '').trim();
+        if (!rawUrl) {
+            return '';
+        }
+
+        try {
+            const parsed = new URL(rawUrl, window.location.origin);
+            const firstSegment = parsed.pathname.split('/').filter(Boolean)[0] || '';
+            const apiArea = String(window.site.api_area || 'api').toLowerCase();
+            if (firstSegment && (firstSegment.toLowerCase() === apiArea || firstSegment.toLowerCase() === 'api')) {
+                return parsed.origin;
+            }
+            return parsed.href.replace(/\/$/, '');
+        } catch (e) {
+            return rawUrl;
+        }
+    }
+
     // type: 类型 website|area|currency|lang
     function inject_path(path, code = '', type = '') {
         if (!path) {
@@ -185,11 +212,11 @@ endif;
         if(!path.startsWith('/')) {
             path = '/' + path;
         }
-        let pre_path = getCookie('WELINE_WEBSITE_URL');
+        let pre_path = normalizeWebsiteBaseUrl(getCookie('WELINE_WEBSITE_URL'));
 
         // 网站
-        if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL'))) {
-            path = WelineString.replaceStartsWith(path, getCookie('WELINE_WEBSITE_URL'), '');
+        if (pre_path && WelineString.startsWith(path, pre_path)) {
+            path = WelineString.replaceStartsWith(path, pre_path, '');
         } else {
             path = WelineString.replaceStartsWith(path, window.site.base_router, '');
         }
@@ -265,22 +292,50 @@ endif;
         return pre_path + path;
     }
 
+    function isIgnorableSwitchQueryParam(key) {
+        key = String(key || '').toLowerCase().trim();
+        if (!key) {
+            return false;
+        }
+        if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(key)) {
+            return true;
+        }
+        return key.startsWith('utm_') || key.startsWith('mtm_') || key.startsWith('pk_');
+    }
+
+    function sanitizeSwitchSearch(search) {
+        const raw = String(search || '');
+        if (!raw || raw === '?') {
+            return '';
+        }
+
+        const params = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
+        Array.from(params.keys()).forEach(key => {
+            if (isIgnorableSwitchQueryParam(key)) {
+                params.delete(key);
+            }
+        });
+
+        const query = params.toString();
+        return query ? '?' + query : '';
+    }
+
     function select_language(lang) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_LANG', lang, 7, {path: '/{{area}}', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, lang, 'lang') + window.location.search
+        setCookie('WELINE_USER_LANG', lang, 7, {path: '/'});
+        window.location.href = inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || '')
     }
 
     function select_currency(currency_code) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
-        setCookie('WELINE_USER_CURRENCY', currency_code, 7, {path: '/', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, currency_code, 'currency') + window.location.search
+        setCookie('WELINE_USER_CURRENCY', currency_code, 7, {path: '/'});
+        window.location.href = inject_path(window.location.pathname, currency_code, 'currency') + sanitizeSwitchSearch(window.location.search || '')
     }
 
     function select_site(url) {
         // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         setCookie('WELINE_WEBSITE_URL', url, 7, {path: '/', domain: window.location.host});
-        window.location.href = inject_path(window.location.pathname, url, 'website') + window.location.search
+        window.location.href = inject_path(window.location.pathname, url, 'website') + sanitizeSwitchSearch(window.location.search || '')
     }
 
     /**

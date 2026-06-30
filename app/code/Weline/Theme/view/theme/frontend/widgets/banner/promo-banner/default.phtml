@@ -11,6 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content", "header"]}
  * @widget.page_layouts {["*"]}
+ * @widget.supports {["layout-homepage-promo","layout-homepage-hero","layout-cms-hero","layout-default-content"]}
  * 
  * @param background_image {default="",type="image",label="背景图片"}
  * @param background_color {default="#f8d7da",type="color",label="背景颜色"}
@@ -21,6 +22,7 @@
  * @param countdown_end {default="",type="string",label="倒计时结束时间",description="格式：2026-12-31 23:59:59"}
  */
 
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $backgroundImage = $this->getData('background_image') ?? '';
 $backgroundColor = $this->getData('background_color') ?? '#f8d7da';
 $text = $this->getData('text') ?? __('限时特惠！全场满300减50');
@@ -33,7 +35,7 @@ $bannerId = 'promo-banner-' . uniqid();
 $hasCountdown = !empty($countdownEnd);
 ?>
 
-<div class="widget-promo-banner" id="<?= $bannerId ?>"
+<div class="widget-promo-banner<?= $isPreviewMode ? ' widget-promo-banner--preview' : '' ?>" id="<?= $bannerId ?>"
      style="background-color: <?= htmlspecialchars($backgroundColor) ?>;
             <?= $backgroundImage ? 'background-image: url(' . htmlspecialchars($backgroundImage) . ');' : '' ?>">
     
@@ -174,6 +176,33 @@ $hasCountdown = !empty($countdownEnd);
 /* 隐藏状态 */
 .widget-promo-banner.hidden {
     display: none;
+}
+
+/* 部件库 / 编辑器预览 */
+.widget-preview-canvas .widget-promo-banner,
+.widget-promo-banner--preview {
+    min-height: 48px;
+    padding: 8px 36px 8px 12px;
+}
+
+.widget-preview-canvas .widget-promo-banner .promo-text,
+.widget-promo-banner--preview .promo-text {
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.widget-preview-canvas .widget-promo-banner .promo-countdown,
+.widget-promo-banner--preview .promo-countdown {
+    padding: 2px 8px;
+    font-size: 10px;
+}
+
+.widget-preview-canvas .widget-promo-banner .promo-close,
+.widget-promo-banner--preview .promo-close {
+    width: 24px;
+    height: 24px;
+    top: 4px;
+    right: 4px;
 }
 
 /* 响应式 */

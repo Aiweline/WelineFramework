@@ -20,7 +20,7 @@ echo "Result: " . ($returnCode === 0 ? "SUCCESS" : "FAILED") . "\n\n";
 
 // Test: Save model
 echo "Testing: Save model...\n";
-$command = 'php bin/w http:request --method=POST --url="/ai/backend/model/save" --data='{"model_code":"test-model","supplier":"test"}'';
+$command = 'php bin/w http:request --method=POST --url="/ai/backend/model/save" --data=\'{"model_code":"test-model","supplier":"test"}\'';
 echo "Command: $command\n";
 system($command, $returnCode);
 echo "Result: " . ($returnCode === 0 ? "SUCCESS" : "FAILED") . "\n\n";
@@ -28,7 +28,7 @@ echo "Result: " . ($returnCode === 0 ? "SUCCESS" : "FAILED") . "\n\n";
 
 // Test: Copy model
 echo "Testing: Copy model...\n";
-$command = 'php bin/w http:request --method=POST --url="/ai/backend/model/copy" --data='{"id":"1"}'';
+$command = 'php bin/w http:request --method=POST --url="/ai/backend/model/copy" --data=\'{"id":"1"}\'';
 echo "Command: $command\n";
 system($command, $returnCode);
 echo "Result: " . ($returnCode === 0 ? "SUCCESS" : "FAILED") . "\n\n";

@@ -5,6 +5,21 @@
 /**@var \Weline\Framework\View\Template $this */
 $activeTab = $activeTab ?? 'adapter';
 $adapters = $adapters ?? [];
+$modelOptionsByModality = is_array($modelOptionsByModality ?? null) ? $modelOptionsByModality : [];
+$jsonForAttributeFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
+$modelOptionsJson = json_encode(
+    $modelOptionsByModality,
+    $jsonForAttributeFlags
+);
+if ($modelOptionsJson === false) {
+    $modelOptionsJson = '{}';
+}
 ?>
 <template>Weline_Ai::Backend/Manager/tabs.phtml</template>
 <?php
@@ -153,7 +168,7 @@ foreach ($adapters as $a) {
                 </h4>
                 <div class="page-title-right">
                     <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>AI 中心</lang></a></li>
+                        <li class="breadcrumb-item"><span><lang>AI 中心</lang></span></li>
                         <li class="breadcrumb-item active"><lang>场景适配器</lang></li>
                     </ol>
                 </div>
@@ -247,7 +262,7 @@ foreach ($adapters as $a) {
             <div class="card stats-card border-0 shadow-sm">
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-center h-100">
-                        <button type="button" class="btn btn-primary action-btn" onclick="WelineAdapterManager.scan()">
+                        <button type="button" class="btn btn-primary action-btn" data-adapter-action="scan">
                             <i class="mdi mdi-magnify-scan me-1"></i>
                             <lang>扫描适配器</lang>
                         </button>
@@ -276,7 +291,7 @@ foreach ($adapters as $a) {
                                    id="adapterSearchInput"
                                    placeholder="<?= __('搜索代码、名称、描述、模型绑定') ?>">
                         </div>
-                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="WelineAdapterManager.cleanup()">
+                        <button type="button" class="btn btn-outline-danger btn-sm" data-adapter-action="cleanup">
                             <i class="mdi mdi-delete-sweep me-1"></i>
                             <lang>清理无效</lang>
                         </button>
@@ -290,25 +305,25 @@ foreach ($adapters as $a) {
                                 <lang>已选择</lang> <span class="select-count" id="selectCount">0</span> <lang>项</lang>
                             </span>
                             <div class="btn-group btn-group-sm">
-                                <button type="button" class="btn btn-outline-primary" onclick="WelineAdapterManager.batchSetModelBindings()">
+                                <button type="button" class="btn btn-outline-primary" data-adapter-action="batch-bind">
                                     <i class="mdi mdi-robot me-1"></i>
                                     <lang>批量配置模型绑定</lang>
                                 </button>
-                                <button type="button" class="btn btn-outline-success" onclick="WelineAdapterManager.batchToggle(1)">
+                                <button type="button" class="btn btn-outline-success" data-adapter-action="batch-toggle" data-adapter-status="1">
                                     <i class="mdi mdi-check-circle me-1"></i>
                                     <lang>批量激活</lang>
                                 </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="WelineAdapterManager.batchToggle(0)">
+                                <button type="button" class="btn btn-outline-secondary" data-adapter-action="batch-toggle" data-adapter-status="0">
                                     <i class="mdi mdi-pause-circle me-1"></i>
                                     <lang>批量禁用</lang>
                                 </button>
-                                <button type="button" class="btn btn-outline-danger" onclick="WelineAdapterManager.batchDelete()">
+                                <button type="button" class="btn btn-outline-danger" data-adapter-action="batch-delete">
                                     <i class="mdi mdi-delete me-1"></i>
                                     <lang>批量删除</lang>
                                 </button>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-link text-muted btn-sm" onclick="WelineAdapterManager.clearSelection()">
+                        <button type="button" class="btn btn-link text-muted btn-sm" data-adapter-action="clear-selection">
                             <lang>取消选择</lang>
                         </button>
                     </div>
@@ -319,7 +334,7 @@ foreach ($adapters as $a) {
                                 <thead>
                                     <tr>
                                         <th class="checkbox-cell">
-                                            <input type="checkbox" class="form-check-input" id="selectAll" onchange="WelineAdapterManager.toggleSelectAll(this)">
+                                            <input type="checkbox" class="form-check-input" id="selectAll" data-adapter-change="toggle-select-all">
                                         </th>
                                         <th><lang>适配器代码</lang></th>
                                         <th><lang>名称</lang></th>
@@ -343,8 +358,7 @@ foreach ($adapters as $a) {
                                             <td class="checkbox-cell">
                                                 <input type="checkbox" class="form-check-input row-checkbox" 
                                                        value="<?= $adapter->getId() ?>"
-                                                       data-model-bindings="<?= htmlspecialchars(json_encode($bindings, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>"
-                                                       onchange="WelineAdapterManager.updateSelection()">
+                                                       data-model-bindings="<?= htmlspecialchars(json_encode($bindings, $jsonForAttributeFlags) ?: '{}', ENT_QUOTES, 'UTF-8') ?>">
                                             </td>
                                             <td>
                                                 <code class="adapter-code"><?= htmlspecialchars($adapter->getData('code')) ?></code>
@@ -418,19 +432,23 @@ foreach ($adapters as $a) {
                                                     />
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-warning action-btn" 
-                                                            onclick="WelineAdapterManager.toggleStatus(<?= $adapter->getId() ?>)"
+                                                            data-adapter-action="toggle-status"
+                                                            data-adapter-id="<?= (int)$adapter->getId() ?>"
                                                             title="<?= $adapter->getData('is_active') ? __('禁用') : __('激活') ?>">
                                                         <i class="mdi mdi-toggle-switch<?= $adapter->getData('is_active') ? '' : '-off' ?>"></i>
                                                     </button>
                                                     <button type="button"
                                                             class="btn btn-sm btn-outline-info action-btn"
-                                                            onclick='WelineAdapterManager.batchSetModelBindings([<?= (int)$adapter->getId() ?>], <?= htmlspecialchars(json_encode($bindings, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>)'
+                                                            data-adapter-action="bind"
+                                                            data-adapter-id="<?= (int)$adapter->getId() ?>"
+                                                            data-model-bindings="<?= htmlspecialchars(json_encode($bindings, $jsonForAttributeFlags) ?: '{}', ENT_QUOTES, 'UTF-8') ?>"
                                                             title="<?= __('配置模型绑定') ?>">
                                                         <i class="mdi mdi-robot-outline"></i>
                                                     </button>
                                                     <button type="button" 
                                                             class="btn btn-sm btn-outline-danger action-btn" 
-                                                            onclick="WelineAdapterManager.delete(<?= $adapter->getId() ?>)"
+                                                            data-adapter-action="delete"
+                                                            data-adapter-id="<?= (int)$adapter->getId() ?>"
                                                             title="<?= __('删除') ?>">
                                                         <i class="mdi mdi-delete"></i>
                                                     </button>
@@ -456,7 +474,7 @@ foreach ($adapters as $a) {
                             <i class="mdi mdi-puzzle-outline d-block"></i>
                             <h5 class="text-muted mb-2"><lang>暂无场景适配器</lang></h5>
                             <p class="text-muted mb-3"><lang>请点击"扫描适配器"按钮来扫描和收集适配器。</lang></p>
-                            <button type="button" class="btn btn-primary" onclick="WelineAdapterManager.scan()">
+                            <button type="button" class="btn btn-primary" data-adapter-action="scan">
                                 <i class="mdi mdi-magnify-scan me-1"></i>
                                 <lang>扫描适配器</lang>
                             </button>
@@ -503,6 +521,14 @@ foreach ($adapters as $a) {
     </div>
 </div>
 
+<form id="batchModelBindingForm"
+      method="post"
+      action="<?= $this->getBackendUrl('*/backend/adapter/batchSaveModelBindings') ?>"
+      class="d-none">
+    <input type="hidden" name="ids" id="batchModelBindingIds" value="">
+    <input type="hidden" name="model_bindings" id="batchModelBindingPayload" value="">
+</form>
+
 <script>
 (function() {
     'use strict';
@@ -519,6 +545,7 @@ foreach ($adapters as $a) {
             getModelOptions: '<?= $this->getBackendUrl('*/backend/adapter/getModelOptions') ?>',
             cleanup: '<?= $this->getBackendUrl('*/backend/adapter/cleanup') ?>'
         },
+        modelOptionsByModality: <?= $modelOptionsJson ?>,
 
         scan: function() {
             BackendConfirm.show('<?= __('确定要扫描场景适配器吗？这将发现所有模块中的适配器并更新数据库记录。') ?>', {
@@ -756,43 +783,34 @@ foreach ($adapters as $a) {
             if (!modal || !selects.length) return;
             var saveBtn = document.getElementById('batchModelBindingSaveBtn');
             if (saveBtn) saveBtn.disabled = true;
-            var api = window.Weline && window.Weline.Api ? window.Weline.Api : { request: function(u, o) { return fetch(u, o).then(function(r) { return r.json(); }); } };
-            var requests = selects.map(function(select) {
+            selects.forEach(function(select) {
                 var modality = select.getAttribute('data-modality') || '';
                 select.innerHTML = '';
                 var emptyOption = document.createElement('option');
                 emptyOption.value = '';
                 emptyOption.textContent = '<?= __('不启用') ?>';
                 select.appendChild(emptyOption);
-                select.disabled = true;
-                return api.request(WelineAdapterManager.urls.getModelOptions + '?primary_modality=' + encodeURIComponent(modality), { method: 'GET' }).then(function(res) {
-                    var data = (res && res.data) || res;
-                    if (data.success && data.items && data.items.length) {
-                        data.items.forEach(function(item) {
-                            var opt = document.createElement('option');
-                            opt.value = item.model_code || '';
-                            opt.textContent = ((item.name || item.model_code || '').trim() || item.model_code) + ' (' + modality + ')';
-                            select.appendChild(opt);
-                        });
-                    }
-                    if (presetBindings[modality]) {
-                        select.value = presetBindings[modality];
-                        if (select.value !== presetBindings[modality]) {
-                            var presetOption = document.createElement('option');
-                            presetOption.value = presetBindings[modality];
-                            presetOption.textContent = presetBindings[modality] + ' (' + modality + ')';
-                            presetOption.dataset.missingModel = '1';
-                            select.appendChild(presetOption);
-                            select.value = presetBindings[modality];
-                        }
-                    }
-                }).catch(function(e) {
-                    BackendToast.error('<?= __('加载模型列表失败：') ?>' + (e.message || e));
-                }).finally(function() {
-                    select.disabled = false;
+                var items = WelineAdapterManager.modelOptionsByModality[modality] || [];
+                items.forEach(function(item) {
+                    var opt = document.createElement('option');
+                    opt.value = item.model_code || '';
+                    opt.textContent = ((item.name || item.model_code || '').trim() || item.model_code) + ' (' + modality + ')';
+                    select.appendChild(opt);
                 });
+                if (presetBindings[modality]) {
+                    select.value = presetBindings[modality];
+                    if (select.value !== presetBindings[modality]) {
+                        var presetOption = document.createElement('option');
+                        presetOption.value = presetBindings[modality];
+                        presetOption.textContent = presetBindings[modality] + ' (' + modality + ')';
+                        presetOption.dataset.missingModel = '1';
+                        select.appendChild(presetOption);
+                        select.value = presetBindings[modality];
+                    }
+                }
+                select.disabled = false;
             });
-            Promise.all(requests).finally(function() { if (saveBtn) saveBtn.disabled = false; });
+            if (saveBtn) saveBtn.disabled = false;
             var bsModal = typeof bootstrap !== 'undefined' && bootstrap.Modal ? new bootstrap.Modal(modal) : null;
             if (bsModal) bsModal.show();
         },
@@ -834,27 +852,17 @@ foreach ($adapters as $a) {
                 BackendToast.warning('<?= __('请至少选择一个能力模型') ?>');
                 return;
             }
+            var form = document.getElementById('batchModelBindingForm');
+            var idsInput = document.getElementById('batchModelBindingIds');
+            var bindingsInput = document.getElementById('batchModelBindingPayload');
+            if (!form || !idsInput || !bindingsInput) {
+                BackendToast.error('<?= __('模型绑定保存失败') ?>');
+                return;
+            }
+            idsInput.value = ids.join(',');
+            bindingsInput.value = JSON.stringify(bindings);
             showLoading();
-            var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ ids: ids, model_bindings: bindings }) };
-            var api = window.Weline && window.Weline.Api ? window.Weline.Api : { request: function(u, o) { return fetch(u, o).then(function(r) { return r.json(); }); } };
-            api.request(WelineAdapterManager.urls.batchSaveModelBindings, opts).then(function(res) {
-                var data = (res && res.data) || res;
-                hideLoading();
-                if (data.success) {
-                    BackendToast.success(data.message || '<?= __('模型绑定已保存') ?>');
-                    var modal = document.getElementById('batchModelBindingModal');
-                    if (modal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                        var m = bootstrap.Modal.getInstance(modal);
-                        if (m) m.hide();
-                    }
-                    setTimeout(function() { location.reload(); }, 500);
-                } else {
-                    BackendToast.error(data.message || '<?= __('模型绑定保存失败') ?>');
-                }
-            }).catch(function(e) {
-                hideLoading();
-                BackendToast.error('<?= __('请求失败：') ?>' + (e.message || e));
-            });
+            form.submit();
         },
 
         filterRows: function(keyword) {
@@ -890,6 +898,52 @@ foreach ($adapters as $a) {
     };
 
     window.WelineAdapterManager = WelineAdapterManager;
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-adapter-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        var action = trigger.getAttribute('data-adapter-action');
+        var id = parseInt(trigger.getAttribute('data-adapter-id') || '0', 10) || 0;
+        if (action === 'scan') {
+            WelineAdapterManager.scan();
+        } else if (action === 'cleanup') {
+            WelineAdapterManager.cleanup();
+        } else if (action === 'batch-bind') {
+            WelineAdapterManager.batchSetModelBindings();
+        } else if (action === 'batch-toggle') {
+            WelineAdapterManager.batchToggle(parseInt(trigger.getAttribute('data-adapter-status') || '0', 10) ? 1 : 0);
+        } else if (action === 'batch-delete') {
+            WelineAdapterManager.batchDelete();
+        } else if (action === 'clear-selection') {
+            WelineAdapterManager.clearSelection();
+        } else if (action === 'toggle-status' && id > 0) {
+            WelineAdapterManager.toggleStatus(id);
+        } else if (action === 'bind' && id > 0) {
+            var bindings = {};
+            try {
+                bindings = JSON.parse(trigger.getAttribute('data-model-bindings') || '{}');
+            } catch (e) {
+                bindings = {};
+            }
+            WelineAdapterManager.batchSetModelBindings([id], bindings);
+        } else if (action === 'delete' && id > 0) {
+            WelineAdapterManager.delete(id);
+        }
+    });
+
+    document.addEventListener('change', function(event) {
+        var trigger = event.target;
+        if (trigger && trigger.getAttribute('data-adapter-change') === 'toggle-select-all') {
+            WelineAdapterManager.toggleSelectAll(trigger);
+            return;
+        }
+        if (trigger && trigger.classList && trigger.classList.contains('row-checkbox')) {
+            WelineAdapterManager.updateSelection();
+        }
+    });
 
     (function bindBatchModelBindingSave() {
         var saveBtn = document.getElementById('batchModelBindingSaveBtn');

@@ -163,7 +163,7 @@ class Maintenance extends CommandAbstract
         $this->printer->note(__('开始滚动重启...'));
         $this->printer->note(__('维护 Worker 将自动启用以接管流量'));
         
-        $info = MasterProcess::getMasterInfo($instanceName);
+        $info = MasterProcess::getMasterEndpoint($instanceName);
         $controlPort = (int)($info['control_port'] ?? 0);
         
         if ($controlPort <= 0) {
@@ -182,7 +182,12 @@ class Maintenance extends CommandAbstract
         \stream_set_blocking($conn, false);
         
         // 发送滚动重启命令
-        $command = ControlMessage::command(ControlMessage::ACTION_ROLLING_RESTART);
+        $command = ControlMessage::command(
+            ControlMessage::ACTION_ROLLING_RESTART,
+            '',
+            [],
+            (string)($info['control_token'] ?? '')
+        );
         $written = @\fwrite($conn, $command);
         
         if ($written === false || $written === 0) {
@@ -241,7 +246,7 @@ class Maintenance extends CommandAbstract
      */
     protected function sendMaintenanceCommand(string $instanceName, string $action): ?array
     {
-        $info = MasterProcess::getMasterInfo($instanceName);
+        $info = MasterProcess::getMasterEndpoint($instanceName);
         $controlPort = (int)($info['control_port'] ?? 0);
         
         if ($controlPort <= 0) {
@@ -260,7 +265,7 @@ class Maintenance extends CommandAbstract
         \stream_set_blocking($conn, false);
         
         // 发送命令
-        $command = ControlMessage::command($action);
+        $command = ControlMessage::command($action, '', [], (string)($info['control_token'] ?? ''));
         $written = @\fwrite($conn, $command);
         
         if ($written === false || $written === 0) {

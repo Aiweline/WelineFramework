@@ -34,26 +34,12 @@ final class StopCommandRuntimeCacheTest extends TestCase
             {
                 return $this->isMasterProcessAvailableForStop($info);
             }
-
-            protected function hasMasterExitedFast(int $masterPid): bool
-            {
-                unset($masterPid);
-
-                return true;
-            }
-
-            protected function masterProcessExists(int $masterPid): bool
-            {
-                unset($masterPid);
-
-                return true;
-            }
         };
 
         self::assertTrue($stop->available($info));
     }
 
-    public function testResolveManagedStopRootPidMemoizesProcessLookups(): void
+    public function testResolveManagedStopRootPidSkipsSlowWindowsProcessLookups(): void
     {
         $stop = new class extends Stop {
             /** @var array<string, int> */
@@ -108,7 +94,7 @@ final class StopCommandRuntimeCacheTest extends TestCase
         self::assertSame(100, $second);
         self::assertSame(
             [
-                'running' => 1,
+                'running' => 0,
                 'command' => 0,
                 'weline' => 0,
                 'manager' => 0,

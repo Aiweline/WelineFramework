@@ -14,9 +14,13 @@ namespace Weline\Eav\Model\EavAttribute\Group;
 
 
 use Weline\Eav\Model\EavAttribute\Group;
+use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\I18n\LocalModel;
 
 class LocalDescription extends LocalModel
 {
     public const fields_ID = Group::schema_fields_ID;
+
+    #[Col('varchar', 255, nullable: true, comment: 'Localized name')]
+    public const schema_fields_name = self::fields_name;
 }

@@ -1,0 +1,1315 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array<int,array<string,mixed>> $styles
+ * @var array<int,array<string,mixed>> $adapters
+ */
+$styles = \is_array($styles ?? null) ? $styles : [];
+$adapters = \is_array($adapters ?? null) ? $adapters : [];
+$catalogUrl = $this->getBackendUrl('ai/backend/style/post-catalog');
+$saveUrl = $this->getBackendUrl('ai/backend/style/post-save');
+$deleteUrl = $this->getBackendUrl('ai/backend/style/post-delete');
+$cloneUrl = $this->getBackendUrl('ai/backend/style/post-clone-builtin');
+$matchUrl = $this->getBackendUrl('ai/backend/style/post-match');
+$bindUrl = $this->getBackendUrl('ai/backend/style/post-bind-adapter-style');
+$unbindUrl = $this->getBackendUrl('ai/backend/style/post-unbind-adapter-style');
+$arrayFields = [
+    'industry_tags' => __('行业标签'),
+    'match_keywords' => __('匹配关键词'),
+    'visual_keywords' => __('视觉关键词'),
+    'layout_patterns' => __('布局模式'),
+    'image_strategy' => __('图片策略'),
+    'forbidden_patterns' => __('禁用模式'),
+    'qa_rules' => __('质检规则'),
+];
+$objectFields = [
+    'color_system' => __('颜色系统 JSON'),
+    'block_rules' => __('区块规则 JSON'),
+    'example_refs' => __('示例引用 JSON'),
+];
+$styleI18n = [
+    'apiUnavailable' => (string)__('前端 API 不可用，请刷新页面后重试。'),
+    'confirmUnavailable' => (string)__('确认组件不可用，请刷新页面后重试。'),
+    'adapterUnavailable' => (string)__('适配器上下文不可用。'),
+    'defaultLabel' => (string)__('默认'),
+    'manualLabel' => (string)__('手动'),
+    'temporaryLabel' => (string)__('临时'),
+    'noneLabel' => (string)__('无'),
+    'stylesSuffix' => (string)__(' 个风格'),
+    'loading' => (string)__('加载中...'),
+    'catalogLoadFailed' => (string)__('风格目录加载失败'),
+    'noMatch' => (string)__('没有风格符合当前筛选。'),
+    'newCustomStyle' => (string)__('新建自定义风格'),
+    'styleDetail' => (string)__('风格详情'),
+    'noSelection' => (string)__('未选择'),
+    'readOnly' => (string)__('只读'),
+    'editable' => (string)__('可编辑'),
+    'newLabel' => (string)__('新建'),
+    'managePrefix' => (string)__('管理 '),
+    'manageAction' => (string)__('管理'),
+    'newCustomCode' => (string)__('（新建自定义风格）'),
+    'untitledStyle' => (string)__('未命名风格'),
+    'readonlyBadge' => (string)__('只读'),
+    'defaultBinding' => (string)__('默认绑定'),
+    'manualBinding' => (string)__('手动绑定'),
+    'bindingDefaultHelp' => (string)__('此风格由适配器代码声明为默认绑定，不能在这里解绑。'),
+    'bindingManualHelp' => (string)__('此风格已手动绑定到当前适配器，可以移除此手动绑定。'),
+    'bindingInactiveHelp' => (string)__('只有启用状态的风格才能绑定到适配器。'),
+    'bindingReadyHelp' => (string)__('将此风格作为当前适配器的长期手动风格。'),
+    'saving' => (string)__('正在保存...'),
+    'saved' => (string)__('已保存。'),
+    'saveFailed' => (string)__('保存失败'),
+    'cloning' => (string)__('正在克隆...'),
+    'cloned' => (string)__('已克隆为自定义风格。'),
+    'cloneFailed' => (string)__('克隆失败'),
+    'deleting' => (string)__('正在删除...'),
+    'deleted' => (string)__('已删除。'),
+    'deleteFailed' => (string)__('删除失败'),
+    'deleteConfirm' => (string)__('确定要删除自定义风格“%{1}”吗？此操作不可恢复。'),
+    'deleteTitle' => (string)__('删除风格'),
+    'deleteConfirmText' => (string)__('确定删除'),
+    'cancelText' => (string)__('取消'),
+    'binding' => (string)__('正在绑定风格...'),
+    'unbinding' => (string)__('正在移除绑定...'),
+    'bound' => (string)__('风格已绑定到适配器。'),
+    'unbound' => (string)__('手动绑定已移除。'),
+    'bindFailed' => (string)__('绑定失败'),
+    'unbindFailed' => (string)__('解绑失败'),
+    'matching' => (string)__('正在匹配...'),
+    'matchFailed' => (string)__('匹配失败'),
+    'matchedPrefix' => (string)__('已匹配 '),
+    'scorePrefix' => (string)__('（分数 '),
+    'scoreSuffix' => (string)__('）'),
+    'noMatchingStyle' => (string)__('未找到匹配风格。'),
+    'codeLabel' => (string)__('代码'),
+    'styleLabel' => (string)__('风格'),
+    'sourceLabel' => (string)__('来源'),
+    'statusLabel' => (string)__('状态'),
+    'bindingLabel' => (string)__('绑定'),
+    'actionsLabel' => (string)__('操作'),
+];
+?>
+<?php if (empty($embed)): ?>
+    <?= $this->fetch('Weline_Ai::templates/Backend/Manager/tabs.phtml', ['activeTab' => 'style']) ?>
+<?php endif; ?>
+
+<style>
+    .weline-ai-style-page {
+        --style-border: rgba(15, 23, 42, 0.1);
+        --style-border-strong: rgba(15, 23, 42, 0.18);
+        --style-surface: #ffffff;
+        --style-soft: #f8fafc;
+        --style-row: #f7fbff;
+        --style-row-active: #edf6ff;
+        --style-text: #1f2a37;
+        --style-muted: #64748b;
+        --style-accent: #0f766e;
+        color: var(--style-text);
+    }
+    .weline-ai-style-page .style-page-head {
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--style-border);
+    }
+    .weline-ai-style-page .style-shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 390px);
+        gap: 16px;
+        align-items: start;
+        min-height: 720px;
+    }
+    .weline-ai-style-page .style-panel {
+        overflow: hidden;
+        border: 1px solid var(--style-border);
+        border-radius: 8px;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+    }
+    .weline-ai-style-page .style-panel > .card-header {
+        border-bottom: 1px solid var(--style-border);
+        background: linear-gradient(180deg, #fbfdff 0%, #f6f8fb 100%);
+    }
+    .weline-ai-style-page .style-filter-card .card-body {
+        padding: 16px 18px;
+    }
+    .weline-ai-style-page .style-table-wrap {
+        max-height: calc(100vh - 260px);
+        min-height: 320px;
+        overflow: auto;
+    }
+    .weline-ai-style-page .style-catalog-table {
+        table-layout: fixed;
+        min-width: 760px;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .weline-ai-style-page .style-catalog-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid var(--style-border-strong);
+        background: #f8fafc;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .weline-ai-style-page .style-catalog-table td {
+        min-width: 0;
+        border-color: var(--style-border);
+        color: #334155;
+        vertical-align: middle;
+    }
+    .weline-ai-style-page .style-catalog-table th:nth-child(2),
+    .weline-ai-style-page .style-catalog-table td:nth-child(2) {
+        width: 34%;
+    }
+    .weline-ai-style-page .style-catalog-table td:nth-child(3) .small,
+    .weline-ai-style-page .style-catalog-table td:nth-child(4),
+    .weline-ai-style-page .style-catalog-table td:nth-child(5) {
+        white-space: nowrap;
+    }
+    .weline-ai-style-page .style-catalog-table td:nth-child(3) .small {
+        display: block;
+        overflow: hidden;
+        max-width: 108px;
+        text-overflow: ellipsis;
+    }
+    .weline-ai-style-page .style-catalog-table .badge {
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-success {
+        color: #166534 !important;
+        background: #dcfce7 !important;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-primary {
+        color: #1d4ed8 !important;
+        background: #dbeafe !important;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-info {
+        color: #0f766e !important;
+        background: #ccfbf1 !important;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-secondary {
+        color: #475569 !important;
+        background: #e2e8f0 !important;
+    }
+    .weline-ai-style-page .style-catalog-table .text-bg-danger {
+        color: #991b1b !important;
+        background: #fee2e2 !important;
+    }
+    .weline-ai-style-page .style-row {
+        cursor: pointer;
+        transition: background-color 160ms ease, box-shadow 160ms ease;
+    }
+    .weline-ai-style-page .style-row:hover {
+        background: var(--style-row);
+    }
+    .weline-ai-style-page .style-row.is-selected {
+        background: var(--style-row-active);
+        box-shadow: inset 3px 0 0 var(--style-accent);
+    }
+    .weline-ai-style-page .style-detail-card {
+        position: sticky;
+        top: 12px;
+        max-height: calc(100vh - 96px);
+        overflow: auto;
+        transition: box-shadow 180ms ease;
+    }
+    .weline-ai-style-page .style-detail-card.is-focus-pulse {
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16), 0 14px 32px rgba(15, 23, 42, 0.08);
+    }
+    .weline-ai-style-page .style-detail-card .card-body,
+    .weline-ai-style-page .style-match-card .card-body {
+        padding: 16px 18px;
+    }
+    .weline-ai-style-page .style-detail-card .form-label,
+    .weline-ai-style-page .style-filter-card .form-label,
+    .weline-ai-style-page .style-match-card .form-label {
+        color: var(--style-muted) !important;
+        font-weight: 700;
+        letter-spacing: 0;
+    }
+    .weline-ai-style-page .style-detail-card .form-control,
+    .weline-ai-style-page .style-detail-card .form-select,
+    .weline-ai-style-page .style-filter-card .form-control,
+    .weline-ai-style-page .style-filter-card .form-select,
+    .weline-ai-style-page .style-match-card .form-control {
+        border-color: #cbd5e1;
+        border-radius: 6px;
+        color: #334155;
+    }
+    .weline-ai-style-page .style-detail-card .form-control:focus,
+    .weline-ai-style-page .style-detail-card .form-select:focus,
+    .weline-ai-style-page .style-filter-card .form-control:focus,
+    .weline-ai-style-page .style-filter-card .form-select:focus,
+    .weline-ai-style-page .style-match-card .form-control:focus {
+        border-color: var(--style-accent);
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+    }
+    .weline-ai-style-page .style-editor {
+        min-height: 84px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+    .weline-ai-style-page .style-editor.is-large {
+        min-height: 126px;
+    }
+    .weline-ai-style-page .style-chip {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(15, 118, 110, 0.18);
+        border-radius: 999px;
+        padding: 2px 7px;
+        margin: 2px 4px 2px 0;
+        font-size: 11px;
+        color: #0f766e;
+        background: #f0fdfa;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .weline-ai-style-page .style-code-token {
+        display: block;
+        max-width: 100%;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        word-break: normal;
+        overflow-wrap: normal;
+    }
+    .weline-ai-style-page .style-catalog-table .btn {
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .weline-ai-style-page .style-empty {
+        border: 1px dashed rgba(108, 117, 125, 0.35);
+        border-radius: 8px;
+        padding: 32px;
+        text-align: center;
+        color: #6c757d;
+        background: #fbfcfd;
+    }
+    .weline-ai-style-page .style-muted-line {
+        display: -webkit-box;
+        overflow: hidden;
+        max-width: 100%;
+        white-space: normal;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    @media (max-width: 1399.98px) {
+        .weline-ai-style-page .style-shell {
+            grid-template-columns: minmax(0, 1fr);
+            min-height: 0;
+        }
+        .weline-ai-style-page .style-detail-card {
+            position: static;
+            max-height: none;
+        }
+    }
+    @media (max-width: 1199.98px) {
+        .weline-ai-style-page .style-shell {
+            min-height: 0;
+        }
+        .weline-ai-style-page .style-table-wrap {
+            max-height: none;
+            overflow: visible;
+            padding: 0 12px 12px;
+        }
+        .weline-ai-style-page .style-catalog-table,
+        .weline-ai-style-page .style-catalog-table tbody {
+            display: block;
+        }
+        .weline-ai-style-page .style-catalog-table thead {
+            display: none;
+        }
+        .weline-ai-style-page .style-catalog-table tbody {
+            padding-top: 12px;
+        }
+        .weline-ai-style-page .style-catalog-table .style-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px 16px;
+            margin-bottom: 10px;
+            padding: 14px;
+            border: 1px solid var(--backend-color-border-default, #dee2e6);
+            border-radius: 8px;
+            background: var(--backend-color-card-bg, #ffffff);
+        }
+        .weline-ai-style-page .style-catalog-table .style-row.is-selected {
+            border-color: var(--style-accent);
+            box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
+        }
+        .weline-ai-style-page .style-catalog-table .style-row td {
+            display: block;
+            border: 0;
+            padding: 0;
+        }
+        .weline-ai-style-page .style-catalog-table .style-row td::before {
+            content: attr(data-label);
+            display: block;
+            margin-bottom: 3px;
+            color: var(--backend-color-text-muted, #6c757d);
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .weline-ai-style-page .style-catalog-table .style-row td:nth-child(1),
+        .weline-ai-style-page .style-catalog-table .style-row td:nth-child(2) {
+            grid-column: 1 / -1;
+        }
+        .weline-ai-style-page .style-catalog-table .style-row td:nth-child(6) {
+            grid-column: 2;
+            grid-row: 3 / span 2;
+            text-align: right;
+        }
+        .weline-ai-style-page .style-catalog-table .style-row td:nth-child(6)::before {
+            text-align: right;
+        }
+        .weline-ai-style-page .style-catalog-table tr:not(.style-row) {
+            display: block;
+        }
+        .weline-ai-style-page .style-catalog-table tr:not(.style-row) td {
+            display: block;
+        }
+    }
+    @media (max-width: 575.98px) {
+        .weline-ai-style-page .style-catalog-table .style-row {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .weline-ai-style-page .style-catalog-table .style-row td:nth-child(6) {
+            grid-column: 1;
+            grid-row: auto;
+            text-align: left;
+        }
+        .weline-ai-style-page .style-catalog-table .style-row td:nth-child(6)::before {
+            text-align: left;
+        }
+    }
+</style>
+
+<div class="container-fluid py-3 weline-ai-style-page">
+    <div class="style-page-head d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h4 class="mb-1"><i class="mdi mdi-palette-outline me-1"></i><?= __('AI 风格') ?></h4>
+            <div class="text-muted small"><?= __('管理模块、自定义、匹配和适配器绑定的视觉风格方向。') ?></div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-style-new">
+                <i class="mdi mdi-plus me-1"></i><?= __('新建自定义风格') ?>
+            </button>
+            <button class="btn btn-outline-primary btn-sm" type="button" id="ai-style-refresh">
+                <i class="mdi mdi-refresh me-1"></i><?= __('刷新目录') ?>
+            </button>
+        </div>
+    </div>
+
+    <div class="style-shell">
+        <div class="style-main-panel">
+            <div class="card style-panel style-filter-card mb-3">
+                <div class="card-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted mb-1" for="ai-style-adapter"><?= __('适配器绑定上下文') ?></label>
+                            <select class="form-select form-select-sm" id="ai-style-adapter"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1" for="ai-style-search"><?= __('搜索') ?></label>
+                            <input class="form-control form-control-sm" id="ai-style-search" type="search" placeholder="<?= __('代码 / 名称 / 关键词') ?>">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-status-filter"><?= __('状态') ?></label>
+                            <select class="form-select form-select-sm" id="ai-style-status-filter">
+                                <option value=""><?= __('全部') ?></option>
+                                <option value="active"><?= __('启用') ?></option>
+                                <option value="disabled"><?= __('禁用') ?></option>
+                                <option value="missing"><?= __('缺失') ?></option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1" for="ai-style-source-filter"><?= __('来源') ?></label>
+                            <select class="form-select form-select-sm" id="ai-style-source-filter">
+                                <option value=""><?= __('全部') ?></option>
+                                <option value="module"><?= __('模块 / 系统 / 内置') ?></option>
+                                <option value="custom"><?= __('自定义') ?></option>
+                                <option value="missing"><?= __('缺失') ?></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2" id="ai-style-adapter-summary"></div>
+                </div>
+            </div>
+
+            <div class="card style-panel style-catalog-card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong><?= __('风格目录') ?></strong>
+                    <span class="small text-muted" id="ai-style-status"><?= \count($styles) ?><?= __(' 个风格') ?></span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="style-table-wrap">
+                        <table class="table table-sm align-middle mb-0 style-catalog-table">
+                            <thead>
+                            <tr>
+                                <th style="width: 190px;"><?= __('代码') ?></th>
+                                <th><?= __('风格') ?></th>
+                                <th style="width: 112px;"><?= __('来源') ?></th>
+                                <th style="width: 74px;"><?= __('状态') ?></th>
+                                <th style="width: 82px;"><?= __('绑定') ?></th>
+                                <th style="width: 88px;"><?= __('操作') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody id="ai-style-table-body">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4"><?= __('正在加载风格目录...') ?></td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="style-side-panel">
+            <div class="card style-panel style-detail-card mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <strong id="ai-style-detail-title"><?= __('风格详情') ?></strong>
+                    <span class="small text-muted" id="ai-style-detail-mode"><?= __('未选择') ?></span>
+                </div>
+                <div class="card-body">
+                    <div id="ai-style-empty" class="style-empty">
+                        <?= __('从目录选择一个风格，或新建自定义风格。') ?>
+                    </div>
+
+                    <form id="ai-style-form" class="d-none">
+                        <div class="d-flex flex-wrap gap-1 mb-2" id="ai-style-badges"></div>
+
+                        <div class="row g-2">
+                            <div class="col-md-7">
+                                <label class="form-label small text-muted mb-1" for="ai-style-code"><?= __('代码') ?></label>
+                                <input type="text" class="form-control form-control-sm" id="ai-style-code" placeholder="<?= __('风格代码') ?>">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label small text-muted mb-1" for="ai-style-edit-status"><?= __('状态') ?></label>
+                                <select class="form-select form-select-sm" id="ai-style-edit-status">
+                                    <option value="active"><?= __('启用') ?></option>
+                                    <option value="disabled"><?= __('禁用') ?></option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-name"><?= __('名称') ?></label>
+                            <input type="text" class="form-control form-control-sm" id="ai-style-name" placeholder="<?= __('可读的风格名称') ?>">
+                        </div>
+
+                        <div class="mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-description"><?= __('描述') ?></label>
+                            <textarea class="form-control form-control-sm" id="ai-style-description" rows="2" placeholder="<?= __('这个风格应该指导什么') ?>"></textarea>
+                        </div>
+
+                        <?php foreach ($arrayFields as $field => $label): ?>
+                            <div class="mt-2">
+                                <label class="form-label small text-muted mb-1" for="ai-style-<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>"><?= \htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></label>
+                                <textarea class="form-control form-control-sm style-editor" id="ai-style-<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" data-style-array="<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" rows="3" placeholder="<?= __('每行一个项目，或 JSON 数组') ?>"></textarea>
+                            </div>
+                        <?php endforeach; ?>
+
+                        <?php foreach ($objectFields as $field => $label): ?>
+                            <div class="mt-2">
+                                <label class="form-label small text-muted mb-1" for="ai-style-<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>"><?= \htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></label>
+                                <textarea class="form-control form-control-sm style-editor is-large" id="ai-style-<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" data-style-object="<?= \htmlspecialchars($field, ENT_QUOTES, 'UTF-8') ?>" rows="4" placeholder='{"hero":"direction"}'></textarea>
+                            </div>
+                        <?php endforeach; ?>
+
+                        <div class="mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-cta"><?= __('CTA 风格') ?></label>
+                            <textarea class="form-control form-control-sm" id="ai-style-cta" rows="2"></textarea>
+                        </div>
+
+                        <div class="mt-2">
+                            <label class="form-label small text-muted mb-1" for="ai-style-supplemental"><?= __('补充提示词') ?></label>
+                            <textarea class="form-control form-control-sm" id="ai-style-supplemental" rows="2"></textarea>
+                            <div class="form-text"><?= __('自定义风格必须包含结构化字段，不能只填写补充说明。') ?></div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button class="btn btn-success btn-sm" type="button" id="ai-style-save-btn">
+                                <i class="mdi mdi-content-save-outline me-1"></i><?= __('保存') ?>
+                            </button>
+                            <button class="btn btn-outline-success btn-sm" type="button" data-style-status-action="active"><?= __('启用') ?></button>
+                            <button class="btn btn-outline-danger btn-sm" type="button" data-style-status-action="disabled"><?= __('禁用') ?></button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button" id="ai-style-clone-btn">
+                                <i class="mdi mdi-content-copy me-1"></i><?= __('克隆为自定义') ?>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" type="button" id="ai-style-delete-btn">
+                                <i class="mdi mdi-delete-outline me-1"></i><?= __('删除') ?>
+                            </button>
+                        </div>
+
+                        <div class="border-top pt-2 mt-3">
+                            <div class="small text-muted mb-2"><?= __('当前上下文的适配器绑定') ?></div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-primary btn-sm" type="button" id="ai-style-bind-btn"><?= __('绑定到适配器') ?></button>
+                                <button class="btn btn-outline-danger btn-sm" type="button" id="ai-style-unbind-btn"><?= __('移除手动绑定') ?></button>
+                            </div>
+                            <div class="small text-muted mt-2" id="ai-style-binding-help"></div>
+                        </div>
+
+                        <div class="small mt-2" id="ai-style-form-status"></div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card style-panel style-match-card">
+                <div class="card-header"><strong><?= __('按简介匹配风格') ?></strong></div>
+                <div class="card-body">
+                    <label class="form-label small text-muted mb-1" for="ai-style-match-title"><?= __('站点标题') ?></label>
+                    <input class="form-control form-control-sm mb-2" id="ai-style-match-title" type="text" placeholder="Teen Patti APK">
+                    <label class="form-label small text-muted mb-1" for="ai-style-match-brief"><?= __('简介') ?></label>
+                    <textarea class="form-control form-control-sm mb-2" id="ai-style-match-brief" rows="3" placeholder="<?= __('描述站点和目标市场') ?>"></textarea>
+                    <button class="btn btn-primary btn-sm" type="button" id="ai-style-match-btn"><?= __('匹配风格') ?></button>
+                    <div class="small mt-2" id="ai-style-match-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var catalogUrl = <?= \json_encode($catalogUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var saveUrl = <?= \json_encode($saveUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var deleteUrl = <?= \json_encode($deleteUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var cloneUrl = <?= \json_encode($cloneUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var matchUrl = <?= \json_encode($matchUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var bindUrl = <?= \json_encode($bindUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var unbindUrl = <?= \json_encode($unbindUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var initialItems = <?= \json_encode($styles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '[]' ?>;
+    var initialAdapters = <?= \json_encode($adapters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '[]' ?>;
+    var i18n = <?= \json_encode($styleI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?: '{}' ?>;
+
+    var state = {
+        items: Array.isArray(initialItems) ? initialItems : [],
+        adapters: Array.isArray(initialAdapters) ? initialAdapters : [],
+        selectedCode: '',
+        selectedAdapter: '',
+        draft: null
+    };
+
+    var els = {
+        adapter: document.getElementById('ai-style-adapter'),
+        adapterSummary: document.getElementById('ai-style-adapter-summary'),
+        search: document.getElementById('ai-style-search'),
+        statusFilter: document.getElementById('ai-style-status-filter'),
+        sourceFilter: document.getElementById('ai-style-source-filter'),
+        tableBody: document.getElementById('ai-style-table-body'),
+        listStatus: document.getElementById('ai-style-status'),
+        detailCard: document.querySelector('.weline-ai-style-page .style-detail-card'),
+        empty: document.getElementById('ai-style-empty'),
+        form: document.getElementById('ai-style-form'),
+        detailTitle: document.getElementById('ai-style-detail-title'),
+        detailMode: document.getElementById('ai-style-detail-mode'),
+        badges: document.getElementById('ai-style-badges'),
+        code: document.getElementById('ai-style-code'),
+        name: document.getElementById('ai-style-name'),
+        status: document.getElementById('ai-style-edit-status'),
+        description: document.getElementById('ai-style-description'),
+        cta: document.getElementById('ai-style-cta'),
+        supplemental: document.getElementById('ai-style-supplemental'),
+        save: document.getElementById('ai-style-save-btn'),
+        remove: document.getElementById('ai-style-delete-btn'),
+        clone: document.getElementById('ai-style-clone-btn'),
+        bind: document.getElementById('ai-style-bind-btn'),
+        unbind: document.getElementById('ai-style-unbind-btn'),
+        bindingHelp: document.getElementById('ai-style-binding-help'),
+        formStatus: document.getElementById('ai-style-form-status'),
+        matchTitle: document.getElementById('ai-style-match-title'),
+        matchBrief: document.getElementById('ai-style-match-brief'),
+        matchBtn: document.getElementById('ai-style-match-btn'),
+        matchStatus: document.getElementById('ai-style-match-status')
+    };
+
+    function post(url, data) {
+        var body = new URLSearchParams();
+        Object.keys(data || {}).forEach(function (key) {
+            var value = data[key];
+            if (value && typeof value === 'object') {
+                body.append(key, JSON.stringify(value));
+            } else {
+                body.append(key, String(value == null ? '' : value));
+            }
+        });
+        return apiRequest(url, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body.toString(),
+            silent: true
+        }).then(function (res) {
+            return res && Object.prototype.hasOwnProperty.call(res, 'data') ? res.data : res;
+        });
+    }
+
+    function apiRequest(url, options) {
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
+            return window.Weline.Api.request(url, options);
+        }
+        if (window.Weline && typeof window.Weline.load === 'function') {
+            return window.Weline.load('api').then(function () {
+                if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
+                    return window.Weline.Api.request(url, options);
+                }
+                throw new Error(i18n.apiUnavailable);
+            });
+        }
+        return Promise.reject(new Error(i18n.apiUnavailable));
+    }
+
+    function responseErrorMessage(err, fallback) {
+        var data = err && err.response && err.response.data ? err.response.data : null;
+        return (data && (data.message || data.msg)) || (err && err.message) || fallback;
+    }
+
+    function formatMessage(template, value) {
+        return String(template || '').replace('%{1}', value);
+    }
+
+    function clearNode(node) {
+        while (node && node.firstChild) {
+            node.removeChild(node.firstChild);
+        }
+    }
+
+    function text(tag, value, className) {
+        var node = document.createElement(tag);
+        if (className) {
+            node.className = className;
+        }
+        node.textContent = value || '';
+        return node;
+    }
+
+    function badge(value, className) {
+        var span = document.createElement('span');
+        span.className = 'badge ' + (className || 'text-bg-secondary');
+        span.textContent = value || '';
+        return span;
+    }
+
+    function chip(value) {
+        var span = document.createElement('span');
+        span.className = 'style-chip';
+        span.textContent = value || '';
+        return span;
+    }
+
+    function setStatus(el, message, isError) {
+        if (!el) {
+            return;
+        }
+        el.className = 'small mt-2 ' + (isError ? 'text-danger' : 'text-success');
+        el.textContent = message || '';
+    }
+
+    function toList(value) {
+        if (Array.isArray(value)) {
+            return value;
+        }
+        if (value && typeof value === 'object') {
+            return Object.keys(value).map(function (key) {
+                var item = value[key];
+                return typeof item === 'string' ? item : JSON.stringify(item);
+            });
+        }
+        if (typeof value === 'string' && value !== '') {
+            return [value];
+        }
+        return [];
+    }
+
+    function flatten(value) {
+        return toList(value).join(' ');
+    }
+
+    function parseLines(value) {
+        var raw = String(value || '').trim();
+        if (raw === '') {
+            return [];
+        }
+        try {
+            var parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return parsed;
+            }
+        } catch (e) {}
+        return raw.split(/\r?\n/).map(function (line) {
+            return line.trim();
+        }).filter(Boolean);
+    }
+
+    function parseObject(value) {
+        var raw = String(value || '').trim();
+        if (raw === '') {
+            return {};
+        }
+        try {
+            var parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return parsed;
+            }
+        } catch (e) {}
+        return parseLines(raw);
+    }
+
+    function formatStructured(value) {
+        if (Array.isArray(value)) {
+            return value.map(function (item) {
+                return typeof item === 'string' ? item : JSON.stringify(item);
+            }).join("\n");
+        }
+        if (value && typeof value === 'object') {
+            return JSON.stringify(value, null, 2);
+        }
+        return String(value || '');
+    }
+
+    function selectedAdapterCode() {
+        return els.adapter ? String(els.adapter.value || '') : '';
+    }
+
+    function currentAdapter() {
+        var code = selectedAdapterCode();
+        return state.adapters.find(function (adapter) {
+            return String(adapter.code || '') === code;
+        }) || null;
+    }
+
+    function sourceGroup(style) {
+        var sourceType = String(style.source_type || style.source || '');
+        if (sourceType === 'system' || sourceType === 'module' || sourceType === 'builtin') {
+            return 'module';
+        }
+        if (sourceType === 'custom') {
+            return 'custom';
+        }
+        if (sourceType === 'missing') {
+            return 'missing';
+        }
+        return sourceType;
+    }
+
+    function findSelectedStyle() {
+        if (state.selectedCode === '__new__') {
+            return state.draft;
+        }
+        return state.items.find(function (item) {
+            return String(item.code || '') === state.selectedCode;
+        }) || null;
+    }
+
+    function renderAdapters() {
+        clearNode(els.adapter);
+        if (!state.adapters.length) {
+            var fallback = document.createElement('option');
+            fallback.value = 'pagebuilder_component_generation';
+            fallback.textContent = 'pagebuilder_component_generation';
+            els.adapter.appendChild(fallback);
+            state.selectedAdapter = fallback.value;
+            return;
+        }
+
+        state.adapters.forEach(function (adapter) {
+            var option = document.createElement('option');
+            option.value = adapter.code || '';
+            option.textContent = (adapter.name || adapter.code || '') + ' (' + (adapter.code || '') + ')';
+            els.adapter.appendChild(option);
+        });
+
+        var preferred = state.adapters.find(function (adapter) {
+            return adapter.code === 'pagebuilder_component_generation';
+        }) || state.adapters.find(function (adapter) {
+            return adapter.code === 'pagebuilder_plan_generation';
+        }) || state.adapters[0];
+        state.selectedAdapter = preferred.code || '';
+        els.adapter.value = state.selectedAdapter;
+    }
+
+    function renderAdapterSummary() {
+        var adapter = currentAdapter();
+        if (!adapter) {
+            els.adapterSummary.textContent = i18n.adapterUnavailable;
+            return;
+        }
+        var defaults = Array.isArray(adapter.default_style_codes) ? adapter.default_style_codes : [];
+        var manual = Array.isArray(adapter.manual_style_codes) ? adapter.manual_style_codes : [];
+        els.adapterSummary.textContent = i18n.defaultLabel + ': ' + (defaults.length ? defaults.join(', ') : i18n.noneLabel)
+            + ' | ' + i18n.manualLabel + ': ' + (manual.length ? manual.join(', ') : i18n.noneLabel);
+    }
+
+    function filteredItems() {
+        var q = String(els.search.value || '').trim().toLowerCase();
+        var status = String(els.statusFilter.value || '');
+        var source = String(els.sourceFilter.value || '');
+        var items = state.items.slice();
+        if (state.draft) {
+            items.unshift(state.draft);
+        }
+        return items.filter(function (style) {
+            var haystack = [
+                style.code || '',
+                style.name || '',
+                style.description || '',
+                style.source || '',
+                style.source_type || '',
+                style.source_module || '',
+                flatten(style.industry_tags),
+                flatten(style.match_keywords),
+                flatten(style.visual_keywords),
+                flatten(style.layout_patterns)
+            ].join(' ').toLowerCase();
+            if (q !== '' && haystack.indexOf(q) === -1) {
+                return false;
+            }
+            if (status !== '' && String(style.status || '') !== status) {
+                return false;
+            }
+            if (source !== '' && sourceGroup(style) !== source) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    function renderTable() {
+        var items = filteredItems();
+        clearNode(els.tableBody);
+        if (!items.length) {
+            var emptyRow = document.createElement('tr');
+            var td = document.createElement('td');
+            td.colSpan = 6;
+            td.className = 'text-center text-muted py-4';
+            td.textContent = i18n.noMatch;
+            emptyRow.appendChild(td);
+            els.tableBody.appendChild(emptyRow);
+            els.listStatus.textContent = '0 / ' + state.items.length + i18n.stylesSuffix;
+            return;
+        }
+
+        items.forEach(function (style) {
+            var code = style._draft ? '__new__' : String(style.code || '');
+            var tr = document.createElement('tr');
+            tr.className = 'style-row' + (code === state.selectedCode ? ' is-selected' : '');
+            tr.dataset.code = code;
+
+            var codeTd = document.createElement('td');
+            codeTd.setAttribute('data-label', i18n.codeLabel);
+            codeTd.title = style._draft ? i18n.newCustomCode : String(style.code || '');
+            codeTd.appendChild(text('code', style._draft ? i18n.newCustomCode : style.code || '', 'style-code-token'));
+            var chipWrap = document.createElement('div');
+            toList(style.industry_tags).slice(0, 3).forEach(function (item) {
+                chipWrap.appendChild(chip(item));
+            });
+            codeTd.appendChild(chipWrap);
+            tr.appendChild(codeTd);
+
+            var nameTd = document.createElement('td');
+            nameTd.setAttribute('data-label', i18n.styleLabel);
+            nameTd.appendChild(text('div', style.name || style.code || i18n.untitledStyle, 'fw-semibold'));
+            nameTd.appendChild(text('div', style.description || '', 'small text-muted style-muted-line'));
+            tr.appendChild(nameTd);
+
+            var sourceTd = document.createElement('td');
+            sourceTd.setAttribute('data-label', i18n.sourceLabel);
+            sourceTd.appendChild(text('div', style.source_module || style.source || style.source_type || '', 'small'));
+            sourceTd.appendChild(text('div', style.source_type || '', 'small text-muted'));
+            tr.appendChild(sourceTd);
+
+            var statusTd = document.createElement('td');
+            statusTd.setAttribute('data-label', i18n.statusLabel);
+            var statusClass = style.status === 'active' ? 'text-bg-success' : (style.status === 'missing' ? 'text-bg-danger' : 'text-bg-secondary');
+            statusTd.appendChild(badge(style.status || 'new', statusClass));
+            tr.appendChild(statusTd);
+
+            var bindingTd = document.createElement('td');
+            bindingTd.setAttribute('data-label', i18n.bindingLabel);
+            if (style.adapter_default) {
+                bindingTd.appendChild(badge(i18n.defaultLabel, 'text-bg-primary'));
+            } else if (style.manual) {
+                bindingTd.appendChild(badge(i18n.manualLabel, 'text-bg-info'));
+            } else if (style.temporary) {
+                bindingTd.appendChild(badge(i18n.temporaryLabel, 'text-bg-light text-dark'));
+            } else {
+                bindingTd.appendChild(text('span', '-', 'small text-muted'));
+            }
+            tr.appendChild(bindingTd);
+
+            var actionTd = document.createElement('td');
+            actionTd.setAttribute('data-label', i18n.actionsLabel);
+            var manageBtn = document.createElement('button');
+            manageBtn.type = 'button';
+            manageBtn.className = 'btn btn-outline-primary btn-sm';
+            manageBtn.textContent = i18n.manageAction;
+            manageBtn.dataset.styleManageAction = '1';
+            manageBtn.setAttribute('aria-label', i18n.manageAction + ' ' + code);
+            actionTd.appendChild(manageBtn);
+            tr.appendChild(actionTd);
+
+            els.tableBody.appendChild(tr);
+        });
+
+        els.listStatus.textContent = String(items.length) + ' / ' + state.items.length + i18n.stylesSuffix;
+    }
+
+    function setFieldsDisabled(disabled) {
+        [els.name, els.status, els.description, els.cta, els.supplemental].forEach(function (input) {
+            input.disabled = disabled;
+        });
+        document.querySelectorAll('[data-style-array], [data-style-object]').forEach(function (input) {
+            input.disabled = disabled;
+        });
+    }
+
+    function renderDetail() {
+        var style = findSelectedStyle();
+        if (!style) {
+            els.empty.classList.remove('d-none');
+            els.form.classList.add('d-none');
+            els.detailTitle.textContent = i18n.styleDetail;
+            els.detailMode.textContent = i18n.noSelection;
+            return;
+        }
+
+        var readonly = !!style.readonly || sourceGroup(style) === 'module' || sourceGroup(style) === 'missing';
+        els.empty.classList.add('d-none');
+        els.form.classList.remove('d-none');
+        els.detailTitle.textContent = style._draft ? i18n.newCustomStyle : i18n.managePrefix + (style.code || '');
+        els.detailMode.textContent = readonly ? i18n.readOnly : (style.exists ? i18n.editable : i18n.newLabel);
+
+        clearNode(els.badges);
+        els.badges.appendChild(badge(style.status || 'new', style.status === 'active' ? 'text-bg-success' : 'text-bg-secondary'));
+        els.badges.appendChild(badge(style.source_type || 'custom', 'text-bg-light text-dark'));
+        if (style.adapter_default) {
+            els.badges.appendChild(badge(i18n.defaultBinding, 'text-bg-primary'));
+        }
+        if (style.manual) {
+            els.badges.appendChild(badge(i18n.manualBinding, 'text-bg-info'));
+        }
+        if (readonly) {
+            els.badges.appendChild(badge(i18n.readonlyBadge, 'text-bg-dark'));
+        }
+
+        els.code.value = style._draft ? '' : String(style.code || '');
+        els.name.value = String(style.name || '');
+        els.status.value = String(style.status || 'active') === 'disabled' ? 'disabled' : 'active';
+        els.description.value = String(style.description || '');
+        els.cta.value = String(style.cta_style || '');
+        els.supplemental.value = String(style.supplemental_prompt || '');
+
+        document.querySelectorAll('[data-style-array]').forEach(function (input) {
+            var field = input.getAttribute('data-style-array') || '';
+            input.value = formatStructured(style[field] || []);
+        });
+        document.querySelectorAll('[data-style-object]').forEach(function (input) {
+            var field = input.getAttribute('data-style-object') || '';
+            input.value = formatStructured(style[field] || {});
+        });
+
+        els.code.readOnly = readonly || (!!style.exists && !style._draft);
+        setFieldsDisabled(readonly);
+        els.save.disabled = readonly;
+        document.querySelectorAll('[data-style-status-action]').forEach(function (btn) {
+            btn.disabled = readonly || style._draft || String(style.status || '') === String(btn.getAttribute('data-style-status-action') || '');
+        });
+        els.clone.disabled = !style.code || sourceGroup(style) === 'custom' || sourceGroup(style) === 'missing';
+        els.remove.disabled = readonly || style._draft || !style.exists || sourceGroup(style) !== 'custom';
+
+        var active = String(style.status || '') === 'active';
+        els.bind.disabled = !active || !style.code || !!style.adapter_default || !!style.manual || !style.exists;
+        els.unbind.disabled = !style.manual || !!style.adapter_default;
+        if (style.adapter_default) {
+            els.bindingHelp.textContent = i18n.bindingDefaultHelp;
+        } else if (style.manual) {
+            els.bindingHelp.textContent = i18n.bindingManualHelp;
+        } else if (!active) {
+            els.bindingHelp.textContent = i18n.bindingInactiveHelp;
+        } else {
+            els.bindingHelp.textContent = i18n.bindingReadyHelp;
+        }
+    }
+
+    function selectStyle(code) {
+        state.selectedCode = code || '';
+        renderTable();
+        renderDetail();
+        setStatus(els.formStatus, '', false);
+    }
+
+    function focusManagedStyle() {
+        if (!els.detailCard) {
+            return;
+        }
+        if (typeof els.detailCard.scrollIntoView === 'function') {
+            els.detailCard.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        }
+        els.detailCard.classList.remove('is-focus-pulse');
+        window.setTimeout(function () {
+            els.detailCard.classList.add('is-focus-pulse');
+        }, 0);
+        window.setTimeout(function () {
+            els.detailCard.classList.remove('is-focus-pulse');
+        }, 850);
+
+        var focusTarget = els.detailCard.querySelector('input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])');
+        if (focusTarget && typeof focusTarget.focus === 'function') {
+            window.setTimeout(function () {
+                try {
+                    focusTarget.focus({preventScroll: true});
+                } catch (e) {
+                    focusTarget.focus();
+                }
+            }, 220);
+        }
+    }
+
+    function newStyle() {
+        state.draft = {
+            _draft: true,
+            exists: false,
+            readonly: false,
+            source: 'custom',
+            source_type: 'custom',
+            status: 'active',
+            code: '',
+            name: '',
+            description: '',
+            industry_tags: [],
+            match_keywords: [],
+            visual_keywords: [],
+            color_system: {},
+            layout_patterns: [],
+            image_strategy: [],
+            forbidden_patterns: [],
+            block_rules: {},
+            qa_rules: [],
+            example_refs: [],
+            cta_style: '',
+            supplemental_prompt: ''
+        };
+        state.selectedCode = '__new__';
+        renderTable();
+        renderDetail();
+        els.code.focus();
+    }
+
+    function collectPayload(statusOverride) {
+        var payload = {
+            code: els.code.value || '',
+            name: els.name.value || '',
+            description: els.description.value || '',
+            status: statusOverride || els.status.value || 'active',
+            cta_style: els.cta.value || '',
+            supplemental_prompt: els.supplemental.value || ''
+        };
+        document.querySelectorAll('[data-style-array]').forEach(function (input) {
+            payload[input.getAttribute('data-style-array') || ''] = parseLines(input.value);
+        });
+        document.querySelectorAll('[data-style-object]').forEach(function (input) {
+            payload[input.getAttribute('data-style-object') || ''] = parseObject(input.value);
+        });
+        return payload;
+    }
+
+    function refreshCatalog() {
+        var adapterCode = selectedAdapterCode();
+        els.listStatus.textContent = i18n.loading;
+        return post(catalogUrl, {
+            adapter_code: adapterCode,
+            include_inactive: 1
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || i18n.catalogLoadFailed);
+            }
+            state.items = Array.isArray(payload.items) ? payload.items : [];
+            state.draft = null;
+            var stillExists = state.items.some(function (item) {
+                return String(item.code || '') === state.selectedCode;
+            });
+            if (!stillExists) {
+                state.selectedCode = state.items.length ? String(state.items[0].code || '') : '';
+            }
+            renderAdapterSummary();
+            renderTable();
+            renderDetail();
+        }).catch(function (err) {
+            els.listStatus.textContent = responseErrorMessage(err, i18n.catalogLoadFailed);
+        });
+    }
+
+    function saveCurrent(statusOverride) {
+        setStatus(els.formStatus, i18n.saving, false);
+        return post(saveUrl, collectPayload(statusOverride)).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || i18n.saveFailed);
+            }
+            state.selectedCode = payload.item && payload.item.code ? String(payload.item.code) : String(els.code.value || '');
+            setStatus(els.formStatus, i18n.saved, false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, responseErrorMessage(err, i18n.saveFailed), true);
+        });
+    }
+
+    function cloneSelected() {
+        var style = findSelectedStyle();
+        if (!style || !style.code) {
+            return;
+        }
+        setStatus(els.formStatus, i18n.cloning, false);
+        return post(cloneUrl, {code: style.code}).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || i18n.cloneFailed);
+            }
+            state.selectedCode = payload.item && payload.item.code ? String(payload.item.code) : '';
+            setStatus(els.formStatus, i18n.cloned, false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, responseErrorMessage(err, i18n.cloneFailed), true);
+        });
+    }
+
+    function deleteSelected() {
+        var style = findSelectedStyle();
+        if (!style || !style.code || sourceGroup(style) !== 'custom' || !style.exists) {
+            return;
+        }
+        if (!window.BackendConfirm || typeof window.BackendConfirm.show !== 'function') {
+            setStatus(els.formStatus, i18n.confirmUnavailable, true);
+            return;
+        }
+        window.BackendConfirm.show(formatMessage(i18n.deleteConfirm, style.code), {
+            title: i18n.deleteTitle,
+            confirmText: i18n.deleteConfirmText,
+            cancelText: i18n.cancelText,
+            type: 'danger'
+        }).then(function (confirmed) {
+            if (!confirmed) {
+                return;
+            }
+            setStatus(els.formStatus, i18n.deleting, false);
+            return post(deleteUrl, {code: style.code}).then(function (payload) {
+                if (!payload || payload.success === false) {
+                    throw new Error((payload && payload.message) || i18n.deleteFailed);
+                }
+                state.selectedCode = '';
+                setStatus(els.formStatus, i18n.deleted, false);
+                return refreshCatalog();
+            }).catch(function (err) {
+                setStatus(els.formStatus, responseErrorMessage(err, i18n.deleteFailed), true);
+            });
+        });
+    }
+
+    function bindSelected(bind) {
+        var style = findSelectedStyle();
+        if (!style || !style.code) {
+            return;
+        }
+        setStatus(els.formStatus, bind ? i18n.binding : i18n.unbinding, false);
+        return post(bind ? bindUrl : unbindUrl, {
+            adapter_code: selectedAdapterCode(),
+            style_code: style.code
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || (bind ? i18n.bindFailed : i18n.unbindFailed));
+            }
+            setStatus(els.formStatus, bind ? i18n.bound : i18n.unbound, false);
+            return refreshCatalog();
+        }).catch(function (err) {
+            setStatus(els.formStatus, responseErrorMessage(err, bind ? i18n.bindFailed : i18n.unbindFailed), true);
+        });
+    }
+
+    function matchStyle() {
+        setStatus(els.matchStatus, i18n.matching, false);
+        return post(matchUrl, {
+            adapter_code: selectedAdapterCode(),
+            site_title: els.matchTitle.value || '',
+            brief_description: els.matchBrief.value || ''
+        }).then(function (payload) {
+            if (!payload || payload.success === false) {
+                throw new Error((payload && payload.message) || i18n.matchFailed);
+            }
+            var item = payload.item || payload.style || payload.direction || null;
+            if (item && item.code) {
+                state.selectedCode = String(item.code);
+                setStatus(els.matchStatus, i18n.matchedPrefix + item.code + ' ' + i18n.scorePrefix + String(payload.score || 0) + i18n.scoreSuffix, false);
+                renderTable();
+                renderDetail();
+                return;
+            }
+            setStatus(els.matchStatus, payload.reason || i18n.noMatchingStyle, true);
+        }).catch(function (err) {
+            setStatus(els.matchStatus, responseErrorMessage(err, i18n.matchFailed), true);
+        });
+    }
+
+    renderAdapters();
+    renderAdapterSummary();
+    if (state.items.length) {
+        state.selectedCode = String(state.items[0].code || '');
+    }
+    refreshCatalog();
+
+    document.getElementById('ai-style-refresh').addEventListener('click', refreshCatalog);
+    document.getElementById('ai-style-new').addEventListener('click', newStyle);
+    els.adapter.addEventListener('change', function () {
+        state.selectedAdapter = selectedAdapterCode();
+        refreshCatalog();
+    });
+    [els.search, els.statusFilter, els.sourceFilter].forEach(function (input) {
+        input.addEventListener('input', renderTable);
+        input.addEventListener('change', renderTable);
+    });
+    els.tableBody.addEventListener('click', function (event) {
+        var row = event.target.closest('tr[data-code]');
+        if (!row) {
+            return;
+        }
+        selectStyle(row.dataset.code || '');
+        if (event.target.closest('[data-style-manage-action]')) {
+            focusManagedStyle();
+        }
+    });
+    els.save.addEventListener('click', function () {
+        saveCurrent('');
+    });
+    document.querySelectorAll('[data-style-status-action]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            saveCurrent(btn.getAttribute('data-style-status-action') || '');
+        });
+    });
+    els.clone.addEventListener('click', cloneSelected);
+    els.remove.addEventListener('click', deleteSelected);
+    els.bind.addEventListener('click', function () {
+        bindSelected(true);
+    });
+    els.unbind.addEventListener('click', function () {
+        bindSelected(false);
+    });
+    els.matchBtn.addEventListener('click', matchStyle);
+})();
+</script>

@@ -55,6 +55,49 @@ shift 2 || true
 PGSQL_DIR="${PROJECT_ROOT}/extend/server/pgsql"
 PGSQL_BIN="${PGSQL_DIR}/bin"
 PGSQL_DATA_DEFAULT="${PGSQL_DIR}/data"
+PGSQL_ENV_DEFAULT="${PROJECT_ROOT}/weline.env"
+PGSQL_OWNER_CLI="${PROJECT_ROOT}/setup/server_installer/pgsql_owner_cli.php"
+PGSQL_PROJECT_PORT_MIN=55432
+PGSQL_PROJECT_PORT_MAX=65535
+
+pgsql_normalize_path() {
+  local path="$1"
+  if [[ -d "$path" ]]; then
+    (cd "$path" 2>/dev/null && pwd -P) || echo "$path"
+    return 0
+  fi
+  local parent base
+  parent="$(dirname "$path")"
+  base="$(basename "$path")"
+  if [[ -d "$parent" ]]; then
+    (cd "$parent" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$base") || echo "$path"
+    return 0
+  fi
+  echo "$path"
+}
+
+pgsql_guard_project_data() {
+  local data_dir="$1"
+  local data_abs default_abs
+  data_abs="$(pgsql_normalize_path "$data_dir")"
+  default_abs="$(pgsql_normalize_path "$PGSQL_DATA_DEFAULT")"
+  if [[ "$data_abs" != "$default_abs" ]]; then
+    echo "ERROR: bin/server pgsql only manages this project data directory: ${PGSQL_DATA_DEFAULT}" >&2
+    echo "       Refusing custom data directory: ${data_dir}" >&2
+    return 1
+  fi
+
+  if [[ -f "$PGSQL_OWNER_CLI" ]]; then
+    "$PHP_BIN" "$PGSQL_OWNER_CLI" server-can-manage
+    local rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+      echo "Skipping local PostgreSQL because env.php is authoritative for another database target."
+      return 2
+    fi
+    return "$rc"
+  fi
+  return 0
+}
 
 pgsql_resolve_data_dir() {
   local data_dir="${PGSQL_DATA_DEFAULT}"
@@ -106,6 +149,63 @@ pgsql_command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+pgsql_resolve_env_file() {
+  local env_file="${WELINE_ENV_FILE:-${PGSQL_ENV_DEFAULT}}"
+  if [[ "$env_file" =~ ^[A-Za-z]:[\\/].* ]] || [[ "$env_file" == /* ]] || [[ "$env_file" == \\\\* ]]; then
+    echo "$env_file"
+    return 0
+  fi
+  echo "${PROJECT_ROOT}/${env_file}"
+}
+
+pgsql_read_port_from_env() {
+  local env_file
+  env_file="$(pgsql_resolve_env_file)"
+  [[ -f "$env_file" ]] || return 1
+  local line
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*DB_PORT[[:space:]]*=[[:space:]]*([0-9]+)[[:space:]]*$ ]]; then
+      local p="${BASH_REMATCH[1]}"
+      if [[ "$p" -gt 0 && "$p" -le 65535 ]]; then
+        echo "$p"
+        return 0
+      fi
+    fi
+  done < "$env_file"
+  return 1
+}
+
+pgsql_sync_env_port() {
+  local port="$1"
+  [[ -z "$port" ]] && return 0
+  local env_file
+  env_file="$(pgsql_resolve_env_file)"
+  local current
+  current="$(pgsql_read_port_from_env 2>/dev/null || true)"
+  if [[ "$current" == "$port" ]]; then
+    if [[ -f "$PGSQL_OWNER_CLI" ]]; then
+      "$PHP_BIN" "$PGSQL_OWNER_CLI" sync-env-port "$port" >/dev/null 2>&1 || true
+    fi
+    return 0
+  fi
+  mkdir -p "$(dirname "$env_file")" 2>/dev/null || true
+  if [[ -f "$env_file" ]]; then
+    if grep -qE '^[[:space:]]*DB_PORT[[:space:]]*=' "$env_file" 2>/dev/null; then
+      sed -i.bak -E "s/^[[:space:]]*DB_PORT[[:space:]]*=.*/DB_PORT=${port}/" "$env_file" 2>/dev/null || true
+    else
+      printf '\nDB_PORT=%s\n' "$port" >> "$env_file"
+    fi
+  else
+    printf 'DB_PORT=%s\n' "$port" > "$env_file"
+  fi
+  export DB_PORT="$port"
+  if [[ -f "$PGSQL_OWNER_CLI" ]]; then
+    "$PHP_BIN" "$PGSQL_OWNER_CLI" sync-env-port "$port" >/dev/null 2>&1 || true
+  fi
+  echo "已同步 PostgreSQL 端口到 $(basename "$env_file")：${port}" >&2
+}
+
 pgsql_is_port_in_use() {
   local port="$1"
   [[ -z "$port" ]] && return 1
@@ -123,10 +223,39 @@ pgsql_is_port_in_use() {
     fi
   fi
 
+  if pgsql_command_exists netstat; then
+    if netstat -an 2>/dev/null | grep -E "[:.]${port}[^0-9].*(LISTEN|LISTENING)" >/dev/null; then
+      return 0
+    fi
+  fi
+
   return 1
 }
 
-pgsql_resolve_port_from_conf() {
+pgsql_project_preferred_port() {
+  local range seed normalized hex
+  range=$((PGSQL_PROJECT_PORT_MAX - PGSQL_PROJECT_PORT_MIN + 1))
+  normalized="$(printf '%s' "${PROJECT_ROOT}" | tr '\\' '/' | tr '[:upper:]' '[:lower:]')"
+  if pgsql_command_exists sha256sum; then
+    hex="$(printf '%s' "$normalized" | sha256sum | awk '{print substr($1,1,8)}')"
+    seed=$((16#$hex))
+  else
+    seed="$(printf '%s' "$normalized" | cksum 2>/dev/null | awk '{print $1}')"
+  fi
+  [[ -z "$seed" ]] && seed=0
+  echo $((PGSQL_PROJECT_PORT_MIN + (seed % range)))
+}
+
+pgsql_normalize_project_port() {
+  local port="$1"
+  if [[ -z "$port" || ! "$port" =~ ^[0-9]+$ || "$port" -le 0 || "$port" -gt 65535 || "$port" -eq 5432 ]]; then
+    pgsql_project_preferred_port
+    return 0
+  fi
+  echo "$port"
+}
+
+pgsql_read_port_from_conf() {
   local data_dir="$1"
   local conf="${data_dir}/postgresql.conf"
   if [[ -f "$conf" ]]; then
@@ -142,39 +271,82 @@ pgsql_resolve_port_from_conf() {
       fi
     done < "$conf"
   fi
-  echo "5432"
+  return 1
 }
 
-pgsql_try_system_start() {
-  if [[ "$(uname -s)" != "Linux" ]]; then
-    return 1
+pgsql_resolve_port_from_conf() {
+  local data_dir="$1"
+  local p
+  p="$(pgsql_read_port_from_conf "$data_dir" 2>/dev/null || true)"
+  if [[ -n "$p" ]]; then
+    echo "$p"
+    return 0
   fi
-  if pgsql_command_exists systemctl; then
-    local unit
-    for unit in postgresql postgresql-16 postgresql-15 postgresql-14 postgresql-13 postgresql@16-main postgresql@15-main postgresql@14-main postgresql@13-main; do
-      if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\b"; then
-        echo "尝试通过 systemd 启动：${unit}"
-        if systemctl start "${unit}"; then
-          echo "系统 PostgreSQL 已启动：${unit}"
-          systemctl status "${unit}" --no-pager 2>/dev/null || true
-          return 0
-        fi
-      fi
-    done
+  pgsql_project_preferred_port
+}
+
+pgsql_write_port_conf() {
+  local data_dir="$1"
+  local port="$2"
+  local conf="${data_dir}/postgresql.conf"
+  [[ -f "$conf" ]] || return 0
+  if grep -qE '^[[:space:]]*#?[[:space:]]*port[[:space:]]*=' "$conf" 2>/dev/null; then
+    sed -i.bak -E "s/^[[:space:]]*#?[[:space:]]*port[[:space:]]*=[[:space:]]*[0-9]+/port = ${port}/" "$conf" 2>/dev/null || true
+  else
+    printf '\nport = %s\n' "$port" >> "$conf"
   fi
-  if pgsql_command_exists service; then
-    echo "尝试通过 service 启动：postgresql"
-    if service postgresql start 2>/dev/null; then
-      echo "系统 PostgreSQL 已启动（service postgresql）。"
+}
+
+pgsql_find_available_port() {
+  local port="$1"
+  port="$(pgsql_normalize_project_port "$port")"
+  if [[ "$port" -ne 5432 ]] && ! pgsql_is_port_in_use "$port"; then
+    echo "$port"
+    return 0
+  fi
+
+  local candidate attempts i
+  candidate="$(pgsql_project_preferred_port)"
+  attempts=$((PGSQL_PROJECT_PORT_MAX - PGSQL_PROJECT_PORT_MIN + 1))
+  for ((i=0; i<attempts; i++)); do
+    if [[ "$candidate" -ne 5432 ]] && ! pgsql_is_port_in_use "$candidate"; then
+      echo "$candidate"
       return 0
     fi
-  fi
+    candidate=$((candidate + 1))
+    [[ "$candidate" -gt "$PGSQL_PROJECT_PORT_MAX" ]] && candidate="$PGSQL_PROJECT_PORT_MIN"
+  done
+  echo "ERROR: no available project PostgreSQL port in ${PGSQL_PROJECT_PORT_MIN}-${PGSQL_PROJECT_PORT_MAX}" >&2
   return 1
+}
+
+pgsql_select_project_port() {
+  local data_dir="$1"
+  local configured
+  configured="$(pgsql_read_port_from_env 2>/dev/null || true)"
+  if [[ -z "$configured" ]]; then
+    configured="$(pgsql_read_port_from_conf "$data_dir" 2>/dev/null || true)"
+  fi
+  [[ -z "$configured" ]] && configured="$(pgsql_project_preferred_port)"
+  configured="$(pgsql_normalize_project_port "$configured")"
+
+  local port
+  port="$(pgsql_find_available_port "$configured")" || return 1
+  if [[ "$port" != "$configured" ]]; then
+    echo "端口 ${configured} 已被占用，当前项目 PostgreSQL 改用端口 ${port}。" >&2
+  fi
+  pgsql_write_port_conf "$data_dir" "$port"
+  pgsql_sync_env_port "$port"
+  echo "$port"
 }
 
 pgsql_start() {
   local data_dir
   data_dir="$(pgsql_resolve_data_dir "$@")"
+  pgsql_guard_project_data "$data_dir"
+  local guard_rc=$?
+  [[ "$guard_rc" -eq 2 ]] && return 0
+  [[ "$guard_rc" -ne 0 ]] && return "$guard_rc"
 
   local pgctl
   if pgctl="$(pgsql_find_pgctl_in_extend)"; then
@@ -204,24 +376,47 @@ pgsql_start() {
       chmod 700 "${data_dir}" 2>/dev/null || true
     fi
 
-    local port
-    port="$(pgsql_resolve_port_from_conf "${data_dir}")"
-    if pgsql_is_port_in_use "${port}"; then
-      echo "警告：检测到 PostgreSQL 端口 ${port} 已被占用，本次启动将被中止。"
-      echo "你可以："
-      echo "  1) 查看占用进程：sudo ss -lntp | grep :${port}  或  sudo lsof -i :${port}"
-      echo "  2) 释放端口后再执行：bash bin/server pgsql start -D \"${data_dir}\""
-      echo "  3) 或修改 ${data_dir}/postgresql.conf 里的 port，后再重启。"
-      return 1
+    if "${pgctl}" -D "${data_dir}" status >/dev/null 2>&1; then
+      local running_port_pre desired_port_pre
+      running_port_pre="$(pgsql_read_port_from_conf "${data_dir}" 2>/dev/null || true)"
+      desired_port_pre="$(pgsql_read_port_from_env 2>/dev/null || true)"
+      [[ -z "$desired_port_pre" ]] && desired_port_pre="$running_port_pre"
+      desired_port_pre="$(pgsql_normalize_project_port "$desired_port_pre")"
+      if [[ -n "$running_port_pre" && "$running_port_pre" == "$desired_port_pre" && "$running_port_pre" != "5432" ]]; then
+        pgsql_sync_env_port "$running_port_pre"
+        echo "PostgreSQL is already running for this project: ${data_dir}"
+        "${pgctl}" -D "${data_dir}" status || true
+        return 0
+      fi
+      echo "Restarting project PostgreSQL from port ${running_port_pre:-unknown} to project port ${desired_port_pre}."
+      "${pgctl}" -D "${data_dir}" stop -m fast || true
+      if "${pgctl}" -D "${data_dir}" status >/dev/null 2>&1; then
+        echo "ERROR: project PostgreSQL is still running after stop; cannot change port safely." >&2
+        return 1
+      fi
     fi
 
+    if "${pgctl}" -D "${data_dir}" status >/dev/null 2>&1; then
+      local running_port
+      running_port="$(pgsql_read_port_from_conf "${data_dir}" 2>/dev/null || true)"
+      if [[ -n "$running_port" ]]; then
+        pgsql_sync_env_port "$running_port"
+      fi
+      echo "PostgreSQL 已在运行：${data_dir}"
+      "${pgctl}" -D "${data_dir}" status || true
+      return 0
+    fi
+
+    local port
+    port="$(pgsql_select_project_port "${data_dir}")" || return 1
+
     local logfile="${data_dir}/logfile"
-    echo "启动 PostgreSQL（pg_ctl）：${data_dir}"
+    echo "启动 PostgreSQL（pg_ctl）：${data_dir}，端口：${port}"
     if [[ "$(uname -s)" == "Linux" ]]; then
       # 注意：-o 后面的参数必须作为一个整体传给 pg_ctl，否则会被当成多余参数报错
-      "${pgctl}" -D "${data_dir}" -l "${logfile}" -o "-k ${data_dir}" start
+      "${pgctl}" -D "${data_dir}" -l "${logfile}" -o "-k ${data_dir} -p ${port}" start
     else
-      "${pgctl}" -D "${data_dir}" -l "${logfile}" start
+      "${pgctl}" -D "${data_dir}" -l "${logfile}" -o "-p ${port}" start
     fi
     local rc=$?
     echo
@@ -250,21 +445,20 @@ pgsql_start() {
     fi
   fi
 
-  # extend/server 中无 pg_ctl：尝试系统服务
-  if pgsql_try_system_start; then
-    return 0
-  fi
-
-  echo "未在 extend/server/pgsql/bin 中找到 pg_ctl，也未能通过系统服务启动 PostgreSQL。"
-  echo "你可以："
-  echo "  1) 执行 bin/install.sh pgsql （Linux/Mac）安装项目内 PostgreSQL；"
-  echo "  2) 或安装系统 PostgreSQL（如：sudo apt-get install -y postgresql && sudo systemctl start postgresql）。"
+  # extend/server 中无 pg_ctl：不接管系统 PostgreSQL。
+  echo "pg_ctl was not found in extend/server/pgsql/bin."
+  echo "bin/server pgsql only manages this project's extend/server/pgsql/data and will not start a system PostgreSQL service."
+  echo "Install or link the matching PostgreSQL major version into extend/server/pgsql, then retry."
   return 1
 }
 
 pgsql_status() {
   local data_dir
   data_dir="$(pgsql_resolve_data_dir "$@")"
+  pgsql_guard_project_data "$data_dir"
+  local guard_rc=$?
+  [[ "$guard_rc" -eq 2 ]] && return 0
+  [[ "$guard_rc" -ne 0 ]] && return "$guard_rc"
 
   local pgctl
   if pgctl="$(pgsql_find_pgctl_in_extend)"; then
@@ -276,25 +470,17 @@ pgsql_status() {
     return 0
   fi
 
-  if [[ "$(uname -s)" == "Linux" ]] && pgsql_command_exists systemctl; then
-    local unit
-    for unit in postgresql postgresql-16 postgresql-15 postgresql-14 postgresql-13 postgresql@16-main postgresql@15-main postgresql@14-main postgresql@13-main; do
-      if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\b"; then
-        echo "检测到系统 PostgreSQL 单元：${unit}"
-        systemctl status "${unit}" --no-pager 2>/dev/null || true
-        return 0
-      fi
-    done
-  fi
-
-  echo "未检测到 extend/server 内 PostgreSQL，也未发现常见 systemd 单元。"
-  echo "如使用系统 PostgreSQL，可执行：systemctl status postgresql 或 service postgresql status。"
+  echo "未检测到 extend/server/pgsql/bin/pg_ctl。bin/server pgsql 不检查系统 PostgreSQL 服务。"
   return 0
 }
 
 pgsql_stop() {
   local data_dir
   data_dir="$(pgsql_resolve_data_dir "$@")"
+  pgsql_guard_project_data "$data_dir"
+  local guard_rc=$?
+  [[ "$guard_rc" -eq 2 ]] && return 0
+  [[ "$guard_rc" -ne 0 ]] && return "$guard_rc"
 
   local pgctl
   if pgctl="$(pgsql_find_pgctl_in_extend)"; then
@@ -309,20 +495,7 @@ pgsql_stop() {
     return 0
   fi
 
-  if [[ "$(uname -s)" == "Linux" ]] && pgsql_command_exists systemctl; then
-    local unit
-    for unit in postgresql postgresql-16 postgresql-15 postgresql-14 postgresql-13 postgresql@16-main postgresql@15-main postgresql@14-main postgresql@13-main; do
-      if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\b"; then
-        echo "尝试停止系统 PostgreSQL：${unit}"
-        systemctl stop "${unit}" 2>/dev/null || true
-        systemctl status "${unit}" --no-pager 2>/dev/null || true
-        return 0
-      fi
-    done
-  fi
-
-  echo "未找到可停止的 PostgreSQL 实例。"
-  echo "如使用系统 PostgreSQL，可执行：systemctl stop postgresql 或 service postgresql stop。"
+  echo "未检测到 extend/server/pgsql/bin/pg_ctl。bin/server pgsql 不停止系统 PostgreSQL 服务。"
   return 0
 }
 
@@ -336,18 +509,19 @@ case "$SERVICE" in
       status) pgsql_status "$@" ;;
       stop)   pgsql_stop "$@" ;;
       help|-h|--help)
-        echo "用法：bash bin/server pgsql <start|status|stop> [-D dataDir]"
+        echo "用法：bash bin/server pgsql <start|status|stop>"
         echo
         echo "说明："
         echo "  1) 优先使用 extend/server/pgsql/bin 下的 pg_ctl + data 目录；"
-        echo "  2) 若未找到 pg_ctl，会尝试系统 PostgreSQL（systemctl/service）；"
-        echo "  3) 端口被占用时会提前检查并给出排查建议。"
+        echo "  2) 若 env.php 指向外部或非当前项目数据库，会跳过本地 PostgreSQL；"
+        echo "  3) 不启动、停止或检查系统 PostgreSQL（systemctl/service）；"
+        echo "  4) 当前项目端口被占用时会自动选择项目端口，并同步 postgresql.conf 与 env.php。"
         echo
         echo "示例："
         echo "  bash bin/server pgsql start"
         echo "  bash bin/server pgsql status"
         echo "  bash bin/server pgsql stop"
-        echo "  bash bin/server pgsql start -D /home/weline/extend/server/pgsql/data"
+        echo "  bash bin/server pgsql start"
         ;;
       *)
         die "pgsql 子命令只支持：start / status / stop / help"

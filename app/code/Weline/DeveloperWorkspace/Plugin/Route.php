@@ -1,57 +1,63 @@
 <?php
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 作者：Administrator
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- * 日期：22/3/2024 13:20:43
- */
-
 namespace Weline\DeveloperWorkspace\Plugin;
 
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core;
+use Weline\Framework\Ui\FormKey;
 
 class Route extends Core
 {
     function afterRoute(Core $core, &$result)
     {
         if (SANDBOX) {
-            $title         = __('开发助手');
-            $sandbox_title = __('关闭沙盒环境');
-            $sure          = __('确定');
-            /**
-             * @var Request $request
-             */
+            $title = __('开发助手');
+            $sandboxTitle = __('关闭沙盒环境');
+            $sandboxKeyLabel = __('沙盒启动Key');
+
+            /** @var Request $request */
             $request = ObjectManager::getInstance(Request::class);
-            $url     = $request->getUrlBuilder()->getUrl('/dev/tool/sandbox/close');
-            $html    = <<<HTML
+            $url = $request->getUrlBuilder()->getUrl('/dev/tool/sandbox/close');
+            $formKey = ObjectManager::getInstance(FormKey::class)->getKey($url);
+
+            $safeUrl = \htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+            $safeTitle = \htmlspecialchars((string)$title, ENT_QUOTES, 'UTF-8');
+            $safeSandboxTitle = \htmlspecialchars((string)$sandboxTitle, ENT_QUOTES, 'UTF-8');
+            $safeSandboxKeyLabel = \htmlspecialchars((string)$sandboxKeyLabel, ENT_QUOTES, 'UTF-8');
+            $safeFormKey = \htmlspecialchars($formKey, ENT_QUOTES, 'UTF-8');
+
+            $html = <<<HTML
 <div class="position-fixed" style="top: 50%; transform: translateY(-50%); right: 0;">
   <div class="card">
     <div class="card-body">
-      <h5 class="card-title">$title</h5>
-      <form action="$url" id="sandbox-form">
-      <div class="form-check">
-        <input class="form-check-input" type="checkbox" id="sandbox" name="close" value="on">
-        <label class="form-check-label" for="sandbox">$sandbox_title</label>
-      </div>
-      <script >
-        document.querySelector('#sandbox').addEventListener('change', function () {
-          if (this.checked) {
-            document.querySelector('#sandbox-form').submit();
-          }
-        })
-</script>
+      <h5 class="card-title">$safeTitle</h5>
+      <form action="$safeUrl" method="post" id="sandbox-form">
+        <input type="hidden" name="form_key" value="$safeFormKey">
+        <input type="hidden" name="close" value="on">
+        <label class="form-label small mb-1" for="sandbox-key">$safeSandboxKeyLabel</label>
+        <input class="form-control form-control-sm mb-2" type="password" name="key" id="sandbox-key" autocomplete="off" required>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="sandbox" value="on">
+          <label class="form-check-label" for="sandbox">$safeSandboxTitle</label>
+        </div>
+        <script>
+          document.querySelector('#sandbox').addEventListener('change', function () {
+            if (this.checked) {
+              var form = document.querySelector('#sandbox-form');
+              if (form.reportValidity()) {
+                form.submit();
+              }
+            }
+          });
+        </script>
       </form>
     </div>
   </div>
 </div>
 HTML;
-            $result  = str_replace('</body>', $html . '</body>', $result);
+            $result = str_replace('</body>', $html . '</body>', $result);
         }
         return $result;
     }

@@ -51,6 +51,7 @@ class Locals extends Model
         // 清除语言缓存
         try {
             w_cache('i18n')->clear();
+            \Weline\Framework\Http\Url::bumpWebsiteParserSitesVersion();
         } catch (\Throwable $e) {
             // 缓存清除失败，静默处理
         }

@@ -25,7 +25,7 @@ $maxVisible = (int)($this->getData('maxVisible') ?? 5);
 $class = $this->getData('class') ?? '';
 
 // 构建CSS类
-$paginationClass = 'pagination';
+$paginationClass = 'w-pagination';
 if ($class) {
     $paginationClass .= ' ' . htmlspecialchars($class);
 }
@@ -45,34 +45,34 @@ if ($endPage - $startPage < $maxVisible - 1) {
 }
 ?>
 <nav class="<?= $paginationClass ?>">
-    <ul class="pagination-list">
+    <ul class="w-pagination-list">
         <?php if ($showFirstLast && $currentPage > 1): ?>
-            <li class="page-item">
-                <a class="page-link" href="<?= $buildUrl(1) ?>"><?= __('首页') ?></a>
+            <li class="w-page-item">
+                <a class="w-page-link" href="<?= $buildUrl(1) ?>"><?= __('首页') ?></a>
             </li>
         <?php endif; ?>
         
         <?php if ($showPrevNext && $currentPage > 1): ?>
-            <li class="page-item">
-                <a class="page-link" href="<?= $buildUrl($currentPage - 1) ?>"><?= __('上一页') ?></a>
+            <li class="w-page-item">
+                <a class="w-page-link" href="<?= $buildUrl($currentPage - 1) ?>"><?= __('上一页') ?></a>
             </li>
         <?php endif; ?>
         
         <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-            <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
-                <a class="page-link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
+            <li class="w-page-item <?= $i === $currentPage ? 'w-active' : '' ?>">
+                <a class="w-page-link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
             </li>
         <?php endfor; ?>
         
         <?php if ($showPrevNext && $currentPage < $totalPages): ?>
-            <li class="page-item">
-                <a class="page-link" href="<?= $buildUrl($currentPage + 1) ?>"><?= __('下一页') ?></a>
+            <li class="w-page-item">
+                <a class="w-page-link" href="<?= $buildUrl($currentPage + 1) ?>"><?= __('下一页') ?></a>
             </li>
         <?php endif; ?>
         
         <?php if ($showFirstLast && $currentPage < $totalPages): ?>
-            <li class="page-item">
-                <a class="page-link" href="<?= $buildUrl($totalPages) ?>"><?= __('末页') ?></a>
+            <li class="w-page-item">
+                <a class="w-page-link" href="<?= $buildUrl($totalPages) ?>"><?= __('末页') ?></a>
             </li>
         <?php endif; ?>
     </ul>

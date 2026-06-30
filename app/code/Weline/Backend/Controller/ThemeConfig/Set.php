@@ -11,8 +11,11 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Controller\ThemeConfig;
 
+use Weline\Admin\Controller\BaseController as AdminBaseController;
 use Weline\Backend\Block\ThemeConfig;
+use Weline\Backend\Model\BackendUserConfig;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Manager\ObjectManager;
 
 class Set extends BackendController
 {
@@ -46,7 +49,11 @@ class Set extends BackendController
         }
         
         try {
-            $old_layout = $this->themeConfig->getThemeConfig('layouts');
+            $originThemeConfig = $this->themeConfig->getOriginThemeConfig();
+            if (!\is_array($originThemeConfig)) {
+                $originThemeConfig = [];
+            }
+            $old_layout = $originThemeConfig['layouts'] ?? [];
             if (isset($data['layouts']) && is_array($data['layouts'])) {
                 // 合并旧配置
                 if (is_array($old_layout)) {
@@ -60,7 +67,13 @@ class Set extends BackendController
                 }
             }
             $data = $this->normalizeThemePayload($data);
-            $this->themeConfig->setThemeConfig($data);
+            $themeConfig = \array_merge($originThemeConfig, $data);
+            if (isset($data['layouts']) && \is_array($data['layouts'])) {
+                $themeConfig['layouts'] = $data['layouts'];
+            }
+            $this->themeConfig->setThemeConfig($themeConfig);
+            $this->persistThemeConfigForCurrentUser($themeConfig);
+            AdminBaseController::clearRuntimeFullPageCache();
             return $this->fetchJson($this->success());
         } catch (\Exception $exception) {
             return $this->fetchJson($this->exception($exception));
@@ -95,5 +108,29 @@ class Set extends BackendController
         $layouts['data-layout-mode'] = $mode;
         $data['layouts'] = $layouts;
         return $data;
+    }
+
+    private function persistThemeConfigForCurrentUser(array $themeConfig): void
+    {
+        /** @var BackendUserConfig $userConfig */
+        $userConfig = ObjectManager::getInstance(BackendUserConfig::class);
+        $userId = $userConfig->getCurrentUserId();
+        if ($userId <= 0) {
+            return;
+        }
+
+        $userConfig->clear()
+            ->setData(BackendUserConfig::schema_fields_key, ThemeConfig::theme_Session_Config, true)
+            ->setData(
+                BackendUserConfig::schema_fields_value,
+                (string)\json_encode(
+                    $themeConfig,
+                    \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_INVALID_UTF8_SUBSTITUTE
+                )
+            )
+            ->setData(BackendUserConfig::schema_fields_user_id, $userId, true)
+            ->setData(BackendUserConfig::schema_fields_module, 'Weline_Backend')
+            ->setData(BackendUserConfig::schema_fields_name, '主题设置')
+            ->save(true);
     }
 }

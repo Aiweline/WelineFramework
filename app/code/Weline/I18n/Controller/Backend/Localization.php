@@ -47,6 +47,16 @@ class Localization extends BaseController
         $this->lifecycle = ObjectManager::getInstance(CountryLocaleLifecycleService::class);
     }
 
+    private function getSafeCurrentLocaleCode(): string
+    {
+        $localeCode = (string)Cookie::getLangLocal();
+        if (!\preg_match('/\A[A-Za-z0-9_.-]{1,32}\z/', $localeCode)) {
+            return 'zh_Hans_CN';
+        }
+
+        return $localeCode;
+    }
+
     public function __init()
     {
         parent::__init();
@@ -61,8 +71,10 @@ class Localization extends BaseController
     {
         // 获取筛选参数
         $filter = $this->request->getGet('filter', 'all'); // 默认显示全部区域
-        $search = $this->request->getGet('search');
+        $search = trim((string)$this->request->getGet('search', ''));
+        $displayLocale = $this->getSafeCurrentLocaleCode();
         $countryFilter = $this->request->getGet('country_filter'); // 国家码过滤
+        $displayLocale = $this->getSafeCurrentLocaleCode();
         
         // 检查是否有国家数据，如果没有则立即安装默认国家
         $this->ensureCountriesInstalled();
@@ -83,10 +95,9 @@ class Localization extends BaseController
         // 确保 zh_Hans_CN 默认安装
         $this->ensureZhHansCnInstalled();
         $this->locale->reset()->joinModel(\Weline\I18n\Model\Locale\Name::class, 'ln', 'main_table.code=ln.locale_code', 'left')
-        ->where('ln.display_locale_code', Cookie::getLangLocal());
+        ->where('ln.display_locale_code', $displayLocale);
         // 处理搜索条件
-        if ($search) {
-            $search = addslashes($search);
+        if ($search !== '') {
             $localeCode = $this->locale::schema_fields_CODE;
             $localeName = \Weline\I18n\Model\Locale\Name::schema_fields_DISPLAY_NAME;
             $countryCode = $this->locale::schema_fields_COUNTRY_CODE;
@@ -507,7 +518,7 @@ class Localization extends BaseController
     private function checkLanguageSwitchAndUpdate()
     {
         try {
-            $currentLang = \Weline\Framework\Http\Cookie::getLangLocal();
+            $currentLang = $this->getSafeCurrentLocaleCode();
             
             // 检查是否有强制更新的请求参数
             $forceUpdate = $this->request->getGet('force_update_locale_names', false);
@@ -564,7 +575,7 @@ class Localization extends BaseController
     {
         try {
             // 获取当前显示语言
-            $currentLang = \Weline\Framework\Http\Cookie::getLangLocal();
+            $currentLang = $this->getSafeCurrentLocaleCode();
             Message::notes(__('开始检查当前语言(%{1})的区域名称数据', [$currentLang]));
             
             // 获取已安装国家的区域总数
@@ -778,7 +789,7 @@ class Localization extends BaseController
     {
         $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
         $countriesModel->joinModel(\Weline\I18n\Model\Countries\Locale\Name::class, 'cn', 'main_table.code=cn.country_code', 'left');
-        $countriesModel->where('cn.display_locale_code', Cookie::getLangLocal());
+        $countriesModel->where('cn.display_locale_code', $this->getSafeCurrentLocaleCode());
         
         $countries = $countriesModel->select('main_table.code, cn.display_name')->fetch()->getItems();
         
@@ -810,7 +821,7 @@ class Localization extends BaseController
         $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
         $countriesModel->joinModel(\Weline\I18n\Model\Countries\Locale\Name::class, 'cn', 'main_table.code=cn.country_code', 'left');
         $countriesModel->where('main_table.' . $countriesModel::schema_fields_IS_INSTALL, 1);
-        $countriesModel->where('cn.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, Cookie::getLangLocal());
+        $countriesModel->where('cn.' . \Weline\I18n\Model\Countries\Locale\Name::schema_fields_DISPLAY_LOCALE_CODE, $this->getSafeCurrentLocaleCode());
         
         $installedCountries = $countriesModel->select('main_table.code, main_table.is_install, main_table.is_active, cn.display_name')
                                            ->fetch()
@@ -1030,7 +1041,7 @@ class Localization extends BaseController
     public function postSyncNames()
     {
         try {
-            $currentLang = \Weline\Framework\Http\Cookie::getLangLocal();
+            $currentLang = $this->getSafeCurrentLocaleCode();
             $force = (bool)$this->request->getPost('force', false);
             
             if ($force) {

@@ -22,7 +22,7 @@ class FrontendController extends PcController
 
     public function __init()
     {
-        if (!isset($this->session)) {
+        if (!isset($this->session) || \Weline\Framework\Runtime\Runtime::isPersistent()) {
             $this->session = SessionFactory::getInstance()->createFrontendSession();
         }
         
@@ -45,7 +45,7 @@ class FrontendController extends PcController
         array $additionalData = []
     ): string {
         $layoutMap = [
-            'auth' => 'Weline_Theme::theme/frontend/layouts/account_auth/default.phtml',
+            'auth' => 'Weline_Theme::theme/frontend/layouts/account/auth.phtml',
             'default' => 'Weline_Theme::theme/frontend/layouts/default/default.phtml',
             'full' => 'Weline_Theme::theme/frontend/layouts/default/default.phtml',
         ];

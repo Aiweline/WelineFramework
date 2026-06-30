@@ -7,7 +7,9 @@ namespace Weline\Database\Observer;
 use Weline\Database\Service\MigrationService;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Registry\Service\RegistryProgress;
 
 class ModuleUpgradeObserver implements ObserverInterface
 {
@@ -34,12 +36,16 @@ class ModuleUpgradeObserver implements ObserverInterface
         }
 
         try {
+            RegistryProgress::section('module upgrade migrations');
+            RegistryProgress::log('Module migration pending lookup started: ' . $moduleName);
             $pendingMigrations = $this->migrationService->getPendingMigrations($moduleName);
             if (empty($pendingMigrations)) {
+                RegistryProgress::log('Module migration pending lookup empty: ' . $moduleName);
                 return;
             }
 
             if ($oldVersion === $newVersion) {
+                RegistryProgress::log('Module migration skipped unchanged version: ' . $moduleName);
                 return;
             }
 
@@ -48,13 +54,29 @@ class ModuleUpgradeObserver implements ObserverInterface
 
             $success = 0;
             $failed  = 0;
+            $total = count($pendingMigrations);
+            $index = 0;
             foreach ($pendingMigrations as $migration) {
+                $index++;
+                RegistryProgress::module('Module migration execute', $index, $total, $moduleName, (string)($migration['filename'] ?? ''));
                 $result = $this->migrationService->upgradeMigration($moduleName, $migration['file']);
                 $result ? $success++ : $failed++;
             }
+            $compaction = ObjectManager::relieveMemoryPressure(false);
+            $cycles = function_exists('gc_collect_cycles') ? gc_collect_cycles() : 0;
+            RegistryProgress::log(sprintf(
+                'Module migration observer finished: %s success=%d failed=%d memory_stores=%d metadata_entries=%d gc_cycles=%d',
+                $moduleName,
+                $success,
+                $failed,
+                (int)($compaction['memory_store_clears'] ?? 0),
+                (int)($compaction['metadata_entries_cleared'] ?? 0),
+                (int)$cycles
+            ));
 
             $this->printing->info(__("迁移完成: 成功 %{1}，失败 %{2}", [$success, $failed]));
         } catch (\Exception $e) {
+            RegistryProgress::log('Module migration observer exception: ' . $moduleName . ' ' . $e->getMessage());
             $this->printing->error(__("模块升级迁移失败: %{1}", $e->getMessage()));
         }
     }

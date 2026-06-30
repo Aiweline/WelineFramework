@@ -16,8 +16,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Service\SitemapRegistryService;
 use Weline\Seo\Service\WebSitemapData;
 use Weline\Seo\Service\SitemapAdapterRegistry;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Model\SitemapUrl;
-use Weline\Websites\Model\Website;
 
 /**
  * Sitemap 测试命令
@@ -32,20 +32,20 @@ class Test implements CommandInterface
     private WebSitemapData $webSitemapData;
     private SitemapAdapterRegistry $adapterRegistry;
     private SitemapUrl $sitemapUrlModel;
-    private Website $websiteModel;
+    private SeoWebsiteDirectory $websiteDirectory;
 
     public function __construct(
         SitemapRegistryService $registryService,
         WebSitemapData $webSitemapData,
         SitemapAdapterRegistry $adapterRegistry,
         SitemapUrl $sitemapUrlModel,
-        Website $websiteModel
+        SeoWebsiteDirectory $websiteDirectory
     ) {
         $this->registryService = $registryService;
         $this->webSitemapData = $webSitemapData;
         $this->adapterRegistry = $adapterRegistry;
         $this->sitemapUrlModel = $sitemapUrlModel;
-        $this->websiteModel = $websiteModel;
+        $this->websiteDirectory = $websiteDirectory;
     }
 
     public function execute(array $args = [], array $options = []): string
@@ -171,11 +171,11 @@ class Test implements CommandInterface
         
         // 显示数据库统计
         echo "\n  数据库统计:\n";
-        $websites = $this->websiteModel->reset()->select()->fetch()->getItems();
+        $websites = $this->websiteDirectory->listWebsites();
         foreach ($websites as $website) {
-            $websiteId = (int)$website->getId();
+            $websiteId = (int)($website['website_id'] ?? 0);
             $count = $this->sitemapUrlModel->getActiveUrlCount($websiteId);
-            $websiteCode = $website->getData('code') ?: 'website_' . $websiteId;
+            $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
             echo "    • {$websiteCode}: {$count} 条 URL\n";
         }
     }
@@ -184,11 +184,11 @@ class Test implements CommandInterface
     {
         $this->printSection('步骤 4: 生成 Sitemap 文件');
         
-        $websites = $this->websiteModel->reset()->select()->fetch()->getItems();
+        $websites = $this->websiteDirectory->listWebsites();
         
         foreach ($websites as $website) {
-            $websiteId = (int)$website->getId();
-            $websiteCode = $website->getData('code') ?: 'website_' . $websiteId;
+            $websiteId = (int)($website['website_id'] ?? 0);
+            $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
             
             echo "\n  站点: {$websiteCode}\n";
             

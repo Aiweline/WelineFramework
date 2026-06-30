@@ -23,6 +23,7 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemePreviewEntryApplication;
 use Weline\Theme\Service\ThemePreviewGenerator;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Framework\Http\Sse\SseWriter;
 
 /**
@@ -254,6 +255,7 @@ class Index extends BackendController
             }
             $theme->_cache->delete('theme');
             $theme->_cache->delete('theme_parent_' . $themeId);
+            $this->clearActivationRuntimeCaches((int)$themeId, $area);
 
             return $this->fetchJson($this->success(__('主题激活成功')));
         } catch (\Exception $e) {
@@ -1000,6 +1002,17 @@ class Index extends BackendController
         $theme->clearQuery();
         $theme->where(WelineTheme::schema_fields_ID, $themeId)
             ->update([WelineTheme::schema_fields_IS_ACTIVE => 1])->fetch();
+    }
+
+    private function clearActivationRuntimeCaches(int $themeId, ?string $area): void
+    {
+        try {
+            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
+                $themeId,
+                'theme_backend_activate_' . ($area ?: 'global')
+            );
+        } catch (\Throwable) {
+        }
     }
 
     private function themeSupportsArea(WelineTheme $theme, string $area): bool

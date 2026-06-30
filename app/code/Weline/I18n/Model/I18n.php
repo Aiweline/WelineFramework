@@ -3,11 +3,14 @@
 namespace Weline\I18n\Model;
 
 use Symfony\Component\Intl\Countries;
+use Symfony\Component\Intl\Languages;
 use Symfony\Component\Intl\Locales;
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\System\File\Data\File;
 use Weline\I18n\Config\Reader;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
@@ -16,8 +19,71 @@ use Weline\I18n\Service\TranslationCollector;
 class I18n
 {
     private const MODULE_COLLECTION_FIBER_LIMIT = 6;
+    private const LOCALE_CACHE_TTL = 300;
+    private const FALLBACK_LOCALE_NAMES = [
+        'en' => 'English',
+        'en_US' => 'English (United States)',
+        'zh_Hans_CN' => 'Chinese (Simplified, China)',
+        'zh_Hant_TW' => 'Chinese (Traditional, Taiwan)',
+        'ja_JP' => 'Japanese (Japan)',
+        'ko_KR' => 'Korean (South Korea)',
+        'de_DE' => 'German (Germany)',
+        'fr_FR' => 'French (France)',
+        'es_ES' => 'Spanish (Spain)',
+        'it_IT' => 'Italian (Italy)',
+        'pt_BR' => 'Portuguese (Brazil)',
+        'ru_RU' => 'Russian (Russia)',
+        'nl_NL' => 'Dutch (Netherlands)',
+    ];
+
+    private const FALLBACK_LANGUAGE_SELF_NAMES = [
+        'en' => 'English',
+        'zh' => '中文',
+        'zh_Hans' => '简体中文',
+        'zh_Hant' => '繁體中文',
+        'ja' => '日本語',
+        'ko' => '한국어',
+        'de' => 'Deutsch',
+        'fr' => 'Français',
+        'es' => 'Español',
+        'it' => 'Italiano',
+        'pt' => 'Português',
+        'ru' => 'Русский',
+        'nl' => 'Nederlands',
+    ];
+
+    private const FALLBACK_COUNTRY_NAMES = [
+        'AR' => 'Argentina',
+        'AU' => 'Australia',
+        'BE' => 'Belgium',
+        'BR' => 'Brazil',
+        'CA' => 'Canada',
+        'CH' => 'Switzerland',
+        'CN' => 'China',
+        'DE' => 'Germany',
+        'DK' => 'Denmark',
+        'ES' => 'Spain',
+        'FI' => 'Finland',
+        'FR' => 'France',
+        'GB' => 'United Kingdom',
+        'IN' => 'India',
+        'IT' => 'Italy',
+        'JP' => 'Japan',
+        'KR' => 'South Korea',
+        'MX' => 'Mexico',
+        'NL' => 'Netherlands',
+        'NO' => 'Norway',
+        'RU' => 'Russia',
+        'SE' => 'Sweden',
+        'TW' => 'Taiwan',
+        'US' => 'United States',
+    ];
 
     private static array $local_words = [];
+    /** @var array{expires_at: float, value: string[]}|null */
+    private static ?array $availableLocaleCodesCache = null;
+    /** @var array<string, array{expires_at: float, value: string}> */
+    private static array $localByCodeCache = [];
     private Reader $reader;
     public CachePoolInterface $i18nCache;
 
@@ -28,54 +94,252 @@ class I18n
         $this->i18nCache = w_cache('i18n');
     }
 
+    public function getAvailableLocaleCodes(): array
+    {
+        if (self::$availableLocaleCodesCache !== null
+            && self::$availableLocaleCodesCache['expires_at'] >= microtime(true)) {
+            return self::$availableLocaleCodesCache['value'];
+        }
+
+        if (class_exists(Locales::class)) {
+            try {
+                return $this->rememberAvailableLocaleCodes(Locales::getLocales());
+            } catch (\Throwable) {
+            }
+        }
+
+        return $this->rememberAvailableLocaleCodes(array_keys(self::FALLBACK_LOCALE_NAMES));
+    }
+
+    public function getLocaleNames(string $displayLocale = 'zh_Hans_CN'): array
+    {
+        $displayLocale = $this->normalizeIntlDisplayLocale($displayLocale);
+        if (class_exists(Locales::class)) {
+            try {
+                return Locales::getNames($displayLocale);
+            } catch (\Throwable) {
+                try {
+                    return Locales::getNames('en');
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        return self::FALLBACK_LOCALE_NAMES;
+    }
+
+    private function normalizeIntlDisplayLocale(string $locale): string
+    {
+        $locale = $this->normalizeLocaleCode($locale);
+        return extension_loaded('intl') ? ($locale !== '' ? $locale : 'en') : 'en';
+    }
+
+    private function normalizeLocaleCode(string $localeCode): string
+    {
+        $localeCode = trim(str_replace('-', '_', $localeCode));
+        if ($localeCode === '') {
+            return '';
+        }
+
+        $parts = explode('_', $localeCode);
+        foreach ($parts as $index => $part) {
+            $part = trim((string)$part);
+            if ($part === '') {
+                unset($parts[$index]);
+                continue;
+            }
+
+            if ($index === 0) {
+                $parts[$index] = strtolower($part);
+                continue;
+            }
+
+            if (strlen($part) === 2 && preg_match('/^[a-zA-Z]{2}$/', $part) === 1) {
+                $parts[$index] = strtoupper($part);
+                continue;
+            }
+
+            if (strlen($part) === 4 && preg_match('/^[a-zA-Z]{4}$/', $part) === 1) {
+                $parts[$index] = ucfirst(strtolower($part));
+            }
+        }
+
+        return implode('_', array_values($parts));
+    }
+
+    private function getLocaleNameFromProvider(string $localeCode, string $displayLocale): string
+    {
+        $displayLocale = $this->normalizeIntlDisplayLocale($displayLocale);
+        if (class_exists(Locales::class)) {
+            try {
+                return Locales::getName($localeCode, $displayLocale);
+            } catch (\Throwable) {
+            }
+        }
+
+        return self::FALLBACK_LOCALE_NAMES[$localeCode] ?? $localeCode;
+    }
+
+    private function countryExists(string $countryCode): bool
+    {
+        $countryCode = strtoupper($countryCode);
+        if (class_exists(Countries::class)) {
+            try {
+                return Countries::exists($countryCode);
+            } catch (\Throwable) {
+            }
+        }
+
+        return isset(self::FALLBACK_COUNTRY_NAMES[$countryCode]);
+    }
+
+    private function getCountryName(string $countryCode, string $displayLocale = 'en'): string
+    {
+        $countryCode = strtoupper($countryCode);
+        if (class_exists(Countries::class)) {
+            try {
+                return Countries::getName($countryCode, $this->normalizeIntlDisplayLocale($displayLocale));
+            } catch (\Throwable) {
+            }
+        }
+
+        return self::FALLBACK_COUNTRY_NAMES[$countryCode] ?? $countryCode;
+    }
+
     public function getLocalByCode(string $locale_code): string
     {
-        if ($data = $this->i18nCache->get($locale_code)) {
-            return $data;
+        $cacheKey = strtolower(trim($locale_code));
+        if (isset(self::$localByCodeCache[$cacheKey])
+            && self::$localByCodeCache[$cacheKey]['expires_at'] >= microtime(true)) {
+            return self::$localByCodeCache[$cacheKey]['value'];
         }
-        $locales = Locales::getLocales();
+        unset(self::$localByCodeCache[$cacheKey]);
+
+        if ($data = $this->i18nCache->get($locale_code)) {
+            return $this->rememberLocalByCode($cacheKey, (string)$data);
+        }
+        $locales = $this->getAvailableLocaleCodes();
         foreach ($locales as $locale) {
             if (strtolower($locale_code) === strtolower($locale)) {
                 $this->i18nCache->set($locale_code, $locale);
-                return $locale;
+                return $this->rememberLocalByCode($cacheKey, $locale);
             }
         }
         $this->i18nCache->set($locale_code, 'zh_Hans_CN');
-        return 'zh_Hans_CN';
+        return $this->rememberLocalByCode($cacheKey, 'zh_Hans_CN');
+    }
+
+    /**
+     * @param string[] $codes
+     * @return string[]
+     */
+    private function rememberAvailableLocaleCodes(array $codes): array
+    {
+        self::$availableLocaleCodesCache = [
+            'expires_at' => microtime(true) + $this->localeCacheTtl(),
+            'value' => $codes,
+        ];
+
+        return $codes;
+    }
+
+    private function rememberLocalByCode(string $cacheKey, string $locale): string
+    {
+        self::$localByCodeCache[$cacheKey] = [
+            'expires_at' => microtime(true) + $this->localeCacheTtl(),
+            'value' => $locale,
+        ];
+
+        return $locale;
+    }
+
+    private function localeCacheTtl(): int
+    {
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            return $policy->ttl('site.i18n_locale_ttl', self::LOCALE_CACHE_TTL);
+        } catch (\Throwable) {
+            return self::LOCALE_CACHE_TTL;
+        }
     }
 
     public function getLocals(string $lang_code = 'zh_Hans_CN'): array
     {
         // 未安装 intl 时 Symfony Polyfill 仅支持 en，传 zh_Hans_CN 会抛错，降级为 en
-        if (!extension_loaded('intl')) {
-            $lang_code = 'en';
-        }
+        $lang_code = $this->normalizeIntlDisplayLocale($lang_code);
         $cache_key = 'getLocals' . $lang_code;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
         }
-        $locals = Locales::getNames($lang_code);
+        $locals = $this->getLocaleNames($lang_code);
         $this->i18nCache->set($cache_key, $locals);
         return $locals;
     }
 
     public function getLocaleName(string $locale_code, string $displace_locale_code = 'zh_Hans_CN'): string
     {
-        if (!extension_loaded('intl')) {
-            $displace_locale_code = 'en';
-        }
         $name = $locale_code;
-        if (Locales::exists($locale_code)) {
-            $name = Locales::getName($locale_code, $displace_locale_code);
+        if ($this->localeExists($locale_code)) {
+            $name = $this->getLocaleNameFromProvider($locale_code, $displace_locale_code);
         }
         return $name;
     }
 
+    /**
+     * 返回语码对应语言在其自身语言下的名称（如 zh_Hans_CN -> 简体中文，en_US -> English）。
+     * 与 getLocaleName($code, $websiteLocale) 不同，后者是当前网站界面语言下的 locale 全称。
+     */
+    public function getLocaleLanguageSelfName(string $localeCode): string
+    {
+        $localeCode = trim($localeCode);
+        if ($localeCode === '') {
+            return '';
+        }
+
+        $languageTag = $this->extractLanguageTagFromLocaleCode($localeCode);
+        if ($languageTag === '') {
+            return $localeCode;
+        }
+
+        if (class_exists(Languages::class)) {
+            try {
+                return Languages::getName($languageTag, $languageTag);
+            } catch (\Throwable) {
+                $baseLanguage = explode('_', $languageTag)[0] ?? '';
+                if ($baseLanguage !== '') {
+                    try {
+                        return Languages::getName($baseLanguage, $baseLanguage);
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+        }
+
+        return self::FALLBACK_LANGUAGE_SELF_NAMES[$languageTag]
+            ?? self::FALLBACK_LANGUAGE_SELF_NAMES[explode('_', $languageTag)[0] ?? '']
+            ?? $this->getLocaleName($localeCode, $localeCode);
+    }
+
+    private function extractLanguageTagFromLocaleCode(string $localeCode): string
+    {
+        $parts = explode('_', trim($localeCode));
+        $language = strtolower((string)($parts[0] ?? ''));
+        if ($language === '') {
+            return '';
+        }
+
+        $second = (string)($parts[1] ?? '');
+        if ($second !== '' && strlen($second) !== 2) {
+            return $language . '_' . $second;
+        }
+
+        return $language;
+    }
+
     public function getLocalesWithFlags(int $width = 24, int $height = 18, string $lang_code = 'zh_Hans_CN', bool $installed = true)
     {
-        if (!extension_loaded('intl')) {
-            $lang_code = 'en';
-        }
+        $lang_code = $this->normalizeIntlDisplayLocale($lang_code);
         $cache_key = 'getLocalesWithFlags' . $lang_code . $width . $height . (string)$installed;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
@@ -92,7 +356,7 @@ class I18n
 
         $locals = [];
         $lang_locals = $this->getLocals($lang_code);
-        $allLocales = Locales::getLocales();
+        $allLocales = $this->getAvailableLocaleCodes();
         
         foreach ($allLocales as $locale) {
             if ($installed && !in_array($locale, $install_packs)) {
@@ -140,7 +404,7 @@ class I18n
 
         $locals = [];
         $lang_locals = $this->getLocals();
-        $allLocales = Locales::getLocales();
+        $allLocales = $this->getAvailableLocaleCodes();
         
         // 收集所有需要获取的国家代码
         $countryCodes = [];
@@ -191,20 +455,25 @@ class I18n
 
     public function getCountryFlagWithLocal(string $local_code = 'zh_Hans_CN', int $width = 24, int $height = 18): array
     {
-        $cache_key = 'getCountryFlagWithLocal' . $local_code . $width . $height;
+        $localeCode = $this->normalizeLocaleCode($local_code);
+        if ($localeCode === '') {
+            return [];
+        }
+
+        $cache_key = 'getCountryFlagWithLocal' . $localeCode . $width . $height;
         if ($data = $this->i18nCache->get($cache_key)) {
             if (is_array($data)) {
                 return $data;
             }
         }
 
-        $lang_locals = $this->getLocals($local_code);
-        $countryCode = $this->getCountryCodeFromLocale($local_code);
+        $lang_locals = $this->getLocals($localeCode);
+        $countryCode = $this->getCountryCodeFromLocale($localeCode);
         
         if ($countryCode) {
             $svg = $this->getCountryFlag($countryCode, $width, $height);
             if ($svg) {
-                $local = ['name' => $lang_locals[$local_code] ?? $local_code, 'flag' => $svg];
+                $local = ['name' => $lang_locals[$localeCode] ?? $localeCode, 'flag' => $svg];
                 $this->i18nCache->set($cache_key, $local, 0);
                 return $local;
             }
@@ -261,7 +530,11 @@ class I18n
     private function collectModuleTranslationsSerial(array $directories, TranslationCollector $collector): array
     {
         $translations = [];
+        $total = count($directories);
+        $index = 0;
         foreach ($directories as $module => $directory) {
+            $index++;
+            RegistryProgress::module('I18n source module scan', $index, $total, (string)$module);
             foreach ($this->collectSingleModuleTranslations($module, $directory, $collector) as $word => $translation) {
                 $translations[$word] = $translation;
             }
@@ -281,8 +554,12 @@ class I18n
         $results = [];
         $errors = [];
         $settled = [];
+        $total = count($directories);
+        $index = 0;
 
         foreach ($directories as $module => $directory) {
+            $index++;
+            RegistryProgress::module('I18n source module scan', $index, $total, (string)$module);
             $fibers[$module] = new \Fiber(function () use ($module, $directory, $collector): array {
                 return $this->collectSingleModuleTranslations($module, $directory, $collector);
             });
@@ -660,20 +937,20 @@ class I18n
 
     public function getCountry(string $country_code = 'CN'): array
     {
-        if (!Countries::exists($country_code)) {
+        if (!$this->countryExists($country_code)) {
             return [];
         }
 
         return [
             'code' => $country_code,
-            'name' => Countries::getName($country_code),
+            'name' => $this->getCountryName($country_code),
             'locales' => $this->getLocalesForCountry($country_code)
         ];
     }
 
     private function getLocalesForCountry(string $countryCode): array
     {
-        $locales = Locales::getLocales();
+        $locales = $this->getAvailableLocaleCodes();
         $countryLocales = [];
         $countryCode = strtoupper($countryCode);
         
@@ -687,17 +964,27 @@ class I18n
 
     private function getCountryCodeFromLocale(string $locale): ?string
     {
-        $parts = explode('_', $locale);
-        $lastPart = end($parts);
-        if (strlen($lastPart) === 2 && strtoupper($lastPart) === $lastPart) {
-            return $lastPart;
+        $parts = explode('_', $this->normalizeLocaleCode($locale));
+        for ($index = count($parts) - 1; $index >= 1; $index--) {
+            $part = strtoupper((string)($parts[$index] ?? ''));
+            if (strlen($part) === 2 && preg_match('/^[A-Z]{2}$/', $part) === 1) {
+                return $part;
+            }
         }
+
         return null;
     }
 
     public function localeExists(string $locale_code): bool
     {
-        return Locales::exists($locale_code);
+        if (class_exists(Locales::class)) {
+            try {
+                return Locales::exists($locale_code);
+            } catch (\Throwable) {
+            }
+        }
+
+        return isset(self::FALLBACK_LOCALE_NAMES[$locale_code]);
     }
 
     public function getLocalsWords(bool $cache = true, ?string $moduleName = null): array
@@ -732,18 +1019,25 @@ class I18n
             }
         }
         
-        $locals_names = extension_loaded('intl') ? Locales::getNames() : Locales::getNames('en');
+        $locals_names = $this->getLocaleNames();
         if (!isset($locals_words)) {
             $locals_words = [];
         }
         $error_count = 0;
         $first_error = true;
         
-        $word_modules = [];
-        $word_translate_modules = [];
-        $word_module_translations = [];
+        $collector = ObjectManager::getInstance(TranslationCollector::class);
+        $words_by_module = [
+            'all_words' => [],
+        ];
         $all_i18ns = $this->reader->getAllI18ns();
+        RegistryProgress::count('I18n CSV source files', array_sum(array_map('count', $all_i18ns)), 'files');
+        $csv_module_count = count($all_i18ns);
+        $csv_module_index = 0;
+        $csv_word_count = 0;
         foreach ($all_i18ns as $module_name => $i18n_files) {
+            $csv_module_index++;
+            RegistryProgress::module('I18n CSV read', $csv_module_index, $csv_module_count, (string)$module_name, count($i18n_files) . ' files');
             $full_module_name = $this->getFullModuleName($module_name);
             foreach ($i18n_files as $local => $i18n_file) {
                 if (isset($locals_names[$local])) {
@@ -832,38 +1126,20 @@ class I18n
                             }
                         }
                         
-                        if (!isset($word_modules[$local])) {
-                            $word_modules[$local] = [];
+                        if (!isset($locals_words[$local])) {
+                            $locals_words[$local] = [];
                         }
-                        if (!isset($word_modules[$local][$data[0]])) {
-                            $word_modules[$local][$data[0]] = [];
-                        }
-                        if (!in_array($word_module, $word_modules[$local][$data[0]])) {
-                            $word_modules[$local][$data[0]][] = $word_module;
-                        }
-                        
-                        if (!isset($word_module_translations[$local])) {
-                            $word_module_translations[$local] = [];
-                        }
-                        if (!isset($word_module_translations[$local][$data[0]])) {
-                            $word_module_translations[$local][$data[0]] = [];
-                        }
-                        $word_module_translations[$local][$data[0]][$word_module] = $data[1];
-                        
-                        if (!isset($locals_words[$local][$data[0]])) {
-                            $locals_words[$local][$data[0]] = $data[1];
-                            if (!isset($word_translate_modules[$local])) {
-                                $word_translate_modules[$local] = [];
+                        $locals_words[$local][$data[0]] = $data[1];
+                        $csv_word_count++;
+
+                        if ($collector->isValidTranslationString($data[0])) {
+                            if (!isset($words_by_module[$local])) {
+                                $words_by_module[$local] = [];
                             }
-                            $word_translate_modules[$local][$data[0]] = $word_module;
-                        } else {
-                            if (in_array($word_module, $word_modules[$local][$data[0]])) {
-                                $locals_words[$local][$data[0]] = $data[1];
-                                if (!isset($word_translate_modules[$local])) {
-                                    $word_translate_modules[$local] = [];
-                                }
-                                $word_translate_modules[$local][$data[0]] = $word_module;
+                            if (!isset($words_by_module[$local][$word_module])) {
+                                $words_by_module[$local][$word_module] = [];
                             }
+                            $words_by_module[$local][$word_module][$data[0]] = $data[1];
                         }
                         $line += 1;
                     }
@@ -886,6 +1162,8 @@ class I18n
                 }
             }
         }
+        unset($all_i18ns);
+        RegistryProgress::count('I18n CSV loaded', $csv_word_count, 'entries');
         
         if ($error_count > 0 && php_sapi_name() === 'cli') {
             echo str_repeat("=", 80) . "\n";
@@ -894,62 +1172,10 @@ class I18n
         }
 
         $directories = $this->getActiveModuleDirectories($moduleName);
-        $collector = ObjectManager::getInstance(TranslationCollector::class);
+        RegistryProgress::count('I18n source scan', count($directories), 'modules');
         $translations = $this->collectModuleTranslations($directories, $collector);
-        
-        if (false) { foreach ($directories as $module => $directory) {
-            $full_module_name = $this->getFullModuleName($module);
-            
-            // 使用 collectLazy() 惰性生成器，逐条消费翻译字符串，避免内存中累积完整数组
-            $module_words = [];
-            foreach ($collector->collectLazy($directory, $module) as $original => $info) {
-                $translations[$original] = $original;
-                $module_words[$original] = $original;
-            }
-            
-            $i18n_dir = $directory . '/i18n';
-            if (is_dir($i18n_dir)) {
-                $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($i18n_dir));
-                foreach ($iterator as $file) {
-                    if ($file->isFile() && $file->getExtension() === 'csv') {
-                        $file_words = [];
-                        $handle = @fopen($file->getPathname(), 'r');
-                        if ($handle !== false) {
-                            while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-                                if(isset($data[0]) && isset($data[1])){
-                                    $file_words[$data[0]] = $data[1];
-                                }
-                            }
-                            fclose($handle);
-                        }
-
-                        // 只保留从代码收集的键，避免乱码/损坏的 CSV 键被写回；翻译值优先用现有 CSV，疑似乱码则用原文
-                        $file_translations = [];
-                        foreach ($module_words as $key => $defaultVal) {
-                            $val = $file_words[$key] ?? $defaultVal;
-                            if (self::isLikelyCorruptedTranslation($val)) {
-                                $val = $defaultVal;
-                            }
-                            $file_translations[$key] = $val;
-                        }
-                        unset($file_words);
-                        $csv_file = @fopen($file->getPathname(), 'w+');
-                        if ($csv_file !== false) {
-                            // 写入 UTF-8 BOM，避免在 Windows 下被误存为非 UTF-8 导致乱码
-                            fwrite($csv_file, "\xEF\xBB\xBF");
-                            foreach ($file_translations as $key => $value) {
-                                fputcsv($csv_file, [$key, $value], ',', '"', '\\');
-                            }
-                            fclose($csv_file);
-                        }
-                        unset($file_translations);
-                    }
-                }
-            }
-            unset($module_words); // 每个模块处理完后释放
-        }
-        
-        }
+        RegistryProgress::count('I18n source scan', count($translations), 'source words');
+        unset($directories);
 
         if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE] ?? []);
@@ -974,6 +1200,15 @@ class I18n
         if ($translations and isset($locals_words[Env::default_LANGUAGE_CODE])) {
             $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
         }
+        foreach ($translations as $word => $translate) {
+            if (
+                $collector->isValidTranslationString((string)$word)
+                && !$this->hasModuleTranslation($words_by_module, Env::default_LANGUAGE_CODE, (string)$word)
+                && !isset($words_by_module['all_words'][$word])
+            ) {
+                $words_by_module['all_words'][(string)$word] = (string)$translate;
+            }
+        }
         unset($translations); // 释放 $translations，后面不再需要
         
         $translate_mode = Env::get('translation.mode', 'default');
@@ -993,8 +1228,16 @@ class I18n
                         $translate = $db_trans[LocaleDictionary::schema_fields_TRANSLATE] ?? '';
                         if ($word && $translate) {
                             $locals_words[$local_code][$word] = $translate;
+                            if (
+                                $collector->isValidTranslationString((string)$word)
+                                && !$this->hasModuleTranslation($words_by_module, (string)$local_code, (string)$word)
+                                && !isset($words_by_module['all_words'][$word])
+                            ) {
+                                $words_by_module['all_words'][(string)$word] = (string)$translate;
+                            }
                         }
                     }
+                    unset($db_translations);
                 }
             } catch (\Exception $e) {
                 w_log_error("在线翻译模式：从数据库读取翻译失败：" . $e->getMessage(), [], 'i18n');
@@ -1008,46 +1251,28 @@ class I18n
                 mkdir($dir, 0755, true);
             }
             
-            $words_by_module = [
-                'all_words' => []
-            ];
-            $all_words_global = [];
-            
-            // 在循环外创建一次 collector 实例，避免每个 word 都重新创建
-            $collector = ObjectManager::getInstance(TranslationCollector::class);
+            foreach (array_keys($locals_words) as $locale) {
+                if (!isset($words_by_module[$locale])) {
+                    $words_by_module[$locale] = [];
+                }
+            }
             
             foreach ($locals_words as $locale => $words) {
-                $words_by_module[$locale] = [];
+                $words_by_module[$locale] ??= [];
                 foreach ($words as $word => $translate) {
-                    if (!$collector->isValidTranslationString($word)) {
+                    if (!$collector->isValidTranslationString((string)$word)) {
                         continue;
                     }
                     
-                    $modules = $word_modules[$locale][$word] ?? [];
-                    if (count($modules) > 1) {
-                        foreach ($modules as $module_name) {
-                            if (!isset($words_by_module[$locale][$module_name])) {
-                                $words_by_module[$locale][$module_name] = [];
-                            }
-                            $module_translate = $word_module_translations[$locale][$word][$module_name] ?? $translate;
-                            $words_by_module[$locale][$module_name][$word] = $module_translate;
-                        }
-                    } elseif (count($modules) === 1) {
-                        $module_name = $modules[0];
-                        if (!isset($words_by_module[$locale][$module_name])) {
-                            $words_by_module[$locale][$module_name] = [];
-                        }
-                        $words_by_module[$locale][$module_name][$word] = $translate;
-                    } else {
-                        if (!isset($all_words_global[$word])) {
-                            $all_words_global[$word] = $translate;
-                        }
+                    if (
+                        !$this->hasModuleTranslation($words_by_module, (string)$locale, (string)$word)
+                        && !isset($words_by_module['all_words'][$word])
+                    ) {
+                        $words_by_module['all_words'][(string)$word] = (string)$translate;
                     }
                 }
             }
             
-            $words_by_module['all_words'] = $all_words_global;
-            unset($all_words_global); // 释放中间变量
             
             // 使用 var_export 替代 w_var_export，避免正则处理导致的额外内存开销
             $text = '<?php return ' . var_export($words_by_module, true) . ';';
@@ -1101,8 +1326,9 @@ class I18n
                     fclose($csv_handle);
                 }
             }
+            unset($words_by_module);
         }
-        self::$local_words = $locals_words;
+        self::$local_words = $cache ? $locals_words : [];
         // 恢复原始内存限制（确保不低于当前内存使用量）
         $restoreLimit = $_prevMemLimit ?: '128M';
         $currentUsage = memory_get_usage(true);
@@ -1118,13 +1344,14 @@ class I18n
 
     public function getLocalWords(string $local_code = 'zh_Hans_CN'): array
     {
-        $words = [];
-        if (isset($this->getLocalsWords()[$local_code])) {
-            $words = (array)($this->getLocalsWords()[$local_code]);
-        } elseif (isset($this->getLocalsWords()['zh_Hans_CN'])) {
-            $words = (array)($this->getLocalsWords()['zh_Hans_CN']);
+        $locals_words = $this->getLocalsWords();
+        if (isset($locals_words[$local_code])) {
+            return (array)$locals_words[$local_code];
         }
-        return $words;
+        if (isset($locals_words['zh_Hans_CN'])) {
+            return (array)$locals_words['zh_Hans_CN'];
+        }
+        return [];
     }
 
     public function convertToLanguageFile(bool $cache = true, ?string $moduleName = null): void
@@ -1166,6 +1393,17 @@ class I18n
         return $qCount >= 5;
     }
 
+    private function hasModuleTranslation(array $wordsByModule, string $locale, string $word): bool
+    {
+        foreach (($wordsByModule[$locale] ?? []) as $moduleWords) {
+            if (is_array($moduleWords) && array_key_exists($word, $moduleWords)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function parseMemoryLimit(string $limit): int
     {
         $limit = trim($limit);
@@ -1190,7 +1428,18 @@ class I18n
 
     public function getCountries(string $display_local_code = 'zh_Hans_CN'): array
     {
-        return Countries::getNames($display_local_code);
+        if (class_exists(Countries::class)) {
+            try {
+                return Countries::getNames($this->normalizeIntlDisplayLocale($display_local_code));
+            } catch (\Throwable) {
+                try {
+                    return Countries::getNames('en');
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        return self::FALLBACK_COUNTRY_NAMES;
     }
 
     public function getActiveLocalsModel(string $target_local = 'zh_Hans_CN'): Locals
@@ -1215,7 +1464,7 @@ class I18n
 
         try {
             $countryCode = $this->getCountryCodeFromLocale($localeCode);
-            if ($countryCode && Countries::exists($countryCode)) {
+            if ($countryCode && $this->countryExists($countryCode)) {
                 $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
                 $country = $countriesModel->reset()
                     ->where(\Weline\I18n\Model\Countries::schema_fields_CODE, $countryCode)

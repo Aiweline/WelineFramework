@@ -79,7 +79,13 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
             throw new \Weline\Framework\Http\ResponseTerminateException(
                 503,
                 $block->fetchHtml('Weline_Admin::templates/maintenance.phtml'),
-                ['Content-Type' => 'text/html; charset=UTF-8', 'Retry-After' => '3600']
+                [
+                    'Content-Type' => 'text/html; charset=UTF-8',
+                    'Retry-After' => '3600',
+                    'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                    'Pragma' => 'no-cache',
+                    'Expires' => '0',
+                ]
             );
         }
     }

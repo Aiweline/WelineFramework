@@ -86,8 +86,8 @@ class DispatcherProvider extends AbstractServiceProvider
             '--memory-limit=' . $context->getDispatcherMemoryLimit(),
         ];
 
-        if ($context->frontend) {
-            $arguments[] = '--frontend';
+        if ($context->windowMode) {
+            $arguments[] = '--win';
         }
 
         return new ServiceCommand(

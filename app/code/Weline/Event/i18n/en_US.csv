@@ -1,15 +1,15 @@
-﻿事件管理,事件管理
-"加载事件列表失败: %{1}","加载事件列表失败: %{1}"
-请指定事件名,请指定事件名
-"事件不存在: %{1}","事件不存在: %{1}"
-事件详情,事件详情
-"加载事件详情失败: %{1}","加载事件详情失败: %{1}"
-事件搜索,事件搜索
-"搜索失败: %{1}","搜索失败: %{1}"
-事件注册表刷新成功,事件注册表刷新成功
-事件注册表刷新失败,事件注册表刷新失败
-"刷新失败: %{1}","刷新失败: %{1}"
-"仅支持 AJAX 请求","仅支持 AJAX 请求"
-复制失败,复制失败
-请手动复制,请手动复制
-确定,确定
+﻿事件管理,"Event management"
+"加载事件列表失败: %{1}","Failed to load event list: %{1}"
+请指定事件名,"Please specify the event name"
+"事件不存在: %{1}","Event does not exist: %{1}"
+事件详情,"Event details"
+"加载事件详情失败: %{1}","Failed to load event details: %{1}"
+事件搜索,"Event Search"
+"搜索失败: %{1}","Search Failed: %{1}"
+事件注册表刷新成功,"Event Registry Refresh Successful"
+事件注册表刷新失败,"Event Registry Refresh Failed"
+"刷新失败: %{1}","Refresh Failed: %{1}"
+"仅支持 AJAX 请求","Only supports AJAX requests"
+复制失败,"Copy failed"
+请手动复制,"Manually copy."
+确定,Confirm

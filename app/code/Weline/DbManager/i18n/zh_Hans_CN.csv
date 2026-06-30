@@ -1,0 +1,762 @@
+﻿"WLS Database Manager","WLS Database Manager"
+"Invalid request method.","Invalid request method."
+"Source DBA connection profile was not found.","未找到源 DBA 连接配置。"
+"Lifecycle SQL execution failed.","生命周期 SQL 执行失败。"
+"Source database connection profile was not found.","未找到源数据库连接 Profile。"
+"Restore rollback failed.","Restore rollback failed."
+"Restore action failed.",恢复操作失败。
+"Migration action failed.",迁移操作失败。
+"SQL apply execution failed.","SQL 应用执行失败。"
+"Database backup execution failed.",数据库备份执行失败。
+"WLS reload was not completed.","WLS reload was not completed."
+"Project database profile save failed.","Project database profile save failed."
+"Database env apply failed.","数据库 env 应用失败。"
+"Database env rollback failed.","数据库 env 回滚失败。"
+"Database slave create failed.","数据库 slave 创建失败。"
+"Database slave remove failed.","数据库 slave 移除失败。"
+"No enabled project database profile was found.","No enabled project database profile was found."
+"Database connection test failed.","Database connection test failed."
+"Database profile was not found.","Database profile was not found."
+"Confirm the database health probe with CHECK_DB_HEALTH before submitting.","提交前请勾选确认并输入 CHECK_DB_HEALTH 以运行数据库健康探测。"
+"Database health probe failed.",数据库健康探测失败。
+Default,Default
+Configured,Configured
+Empty,Empty
+Ready,Ready
+"Needs attention","Needs attention"
+"Driver available","Driver available"
+"PDO driver is not available","PDO driver is not available"
+"Sandbox database config is available and may be used by the current runtime.","Sandbox database config is available and may be used by the current runtime."
+"Configuration is read from app/etc/env.php.","Configuration is read from app/etc/env.php."
+"No explicit database config was found; the framework fallback profile is shown.","No explicit database config was found; the framework fallback profile is shown."
+Profiles,Profiles
+Guard,Guard
+Writable,Writable
+Guarded,Guarded
+"Database connection test passed.","Database connection test passed."
+"Project database profile saved.","Project database profile saved."
+"Project database profile saved and WLS reload was requested.","Project database profile saved and WLS reload was requested."
+"Database env applied and backup created.","数据库 env 已应用并创建备份。"
+"No database env changes were needed.","数据库 env 没有需要写入的变更。"
+"Database env restored from backup.","数据库 env 已从备份恢复。"
+"Database slave profile created and env backup created.","数据库 slave 配置已创建，并已创建 env 备份。"
+"Database slave profile removed and env backup created.","数据库 slave 配置已移除，并已创建 env 备份。"
+"Lifecycle SQL executed successfully.","生命周期 SQL 已成功执行。"
+"Database backup completed successfully.",数据库备份已成功完成。
+"Restore preflight passed.",恢复预检通过。
+"Database restore completed successfully.",数据库恢复完成。
+"Database restore rollback completed successfully.",数据库恢复回滚完成。
+"Migration preflight passed; guarded MySQL migration import requires separate RUN_DB_MIGRATION confirmation.","迁移预检通过；受控 MySQL 迁移导入需要单独确认 RUN_DB_MIGRATION。"
+"Database migration import completed successfully after pre-migration backup.",迁移前备份完成后，数据库迁移导入已成功完成。
+"SQL apply completed successfully after pre-apply backup.","应用前备份后 SQL 应用已成功完成。"
+"Database health probe passed.",数据库健康探测通过。
+"SQLite path is required.","SQLite path is required."
+"Database host, name, and username are required.","Database host, name, and username are required."
+"Secret fields cannot contain control characters.","Secret fields cannot contain control characters."
+"Database port must be between 1 and 65535.","数据库端口必须在 1 到 65535 之间。"
+等待生命周期动作,等待生命周期动作
+"等待面板确认后可通过 POST 执行","等待面板确认后可通过 POST 执行"
+"仅预览，不执行 SQL","仅预览，不执行 SQL"
+"生命周期 SQL 计划目前只支持 mysql 或 pgsql。","生命周期 SQL 计划目前只支持 mysql 或 pgsql。"
+"数据库名未通过适配器 SQL 白名单。","数据库名未通过适配器 SQL 白名单。"
+"用户名未通过适配器 SQL 白名单。","用户名未通过适配器 SQL 白名单。"
+"创建用户 SQL 计划需要 Project Profile 或 env profile 中已有密码。","创建用户 SQL 计划需要 Project Profile 或 env profile 中已有密码。"
+"MySQL 用户 SQL 计划需要明确 Host Scope。","MySQL 用户 SQL 计划需要明确 Host Scope。"
+"PostgreSQL role 不使用 Host Scope；该值只会保留在面板上下文中。","PostgreSQL role 不使用 Host Scope；该值只会保留在面板上下文中。"
+"SQL 计划被阻断","SQL 计划被阻断"
+创建数据库,创建数据库
+创建用户,创建用户
+授予权限,授予权限
+"SQL 计划已生成","SQL 计划已生成"
+创建角色,创建角色
+数据库权限,数据库权限
+"Schema 权限","Schema 权限"
+表权限,表权限
+序列权限,序列权限
+连接权限,连接权限
+"Schema 使用权限","Schema 使用权限"
+数据库删除必须走单独的破坏性确认流程。,数据库删除必须走单独的破坏性确认流程。
+"执行前应先确认没有项目 Profile 正在使用目标数据库。","执行前应先确认没有项目 Profile 正在使用目标数据库。"
+用户删除必须走单独的破坏性确认流程。,用户删除必须走单独的破坏性确认流程。
+"执行前应先确认目标用户没有被其他 Profile 或外部系统使用。","执行前应先确认目标用户没有被其他 Profile 或外部系统使用。"
+"权限回收必须记录当前 grants 快照。","权限回收必须记录当前 grants 快照。"
+执行前应准备最小权限回退语句，并保留验证查询结果。,执行前应准备最小权限回退语句，并保留验证查询结果。
+"proc_open is required for database restore execution.","proc_open is required for database restore execution."
+"Another PostgreSQL plain SQL restore appears to be running.","似乎已有另一个 PostgreSQL plain SQL 恢复正在运行。"
+"PostgreSQL plain SQL restore is blocked while other active sessions are using the target database.","目标数据库存在其他活动会话时，PostgreSQL plain SQL 恢复会被阻止。"
+"PostgreSQL plain SQL restore is blocked while prepared transactions exist.","存在 prepared transactions 时，PostgreSQL plain SQL 恢复会被阻止。"
+"PostgreSQL plain SQL restore is blocked while another advisory lock is active.","存在其他 advisory lock 时，PostgreSQL plain SQL 恢复会被阻止。"
+"PostgreSQL plain SQL restore public-schema mode is blocked by extra schemas: %{1}","PostgreSQL plain SQL 恢复的 public-schema 模式被额外 schema 阻止：%{1}"
+"PostgreSQL restore user is required before public schema reset.","public schema reset 前必须提供 PostgreSQL 恢复用户。"
+"Unable to start PostgreSQL plain SQL restore command.","无法启动 PostgreSQL plain SQL 恢复命令。"
+"PostgreSQL plain SQL restore command failed.","PostgreSQL plain SQL 恢复命令失败。"
+"Unable to open restore command input pipe.",无法打开恢复命令输入管道。
+"zlib is required for compressed database restore artifacts.","恢复压缩数据库产物需要 zlib。"
+"Compressed restore artifact could not be opened.",无法打开压缩恢复产物。
+"Compressed restore artifact could not be read.",无法读取压缩恢复产物。
+"Restore artifact could not be opened.",无法打开恢复产物。
+"Restore artifact could not be read.",无法读取恢复产物。
+"Unable to stream restore artifact into the database client.",无法将恢复产物流式写入数据库客户端。
+"PostgreSQL safety query failed.","PostgreSQL 安全查询失败。"
+"Unable to create the Database Manager backup directory.","无法创建 Database Manager 备份目录。"
+"Unable to reserve restore process output storage.",无法预留恢复进程输出存储。
+"Enable and save the Project Profile before backup execution.","备份执行前请先启用并保存 Project Profile。"
+"Project backup connection is incomplete: %{1}",项目备份连接配置不完整：%{1}
+"Backup execution currently supports mysql and pgsql profiles.","备份执行当前支持 mysql 和 pgsql Profile。"
+"Submitted backup driver does not match the enabled Project Profile.","提交的备份驱动与已启用的 Project Profile 不一致。"
+"Database name must start with a letter or underscore and contain only letters, numbers, and underscores.",数据库名称必须以字母或下划线开头，且只能包含字母、数字和下划线。
+"Database backup artifact is empty.",数据库备份产物为空。
+"Database backup checksum could not be calculated.",无法计算数据库备份校验和。
+"Unable to write the database backup metadata.",无法写入数据库备份元数据。
+"%{1} backup completed successfully.","%{1} 备份已成功完成。"
+"Confirm database backup execution before submitting.",提交前请确认数据库备份执行。
+"Type RUN_DB_BACKUP to execute the database backup.","输入 RUN_DB_BACKUP 后才能执行数据库备份。"
+"Backup plan is not ready for execution.",备份计划尚未准备好执行。
+"Only backup_database can execute in this slice.","当前切片仅允许执行 backup_database。"
+"The selected backup is outside the Database Manager backup directory.","所选备份不在 Database Manager 备份目录内。"
+"Backup artifact already exists; choose a new file name.",备份产物已存在，请选择新的文件名。
+"proc_open is required for database backup execution.","数据库备份执行需要 proc_open。"
+"Unable to start PostgreSQL backup command.","无法启动 PostgreSQL 备份命令。"
+"PostgreSQL backup command failed.","PostgreSQL 备份命令失败。"
+"Unable to start MySQL backup command.","无法启动 MySQL 备份命令。"
+"MySQL backup command failed.","MySQL 备份命令失败。"
+"Unable to reserve a temporary database backup artifact.",无法预留临时数据库备份产物。
+"zlib is required for compressed database backup artifacts.","压缩数据库备份产物需要 zlib。"
+"Unable to read the temporary database backup artifact.",无法读取临时数据库备份产物。
+"Unable to write the compressed database backup artifact.",无法写入压缩数据库备份产物。
+"Unable to close the compressed database backup artifact.",无法关闭压缩数据库备份产物。
+"Use a .sql or .sql.gz artifact before MySQL backup execution.","MySQL 备份执行前请使用 .sql 或 .sql.gz 产物。"
+"Use a .sql, .sql.gz, .dump, or .backup artifact before backup execution.","备份执行前请使用 .sql、.sql.gz、.dump 或 .backup 产物。"
+"No Action Selected",未选择动作
+"Waiting for Input",等待输入
+"Database backup, restore, migration, and SQL apply planning currently require mysql or pgsql profile drivers.","数据库备份、恢复、迁移和 SQL 应用计划当前需要 mysql 或 pgsql 连接驱动。"
+"Database name is required before building a backup, restore, migration, or SQL apply plan.","构建备份、恢复、迁移或 SQL 应用计划前必须填写数据库名。"
+"This preview is using the selected env profile. Backup execution requires an enabled Project Profile.","当前预览正在使用所选 env profile。备份执行需要启用 Project Profile。"
+"Restore planning requires a backup artifact name.",恢复计划需要备份产物名称。
+"Backup artifact must be a safe file name ending in .sql, .sql.gz, .dump, or .backup.","备份产物必须是安全文件名，并以 .sql、.sql.gz、.dump 或 .backup 结尾。"
+"Restore is destructive and must stay behind preflight, pre-restore backup, confirmation phrase, and audit logging before execution is enabled.",恢复是破坏性操作，启用执行前必须经过预检、恢复前备份、确认短语和审计记录。
+"PostgreSQL plain SQL restore requires RESET_PG_SCHEMA and resets only the public schema; unexpected user schemas block execution.","PostgreSQL plain SQL 恢复需要 RESET_PG_SCHEMA，并且只会重置 public schema；存在额外用户 schema 时会阻止执行。"
+"Migration dry-run requires a target profile, branch, tag, or migration reference.","迁移 dry-run 需要目标 profile、分支、标签或迁移引用。"
+"Migration target may contain only letters, numbers, underscores, dots, colons, and dashes.",迁移目标只能包含字母、数字、下划线、点、冒号和短横线。
+"Migration preflight requires a verified backup artifact before it can run.",迁移预检运行前必须提供已验证的备份产物。
+"Migration preflight is read-only; MySQL/MariaDB execution is a separate guarded import path that creates a fresh pre-migration backup first.","迁移预检是只读的；MySQL/MariaDB 执行是单独的受控导入路径，会先创建新的迁移前备份。"
+"SQL apply planning requires a reviewed SQL artifact name.","SQL 应用计划需要填写已审核的 SQL 产物名称。"
+"SQL apply artifact must be a safe file name ending in .sql or .sql.gz.","SQL 应用产物必须是以 .sql 或 .sql.gz 结尾的安全文件名。"
+"SQL apply executes only additive allowlisted DDL and creates a fresh pre-apply schema/data backup before execution.","SQL 应用只执行白名单内的增量 DDL，执行前会创建新的结构和数据备份。"
+"Generated backup artifact name is not safe; adjust the database name or artifact label.",生成的备份产物名称不安全；请调整数据库名称或产物标签。
+"This execution slice does not have a backup execution adapter for the selected driver yet.",当前执行切片尚未为所选驱动提供备份执行适配器。
+"Migration execution is currently enabled only for MySQL/MariaDB .sql and .sql.gz backup artifacts; this driver remains preflight-only.","迁移执行当前只支持 MySQL/MariaDB 的 .sql 和 .sql.gz 备份产物；此驱动仍保持预检-only。"
+"Dry Run Only","仅 Dry Run"
+Blocked,已阻断
+"Ready To Execute",可执行
+"Ready To Restore",可执行恢复
+"Ready To Preflight",可执行预检
+"Ready To Migrate",可执行迁移
+"Ready To Apply",可执行应用
+"No Profile","无 Profile"
+"Execution disabled in this slice",当前切片禁用执行
+"Restore Preflight",恢复预检
+"MySQL Migration Import","MySQL 迁移导入"
+"Migration Preflight",迁移预检
+"SQL Apply","SQL 应用"
+"Backup Action",备份动作
+"Select a backup, restore, migration dry-run, or SQL apply action to build a guarded plan.","选择备份、恢复、迁移预演或 SQL 应用动作以构建受控计划。"
+"The action is normalized before any future execution adapter can run.",未来执行适配器运行前，动作会先被规范化。
+"Profile Source","Profile 来源"
+"No database profile is available for this context.","当前上下文没有可用的数据库 Profile。"
+"Driver Support",驱动支持
+"Database Target",数据库目标
+"Used as the future dump, restore, or schema-diff database identifier.","作为未来 dump、恢复或结构差异的数据库标识符使用。"
+"A database name is required for this action.",此动作需要数据库名称。
+"Backup Scope",备份范围
+"Scope is passed to the database dump adapter when execution is enabled.","启用执行时，备份范围会传给数据库 dump 适配器。"
+"SQL apply always creates a schema and data pre-apply backup before executing additive statements.","SQL 应用执行增量语句前总会创建结构和数据备份。"
+"Scope is ignored unless the selected action is backup.",除备份动作外，此范围会被忽略。
+"Artifact Boundary","Artifact Boundary"
+"SQL apply requires an existing reviewed .sql or .sql.gz artifact inside var/backups/wls/db-manager/database.","SQL 应用需要 var/backups/wls/db-manager/database 内已存在且已审核的 .sql 或 .sql.gz 产物。"
+"Migration preflight requires an existing Database Manager backup artifact with matching metadata; MySQL execution accepts only .sql or .sql.gz.","迁移预检需要已存在且元数据匹配的 Database Manager 备份产物；MySQL 执行只接受 .sql 或 .sql.gz。"
+"Execution may only write backup artifacts inside var/backups/wls/db-manager/database.","执行只能把备份产物写入 var/backups/wls/db-manager/database。"
+"Not required for this plan.",当前计划不需要。
+"Migration Target",迁移目标
+"Used as the future target profile, branch, tag, or migration reference.","作为未来目标 profile、分支、标签或迁移引用使用。"
+"Not required for backup or restore planning.",备份或恢复计划不需要。
+"Execution Adapter",执行适配器
+"Choose a database backup, restore, or migration dry-run action before future execution adapters are allowed to run.","先选择数据库备份、恢复或迁移 dry-run 动作，未来执行适配器才允许进入执行阶段。"
+"Reload the enabled Project Database Profile and selected source env profile.","重新读取已启用的 Project Database Profile 和所选源 env profile。"
+"Verify driver support, database identifier safety, credential state, artifact name, and backup directory confinement.",验证驱动支持、数据库标识符安全性、凭据状态、产物名称和备份目录边界。
+"%{1} adapter builds a vendor dump command inside the adapter boundary and writes only to the WLS backup directory.","%{1} 适配器在适配器边界内生成数据库厂商 dump 命令，并且只写入 WLS 备份目录。"
+"Record artifact metadata, checksum, profile scope, operator intent, and backup result in the DbManager audit log.","在 DbManager 审计日志中记录产物元数据、校验和、Profile 范围、操作员意图和备份结果。"
+"Keep restore, migration, SQL apply, and WLS reload side effects disabled from the backup execution path.","备份执行路径保持禁用恢复、迁移、SQL 应用和 WLS 重载副作用。"
+"Resolve the selected artifact by server-side name lookup inside the WLS backup directory.","通过服务端名称查找，在 WLS 备份目录内解析所选产物。"
+"Run restore preflight to verify artifact metadata, checksum, driver, database, and readability before destructive restore is allowed.",允许破坏性恢复前，先运行恢复预检以验证产物元数据、校验和、驱动、数据库和可读性。
+"Create a fresh pre-restore backup before destructive restore execution runs.",执行破坏性恢复前创建新的恢复前备份。
+"Require CHECK_DB_RESTORE, RUN_DB_RESTORE, and adapter-specific reset confirmation when schema reset is required.","需要 schema reset 时，必须确认 CHECK_DB_RESTORE、RUN_DB_RESTORE 和适配器专属 reset 短语。"
+"%{1} adapter restores through an allowlisted command path and then runs verification queries.","%{1} 适配器通过白名单命令路径执行恢复，然后运行验证查询。"
+"WLS reload remains disabled; project health is reported separately as a read-only summary.","WLS 重载仍保持禁用；项目健康以独立的只读摘要展示。"
+"Resolve the reviewed SQL artifact by server-side name lookup inside the WLS backup directory.","通过服务端名称查找在 WLS 备份目录内解析已审核的 SQL 产物。"
+"Reject oversized artifacts and block destructive or data-touching SQL before any adapter connects.","任何适配器连接前先拒绝超大产物并阻断破坏性或数据修改 SQL。"
+"Create a fresh schema and data pre-apply backup through the existing dump adapter.","通过现有 dump 适配器创建新的结构和数据应用前备份。"
+"Execute only additive CREATE TABLE, CREATE INDEX, or ALTER TABLE ADD statements through the selected PDO driver.","仅通过所选 PDO 驱动执行增量 CREATE TABLE、CREATE INDEX 或 ALTER TABLE ADD 语句。"
+"Run a verification query, append sanitized audit evidence, and keep WLS reload separate from SQL apply execution.","运行验证查询，追加脱敏审计证据，并将 WLS 重载与 SQL 应用执行分离。"
+"Use the recorded pre-apply backup as the rollback source if the additive SQL must be reversed.","如果需要撤销增量 SQL，使用记录的应用前备份作为回滚来源。"
+"Resolve the migration target and selected MySQL/MariaDB backup artifact by server-side name lookup inside the WLS backup directory.","通过服务端名称查找在 WLS 备份目录内解析迁移目标和所选 MySQL/MariaDB 备份产物。"
+"Run migration preflight to verify metadata, byte size, checksum, driver, database, and risk classification before execution is offered.",提供执行入口前先运行迁移预检，校验元数据、字节大小、校验和、驱动、数据库和风险分类。
+"Require CHECK_DB_MIGRATION and RUN_DB_MIGRATION confirmations before importing the artifact.","导入产物前必须确认 CHECK_DB_MIGRATION 和 RUN_DB_MIGRATION。"
+"Create a fresh schema and data pre-migration backup through the existing dump adapter.","通过现有 dump 适配器创建新的结构和数据迁移前备份。"
+"Import the verified .sql or .sql.gz artifact through the MySQL client with credentials passed through process environment only.","通过 MySQL 客户端导入已验证的 .sql 或 .sql.gz 产物，凭据只通过进程环境传递。"
+"Run a verification query, append sanitized audit evidence, and keep WLS reload separate from migration execution.","运行验证查询，追加脱敏审计证据，并将 WLS 重载与迁移执行分离。"
+"Resolve source and target profiles without executing project migration scripts.","解析源和目标 Profile，但不执行项目迁移脚本。"
+"Verify backup artifact metadata, byte size, checksum, driver, and database before any migration execution path can exist.",任何迁移执行路径出现前，都必须先验证备份产物元数据、字节大小、校验和、驱动和数据库。
+"Build a schema/data drift report using adapter-owned inspection commands or safe framework metadata.",使用适配器自有检查命令或安全框架元数据生成结构/数据漂移报告。
+"Classify generated migration intent as additive, destructive, data-touching, or unsupported before any apply button exists.",在出现任何应用按钮前，先把迁移意图归类为追加、破坏性、触碰数据或不支持。
+"Require backup evidence, confirmation phrase, audit record, and rollback guidance before a later migration execution slice can run.",后续迁移执行切片运行前，需要备份证据、确认短语、审计记录和回滚指引。
+"Keep this dry-run path free of DDL, DML, dump writes, restore writes, and WLS reload side effects.","保持该 dry-run 路径不产生 DDL、DML、dump 写入、恢复写入和 WLS 重载副作用。"
+"Project Profile","Project Profile"
+"The enabled Project Profile is the preferred source for project-scoped operations.","已启用的 Project Profile 是项目级操作的优先来源。"
+"Selected env profile","所选 env profile"
+"The selected env profile is shown for preview, but future execution should require explicit confirmation.","所选 env profile 仅用于预览，未来执行应要求明确确认。"
+"Fix blocked plan inputs before execution can run.",请先修正被阻断的计划输入。
+"%{1} execution is available after RUN_DB_BACKUP confirmation.","确认 RUN_DB_BACKUP 后可执行 %{1}。"
+"SQL apply execution is available after RUN_DB_SQL_APPLY confirmation; WLS creates a pre-apply backup first.","输入 RUN_DB_SQL_APPLY 确认后可执行 SQL 应用；WLS 会先创建应用前备份。"
+"MySQL/MariaDB migration import is available after CHECK_DB_MIGRATION and RUN_DB_MIGRATION confirmations; WLS creates a pre-migration backup first.","确认 CHECK_DB_MIGRATION 和 RUN_DB_MIGRATION 后可执行 MySQL/MariaDB 迁移导入；WLS 会先创建迁移前备份。"
+"Save and enable the Project Profile before restore preflight.","恢复预检前请先保存并启用 Project Profile。"
+"Restore preflight currently supports mysql and pgsql profiles.","恢复预检当前支持 mysql 和 pgsql Profile。"
+"PostgreSQL plain SQL restore is available after CHECK_DB_RESTORE, RUN_DB_RESTORE, and RESET_PG_SCHEMA confirmations; WLS resets only the public schema after a custom-format pre-restore backup.","确认 CHECK_DB_RESTORE、RUN_DB_RESTORE 和 RESET_PG_SCHEMA 后可执行 PostgreSQL plain SQL 恢复；WLS 会先创建 custom-format 恢复前备份，然后只重置 public schema。"
+"Restore execution is available after CHECK_DB_RESTORE and RUN_DB_RESTORE confirmations; a fresh pre-restore backup is created first.","确认 CHECK_DB_RESTORE 和 RUN_DB_RESTORE 后可执行恢复；会先创建新的恢复前备份。"
+"Restore preflight is available after CHECK_DB_RESTORE confirmation; restore execution remains disabled for this driver.","确认 CHECK_DB_RESTORE 后可运行恢复预检；当前驱动仍禁用恢复执行。"
+"Save and enable the Project Profile before migration preflight.","迁移预检前请先保存并启用 Project Profile。"
+"Migration preflight currently supports mysql and pgsql profiles.","迁移预检当前支持 mysql 和 pgsql Profile。"
+"Provide a safe migration target reference before migration preflight.",迁移预检前请提供安全的迁移目标引用。
+"Migration import is available after CHECK_DB_MIGRATION and RUN_DB_MIGRATION confirmations; a fresh pre-migration backup is created first.","确认 CHECK_DB_MIGRATION 和 RUN_DB_MIGRATION 后可执行迁移导入；执行前会创建新的迁移前备份。"
+"Migration preflight is available after CHECK_DB_MIGRATION confirmation; migration execution remains disabled for this driver.","确认 CHECK_DB_MIGRATION 后可运行迁移预检；此驱动的迁移执行仍保持禁用。"
+"Save and enable the Project Profile before SQL apply execution.","执行 SQL 应用前请先保存并启用项目 Profile。"
+"SQL apply currently supports mysql and pgsql profiles.","SQL 应用当前支持 mysql 和 pgsql Profile。"
+"SQL apply execution is guarded until all checks are ready.","所有检查就绪前 SQL 应用执行保持受控。"
+"Restore, migration, and SQL apply execution remain disabled in this slice.","此切片中恢复、迁移和 SQL 应用执行仍保持禁用。"
+"Save and enable the Project Profile before backup execution.","备份执行前请先保存并启用 Project Profile。"
+"Backup execution is guarded until all checks are ready.",所有检查就绪前，备份执行保持受保护。
+"Backup Database",备份数据库
+"Restore Database",恢复数据库
+"Migration Dry Run","迁移 Dry Run"
+"Schema Only",仅结构
+"Data Only",仅数据
+"Schema And Data",结构和数据
+"Use a .sql or .sql.gz artifact before MySQL restore preflight.","MySQL 恢复预检前请使用 .sql 或 .sql.gz 产物。"
+"Use a .sql, .sql.gz, .dump, or .backup artifact before restore preflight.","恢复预检前请使用 .sql、.sql.gz、.dump 或 .backup 产物。"
+"Use a .sql or .sql.gz backup artifact before MySQL migration preflight.","MySQL 迁移预检前请使用 .sql 或 .sql.gz 备份产物。"
+"Use a .sql, .sql.gz, .dump, or .backup artifact before migration preflight.","迁移预检前请使用 .sql、.sql.gz、.dump 或 .backup 产物。"
+"Use a reviewed .sql or .sql.gz artifact before SQL apply execution.","执行 SQL 应用前请使用已审核的 .sql 或 .sql.gz 产物。"
+"%{1} backup execution is available through the %{2} adapter.","%{1} 备份可通过 %{2} 适配器执行。"
+"%{1} SQL apply execution is available through PDO after pre-apply backup.","%{1} SQL 应用可在应用前备份后通过 PDO 执行。"
+"MySQL/MariaDB migration import is available through the mysql client after preflight and pre-migration backup.","预检和迁移前备份完成后，可通过 mysql 客户端执行 MySQL/MariaDB 迁移导入。"
+"This driver remains preview-only until a matching execution adapter is added.",在加入匹配执行适配器前，该驱动仍仅可预览。
+"This driver is not supported for database backup, restore, migration, or SQL apply planning.","此驱动不支持数据库备份、恢复、迁移或 SQL 应用计划。"
+"MySQL mysqldump","MySQL mysqldump"
+"PostgreSQL pg_dump","PostgreSQL pg_dump"
+"MySQL Restore","MySQL 恢复"
+"PostgreSQL psql schema reset","PostgreSQL psql schema reset"
+"PostgreSQL pg_restore","PostgreSQL pg_restore"
+"Database profile is incomplete: %{1}","Database profile is incomplete: %{1}"
+"%{1} is not available for this runtime.","%{1} is not available for this runtime."
+"Confirm the database slave create operation before submitting.","提交前请确认数据库 slave 创建操作。"
+"Type CREATE_DB_SLAVE to create a database slave profile.","输入 CREATE_DB_SLAVE 以创建数据库 slave 配置。"
+"Database slave create is not available.","数据库 slave 创建当前不可用。"
+"The selected database slave key already exists in app/etc/env.php.","所选数据库 slave key 已存在于 app/etc/env.php。"
+"Unable to read app/etc/env.php before applying database changes.","应用数据库变更前无法读取 app/etc/env.php。"
+"Slave Profile","Slave 配置"
+Missing,缺失
+"Unable to write database config into app/etc/env.php.","无法把数据库配置写入 app/etc/env.php。"
+"Confirm the database slave remove operation before submitting.","提交前请确认数据库 slave 移除操作。"
+"Type REMOVE_DB_SLAVE to remove a database slave profile.","输入 REMOVE_DB_SLAVE 以移除数据库 slave 配置。"
+"Select an existing database slave profile before removing it.","移除前请选择已有数据库 slave 配置。"
+"No database slave profiles are available to remove.","没有可移除的数据库 slave 配置。"
+"The selected database slave profile was not found in app/etc/env.php.","未在 app/etc/env.php 中找到所选数据库 slave 配置。"
+Removed,已移除
+"Confirm the database env apply operation before submitting.","提交前请确认数据库 env 应用操作。"
+"Type APPLY_DB_ENV to apply database env changes.","输入 APPLY_DB_ENV 以应用数据库 env 变更。"
+"Database env apply is not available.","数据库 env 应用当前不可用。"
+"Confirm the database env rollback operation before submitting.","提交前请确认数据库 env 回滚操作。"
+"Type ROLLBACK_DB_ENV to restore the selected database env backup.","输入 ROLLBACK_DB_ENV 以恢复所选数据库 env 备份。"
+"The selected backup does not belong to the current env.php target.","所选备份不属于当前 env.php 目标。"
+"Unable to read the selected database env backup.","无法读取所选数据库 env 备份。"
+"Save a Project Database Profile before applying app/etc/env.php.","请先保存项目数据库配置，再应用 app/etc/env.php。"
+"Enable the Project Database Profile before applying app/etc/env.php.","请先启用项目数据库配置，再应用 app/etc/env.php。"
+"Save a Project Database Profile before creating or removing database slave profiles.","创建或移除数据库 slave 配置前请先保存 Project Database Profile。"
+"Enable the Project Database Profile before creating or removing database slave profiles.","创建或移除数据库 slave 配置前请先启用 Project Database Profile。"
+"The selected slave database profile was not found in app/etc/env.php. Save or select an existing env slave before applying.","未在 app/etc/env.php 中找到所选 slave 数据库配置。请先选择已有 env slave 再应用。"
+"Use a lowercase slave key that starts with a letter and contains only letters, numbers, dot, underscore, or hyphen.","请使用小写 slave key，必须以字母开头，且只能包含字母、数字、点、下划线或连字符。"
+"The selected database slave key is reserved.","所选数据库 slave key 为保留值。"
+Driver,Driver
+Host,Host
+Port,Port
+Database,Database
+"SQLite path","SQLite path"
+Username,Username
+Password,Password
+Prefix,Prefix
+Charset,Charset
+Collation,Collation
+"Persistent connection","Persistent connection"
+"Pre SQL","Pre SQL"
+"Configured (updated)","Configured (updated)"
+Enabled,Enabled
+Disabled,已禁用
+"Only the current app/etc/env.php file can be managed by Database Manager.","Database Manager 只能管理当前 app/etc/env.php 文件。"
+"app/etc/env.php must be readable and writable before apply or rollback.","应用或回滚前，app/etc/env.php 必须可读写。"
+"Unable to write the database env backup file.","无法写入数据库 env 备份文件。"
+"Unable to write the database env backup metadata.","无法写入数据库 env 备份元数据。"
+"The selected database env backup is not readable.","所选数据库 env 备份不可读。"
+"The selected backup file is not a Database Manager env.php backup.","所选备份文件不是 Database Manager env.php 备份。"
+"The selected database env backup metadata is missing or invalid.","所选数据库 env 备份元数据缺失或无效。"
+"Unable to write app/etc/env.php from the selected backup.","无法使用所选备份写回 app/etc/env.php。"
+"Runtime reload skipped.",已跳过运行时重载。
+"Select a running WLS instance before requesting reload.","请求重载前请选择正在运行的 WLS 实例。"
+"WLS reload request failed.","WLS 重载请求失败。"
+"Source DBA connection is incomplete: %{1}","源 DBA 连接配置不完整：%{1}"
+"Enable and save the Project Profile before executing lifecycle SQL.","执行生命周期 SQL 前，请先保存并启用项目 Profile。"
+"Lifecycle SQL plan has no executable statements.","Lifecycle SQL plan has no executable statements."
+"Confirm lifecycle SQL execution before submitting.","提交前请确认生命周期 SQL 执行。"
+"Type RUN_DB_LIFECYCLE to execute lifecycle SQL.","输入 RUN_DB_LIFECYCLE 后才能执行生命周期 SQL。"
+"Lifecycle plan is not ready for execution.",生命周期计划尚未准备好执行。
+"Adapter SQL plan is not ready for execution.","适配器 SQL 计划尚未准备好执行。"
+"Lifecycle execution currently supports only mysql or pgsql.","生命周期执行当前仅支持 mysql 或 pgsql。"
+"Project Profile password is required for this lifecycle action.","此生命周期动作需要项目 Profile 密码。"
+"Database password could not be quoted safely by PDO.","PDO 无法安全引用数据库密码。"
+"Lifecycle SQL still contains an unresolved secret placeholder.","生命周期 SQL 仍包含未解析的密钥占位符。"
+"SQL Statement","SQL Statement"
+"Target database is required for this lifecycle statement.",当前生命周期语句需要目标数据库。
+"Target-database lifecycle statements currently require pgsql.","目标数据库生命周期语句当前要求 pgsql。"
+"Source DBA connection test failed.","源 DBA 连接测试失败。"
+"Database lifecycle actions currently require mysql or pgsql profile drivers.","数据库生命周期动作当前要求 mysql 或 pgsql Profile 驱动。"
+"Database name is required for this lifecycle action.",此生命周期动作需要数据库名称。
+"Username is required for this lifecycle action.",此生命周期动作需要用户名。
+"Username must start with a letter or underscore and contain only letters, numbers, underscores, dots, and dashes.",用户名必须以字母或下划线开头，且只能包含字母、数字、下划线、点和短横线。
+"Create user requires a password stored in the Project Profile or copied from the selected env profile.","创建用户需要 Project Profile 中已保存密码，或从所选 env profile 复制密码。"
+"No host was provided; a future MySQL adapter must choose a safe host scope before execution.","未提供主机范围；未来 MySQL 适配器执行前必须选择安全的 host 范围。"
+"Grant preview assumes the database and user already exist; future execution must verify both before applying privileges.",授权预览假设数据库和用户已存在；未来执行前必须验证二者后再授予权限。
+"Execution blocked until the lifecycle plan is valid.",生命周期计划有效前执行会被阻断。
+"Execution is unavailable until the adapter SQL plan is ready.","适配器 SQL 计划准备好前不可执行。"
+"Save and enable the Project Profile before lifecycle execution.","生命周期执行前请先保存并启用项目 Profile。"
+"Guarded POST execution is available after confirmation.","确认后可通过受控 POST 执行。"
+"Profile Required","需要 Profile"
+"POST execution will rebuild this plan, require RUN_DB_LIFECYCLE, write an audit record, and run verification queries.","POST 执行会重建此计划，要求 RUN_DB_LIFECYCLE，写入审计记录，并运行验证查询。"
+"Save and enable the Project Profile before lifecycle SQL can execute.","请先保存并启用项目 Profile，生命周期 SQL 才能执行。"
+"Execution remains unavailable until the adapter SQL plan is ready.","适配器 SQL 计划准备好前仍不可执行。"
+"Lifecycle Action",生命周期动作
+"Select an action to build a guarded DBA plan.","选择动作后生成受保护的 DBA 计划。"
+"The action is normalized before the execution adapter can run.",执行适配器运行前会先规范化动作。
+"The adapter maps this driver to vendor-specific SQL.","适配器会将此驱动映射为数据库方言 SQL。"
+"This driver is not supported for lifecycle DBA actions.","此驱动不支持生命周期 DBA 动作。"
+"Used as the future database/schema identifier.","作为未来数据库或 schema 标识符使用。"
+"Not required for this action.",此动作不需要。
+"User Target",用户目标
+"Used as the future database user identifier.",作为未来数据库用户标识符使用。
+"Grant Scope",授权范围
+"Host scope is captured for adapter verification.",主机范围会用于适配器验证。
+"Host scope is not selected in this dry run.","本次 dry run 未选择主机范围。"
+"Choose a lifecycle action and preview the plan before any future DBA adapter is allowed to run.","选择生命周期动作并预览计划后，未来 DBA 适配器才可进入执行阶段。"
+"Verify driver support, identifier allowlists, credential state, and operator confirmation phrase.",验证驱动支持、标识符白名单、凭据状态和操作员确认短语。
+"%{1} adapter builds vendor-specific SQL with identifier quoting inside the adapter boundary.","%{1} 适配器在适配器边界内生成带标识符引用的数据库厂商 SQL。"
+"Execute only through the guarded POST route after the plan is rebuilt server-side and RUN_DB_LIFECYCLE is confirmed.","仅在服务端重建计划并确认 RUN_DB_LIFECYCLE 后，通过受控 POST 路由执行。"
+"Append an audit record and run adapter verification queries after the database operation succeeds.",数据库操作成功后追加审计记录并运行适配器验证查询。
+"Create Database",创建数据库
+"Create User",创建用户
+"Grant User",授权用户
+"Read Only",只读
+"Schema Owner","Schema Owner"
+"Read Write",读写
+"Migration preflight failed.",迁移预检失败。
+"Enable and save the Project Profile before migration execution.","Enable and save the Project Profile before migration execution."
+"Project migration connection is incomplete: %{1}",项目迁移连接信息不完整：%{1}
+"Migration execution currently supports mysql Project Profiles only.","迁移执行当前仅支持 mysql 项目 Profile。"
+"Submitted migration driver does not match the enabled Project Profile.","提交的迁移驱动与已启用的项目 Profile 不一致。"
+"Migration artifact is empty.",迁移产物为空。
+"Migration artifact checksum could not be calculated.",无法计算迁移产物校验和。
+"Migration artifact checksum changed after preflight; rebuild the plan before execution.",迁移产物校验和在预检后发生变化；执行前请重新构建计划。
+"Confirm migration preflight before executing migration.",执行迁移前请确认迁移预检。
+"Type CHECK_DB_MIGRATION before executing migration.","执行迁移前请输入 CHECK_DB_MIGRATION。"
+"Confirm database migration execution before submitting.",提交前请确认数据库迁移执行。
+"Type RUN_DB_MIGRATION to execute the database migration import.","请输入 RUN_DB_MIGRATION 以执行数据库迁移导入。"
+"Migration plan is not ready for execution.",迁移计划尚未就绪。
+"Only migration_dry_run can execute migration import in this slice.","此切片中只有 migration_dry_run 可以执行迁移导入。"
+"Use a .sql or .sql.gz backup artifact before MySQL migration execution.","执行 MySQL 迁移前请使用 .sql 或 .sql.gz 备份产物。"
+"Database Manager backup directory does not exist.","Database Manager 备份目录不存在。"
+"The selected migration artifact is outside the Database Manager backup directory.","所选迁移产物位于 Database Manager 备份目录之外。"
+"Migration artifact was not found inside the Database Manager backup directory.","Database Manager 备份目录内未找到迁移产物。"
+"Migration artifact is not readable.",迁移产物不可读。
+"Pre-migration backup is not ready.",迁移前备份尚未就绪。
+"Pre-migration backup failed.",迁移前备份失败。
+"proc_open is required for database migration execution.","数据库迁移执行需要 proc_open。"
+"Unable to start MySQL migration import command.","无法启动 MySQL 迁移导入命令。"
+"Unable to open migration import input pipe.",无法打开迁移导入输入管道。
+"MySQL migration import command failed.","MySQL 迁移导入命令失败。"
+"zlib is required for compressed database migration artifacts.","压缩数据库迁移产物需要 zlib。"
+"Compressed migration artifact could not be opened.",无法打开压缩迁移产物。
+"Compressed migration artifact could not be read.",无法读取压缩迁移产物。
+"Migration artifact could not be opened.",无法打开迁移产物。
+"Migration artifact could not be read.",无法读取迁移产物。
+"Unable to stream migration artifact into the database client.",无法将迁移产物流式写入数据库客户端。
+"pdo_mysql is not available for migration verification.","迁移验证需要 pdo_mysql。"
+"Migration verification query failed.",迁移验证查询失败。
+"Unable to reserve migration process output storage.",无法预留迁移进程输出存储。
+"Database migration execution failed.",数据库迁移执行失败。
+"Enable and save the Project Profile before migration preflight.","迁移预检前请启用并保存 Project Profile。"
+"Migration backup artifact is empty.",迁移备份产物为空。
+"Migration backup artifact checksum could not be calculated.",无法计算迁移备份产物校验和。
+"Migration preflight passed; migration execution remains disabled for this driver.",迁移预检通过；此驱动的迁移执行仍保持禁用。
+"Confirm migration preflight before submitting.",提交前请确认迁移预检。
+"Type CHECK_DB_MIGRATION to run migration preflight.","输入 CHECK_DB_MIGRATION 以运行迁移预检。"
+"Migration plan is not ready for preflight.",迁移计划尚未准备好预检。
+"Only migration_dry_run can run migration preflight.","只有 migration_dry_run 可以运行迁移预检。"
+"Migration target contains a destructive keyword and is blocked before preflight.",迁移目标包含破坏性关键词，已在预检前阻止。
+"The selected migration backup artifact is outside the Database Manager backup directory.","选择的迁移备份产物不在 Database Manager 备份目录内。"
+"Migration backup artifact was not found inside the Database Manager backup directory.","Database Manager 备份目录内未找到迁移备份产物。"
+"Migration backup artifact is not readable.",迁移备份产物不可读。
+"Migration backup artifact metadata is required before migration preflight can pass.",迁移预检通过前必须存在迁移备份产物元数据。
+"Migration backup artifact metadata is empty.",迁移备份产物元数据为空。
+"Migration backup artifact metadata is not valid JSON.","迁移备份产物元数据不是有效 JSON。"
+"Migration backup artifact metadata must come from a Database Manager backup.","迁移备份产物元数据必须来自 Database Manager 备份。"
+"Migration backup artifact metadata does not match the selected artifact name.",迁移备份产物元数据与所选产物名称不匹配。
+"Migration backup artifact driver does not match the enabled Project Profile.","迁移备份产物驱动与已启用 Project Profile 不匹配。"
+"Migration backup artifact database does not match the enabled Project Profile.","迁移备份产物数据库与已启用 Project Profile 不匹配。"
+"Migration backup artifact byte size does not match metadata.",迁移备份产物字节大小与元数据不匹配。
+"Migration backup artifact checksum does not match metadata.",迁移备份产物校验和与元数据不匹配。
+"zlib is required to inspect compressed migration backup artifacts.","检查压缩迁移备份产物需要 zlib。"
+"Compressed migration backup artifact could not be opened.",无法打开压缩迁移备份产物。
+"Compressed migration backup artifact could not be read.",无法读取压缩迁移备份产物。
+"Migration backup artifact could not be opened.",无法打开迁移备份产物。
+"Migration backup artifact could not be read.",无法读取迁移备份产物。
+"Panel Profile","Panel Profile"
+"Env default","Env default"
+"Confirm the database profile save before submitting.","Confirm the database profile save before submitting."
+"Select a target WLS instance before requesting reload.","Select a target WLS instance before requesting reload."
+"WLS runtime reload requested.","WLS runtime reload requested."
+"Type COPY_ENV_PASSWORD to copy the source env profile password.","请输入 COPY_ENV_PASSWORD 才能复制源 env profile 密码。"
+"Source env profile was not found.","未找到源 env profile。"
+"The selected source env profile has no password to copy.","选择的源 env profile 没有可复制的密码。"
+"OpenSSL extension is required before saving database passwords.","保存数据库密码前需要启用 OpenSSL 扩展。"
+"Database password encryption failed.",数据库密码加密失败。
+"Selected Profile","已选 Profile"
+"No database profile is available from env.php.","env.php 中没有可用的数据库 Profile。"
+"The requested profile could not be resolved.","无法解析请求的 Profile。"
+"The selected source profile has required fields.","已选源 Profile 已具备必要字段。"
+"Complete the selected source profile before guarded operations.","执行受保护操作前请补全已选源 Profile。"
+"Project-level database operations will prefer the saved Project Profile.","项目级数据库操作会优先使用已保存的 Project Profile。"
+"Enable the saved Project Profile before project-level operations.","执行项目级操作前请启用已保存的 Project Profile。"
+Inherited,Inherited
+Local,本地
+"Save a Project Profile when this WLS project needs isolated database settings.","当此 WLS 项目需要独立数据库设置时，请保存 Project Profile。"
+"No project context was selected; env profile inheritance is being used.","未选择项目上下文，当前使用 env Profile 继承。"
+"Driver Runtime",驱动运行时
+Unknown,未知
+"Required PDO driver is available in this runtime.","当前运行时已启用所需 PDO 驱动。"
+"Install or enable the required PDO driver before running DB operations.","执行数据库操作前请安装或启用所需 PDO 驱动。"
+"Backup Directory",备份目录
+"Database backup artifacts can be written inside the managed backup directory.",数据库备份产物可以写入托管备份目录。
+Creatable,可创建
+"The backup directory is not present yet, but the parent directory is writable.",备份目录尚不存在，但父目录可写。
+"The managed backup directory or its parent is not writable.",托管备份目录或其父目录不可写。
+"Env Backup","Env 备份"
+Available,可用
+"A recent Database Manager env.php backup is available for rollback.","存在可用于回滚的近期 Database Manager env.php 备份。"
+None,无
+"Create an env backup before applying or rolling back database profile changes.","应用或回滚数据库 Profile 变更前请先创建 env 备份。"
+"Backup Plan",备份计划
+Idle,空闲
+"Select a backup, restore, or migration dry-run action when planning DB changes.","Select a backup, restore, or migration dry-run action when planning DB changes."
+"The selected backup plan has reached its guarded readiness state.",已选备份计划已达到受保护的就绪状态。
+"Resolve backup plan warnings before execution or preflight.",执行或预检前请先处理备份计划警告。
+"Slave Profiles","Slave Profiles"
+"Configured slave profiles are visible to the panel.","面板可见已配置的 slave Profiles。"
+"No slave profile is configured; this is optional for single-database projects.","未配置 slave Profile；单数据库项目可不配置。"
+"No blocking database panel health issues were detected.",未发现阻塞数据库面板的健康问题。
+"Restore preflight failed.",恢复预检失败。
+"Enable and save the Project Profile before restore execution.","Enable and save the Project Profile before restore execution."
+"Project restore connection is incomplete: %{1}",项目恢复连接不完整：%{1}
+"Restore execution currently supports mysql and pgsql Project Profiles.","恢复执行当前支持 mysql 和 pgsql Project Profile。"
+"Submitted restore driver does not match the enabled Project Profile.","提交的恢复驱动与已启用 Project Profile 不匹配。"
+"Restore artifact is empty.",恢复产物为空。
+"Restore artifact checksum could not be calculated.",无法计算恢复产物校验和。
+"Pre-restore backup failed; restore execution was stopped.","Pre-restore backup failed; restore execution was stopped."
+"Save and enable the Project Profile before restore rollback.","执行恢复回滚前，请先保存并启用项目 Profile。"
+"Run a guarded restore first so WLS can record a pre-restore backup.","请先执行一次受控恢复，让 WLS 记录恢复前备份。"
+"Restore Rollback",恢复回滚
+"Ready To Roll Back",可执行回滚
+"Rollback is available for the latest recorded pre-restore backup.",可基于最近记录的恢复前备份执行回滚。
+"No rollback backup is ready.",暂无可用回滚备份。
+"Rollback Artifact",回滚产物
+"WLS only offers artifacts recorded as pre-restore backups.","WLS 只提供审计中记录为恢复前备份的产物。"
+"Profile Guard","Profile 防护"
+"Rollback uses the current enabled Project Profile and re-runs restore verification.","回滚使用当前启用的项目 Profile，并会重新执行恢复验证。"
+"Restore rollback backup was not found.",未找到恢复回滚备份。
+"Restore rollback plan is not ready.",恢复回滚计划未就绪。
+"Confirm restore preflight before executing restore.",执行恢复前请确认恢复预检。
+"Type CHECK_DB_RESTORE before executing restore.","执行恢复前请输入 CHECK_DB_RESTORE。"
+"Confirm database restore execution before submitting.",提交前请确认数据库恢复执行。
+"Type RUN_DB_RESTORE to execute the database restore.","输入 RUN_DB_RESTORE 以执行数据库恢复。"
+"Confirm PostgreSQL public schema reset before executing plain SQL restore.","执行 plain SQL 恢复前，请确认 PostgreSQL public schema reset。"
+"Type RESET_PG_SCHEMA before executing PostgreSQL plain SQL restore.","执行 PostgreSQL plain SQL 恢复前请输入 RESET_PG_SCHEMA。"
+"Restore plan is not ready for execution.",恢复计划尚未准备好执行。
+"Only restore_database can execute in this slice.","此切片仅允许 restore_database 执行。"
+"Confirm database restore rollback before submitting.",提交前请确认数据库恢复回滚。
+"Type ROLLBACK_DB_RESTORE to execute restore rollback.","请输入 ROLLBACK_DB_RESTORE 以执行恢复回滚。"
+"Confirm PostgreSQL public schema reset before restore rollback.","执行恢复回滚前请确认 PostgreSQL public schema reset。"
+"Type RESET_PG_SCHEMA before PostgreSQL restore rollback.","执行 PostgreSQL 恢复回滚前请输入 RESET_PG_SCHEMA。"
+"Rollback backup is available.",回滚备份可用。
+"Selected rollback backup was not found in recent restore audit records.",最近恢复审计记录中未找到所选回滚备份。
+"No recent restore pre-restore backup is available for rollback.",最近没有可用于回滚的恢复前备份。
+"Rollback backup artifact is empty.",回滚备份产物为空。
+"Rollback backup checksum could not be calculated.",无法计算回滚备份校验和。
+"Pre-restore backup is not ready.",恢复前备份尚未准备好。
+"The selected restore artifact is outside the Database Manager backup directory.","选择的恢复产物不在 Database Manager 备份目录内。"
+"Restore artifact was not found inside the Database Manager backup directory.","Database Manager 备份目录内未找到恢复产物。"
+"Restore artifact is not readable.",恢复产物不可读。
+"Restore artifact metadata is required before restore execution can run.",恢复执行前需要恢复产物元数据。
+"Restore artifact metadata is empty.",恢复产物元数据为空。
+"Restore artifact metadata is not valid JSON.","恢复产物元数据不是有效 JSON。"
+"Restore artifact metadata must come from a Database Manager backup.","恢复产物元数据必须来自 Database Manager 备份。"
+"Restore artifact metadata does not match the selected artifact name.",恢复产物元数据与所选产物名称不匹配。
+"Restore artifact driver does not match the enabled Project Profile.","恢复产物驱动与已启用 Project Profile 不匹配。"
+"Restore artifact database does not match the enabled Project Profile.","恢复产物数据库与已启用 Project Profile 不匹配。"
+"Restore artifact byte size does not match metadata.",恢复产物字节大小与元数据不匹配。
+"Restore artifact checksum does not match metadata.",恢复产物校验和与元数据不匹配。
+"Unable to start PostgreSQL restore command.","Unable to start PostgreSQL restore command."
+"PostgreSQL restore command failed.","PostgreSQL restore command failed."
+"Unable to start MySQL restore command.","无法启动 MySQL 恢复命令。"
+"MySQL restore command failed.","MySQL 恢复命令失败。"
+"Restore verification query failed.",恢复验证查询失败。
+"Use a .sql or .sql.gz artifact before MySQL restore execution.","MySQL 恢复执行前请使用 .sql 或 .sql.gz 产物。"
+"Use a .sql, .sql.gz, .dump, or .backup artifact before PostgreSQL restore execution.","Use a .sql, .sql.gz, .dump, or .backup artifact before PostgreSQL restore execution."
+"Restore execution currently supports mysql and pgsql artifacts.","恢复执行当前支持 mysql 和 pgsql 产物。"
+"Database restore execution failed.",数据库恢复执行失败。
+"Enable and save the Project Profile before restore preflight.","恢复预检前请启用并保存 Project Profile。"
+"Restore preflight passed; restore execution remains disabled.",恢复预检通过；恢复执行仍保持禁用。
+"Confirm restore preflight before submitting.",提交前请确认恢复预检。
+"Type CHECK_DB_RESTORE to run restore preflight.","输入 CHECK_DB_RESTORE 以运行恢复预检。"
+"Restore plan is not ready for preflight.",恢复计划尚未准备好预检。
+"Only restore_database can run restore preflight.","只有 restore_database 可以运行恢复预检。"
+"Restore artifact metadata is required before restore preflight can pass.",恢复预检通过前必须存在恢复产物元数据。
+"zlib is required to inspect compressed restore artifacts.","检查压缩恢复产物需要 zlib。"
+"Enable and save the Project Profile before SQL apply execution.","Enable and save the Project Profile before SQL apply execution."
+"Project SQL apply connection is incomplete: %{1}","项目 SQL 应用连接信息不完整：%{1}"
+"Submitted SQL apply driver does not match the enabled Project Profile.","提交的 SQL 应用驱动与已启用的项目 Profile 不一致。"
+"SQL apply artifact checksum could not be calculated.","无法计算 SQL 应用产物校验和。"
+"SQL apply verification query failed.","SQL 应用验证查询失败。"
+"Confirm SQL apply execution before submitting.","提交前请确认 SQL 应用执行。"
+"Type RUN_DB_SQL_APPLY to execute SQL apply.","请输入 RUN_DB_SQL_APPLY 以执行 SQL 应用。"
+"SQL apply plan is not ready for execution.","SQL 应用计划尚未就绪。"
+"Only sql_apply can run SQL apply execution.","只有 sql_apply 可以执行 SQL 应用。"
+"The selected SQL apply artifact is outside the Database Manager backup directory.","所选 SQL 应用产物位于 Database Manager 备份目录之外。"
+"SQL apply artifact was not found inside the Database Manager backup directory.","Database Manager 备份目录内未找到 SQL 应用产物。"
+"SQL apply artifact is not readable.","SQL 应用产物不可读。"
+"SQL apply artifact is empty.","SQL 应用产物为空。"
+"SQL apply artifact exceeds the guarded size limit.","SQL 应用产物超过受控大小限制。"
+"zlib is required for compressed SQL apply artifacts.","压缩 SQL 应用产物需要 zlib。"
+"Unable to read the compressed SQL apply artifact.","无法读取压缩 SQL 应用产物。"
+"SQL apply artifact does not contain executable statements.","SQL 应用产物不包含可执行语句。"
+"SQL apply artifact contains too many statements for this guarded slice.","SQL 应用产物中的语句数量超过此受控切片限制。"
+"SQL apply artifact contains unsupported control syntax.","SQL 应用产物包含不支持的控制语法。"
+"SQL apply artifact contains a blocked SQL keyword.","SQL 应用产物包含被阻断的 SQL 关键字。"
+"SQL apply artifact cannot create or alter databases.","SQL 应用产物不能创建或修改数据库。"
+"SQL apply only allows additive CREATE TABLE, CREATE INDEX, or ALTER TABLE ADD statements in this slice.","此切片中 SQL 应用只允许增量 CREATE TABLE、CREATE INDEX 或 ALTER TABLE ADD 语句。"
+"Pre-apply backup failed.",应用前备份失败。
+"Public schema only","仅 public schema"
+"Not required",不需要
+"Stored in Profile","已存入 Profile"
+"Only in source env profile","仅存在于源 env 配置"
+"Not configured",未配置
+"Project Profile secret",项目配置密文
+"Existing env password","沿用 env 密码"
+"Empty password",空密码
+"Existing slave","已有 slave"
+"Direct db","直接 db"
+Master/default,Master/default
+"WLS Standalone Backend","WLS Standalone Backend"
+"Database Manager","Database Manager"
+"Database manager navigation","Database manager navigation"
+Summary,Summary
+Health,健康
+Lifecycle,生命周期
+"Env Apply","Env 应用"
+Slaves,Slaves
+Test,Test
+Marketplace,Marketplace
+Dark,Dark
+Light,Light
+"WLS Panel Plugin","WLS Panel Plugin"
+"Database profile readout and guarded connection checks for the selected WLS project context.","Database profile readout and guarded connection checks for the selected WLS project context."
+"WLS Panel","WLS Panel"
+"Project Admin","Project Admin"
+"Project Health",项目健康
+"Read-only readiness summary for the selected WLS database context. The guarded probe below only runs SELECT 1 and never runs migrations, applies SQL, restores data, or reloads WLS.","所选 WLS 数据库上下文的只读就绪摘要。下方受控探测只运行 SELECT 1，不会运行迁移、应用 SQL、恢复数据或重载 WLS。"
+Attention,关注
+"A database profile is required before running a health probe.","运行健康探测前需要数据库 Profile。"
+"Probe Profile","探测 Profile"
+"I understand this health probe opens a short read-only database connection.",我理解此健康探测会打开一次短暂的只读数据库连接。
+"Health Probe Phrase",健康探测确认短语
+"Run Health Probe",运行健康探测
+"The active health probe executes one SELECT 1 check, records a sanitized audit event, and never writes schema, data, env.php, or WLS runtime state.","主动健康探测只执行一次 SELECT 1 检查，记录脱敏审计事件，不会写入结构、数据、env.php 或 WLS 运行时状态。"
+"Project Context","Project Context"
+Operation,Operation
+"Project ID","Project ID"
+Domain,Domain
+"Project Type","Project Type"
+"Database Profiles","Database Profiles"
+"Connection details are masked. Use Project Profile below to save a guarded database configuration for this WLS project.","Connection details are masked. Use Project Profile below to save a guarded database configuration for this WLS project."
+"No database profiles were found.","No database profiles were found."
+"Project Database Profile","Project Database Profile"
+"Save a database profile for the selected WLS project. Secrets are encrypted at rest, masked in the UI, and omitted from audit logs.","Save a database profile for the selected WLS project. Secrets are encrypted at rest, masked in the UI, and omitted from audit logs."
+"Enabled Profile","Enabled Profile"
+"Saved Disabled","Saved Disabled"
+"Enable project database profile","Enable project database profile"
+"Confirm guarded save","Confirm guarded save"
+"Source profile","Source profile"
+"No env profile","No env profile"
+"Used as the inherited baseline before this project saves overrides.","Used as the inherited baseline before this project saves overrides."
+"Configured, leave blank to keep","Configured, leave blank to keep"
+"Not saved in Profile","Not saved in Profile"
+State,State
+"Copy source env password into Profile","复制源 env 密码到 Profile"
+"Copy confirmation",复制确认
+"Copies the selected source env profile password into this Project Profile without showing it.","将选择的源 env profile 密码复制到当前项目 Profile，全程不显示明文。"
+"Runtime action","Runtime action"
+"Save only","Save only"
+"Request WLS reload","Request WLS reload"
+"Target WLS instance","Target WLS instance"
+Description,Description
+"Optional operator note for this WLS project database profile.","Optional operator note for this WLS project database profile."
+"Clear stored password","Clear stored password"
+"Last runtime action","Last runtime action"
+"Runtime result","Runtime result"
+"Last test","Last test"
+"Test message","Test message"
+"Save Project Profile","Save Project Profile"
+"Recent Audit","Recent Audit"
+"Latest DbManager profile save and connection-test audit entries.","Latest DbManager profile save and connection-test audit entries."
+Time,Time
+Event,Event
+Scope,Scope
+"Database Lifecycle Plan",数据库生命周期计划
+"Preview create database, create user, or grant intent before any future DBA adapter is allowed to execute vendor-specific SQL.","在未来 DBA 适配器允许执行数据库方言 SQL 前，先预览创建数据库、创建用户或授权意图。"
+"Select Action",选择动作
+"Host Scope",主机范围
+"Grant Mode",授权模式
+Execution,执行
+"Preview Lifecycle Plan",预览生命周期计划
+"适配器 SQL 计划","适配器 SQL 计划"
+"SQL is shown as the adapter plan; execution is only available through the guarded form below after the Project Profile and confirmation are ready.","SQL 作为适配器计划展示；只有项目 Profile 和确认信息就绪后，才能通过下方受控表单执行。"
+适配器,适配器
+执行状态,执行状态
+确认短语,确认短语
+审计事件,审计事件
+"SQL 语句预览","SQL 语句预览"
+"SQL 语句","SQL 语句"
+"当前输入还不能生成安全 SQL 计划。","当前输入还不能生成安全 SQL 计划。"
+验证查询,验证查询
+回滚或清理指引,回滚或清理指引
+"Lifecycle Execution Boundary",生命周期执行边界
+"Execution connects to the selected source DBA profile, runs only the rebuilt adapter SQL plan, appends an audit record, and never renders stored passwords.","执行会连接所选源 DBA Profile，只运行重建后的适配器 SQL 计划，追加审计记录，并且不会渲染存储密码。"
+"Confirmation Phrase",确认短语
+"Type exactly: %{1}",请准确输入：%{1}
+"I understand WLS Database Manager will execute lifecycle SQL against the selected source DBA profile.","我确认 WLS Database Manager 会针对所选源 DBA Profile 执行生命周期 SQL。"
+"Execution Guard",执行保护
+"Run Lifecycle Action",执行生命周期动作
+"Backup Restore And Migration Plan",备份恢复与迁移计划
+"Preview backup, destructive restore, guarded MySQL/MariaDB migration import, or guarded SQL apply intent. Migration import and SQL apply both create a fresh safety backup before execution.","预览备份、破坏性恢复、受控 MySQL/MariaDB 迁移导入或受控 SQL 应用意图。迁移导入和 SQL 应用都会在执行前创建新的安全备份。"
+"Backup Artifact",备份产物
+"Artifact Directory",产物目录
+"Preview Backup Plan",预览备份计划
+"Database Backup Execution Boundary",数据库备份执行边界
+"Execution runs pg_dump or mysqldump only for backup_database, writes inside the WLS backup directory, stores metadata, and appends sanitized audit records.","执行仅针对 backup_database 运行 pg_dump 或 mysqldump，写入 WLS 备份目录，保存元数据，并追加脱敏审计记录。"
+"I understand WLS Database Manager will run the matching database dump adapter against the enabled Project Profile.","我确认 WLS Database Manager 会针对已启用的 Project Profile 运行匹配的数据库 dump 适配器。"
+"Run Database Backup",执行数据库备份
+"Database Restore Rollback",数据库恢复回滚
+"Rollback restores only a pre-restore backup recorded by a previous guarded restore, then creates a fresh safety backup and verifies the target connection.",回滚只会恢复之前受控恢复记录的恢复前备份；执行前会再创建新的安全备份并验证目标连接。
+"Original Restore",原恢复产物
+"Rollback Phrase",回滚确认短语
+"PostgreSQL Reset Phrase","PostgreSQL Reset 短语"
+"I understand rollback is destructive and will restore the recorded pre-restore backup.",我理解回滚是破坏性操作，并会恢复已记录的恢复前备份。
+"I understand PostgreSQL rollback will reset the public schema before replaying the backup.","我理解 PostgreSQL 回滚会在回放备份前重置 public schema。"
+"Rollback Guard",回滚防护
+"Run Restore Rollback",执行恢复回滚
+"Rollback never accepts arbitrary paths; WLS checks the audit record, artifact metadata, checksum, driver, and database before executing.","回滚不接受任意路径；执行前 WLS 会校验审计记录、产物元数据、校验和、驱动和数据库。"
+"Database Restore Preflight Boundary",数据库恢复预检边界
+"Preflight verifies the selected backup artifact, metadata, checksum, driver, database, and readability; it never restores data or runs SQL.","预检会验证所选备份产物、元数据、校验和、驱动、数据库和可读性；不会恢复数据或运行 SQL。"
+"I understand WLS Database Manager will only verify the selected backup artifact and will not restore data.","我确认 WLS Database Manager 只会验证所选备份产物，不会恢复数据。"
+"Preflight Guard",预检保护
+"Run Restore Preflight",运行恢复预检
+"Use this preflight before restore execution; it never modifies the target database.",在恢复执行前使用此预检；它不会修改目标数据库。
+"Database Restore Execution Boundary",数据库恢复执行边界
+"Execution re-runs restore preflight, creates a fresh pre-restore backup, restores through the selected driver adapter, verifies the target connection, and writes sanitized audit records.",执行会重新运行恢复预检，创建新的恢复前备份，通过所选驱动适配器恢复，验证目标连接，并写入脱敏审计记录。
+"Preflight Phrase",预检确认短语
+"Restore Phrase",恢复短语
+"I understand WLS Database Manager will verify the artifact again before restore execution.","我确认 WLS Database Manager 会在恢复执行前再次验证产物。"
+"I understand this restore is destructive and a fresh pre-restore backup will be created first.",我确认本次恢复具有破坏性，并会先创建新的恢复前备份。
+"I understand PostgreSQL plain SQL restore will reset the public schema before replaying the artifact.","我确认 PostgreSQL plain SQL 恢复会在回放产物前重置 public schema。"
+"Reset Mode","Reset 模式"
+"Restore Guard",恢复保护
+"Run Database Restore",运行数据库恢复
+"Restore execution supports MySQL/MariaDB .sql and .sql.gz artifacts, PostgreSQL .dump and .backup artifacts, and PostgreSQL plain SQL artifacts only behind RESET_PG_SCHEMA public-schema reset. Migration import and WLS reload are separate guarded paths; project health probes are read-only.","恢复执行支持 MySQL/MariaDB .sql 和 .sql.gz 产物、PostgreSQL .dump 和 .backup 产物，以及需要 RESET_PG_SCHEMA public schema reset 保护的 PostgreSQL plain SQL 产物。迁移导入和 WLS 重载是独立受控路径；项目健康探针是只读的。"
+"Database Migration Preflight Boundary",数据库迁移预检边界
+"Preflight verifies the migration target, enabled Project Profile, backup evidence, metadata, checksum, and risk classification; it never runs migrations or SQL.","预检会验证迁移目标、已启用 Project Profile、备份证据、元数据、校验和和风险分类；不会运行迁移或 SQL。"
+"I understand WLS Database Manager will only verify migration readiness and will not run migration scripts.","我确认 WLS Database Manager 只会验证迁移准备状态，不会运行迁移脚本。"
+"Migration Preflight Guard",迁移预检保护
+"Run Migration Preflight",运行迁移预检
+"Preflight is read-only. MySQL/MariaDB migration import is offered in a separate card and requires RUN_DB_MIGRATION before any database change can happen.","预检是只读的。MySQL/MariaDB 迁移导入在独立卡片中提供，任何数据库变更前都必须确认 RUN_DB_MIGRATION。"
+"Database Migration Execution Boundary",数据库迁移执行边界
+"Execution re-runs migration preflight, creates a fresh pre-migration backup, imports the verified MySQL/MariaDB .sql artifact, verifies the target, and writes sanitized audit records.","执行会重新运行迁移预检，创建新的迁移前备份，导入已验证的 MySQL/MariaDB .sql 产物，验证目标并写入脱敏审计记录。"
+"Migration Phrase",迁移确认短语
+"I understand WLS Database Manager will verify the artifact again before migration import.","我理解 WLS Database Manager 会在迁移导入前再次验证产物。"
+"I understand migration import modifies the target database after creating a fresh pre-migration backup.",我理解迁移导入会在创建新的迁移前备份后修改目标数据库。
+"Migration Import Guard",迁移导入防护
+"Run Migration Import",执行迁移导入
+"This slice does not run project code migrations, schema diff generators, WLS reload, or arbitrary SQL; it imports only a verified .sql or .sql.gz backup artifact from the WLS backup directory.","此切片不会运行项目代码迁移、schema diff 生成器、WLS 重载或任意 SQL；它只从 WLS 备份目录导入已验证的 .sql 或 .sql.gz 备份产物。"
+"Database SQL Apply Boundary","数据库 SQL 应用边界"
+"Execution resolves a reviewed .sql artifact from the WLS backup directory, creates a fresh pre-apply backup, blocks destructive or data-touching SQL, runs additive DDL only, verifies the target, and appends audit evidence.","执行会从 WLS 备份目录解析已审核的 .sql 产物，创建新的应用前备份，阻断破坏性或数据修改 SQL，仅运行增量 DDL，验证目标并追加审计证据。"
+"SQL Apply Phrase","SQL 应用确认短语"
+"I understand SQL apply will modify the target database after creating a fresh pre-apply backup.","我理解 SQL 应用会在创建新的应用前备份后修改目标数据库。"
+"SQL Allowlist","SQL 白名单"
+"Allowed: CREATE TABLE, CREATE INDEX, ALTER TABLE ADD. Blocked: DROP, TRUNCATE, DELETE, UPDATE, GRANT, REVOKE, LOAD, COPY, and database-level SQL.","允许：CREATE TABLE、CREATE INDEX、ALTER TABLE ADD。阻断：DROP、TRUNCATE、DELETE、UPDATE、GRANT、REVOKE、LOAD、COPY 和数据库级 SQL。"
+"SQL Apply Guard","SQL 应用防护"
+"Run SQL Apply","执行 SQL 应用"
+"SQL apply never accepts arbitrary paths or inline SQL; it only reads safe artifact names inside var/backups/wls/db-manager/database.","SQL 应用不接受任意路径或内联 SQL；它只读取 var/backups/wls/db-manager/database 内的安全产物名。"
+"Env Apply And Rollback","Env 应用与回滚"
+"Apply writes the enabled Project Database Profile into app/etc/env.php after creating a backup, then optional WLS reload can be requested.","应用会先创建备份，再把已启用的项目数据库配置写入 app/etc/env.php，并可选择请求 WLS 重载。"
+"Write Target",写入目标
+"Write Mode",写入模式
+"Profile Key",配置键
+"Password Source",密码来源
+"Latest Backup",最新备份
+"This apply updates only the existing slave profile shown above. Use Slave Create / Remove for db.slaves list changes.","本次应用只会更新上方显示的已有 slave 配置。如需变更 db.slaves 列表，请使用 Slave Create / Remove。"
+"No database env changes are pending for this profile.","当前项目数据库配置没有待写入的 env 差异。"
+Field,Field
+"Current env.php","当前 env.php"
+"Apply only",仅应用
+"I understand Database Manager will update app/etc/env.php after creating a backup.","我确认 Database Manager 会在创建备份后更新 app/etc/env.php。"
+"Apply env.php","应用 env.php"
+Backup,Backup
+"Restore only",仅恢复
+"I understand Database Manager will restore the selected app/etc/env.php backup.","我确认 Database Manager 会恢复所选 app/etc/env.php 备份。"
+"Rollback env.php","回滚 env.php"
+"Slave Create / Remove","Slave 创建 / 移除"
+"Create or remove explicit db.slaves entries after an env backup; normal Env Apply only updates an already selected target.","创建 env 备份后显式创建或移除 db.slaves 条目；普通 Env Apply 只更新已选中的目标。"
+"Database slave management is not available.","数据库 slave 管理当前不可用。"
+"Source Profile","来源 Profile"
+"Existing Slaves","已有 Slaves"
+"New slave key","新 slave key"
+"Lowercase key, for example reporting_slave.","小写 key，例如 reporting_slave。"
+"Create only",仅创建
+"I understand Database Manager will add a db.slaves entry after creating an env backup.","我确认 Database Manager 会先创建 env 备份，再添加 db.slaves 条目。"
+"Create Slave","创建 Slave"
+"Existing Slave Profiles","已有 Slave 配置"
+"No database slave profiles are configured in app/etc/env.php.","app/etc/env.php 中尚未配置数据库 slave。"
+Slave,Slave
+User,用户
+"Remove after backup",备份后移除
+Remove,移除
+"Connection Test","Connection Test"
+"Runs a single POST-only SELECT 1 check and returns a sanitized result.","Runs a single POST-only SELECT 1 check and returns a sanitized result."
+"A database profile is required before testing.","A database profile is required before testing."
+Profile,Profile
+"Test Connection","Test Connection"
+"Missing fields: %{1}","Missing fields: %{1}"

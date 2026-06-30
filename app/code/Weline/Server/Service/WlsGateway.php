@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Server\IPC\ChildControl\ChildControlClientInterface;
+use Weline\Server\IPC\ControlClient;
+use Weline\Server\IPC\ControlMessage;
+
 /**
  * WLS Gateway - 多项目统一入口反向代理
  *
@@ -40,6 +44,8 @@ class WlsGateway
      */
     private int $listenPort = 443;
 
+    private string $instanceName = 'default';
+
     /**
      * IPC 控制端口
      */
@@ -58,12 +64,26 @@ class WlsGateway
     /**
      * IPC 连接资源
      */
-    private $ipcSocket = null;
+    private ?ChildControlClientInterface $ipcClient = null;
 
     /**
      * IPC 读取缓冲区
      */
-    private string $ipcBuffer = '';
+    private int $ipcEpoch = 0;
+
+    private string $ipcLaunchId = '';
+
+    private string $ipcSlotId = '';
+
+    private string $ipcLeaseId = '';
+
+    private int $ipcGeneration = 0;
+
+    private bool $running = true;
+
+    private bool $readyAcknowledged = false;
+
+    private float $lastReadySentAt = 0.0;
 
     /**
      * 添加路由规则
@@ -185,6 +205,20 @@ class WlsGateway
         $this->masterPid = $masterPid;
     }
 
+    public function setIpcIdentity(
+        int $epoch,
+        string $launchId,
+        string $slotId,
+        string $leaseId,
+        int $generation
+    ): void {
+        $this->ipcEpoch = $epoch;
+        $this->ipcLaunchId = $launchId;
+        $this->ipcSlotId = $slotId;
+        $this->ipcLeaseId = $leaseId;
+        $this->ipcGeneration = $generation;
+    }
+
     /**
      * 设置监听地址
      */
@@ -192,6 +226,12 @@ class WlsGateway
     {
         $this->listenHost = $host;
         $this->listenPort = $port;
+    }
+
+    public function setInstanceName(string $instanceName): void
+    {
+        $instanceName = \trim($instanceName);
+        $this->instanceName = $instanceName !== '' ? $instanceName : 'default';
     }
 
     /**
@@ -203,28 +243,59 @@ class WlsGateway
             throw new \RuntimeException('IPC 配置未设置，无法启用动态路由');
         }
 
-        // 连接 Master IPC 控制端口
-        $this->ipcSocket = @stream_socket_client(
-            "tcp://127.0.0.1:{$this->controlPort}",
-            $errno,
-            $errstr,
-            5
+        $client = new ControlClient();
+        $client->setSelfTag('Gateway');
+        $client->rememberRegistration(
+            ControlMessage::ROLE_GATEWAY,
+            \getmypid(),
+            $this->listenPort,
+            1,
+            $this->ipcEpoch,
+            $this->ipcLaunchId,
+            ControlMessage::PROCESS_KIND_FRAMEWORK,
+            '',
+            $this->instanceName,
+            $this->ipcLaunchId
         );
+        $client->markReadyState(false);
+        $client->onMessage(function (array $message, ChildControlClientInterface $client): void {
+            unset($client);
+            $this->handleIpcMessage($message);
+        });
+        $client->onDisconnect(function (bool $receivedShutdown, ChildControlClientInterface $client): void {
+            unset($client);
+            $this->readyAcknowledged = false;
+            if ($receivedShutdown) {
+                $this->running = false;
+            }
+        });
 
-        if (!$this->ipcSocket) {
-            throw new \RuntimeException("无法连接 Master IPC: {$errstr} ({$errno})");
+        if (!$client->connect('127.0.0.1', $this->controlPort)) {
+            $lastError = \method_exists($client, 'getLastConnectError') ? $client->getLastConnectError() : '';
+            throw new \RuntimeException('无法连接 Master IPC' . ($lastError !== '' ? ': ' . $lastError : ''));
         }
 
-        stream_set_blocking($this->ipcSocket, false);
+        if (!$client->register(
+            ControlMessage::ROLE_GATEWAY,
+            \getmypid(),
+            $this->listenPort,
+            1,
+            $this->ipcEpoch,
+            $this->ipcLaunchId,
+            ControlMessage::PROCESS_KIND_FRAMEWORK,
+            '',
+            $this->instanceName,
+            $this->ipcLaunchId
+        )) {
+            $client->close();
+            throw new \RuntimeException('向 Master IPC 注册 Gateway 失败');
+        }
+        if (!$client->flushPendingWrites(1.0)) {
+            $client->close();
+            throw new \RuntimeException('向 Master IPC 发送 Gateway 注册消息失败');
+        }
 
-        // 发送 register 消息
-        $registerMsg = \Weline\Server\IPC\ControlMessage::register(
-            \Weline\Server\IPC\ControlMessage::ROLE_GATEWAY,
-            getmypid(),
-            $this->listenPort
-        );
-        fwrite($this->ipcSocket, $registerMsg);
-
+        $this->ipcClient = $client;
         $this->dynamicRoutingEnabled = true;
         echo "动态路由已启用，已连接到 Master IPC\n";
     }
@@ -270,7 +341,7 @@ class WlsGateway
         $type = $message['type'] ?? '';
 
         switch ($type) {
-            case \Weline\Server\IPC\ControlMessage::TYPE_PROXY_ADD_ROUTE:
+            case ControlMessage::TYPE_PROXY_ADD_ROUTE:
                 $this->addRoute(
                     $message['domain'] ?? '',
                     $message['backend_host'] ?? '',
@@ -281,20 +352,86 @@ class WlsGateway
                 echo "IPC: 添加路由 {$message['domain']}\n";
                 break;
 
-            case \Weline\Server\IPC\ControlMessage::TYPE_PROXY_REMOVE_ROUTE:
+            case ControlMessage::TYPE_PROXY_REMOVE_ROUTE:
                 $this->removeRoute($message['domain'] ?? '');
                 echo "IPC: 移除路由 {$message['domain']}\n";
                 break;
 
-            case \Weline\Server\IPC\ControlMessage::TYPE_PROXY_RELOAD:
+            case ControlMessage::TYPE_PROXY_RELOAD:
                 $this->reloadRoutes($message['routes'] ?? []);
                 echo "IPC: 重载路由表\n";
                 break;
 
-            case \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN:
+            case ControlMessage::TYPE_SHUTDOWN:
                 echo "IPC: 收到停止信号\n";
-                exit(0);
+                $this->running = false;
                 break;
+
+            case ControlMessage::TYPE_ACK:
+                break;
+
+            case ControlMessage::TYPE_ACK_READY:
+            case ControlMessage::TYPE_READY_ACK:
+                if (\array_key_exists('accepted', $message) && !(bool)($message['accepted'] ?? false)) {
+                    $this->running = false;
+                    break;
+                }
+                $this->readyAcknowledged = true;
+                break;
+        }
+    }
+
+    private function sendReady(): void
+    {
+        if (!$this->dynamicRoutingEnabled || !$this->ipcClient || $this->readyAcknowledged) {
+            return;
+        }
+        if (!$this->ipcClient->isConnected()) {
+            return;
+        }
+
+        $this->ipcClient->sendReady(
+            ControlMessage::ROLE_GATEWAY,
+            1,
+            $this->listenPort,
+            $this->ipcEpoch,
+            $this->ipcLaunchId,
+            $this->ipcLaunchId
+        );
+        $this->ipcClient->flushPendingWrites(1.0);
+        $this->lastReadySentAt = \microtime(true);
+    }
+
+    private function resetIpcConnectionState(): void
+    {
+        $this->ipcClient?->close();
+        $this->ipcClient = null;
+        $this->dynamicRoutingEnabled = false;
+        $this->readyAcknowledged = false;
+        $this->lastReadySentAt = 0.0;
+    }
+
+    private function reconnectIpcIfNeeded(): void
+    {
+        if ($this->controlPort <= 0 || $this->masterPid <= 0) {
+            return;
+        }
+        if ($this->ipcClient !== null && $this->ipcClient->isConnected()) {
+            return;
+        }
+        if ($this->ipcClient !== null && $this->ipcClient->tryReconnect()) {
+            if (!$this->readyAcknowledged) {
+                $this->sendReady();
+            }
+            return;
+        }
+
+        try {
+            $this->enableDynamicRouting();
+            $this->sendReady();
+        } catch (\Throwable $e) {
+            echo "IPC 閲嶈繛澶辫触: {$e->getMessage()}\n";
+            $this->resetIpcConnectionState();
         }
     }
 
@@ -303,29 +440,50 @@ class WlsGateway
      */
     private function checkIpcMessages(): void
     {
-        if (!$this->dynamicRoutingEnabled || !$this->ipcSocket) {
+        if (!$this->ipcClient || !$this->ipcClient->isConnected()) {
+            $this->reconnectIpcIfNeeded();
             return;
         }
 
-        // 读取 IPC 数据
-        $data = @fread($this->ipcSocket, 8192);
-        if ($data !== false && $data !== '') {
-            $this->ipcBuffer .= $data;
-
-            // 提取完整消息
-            $messages = \Weline\Server\IPC\ControlMessage::extractMessages($this->ipcBuffer);
-            foreach ($messages as $message) {
-                $this->handleIpcMessage($message);
-            }
+        if (!$this->dynamicRoutingEnabled) {
+            return;
         }
 
-        // 检查连接是否关闭
-        if (feof($this->ipcSocket)) {
-            echo "IPC 连接已关闭\n";
-            fclose($this->ipcSocket);
-            $this->ipcSocket = null;
-            $this->dynamicRoutingEnabled = false;
+        $this->ipcClient->handleReadable();
+        $this->ipcClient->handleWritable();
+        if (!$this->ipcClient->isConnected()) {
+            return;
         }
+        if ($this->ipcClient->hasReceivedShutdown()) {
+            $this->running = false;
+            return;
+        }
+        if ($this->ipcClient->isReadyStateConfirmed()) {
+            $this->readyAcknowledged = true;
+        }
+
+        if (!$this->readyAcknowledged && (\microtime(true) - $this->lastReadySentAt) >= 1.0) {
+            $this->sendReady();
+        }
+    }
+
+    /**
+     * @param resource $listenSocket
+     */
+    private function waitForActivity($listenSocket): void
+    {
+        $read = [$listenSocket];
+        $ipcSocket = $this->ipcClient?->getSocket();
+        if (\is_resource($ipcSocket)) {
+            $read[] = $ipcSocket;
+        }
+
+        $write = null;
+        if ($this->ipcClient?->hasPendingWrites() && \is_resource($ipcSocket)) {
+            $write = [$ipcSocket];
+        }
+        $except = null;
+        @\stream_select($read, $write, $except, 0, 1000);
     }
 
     /**
@@ -341,7 +499,7 @@ class WlsGateway
         }
 
         // 如果启用动态路由，先连接 IPC
-        if ($this->dynamicRoutingEnabled && $this->ipcSocket) {
+        if ($this->dynamicRoutingEnabled && $this->ipcClient) {
             echo "动态路由已启用\n";
         }
 
@@ -358,11 +516,12 @@ class WlsGateway
         }
 
         stream_set_blocking($socket, false);
+        $this->sendReady();
 
         echo "Gateway 已启动，等待连接...\n";
 
         // 事件循环
-        while (true) {
+        while ($this->running) {
             // 检查 IPC 消息
             $this->checkIpcMessages();
 
@@ -372,8 +531,10 @@ class WlsGateway
                 $this->handleClient($client);
             }
 
-            usleep(1000); // 1ms
+            $this->waitForActivity($socket);
         }
+
+        fclose($socket);
     }
 
     /**
@@ -382,7 +543,9 @@ class WlsGateway
     private function handleClient($client): void
     {
         // 读取 ClientHello 获取 SNI
-        $domain = $this->extractSNI($client);
+        $initialData = '';
+        // Read ClientHello once for SNI, then forward the same bytes to the backend.
+        $domain = $this->extractSNI($client, $initialData);
         if (!$domain) {
             echo "无法提取 SNI，关闭连接\n";
             fclose($client);
@@ -416,16 +579,30 @@ class WlsGateway
         }
 
         // 双向转发
+        if ($initialData !== '') {
+            fwrite($backendConn, $initialData);
+        }
+
         $this->relay($client, $backendConn);
     }
 
     /**
      * 从 TLS ClientHello 中提取 SNI
      */
-    private function extractSNI($socket): ?string
+    private function extractSNI($socket, string &$initialData = ''): ?string
     {
         // 读取 TLS 握手数据
+        stream_set_blocking($socket, false);
+        $read = [$socket];
+        $write = null;
+        $except = null;
+        $ready = @stream_select($read, $write, $except, 1, 0);
+        if ($ready !== 1) {
+            return null;
+        }
+
         $data = fread($socket, 4096);
+        $initialData = \is_string($data) ? $data : '';
         if (!$data) {
             return null;
         }
@@ -439,15 +616,58 @@ class WlsGateway
         // - ...
         // - SNI Extension (Type 0x0000)
 
-        if (ord($data[0]) !== 0x16) {
+        if (\strlen($data) < 5 || \ord($data[0]) !== 0x16) {
             return null; // 不是 TLS 握手
         }
 
         // 查找 SNI 扩展（简化版）
-        if (preg_match('/\x00\x00.{2}(.{2})(.+?)\x00/s', $data, $matches)) {
-            $sniLength = unpack('n', $matches[1])[1];
-            $sni = substr($matches[2], 0, $sniLength);
-            return $sni;
+        $recordLength = $this->readUint16($data, 3);
+        if ($recordLength <= 0 || \strlen($data) < 9 || \ord($data[5]) !== 0x01) {
+            return null;
+        }
+
+        $offset = 9; // record header + handshake header
+        $offset += 2; // client version
+        $offset += 32; // random
+        if (!isset($data[$offset])) {
+            return null;
+        }
+
+        $sessionIdLength = \ord($data[$offset]);
+        $offset += 1 + $sessionIdLength;
+        if ($offset + 2 > \strlen($data)) {
+            return null;
+        }
+
+        $cipherSuitesLength = $this->readUint16($data, $offset);
+        $offset += 2 + $cipherSuitesLength;
+        if (!isset($data[$offset])) {
+            return null;
+        }
+
+        $compressionMethodsLength = \ord($data[$offset]);
+        $offset += 1 + $compressionMethodsLength;
+        if ($offset + 2 > \strlen($data)) {
+            return null;
+        }
+
+        $extensionsLength = $this->readUint16($data, $offset);
+        $offset += 2;
+        $extensionsEnd = \min(\strlen($data), $offset + $extensionsLength);
+
+        while ($offset + 4 <= $extensionsEnd) {
+            $extensionType = $this->readUint16($data, $offset);
+            $extensionLength = $this->readUint16($data, $offset + 2);
+            $offset += 4;
+            if ($offset + $extensionLength > $extensionsEnd) {
+                return null;
+            }
+
+            if ($extensionType === 0x0000) {
+                return $this->extractServerNameFromExtension(\substr($data, $offset, $extensionLength));
+            }
+
+            $offset += $extensionLength;
         }
 
         return null;
@@ -456,6 +676,44 @@ class WlsGateway
     /**
      * 双向数据转发
      */
+    private function extractServerNameFromExtension(string $extension): ?string
+    {
+        if (\strlen($extension) < 5) {
+            return null;
+        }
+
+        $listLength = $this->readUint16($extension, 0);
+        $offset = 2;
+        $end = \min(\strlen($extension), $offset + $listLength);
+        while ($offset + 3 <= $end) {
+            $nameType = \ord($extension[$offset]);
+            $nameLength = $this->readUint16($extension, $offset + 1);
+            $offset += 3;
+            if ($offset + $nameLength > $end) {
+                return null;
+            }
+
+            if ($nameType === 0) {
+                $name = \strtolower(\trim(\substr($extension, $offset, $nameLength)));
+                return $name !== '' ? $name : null;
+            }
+
+            $offset += $nameLength;
+        }
+
+        return null;
+    }
+
+    private function readUint16(string $data, int $offset): int
+    {
+        if ($offset < 0 || $offset + 2 > \strlen($data)) {
+            return 0;
+        }
+
+        $value = \unpack('n', \substr($data, $offset, 2));
+        return (int)($value[1] ?? 0);
+    }
+
     private function relay($client, $backend): void
     {
         stream_set_blocking($client, false);
@@ -465,31 +723,34 @@ class WlsGateway
         $start = time();
 
         while (true) {
-            // 超时检查
-            if (time() - $start > $timeout) {
+            if (time() - $start > $timeout || feof($client) || feof($backend)) {
                 break;
             }
 
-            // 客户端 → 后端
-            $data = fread($client, 8192);
-            if ($data !== false && $data !== '') {
-                fwrite($backend, $data);
-                $start = time(); // 重置超时
-            }
-
-            // 后端 → 客户端
-            $data = fread($backend, 8192);
-            if ($data !== false && $data !== '') {
-                fwrite($client, $data);
-                $start = time(); // 重置超时
-            }
-
-            // 连接关闭检查
-            if (feof($client) || feof($backend)) {
+            $read = [$client, $backend];
+            $write = null;
+            $except = null;
+            $ready = @\stream_select($read, $write, $except, 1, 0);
+            if ($ready === false) {
                 break;
             }
+            if ($ready === 0) {
+                continue;
+            }
 
-            usleep(1000); // 1ms
+            foreach ($read as $socket) {
+                $data = fread($socket, 8192);
+                if ($data === false || $data === '') {
+                    continue;
+                }
+
+                if ($socket === $client) {
+                    fwrite($backend, $data);
+                } else {
+                    fwrite($client, $data);
+                }
+                $start = time();
+            }
         }
 
         fclose($client);

@@ -1,5 +1,12 @@
-﻿保存成功,保存成功
-保存失败!,保存失败!
-保存成功!,保存成功!
+﻿保存成功,"Saved successfully"
+保存失败!,"Save Failed!"
+保存成功!,"Saved successfully!"
 参数错误,"Parameter error"
-设置不存在,设置不存在
+设置不存在,"Setting Does Not Exist"
+"Unsupported contact operation: %{1}","Unsupported contact operation: %{1}"
+"Name, email, subject and comments are required.","Name, email, subject and comments are required."
+"Invalid email address.","Invalid email address."
+"Thanks, your message has been submitted.","Thanks, your message has been submitted."
+"Contact query provider","Contact query provider"
+"Provides storefront contact form operations.","Provides storefront contact form operations."
+"Submit storefront contact form.","Submit storefront contact form."

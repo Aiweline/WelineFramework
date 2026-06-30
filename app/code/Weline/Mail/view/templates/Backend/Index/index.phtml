@@ -1,0 +1,709 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$environment = $environment ?? [];
+$installPlan = $install_plan ?? [];
+$domains = $domains ?? [];
+$accounts = $accounts ?? [];
+$messages = $messages ?? [];
+$dnsResult = $dns_result ?? null;
+$clientSettings = $client_settings ?? null;
+$checks = $environment['checks'] ?? [];
+$domainLookup = $domain_lookup ?? [];
+$domainAccountCounts = $domain_account_counts ?? [];
+$websiteDomainOptions = $website_domain_options ?? [];
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$domainOptionsJson = json_encode(
+    $websiteDomainOptions,
+    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
+) ?: '[]';
+$statusBadge = static function (string $status): string {
+    return match ($status) {
+        'active' => 'bg-success',
+        'pending' => 'bg-warning text-dark',
+        'suspended' => 'bg-secondary',
+        default => 'bg-light text-dark',
+    };
+};
+$engineBadge = static function (string $engine): string {
+    return $engine === 'fake' ? 'bg-info text-dark' : 'bg-primary';
+};
+$totalDomains = count($domains);
+$activeDomains = 0;
+foreach ($domains as $domain) {
+    if ((string)$domain->getData('status') === 'active') {
+        $activeDomains++;
+    }
+}
+$totalAccounts = count($accounts);
+?>
+<style>
+    .mail-admin-page .mail-stat {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 14px 16px;
+        background: #fff;
+        min-height: 88px;
+    }
+    .mail-admin-page .mail-stat-label {
+        color: #64748b;
+        font-size: 12px;
+        margin-bottom: 6px;
+    }
+    .mail-admin-page .mail-stat-value {
+        color: #111827;
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+    .mail-admin-page .mail-domain-results {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        overflow: hidden;
+        max-height: 320px;
+        overflow-y: auto;
+        background: #fff;
+    }
+    .mail-admin-page .mail-domain-option {
+        width: 100%;
+        border: 0;
+        border-bottom: 1px solid #eef2f7;
+        background: #fff;
+        padding: 12px 14px;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color .18s ease, border-color .18s ease;
+    }
+    .mail-admin-page .mail-domain-option:hover,
+    .mail-admin-page .mail-domain-option.is-selected {
+        background: #f8fafc;
+    }
+    .mail-admin-page .mail-domain-option:last-child {
+        border-bottom: 0;
+    }
+    .mail-admin-page .mail-domain-name {
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .mail-admin-page .mail-muted-line {
+        color: #64748b;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+    .mail-admin-page .mail-selected-domain {
+        border: 1px dashed #94a3b8;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #f8fafc;
+    }
+    .mail-admin-page .mail-table-domain {
+        font-weight: 700;
+        color: #111827;
+    }
+    .mail-admin-page .mail-row-hidden {
+        display: none;
+    }
+</style>
+
+<div class="mail-admin-page">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0"><?= __('企业邮箱') ?></h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><?= __('系统服务') ?></li>
+                        <li class="breadcrumb-item active"><?= __('企业邮箱') ?></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="mail-stat">
+                <div class="mail-stat-label"><?= __('邮箱域名') ?></div>
+                <div class="mail-stat-value"><?= (int)$totalDomains ?></div>
+                <div class="mail-muted-line"><?= __('已开启 %{1} 个', [(string)$activeDomains]) ?></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="mail-stat">
+                <div class="mail-stat-label"><?= __('邮箱账号') ?></div>
+                <div class="mail-stat-value"><?= (int)$totalAccounts ?></div>
+                <div class="mail-muted-line"><?= __('按域名统一管理') ?></div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="mail-stat">
+                <div class="mail-stat-label"><?= __('Websites 候选域名') ?></div>
+                <div class="mail-stat-value"><?= (int)count($websiteDomainOptions) ?></div>
+                <div class="mail-muted-line"><?= __('来自 Websites 域名池和注册域名') ?></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><?= __('邮件服务环境') ?></h5>
+                    <p class="text-muted mb-3"><?= __('底层引擎：%{1}，平台：%{2}', [$escape($environment['engine'] ?? 'stalwart'), $escape($environment['platform'] ?? PHP_OS_FAMILY)]) ?></p>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                            <tr>
+                                <th><?= __('检测项') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('详情') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($checks as $check): ?>
+                                <tr>
+                                    <td><?= $escape($check['name'] ?? '') ?></td>
+                                    <td>
+                                        <?php if (!empty($check['ok'])): ?>
+                                            <span class="badge bg-success"><?= __('通过') ?></span>
+                                        <?php else: ?>
+                                            <span class="badge bg-warning text-dark"><?= __('待处理') ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-muted" style="white-space: normal;"><?= $escape($check['detail'] ?? '') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><?= __('原生安装计划') ?></h5>
+                    <p class="text-muted mb-2"><?= __('Fake 测试引擎仅用于 .invalid / .test 域名的本地业务冒烟，真实生产域名仍需要 Stalwart 环境。') ?></p>
+                    <ol class="mb-3">
+                        <?php foreach (($installPlan['steps'] ?? []) as $step): ?>
+                            <li><?= $escape($step) ?></li>
+                        <?php endforeach; ?>
+                    </ol>
+                    <code>php bin/w mail:env:install</code><br>
+                    <code>php bin/w env:install stalwart-mail-server -y</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-5">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><?= __('从 Websites 开通邮箱域名') ?></h5>
+                    <form id="mail-domain-create-form" method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/create-domain') ?>">
+                        <div class="mb-3">
+                            <label class="form-label" for="mail-domain-search"><?= __('搜索 Websites 域名') ?></label>
+                            <input id="mail-domain-search" class="form-control" autocomplete="off" placeholder="example.com">
+                            <input id="mail-domain-hidden" type="hidden" name="domain_name">
+                            <div class="form-text"><?= __('真实引擎需选择 Websites 中已有域名；Fake 可输入 .test / .invalid。') ?></div>
+                        </div>
+                        <div id="mail-domain-results" class="mail-domain-results mb-3"></div>
+                        <div class="mail-selected-domain mb-3">
+                            <div class="mail-muted-line"><?= __('当前选择') ?></div>
+                            <div id="mail-selected-domain-name" class="mail-domain-name"><?= __('尚未选择域名') ?></div>
+                            <div id="mail-selected-domain-meta" class="mail-muted-line"><?= __('请搜索并选择一个域名') ?></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="mail-domain-hostname"><?= __('邮件主机名') ?></label>
+                            <input id="mail-domain-hostname" class="form-control" name="hostname" placeholder="mail.example.com">
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="mail-domain-engine"><?= __('邮件引擎') ?></label>
+                                <select id="mail-domain-engine" class="form-select" name="engine" required>
+                                    <option value="stalwart">Stalwart</option>
+                                    <option value="fake"><?= __('Fake 测试引擎') ?></option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="mail-domain-quota"><?= __('默认容量 MB') ?></label>
+                                <input id="mail-domain-quota" class="form-control" name="default_quota_mb" type="number" min="128" value="1024">
+                            </div>
+                        </div>
+                        <button id="mail-domain-submit" class="btn btn-primary" type="submit"><?= __('开通邮箱域名') ?></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-7">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <h5 class="card-title mb-0"><?= __('邮箱域名列表') ?></h5>
+                        <span class="text-muted small"><?= __('支持多个域名') ?></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                            <tr>
+                                <th><?= __('域名') ?></th>
+                                <th><?= __('主机名') ?></th>
+                                <th><?= __('引擎') ?></th>
+                                <th><?= __('账号数') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('操作') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php if ($domains === []): ?>
+                                <tr><td colspan="6" class="text-muted"><?= __('暂无邮箱域名') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach ($domains as $domain): ?>
+                                    <?php
+                                    $domainId = (int)$domain->getId();
+                                    $domainName = (string)$domain->getData('domain_name');
+                                    $engine = (string)$domain->getData('engine');
+                                    $status = (string)$domain->getData('status');
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="mail-table-domain"><?= $escape($domainName) ?></div>
+                                            <div class="mail-muted-line">#<?= $domainId ?></div>
+                                        </td>
+                                        <td><?= $escape($domain->getData('hostname')) ?></td>
+                                        <td><span class="badge <?= $engineBadge($engine) ?>"><?= $escape($engine) ?></span></td>
+                                        <td><?= (int)($domainAccountCounts[$domainId] ?? 0) ?></td>
+                                        <td><span class="badge <?= $statusBadge($status) ?>"><?= $escape($status) ?></span></td>
+                                        <td>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <form method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/set-domain-status') ?>">
+                                                    <input type="hidden" name="domain_id" value="<?= $domainId ?>">
+                                                    <input type="hidden" name="status" value="active">
+                                                    <button class="btn btn-sm btn-success" type="submit"><?= __('开启') ?></button>
+                                                </form>
+                                                <form method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/set-domain-status') ?>">
+                                                    <input type="hidden" name="domain_id" value="<?= $domainId ?>">
+                                                    <input type="hidden" name="status" value="suspended">
+                                                    <button class="btn btn-sm btn-outline-warning" type="submit"><?= __('停用') ?></button>
+                                                </form>
+                                                <form method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/set-domain-status') ?>">
+                                                    <input type="hidden" name="domain_id" value="<?= $domainId ?>">
+                                                    <input type="hidden" name="status" value="pending">
+                                                    <button class="btn btn-sm btn-outline-secondary" type="submit"><?= __('待同步') ?></button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><?= __('创建邮箱账号') ?></h5>
+                    <form method="post" action="<?= $this->getBackendUrl('weline_mail/backend/index/create-account') ?>">
+                        <div class="mb-3">
+                            <label class="form-label" for="mail-account-domain-select"><?= __('邮箱域名') ?></label>
+                            <select id="mail-account-domain-select" class="form-select" name="domain_id" required>
+                                <option value=""><?= __('请选择域名') ?></option>
+                                <?php foreach ($domains as $domain): ?>
+                                    <?php
+                                    $domainId = (int)$domain->getId();
+                                    $domainName = (string)$domain->getData('domain_name');
+                                    ?>
+                                    <option
+                                        value="<?= $domainId ?>"
+                                        data-domain="<?= $escape($domainName) ?>"
+                                        data-engine="<?= $escape($domain->getData('engine')) ?>"
+                                        data-quota="<?= (int)$domain->getData('default_quota_mb') ?>"
+                                    ><?= $escape($domainName) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="mail-account-local"><?= __('邮箱账号') ?></label>
+                            <div class="input-group">
+                                <input id="mail-account-local" class="form-control" name="local_part" placeholder="admin" required>
+                                <span id="mail-account-domain-suffix" class="input-group-text">@</span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="mail-account-display"><?= __('显示名称') ?></label>
+                            <input id="mail-account-display" class="form-control" name="display_name" placeholder="<?= $escape(__('管理员')) ?>">
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="mail-account-customer"><?= __('客户ID') ?></label>
+                                <input id="mail-account-customer" class="form-control" name="customer_id" type="number" min="0" value="0">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="mail-account-quota"><?= __('容量 MB') ?></label>
+                                <input id="mail-account-quota" class="form-control" name="quota_mb" type="number" min="128" value="1024">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="mail-account-status"><?= __('账号状态') ?></label>
+                            <select id="mail-account-status" class="form-select" name="status">
+                                <option value="pending"><?= __('待同步') ?></option>
+                                <option value="active"><?= __('开启') ?></option>
+                                <option value="suspended"><?= __('停用') ?></option>
+                            </select>
+                            <div class="form-text"><?= __('Fake 域名会自动建议开启，真实域名默认待同步。') ?></div>
+                        </div>
+                        <button class="btn btn-primary" type="submit"><?= __('创建邮箱账号') ?></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-8">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+                        <h5 class="card-title mb-0"><?= __('域名邮箱列表管理') ?></h5>
+                        <div style="min-width: 240px;">
+                            <label class="form-label mb-1" for="mail-account-domain-filter"><?= __('按域名筛选') ?></label>
+                            <select id="mail-account-domain-filter" class="form-select form-select-sm">
+                                <option value=""><?= __('全部域名') ?></option>
+                                <?php foreach ($domains as $domain): ?>
+                                    <option value="<?= (int)$domain->getId() ?>"><?= $escape($domain->getData('domain_name')) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                            <tr>
+                                <th><?= __('邮箱') ?></th>
+                                <th><?= __('域名') ?></th>
+                                <th><?= __('客户ID') ?></th>
+                                <th><?= __('名称') ?></th>
+                                <th><?= __('容量') ?></th>
+                                <th><?= __('状态') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody id="mail-account-table-body">
+                            <?php if ($accounts === []): ?>
+                                <tr><td colspan="6" class="text-muted"><?= __('暂无邮箱账号') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach ($accounts as $account): ?>
+                                    <?php
+                                    $domainId = (int)$account->getData('domain_id');
+                                    $domainInfo = $domainLookup[$domainId] ?? [];
+                                    $status = (string)$account->getData('status');
+                                    ?>
+                                    <tr data-domain-id="<?= $domainId ?>">
+                                        <td>
+                                            <div class="mail-table-domain"><?= $escape($account->getData('email')) ?></div>
+                                            <div class="mail-muted-line">#<?= (int)$account->getId() ?></div>
+                                        </td>
+                                        <td><?= $escape($domainInfo['domain_name'] ?? ('#' . $domainId)) ?></td>
+                                        <td><?= (int)$account->getData('customer_id') ?></td>
+                                        <td><?= $escape($account->getData('display_name')) ?></td>
+                                        <td><?= (int)$account->getData('quota_mb') ?> MB</td>
+                                        <td><span class="badge <?= $statusBadge($status) ?>"><?= $escape($status) ?></span></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><?= __('DNS 检测') ?></h5>
+                    <form class="row gy-2 gx-2 align-items-end" method="get" action="<?= $this->getBackendUrl('weline_mail/backend/index') ?>">
+                        <div class="col-md-5">
+                            <label class="form-label"><?= __('邮箱域名') ?></label>
+                            <input class="form-control" name="domain" value="<?= $escape($dnsResult['domain'] ?? '') ?>" placeholder="example.com">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label"><?= __('邮件主机名') ?></label>
+                            <input class="form-control" name="hostname" value="<?= $escape($dnsResult['hostname'] ?? '') ?>" placeholder="mail.example.com">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-secondary w-100" type="submit"><?= __('检测') ?></button>
+                        </div>
+                    </form>
+                    <?php if ($dnsResult): ?>
+                        <div class="table-responsive mt-3">
+                            <table class="table table-sm">
+                                <thead>
+                                <tr>
+                                    <th><?= __('类型') ?></th>
+                                    <th><?= __('主机') ?></th>
+                                    <th><?= __('建议值') ?></th>
+                                    <th><?= __('状态') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($dnsResult['records'] as $record): ?>
+                                    <tr>
+                                        <td><?= $escape($record['type'] ?? '') ?></td>
+                                        <td><?= $escape($record['host'] ?? '') ?></td>
+                                        <td style="white-space: normal;"><?= $escape($record['value'] ?? '') ?></td>
+                                        <td><?= !empty($record['ok']) ? __('存在') : __('未检测到') ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><?= __('客户端配置') ?></h5>
+                    <?php if ($clientSettings): ?>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <tbody>
+                                <tr><th>SMTP</th><td><?= $escape($clientSettings['smtp']['host'] ?? '') ?>:<?= (int)($clientSettings['smtp']['port'] ?? 0) ?> <?= $escape($clientSettings['smtp']['security'] ?? '') ?></td></tr>
+                                <tr><th>IMAP</th><td><?= $escape($clientSettings['imap']['host'] ?? '') ?>:<?= (int)($clientSettings['imap']['port'] ?? 0) ?> <?= $escape($clientSettings['imap']['security'] ?? '') ?></td></tr>
+                                <tr><th>POP3</th><td><?= $escape($clientSettings['pop3']['host'] ?? '') ?>:<?= (int)($clientSettings['pop3']['port'] ?? 0) ?> <?= $escape($clientSettings['pop3']['security'] ?? '') ?></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <p class="text-muted"><?= __('输入域名和邮件主机名后显示客户端连接配置。') ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><?= __('Fake 邮件审计') ?></h5>
+                    <p class="text-muted"><?= __('显示最近 20 封 fake 模式写入的收件箱和发件箱邮件，用于后台冒烟核对。') ?></p>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th><?= __('账号ID') ?></th>
+                                <th><?= __('邮件箱') ?></th>
+                                <th><?= __('发件人') ?></th>
+                                <th><?= __('收件人') ?></th>
+                                <th><?= __('主题') ?></th>
+                                <th><?= __('投递状态') ?></th>
+                                <th><?= __('时间') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php if ($messages === []): ?>
+                                <tr><td colspan="8" class="text-muted"><?= __('暂无 fake 邮件记录') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach ($messages as $message): ?>
+                                    <tr>
+                                        <td><?= (int)$message->getId() ?></td>
+                                        <td><?= (int)$message->getData('account_id') ?></td>
+                                        <td><?= $escape($message->getData('folder')) ?></td>
+                                        <td><?= $escape($message->getData('from_email')) ?></td>
+                                        <td><?= $escape($message->getData('to_email')) ?></td>
+                                        <td><?= $escape($message->getData('subject')) ?></td>
+                                        <td><?= $escape($message->getData('delivery_status')) ?></td>
+                                        <td><?= $escape($message->getData('created_at')) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var domainOptions = <?= $domainOptionsJson ?>;
+    var searchInput = document.getElementById('mail-domain-search');
+    var hiddenInput = document.getElementById('mail-domain-hidden');
+    var resultBox = document.getElementById('mail-domain-results');
+    var selectedName = document.getElementById('mail-selected-domain-name');
+    var selectedMeta = document.getElementById('mail-selected-domain-meta');
+    var hostInput = document.getElementById('mail-domain-hostname');
+    var engineSelect = document.getElementById('mail-domain-engine');
+    var domainSubmit = document.getElementById('mail-domain-submit');
+    var accountDomainSelect = document.getElementById('mail-account-domain-select');
+    var accountDomainSuffix = document.getElementById('mail-account-domain-suffix');
+    var accountQuota = document.getElementById('mail-account-quota');
+    var accountStatus = document.getElementById('mail-account-status');
+    var accountFilter = document.getElementById('mail-account-domain-filter');
+
+    function normalize(value) {
+        return String(value || '').trim().toLowerCase();
+    }
+
+    function isFakeDomain(domain) {
+        return domain.endsWith('.test') || domain.endsWith('.invalid');
+    }
+
+    function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, function (char) {
+            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[char];
+        });
+    }
+
+    function renderDomainOptions() {
+        var query = normalize(searchInput.value);
+        var filtered = domainOptions.filter(function (item) {
+            if (!query) {
+                return true;
+            }
+            return normalize(item.domain).indexOf(query) !== -1
+                || normalize(item.source_domain).indexOf(query) !== -1
+                || normalize(item.source).indexOf(query) !== -1;
+        }).slice(0, 14);
+
+        if (!filtered.length) {
+            resultBox.innerHTML = '<div class="p-3 text-muted"><?= $escape(__('暂无匹配域名，可输入 .test / .invalid 域名做 Fake 冒烟')) ?></div>';
+            return;
+        }
+
+        resultBox.innerHTML = filtered.map(function (item) {
+            var created = item.is_created ? '<span class="badge bg-success ms-2"><?= $escape(__('已开通')) ?></span>' : '';
+            var sourceDomain = item.source_domain && item.source_domain !== item.domain
+                ? '<span class="text-muted ms-2">' + escapeHtml(item.source_domain) + '</span>'
+                : '';
+            var accountText = item.is_created
+                ? '<?= $escape(__('账号数')) ?> ' + Number(item.account_count || 0)
+                : '<?= $escape(__('未开通')) ?>';
+            return '<button type="button" class="mail-domain-option" data-domain="' + escapeHtml(item.domain) + '">'
+                + '<div><span class="mail-domain-name">' + escapeHtml(item.domain) + '</span>' + created + sourceDomain + '</div>'
+                + '<div class="mail-muted-line">' + escapeHtml(item.source || '') + ' · ' + escapeHtml(item.website_status || '') + ' · ' + accountText + '</div>'
+                + '</button>';
+        }).join('');
+    }
+
+    function findDomainOption(domain) {
+        domain = normalize(domain);
+        for (var i = 0; i < domainOptions.length; i++) {
+            if (normalize(domainOptions[i].domain) === domain) {
+                return domainOptions[i];
+            }
+        }
+        return null;
+    }
+
+    function selectDomain(domain) {
+        domain = normalize(domain);
+        var option = findDomainOption(domain);
+        hiddenInput.value = domain;
+        searchInput.value = domain;
+        if (!hostInput.value || hostInput.dataset.auto === '1') {
+            hostInput.value = domain ? 'mail.' + domain : '';
+            hostInput.dataset.auto = '1';
+        }
+        if (domain) {
+            engineSelect.value = isFakeDomain(domain) ? 'fake' : 'stalwart';
+        }
+        if (option) {
+            selectedName.textContent = option.domain;
+            selectedMeta.textContent = (option.source || '') + (option.is_created ? ' · <?= $escape(__('已开通')) ?>' : ' · <?= $escape(__('可开通')) ?>');
+            domainSubmit.disabled = !!option.is_created;
+        } else {
+            selectedName.textContent = domain || '<?= $escape(__('尚未选择域名')) ?>';
+            selectedMeta.textContent = domain ? '<?= $escape(__('手动测试域名')) ?>' : '<?= $escape(__('请搜索并选择一个域名')) ?>';
+            domainSubmit.disabled = false;
+        }
+        Array.prototype.forEach.call(resultBox.querySelectorAll('.mail-domain-option'), function (button) {
+            button.classList.toggle('is-selected', normalize(button.getAttribute('data-domain')) === domain);
+        });
+    }
+
+    if (searchInput && resultBox) {
+        renderDomainOptions();
+        searchInput.addEventListener('input', function () {
+            var value = normalize(searchInput.value);
+            hiddenInput.value = value;
+            if (!hostInput.value || hostInput.dataset.auto === '1') {
+                hostInput.value = value ? 'mail.' + value : '';
+                hostInput.dataset.auto = '1';
+            }
+            if (value) {
+                var exact = findDomainOption(value);
+                if (exact) {
+                    selectDomain(value);
+                } else {
+                    selectedName.textContent = value;
+                    selectedMeta.textContent = '<?= $escape(__('手动测试域名')) ?>';
+                    domainSubmit.disabled = false;
+                }
+            }
+            renderDomainOptions();
+        });
+        resultBox.addEventListener('click', function (event) {
+            var button = event.target.closest('.mail-domain-option');
+            if (!button) {
+                return;
+            }
+            selectDomain(button.getAttribute('data-domain'));
+        });
+        hostInput.addEventListener('input', function () {
+            hostInput.dataset.auto = '0';
+        });
+        document.getElementById('mail-domain-create-form').addEventListener('submit', function () {
+            hiddenInput.value = normalize(hiddenInput.value || searchInput.value);
+        });
+    }
+
+    function syncAccountDomainDefaults() {
+        if (!accountDomainSelect) {
+            return;
+        }
+        var option = accountDomainSelect.options[accountDomainSelect.selectedIndex];
+        var domain = option ? option.getAttribute('data-domain') : '';
+        var engine = option ? option.getAttribute('data-engine') : '';
+        accountDomainSuffix.textContent = domain ? '@' + domain : '@';
+        if (option && option.getAttribute('data-quota')) {
+            accountQuota.value = option.getAttribute('data-quota');
+        }
+        if (accountStatus) {
+            accountStatus.value = engine === 'fake' ? 'active' : 'pending';
+        }
+    }
+
+    if (accountDomainSelect) {
+        accountDomainSelect.addEventListener('change', syncAccountDomainDefaults);
+        syncAccountDomainDefaults();
+    }
+
+    function filterAccountRows() {
+        if (!accountFilter) {
+            return;
+        }
+        var domainId = accountFilter.value;
+        Array.prototype.forEach.call(document.querySelectorAll('#mail-account-table-body tr[data-domain-id]'), function (row) {
+            row.classList.toggle('mail-row-hidden', domainId && row.getAttribute('data-domain-id') !== domainId);
+        });
+    }
+
+    if (accountFilter) {
+        accountFilter.addEventListener('change', filterAccountRows);
+        filterAccountRows();
+    }
+})();
+</script>

@@ -18,9 +18,9 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\Shipping\Service\DeliveryAddressService;
 
 /**
- * Geo定位观察者
+ * Location定位观察者
  * 
- * 监听Geo模块的地址更新事件，自动更新配送地址信息到session
+ * 监听Location模块的地址更新事件，自动更新配送地址信息到session
  */
 class GeoLocationObserver implements ObserverInterface
 {
@@ -38,8 +38,8 @@ class GeoLocationObserver implements ObserverInterface
     /**
      * 执行观察者逻辑
      * 
-     * 监听 Weline_Geo::address-updated 事件
-     * 当Geo模块更新地址时，自动更新配送地址信息
+     * 监听 Weline_Location::address-updated 事件
+     * 当Location模块更新地址时，自动更新配送地址信息
      * 
      * @param Event $event
      */

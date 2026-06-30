@@ -11,6 +11,10 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Event;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
+
 /**
  * 事件注册表管理
  * 管理 generated/events.php 文件的读取和写入
@@ -23,6 +27,8 @@ class EventRegistry implements EventRegistryInterface
 
     private ?array $cachedRegistry = null;
     private ?int $cachedFileMtime = null;
+    private static ?array $runtimeRegistryCache = null;
+    private static ?int $runtimeRegistryMtime = null;
     private EventScanner $scanner;
     private Config\XmlReader $xmlReader;
 
@@ -42,17 +48,32 @@ class EventRegistry implements EventRegistryInterface
      */
     public function getRegistry(bool $forceReload = false): array
     {
+        $trustRuntimeCache = $this->canTrustCachedRegistryForRuntime();
+
         // 内存缓存机制
         if (!$forceReload && $this->cachedRegistry !== null) {
+            if ($trustRuntimeCache) {
+                return $this->cachedRegistry;
+            }
             $currentMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
             if ($currentMtime === $this->cachedFileMtime) {
                 return $this->cachedRegistry;
             }
         }
 
+        if (!$forceReload && $trustRuntimeCache && self::$runtimeRegistryCache !== null) {
+            $this->cachedRegistry = self::$runtimeRegistryCache;
+            $this->cachedFileMtime = self::$runtimeRegistryMtime;
+            return self::$runtimeRegistryCache;
+        }
+
         if (!file_exists(self::REGISTRY_FILE)) {
             $this->cachedRegistry = ['events' => [], 'event_to_module' => []];
             $this->cachedFileMtime = 0;
+            if ($trustRuntimeCache) {
+                self::$runtimeRegistryCache = $this->cachedRegistry;
+                self::$runtimeRegistryMtime = 0;
+            }
             return $this->cachedRegistry;
         }
 
@@ -89,8 +110,19 @@ class EventRegistry implements EventRegistryInterface
 
         $this->cachedRegistry = $registry;
         $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+        if ($trustRuntimeCache) {
+            self::$runtimeRegistryCache = $registry;
+            self::$runtimeRegistryMtime = $this->cachedFileMtime;
+        }
 
         return $registry;
+    }
+
+    private function canTrustCachedRegistryForRuntime(): bool
+    {
+        return (\defined('WLS_MODE') && WLS_MODE)
+            || (\class_exists(\Weline\Framework\Runtime\Runtime::class)
+                && \Weline\Framework\Runtime\Runtime::isPersistent());
     }
 
     /**
@@ -102,16 +134,25 @@ class EventRegistry implements EventRegistryInterface
     public function refresh(): bool
     {
         // 扫描所有事件规约
+        RegistryProgress::log('Event scan: event.php specs started');
         $scannedData = $this->scanner->scanAllEvents();
+        RegistryProgress::count('Event spec scan', count($scannedData), 'modules with event specs');
 
         // 收集所有观察者信息
+        RegistryProgress::log('Event observer collection started');
         $observersData = $this->collectObservers();
+        RegistryProgress::count('Event observer collection', count($observersData), 'events with observers');
 
         // 组织数据结构，按事件名索引（如果发现冲突会抛出异常）
+        RegistryProgress::log('Event organize registry data');
         $registry = $this->organizeRegistryData($scannedData, $observersData);
+        RegistryProgress::count('Event registry', count($registry['events'] ?? []), 'events organized');
 
         // 扫描所有观察者并合并到事件信息中
-        $this->mergeObserversIntoRegistry($registry);
+        RegistryProgress::log('Event merge observers into registry');
+        $this->mergeObserversIntoRegistry($registry, $observersData);
+        unset($scannedData, $observersData);
+        RegistryProgress::log('Event raw scan data released');
 
         // 保存注册表
         return $this->saveRegistry($registry);
@@ -128,6 +169,7 @@ class EventRegistry implements EventRegistryInterface
     public function refreshForModules(array $moduleNames): bool
     {
         // 1. 加载现有注册表
+        RegistryProgress::log('Event incremental: loading current registry');
         $registry = $this->getRegistry(true);
         
         // 确保注册表结构完整
@@ -145,14 +187,22 @@ class EventRegistry implements EventRegistryInterface
         $this->purgeInactiveModulesFromRegistry($registry);
         
         // 2. 清除目标模块的旧数据
+        RegistryProgress::log('Event incremental: clearing modules ' . implode(', ', $moduleNames));
         $this->clearModuleData($registry, $moduleNames);
         
         // 3. 扫描目标模块的新数据
+        RegistryProgress::log('Event incremental: scanning target event specs');
         $newScannedData = $this->scanner->scanModules($moduleNames);
+        RegistryProgress::count('Event incremental spec scan', count($newScannedData), 'modules with event specs');
+        RegistryProgress::log('Event incremental: collecting target observers');
         $newObserversData = $this->collectObserversForModules($moduleNames);
+        RegistryProgress::count('Event incremental observer collection', count($newObserversData), 'events with observers');
         
         // 4. 合并新数据到注册表
+        RegistryProgress::log('Event incremental: merging scanned data');
         $this->mergeScannedDataIntoRegistry($registry, $newScannedData, $newObserversData);
+        unset($newScannedData, $newObserversData);
+        RegistryProgress::log('Event incremental raw scan data released');
         
         // 5. 重新排序所有观察者
         foreach ($registry['events'] as &$eventInfo) {
@@ -174,13 +224,21 @@ class EventRegistry implements EventRegistryInterface
      */
     private function purgeInactiveModulesFromRegistry(array &$registry): void
     {
-        $env = \Weline\Framework\App\Env::getInstance();
+        $env = Env::getInstance();
 
         foreach ($registry['events'] as $eventName => $eventInfo) {
             $ownerModule = $eventInfo['module'] ?? '';
-            if ($ownerModule !== '' && !$env->getModuleStatus($ownerModule)) {
+            if ($ownerModule !== '' && !RegistryModulePresence::isActivePresent((string)$ownerModule, $env)) {
                 unset($registry['events'][$eventName], $registry['event_to_module'][$eventName]);
                 continue;
+            }
+
+            if (isset($eventInfo['modules']) && is_array($eventInfo['modules'])) {
+                foreach (array_keys($eventInfo['modules']) as $moduleName) {
+                    if (!RegistryModulePresence::isActivePresent((string)$moduleName, $env)) {
+                        unset($registry['events'][$eventName]['modules'][$moduleName]);
+                    }
+                }
             }
 
             if (!isset($eventInfo['observers']) || !is_array($eventInfo['observers'])) {
@@ -189,13 +247,13 @@ class EventRegistry implements EventRegistryInterface
 
             $registry['events'][$eventName]['observers'] = array_values(array_filter(
                 $eventInfo['observers'],
-                static fn($observer): bool => $env->getModuleStatus((string)($observer['module'] ?? ''))
+                fn($observer): bool => $this->isObserverConfigUsable($observer, $env)
             ));
         }
 
         foreach ($registry['dynamic_patterns'] as $pattern => $patternInfo) {
             $ownerModule = $patternInfo['module'] ?? '';
-            if ($ownerModule !== '' && !$env->getModuleStatus($ownerModule)) {
+            if ($ownerModule !== '' && !RegistryModulePresence::isActivePresent((string)$ownerModule, $env)) {
                 unset($registry['dynamic_patterns'][$pattern]);
                 continue;
             }
@@ -206,9 +264,32 @@ class EventRegistry implements EventRegistryInterface
 
             $registry['dynamic_patterns'][$pattern]['observers'] = array_values(array_filter(
                 $patternInfo['observers'],
-                static fn($observer): bool => $env->getModuleStatus((string)($observer['module'] ?? ''))
+                fn($observer): bool => $this->isObserverConfigUsable($observer, $env)
             ));
         }
+    }
+
+    private function isObserverConfigUsable(mixed $observer, Env $env): bool
+    {
+        if (!is_array($observer)) {
+            return false;
+        }
+
+        $moduleName = (string)($observer['module'] ?? '');
+        if (!RegistryModulePresence::isActivePresent($moduleName, $env)) {
+            return false;
+        }
+
+        $instance = (string)($observer['instance'] ?? '');
+        if (!RegistryModulePresence::classExists($instance)) {
+            w_log_warning(__('事件注册表跳过不存在的观察者类：%{1}（模块：%{2}）', [
+                $instance,
+                $moduleName,
+            ]), [], 'event_registry.log');
+            return false;
+        }
+
+        return true;
     }
     
     /**
@@ -263,10 +344,15 @@ class EventRegistry implements EventRegistryInterface
         $observersData = [];
         
         try {
+            RegistryProgress::log('Event observer XML read started');
             $eventObserversList = $this->xmlReader->read();
-            $env = \Weline\Framework\App\Env::getInstance();
+            RegistryProgress::count('Event observer XML read', count($eventObserversList), 'config files');
+            $env = Env::getInstance();
+            $configIndex = 0;
+            $totalConfigs = count($eventObserversList);
             
             foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
+                $configIndex++;
                 $moduleName = explode('::', $module_and_file)[0] ?? '';
                 
                 // 只处理目标模块
@@ -275,9 +361,11 @@ class EventRegistry implements EventRegistryInterface
                 }
                 
                 // 检查模块状态
-                if (!$env->getModuleStatus($moduleName)) {
+                if (!RegistryModulePresence::isActivePresent($moduleName, $env)) {
+                    RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'skip inactive');
                     continue;
                 }
+                RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'collect');
                 
                 foreach ($moduleEventObservers as $eventName => $eventObservers) {
                     if (!isset($observersData[$eventName])) {
@@ -286,6 +374,9 @@ class EventRegistry implements EventRegistryInterface
                     foreach ($eventObservers as $observer) {
                         $observer['module'] = $moduleName;
                         $observer['module_status'] = true;
+                        if (!$this->isObserverConfigUsable($observer, $env)) {
+                            continue;
+                        }
                         $observersData[$eventName][] = $observer;
                     }
                 }
@@ -317,6 +408,8 @@ class EventRegistry implements EventRegistryInterface
      */
     private function mergeScannedDataIntoRegistry(array &$registry, array $scannedData, array $observersData): void
     {
+        $env = Env::getInstance();
+
         foreach ($scannedData as $moduleName => $events) {
             foreach ($events as $eventName => $eventInfo) {
                 // 检查是否是动态事件模式
@@ -405,6 +498,9 @@ class EventRegistry implements EventRegistryInterface
             if (isset($registry['events'][$eventName])) {
                 // 去重后添加
                 foreach ($observers as $observer) {
+                    if (!$this->isObserverConfigUsable($observer, $env)) {
+                        continue;
+                    }
                     $observerKey = ($observer['instance'] ?? '') . '::' . ($observer['name'] ?? '');
                     $isDuplicate = false;
                     foreach ($registry['events'][$eventName]['observers'] as $existingObserver) {
@@ -434,25 +530,32 @@ class EventRegistry implements EventRegistryInterface
         try {
             /** @var \Weline\Framework\Event\Config\XmlReader $xmlReader */
             $xmlReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\Config\XmlReader::class);
+            RegistryProgress::log('Event observer XML read started');
             $eventObserversList = $xmlReader->read();
+            RegistryProgress::count('Event observer XML read', count($eventObserversList), 'config files');
             
-            $env = \Weline\Framework\App\Env::getInstance();
+            $env = Env::getInstance();
             $moduleList = $env->getModuleList();
             // 首次安装时 modules.php 可能尚未生成，moduleList 为空，此时不过滤观察者，否则 register_installer 等观察者会全部被跳过，导致 Theme/I18n Handle 不存在
             $skipByStatus = !empty($moduleList);
+            $configIndex = 0;
+            $totalConfigs = count($eventObserversList);
             
             // 合并所有模块的观察者
             foreach ($eventObserversList as $module_and_file => $moduleEventObservers) {
+                $configIndex++;
                 // 提取模块名并检查模块状态
                 $moduleName = explode('::', $module_and_file)[0] ?? '';
                 if (empty($moduleName)) {
                     continue;
                 }
-                if ($skipByStatus && !$env->getModuleStatus($moduleName)) {
+                if ($skipByStatus && !RegistryModulePresence::isActivePresent($moduleName, $env)) {
+                    RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'skip inactive');
                     // 模块列表已存在时，跳过禁用的模块
                     continue;
                 }
                 
+                RegistryProgress::module('Event observer config', $configIndex, $totalConfigs, (string)$moduleName, 'collect');
                 foreach ($moduleEventObservers as $eventName => $eventObservers) {
                     if (!isset($observersData[$eventName])) {
                         $observersData[$eventName] = [];
@@ -642,18 +745,18 @@ class EventRegistry implements EventRegistryInterface
      * @param array $registry 注册表数据（引用传递，会修改原数组）
      * @return void
      */
-    private function mergeObserversIntoRegistry(array &$registry): void
+    private function mergeObserversIntoRegistry(array &$registry, ?array $observersData = null): void
     {
         // 扫描所有观察者
-        $observersData = $this->xmlReader->read();
+        $observersData ??= $this->xmlReader->read();
         
-        $env = \Weline\Framework\App\Env::getInstance();
+        $env = Env::getInstance();
         
         // 合并所有观察者到对应的事件中
         foreach ($observersData as $module_and_file => $eventObservers) {
             // 提取模块名并检查模块状态
             $moduleName = explode('::', $module_and_file)[0] ?? '';
-            if (empty($moduleName) || !$env->getModuleStatus($moduleName)) {
+            if (empty($moduleName) || !RegistryModulePresence::isActivePresent($moduleName, $env)) {
                 // 跳过禁用的模块
                 continue;
             }
@@ -730,6 +833,7 @@ class EventRegistry implements EventRegistryInterface
      */
     public function saveRegistry(array $registry): bool
     {
+        RegistryProgress::log('Event save registry: generated/events.php');
         $content = "<?php return " . var_export($registry, true) . ";\n";
 
         // 确保目录存在
@@ -744,13 +848,17 @@ class EventRegistry implements EventRegistryInterface
             // 更新实例缓存
             $this->cachedRegistry = $registry;
             $this->cachedFileMtime = file_exists(self::REGISTRY_FILE) ? filemtime(self::REGISTRY_FILE) : 0;
+            self::$runtimeRegistryCache = $registry;
+            self::$runtimeRegistryMtime = $this->cachedFileMtime;
             
             // 清除 EventData 的静态缓存，确保其他使用 EventData 的代码能立即看到新生成的文件
             EventData::clearCache();
+            RegistryProgress::log('Event save registry finished');
             
             return true;
         }
 
+        RegistryProgress::log('Event save registry failed');
         return false;
     }
 
@@ -887,6 +995,12 @@ class EventRegistry implements EventRegistryInterface
      *
      * @return array
      */
+    public function clearMemoryCache(): void
+    {
+        $this->cachedRegistry = null;
+        $this->cachedFileMtime = null;
+    }
+
     public function getEvents(): array
     {
         $registry = $this->getRegistry();

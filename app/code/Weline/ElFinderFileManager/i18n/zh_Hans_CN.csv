@@ -1,2 +1,5 @@
-﻿main.js无法加载！请确保你已通过Composer安装了studio-42/elfinder,main.js无法加载！请确保你已通过Composer安装了studio-42/elfinder
-main.js无法加载！请检查文件权限.,main.js无法加载！请检查文件权限.
+﻿"ElFinder main.js 加载失败，请确认已通过 Composer 安装 studio-42/elfinder。","ElFinder main.js 加载失败，请确认已通过 Composer 安装 studio-42/elfinder。"
+"ElFinder main.js 生成失败，请检查文件权限。","ElFinder main.js 生成失败，请检查文件权限。"
+"ElFinder 依赖加载失败，请通过 Composer 安装依赖后重试。","ElFinder 依赖加载失败，请通过 Composer 安装依赖后重试。"
+前台文件管理器未启用。,前台文件管理器未启用。
+请先登录后再访问文件管理器。,请先登录后再访问文件管理器。

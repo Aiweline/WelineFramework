@@ -26,6 +26,7 @@ final class ObjectManagerMemoryPressureCompactionTest extends TestCase
 
         ObjectManager::parserClass(ObjectManagerMemoryPressureCompactionFixture::class);
         ObjectManager::isStaticClass(ObjectManagerMemoryPressureCompactionFixture::class);
+        ObjectManager::getInstance(ObjectManagerMemoryPressureCompactionFixture::class, [], false);
 
         $getMethodParams = new \ReflectionMethod(ObjectManager::class, 'getMethodParams');
         $getMethodParams->setAccessible(true);

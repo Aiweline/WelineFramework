@@ -1,0 +1,9 @@
+{
+  "release_id": "codex-local-fixture",
+  "deploy_version": "codex-local-fixture",
+  "deploy_mode": "dev",
+  "deploy_mode_source": "env.php:system.deploy",
+  "appstore_environment": "local",
+  "appstore_platform_url": "https://app.weline.test:9523",
+  "appstore_platform_url_source": "local_default"
+}

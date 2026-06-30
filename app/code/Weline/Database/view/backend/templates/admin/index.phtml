@@ -1,153 +1,823 @@
-<div class="w-database-admin">
-    <h2>{{title}}</h2>
+<?php
+/**
+ * Database admin backend content.
+ *
+ * The backend layout owns the page title, breadcrumbs, and system messages.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
 
-    <div class="w-db-toolbar">
-        <label>
-            <lang>数据库</lang>
-            <select id="db-select"></select>
-        </label>
-        <label>
-            <lang>数据表</lang>
-            <select id="table-select"></select>
-        </label>
-        <button id="load-table">
-            <lang>加载数据</lang>
-        </button>
-        <button id="load-meta">
-            <lang>查看结构</lang>
-        </button>
-    </div>
+$activeTab = (string)($active_tab ?? $this->getData('active_tab') ?? 'browse');
+$allowedTabs = ['browse', 'sql', 'import', 'audit'];
+if (!in_array($activeTab, $allowedTabs, true)) {
+    $activeTab = 'browse';
+}
 
-    <div class="w-db-section">
-        <h3><lang>行数据</lang></h3>
-        <pre id="rows-panel"><lang>请先选择数据库与数据表</lang></pre>
-    </div>
+$defaultDatabase = (string)($default_database ?? $this->getData('default_database') ?? '');
+$initialDatabases = $databases ?? $this->getData('databases') ?? [];
+$initialDatabases = is_array($initialDatabases) ? array_values(array_filter(
+    array_map(static fn(mixed $value): string => (string)$value, $initialDatabases),
+    static fn(string $value): bool => $value !== ''
+)) : [];
+if ($defaultDatabase === '' && $initialDatabases !== []) {
+    $defaultDatabase = $initialDatabases[0];
+}
+if ($defaultDatabase !== '' && !in_array($defaultDatabase, $initialDatabases, true)) {
+    array_unshift($initialDatabases, $defaultDatabase);
+}
+$initialTables = $tables ?? $this->getData('tables') ?? [];
+$initialTables = is_array($initialTables) ? array_values(array_filter(
+    array_map(static fn(mixed $value): string => (string)$value, $initialTables),
+    static fn(string $value): bool => $value !== ''
+)) : [];
+$auditLogs = $audit_logs ?? $this->getData('audit_logs') ?? [];
+$auditLogs = is_array($auditLogs) ? $auditLogs : [];
+$auditJson = json_encode($auditLogs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+$auditJson = $auditJson === false ? '[]' : $auditJson;
 
-    <div class="w-db-section">
-        <h3><lang>结构信息</lang></h3>
-        <pre id="meta-panel"><lang>点击“查看结构”加载字段和索引</lang></pre>
-    </div>
+$h = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$navClass = static fn(string $tab): string => 'nav-link' . ($activeTab === $tab ? ' active' : '');
+$paneClass = static fn(string $tab): string => 'tab-pane fade' . ($activeTab === $tab ? ' show active' : '');
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
-    <div class="w-db-section">
-        <h3><lang>SQL 控制台（写操作需确认）</lang></h3>
-        <textarea id="sql-input" rows="8" style="width:100%" placeholder="SELECT * FROM table_name LIMIT 20;"></textarea>
-        <div class="w-db-toolbar">
-            <label><input id="sql-confirmed" type="checkbox"/> <lang>确认执行写操作</lang></label>
-            <label><lang>高危确认短语</lang> <input id="sql-confirm-phrase" value=""/></label>
-            <button id="sql-run"><lang>执行 SQL</lang></button>
+$endpoints = [
+    'databases' => $this->getBackendUrl('database/backend/admin/databases'),
+    'tables' => $this->getBackendUrl('database/backend/admin/tables'),
+    'rows' => $this->getBackendUrl('database/backend/admin/rows'),
+    'tableMeta' => $this->getBackendUrl('database/backend/admin/table-meta'),
+    'executeSql' => $this->getBackendUrl('database/backend/admin/execute-sql'),
+    'prepareSqlImport' => $this->getBackendUrl('database/backend/admin/prepare-sql-import'),
+    'downloadSqlBackup' => $this->getBackendUrl('database/backend/admin/download-sql-backup'),
+    'executeSqlImport' => $this->getBackendUrl('database/backend/admin/execute-sql-import'),
+];
+
+$texts = [
+    'apiUnavailable' => (string)__('主题请求模块未加载，请刷新页面后重试'),
+    'chooseDatabaseTable' => (string)__('请先选择数据库与数据表'),
+    'chooseSqlFile' => (string)__('请选择 .sql 文件'),
+    'emptyRows' => (string)__('当前数据表暂无可显示数据'),
+    'emptyTables' => (string)__('当前数据库没有可浏览的数据表'),
+    'loading' => (string)__('加载中...'),
+    'loadFailed' => (string)__('加载失败'),
+    'loadRowsSuccess' => (string)__('行数据已加载'),
+    'loadMetaSuccess' => (string)__('结构信息已加载'),
+    'prepareImporting' => (string)__('正在上传 SQL 并生成备份...'),
+    'downloadBackupPrefix' => (string)__('下载备份：'),
+    'uploadSqlFirst' => (string)__('请先上传 SQL 并下载备份'),
+    'executeImporting' => (string)__('正在执行 SQL 导入...'),
+    'sqlExecuting' => (string)__('正在执行 SQL...'),
+    'success' => (string)__('操作成功'),
+    'failed' => (string)__('操作失败'),
+    'totalRows' => (string)__('总行数'),
+    'currentRows' => (string)__('当前显示'),
+    'nullValue' => 'NULL',
+];
+?>
+
+<div class="weline-database-admin" data-default-database="<?= $h($defaultDatabase) ?>">
+    <div class="row g-3 mb-3">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border shadow-sm h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="w-db-summary-icon bg-soft-primary text-primary me-3">
+                        <i class="mdi mdi-database-search fs-4"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted mb-1"><lang>数据库</lang></p>
+                        <h4 class="mb-0" id="db-count"><?= $initialDatabases !== [] ? count($initialDatabases) : '-' ?></h4>
+                    </div>
+                </div>
+            </div>
         </div>
-        <pre id="sql-panel"></pre>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border shadow-sm h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="w-db-summary-icon bg-soft-success text-success me-3">
+                        <i class="mdi mdi-table fs-4"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted mb-1"><lang>当前数据表</lang></p>
+                        <h4 class="mb-0" id="table-count"><?= $initialTables !== [] ? count($initialTables) : '-' ?></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border shadow-sm h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="w-db-summary-icon bg-soft-info text-info me-3">
+                        <i class="mdi mdi-database-marker fs-4"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-muted mb-1"><lang>已选数据库</lang></p>
+                        <h4 class="mb-0 text-truncate" id="active-database"><?= $defaultDatabase !== '' ? $h($defaultDatabase) : '-' ?></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border shadow-sm h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="w-db-summary-icon bg-soft-warning text-warning me-3">
+                        <i class="mdi mdi-shield-search fs-4"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted mb-1"><lang>审计日志</lang></p>
+                        <h4 class="mb-0"><?= count($auditLogs) ?></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="w-db-section">
-        <h3><lang>审计日志（最近 50 条）</lang></h3>
-        <pre><?=json_encode($audit_logs ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)?></pre>
+    <ul class="nav nav-tabs weline-database-admin__tabs mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="<?= $navClass('browse') ?>" data-bs-toggle="tab" data-bs-target="#w-db-tab-browse" type="button" role="tab">
+                <i class="mdi mdi-table-search me-1"></i><lang>数据浏览</lang>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="<?= $navClass('sql') ?>" data-bs-toggle="tab" data-bs-target="#w-db-tab-sql" type="button" role="tab">
+                <i class="mdi mdi-console-line me-1"></i><lang>SQL 控制台</lang>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="<?= $navClass('import') ?>" data-bs-toggle="tab" data-bs-target="#w-db-tab-import" type="button" role="tab">
+                <i class="mdi mdi-database-import-outline me-1"></i><lang>SQL 导入</lang>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="<?= $navClass('audit') ?>" data-bs-toggle="tab" data-bs-target="#w-db-tab-audit" type="button" role="tab">
+                <i class="mdi mdi-clipboard-text-clock-outline me-1"></i><lang>审计日志</lang>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="<?= $paneClass('browse') ?>" id="w-db-tab-browse" role="tabpanel">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row gy-3 gx-3 align-items-end">
+                        <div class="col-xl-4 col-md-6">
+                            <label class="form-label text-muted" for="db-select"><lang>数据库</lang></label>
+                            <select class="form-select" id="db-select">
+                                <?php foreach ($initialDatabases as $database): ?>
+                                    <option value="<?= $h($database) ?>"<?= $database === $defaultDatabase ? ' selected' : '' ?>><?= $h($database) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-xl-4 col-md-6">
+                            <label class="form-label text-muted" for="table-select"><lang>数据表</lang></label>
+                            <select class="form-select" id="table-select">
+                                <?php foreach ($initialTables as $table): ?>
+                                    <option value="<?= $h($table) ?>"><?= $h($table) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-xl-4">
+                            <div class="d-flex flex-wrap gap-2 justify-content-xl-end">
+                                <button class="btn btn-primary" id="load-table" type="button">
+                                    <i class="mdi mdi-table-eye me-1"></i><lang>加载数据</lang>
+                                </button>
+                                <button class="btn btn-soft-secondary" id="load-meta" type="button">
+                                    <i class="mdi mdi-table-cog me-1"></i><lang>查看结构</lang>
+                                </button>
+                                <button class="btn btn-outline-secondary" id="database-refresh" type="button" title="<?= $h(__('刷新')) ?>">
+                                    <i class="mdi mdi-refresh"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-xl-8">
+                    <div class="card h-100">
+                        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                            <div>
+                                <h5 class="card-title mb-1"><lang>行数据</lang></h5>
+                                <p class="text-muted mb-0"><lang>默认读取前 20 行，可用于快速检查表数据。</lang></p>
+                            </div>
+                            <span class="badge bg-light text-dark" id="rows-summary">-</span>
+                        </div>
+                        <div class="card-body">
+                            <div id="rows-panel" class="w-db-table-panel">
+                                <div class="w-db-empty-state">
+                                    <i class="mdi mdi-table-search"></i>
+                                    <span><lang>请先选择数据库与数据表</lang></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-1"><lang>结构信息</lang></h5>
+                            <p class="text-muted mb-0"><lang>字段、索引、外键和建表语句。</lang></p>
+                        </div>
+                        <div class="card-body">
+                            <pre id="meta-panel" class="w-db-json-panel mb-0"><lang>点击“查看结构”加载字段和索引</lang></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="<?= $paneClass('sql') ?>" id="w-db-tab-sql" role="tabpanel">
+            <div class="row g-3">
+                <div class="col-xl-7">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-1"><lang>SQL 控制台</lang></h5>
+                            <p class="text-muted mb-0"><lang>SELECT 可直接执行；写操作需要确认。</lang></p>
+                        </div>
+                        <div class="card-body">
+                            <label class="form-label text-muted" for="sql-input"><lang>SQL 语句</lang></label>
+                            <textarea id="sql-input" class="form-control font-monospace" rows="10" placeholder="SELECT * FROM table_name LIMIT 20;"></textarea>
+                            <div class="row gy-3 gx-3 align-items-end mt-1">
+                                <div class="col-lg-4">
+                                    <div class="form-check mt-4">
+                                        <input id="sql-confirmed" class="form-check-input" type="checkbox"/>
+                                        <label class="form-check-label" for="sql-confirmed"><lang>确认执行写操作</lang></label>
+                                    </div>
+                                </div>
+                                <div class="col-lg-5">
+                                    <label class="form-label text-muted" for="sql-confirm-phrase"><lang>高危确认短语</lang></label>
+                                    <input id="sql-confirm-phrase" class="form-control" value="" placeholder="I_UNDERSTAND_THE_RISK"/>
+                                </div>
+                                <div class="col-lg-3 text-lg-end">
+                                    <button id="sql-run" class="btn btn-danger w-100" type="button">
+                                        <i class="mdi mdi-play-network-outline me-1"></i><lang>执行 SQL</lang>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="alert alert-warning border-0 mt-3 mb-0">
+                                <i class="mdi mdi-alert-outline me-1"></i>
+                                <lang>写操作会进入审计日志；高危操作必须输入确认短语。</lang>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-5">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-1"><lang>执行结果</lang></h5>
+                            <p class="text-muted mb-0"><lang>返回分析、影响行数与查询结果。</lang></p>
+                        </div>
+                        <div class="card-body">
+                            <pre id="sql-panel" class="w-db-json-panel mb-0"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="<?= $paneClass('import') ?>" id="w-db-tab-import" role="tabpanel">
+            <div class="row g-3">
+                <div class="col-xl-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-1"><lang>SQL 文件导入</lang></h5>
+                            <p class="text-muted mb-0"><lang>系统会先生成受影响数据表备份，再允许导入。</lang></p>
+                        </div>
+                        <div class="card-body">
+                            <form id="sql-import-form" class="needs-validation" novalidate>
+                                <label class="form-label text-muted" for="sql-import-file"><lang>SQL 文件</lang></label>
+                                <input id="sql-import-file" class="form-control" name="sql_file" type="file" accept=".sql,application/sql,text/plain"/>
+                                <div class="d-flex flex-wrap gap-2 mt-3">
+                                    <button id="sql-import-prepare" class="btn btn-primary" type="submit">
+                                        <i class="mdi mdi-cloud-upload-outline me-1"></i><lang>上传并生成备份</lang>
+                                    </button>
+                                    <a id="sql-import-backup-link" class="btn btn-outline-primary is-hidden" href="#" target="_blank" rel="noopener">
+                                        <i class="mdi mdi-download me-1"></i><lang>下载备份</lang>
+                                    </a>
+                                </div>
+                            </form>
+
+                            <hr class="my-4"/>
+
+                            <div class="form-check mb-3">
+                                <input id="sql-import-backup-confirmed" class="form-check-input" type="checkbox"/>
+                                <label class="form-check-label" for="sql-import-backup-confirmed"><lang>已下载并保存备份文件</lang></label>
+                            </div>
+                            <label class="form-label text-muted" for="sql-import-confirm-phrase"><lang>导入确认短语</lang></label>
+                            <input id="sql-import-confirm-phrase" class="form-control" value="" placeholder="I_UNDERSTAND_SQL_IMPORT"/>
+                            <button id="sql-import-execute" class="btn btn-danger w-100 mt-3" type="button" disabled>
+                                <i class="mdi mdi-database-arrow-up-outline me-1"></i><lang>执行 SQL 导入</lang>
+                            </button>
+                            <iframe id="sql-import-download-frame" class="is-hidden" title="sql import backup download"></iframe>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h5 class="card-title mb-1"><lang>导入检查结果</lang></h5>
+                            <p class="text-muted mb-0"><lang>展示备份文件、目标表和安全检查结果。</lang></p>
+                        </div>
+                        <div class="card-body">
+                            <pre id="sql-import-panel" class="w-db-json-panel mb-0"><lang>请选择 .sql 文件上传，系统会先备份受影响数据表并下载备份。</lang></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="<?= $paneClass('audit') ?>" id="w-db-tab-audit" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div>
+                        <h5 class="card-title mb-1"><lang>审计日志</lang></h5>
+                        <p class="text-muted mb-0"><lang>最近 50 条数据库后台操作记录。</lang></p>
+                    </div>
+                    <span class="badge bg-light text-dark"><?= count($auditLogs) ?></span>
+                </div>
+                <div class="card-body">
+                    <pre class="w-db-json-panel mb-0"><?= $h($auditJson) ?></pre>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
-<theme:js>
-(() => {
-  const dbSelect = document.getElementById('db-select');
-  const tableSelect = document.getElementById('table-select');
-  const rowsPanel = document.getElementById('rows-panel');
-  const metaPanel = document.getElementById('meta-panel');
-  const sqlPanel = document.getElementById('sql-panel');
-  const sqlInput = document.getElementById('sql-input');
+<script>
+(function () {
+    'use strict';
 
-  const fetchJson = async (url, options = {}) => {
-    const response = await fetch(url, options);
-    const text = await response.text();
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      return { success: false, message: text };
+    var root = document.querySelector('.weline-database-admin');
+    if (!root) {
+        return;
     }
-  };
 
-  const loadDatabases = async () => {
-    const data = await fetchJson('@backend-url(database/backend/admin/databases)');
-    dbSelect.innerHTML = '';
-    (data.data || []).forEach(db => {
-      const option = document.createElement('option');
-      option.value = db;
-      option.textContent = db;
-      dbSelect.appendChild(option);
-    });
-    if (dbSelect.value) {
-      loadTables(dbSelect.value);
+    var endpoints = <?= json_encode($endpoints, $jsonFlags) ?>;
+    var text = <?= json_encode($texts, $jsonFlags) ?>;
+    var currentSqlImportToken = '';
+    var currentSqlImportConfirmPhrase = 'I_UNDERSTAND_SQL_IMPORT';
+
+    var dbSelect = document.getElementById('db-select');
+    var tableSelect = document.getElementById('table-select');
+    var rowsPanel = document.getElementById('rows-panel');
+    var rowsSummary = document.getElementById('rows-summary');
+    var metaPanel = document.getElementById('meta-panel');
+    var sqlPanel = document.getElementById('sql-panel');
+    var sqlInput = document.getElementById('sql-input');
+    var sqlImportForm = document.getElementById('sql-import-form');
+    var sqlImportFile = document.getElementById('sql-import-file');
+    var sqlImportPanel = document.getElementById('sql-import-panel');
+    var sqlImportPrepare = document.getElementById('sql-import-prepare');
+    var sqlImportBackupLink = document.getElementById('sql-import-backup-link');
+    var sqlImportBackupConfirmed = document.getElementById('sql-import-backup-confirmed');
+    var sqlImportConfirmPhrase = document.getElementById('sql-import-confirm-phrase');
+    var sqlImportExecute = document.getElementById('sql-import-execute');
+    var sqlImportDownloadFrame = document.getElementById('sql-import-download-frame');
+
+    function notify(type, message) {
+        var toast = window.BackendToast;
+        if (toast && typeof toast[type] === 'function') {
+            toast[type](message);
+        }
     }
-  };
 
-  const loadTables = async (database) => {
-    const data = await fetchJson('@backend-url(database/backend/admin/tables)?database=' + encodeURIComponent(database));
-    tableSelect.innerHTML = '';
-    (data.data || []).forEach(table => {
-      const option = document.createElement('option');
-      option.value = table;
-      option.textContent = table;
-      tableSelect.appendChild(option);
+    function unwrapResponse(response) {
+        var hasTransportEnvelope = response
+            && typeof response === 'object'
+            && !Array.isArray(response)
+            && Object.prototype.hasOwnProperty.call(response, 'data')
+            && (Object.prototype.hasOwnProperty.call(response, 'status')
+                || Object.prototype.hasOwnProperty.call(response, 'ok')
+                || Object.prototype.hasOwnProperty.call(response, 'headers'));
+        var data = hasTransportEnvelope ? response.data : response;
+        if (typeof data === 'string') {
+            try {
+                return JSON.parse(data);
+            } catch (e) {
+                return {success: false, message: data};
+            }
+        }
+        return data || {};
+    }
+
+    function requestJson(url, options) {
+        var requestOptions = Object.assign({silent: true}, options || {});
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
+            return window.Weline.Api.request(url, requestOptions).then(unwrapResponse);
+        }
+
+        return Promise.reject(new Error(text.apiUnavailable));
+    }
+
+    function withQuery(url, params) {
+        var query = new URLSearchParams();
+        Object.keys(params || {}).forEach(function (key) {
+            if (params[key] !== undefined && params[key] !== null) {
+                query.append(key, params[key]);
+            }
+        });
+        var glue = url.indexOf('?') === -1 ? '?' : '&';
+        return url + glue + query.toString();
+    }
+
+    function setJsonPanel(panel, data) {
+        if (!panel) {
+            return;
+        }
+        panel.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    }
+
+    function setSummary(id, value) {
+        var node = document.getElementById(id);
+        if (node) {
+            node.textContent = value;
+        }
+    }
+
+    function createEmptyState(message, icon) {
+        var empty = document.createElement('div');
+        empty.className = 'w-db-empty-state';
+        var i = document.createElement('i');
+        i.className = 'mdi ' + (icon || 'mdi-database-search');
+        var span = document.createElement('span');
+        span.textContent = message;
+        empty.appendChild(i);
+        empty.appendChild(span);
+        return empty;
+    }
+
+    function formatCellValue(value) {
+        if (value === null) {
+            return text.nullValue;
+        }
+        if (typeof value === 'object') {
+            return JSON.stringify(value);
+        }
+        return String(value);
+    }
+
+    function renderRows(payload) {
+        var rows = Array.isArray(payload.items) ? payload.items : [];
+        rowsPanel.innerHTML = '';
+        rowsSummary.textContent = text.totalRows + ': ' + (payload.total || 0) + ' / ' + text.currentRows + ': ' + rows.length;
+
+        if (!rows.length) {
+            rowsPanel.appendChild(createEmptyState(text.emptyRows, 'mdi-table-off'));
+            return;
+        }
+
+        var columns = [];
+        rows.forEach(function (row) {
+            Object.keys(row || {}).forEach(function (key) {
+                if (columns.indexOf(key) === -1) {
+                    columns.push(key);
+                }
+            });
+        });
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'table-responsive';
+        var table = document.createElement('table');
+        table.className = 'table table-bordered table-hover align-middle mb-0';
+        var thead = document.createElement('thead');
+        var headRow = document.createElement('tr');
+        columns.forEach(function (column) {
+            var th = document.createElement('th');
+            th.textContent = column;
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        var tbody = document.createElement('tbody');
+        rows.forEach(function (row) {
+            var tr = document.createElement('tr');
+            columns.forEach(function (column) {
+                var td = document.createElement('td');
+                td.className = 'w-db-cell';
+                td.textContent = formatCellValue(row ? row[column] : '');
+                td.title = td.textContent;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrapper.appendChild(table);
+        rowsPanel.appendChild(wrapper);
+    }
+
+    function updateSqlImportExecuteState() {
+        sqlImportExecute.disabled = !currentSqlImportToken
+            || !sqlImportBackupConfirmed.checked
+            || sqlImportConfirmPhrase.value.trim() !== currentSqlImportConfirmPhrase;
+    }
+
+    function loadTables(database) {
+        if (!database) {
+            tableSelect.innerHTML = '';
+            setSummary('table-count', '-');
+            setSummary('active-database', '-');
+            return Promise.resolve();
+        }
+        setSummary('active-database', database);
+        tableSelect.disabled = true;
+        return requestJson(withQuery(endpoints.tables, {database: database}))
+            .then(function (data) {
+                var tables = Array.isArray(data.data) ? data.data : [];
+                tableSelect.innerHTML = '';
+                tables.forEach(function (table) {
+                    var option = document.createElement('option');
+                    option.value = table;
+                    option.textContent = table;
+                    tableSelect.appendChild(option);
+                });
+                setSummary('table-count', tables.length);
+                if (!tables.length) {
+                    rowsPanel.innerHTML = '';
+                    rowsPanel.appendChild(createEmptyState(text.emptyTables, 'mdi-table-off'));
+                }
+            })
+            .catch(function (error) {
+                notify('error', text.loadFailed + ': ' + error.message);
+            })
+            .finally(function () {
+                tableSelect.disabled = false;
+            });
+    }
+
+    function loadDatabases() {
+        dbSelect.disabled = true;
+        return requestJson(endpoints.databases)
+            .then(function (data) {
+                var databases = Array.isArray(data.data) ? data.data : [];
+                var defaultDatabase = root.getAttribute('data-default-database') || '';
+                if (defaultDatabase && databases.indexOf(defaultDatabase) === -1) {
+                    databases.unshift(defaultDatabase);
+                }
+                dbSelect.innerHTML = '';
+                databases.forEach(function (database) {
+                    var option = document.createElement('option');
+                    option.value = database;
+                    option.textContent = database;
+                    dbSelect.appendChild(option);
+                });
+                setSummary('db-count', databases.length);
+                if (defaultDatabase && databases.indexOf(defaultDatabase) !== -1) {
+                    dbSelect.value = defaultDatabase;
+                }
+                if (dbSelect.value) {
+                    return loadTables(dbSelect.value);
+                }
+                return null;
+            })
+            .catch(function (error) {
+                notify('error', text.loadFailed + ': ' + error.message);
+            })
+            .finally(function () {
+                dbSelect.disabled = false;
+            });
+    }
+
+    dbSelect.addEventListener('change', function () {
+        loadTables(dbSelect.value);
     });
-  };
 
-  dbSelect.addEventListener('change', () => loadTables(dbSelect.value));
-
-  document.getElementById('load-table').addEventListener('click', async () => {
-    const data = await fetchJson('@backend-url(database/backend/admin/rows)?database=' + encodeURIComponent(dbSelect.value) + '&table=' + encodeURIComponent(tableSelect.value));
-    rowsPanel.textContent = JSON.stringify(data, null, 2);
-  });
-
-  document.getElementById('load-meta').addEventListener('click', async () => {
-    const data = await fetchJson('@backend-url(database/backend/admin/table-meta)?database=' + encodeURIComponent(dbSelect.value) + '&table=' + encodeURIComponent(tableSelect.value));
-    metaPanel.textContent = JSON.stringify(data, null, 2);
-  });
-
-  document.getElementById('sql-run').addEventListener('click', async () => {
-    const payload = new URLSearchParams({
-      database: dbSelect.value,
-      table: tableSelect.value,
-      sql: sqlInput.value,
-      confirmed: document.getElementById('sql-confirmed').checked ? '1' : '0',
-      confirm_phrase: document.getElementById('sql-confirm-phrase').value
+    document.getElementById('database-refresh').addEventListener('click', function () {
+        window.location.reload();
     });
-    const data = await fetchJson('@backend-url(database/backend/admin/execute-sql)', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: payload.toString()
-    });
-    sqlPanel.textContent = JSON.stringify(data, null, 2);
-  });
 
-  loadDatabases();
+    document.getElementById('load-table').addEventListener('click', function () {
+        if (!dbSelect.value || !tableSelect.value) {
+            rowsPanel.innerHTML = '';
+            rowsPanel.appendChild(createEmptyState(text.chooseDatabaseTable, 'mdi-alert-circle-outline'));
+            return;
+        }
+        rowsPanel.innerHTML = '';
+        rowsPanel.appendChild(createEmptyState(text.loading, 'mdi-loading mdi-spin'));
+        requestJson(withQuery(endpoints.rows, {
+            database: dbSelect.value,
+            table: tableSelect.value
+        })).then(function (data) {
+            if (!data.success) {
+                throw new Error(data.message || text.loadFailed);
+            }
+            renderRows(data.data || {});
+            notify('success', text.loadRowsSuccess);
+        }).catch(function (error) {
+            rowsPanel.innerHTML = '';
+            rowsPanel.appendChild(createEmptyState(text.loadFailed + ': ' + error.message, 'mdi-alert-circle-outline'));
+            notify('error', text.loadFailed + ': ' + error.message);
+        });
+    });
+
+    document.getElementById('load-meta').addEventListener('click', function () {
+        if (!dbSelect.value || !tableSelect.value) {
+            setJsonPanel(metaPanel, text.chooseDatabaseTable);
+            return;
+        }
+        setJsonPanel(metaPanel, text.loading);
+        requestJson(withQuery(endpoints.tableMeta, {
+            database: dbSelect.value,
+            table: tableSelect.value
+        })).then(function (data) {
+            if (!data.success) {
+                throw new Error(data.message || text.loadFailed);
+            }
+            setJsonPanel(metaPanel, data.data || {});
+            notify('success', text.loadMetaSuccess);
+        }).catch(function (error) {
+            setJsonPanel(metaPanel, {success: false, message: error.message});
+            notify('error', text.loadFailed + ': ' + error.message);
+        });
+    });
+
+    document.getElementById('sql-run').addEventListener('click', function () {
+        var payload = new URLSearchParams({
+            database: dbSelect.value || '',
+            table: tableSelect.value || '',
+            sql: sqlInput.value,
+            confirmed: document.getElementById('sql-confirmed').checked ? '1' : '0',
+            confirm_phrase: document.getElementById('sql-confirm-phrase').value
+        });
+        setJsonPanel(sqlPanel, text.sqlExecuting);
+        requestJson(endpoints.executeSql, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest'},
+            body: payload.toString()
+        }).then(function (data) {
+            setJsonPanel(sqlPanel, data);
+            notify(data.success ? 'success' : 'error', data.message || (data.success ? text.success : text.failed));
+        }).catch(function (error) {
+            setJsonPanel(sqlPanel, {success: false, message: error.message});
+            notify('error', text.failed + ': ' + error.message);
+        });
+    });
+
+    sqlImportForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var file = sqlImportFile.files && sqlImportFile.files[0] ? sqlImportFile.files[0] : null;
+        currentSqlImportToken = '';
+        sqlImportBackupConfirmed.checked = false;
+        sqlImportConfirmPhrase.value = '';
+        sqlImportBackupLink.classList.add('is-hidden');
+        updateSqlImportExecuteState();
+
+        if (!file) {
+            setJsonPanel(sqlImportPanel, text.chooseSqlFile);
+            notify('warning', text.chooseSqlFile);
+            return;
+        }
+
+        var payload = new FormData();
+        payload.append('sql_file', file);
+        sqlImportPrepare.disabled = true;
+        setJsonPanel(sqlImportPanel, text.prepareImporting);
+        requestJson(endpoints.prepareSqlImport, {
+            method: 'POST',
+            body: payload
+        }).then(function (data) {
+            setJsonPanel(sqlImportPanel, data);
+            if (data.success && data.data && data.data.token) {
+                currentSqlImportToken = data.data.token;
+                currentSqlImportConfirmPhrase = data.data.confirm_phrase || currentSqlImportConfirmPhrase;
+                var backupUrl = withQuery(endpoints.downloadSqlBackup, {token: currentSqlImportToken});
+                sqlImportBackupLink.href = backupUrl;
+                sqlImportBackupLink.textContent = text.downloadBackupPrefix + (data.data.backup_filename || 'weline_sql_import_backup.sql');
+                sqlImportBackupLink.classList.remove('is-hidden');
+                sqlImportDownloadFrame.src = backupUrl + '&_=' + Date.now();
+                notify('success', text.success);
+            } else {
+                notify('error', data.message || text.failed);
+            }
+        }).catch(function (error) {
+            setJsonPanel(sqlImportPanel, {success: false, message: error.message});
+            notify('error', text.failed + ': ' + error.message);
+        }).finally(function () {
+            sqlImportPrepare.disabled = false;
+            updateSqlImportExecuteState();
+        });
+    });
+
+    sqlImportBackupConfirmed.addEventListener('change', updateSqlImportExecuteState);
+    sqlImportConfirmPhrase.addEventListener('input', updateSqlImportExecuteState);
+
+    sqlImportExecute.addEventListener('click', function () {
+        if (!currentSqlImportToken) {
+            setJsonPanel(sqlImportPanel, text.uploadSqlFirst);
+            notify('warning', text.uploadSqlFirst);
+            return;
+        }
+        var payload = new URLSearchParams({
+            token: currentSqlImportToken,
+            backup_confirmed: sqlImportBackupConfirmed.checked ? '1' : '0',
+            confirm_phrase: sqlImportConfirmPhrase.value.trim()
+        });
+        sqlImportExecute.disabled = true;
+        setJsonPanel(sqlImportPanel, text.executeImporting);
+        requestJson(endpoints.executeSqlImport, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest'},
+            body: payload.toString()
+        }).then(function (data) {
+            setJsonPanel(sqlImportPanel, data);
+            if (data.success) {
+                currentSqlImportToken = '';
+                sqlImportBackupConfirmed.checked = false;
+                sqlImportConfirmPhrase.value = '';
+                notify('success', text.success);
+            } else {
+                notify('error', data.message || text.failed);
+            }
+        }).catch(function (error) {
+            setJsonPanel(sqlImportPanel, {success: false, message: error.message});
+            notify('error', text.failed + ': ' + error.message);
+        }).finally(updateSqlImportExecuteState);
+    });
+
+    loadDatabases();
 })();
-</theme:js>
+</script>
 
-<theme:css>
-.w-database-admin {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+<style>
+.weline-database-admin {
+    --w-db-code-bg: var(--backend-color-bg-secondary, #f8f9fa);
 }
 
-.w-db-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+.weline-database-admin .w-db-summary-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 44px;
 }
 
-.w-db-section {
-  border: 1px solid var(--color-border, #d9d9d9);
-  border-radius: 8px;
-  padding: 12px;
-  background: var(--color-bg, #fff);
+.weline-database-admin__tabs {
+    border-bottom-color: var(--backend-color-card-border, #dee2e6);
 }
 
-.w-db-section pre {
-  max-height: 320px;
-  overflow: auto;
-  background: #111827;
-  color: #f8fafc;
-  padding: 10px;
-  border-radius: 6px;
+.weline-database-admin__tabs .nav-link {
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-weight: 600;
 }
-</theme:css>
+
+.weline-database-admin__tabs .nav-link.active {
+    color: var(--backend-color-primary, #405189);
+}
+
+.weline-database-admin .w-db-table-panel {
+    min-height: 320px;
+}
+
+.weline-database-admin .w-db-empty-state {
+    min-height: 260px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: var(--backend-color-text-secondary, #74788d);
+    text-align: center;
+    border: 1px dashed var(--backend-color-card-border, #dbe4f0);
+    border-radius: var(--backend-border-radius-lg, 0.75rem);
+    background: var(--backend-color-bg-secondary, #f8fbff);
+}
+
+.weline-database-admin .w-db-empty-state i {
+    font-size: 2rem;
+}
+
+.weline-database-admin .w-db-json-panel {
+    max-height: 520px;
+    min-height: 260px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    padding: 1rem;
+    border: 1px solid var(--backend-color-card-border, #dbe4f0);
+    border-radius: var(--backend-border-radius-lg, 0.75rem);
+    background: var(--w-db-code-bg);
+    color: var(--backend-color-text-primary, #212529);
+    font-family: "Fira Code", Monaco, Consolas, "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.weline-database-admin .w-db-cell {
+    max-width: 320px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "Fira Code", Monaco, Consolas, "Courier New", monospace;
+    font-size: 12px;
+}
+
+.weline-database-admin .min-w-0 {
+    min-width: 0;
+}
+
+.weline-database-admin .is-hidden {
+    display: none !important;
+}
+</style>

@@ -51,7 +51,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 return [];
             }
 
-            protected function collectRecoverablePortsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+            protected function collectRecoverablePortsFromEndpointRecord(string $name, bool $includeSharedState = false): array
             {
                 unset($name, $includeSharedState);
 
@@ -215,7 +215,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 return [];
             }
 
-            protected function collectRecoverablePortsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+            protected function collectRecoverablePortsFromEndpointRecord(string $name, bool $includeSharedState = false): array
             {
                 unset($name, $includeSharedState);
 
@@ -588,7 +588,7 @@ final class StopCommandResidualCleanupRetryTest extends TestCase
                 return [];
             }
 
-            protected function collectRecoverablePortsFromInstanceRecords(string $name, bool $includeSharedState = false): array
+            protected function collectRecoverablePortsFromEndpointRecord(string $name, bool $includeSharedState = false): array
             {
                 unset($name, $includeSharedState);
 

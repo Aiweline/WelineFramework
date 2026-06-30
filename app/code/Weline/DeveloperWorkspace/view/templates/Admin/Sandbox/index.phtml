@@ -1,15 +1,18 @@
 <?php
 /**
- * 沙盒环境配置页面（内容模板）
- *
  * @var \Weline\Framework\View\Template $this
  */
+$sandboxKeyConfigured = (bool)($this->getData('sandboxKeyConfigured') ?? false);
+$enabled = (string)($this->getData('enabled') ?? '') === '1';
+$enableUrl = $this->getBackendUrl('*/admin/sandbox/enable');
+$closeUrl = $this->getBackendUrl('*/admin/sandbox/close');
+$saveUrl = $this->getBackendUrl('*/admin/sandbox/setSandboxKey');
 ?>
 
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><lang>沙盒环境配置</lang></h4>
+            <h4 class="mb-sm-0"><?= __('沙盒环境配置') ?></h4>
             <div class="page-title-right">
                 <breadcrumb model='Weline\Backend\Model\Menu' order_field='order'
                             name_field='title'></breadcrumb>
@@ -22,7 +25,7 @@
     <div class="col-xl-12 col-sm-12">
         <div class="card">
             <div class="card-body">
-                <lang>沙盒环境是一套数据隔离的可提供给测试人员对代码进行测试的环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。</lang>
+                <?= __('沙盒环境是一套数据隔离的测试环境，测试时数据不会写入正式数据库，而是写入沙盒数据库。') ?>
             </div>
         </div>
     </div>
@@ -37,45 +40,61 @@
                 </div>
             </div>
             <div class="card-body">
-                <h4 class='card-title'><lang>可配置参数：</lang></h4>
-                <p class='card-title-desc'><lang>控制沙盒环境参数来达到测试系统环境。</lang></p>
+                <h4 class='card-title'><?= __('可配置参数：') ?></h4>
+                <p class='card-title-desc'><?= __('控制沙盒环境参数来达到测试系统环境。') ?></p>
                 <div class="row">
-                    <h3><lang>沙盒启动Key</lang></h3>
+                    <h3><?= __('沙盒启动Key') ?></h3>
                     <div class="mt-2">
-                        <lang>当前沙盒状态：</lang>
-                        <span class="badge bg-@if{enabled=>'success'|'info'}"><lang>@if{enabled=>'开启'|'关闭'}</lang></span>
+                        <?= __('当前沙盒状态：') ?>
+                        <span class="badge bg-<?= $enabled ? 'success' : 'info' ?>">
+                            <?= $enabled ? __('开启') : __('关闭') ?>
+                        </span>
                     </div>
                     <div class="mt-2">
-                        <lang>当前Key：</lang>
-                        <span class="badge bg-info">{{env.sandbox_key}}</span>
+                        <?= __('当前Key状态：') ?>
+                        <span class="badge bg-<?= $sandboxKeyConfigured ? 'success' : 'warning' ?>">
+                            <?= $sandboxKeyConfigured ? __('已配置') : __('未配置') ?>
+                        </span>
                     </div>
                     <div class="mt-3">
                         <form class="row g-2 align-items-end" method="post"
-                              action="@url{'*/admin/sandbox/setSandboxKey'}" novalidate>
+                              action="<?= htmlspecialchars($saveUrl, ENT_QUOTES, 'UTF-8') ?>" novalidate>
+                            <?= $this->getFormKey($saveUrl) ?>
                             <div class="col-md-6 col-lg-5">
-                                <label class="form-label mb-1" for="sandbox_key_input"><lang>沙盒Key</lang></label>
-                                <input type="text" class="form-control" name="key" id="sandbox_key_input"
-                                       placeholder="@lang{请输入沙盒Key}" value="{{env.sandbox_key}}" required>
+                                <label class="form-label mb-1" for="sandbox_key_input"><?= __('新沙盒Key') ?></label>
+                                <input type="password" class="form-control" name="key" id="sandbox_key_input"
+                                       placeholder="<?= __('请输入新的沙盒Key') ?>" autocomplete="new-password" required>
                             </div>
                             <div class="col-auto pb-1">
-                                <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
+                                <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
                             </div>
                         </form>
                     </div>
 
-                    <div class="mt-2">
-                        <lang>沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：</lang>
-                        @frontend-url{'*/sandbox/enable'}?enable=on&key=<span class="text-info">{{ env.sandbox_key }}</span></span>
-                        <a href="@backend-url{'*/admin/sandbox/enable'}?enable=on&key={{env.sandbox_key}}">
-                            <lang>开启沙盒</lang>
-                        </a>
-                    </div>
-                    <div class="mt-2">
-                        <lang>关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：</lang>
-                        @frontend-url{'*/sandbox/close'}?close=on&key=<span class="text-info">{{ env.sandbox_key }}</span></span>
-                        <a href="@backend-url{'*/admin/sandbox/close'}?close=on&key={{env.sandbox_key}}">
-                            <lang>关闭沙盒</lang>
-                        </a>
+                    <div class="mt-3">
+                        <div class="mb-2">
+                            <?= __('沙盒请求请优先通过已授权表单开关；不要把启动Key放进可点击GET链接。') ?>
+                        </div>
+                        <form class="d-inline-block me-2" method="post"
+                              action="<?= htmlspecialchars($enableUrl, ENT_QUOTES, 'UTF-8') ?>">
+                            <?= $this->getFormKey($enableUrl) ?>
+                            <label class="visually-hidden" for="sandbox_enable_key"><?= __('沙盒启动Key') ?></label>
+                            <input type="password" class="form-control form-control-sm d-inline-block w-auto me-1"
+                                   name="key" id="sandbox_enable_key" placeholder="<?= __('沙盒启动Key') ?>"
+                                   autocomplete="off" required>
+                            <input type="hidden" name="enable" value="on">
+                            <button type="submit" class="btn btn-sm btn-success"><?= __('开启沙盒') ?></button>
+                        </form>
+                        <form class="d-inline-block" method="post"
+                              action="<?= htmlspecialchars($closeUrl, ENT_QUOTES, 'UTF-8') ?>">
+                            <?= $this->getFormKey($closeUrl) ?>
+                            <label class="visually-hidden" for="sandbox_close_key"><?= __('沙盒启动Key') ?></label>
+                            <input type="password" class="form-control form-control-sm d-inline-block w-auto me-1"
+                                   name="key" id="sandbox_close_key" placeholder="<?= __('沙盒启动Key') ?>"
+                                   autocomplete="off" required>
+                            <input type="hidden" name="close" value="on">
+                            <button type="submit" class="btn btn-sm btn-warning"><?= __('关闭沙盒') ?></button>
+                        </form>
                     </div>
                 </div>
             </div>

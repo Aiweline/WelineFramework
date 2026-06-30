@@ -108,8 +108,8 @@ class Collect implements CommandInterface
                     );
                     echo sprintf(
                         "    输入价格: $%s/1K tokens | 输出价格: $%s/1K tokens\n",
-                        number_format($model->getData('token_price_input') ?? 0, 6),
-                        number_format($model->getData('token_price_output') ?? 0, 6)
+                        number_format((float)($model->getData('token_price_input') ?? 0), 6),
+                        number_format((float)($model->getData('token_price_output') ?? 0), 6)
                     );
                 } else {
                     echo sprintf(

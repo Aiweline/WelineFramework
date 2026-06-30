@@ -1,8 +1,9 @@
 <?php
 $challengeToken = (string) ($this->getData('challenge_token') ?? '');
+$challengeAction = (string) $this->getUrl('customer/account/challenge');
+$loginUrl = (string) $this->getUrl('customer/account/login');
 ?>
 <style>
-/* ========== 双因素验证表单容器 ========== */
 .auth-form {
     max-width: 440px;
     width: 100%;
@@ -25,7 +26,6 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     }
 }
 
-/* ========== 头部样式 ========== */
 .auth-form__header {
     text-align: center;
     margin-bottom: var(--spacing-xl, 2rem);
@@ -35,28 +35,30 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     width: 64px;
     height: 64px;
     margin: 0 auto var(--spacing-md, 1rem);
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
     border-radius: var(--radius-lg, 12px);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-    animation: authIconShine 3s ease-in-out infinite;
+    box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
 }
 
-@keyframes authIconShine {
-    0%, 100% {
-        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-        transform: scale(1);
-    }
-    50% {
-        box-shadow: 0 4px 25px rgba(99, 102, 241, 0.6);
-        transform: scale(1.02);
-    }
+.auth-form__svg-icon {
+    width: 1rem;
+    height: 1rem;
+    display: inline-block;
+    flex-shrink: 0;
+    color: currentColor;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
-.auth-form__icon i {
-    font-size: 2rem;
+.auth-form__icon .auth-form__svg-icon {
+    width: 2rem;
+    height: 2rem;
     color: var(--color-text-light);
 }
 
@@ -65,7 +67,6 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     font-weight: var(--font-weight-bold, 700);
     color: var(--color-text-primary);
     margin: 0 0 var(--spacing-xs, 0.25rem) 0;
-    letter-spacing: -0.5px;
 }
 
 .auth-form__subtitle {
@@ -75,22 +76,26 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     line-height: 1.6;
 }
 
-/* ========== 提示信息 ========== */
+.auth-form__flash {
+    width: 100%;
+    margin-bottom: var(--spacing-md, 1rem);
+}
+
 .auth-form__hint {
     display: flex;
     align-items: flex-start;
     gap: var(--spacing-sm, 0.75rem);
     padding: var(--spacing-md, 1rem);
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.05) 100%);
+    background: var(--color-bg-secondary);
     border-radius: var(--radius-md, 8px);
-    border: 1px solid rgba(99, 102, 241, 0.2);
+    border: 1px solid var(--color-border-default);
     margin-bottom: var(--spacing-lg, 1.5rem);
 }
 
 .auth-form__hint-icon {
     width: 40px;
     height: 40px;
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
     border-radius: var(--radius-md, 8px);
     display: flex;
     align-items: center;
@@ -98,20 +103,17 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     flex-shrink: 0;
 }
 
-.auth-form__hint-icon i {
-    font-size: 1.25rem;
-    color: white;
-}
-
-.auth-form__hint-content {
-    flex: 1;
+.auth-form__hint-icon .auth-form__svg-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--color-text-light);
 }
 
 .auth-form__hint-title {
     font-size: var(--font-size-sm, 0.875rem);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold, 600);
     color: var(--color-text-primary);
-    margin: 0 0 0.25rem 0;
+    margin: 0 0 var(--spacing-xs, 0.25rem) 0;
 }
 
 .auth-form__hint-text {
@@ -121,9 +123,20 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     line-height: 1.5;
 }
 
-/* ========== 表单样式 ========== */
+.auth-form__body {
+    margin-top: var(--spacing-lg, 1.5rem);
+}
+
 .auth-form__field {
     margin-bottom: var(--spacing-lg, 1.5rem);
+}
+
+.auth-form__label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-xs, 0.5rem);
+    margin-bottom: var(--spacing-xs, 0.5rem);
 }
 
 .auth-form__label {
@@ -133,25 +146,32 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     font-size: var(--font-size-sm, 0.875rem);
     font-weight: var(--font-weight-semibold, 600);
     color: var(--color-text-primary);
-    margin-bottom: var(--spacing-xs, 0.5rem);
 }
 
-.auth-form__label i {
-    color: #6366f1;
-    font-size: var(--font-size-sm, 0.875rem);
+.auth-form__label .auth-form__svg-icon {
+    color: var(--color-primary);
+}
+
+.auth-form__code-type {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-sm, 6px);
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
 }
 
 .auth-form__input-wrapper {
     position: relative;
 }
 
-.auth-form__input-wrapper i {
+.auth-form__input-icon {
     position: absolute;
     left: var(--spacing-sm, 0.75rem);
     top: 50%;
     transform: translateY(-50%);
     color: var(--color-text-tertiary);
-    font-size: 1rem;
     z-index: 1;
     transition: color 0.3s;
 }
@@ -163,7 +183,7 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     border-radius: var(--radius-md, 8px);
     font-size: var(--font-size-lg, 1.25rem);
     font-weight: 600;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.12em;
     text-align: center;
     transition: all 0.3s;
     background: var(--color-bg-primary);
@@ -172,63 +192,58 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
 
 .auth-form__input:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
-.auth-form__input:focus + i,
-.auth-form__input-wrapper:focus-within i {
-    color: #6366f1;
+.auth-form__input-wrapper:focus-within .auth-form__input-icon {
+    color: var(--color-primary);
 }
 
 .auth-form__input::placeholder {
     color: var(--color-text-tertiary);
-    letter-spacing: normal;
+    letter-spacing: 0;
     font-size: var(--font-size-base, 0.9375rem);
 }
 
-/* ========== 提交按钮 ========== */
+.auth-form__microcopy {
+    margin: var(--spacing-xs, 0.5rem) 0 0;
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+}
+
+.auth-form__inline-error {
+    margin: var(--spacing-xs, 0.5rem) 0 0;
+    padding: var(--spacing-sm, 0.75rem);
+    border-radius: var(--radius-md, 8px);
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
 .auth-form__submit {
     width: 100%;
     padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-    border: 2px solid #4f46e5;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    border: 2px solid var(--color-primary-border);
     border-radius: var(--radius-md, 8px);
-    color: var(--color-text-light);
+    color: var(--color-text-primary);
     font-size: var(--font-size-base, 1rem);
     font-weight: var(--font-weight-semibold, 600);
     cursor: pointer;
     transition: all 0.3s;
-    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-    position: relative;
-    overflow: hidden;
-}
-
-.auth-form__submit::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.3);
-    transform: translate(-50%, -50%);
-    transition: width 0.6s, height 0.6s;
-}
-
-.auth-form__submit:hover::before {
-    width: 300px;
-    height: 300px;
+    box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs, 0.5rem);
 }
 
 .auth-form__submit:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
-}
-
-.auth-form__submit:active {
-    transform: translateY(0);
+    box-shadow: 0 6px 20px rgba(240, 193, 75, 0.5);
 }
 
 .auth-form__submit:disabled {
@@ -237,14 +252,11 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     transform: none;
 }
 
-/* ========== 页脚链接 ========== */
 .auth-form__footer {
     margin-top: var(--spacing-lg, 1.5rem);
     padding-top: var(--spacing-md, 1rem);
     border-top: 1px solid var(--color-border-default);
     text-align: center;
-    font-size: var(--font-size-sm, 0.875rem);
-    color: var(--color-text-secondary);
 }
 
 .auth-form__footer-link {
@@ -262,80 +274,20 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
     text-decoration: underline;
 }
 
-/* ========== 成功/错误提示 ========== */
-.auth-form__alert {
-    padding: var(--spacing-sm, 0.75rem);
-    border-radius: var(--radius-md, 8px);
-    margin-bottom: var(--spacing-md, 1rem);
-    font-size: var(--font-size-sm, 0.875rem);
-    animation: authShake 0.5s;
-}
-
-.auth-form__alert--success {
-    background: #d1fae5;
-    color: #065f46;
-    border: 1px solid #a7f3d0;
-}
-
-.auth-form__alert--danger {
-    background: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
-}
-
-@keyframes authShake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-10px); }
-    75% { transform: translateX(10px); }
-}
-
-/* ========== 输入框焦点效果 ========== */
-.auth-form__input-wrapper--focused {
-    transform: translateY(-2px);
-}
-
-.auth-form__input-wrapper--focused i {
-    color: #6366f1;
-    transform: translateY(-50%) scale(1.1);
-}
-
-/* ========== 倒计时样式 ========== */
-.auth-form__timer {
-    text-align: center;
-    margin-top: var(--spacing-md, 1rem);
-    font-size: var(--font-size-sm, 0.875rem);
-    color: var(--color-text-secondary);
-}
-
-.auth-form__timer-value {
-    font-weight: 600;
-    color: #6366f1;
-}
-
-/* ========== 响应式设计 ========== */
-@media (max-width: 640px) {
+@media (max-width: 480px) {
     .auth-form {
         padding: var(--spacing-lg, 1.5rem) var(--spacing-md, 1rem);
         margin: var(--spacing-sm, 0.5rem);
-        border-radius: var(--radius-md, 8px);
     }
 
-    .auth-form__title {
-        font-size: var(--font-size-xl, 1.5rem);
-    }
-
-    .auth-form__icon {
-        width: 56px;
-        height: 56px;
-    }
-
-    .auth-form__icon i {
-        font-size: 1.75rem;
+    .auth-form__label-row {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .auth-form__input {
         font-size: var(--font-size-base, 1rem);
-        letter-spacing: 0.15em;
+        letter-spacing: 0.08em;
     }
 }
 </style>
@@ -343,40 +295,52 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
 <div class="auth-form">
     <header class="auth-form__header">
         <div class="auth-form__icon">
-            <i class="fas fa-shield-halved"></i>
+            <svg class="auth-form__svg-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6l7-3z"></path>
+                <path d="M9.5 12l1.7 1.7 3.8-4"></path>
+            </svg>
         </div>
-        <h1 class="auth-form__title"><lang>双因素验证</lang></h1>
-        <p class="auth-form__subtitle"><lang>输入您的身份验证器应用生成的代码或备用恢复码</lang></p>
+        <h1 class="auth-form__title"><lang>两步验证</lang></h1>
+        <p class="auth-form__subtitle"><lang>请输入身份验证器应用生成的验证码或备用恢复码</lang></p>
     </header>
 
-    <form action="/customer/account/challenge" method="post" class="auth-form__body">
-        <?= $this->getFormKey('/customer/account/challenge') ?>
-        <input type="hidden" name="challenge_token" value="<?= htmlspecialchars($challengeToken, ENT_QUOTES) ?>" />
+    <div class="auth-form__flash wf-system-messages" aria-live="polite">
+        <template>Weline_Component::message.phtml</template>
+    </div>
 
-        <?php if (!empty($success_message)): ?>
-        <div class="auth-form__alert auth-form__alert--success" id="successMessage"><?= $success_message ?></div>
-        <?php endif; ?>
-        <?php if (!empty($error_message)): ?>
-        <div class="auth-form__alert auth-form__alert--danger" id="errorMessage"><?= $error_message ?></div>
-        <?php endif; ?>
+    <form action="<?= htmlspecialchars($challengeAction, ENT_QUOTES) ?>" method="post" class="auth-form__body" data-challenge-form novalidate>
+        <?= $this->getFormKey($challengeAction) ?>
+        <input type="hidden" name="challenge_token" value="<?= htmlspecialchars($challengeToken, ENT_QUOTES) ?>">
 
         <div class="auth-form__hint">
             <div class="auth-form__hint-icon">
-                <i class="fas fa-mobile-alt"></i>
+                <svg class="auth-form__svg-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="7" y="2" width="10" height="20" rx="2"></rect>
+                    <path d="M11 18h2"></path>
+                    <path d="M10 5h4"></path>
+                </svg>
             </div>
-            <div class="auth-form__hint-content">
+            <div>
                 <p class="auth-form__hint-title"><lang>身份验证器应用</lang></p>
-                <p class="auth-form__hint-text"><lang>打开您的身份验证器应用，获取6位数字验证码</lang></p>
+                <p class="auth-form__hint-text"><lang>打开身份验证器应用，获取最新的6位数字验证码；也可以输入8位备用恢复码。</lang></p>
             </div>
         </div>
 
         <div class="auth-form__field">
-            <label class="auth-form__label" for="code">
-                <i class="fas fa-key"></i>
-                <lang>验证码</lang>
-            </label>
+            <div class="auth-form__label-row">
+                <label class="auth-form__label" for="code">
+                    <svg class="auth-form__svg-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="7.5" cy="14.5" r="3.5"></circle>
+                        <path d="M10 12l8-8"></path>
+                        <path d="M15 5l4 4"></path>
+                        <path d="M13 7l2 2"></path>
+                    </svg>
+                    <lang>验证码</lang>
+                </label>
+                <span class="auth-form__code-type"><lang>6位验证码或备用恢复码</lang></span>
+            </div>
+
             <div class="auth-form__input-wrapper">
-                <i class="fas fa-lock"></i>
                 <input
                     class="auth-form__input"
                     type="text"
@@ -384,132 +348,200 @@ $challengeToken = (string) ($this->getData('challenge_token') ?? '');
                     name="code"
                     required
                     autocomplete="one-time-code"
-                    placeholder="<lang>6位验证码或备用码（如 ####-####）</lang>"
-                    maxlength="9"
                     inputmode="numeric"
-                />
+                    placeholder="<lang>123456 或 1234-5678</lang>"
+                    maxlength="9"
+                    aria-describedby="codeHelp codeError"
+                >
+                <svg class="auth-form__svg-icon auth-form__input-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                </svg>
             </div>
+
+            <p class="auth-form__microcopy" id="codeHelp"><lang>备用恢复码每个只能使用一次。</lang></p>
+            <p class="auth-form__inline-error" id="codeError" hidden aria-live="polite"></p>
         </div>
 
         <button type="submit" id="verifyBtn" class="auth-form__submit">
-            <i class="fas fa-check-circle me-2"></i>
-            <lang>验证并继续</lang>
+            <svg class="auth-form__svg-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M8.5 12.5l2.2 2.2 4.8-5"></path>
+            </svg>
+            <span data-submit-label><lang>验证并继续</lang></span>
         </button>
     </form>
 
     <footer class="auth-form__footer">
-        <a href="/customer/account/login" class="auth-form__footer-link">
-            <i class="fas fa-sign-in-alt"></i>
+        <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>" class="auth-form__footer-link">
+            <svg class="auth-form__svg-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M19 12H5"></path>
+                <path d="M12 19l-7-7 7-7"></path>
+            </svg>
             <lang>返回登录</lang>
         </a>
     </footer>
 </div>
 
 <script>
-(function() {
+(function () {
     'use strict';
 
-    $(document).ready(function() {
-        var $form = $('form[action="/customer/account/challenge"]');
-        var $codeInput = $('#code');
-        var $verifyBtn = $('#verifyBtn');
+    var form = document.querySelector('[data-challenge-form]');
+    if (!form) {
+        return;
+    }
 
-        // 只允许输入数字
-        $codeInput.on('input', function() {
-            this.value = this.value.replace(/[^0-9]/g, '');
-        });
+    var codeInput = document.getElementById('code');
+    var submitButton = document.getElementById('verifyBtn');
+    var submitLabel = submitButton ? submitButton.querySelector('[data-submit-label]') : null;
+    var codeError = document.getElementById('codeError');
+    var verifyingText = '验证中...';
+    var invalidCodeText = '请输入6位身份验证器验证码或8位备用恢复码。';
 
-        // 输入框焦点效果
-        $codeInput.on('focus', function() {
-            $(this).closest('.auth-form__input-wrapper').addClass('auth-form__input-wrapper--focused');
-        }).on('blur', function() {
-            $(this).closest('.auth-form__input-wrapper').removeClass('auth-form__input-wrapper--focused');
-        });
+    function sanitizeDigits(value) {
+        return value.replace(/\D/g, '').slice(0, 8);
+    }
 
-        $form.on('submit', function(e) {
-            e.preventDefault();
+    function hideError() {
+        if (!codeError) {
+            return;
+        }
 
-            var digits = $codeInput.val().trim().replace(/[^0-9]/g, '');
-            var $errorMsg = $('#errorMessage');
-            var $successMsg = $('#successMessage');
+        codeError.hidden = true;
+        codeError.textContent = '';
+    }
 
-            if ($errorMsg.length) {
-                $errorMsg.addClass('d-none').removeClass('show');
+    function showError(message) {
+        if (!codeError) {
+            return;
+        }
+
+        codeError.hidden = false;
+        codeError.textContent = message;
+    }
+
+    function setLoading(loading) {
+        if (submitButton) {
+            submitButton.disabled = loading;
+        }
+
+        if (submitLabel) {
+            submitLabel.textContent = loading ? verifyingText : '<lang>验证并继续</lang>';
+        }
+    }
+
+    function readJsonResponse(response) {
+        var contentType = response.headers.get('content-type') || '';
+        if (contentType.indexOf('application/json') === -1) {
+            return response.text().then(function (text) {
+                return {
+                    success: false,
+                    message: text || ('HTTP ' + response.status)
+                };
+            });
+        }
+
+        return response.json();
+    }
+
+    var accountApiPromise = null;
+
+    function getAccountApi() {
+        if (!accountApiPromise) {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                accountApiPromise = window.Weline.Api.resource('account');
+            } else if (window.Weline && typeof window.Weline.load === 'function') {
+                accountApiPromise = window.Weline.load('api').then(function() {
+                    if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api is unavailable.');
+                    }
+                    return window.Weline.Api.resource('account');
+                });
+            } else {
+                accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
             }
-            if ($successMsg.length) {
-                $successMsg.addClass('d-none').removeClass('show');
-            }
+        }
+        return accountApiPromise;
+    }
 
-            // 6 位：TOTP；8 位：备用恢复码（存储格式为 ####-####，需带连字符才能命中）
-            if (!digits || (digits.length !== 6 && digits.length !== 8)) {
-                ensureErrorMsg().html('<lang>请输入6位身份验证器验证码，或8位数字备用恢复码</lang>');
-                $codeInput.focus();
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function (value, key) {
+            payload[key] = value;
+        });
+        delete payload.form_key;
+        return payload;
+    }
+
+    function submitChallenge() {
+        var body = formDataToObject(new FormData(form));
+
+        return getAccountApi().then(function (AccountApi) {
+            return AccountApi.completeChallenge(body, {silent: true});
+        });
+    }
+
+    if (codeInput) {
+        codeInput.addEventListener('input', function () {
+            hideError();
+
+            var digits = sanitizeDigits(this.value);
+            if (digits.length > 6) {
+                this.value = digits.slice(0, 4) + '-' + digits.slice(4);
                 return;
             }
 
-            var codeForSubmit = digits.length === 8
-                ? digits.slice(0, 4) + '-' + digits.slice(4, 8)
-                : digits;
-            $codeInput.val(codeForSubmit);
-
-            // 禁用按钮，显示加载状态
-            $verifyBtn.prop('disabled', true);
-            var originalText = $verifyBtn.html();
-            $verifyBtn.html('<i class="fas fa-spinner fa-spin me-2"></i><lang>验证中...</lang>');
-
-            // 提交表单
-            var formData = new FormData(this);
-            fetch($form.attr('action'), {
-                method: 'POST',
-                headers: { 'Accept': 'application/json' },
-                body: formData
-            })
-            .then(function(response) { return response.json(); })
-            .then(function(data) {
-                if (data.success) {
-                    ensureSuccessMsg().html('<i class="fas fa-check-circle me-2"></i>' + (data.message || '<lang>验证成功！</lang>'));
-                    $verifyBtn.removeClass('auth-form__submit').addClass('auth-form__submit--success');
-                    $verifyBtn.html('<i class="fas fa-check me-2"></i><lang>验证成功！</lang>');
-
-                    if (data.redirect) {
-                        setTimeout(function() {
-                            window.location.href = data.redirect;
-                        }, 1000);
-                    }
-                } else {
-                    ensureErrorMsg().html(data.message || '<lang>验证码错误，请重试</lang>');
-                    $verifyBtn.prop('disabled', false);
-                    $verifyBtn.html(originalText);
-                    $codeInput.focus();
-                }
-            })
-            .catch(function() {
-                ensureErrorMsg().html('<lang>请求失败，请稍后重试</lang>');
-                $verifyBtn.prop('disabled', false);
-                $verifyBtn.html(originalText);
-            });
+            this.value = digits;
         });
 
-        function ensureErrorMsg() {
-            var $el = $('#errorMessage');
-            if ($el.length === 0) {
-                $el = $('<div class="auth-form__alert auth-form__alert--danger" id="errorMessage"></div>');
-                $form.prepend($el);
-            }
-            return $el;
+        window.setTimeout(function () {
+            codeInput.focus();
+        }, 0);
+    }
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        if (!codeInput) {
+            return;
         }
 
-        function ensureSuccessMsg() {
-            var $el = $('#successMessage');
-            if ($el.length === 0) {
-                $el = $('<div class="auth-form__alert auth-form__alert--success" id="successMessage"></div>');
-                $form.prepend($el);
-            }
-            return $el;
+        hideError();
+
+        var digits = sanitizeDigits(codeInput.value);
+        if (digits.length !== 6 && digits.length !== 8) {
+            showError(invalidCodeText);
+            codeInput.focus();
+            return;
         }
 
-        // 自动聚焦到验证码输入框
-        $codeInput.focus();
+        codeInput.value = digits.length === 8
+            ? digits.slice(0, 4) + '-' + digits.slice(4)
+            : digits;
+
+        setLoading(true);
+
+        submitChallenge()
+            .then(function (payload) {
+                if (!payload) {
+                    return;
+                }
+
+                if (payload.success === true || payload.success === 'true' || payload.status === 'authenticated') {
+                    window.location.href = payload.redirect || '/customer/account';
+                    return;
+                }
+
+                showError(payload.message || '<lang>验证失败，请重新输入验证码</lang>');
+                setLoading(false);
+                codeInput.focus();
+            })
+            .catch(function (error) {
+                showError((error && error.message) || '<lang>验证请求失败，请稍后重试</lang>');
+                setLoading(false);
+                codeInput.focus();
+            });
     });
-})();
+}());
 </script>

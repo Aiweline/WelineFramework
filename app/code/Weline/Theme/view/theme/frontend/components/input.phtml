@@ -37,20 +37,20 @@ $icon = $this->getData('icon') ?? '';
 $autocomplete = $this->getData('autocomplete') ?? 'off';
 
 // 构建CSS类
-$inputClass = 'form-control';
+$inputClass = 'w-form-control';
 if ($class) {
     $inputClass .= ' ' . htmlspecialchars($class);
 }
 if ($error) {
-    $inputClass .= ' is-invalid';
+    $inputClass .= ' w-is-invalid';
 }
 ?>
-<div class="form-group">
+<div class="w-form-group">
     <?php if ($label): ?>
-        <label for="<?= htmlspecialchars($id) ?>" class="form-label">
+        <label for="<?= htmlspecialchars($id) ?>" class="w-form-label">
             <?= htmlspecialchars($label) ?>
             <?php if ($required): ?>
-                <span class="text-danger">*</span>
+                <span class="w-text-danger">*</span>
             <?php endif; ?>
         </label>
     <?php endif; ?>
@@ -72,11 +72,11 @@ if ($error) {
     </div>
     
     <?php if ($help && !$error): ?>
-        <small class="form-text"><?= htmlspecialchars($help) ?></small>
+        <small class="w-form-text"><?= htmlspecialchars($help) ?></small>
     <?php endif; ?>
     
     <?php if ($error): ?>
-        <div class="invalid-feedback"><?= htmlspecialchars($error) ?></div>
+        <div class="w-invalid-feedback"><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
 </div>
 

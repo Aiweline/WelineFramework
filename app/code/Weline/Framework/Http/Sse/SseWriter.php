@@ -73,6 +73,8 @@ class SseWriter
      */
     private bool $cooperativeYield = true;
 
+    private ?string $corsOrigin = '*';
+
     /**
      * 让步延迟毫秒数（0 = 立即让步）
      */
@@ -97,6 +99,12 @@ class SseWriter
     public function setHeartbeatInterval(int $seconds): self
     {
         $this->heartbeatInterval = $seconds;
+        return $this;
+    }
+
+    public function setCorsOrigin(?string $origin): self
+    {
+        $this->corsOrigin = $origin === null ? null : \str_replace(["\r", "\n"], '', $origin);
         return $this;
     }
     
@@ -129,7 +137,9 @@ class SseWriter
             $headers .= "Cache-Control: no-cache\r\n";
             $headers .= "Connection: keep-alive\r\n";
             $headers .= "X-Accel-Buffering: no\r\n";
-            $headers .= "Access-Control-Allow-Origin: *\r\n";
+            if ($this->corsOrigin !== null && $this->corsOrigin !== '') {
+                $headers .= "Access-Control-Allow-Origin: {$this->corsOrigin}\r\n";
+            }
             $headers .= "\r\n";
 
             // 使用带重试的写入方法
@@ -151,7 +161,9 @@ class SseWriter
                 \header('Pragma: no-cache');
                 \header('Connection: keep-alive');
                 \header('X-Accel-Buffering: no');
-                \header('Access-Control-Allow-Origin: *');
+                if ($this->corsOrigin !== null && $this->corsOrigin !== '') {
+                    \header('Access-Control-Allow-Origin: ' . $this->corsOrigin);
+                }
             }
 
             // 清空所有输出缓冲区
@@ -308,13 +320,7 @@ class SseWriter
             // #endregion
 
             // 缓冲区满，yield 让出控制权，下一轮再试
-            if ($this->cooperativeYield) {
-                if ($this->yieldDelayMs > 0) {
-                    SchedulerSystem::yieldDelay($this->yieldDelayMs);
-                } else {
-                    SchedulerSystem::yield();
-                }
-            }
+            $this->cooperativeYield();
         }
 
         // #region agent debug log
@@ -404,6 +410,20 @@ class SseWriter
         return $this;
     }
 
+    private function cooperativeYield(): void
+    {
+        if (!$this->cooperativeYield) {
+            return;
+        }
+
+        if ($this->yieldDelayMs > 0) {
+            SchedulerSystem::yieldDelay($this->yieldDelayMs);
+            return;
+        }
+
+        SchedulerSystem::yield();
+    }
+
     /**
      * 发送后让出控制权（协作式调度）
      *
@@ -430,11 +450,7 @@ class SseWriter
             return $this;
         }
 
-        if ($this->yieldDelayMs > 0) {
-            SchedulerSystem::yieldDelay($this->yieldDelayMs);
-        } else {
-            SchedulerSystem::yield();
-        }
+        $this->cooperativeYield();
 
         // #region agent debug log
         if (Env::get('dev.mode') || Env::get('wls.debug', false)) {

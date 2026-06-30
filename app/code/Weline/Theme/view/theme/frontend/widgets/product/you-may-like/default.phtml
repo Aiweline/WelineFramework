@@ -11,6 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["*"]}
+ * @widget.supports {["layout-product-related-products","layout-product-list-recommendations","layout-search-recommendations","layout-default-content"]}
  * @widget.compatible {true}
  * 
  * @param title {default="猜你喜欢",type="string",label="标题"}
@@ -141,27 +142,339 @@ $widgetId = 'you-may-like-' . uniqid();
 </div>
 
 <style>
-.widget-you-may-like .match-badge {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    background: rgba(155, 89, 182, 0.9);
-    color: #fff;
-    padding: 4px 10px;
-    border-radius: 15px;
-    font-size: 11px;
-    font-weight: 500;
+/* ========== 猜你喜欢 - 完整样式 ========== */
+
+/* -- 部件容器 -- */
+.widget-you-may-like {
+    padding: 40px 0;
+}
+
+/* -- 头部区域 -- */
+.widget-you-may-like .widget-header {
+    text-align: center;
+    margin-bottom: 32px;
+    position: relative;
+}
+
+.widget-you-may-like .widget-header::after {
+    content: '';
+    display: block;
+    width: 60px;
+    height: 3px;
+    margin: 16px auto 0;
+    background: linear-gradient(90deg, #9b59b6, #8e44ad, #c39bd3);
+    border-radius: 3px;
+}
+
+.widget-you-may-like .widget-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--color-text-primary, #111);
+    margin: 0 0 8px 0;
     display: flex;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+    gap: 10px;
+}
+
+.widget-you-may-like .widget-title i {
+    font-size: 26px;
+    background: linear-gradient(135deg, #9b59b6, #c39bd3);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.widget-you-may-like .widget-subtitle {
+    font-size: 14px;
+    color: var(--color-text-secondary, #767676);
+    margin: 0;
+}
+
+/* -- 产品网格 -- */
+.widget-you-may-like .products-grid {
+    display: grid;
+    gap: 20px;
+}
+
+.widget-you-may-like .products-grid.columns-2 { grid-template-columns: repeat(2, 1fr); }
+.widget-you-may-like .products-grid.columns-3 { grid-template-columns: repeat(3, 1fr); }
+.widget-you-may-like .products-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
+.widget-you-may-like .products-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
+
+/* -- 产品卡片 -- */
+.widget-you-may-like .product-card {
+    background: var(--color-bg-primary, #fff);
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.widget-you-may-like .product-card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-lg, 0 10px 25px rgba(0,0,0,0.12));
+    border-color: rgba(155, 89, 182, 0.3);
+}
+
+/* -- 图片区域 -- */
+.widget-you-may-like .product-image-wrapper {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-bg-secondary, #f8f9fa);
+    aspect-ratio: 1 / 1;
+}
+
+.widget-you-may-like .product-image-link {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.widget-you-may-like .product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+
+.widget-you-may-like .product-card:hover .product-image {
+    transform: scale(1.08);
+}
+
+/* -- 匹配度徽章 -- */
+.widget-you-may-like .match-badge {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: linear-gradient(135deg, rgba(155, 89, 182, 0.92), rgba(142, 68, 173, 0.92));
+    color: #fff;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
     z-index: 2;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 8px rgba(155, 89, 182, 0.25);
+    animation: matchPulse 3s ease-in-out infinite;
+}
+
+@keyframes matchPulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(155, 89, 182, 0.25); }
+    50% { box-shadow: 0 2px 16px rgba(155, 89, 182, 0.45); }
+}
+
+.widget-you-may-like .match-badge i {
+    font-size: 13px;
+}
+
+/* -- 产品操作按钮 -- */
+.widget-you-may-like .product-actions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 2;
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.widget-you-may-like .product-card:hover .product-actions {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.widget-you-may-like .action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--color-bg-primary, #fff);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--color-text-secondary, #767676);
+    transition: all 0.25s ease;
+}
+
+.widget-you-may-like .action-btn:hover {
+    transform: scale(1.12);
+}
+
+.widget-you-may-like .btn-wishlist:hover {
+    background: #ff4757;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(255, 71, 87, 0.35);
+}
+
+.widget-you-may-like .btn-quickview:hover {
+    background: #9b59b6;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(155, 89, 182, 0.35);
+}
+
+/* -- 产品信息区域 -- */
+.widget-you-may-like .product-info {
+    padding: 16px;
+}
+
+.widget-you-may-like .product-name {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.widget-you-may-like .product-name a {
+    color: var(--color-text-primary, #111);
+    text-decoration: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    transition: color 0.2s ease;
+}
+
+.widget-you-may-like .product-name a:hover {
+    color: #9b59b6;
+}
+
+/* -- 评分 -- */
+.widget-you-may-like .product-rating {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.widget-you-may-like .product-rating .stars {
+    display: flex;
+    gap: 2px;
 }
 
 .widget-you-may-like .product-rating .stars i {
+    font-size: 13px;
     color: #ffc107;
 }
 
 .widget-you-may-like .product-rating .stars i.ri-star-line {
     color: #ddd;
+}
+
+.widget-you-may-like .review-count {
+    font-size: 12px;
+    color: var(--color-text-tertiary, #a6a6a6);
+}
+
+/* -- 价格 -- */
+.widget-you-may-like .product-price {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.widget-you-may-like .price-original {
+    font-size: 13px;
+    color: var(--color-text-tertiary, #a6a6a6);
+    text-decoration: line-through;
+}
+
+.widget-you-may-like .price-current {
+    font-size: 20px;
+    font-weight: 700;
+    color: #e74c3c;
+}
+
+.widget-you-may-like .price-current::first-letter {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* -- 加入购物车按钮 -- */
+.widget-you-may-like .btn-add-to-cart {
+    width: 100%;
+    padding: 10px 0;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(155, 89, 182, 0.2);
+}
+
+.widget-you-may-like .btn-add-to-cart:hover {
+    background: linear-gradient(135deg, #8e44ad, #7d3c98);
+    box-shadow: 0 4px 16px rgba(155, 89, 182, 0.35);
+    transform: translateY(-1px);
+}
+
+.widget-you-may-like .btn-add-to-cart:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(155, 89, 182, 0.2);
+}
+
+.widget-you-may-like .btn-add-to-cart i {
+    font-size: 17px;
+}
+
+/* -- 响应式 -- */
+@media (max-width: 1024px) {
+    .widget-you-may-like .products-grid.columns-4,
+    .widget-you-may-like .products-grid.columns-5 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .widget-you-may-like .products-grid.columns-3,
+    .widget-you-may-like .products-grid.columns-4,
+    .widget-you-may-like .products-grid.columns-5 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .widget-you-may-like .widget-title {
+        font-size: 22px;
+    }
+
+    .widget-you-may-like .product-info {
+        padding: 12px;
+    }
+
+    .widget-you-may-like .products-grid {
+        gap: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .widget-you-may-like .products-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px;
+    }
+
+    .widget-you-may-like .price-current {
+        font-size: 16px;
+    }
+
+    .widget-you-may-like .btn-add-to-cart {
+        font-size: 12px;
+        padding: 8px 0;
+    }
 }
 </style>

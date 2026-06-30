@@ -1,0 +1,18 @@
+<?php
+/**
+ * Location module - layout body-end hook
+ * 
+ * Declare the Location frontend module before body end.
+ * Hook名称：Weline_Theme::frontend::layouts::base::body-end
+ * 
+ * @hook-priority 100      Hook优先级：100（framework位置默认优先级）
+ * @hook-sort-order 0      Hook排序顺序：0（默认值）
+ * @hook-solo false        Hook独享：false（不独占）
+ */
+?>
+<script>
+    // Declare Location module on demand.
+    if (typeof Weline !== 'undefined' && Weline.declare) {
+        Weline.declare('location');
+    }
+</script>

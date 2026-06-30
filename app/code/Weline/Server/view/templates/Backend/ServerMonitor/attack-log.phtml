@@ -70,11 +70,11 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
                 <small class="text-muted">(<?= __('共 %{1} 条', $total) ?>)</small>
             </h5>
             <div class="d-flex gap-2">
-                <select class="form-select form-select-sm" style="width: auto;" onchange="filterByInstance(this.value)">
+                <select class="form-select form-select-sm" style="width: auto;" data-attack-log-change="filter-instance">
                     <option value=""><?= __('全部实例') ?></option>
                     <option value="default" <?= $instance === 'default' ? 'selected' : '' ?>>default</option>
                 </select>
-                <button class="btn btn-sm btn-outline-primary" onclick="location.reload()">
+                <button class="btn btn-sm btn-outline-primary" data-attack-log-action="reload">
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
@@ -179,6 +179,19 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
 </style>
 
 <script>
+document.addEventListener('change', function(event) {
+    if (event.target.matches('[data-attack-log-change="filter-instance"]')) {
+        filterByInstance(event.target.value);
+    }
+});
+
+document.addEventListener('click', function(event) {
+    const trigger = event.target.closest('[data-attack-log-action="reload"]');
+    if (trigger) {
+        location.reload();
+    }
+});
+
 function filterByInstance(instance) {
     const url = new URL(window.location.href);
     if (instance) {

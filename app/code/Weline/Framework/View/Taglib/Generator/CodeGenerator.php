@@ -332,6 +332,10 @@ final class CodeGenerator
             return $builtinResult;
         }
 
+        if ($this->isSlotTag($node)) {
+            $node = $node->withChildren($this->selectSlotElseFallbackNodes($node->children));
+        }
+
         $callback = $this->tagCallbacks[$node->name] ?? null;
 
         if ($callback !== null) {
@@ -339,6 +343,9 @@ final class CodeGenerator
             $result = $callback($params);
             
             if (is_string($result)) {
+                if ($node->name === 'hook' || $node->name === 'w:hook') {
+                    $result = $this->stripLeakedHookFallbackDelimiter($result);
+                }
                 return $result;
             }
         }
@@ -347,11 +354,55 @@ final class CodeGenerator
         return $this->generateDefaultTag($node);
     }
 
+    private function stripLeakedHookFallbackDelimiter(string $content): string
+    {
+        $patterns = [
+            '/<(?:w:)?else\s*\/?>/i',
+            '/<\?php\s*else\s*:?\s*\?>/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (!preg_match($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+
+            $delimiter = $matches[0][0];
+            $delimiterOffset = (int)$matches[0][1];
+            $candidateHookName = preg_replace('/\s+/', '', substr($content, 0, $delimiterOffset));
+            if (!is_string($candidateHookName)
+                || $candidateHookName === ''
+                || !preg_match('/^[A-Za-z0-9_.\-:]+$/', $candidateHookName)
+            ) {
+                continue;
+            }
+
+            return substr($content, $delimiterOffset + strlen($delimiter));
+        }
+
+        return $content;
+    }
+
     /**
      * 生成内置标签代码
      * 
      * @return string|null 返回 null 表示非内置标签
      */
+    private function isSlotTag(TagNode $node): bool
+    {
+        return $node->name === 'slot' || $node->name === 'w:slot';
+    }
+
+    private function selectSlotElseFallbackNodes(array $children): array
+    {
+        foreach ($children as $index => $child) {
+            if ($child instanceof TagNode && ($child->name === 'else' || $child->name === 'w:else')) {
+                return array_slice($children, $index + 1);
+            }
+        }
+
+        return $children;
+    }
+
     private function generateBuiltinTag(TagNode $node): ?string
     {
         // 检查是否是 @tag{...} 格式（内联格式）

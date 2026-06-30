@@ -1,83 +1,83 @@
 ﻿"开始收集 Sticker 信息...","开始收集 Sticker 信息..."
-"从 ExtendsData 读取 Sticker 信息...","从 ExtendsData 读取 Sticker 信息..."
-"发现 %{1} 个 Sticker 文件","发现 %{1} 个 Sticker 文件"
-"没有发现 Sticker 文件","没有发现 Sticker 文件"
-注册表读取完成,注册表读取完成
-检测冲突...,检测冲突...
-"检测到 %{1} 个冲突","检测到 %{1} 个冲突"
-注册表未更新，请解决冲突后重新执行,注册表未更新，请解决冲突后重新执行
-未检测到冲突,未检测到冲突
-清除缓存...,清除缓存...
-缓存清除完成,缓存清除完成
-执行失败：%{1},执行失败：%{1}
-"开始刷新 Sticker 编译文件...","开始刷新 Sticker 编译文件..."
-刷新完成,刷新完成
-"成功: %{1}","成功: %{1}"
-"失败: %{1}","失败: %{1}"
-错误详情:,错误详情:
-加载Sticker列表失败：%{1},加载Sticker列表失败：%{1}
-参数不完整,参数不完整
-Sticker不存在,Sticker不存在
-Sticker详情,Sticker详情
-加载Sticker详情失败：%{1},加载Sticker详情失败：%{1}
-刷新Sticker注册表失败：%{1},刷新Sticker注册表失败：%{1}
-搜索失败：%{1},搜索失败：%{1}
-"Sticker 编译失败","Sticker 编译失败"
-"未找到 Sticker 规则","未找到 Sticker 规则"
-目标模块,目标模块
-目标文件,目标文件
-"没有有效的 actions","没有有效的 actions"
-可能原因,可能原因
-"Sticker 文件解析失败或 actions 为空","Sticker 文件解析失败或 actions 为空"
-"Sticker 编译警告","Sticker 编译警告"
-"actions 为空，跳过该 Sticker","actions 为空，跳过该 Sticker"
-"Sticker 文件","Sticker 文件"
-"Sticker 目标代码未找到","Sticker 目标代码未找到"
-"Sticker 规则无法找到目标代码","Sticker 规则无法找到目标代码"
-来源模块,来源模块
-目标代码,目标代码
-（空）,（空）
-"Sticker 位置参数无效","Sticker 位置参数无效"
-位置参数无效,位置参数无效
-位置参数,位置参数
-实际匹配数,实际匹配数
-源文件不存在,源文件不存在
-源文件路径,源文件路径
-"Sticker 编译异常","Sticker 编译异常"
-编译过程中发生异常,编译过程中发生异常
-异常信息,异常信息
-"Sticker 规则失效警告","Sticker 规则失效警告"
-"Sticker 规则已失效","Sticker 规则已失效"
-原因,原因
-位置,位置
-未知,未知
-"Sticker 冲突检测","Sticker 冲突检测"
-"检测到 Sticker 规则冲突","检测到 Sticker 规则冲突"
-冲突详情,冲突详情
-未知原因,未知原因
+"从 ExtendsData 读取 Sticker 信息...","Reading Sticker information from ExtendsData..."
+"发现 %{1} 个 Sticker 文件","Found %{1} Sticker files"
+"没有发现 Sticker 文件","No Sticker file found"
+注册表读取完成,"Registry read completed"
+检测冲突...,"Detecting conflicts..."
+"检测到 %{1} 个冲突","Detected %{1} conflicts"
+注册表未更新，请解决冲突后重新执行,"Registry not updated, please resolve conflicts and re-execute"
+未检测到冲突,"No conflicts detected"
+清除缓存...,"Clearing cache..."
+缓存清除完成,"Cache Clear Complete"
+执行失败：%{1},"Execution failed: %{1}"
+"开始刷新 Sticker 编译文件...","Refreshing Sticker compiled files..."
+刷新完成,"Refresh Complete"
+"成功: %{1}","Success: %{1}"
+"失败: %{1}","Failed: %{1}"
+错误详情:,"Error details:"
+加载Sticker列表失败：%{1},"Failed to load Sticker list: %{1}"
+参数不完整,"Incomplete parameters"
+Sticker不存在,"Sticker does not exist"
+Sticker详情,"Sticker details"
+加载Sticker详情失败：%{1},"Failed to load Sticker details: %{1}"
+刷新Sticker注册表失败：%{1},"Failed to refresh Sticker registry: %{1}"
+搜索失败：%{1},"Search Failed: %{1}"
+"Sticker 编译失败","Sticker compilation failed"
+"未找到 Sticker 规则","Sticker rule not found"
+目标模块,"Target module"
+目标文件,"Target file"
+"没有有效的 actions","No valid actions"
+可能原因,"Possible Causes"
+"Sticker 文件解析失败或 actions 为空","Sticker file parsing failed or actions are empty"
+"Sticker 编译警告","Sticker compilation warning"
+"actions 为空，跳过该 Sticker","actions is empty, skip the Sticker"
+"Sticker 文件","Sticker file"
+"Sticker 目标代码未找到","Sticker target code not found"
+"Sticker 规则无法找到目标代码","Sticker rule cannot find the target code"
+来源模块,"Source module"
+目标代码,"Target code"
+（空）,(Empty)
+"Sticker 位置参数无效","Invalid Sticker position parameter"
+位置参数无效,"Invalid Position Parameter"
+位置参数,"Position Parameter"
+实际匹配数,"Actual Match Count"
+源文件不存在,"Source file does not exist"
+源文件路径,"Source file path"
+"Sticker 编译异常","Sticker compilation exception"
+编译过程中发生异常,"An exception occurred during compilation"
+异常信息,"Exception information"
+"Sticker 规则失效警告","Sticker rule invalidation warning"
+"Sticker 规则已失效","Sticker rule has expired"
+原因,Reason
+位置,Position
+未知,Unknown
+"Sticker 冲突检测","Sticker conflict detection"
+"检测到 Sticker 规则冲突","Detected Sticker rule conflict."
+冲突详情,"Conflict details"
+未知原因,"Unknown reason"
 首页,Home
-Sticker管理,Sticker管理
+Sticker管理,"Sticker management"
 详情,Details
-返回列表,返回列表
-基本信息,基本信息
-Sticker文件,Sticker文件
-完整路径,完整路径
-规则数量,规则数量
-修改规则,修改规则
-暂无规则,暂无规则
-位置：%{1},位置：%{1}
-修改代码,修改代码
-"Sticker 文件内容","Sticker 文件内容"
-文件不存在或为空,文件不存在或为空
-源文件内容,源文件内容
-源文件不存在或为空,源文件不存在或为空
-系统,系统
-总数：%{1},总数：%{1}
-搜索模块名、文件路径,搜索模块名、文件路径
-所有目标模块,所有目标模块
-所有来源模块,所有来源模块
+返回列表,"Return to List"
+基本信息,"Basic information"
+Sticker文件,"Sticker file"
+完整路径,"Full Path"
+规则数量,"Rule Count"
+修改规则,"Modification rules"
+暂无规则,"No rules"
+位置：%{1},"Position: %{1}"
+修改代码,"Modify Code"
+"Sticker 文件内容","Sticker file content"
+文件不存在或为空,"File does not exist or is empty"
+源文件内容,"Source file content"
+源文件不存在或为空,"Source file does not exist or is empty"
+系统,System
+总数：%{1},"Total Count: %{1}"
+搜索模块名、文件路径,"Search Module Name, File Path"
+所有目标模块,"All Target Modules"
+所有来源模块,"All Source Modules"
 搜索,Search
 重置,Reset
-暂无Sticker,暂无Sticker
+暂无Sticker,"No Sticker"
 操作,Operation
-查看详情,查看详情
+查看详情,"View Details"

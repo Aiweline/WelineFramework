@@ -82,6 +82,7 @@ class RenderVirtualComponentPreviewTool implements ToolInterface
             pageLayouts: is_array($payload['meta_json']['page_layouts'] ?? null) ? $payload['meta_json']['page_layouts'] : ['*'],
             slots: is_array($payload['meta_json']['slots'] ?? null) ? $payload['meta_json']['slots'] : [],
             slot: isset($payload['meta_json']['slot']) ? (string)$payload['meta_json']['slot'] : null,
+            supports: $this->normalizeStringArray($payload['meta_json']['supports'] ?? null),
             exclusive: (bool)($payload['meta_json']['exclusive'] ?? false),
             compatible: !array_key_exists('compatible', $payload['meta_json'] ?? []) || (bool)$payload['meta_json']['compatible'],
             isContainer: (bool)($payload['meta_json']['is_container'] ?? false),
@@ -118,6 +119,22 @@ class RenderVirtualComponentPreviewTool implements ToolInterface
     public function isEnabled(): bool
     {
         return true;
+    }
+
+    private function normalizeStringArray(array|string|null $value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('strval', $value), static fn(string $item): bool => $item !== ''));
+        }
+
+        if (is_string($value) && $value !== '') {
+            return array_values(array_filter(array_map(
+                static fn(string $item): string => trim($item),
+                explode(',', $value)
+            ), static fn(string $item): bool => $item !== ''));
+        }
+
+        return [];
     }
 
     private function convertSchemaToParams(array $schema): array

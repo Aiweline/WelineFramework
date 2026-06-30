@@ -50,7 +50,8 @@ class InMemoryMetricsAggregator implements MetricsAggregatorInterface, MetricsQu
             $this->checkMemoryPressure();
         }
 
-        $this->flushDueBuckets(false);
+        // Do not flush to the database from the Master IPC hot path. A synchronous
+        // metrics write can block status/reload control commands under load.
     }
 
     /**
@@ -207,6 +208,16 @@ class InMemoryMetricsAggregator implements MetricsAggregatorInterface, MetricsQu
     public function snapshotHostDetail(string $instanceName, string $host, int $sinceTs): array
     {
         return $this->aggregateBuckets($instanceName, \strtolower($host), $sinceTs);
+    }
+
+    public function getBufferedBucketCount(): int
+    {
+        return \count(self::$buckets);
+    }
+
+    public function getRetryQueueCount(): int
+    {
+        return \count(self::$retryQueue);
     }
 
     public function query(string $instanceName, int $windowSec = 300, ?string $host = null): array

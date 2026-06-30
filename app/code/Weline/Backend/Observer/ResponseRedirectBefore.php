@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Observer;
 
+use Weline\Admin\Service\BackendLoginReturnUrlService;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\DataObject\DataObject;
@@ -27,10 +28,12 @@ class ResponseRedirectBefore implements ObserverInterface
      * @var Request
      */
     protected Request $request;
+    private ?BackendLoginReturnUrlService $returnUrlService;
 
-    public function __construct(Request $request)
+    public function __construct(Request $request, ?BackendLoginReturnUrlService $returnUrlService = null)
     {
         $this->request = $request;
+        $this->returnUrlService = $returnUrlService;
     }
 
     /**
@@ -99,10 +102,14 @@ class ResponseRedirectBefore implements ObserverInterface
             // 检查当前路径是否在白名单中
             $currentPath = trim($this->request->getRouteUrlPath(), '/');
             if (!in_array($currentPath, $whiteUrls)) {
+                $refererUrl = $this->getReturnUrlService()->normalizeCandidateUrl($this->getCurrentRequestUrl());
+                if ($refererUrl === null) {
+                    return;
+                }
                 // 记录登录来源页面
                 /** @var Session $session */
                 $session = ObjectManager::getInstance(Session::class);
-                $session->setData('backend_login_referer', $this->request->getUrlBuilder()->getCurrentUrl());
+                $session->setData('backend_login_referer', $refererUrl);
             }
             
         } catch (\Exception $e) {
@@ -140,7 +147,7 @@ class ResponseRedirectBefore implements ObserverInterface
                 $hint = $sessId !== '' ? \substr($sessId, 0, 8) . '...' : 'none';
                 w_log_warning('[Backend] Redirect to login: cookie_sid=' . $hint . ' (session empty or not logged in)', [], 'session');
                 // 未登录用户重定向到登录页（同源 URL，避免 admin ↔ login 循环重定向）
-                $loginUrl = $this->getBackendLoginUrlSameOrigin();
+                $loginUrl = $this->withBackendLoginReturnUrl($this->getBackendLoginUrlSameOrigin());
                 $data->setData('url', $loginUrl);
                 $data->setData('code', 302);
                 return;
@@ -313,6 +320,50 @@ class ResponseRedirectBefore implements ObserverInterface
         $scheme = $this->request->isSecure() ? 'https' : 'http';
         $host = $this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost';
         return $scheme . '://' . $host . $pathPart;
+    }
+
+    private function withBackendLoginReturnUrl(string $loginUrl): string
+    {
+        if (!$this->request->isGet() || $this->request->isAjax() || $this->request->isIframe()) {
+            return $loginUrl;
+        }
+
+        $currentRequestUrl = $this->getCurrentRequestUrl();
+        if ($currentRequestUrl === '') {
+            return $loginUrl;
+        }
+
+        $currentPath = strtolower((string)(parse_url($currentRequestUrl, PHP_URL_PATH) ?: ''));
+        if ($currentPath === ''
+            || str_ends_with($currentPath, '/admin/login')
+            || str_ends_with($currentPath, '/admin/login/post')
+            || str_ends_with($currentPath, '/admin/login/logout')
+        ) {
+            return $loginUrl;
+        }
+
+        return $this->getReturnUrlService()->buildLoginUrlWithReturn($loginUrl, $currentRequestUrl, 'not_logged_in');
+    }
+
+    private function getReturnUrlService(): BackendLoginReturnUrlService
+    {
+        if (!$this->returnUrlService instanceof BackendLoginReturnUrlService) {
+            $this->returnUrlService = ObjectManager::getInstance(BackendLoginReturnUrlService::class);
+        }
+
+        return $this->returnUrlService;
+    }
+
+    private function getCurrentRequestUrl(): string
+    {
+        $uri = (string)($this->request->getServer('WELINE_ORIGIN_REQUEST_URI') ?: $this->request->getServer('REQUEST_URI'));
+        if ($uri === '') {
+            return '';
+        }
+
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: 'localhost');
+        return $scheme . '://' . $host . (str_starts_with($uri, '/') ? $uri : '/' . $uri);
     }
 
     /**

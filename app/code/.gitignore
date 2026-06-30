@@ -1,7 +1,9 @@
 *.tar.gz
 *.zip
 *.rar
-Aiweline
+Aiweline/*
+!Aiweline/A2A/
+!Aiweline/A2A/**
 Shopify
 Jhll
 */*/view/tpl/*

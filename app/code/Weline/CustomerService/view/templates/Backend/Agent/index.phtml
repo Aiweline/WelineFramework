@@ -22,6 +22,16 @@ $customerServiceDefaultLocale = isset($locales['zh_Hans_CN'])
     ? 'zh_Hans_CN'
     : (string)(array_key_first($locales) ?: '');
 $customerServiceDefaultSupportedLocales = $customerServiceDefaultLocale !== '' ? [$customerServiceDefaultLocale] : [];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
+$jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
+    return htmlspecialchars(json_encode($value, $jsonForScriptFlags), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+};
 ?>
 <link rel="stylesheet" href="<?= $statisticsCssUrl ?>">
 <style>
@@ -233,7 +243,7 @@ $customerServiceDefaultSupportedLocales = $customerServiceDefaultLocale !== '' ?
 <div class="cs-agent-page customer-service-agent">
     <div class="page-header">
         <h1><?= __('客服人员管理') ?></h1>
-        <button class="btn btn-primary" onclick="showAgentModal()">
+        <button class="btn btn-primary" data-agent-action="create">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: middle; margin-right: 4px;">
                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
             </svg>
@@ -265,8 +275,8 @@ $customerServiceDefaultSupportedLocales = $customerServiceDefaultLocale !== '' ?
                     </tr>
                 <?php else: ?>
                     <?php foreach ($agents as $agent): ?>
-                        <tr data-agent='<?= htmlspecialchars(json_encode($agent, JSON_UNESCAPED_UNICODE)) ?>'>
-                            <td><?= $agent['agent_id'] ?></td>
+                        <tr data-agent="<?= $jsonForHtmlAttr($agent) ?>">
+                            <td><?= (int)($agent['agent_id'] ?? 0) ?></td>
                             <td><?= htmlspecialchars($agent['name']) ?></td>
                             <td><?= htmlspecialchars($agent['user_name'] ?? '-') ?></td>
                             <td><?= htmlspecialchars($agent['email']) ?></td>
@@ -310,13 +320,13 @@ $customerServiceDefaultSupportedLocales = $customerServiceDefaultLocale !== '' ?
                             </td>
                             <td>
                                 <div class="btn-group">
-                                    <button class="btn btn-sm btn-info" onclick="viewStatistics(<?= $agent['agent_id'] ?>)" title="<?= __('查看统计') ?>">
+                                    <button class="btn btn-sm btn-info" data-agent-action="statistics" data-agent-id="<?= $jsonForHtmlAttr((int)($agent['agent_id'] ?? 0)) ?>" title="<?= __('查看统计') ?>">
                                         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
                                     </button>
-                                    <button class="btn btn-sm btn-primary" onclick="editAgent(<?= $agent['agent_id'] ?>)" title="<?= __('编辑') ?>">
+                                    <button class="btn btn-sm btn-primary" data-agent-action="edit" data-agent-id="<?= $jsonForHtmlAttr((int)($agent['agent_id'] ?? 0)) ?>" title="<?= __('编辑') ?>">
                                         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                                     </button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteAgent(<?= $agent['agent_id'] ?>)" title="<?= __('删除') ?>">
+                                    <button class="btn btn-sm btn-danger" data-agent-action="delete" data-agent-id="<?= $jsonForHtmlAttr((int)($agent['agent_id'] ?? 0)) ?>" title="<?= __('删除') ?>">
                                         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                                     </button>
                                 </div>
@@ -334,7 +344,7 @@ $customerServiceDefaultSupportedLocales = $customerServiceDefaultLocale !== '' ?
     <div class="cs-modal">
         <div class="cs-modal-header">
             <h3 id="modal-title"><?= __('添加客服') ?></h3>
-            <button class="cs-modal-close" onclick="closeAgentModal()">&times;</button>
+            <button class="cs-modal-close" data-agent-action="close-modal">&times;</button>
         </div>
         <div class="cs-modal-body">
             <form id="agent-form">
@@ -401,22 +411,22 @@ $customerServiceDefaultSupportedLocales = $customerServiceDefaultLocale !== '' ?
             </form>
         </div>
         <div class="cs-modal-footer">
-            <button class="btn btn-secondary" onclick="closeAgentModal()"><?= __('取消') ?></button>
-            <button class="btn btn-primary" onclick="saveAgent()"><?= __('保存') ?></button>
+            <button class="btn btn-secondary" data-agent-action="close-modal"><?= __('取消') ?></button>
+            <button class="btn btn-primary" data-agent-action="save"><?= __('保存') ?></button>
         </div>
     </div>
 </div>
 
 <script>
 const AgentManager = {
-    saveUrl: '<?= $saveUrl ?>',
-    deleteUrl: '<?= $deleteUrl ?>',
-    statisticsUrl: '<?= $statisticsUrl ?>',
-    agents: <?= json_encode($agents, JSON_UNESCAPED_UNICODE) ?>
+    saveUrl: <?= json_encode($saveUrl, $jsonForScriptFlags) ?>,
+    deleteUrl: <?= json_encode($deleteUrl, $jsonForScriptFlags) ?>,
+    statisticsUrl: <?= json_encode($statisticsUrl, $jsonForScriptFlags) ?>,
+    agents: <?= json_encode($agents, $jsonForScriptFlags) ?>
 };
 
 const CustomerServiceLanguageUtils = window.WelineLanguageSelectUtils || null;
-const CustomerServiceDefaultLocale = <?= json_encode($customerServiceDefaultLocale, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+const CustomerServiceDefaultLocale = <?= json_encode($customerServiceDefaultLocale, $jsonForScriptFlags) ?>;
 
 if (CustomerServiceLanguageUtils && typeof CustomerServiceLanguageUtils.bindDefaultToMultiple === 'function') {
     CustomerServiceLanguageUtils.bindDefaultToMultiple({
@@ -458,7 +468,13 @@ function syncAgentLanguageSelection(locale, supportedLocales) {
     }
 }
 
+function normalizeAgentId(value) {
+    const parsed = parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function showAgentModal(agentId = 0) {
+    agentId = normalizeAgentId(agentId);
     const modal = document.getElementById('agent-modal');
     const form = document.getElementById('agent-form');
     const title = document.getElementById('modal-title');
@@ -630,7 +646,10 @@ function csShowConfirmDialog(message, options) {
 }
 
 function editAgent(agentId) {
-    showAgentModal(agentId);
+    agentId = normalizeAgentId(agentId);
+    if (agentId > 0) {
+        showAgentModal(agentId);
+    }
 }
 
 function saveAgent() {
@@ -660,6 +679,10 @@ function saveAgent() {
 }
 
 function deleteAgent(agentId) {
+    agentId = normalizeAgentId(agentId);
+    if (agentId <= 0) {
+        return;
+    }
     csShowConfirmDialog(
         '<?= __('确定要删除此客服吗？') ?>',
         {
@@ -694,7 +717,11 @@ function deleteAgent(agentId) {
 }
 
 function viewStatistics(agentId) {
-    const url = AgentManager.statisticsUrl + '?agent_id=' + agentId + '&period=all';
+    agentId = normalizeAgentId(agentId);
+    if (agentId <= 0) {
+        return;
+    }
+    const url = AgentManager.statisticsUrl + '?agent_id=' + encodeURIComponent(String(agentId)) + '&period=all';
     
     fetch(url)
         .then(response => response.json())
@@ -718,7 +745,7 @@ function showStatisticsModal(statistics) {
         <div class="modal-content">
             <div class="modal-header">
                 <h3><?= __('客服统计详情') ?></h3>
-                <button class="close-btn" onclick="this.closest('.statistics-modal').remove()">&times;</button>
+                <button class="close-btn" data-statistics-action="close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="stat-detail-section">
@@ -769,6 +796,41 @@ function formatResponseTime(seconds) {
 document.getElementById('agent-modal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeAgentModal();
+    }
+});
+
+document.addEventListener('click', function(event) {
+    const statisticsAction = event.target.closest('[data-statistics-action]');
+    if (statisticsAction && statisticsAction.getAttribute('data-statistics-action') === 'close') {
+        event.preventDefault();
+        const modal = statisticsAction.closest('.statistics-modal');
+        if (modal) {
+            modal.remove();
+        }
+        return;
+    }
+
+    const trigger = event.target.closest('[data-agent-action]');
+    if (!trigger) {
+        return;
+    }
+
+    event.preventDefault();
+    const action = String(trigger.getAttribute('data-agent-action') || '').trim();
+    const agentId = normalizeAgentId(trigger.getAttribute('data-agent-id'));
+
+    if (action === 'create') {
+        showAgentModal();
+    } else if (action === 'statistics') {
+        viewStatistics(agentId);
+    } else if (action === 'edit') {
+        editAgent(agentId);
+    } else if (action === 'delete') {
+        deleteAgent(agentId);
+    } else if (action === 'close-modal') {
+        closeAgentModal();
+    } else if (action === 'save') {
+        saveAgent();
     }
 });
 </script>

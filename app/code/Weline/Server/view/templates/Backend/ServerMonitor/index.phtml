@@ -104,7 +104,7 @@ use Weline\Server\Model\ServerStatusLog;
                         <i class="bi bi-diagram-2 me-2"></i><?= __('进程状态') ?>
                     </h5>
                     <div>
-                        <button class="btn btn-sm btn-outline-primary" onclick="refreshStatus()">
+                        <button class="btn btn-sm btn-outline-primary" data-server-monitor-action="refresh-status">
                             <i class="bi bi-arrow-clockwise"></i> <?= __('刷新') ?>
                         </button>
                         <a href="<?= $managerUrl ?>" class="btn btn-sm btn-outline-secondary ms-2">
@@ -417,7 +417,7 @@ use Weline\Server\Model\ServerStatusLog;
                         <input id="benchmark-target" class="form-control" type="text" placeholder="<?= __('压测目标 URL，例如 http://127.0.0.1:9981/_wls/health') ?>">
                         <input id="benchmark-concurrency" class="form-control" type="number" min="1" value="50" style="max-width: 90px;">
                         <input id="benchmark-requests" class="form-control" type="number" min="1" value="1000" style="max-width: 110px;">
-                        <button class="btn btn-outline-primary" onclick="runBenchmark()">
+                        <button class="btn btn-outline-primary" data-server-monitor-action="run-benchmark">
                             <i class="bi bi-play-circle"></i> <?= __('开始压测') ?>
                         </button>
                     </div>
@@ -446,7 +446,7 @@ use Weline\Server\Model\ServerStatusLog;
                         <a href="<?= $apiDocUrl ?>" class="btn btn-outline-info">
                             <i class="bi bi-book me-2"></i><?= __('API 文档') ?>
                         </a>
-                        <button class="btn btn-outline-warning" onclick="cleanupLogs()">
+                        <button class="btn btn-outline-warning" data-server-monitor-action="cleanup-logs">
                             <i class="bi bi-trash me-2"></i><?= __('清理过期日志') ?>
                         </button>
                     </div>
@@ -575,11 +575,35 @@ const BENCHMARK_DETAIL_API_URL = '<?= $benchmarkDetailApiUrl ?>';
 let refreshTimer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    const monitor = document.querySelector('.server-monitor');
+    if (monitor) {
+        monitor.addEventListener('click', handleServerMonitorClick);
+    }
     // 每 30 秒自动刷新
     refreshTimer = setInterval(refreshStatus, 30000);
     refreshStatus();
     refreshTraffic();
 });
+
+function handleServerMonitorClick(event) {
+    const trigger = event.target.closest('[data-server-monitor-action]');
+    if (!trigger) {
+        return;
+    }
+
+    const action = trigger.dataset.serverMonitorAction;
+    if (action === 'refresh-status') {
+        refreshStatus();
+        return;
+    }
+    if (action === 'run-benchmark') {
+        runBenchmark();
+        return;
+    }
+    if (action === 'cleanup-logs') {
+        cleanupLogs();
+    }
+}
 
 async function refreshStatus() {
     try {

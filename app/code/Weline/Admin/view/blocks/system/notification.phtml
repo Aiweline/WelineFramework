@@ -336,7 +336,9 @@ $unreadCount = count($notices);
                     $noticeUrl = $notice->getData('url') ?? '';
                     $source = $notice->getData('source') ?? '';
                     ?>
-                    <a href="<?= $noticeUrl ? htmlspecialchars($noticeUrl) : 'javascript:void(0)' ?>" class="weline-notif-item">
+                    <a href="<?= $noticeUrl ? htmlspecialchars($noticeUrl) : '#' ?>"
+                       class="weline-notif-item"
+                        <?= $noticeUrl ? '' : 'data-notification-empty-link="1"' ?>>
                         <div class="weline-notif-icon <?= $iconClass ?>">
                             <?php if ($notice->getIsIcon()): ?>
                                 <i class="<?= htmlspecialchars($notice->getAvatar()) ?>"></i>
@@ -375,3 +377,19 @@ $unreadCount = count($notices);
         </div>
     </div>
 </div>
+<script>
+(function() {
+    'use strict';
+
+    document.addEventListener('click', function(event) {
+        var target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        if (target.closest('[data-notification-empty-link]')) {
+            event.preventDefault();
+        }
+    });
+})();
+</script>

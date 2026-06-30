@@ -466,7 +466,7 @@ final class PreviewContextService
 
     private function getRawQueryParams(): array
     {
-        $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', ''));
         if ($requestUri === '') {
             $requestUri = (string) (\w_env('request.uri', '') ?? '');
         }

@@ -171,6 +171,7 @@
         currentPage: 1,
         currentDateFrom: '',
         currentDateTo: '',
+        recordsByKey: new Map(),
         
         init: function() {
             var self = this;
@@ -239,36 +240,62 @@
         displayRecords: function(records) {
             var tbody = document.getElementById('weline-ai-usage-list');
             var self = this;
+            this.clearElement(tbody);
+            this.recordsByKey.clear();
             
             if (records.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="text-center"><?= __('暂无数据') ?></td></tr>';
+                var emptyRow = document.createElement('tr');
+                var emptyCell = document.createElement('td');
+                emptyCell.colSpan = 11;
+                emptyCell.className = 'text-center';
+                emptyCell.textContent = '<?= __('暂无数据') ?>';
+                emptyRow.appendChild(emptyCell);
+                tbody.appendChild(emptyRow);
                 return;
             }
             
-            tbody.innerHTML = records.map(function(record) {
-                return '<tr>' +
-                    '<td>' + record.created_at_formatted + '</td>' +
-                    '<td>' + (record.model_name || record.model_code) + '</td>' +
-                    '<td>' + (record.user_name || record.user_id || '-') + '</td>' +
-                    '<td>' + (record.request_type || 'chat') + '</td>' +
-                    '<td>' + record.prompt_tokens.toLocaleString() + '</td>' +
-                    '<td>' + record.completion_tokens.toLocaleString() + '</td>' +
-                    '<td>' + record.total_tokens.toLocaleString() + '</td>' +
-                    '<td>' + record.total_cost_formatted + '</td>' +
-                    '<td>' + record.request_time_formatted + '</td>' +
-                    '<td>' + (record.status === 'success' 
-                        ? '<span class="badge bg-success"><?= __('成功') ?></span>' 
-                        : '<span class="badge bg-danger"><?= __('失败') ?></span>') + '</td>' +
-                    '<td><button class="btn btn-sm btn-info weline-ai-view-detail" data-record=\'' + JSON.stringify(record) + '\'>' +
-                        '<i class="mdi mdi-eye"></i></button></td>' +
-                '</tr>';
-            }).join('');
-            
-            // 绑定查看详情事件
-            document.querySelectorAll('.weline-ai-view-detail').forEach(function(btn) {
+            records.forEach(function(record, index) {
+                var recordKey = self.getRecordKey(record, index);
+                self.recordsByKey.set(recordKey, record);
+
+                var row = document.createElement('tr');
+                self.appendCell(row, record.created_at_formatted);
+                self.appendCell(row, record.model_name || record.model_code);
+                self.appendCell(row, record.user_name || record.user_id || '-');
+                self.appendCell(row, record.request_type || 'chat');
+                self.appendCell(row, self.formatNumber(record.prompt_tokens));
+                self.appendCell(row, self.formatNumber(record.completion_tokens));
+                self.appendCell(row, self.formatNumber(record.total_tokens));
+                self.appendCell(row, record.total_cost_formatted);
+                self.appendCell(row, record.request_time_formatted);
+
+                var statusCell = document.createElement('td');
+                var statusBadge = document.createElement('span');
+                statusBadge.className = record.status === 'success' ? 'badge bg-success' : 'badge bg-danger';
+                statusBadge.textContent = record.status === 'success' ? '<?= __('成功') ?>' : '<?= __('失败') ?>';
+                statusCell.appendChild(statusBadge);
+                row.appendChild(statusCell);
+
+                var actionCell = document.createElement('td');
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn btn-sm btn-info weline-ai-view-detail';
+                button.setAttribute('data-record-key', recordKey);
+                var icon = document.createElement('i');
+                icon.className = 'mdi mdi-eye';
+                button.appendChild(icon);
+                actionCell.appendChild(button);
+                row.appendChild(actionCell);
+
+                tbody.appendChild(row);
+            });
+
+            tbody.querySelectorAll('.weline-ai-view-detail').forEach(function(btn) {
                 btn.addEventListener('click', function() {
-                    var record = JSON.parse(this.getAttribute('data-record'));
-                    self.viewDetail(record);
+                    var record = self.recordsByKey.get(this.getAttribute('data-record-key'));
+                    if (record) {
+                        self.viewDetail(record);
+                    }
                 });
             });
         },
@@ -339,45 +366,110 @@
         },
         
         viewDetail: function(record) {
-            var content = '<div class="row">' +
-                '<div class="col-md-6">' +
-                    '<p><strong><?= __('请求ID') ?>:</strong> ' + (record.request_id || '-') + '</p>' +
-                    '<p><strong><?= __('模型') ?>:</strong> ' + (record.model_name || record.model_code) + '</p>' +
-                    '<p><strong><?= __('用户') ?>:</strong> ' + (record.user_name || record.user_id || '-') + '</p>' +
-                    '<p><strong><?= __('请求类型') ?>:</strong> ' + (record.request_type || 'chat') + '</p>' +
-                    '<p><strong><?= __('时间') ?>:</strong> ' + record.created_at_formatted + '</p>' +
-                '</div>' +
-                '<div class="col-md-6">' +
-                    '<p><strong><?= __('输入令牌') ?>:</strong> ' + record.prompt_tokens.toLocaleString() + '</p>' +
-                    '<p><strong><?= __('输出令牌') ?>:</strong> ' + record.completion_tokens.toLocaleString() + '</p>' +
-                    '<p><strong><?= __('总令牌') ?>:</strong> ' + record.total_tokens.toLocaleString() + '</p>' +
-                    '<p><strong><?= __('花费') ?>:</strong> ' + record.total_cost_formatted + '</p>' +
-                    '<p><strong><?= __('耗时') ?>:</strong> ' + record.request_time_formatted + '</p>' +
-                '</div>' +
-            '</div>';
+            var detailContent = document.getElementById('weline-ai-detail-content');
+            this.clearElement(detailContent);
+
+            var row = document.createElement('div');
+            row.className = 'row';
+
+            var leftCol = document.createElement('div');
+            leftCol.className = 'col-md-6';
+            this.appendDetailLine(leftCol, '<?= __('请求ID') ?>', record.request_id || '-');
+            this.appendDetailLine(leftCol, '<?= __('模型') ?>', record.model_name || record.model_code);
+            this.appendDetailLine(leftCol, '<?= __('用户') ?>', record.user_name || record.user_id || '-');
+            this.appendDetailLine(leftCol, '<?= __('请求类型') ?>', record.request_type || 'chat');
+            this.appendDetailLine(leftCol, '<?= __('时间') ?>', record.created_at_formatted);
+            row.appendChild(leftCol);
+
+            var rightCol = document.createElement('div');
+            rightCol.className = 'col-md-6';
+            this.appendDetailLine(rightCol, '<?= __('输入令牌') ?>', this.formatNumber(record.prompt_tokens));
+            this.appendDetailLine(rightCol, '<?= __('输出令牌') ?>', this.formatNumber(record.completion_tokens));
+            this.appendDetailLine(rightCol, '<?= __('总令牌') ?>', this.formatNumber(record.total_tokens));
+            this.appendDetailLine(rightCol, '<?= __('花费') ?>', record.total_cost_formatted);
+            this.appendDetailLine(rightCol, '<?= __('耗时') ?>', record.request_time_formatted);
+            row.appendChild(rightCol);
+
+            detailContent.appendChild(row);
             
             if (record.error_message) {
-                content += '<div class="alert alert-danger mt-3">' +
-                    '<strong><?= __('错误信息') ?>:</strong> ' + record.error_message +
-                '</div>';
+                var errorAlert = document.createElement('div');
+                errorAlert.className = 'alert alert-danger mt-3';
+                var errorLabel = document.createElement('strong');
+                errorLabel.textContent = '<?= __('错误信息') ?>: ';
+                errorAlert.appendChild(errorLabel);
+                errorAlert.appendChild(document.createTextNode(this.valueToText(record.error_message)));
+                detailContent.appendChild(errorAlert);
             }
             
             if (record.request_data) {
-                content += '<div class="mt-3">' +
-                    '<h6><?= __('请求数据') ?>:</h6>' +
-                    '<pre class="weline-ai-pre">' + record.request_data + '</pre>' +
-                '</div>';
+                detailContent.appendChild(this.createPreBlock('<?= __('请求数据') ?>', record.request_data));
             }
             
             if (record.response_data) {
-                content += '<div class="mt-3">' +
-                    '<h6><?= __('响应数据') ?>:</h6>' +
-                    '<pre class="weline-ai-pre">' + record.response_data + '</pre>' +
-                '</div>';
+                detailContent.appendChild(this.createPreBlock('<?= __('响应数据') ?>', record.response_data));
             }
             
-            document.getElementById('weline-ai-detail-content').innerHTML = content;
             new bootstrap.Modal(document.getElementById('weline-ai-detail-modal')).show();
+        },
+
+        getRecordKey: function(record, index) {
+            var rawKey = record.id || record.usage_id || record.request_id || index;
+            return 'usage-' + this.currentPage + '-' + index + '-' + String(rawKey);
+        },
+
+        clearElement: function(element) {
+            while (element.firstChild) {
+                element.removeChild(element.firstChild);
+            }
+        },
+
+        appendCell: function(row, value) {
+            var cell = document.createElement('td');
+            cell.textContent = this.valueToText(value);
+            row.appendChild(cell);
+            return cell;
+        },
+
+        appendDetailLine: function(parent, label, value) {
+            var paragraph = document.createElement('p');
+            var strong = document.createElement('strong');
+            strong.textContent = label + ': ';
+            paragraph.appendChild(strong);
+            paragraph.appendChild(document.createTextNode(this.valueToText(value)));
+            parent.appendChild(paragraph);
+        },
+
+        createPreBlock: function(label, value) {
+            var wrapper = document.createElement('div');
+            wrapper.className = 'mt-3';
+            var heading = document.createElement('h6');
+            heading.textContent = label + ':';
+            var pre = document.createElement('pre');
+            pre.className = 'weline-ai-pre';
+            pre.textContent = this.valueToText(value);
+            wrapper.appendChild(heading);
+            wrapper.appendChild(pre);
+            return wrapper;
+        },
+
+        valueToText: function(value) {
+            if (value === null || typeof value === 'undefined' || value === '') {
+                return '-';
+            }
+            if (typeof value === 'object') {
+                try {
+                    return JSON.stringify(value, null, 2);
+                } catch (error) {
+                    return String(value);
+                }
+            }
+            return String(value);
+        },
+
+        formatNumber: function(value) {
+            var number = Number(value || 0);
+            return Number.isFinite(number) ? number.toLocaleString() : this.valueToText(value);
         },
         
         exportData: function() {

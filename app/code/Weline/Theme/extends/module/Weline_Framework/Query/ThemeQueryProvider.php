@@ -3,9 +3,14 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 
+use Weline\Admin\Controller\BaseController as AdminBaseController;
+use Weline\Backend\Block\ThemeConfig as BackendThemeConfig;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
+use Weline\Theme\Service\ThemeVirtualLayoutService;
 
 /**
  * 主题查询器
@@ -14,10 +19,14 @@ use Weline\Theme\Service\ThemeContextService;
  */
 class ThemeQueryProvider implements QueryProviderInterface
 {
+    private ?ThemeVirtualLayoutService $virtualLayoutService;
+
     public function __construct(
         private readonly WelineTheme $welineTheme,
         private readonly ThemeContextService $themeContext,
+        ?ThemeVirtualLayoutService $virtualLayoutService = null,
     ) {
+        $this->virtualLayoutService = $virtualLayoutService;
     }
 
     public function getProviderName(): string
@@ -32,10 +41,73 @@ class ThemeQueryProvider implements QueryProviderInterface
             'getConfigValue' => $this->getConfigValue($params),
             'getTemplatePath' => $this->getTemplatePath($params),
             'scanThemeLayoutsByType' => $this->scanThemeLayoutsByType($params),
+            'listVirtualLayoutOptions' => $this->listVirtualLayoutOptions($params),
+            'virtualLayoutExists' => $this->virtualLayoutExists($params),
+            'loadVirtualLayoutSource' => $this->loadVirtualLayoutSource($params),
+            'listVirtualLayoutVersions' => $this->listVirtualLayoutVersions($params),
+            'saveVirtualLayoutSource' => $this->saveVirtualLayoutSource($params),
+            'rollbackVirtualLayoutVersion' => $this->rollbackVirtualLayoutVersion($params),
+            'resolveVirtualLayoutRuntime' => $this->resolveVirtualLayoutRuntime($params),
+            'clearRuntimeLayoutCaches' => $this->clearRuntimeLayoutCaches($params),
+            'saveLayoutSelection' => $this->saveLayoutSelection($params),
+            'deleteLayoutSelection' => $this->deleteLayoutSelection($params),
+            'resolveLayoutSelection' => $this->resolveLayoutSelection($params),
+            'listLayoutSelectionVersions' => $this->listLayoutSelectionVersions($params),
+            'precheckLayoutSelectionRollback' => $this->precheckLayoutSelectionRollback($params),
+            'rollbackLayoutSelectionVersion' => $this->rollbackLayoutSelectionVersion($params),
+            'editorRequest' => $this->editorRequest($params),
+            'setBackendThemeMode' => $this->setBackendThemeMode($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Theme 查询器不支持的操作：%{1}', $operation)
             ),
         };
+    }
+
+    private function setBackendThemeMode(array $params): array
+    {
+        $mode = strtolower(trim((string)($params['mode'] ?? '')));
+        if (!in_array($mode, ['light', 'dark'], true)) {
+            throw new \InvalidArgumentException((string)__('Invalid backend theme mode: %{1}', $mode));
+        }
+
+        /** @var BackendThemeConfig $themeConfig */
+        $themeConfig = ObjectManager::getInstance(BackendThemeConfig::class);
+        if (method_exists($themeConfig, '__init')) {
+            $themeConfig->__init();
+        }
+
+        $originConfig = $themeConfig->getOriginThemeConfig();
+        if (!is_array($originConfig)) {
+            $originConfig = [];
+        }
+
+        $layouts = isset($originConfig['layouts']) && is_array($originConfig['layouts'])
+            ? $originConfig['layouts']
+            : [];
+        $layouts['data-topbar'] = $mode;
+        $layouts['data-sidebar'] = $mode;
+        $layouts['data-theme-mode'] = $mode;
+        $layouts['data-layout-mode'] = $mode;
+
+        $nextConfig = $originConfig;
+        $nextConfig['theme-mode-switch'] = $mode;
+        $nextConfig['dark-mode-switch'] = $mode === 'dark';
+        $nextConfig['light-mode-switch'] = $mode === 'light';
+        if (array_key_exists('rtl_mode', $params) || array_key_exists('rtl', $params)) {
+            $nextConfig['rtl-mode-switch'] = $this->normalizeBool($params['rtl_mode'] ?? $params['rtl'] ?? false);
+        }
+        $nextConfig['layouts'] = $layouts;
+
+        $themeConfig->setThemeConfig($nextConfig);
+        AdminBaseController::clearRuntimeFullPageCache();
+
+        return [
+            'success' => true,
+            'mode' => $mode,
+            'layouts' => $layouts,
+            'msg' => (string)__('同步成功'),
+            'message' => (string)__('同步成功'),
+        ];
     }
 
     private function getActiveTheme(array $params): ?array
@@ -121,7 +193,573 @@ class ThemeQueryProvider implements QueryProviderInterface
         if (!$theme->getId()) {
             return [];
         }
-        return $this->doScanThemeLayouts($layoutType, $area, $theme);
+        $fileOptions = $this->doScanThemeLayouts($layoutType, $area, $theme);
+        $virtualOptions = $this->virtualLayoutService()->listLayoutOptions(
+            $layoutType,
+            (int)$theme->getId(),
+            $area,
+            isset($params['scope']) ? (string)$params['scope'] : null
+        );
+
+        return array_replace($fileOptions, $virtualOptions);
+    }
+
+    private function listVirtualLayoutOptions(array $params): array
+    {
+        return $this->virtualLayoutService()->listLayoutOptions(
+            (string)($params['layout_type'] ?? ''),
+            (int)($params['theme_id'] ?? 0),
+            $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND,
+            isset($params['scope']) ? (string)$params['scope'] : null
+        );
+    }
+
+    private function virtualLayoutExists(array $params): bool
+    {
+        $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
+
+        return $this->virtualLayoutService()->layoutExists(
+            (string)($params['layout_type'] ?? $identity['layout_type'] ?? ''),
+            (string)($params['layout_option'] ?? $params['layout_code'] ?? $identity['layout_option'] ?? ''),
+            $identity
+        );
+    }
+
+    private function loadVirtualLayoutSource(array $params): ?string
+    {
+        $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
+
+        return $this->virtualLayoutService()->loadEditableSource(
+            (string)($params['layout_type'] ?? $identity['layout_type'] ?? ''),
+            (string)($params['layout_option'] ?? $params['layout_code'] ?? $identity['layout_option'] ?? ''),
+            $identity
+        );
+    }
+
+    private function listVirtualLayoutVersions(array $params): array
+    {
+        $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
+
+        return $this->virtualLayoutService()->listVersionDetails($identity);
+    }
+
+    private function saveVirtualLayoutSource(array $params): array
+    {
+        $identity = is_array($params['identity'] ?? null) ? $params['identity'] : $params;
+        $source = (string)($params['source'] ?? $params['source_code'] ?? '');
+        $versionData = is_array($params['version_data'] ?? null) ? $params['version_data'] : [];
+        $publish = array_key_exists('publish', $params) ? $this->normalizeBool($params['publish']) : true;
+
+        return $this->virtualLayoutService()->saveSourceVersion($identity, $source, $versionData, $publish);
+    }
+
+    private function rollbackVirtualLayoutVersion(array $params): array
+    {
+        return $this->virtualLayoutService()->rollbackPublishedVersion(
+            (int)($params['asset_id'] ?? 0),
+            (int)($params['version_id'] ?? $params['target_version_id'] ?? 0),
+            is_array($params['options'] ?? null) ? $params['options'] : []
+        );
+    }
+
+    private function resolveVirtualLayoutRuntime(array $params): ?array
+    {
+        return $this->virtualLayoutService()->resolvePublishedRuntimeLayout(
+            (string)($params['layout_type'] ?? ''),
+            (string)($params['layout_option'] ?? ''),
+            (int)($params['theme_id'] ?? 0),
+            $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND,
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            is_array($params['target_chain'] ?? null) ? $params['target_chain'] : []
+        );
+    }
+
+    private function clearRuntimeLayoutCaches(array $params): array
+    {
+        $reason = trim((string)($params['reason'] ?? 'theme_query_clear_runtime_layout_caches'));
+        if ($reason === '') {
+            $reason = 'theme_query_clear_runtime_layout_caches';
+        }
+
+        ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(null, $reason);
+
+        return [
+            'success' => true,
+            'reason' => $reason,
+        ];
+    }
+
+    private function saveLayoutSelection(array $params): array
+    {
+        return $this->virtualLayoutService()->saveLayoutSelection(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? ''),
+            (string)($params['layout_option'] ?? $params['layout_code'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+            is_array($params['options'] ?? null) ? $params['options'] : []
+        );
+    }
+
+    private function deleteLayoutSelection(array $params): array
+    {
+        return $this->virtualLayoutService()->deleteLayoutSelection(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+            is_array($params['options'] ?? null) ? $params['options'] : []
+        );
+    }
+
+    private function resolveLayoutSelection(array $params): ?array
+    {
+        return $this->virtualLayoutService()->resolveLayoutSelection(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null
+        );
+    }
+
+    private function listLayoutSelectionVersions(array $params): array
+    {
+        return $this->virtualLayoutService()->listLayoutSelectionVersions(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+            (int)($params['limit'] ?? 20),
+            $this->normalizeBool($params['with_precheck'] ?? false)
+        );
+    }
+
+    private function precheckLayoutSelectionRollback(array $params): array
+    {
+        $versionId = (int)($params['version_id'] ?? 0);
+        if ($versionId <= 0) {
+            return ['rollbackable' => false, 'status' => 'invalid_version', 'version_id' => $versionId, 'blockers' => ['invalid_version']];
+        }
+
+        return $this->virtualLayoutService()->precheckLayoutSelectionRollback($versionId, $params);
+    }
+
+    private function rollbackLayoutSelectionVersion(array $params): array
+    {
+        $versionId = (int)($params['version_id'] ?? 0);
+        if ($versionId <= 0) {
+            return ['success' => false, 'status' => 'invalid_version', 'version_id' => $versionId];
+        }
+
+        return $this->virtualLayoutService()->rollbackLayoutSelectionVersion($versionId, $params);
+    }
+
+    private function editorRequest(array $params): mixed
+    {
+        $url = trim((string)($params['url'] ?? ''));
+        $method = strtoupper(trim((string)($params['method'] ?? 'GET'))) ?: 'GET';
+        $headers = is_array($params['headers'] ?? null) ? $params['headers'] : [];
+        $body = array_key_exists('body', $params) && $params['body'] !== null ? (string)$params['body'] : '';
+
+        if ($url === '') {
+            return ['success' => false, 'message' => 'Missing editor request URL.'];
+        }
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            return ['success' => false, 'message' => 'Unsupported editor request method.'];
+        }
+
+        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        $url = $this->resolveEditorRequestUrl($url, $request);
+        $this->assertAllowedEditorRequestUrl($url);
+
+        $directResponse = $this->dispatchEditorRequestDirect($url, $method, $headers, $body);
+        if ($directResponse !== null) {
+            return $directResponse;
+        }
+
+        $curlHeaders = ['X-Requested-With: XMLHttpRequest'];
+        $hasContentType = false;
+        foreach ($headers as $name => $value) {
+            $name = trim((string)$name);
+            if ($name === '') {
+                continue;
+            }
+            $lowerName = strtolower($name);
+            if (!in_array($lowerName, ['content-type', 'accept', 'x-requested-with'], true)) {
+                continue;
+            }
+            if ($lowerName === 'content-type') {
+                $hasContentType = true;
+            }
+            $curlHeaders[] = $name . ': ' . (string)$value;
+        }
+        if ($method === 'POST' && !$hasContentType) {
+            $curlHeaders[] = 'Content-Type: application/json';
+        }
+
+        $curl = curl_init($url);
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER => true,
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_HTTPHEADER => $curlHeaders,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_CONNECTTIMEOUT => 10,
+        ]);
+
+        $cookie = (string)$request->getServer('HTTP_COOKIE');
+        if ($cookie !== '') {
+            curl_setopt($curl, CURLOPT_COOKIE, $cookie);
+        }
+        if ($method === 'POST') {
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $body);
+        }
+
+        if ($this->shouldSkipEditorRequestSslVerification($url, $request)) {
+            curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+        }
+
+        $raw = curl_exec($curl);
+        $errno = curl_errno($curl);
+        $error = curl_error($curl);
+        $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $headerSize = (int)curl_getinfo($curl, CURLINFO_HEADER_SIZE);
+        $contentType = (string)curl_getinfo($curl, CURLINFO_CONTENT_TYPE);
+        curl_close($curl);
+
+        if ($errno !== 0 || !is_string($raw)) {
+            return ['success' => false, 'message' => $error !== '' ? $error : 'Editor request failed.'];
+        }
+
+        $responseBody = substr($raw, $headerSize);
+        $decoded = json_decode($responseBody, true);
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $decoded;
+        }
+
+        if ($status < 200 || $status >= 300) {
+            return [
+                'success' => false,
+                'message' => 'Editor request returned HTTP ' . $status,
+                'content_type' => $contentType,
+                'body' => mb_substr(trim($responseBody), 0, 500),
+            ];
+        }
+
+        return $responseBody;
+    }
+
+    private function dispatchEditorRequestDirect(string $url, string $method, array $headers, string $body): mixed
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['path'])) {
+            return null;
+        }
+
+        $path = strtolower($this->normalizeEditorRequestPath((string)$parts['path']));
+        if (!str_starts_with($path, '/theme/backend/theme-editor/')
+            && !str_starts_with($path, '/theme/backend/virtual-theme/')
+            && !str_starts_with($path, '/theme/backend/widget/paramrender/')
+        ) {
+            return null;
+        }
+
+        $queryParams = [];
+        if (!empty($parts['query'])) {
+            parse_str((string)$parts['query'], $queryParams);
+        }
+        $bodyParams = $this->parseEditorRequestBody($body, $headers);
+        $this->injectEditorRequestParams($queryParams, $bodyParams, $body);
+        $themeEditor = null;
+
+        try {
+            $response = match ($path) {
+                '/theme/backend/theme-editor/widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgets(),
+                '/theme/backend/theme-editor/widget-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetConfig(),
+                '/theme/backend/theme-editor/widget-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetPreview(),
+                '/theme/backend/theme-editor/layout-options' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutOptionsPayload(),
+                '/theme/backend/theme-editor/layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutConfigPayload(),
+                '/theme/backend/theme-editor/save-layout-selection' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutSelectionPayload(),
+                '/theme/backend/theme-editor/save-layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutConfigPayload(),
+                '/theme/backend/theme-editor/ai-translate-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postAiTranslateConfig(),
+                '/theme/backend/theme-editor/compile-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->getCompileLayoutPayload(),
+                '/theme/backend/theme-editor/installed-locales' => ($themeEditor ??= $this->createDirectThemeEditor())->getInstalledLocales(),
+                '/theme/backend/theme-editor/save-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveWidget(),
+                '/theme/backend/theme-editor/update-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postUpdateConfig(),
+                '/theme/backend/theme-editor/remove-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postRemoveWidget(),
+                '/theme/backend/theme-editor/save-widget-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveWidgetConfig(),
+                '/theme/backend/theme-editor/update-sort' => ($themeEditor ??= $this->createDirectThemeEditor())->postUpdateSort(),
+                '/theme/backend/theme-editor/swap-widget-order' => ($themeEditor ??= $this->createDirectThemeEditor())->postSwapWidgetOrder(),
+                '/theme/backend/theme-editor/remove-orphan-widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->postRemoveOrphanWidgets(),
+                '/theme/backend/theme-editor/move-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postMoveWidget(),
+                '/theme/backend/theme-editor/save-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveLayout(),
+                '/theme/backend/theme-editor/publish' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublish(),
+                '/theme/backend/theme-editor/render-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postRenderWidget(),
+                '/theme/backend/theme-editor/save-compiled-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveCompiledLayout(),
+                '/theme/backend/theme-editor/start-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postStartPreview(),
+                '/theme/backend/theme-editor/exit-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->postExitPreview(),
+                '/theme/backend/theme-editor/publish-and-exit' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublishAndExit(),
+                '/theme/backend/theme-editor/check-lock' => ($themeEditor ??= $this->createDirectThemeEditor())->getCheckLock(),
+                '/theme/backend/theme-editor/release-lock' => ($themeEditor ??= $this->createDirectThemeEditor())->postReleaseLock(),
+                '/theme/backend/theme-editor/update-activity' => ($themeEditor ??= $this->createDirectThemeEditor())->postUpdateActivity(),
+                '/theme/backend/theme-editor/request-takeover' => ($themeEditor ??= $this->createDirectThemeEditor())->postRequestTakeover(),
+                '/theme/backend/theme-editor/check-takeover-request' => ($themeEditor ??= $this->createDirectThemeEditor())->getCheckTakeoverRequest(),
+                '/theme/backend/theme-editor/force-takeover' => ($themeEditor ??= $this->createDirectThemeEditor())->postForceTakeover(),
+                '/theme/backend/theme-editor/versions' => ($themeEditor ??= $this->createDirectThemeEditor())->getVersionsPayload(),
+                '/theme/backend/theme-editor/save-version' => ($themeEditor ??= $this->createDirectThemeEditor())->saveVersionPayload(),
+                '/theme/backend/theme-editor/switch-version' => ($themeEditor ??= $this->createDirectThemeEditor())->switchVersionPayload(),
+                '/theme/backend/theme-editor/restore-original' => ($themeEditor ??= $this->createDirectThemeEditor())->restoreOriginalPayload(),
+                '/theme/backend/theme-editor/publish-version' => ($themeEditor ??= $this->createDirectThemeEditor())->publishVersionPayload(),
+                '/theme/backend/theme-editor/delete-version' => ($themeEditor ??= $this->createDirectThemeEditor())->deleteVersionPayload(),
+                '/theme/backend/theme-editor/rename-version' => ($themeEditor ??= $this->createDirectThemeEditor())->renameVersionPayload(),
+                '/theme/backend/virtual-theme/manifest' => $this->createDirectVirtualTheme()->getManifest(),
+                '/theme/backend/virtual-theme/ai-catalog' => $this->createDirectVirtualTheme()->getAiCatalog(),
+                '/theme/backend/virtual-theme/source' => $this->createDirectVirtualTheme()->getSource(),
+                '/theme/backend/virtual-theme/create-draft' => $this->createDirectVirtualTheme()->postCreateDraft(),
+                '/theme/backend/virtual-theme/block-action' => $this->createDirectVirtualTheme()->postBlockAction(),
+                '/theme/backend/virtual-theme/save-source' => $this->createDirectVirtualTheme()->postSaveSource(),
+                '/theme/backend/virtual-theme/publish-version' => $this->createDirectVirtualTheme()->postPublishVersion(),
+                '/theme/backend/virtual-theme/rollback-version' => $this->createDirectVirtualTheme()->postRollbackVersion(),
+                '/theme/backend/widget/paramrender/form' => $this->createDirectParamRender()->postForm(),
+                default => null,
+            };
+        } catch (\Throwable $e) {
+            if (method_exists($e, 'getBody')) {
+                $response = (string)$e->getBody();
+            } else {
+                throw $e;
+            }
+        }
+
+        if ($response === null) {
+            return null;
+        }
+
+        if (is_string($response)) {
+            $decoded = json_decode($response, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $decoded;
+            }
+        }
+
+        return $response;
+    }
+
+    private function createDirectThemeEditor(): \Weline\Theme\Controller\Backend\ThemeEditor
+    {
+        $controller = new \Weline\Theme\Controller\Backend\ThemeEditor(
+            ObjectManager::getInstance(WelineTheme::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutVersionService::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeCacheGenerator::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\WidgetPositionResolver::class),
+            ObjectManager::getInstance(\Weline\Widget\Service\WidgetRegistry::class),
+            ObjectManager::getInstance(\Weline\Theme\Model\ThemeLayout::class),
+            ObjectManager::getInstance(\Weline\Meta\Model\Meta::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\PreviewTokenService::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\EditorLockService::class)
+        );
+        $this->injectRequestIntoController($controller);
+        return $controller;
+    }
+
+    private function createDirectParamRender(): \Weline\Theme\Controller\Backend\Widget\ParamRender
+    {
+        $controller = new \Weline\Theme\Controller\Backend\Widget\ParamRender();
+        $this->injectRequestIntoController($controller);
+        return $controller;
+    }
+
+    private function createDirectVirtualTheme(): \Weline\Theme\Controller\Backend\VirtualTheme
+    {
+        $controller = new \Weline\Theme\Controller\Backend\VirtualTheme(
+            ObjectManager::getInstance(WelineTheme::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeVirtualThemeManifestService::class),
+            ObjectManager::getInstance(ThemeVirtualLayoutService::class)
+        );
+        $this->injectRequestIntoController($controller);
+        return $controller;
+    }
+
+    private function injectRequestIntoController(object $controller): void
+    {
+        $session = \Weline\Framework\Session\SessionFactory::getInstance()->createBackendSession();
+        if (method_exists($session, 'start')) {
+            $session->start(null);
+        }
+
+        $this->setControllerProperty($controller, 'request', ObjectManager::getInstance(\Weline\Framework\Http\Request::class));
+        $this->setControllerProperty($controller, '_objectManager', ObjectManager::getInstance());
+        $this->setControllerProperty($controller, '_url', ObjectManager::getInstance(\Weline\Framework\Http\Url::class));
+        $this->setControllerProperty($controller, 'session', $session);
+    }
+
+    private function setControllerProperty(object $controller, string $propertyName, mixed $value): void
+    {
+        $reflection = new \ReflectionObject($controller);
+        while ($reflection !== false) {
+            if ($reflection->hasProperty($propertyName)) {
+                $property = $reflection->getProperty($propertyName);
+                $property->setAccessible(true);
+                $property->setValue($controller, $value);
+                return;
+            }
+            $reflection = $reflection->getParentClass();
+        }
+    }
+
+    private function parseEditorRequestBody(string $body, array $headers): array
+    {
+        if ($body === '') {
+            return [];
+        }
+
+        $contentType = '';
+        foreach ($headers as $name => $value) {
+            if (strtolower((string)$name) === 'content-type') {
+                $contentType = strtolower((string)$value);
+                break;
+            }
+        }
+
+        if (str_contains($contentType, 'application/json') || str_starts_with(ltrim($body), '{')) {
+            $decoded = json_decode($body, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        $parsed = [];
+        parse_str($body, $parsed);
+        return is_array($parsed) ? $parsed : [];
+    }
+
+    private function injectEditorRequestParams(array $queryParams, array $bodyParams, string $rawBody): void
+    {
+        /** @var \Weline\Framework\Http\Request $request */
+        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        foreach ($queryParams as $key => $value) {
+            $request->setGet((string)$key, $value);
+        }
+        foreach ($bodyParams as $key => $value) {
+            $request->setPost((string)$key, $value);
+        }
+
+        $merged = array_merge($queryParams, $bodyParams);
+        $request->setData('params', $merged);
+        $request->setData('body_params', $bodyParams !== [] ? $bodyParams : $rawBody);
+        $request->setData('array_body_params', $bodyParams);
+        $request->getParameterBag()->setBody($bodyParams);
+        $request->getParameterBag()->setRawBody($rawBody);
+    }
+
+    private function resolveEditorRequestUrl(string $url, \Weline\Framework\Http\Request $request): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            throw new \InvalidArgumentException('Invalid editor request URL.');
+        }
+
+        $https = strtolower((string)$request->getServer('HTTPS'));
+        $forwardedProto = strtolower((string)$request->getServer('HTTP_X_FORWARDED_PROTO'));
+        $scheme = $forwardedProto !== ''
+            ? $forwardedProto
+            : (($https !== '' && $https !== 'off') ? 'https' : 'http');
+
+        if (($parts['scheme'] ?? '') === '' && ($parts['host'] ?? '') !== '') {
+            return $scheme . ':' . $url;
+        }
+
+        if (($parts['scheme'] ?? '') !== '') {
+            return $url;
+        }
+
+        $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: '');
+        if ($host === '') {
+            throw new \InvalidArgumentException('Unable to resolve editor request host.');
+        }
+
+        return $scheme . '://' . $host . (str_starts_with($url, '/') ? $url : '/' . $url);
+    }
+
+    private function shouldSkipEditorRequestSslVerification(string $url, \Weline\Framework\Http\Request $request): bool
+    {
+        if (strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: '')) !== 'https') {
+            return false;
+        }
+
+        $targetHost = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+        if ($targetHost === '') {
+            return false;
+        }
+
+        if (in_array($targetHost, ['127.0.0.1', 'localhost', '::1'], true)) {
+            return true;
+        }
+
+        $requestHost = strtolower((string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: ''));
+        $requestHostName = strtolower((string)(parse_url('//' . $requestHost, PHP_URL_HOST) ?: $requestHost));
+        if ($requestHostName === '' || $targetHost !== $requestHostName) {
+            return false;
+        }
+
+        // WLS local domains use self-signed certificates. The request has already passed the editor path and same-host whitelist.
+        return str_ends_with($targetHost, '.weline.test')
+            || str_ends_with($targetHost, '.weline.localhost')
+            || str_ends_with($targetHost, '.local.test');
+    }
+
+    private function assertAllowedEditorRequestUrl(string $url): void
+    {
+        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['path'])) {
+            throw new \InvalidArgumentException('Invalid editor request URL.');
+        }
+
+        $scheme = strtolower((string)($parts['scheme'] ?? ''));
+        if ($scheme !== '' && !in_array($scheme, ['http', 'https'], true)) {
+            throw new \InvalidArgumentException('Unsupported editor request scheme.');
+        }
+
+        $targetHost = strtolower((string)($parts['host'] ?? ''));
+        if ($targetHost !== '') {
+            $requestHost = strtolower((string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: ''));
+            $requestHostName = strtolower((string)(parse_url('//' . $requestHost, PHP_URL_HOST) ?: $requestHost));
+            if ($requestHostName !== '' && $targetHost !== $requestHostName) {
+                throw new \InvalidArgumentException('Editor request host is not allowed.');
+            }
+        }
+
+        $normalizedPath = $this->normalizeEditorRequestPath((string)$parts['path']);
+        foreach ([
+            '/theme/backend/theme-editor/',
+            '/theme/backend/virtual-theme/',
+            '/theme/backend/widget/paramrender/form',
+            '/weline/eav/api/options',
+        ] as $allowedPrefix) {
+            if ($normalizedPath === $allowedPrefix || str_starts_with($normalizedPath, $allowedPrefix)) {
+                return;
+            }
+        }
+
+        throw new \InvalidArgumentException('Editor request path is not allowed.');
+    }
+
+    private function normalizeEditorRequestPath(string $path): string
+    {
+        $lowerPath = strtolower($path);
+        foreach (['/theme/backend/', '/weline/eav/'] as $marker) {
+            $pos = strpos($lowerPath, $marker);
+            if ($pos !== false) {
+                return substr($path, $pos);
+            }
+        }
+
+        return $path;
     }
 
     private function doScanThemeLayouts(string $layoutType, string $area, WelineTheme $theme): array
@@ -174,6 +812,15 @@ class ThemeQueryProvider implements QueryProviderInterface
         return $meta;
     }
 
+    private function virtualLayoutService(): ThemeVirtualLayoutService
+    {
+        if ($this->virtualLayoutService instanceof ThemeVirtualLayoutService) {
+            return $this->virtualLayoutService;
+        }
+
+        return $this->virtualLayoutService = ObjectManager::getInstance(ThemeVirtualLayoutService::class);
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -211,10 +858,190 @@ class ThemeQueryProvider implements QueryProviderInterface
                 ],
                 [
                     'name' => 'scanThemeLayoutsByType',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
                     'description' => __('扫描当前主题中指定类型的布局选项'),
                     'params' => [
                         ['name' => 'layout_type', 'type' => 'string', 'required' => true],
                         ['name' => 'area', 'type' => 'string', 'required' => false, 'description' => __('默认 frontend')],
+                    ],
+                ],
+                [
+                    'name' => 'listVirtualLayoutOptions',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('列出 Theme 虚拟布局选项'),
+                    'params' => [
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'theme_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'virtualLayoutExists',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('检查 Theme 虚拟布局是否存在'),
+                    'params' => [
+                        ['name' => 'identity', 'type' => 'array', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'loadVirtualLayoutSource',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('读取 Theme 虚拟布局当前可编辑源码'),
+                    'params' => [
+                        ['name' => 'identity', 'type' => 'array', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'listVirtualLayoutVersions',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('列出 Theme 虚拟布局源码/发布版本'),
+                    'params' => [
+                        ['name' => 'identity', 'type' => 'array', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'saveVirtualLayoutSource',
+                    'description' => __('保存 Theme 虚拟布局源码版本'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'identity', 'type' => 'array', 'required' => true],
+                        ['name' => 'source', 'type' => 'string', 'required' => true],
+                        ['name' => 'publish', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'rollbackVirtualLayoutVersion',
+                    'description' => __('回滚 Theme 虚拟布局发布版本'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'asset_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'version_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'resolveVirtualLayoutRuntime',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('解析当前有效 Theme 虚拟布局运行时信息'),
+                    'params' => [
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'layout_option', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_chain', 'type' => 'array', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'clearRuntimeLayoutCaches',
+                    'description' => __('清理 Theme 运行时布局缓存'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'reason', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'saveLayoutSelection',
+                    'description' => __('保存 Theme 布局选择'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'layout_option', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'deleteLayoutSelection',
+                    'description' => __('删除 Theme 布局选择并恢复继承'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'resolveLayoutSelection',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('解析 Theme 布局选择及来源'),
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'listLayoutSelectionVersions',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('列出产品/分类布局选择版本'),
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
+                        ['name' => 'with_precheck', 'type' => 'bool', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'precheckLayoutSelectionRollback',
+                    'mode' => 'read',
+                    'graph' => true,
+                    'description' => __('预检产品/分类布局选择版本是否可回滚'),
+                    'params' => [
+                        ['name' => 'version_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'target_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'rollbackLayoutSelectionVersion',
+                    'description' => __('回滚产品/分类布局选择版本'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'version_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'target_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'layout_type', 'type' => 'string', 'required' => false],
+                        ['name' => 'scope', 'type' => 'string', 'required' => false],
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'reason', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'editorRequest',
+                    'description' => __('Theme editor signed backend request bridge'),
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'url', 'type' => 'string', 'required' => true, 'max_length' => 2048],
+                        ['name' => 'method', 'type' => 'string', 'required' => false, 'max_length' => 8],
+                        ['name' => 'headers', 'type' => 'array', 'required' => false],
+                        ['name' => 'body', 'type' => 'string', 'required' => false, 'nullable' => true, 'max_length' => 1048576],
+                    ],
+                ],
+                [
+                    'name' => 'setBackendThemeMode',
+                    'description' => __('同步后台亮色/暗色模式'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'mode', 'type' => 'string', 'required' => true, 'description' => __('light 或 dark')],
+                        ['name' => 'rtl_mode', 'type' => 'bool', 'required' => false],
+                        ['name' => 'rtl', 'type' => 'bool', 'required' => false],
                     ],
                 ],
             ],
@@ -236,5 +1063,19 @@ class ThemeQueryProvider implements QueryProviderInterface
             ThemeContextService::AREA_BACKEND => ThemeContextService::AREA_BACKEND,
             default => null,
         };
+    }
+
+    private function normalizeBool(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_numeric($value)) {
+            return (int)$value === 1;
+        }
+        if (is_string($value)) {
+            return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
+        }
+        return false;
     }
 }

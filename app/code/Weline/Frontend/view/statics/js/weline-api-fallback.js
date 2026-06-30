@@ -1,51 +1,29 @@
 /**
- * Weline.Api 同步回退实现
- * 在 weline-api.js（Worker 版本）加载前提供基础 fetch 实现，确保 Weline.Api.request 立即可用。
- * 当 weline-api.js 加载后会覆盖本实现。
+ * Weline.Api fail-closed placeholder.
+ *
+ * The full module replaces this object after loading. Until the worker-backed
+ * implementation is available, browser business API requests must fail instead
+ * of falling back to direct fetch.
  */
 (function (window) {
     'use strict';
     if (window.WelineApiModule && window.WelineApiModule.__full) return;
 
-    function fetchRequest(url, opts) {
-        opts = opts || {};
-        var method = opts.method || 'GET';
-        var headers = opts.headers || {};
-        var body = opts.body;
-        var cred = opts.credentials || 'same-origin';
-        return fetch(url, {
-            method: method,
-            headers: headers,
-            body: body,
-            credentials: cred
-        }).then(function (r) {
-            var ct = (r.headers.get('content-type') || '').toLowerCase();
-            if (ct.indexOf('application/json') !== -1) {
-                return r.json().then(function (d) {
-                    return { ok: r.ok, status: r.status, statusText: r.statusText || '', data: d };
-                });
-            }
-            return r.text().then(function (t) {
-                return { ok: r.ok, status: r.status, statusText: r.statusText || '', data: t };
-            });
-        });
+    function disabled() {
+        return Promise.reject(new Error('[Weline.Api] worker unavailable; direct frontend API requests are disabled.'));
     }
 
     window.WelineApiModule = {
         __full: false,
-        request: function (url, opts) {
-            opts = opts || {};
-            return fetchRequest(url, opts);
-        },
-        get: function (url, opts) {
-            return fetchRequest(url, Object.assign({}, opts, { method: 'GET' }));
-        },
-        post: function (url, data, opts) {
-            opts = opts || {};
-            var body = typeof data === 'string' ? data : JSON.stringify(data || {});
-            var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
-            return fetchRequest(url, { method: 'POST', headers: headers, body: body, credentials: opts.credentials || 'same-origin' });
-        },
+        __fallback: true,
+        request: disabled,
+        get: disabled,
+        post: disabled,
+        call: disabled,
+        graph: disabled,
+        stream: disabled,
+        upload: disabled,
+        resource: disabled,
         markCartActive: function () {},
         markCartEmpty: function () {},
         enableAutoRequests: function () {},
@@ -53,7 +31,6 @@
         getClient: function () { return null; }
     };
 
-    // 确保 window.Weline.Api 立即可用，供 head 之后的脚本直接调用
     window.Weline = window.Weline || {};
     window.Weline.Api = window.Weline.Api || window.WelineApiModule;
 })(window);

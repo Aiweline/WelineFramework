@@ -3,7 +3,8 @@
  * 
  * 所有功能模块按需加载，页面只需引入此文件
  * 使用方式：
- *   Weline.Api.request(url, options)
+ *   const CartApi = await Weline.Api.resource('cart')
+ *   await CartApi.add({ product_id, qty })
  *   Weline.Account.frontendLogin(username, password)
  */
 (function (window, document) {
@@ -20,6 +21,7 @@
     const defaultConfig = {
         baseUrl: window.location.origin,
         modulesBaseUrl: '/static/Weline_Frontend/js/weline-api',
+        assetVersion: 'dev',
         // 模块配置
         api: {
             workerUrl: null,
@@ -34,15 +36,6 @@
             maintenanceHandler: null,
         },
         account: {
-            frontendLoginUrl: '/frontend/account/login',
-            frontendLogoutUrl: '/frontend/account/logout',
-            frontendCheckLoginUrl: '/frontend/account/check-login',
-            apiLoginUrl: '/api/rest/v1/weline_api/auth/login',
-            apiLogoutUrl: '/api/rest/v1/weline_api/auth/logout',
-            apiCheckLoginUrl: '/api/rest/v1/weline_api/auth/check',
-            backendApiLoginUrl: '/api_admin/rest/v1/weline_backend/api/auth/login',
-            backendApiLogoutUrl: '/api_admin/rest/v1/weline_backend/api/auth/logout',
-            backendApiCheckLoginUrl: '/api_admin/rest/v1/weline_backend/api/auth/check',
             frontendTokenKey: 'weline_frontend_session',
             apiTokenKey: 'weline_api_access_token',
             apiRefreshTokenKey: 'weline_api_refresh_token',
@@ -60,6 +53,47 @@
         (window.Weline && window.Weline.config) || window.__WelineThemeConfig || window.WelineConfig || {}
     );
 
+    function writeCookieValue(key, value, expiry = 365, options = {}) {
+        const normalizedOptions = Object.assign({ path: '/' }, options || {});
+        if (typeof window.setCookie === 'function') {
+            window.setCookie(key, value, expiry, normalizedOptions);
+            return;
+        }
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
+        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
+        Object.keys(normalizedOptions).forEach((optionKey) => {
+            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+        });
+        document.cookie = cookieString;
+    }
+
+    function writeCanonicalLocalStorage(canonicalKey, legacyKeys, value) {
+        try {
+            if (!window.localStorage) {
+                return;
+            }
+            localStorage.setItem(canonicalKey, value);
+            legacyKeys.forEach((key) => {
+                if (key && key !== canonicalKey) {
+                    localStorage.removeItem(key);
+                }
+            });
+        } catch (error) {
+            // localStorage can be unavailable in privacy modes.
+        }
+    }
+
+    function persistLangPreference(lang) {
+        writeCanonicalLocalStorage('weline_user_lang', ['weline_user_lang', 'api_doc_locale', 'WELINE_USER_LANG'], lang);
+        writeCookieValue('WELINE_USER_LANG', lang, 365);
+    }
+
+    function persistCurrencyPreference(currency) {
+        writeCanonicalLocalStorage('weline_user_currency', ['weline_user_currency', 'api_doc_currency', 'WELINE_USER_CURRENCY'], currency);
+        writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+    }
+
     /**
      * 模块加载器
      */
@@ -67,6 +101,44 @@
         constructor() {
             this.loadedModules = new Map();
             this.loadingModules = new Map();
+        }
+
+        getScriptUrl(url) {
+            const isDev = runtimeConfig.debug ||
+                window.DEV ||
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1';
+            if (!isDev) {
+                return url;
+            }
+            if (url.indexOf('_weline_dev=') !== -1) {
+                return url;
+            }
+            const assetVersion = encodeURIComponent(String(
+                runtimeConfig.assetVersion ||
+                runtimeConfig.deployVersion ||
+                runtimeConfig.deploy_version ||
+                'dev'
+            ));
+            const separator = url.indexOf('?') === -1 ? '?' : '&';
+            return `${url}${separator}_weline_dev=${assetVersion}`;
+        }
+
+        isGlobalModuleReady(globalVarName, requireFullGlobal = false) {
+            if (!globalVarName || !window[globalVarName]) {
+                return false;
+            }
+            if (!requireFullGlobal) {
+                return true;
+            }
+            if (window[globalVarName].__full !== true) {
+                return false;
+            }
+            if (globalVarName === 'WelineApiModule') {
+                const requiredMethods = ['request', 'get', 'post', 'call', 'graph', 'stream', 'resource'];
+                return requiredMethods.every(method => typeof window[globalVarName][method] === 'function');
+            }
+            return true;
         }
 
         /**
@@ -103,7 +175,10 @@
 
                 // 检查是否已经通过script标签加载（通过检查全局变量）
                 const globalVarName = this.getGlobalVarName(moduleName);
-                if (window[globalVarName]) {
+                const requiresFullGlobal = globalVarName === 'WelineApiModule'
+                    || globalVarName === 'WelineAccountModule'
+                    || globalVarName === 'WelineTokenStorage';
+                if (this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
                     const module = window[globalVarName];
                     this.loadedModules.set(moduleName, module);
                     this.loadingModules.delete(moduleName);
@@ -113,13 +188,13 @@
 
                 // 动态加载脚本
                 const script = document.createElement('script');
-                script.src = path;
+                script.src = this.getScriptUrl(path);
                 script.async = true;
                 script.crossOrigin = 'anonymous';
 
                 script.onload = () => {
                     // 检查是否成功加载
-                    if (window[globalVarName]) {
+                    if (this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
                         const module = window[globalVarName];
                         this.loadedModules.set(moduleName, module);
                         this.loadingModules.delete(moduleName);
@@ -240,6 +315,22 @@
          * Api 模块代理
          */
         Api: {
+            call: async (provider, operation, params, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.call(provider, operation, params, options);
+            },
+            graph: async (graph, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.graph(graph, options);
+            },
+            stream: async (channel, params, options) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.stream(channel, params, options);
+            },
+            resource: async (provider, optionalMap) => {
+                const ApiModule = await moduleLoader.loadModule('api');
+                return ApiModule.resource(provider, optionalMap);
+            },
             /**
              * 发送请求
              */
@@ -313,7 +404,7 @@
              */
             switchLang: async (lang) => {
                 // 保存语言偏好
-                localStorage.setItem('weline_user_lang', lang);
+                persistLangPreference(lang);
                 // 重新加载页面
                 const url = new URL(window.location.href);
                 url.searchParams.set('lang', lang);
@@ -342,7 +433,7 @@
              */
             switchCurrency: async (currency) => {
                 // 保存货币偏好
-                localStorage.setItem('weline_user_currency', currency);
+                persistCurrencyPreference(currency);
                 // 重新加载页面
                 const url = new URL(window.location.href);
                 url.searchParams.set('currency', currency);
@@ -467,7 +558,11 @@
     // 兼容旧版本（可选）
     if (!window.WelineApi) {
         window.WelineApi = {
-            request: (url, options) => Weline.Api.request(url, options),
+            call: (provider, operation, params, options) => Weline.Api.call(provider, operation, params, options),
+            graph: (graph, options) => Weline.Api.graph(graph, options),
+            stream: (channel, params, options) => Weline.Api.stream(channel, params, options),
+            resource: (provider, optionalMap) => Weline.Api.resource(provider, optionalMap),
+            request: () => Promise.reject(new Error('[WelineApi] direct request(url) is disabled. Use Weline.Api.resource()/call()/graph()/stream().')),
             account: Weline.Account,
         };
     }

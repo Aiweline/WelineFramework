@@ -83,21 +83,21 @@
             <label for="expireTime">过期时间(秒，0为默认7天):</label>
             <input type="number" id="expireTime" value="0">
         </div>
-        <button onclick="login()">登录</button>
+        <button data-api-auth-test-action="login">登录</button>
         <div id="loginResult" class="result"></div>
     </div>
 
     <div class="section">
         <h2>用户信息</h2>
-        <button onclick="getCurrentUser()">获取当前用户信息</button>
-        <button onclick="getTokenInfo()">获取Token信息</button>
+        <button data-api-auth-test-action="get-current-user">获取当前用户信息</button>
+        <button data-api-auth-test-action="get-token-info">获取Token信息</button>
         <div id="userResult" class="result"></div>
     </div>
 
     <div class="section">
         <h2>Token管理</h2>
-        <button onclick="refreshToken()">刷新Token</button>
-        <button onclick="logout()" class="danger">登出</button>
+        <button data-api-auth-test-action="refresh-token">刷新Token</button>
+        <button data-api-auth-test-action="logout" class="danger">登出</button>
         <div id="tokenResult" class="result"></div>
     </div>
 
@@ -120,15 +120,15 @@
             <label for="apiData">请求数据 (JSON):</label>
             <textarea id="apiData" rows="4" style="width: 100%; font-family: monospace;"></textarea>
         </div>
-        <button onclick="testApi()">测试API</button>
+        <button data-api-auth-test-action="test-api">测试API</button>
         <div id="apiResult" class="result"></div>
     </div>
 
     <div class="section">
         <h2>Token状态</h2>
         <div id="tokenStatus" class="result"></div>
-        <button onclick="updateTokenStatus()">更新状态</button>
-        <button onclick="clearToken()" class="danger">清除Token</button>
+        <button data-api-auth-test-action="update-token-status">更新状态</button>
+        <button data-api-auth-test-action="clear-token" class="danger">清除Token</button>
     </div>
 
     <script src="js/api-auth-test.js"></script>
@@ -232,9 +232,43 @@
         }
 
         // 页面加载时更新token状态
+        document.addEventListener('click', function(event) {
+            const trigger = event.target.closest('[data-api-auth-test-action]');
+            if (!trigger) {
+                return;
+            }
+            event.preventDefault();
+            switch (trigger.getAttribute('data-api-auth-test-action')) {
+                case 'login':
+                    login();
+                    break;
+                case 'get-current-user':
+                    getCurrentUser();
+                    break;
+                case 'get-token-info':
+                    getTokenInfo();
+                    break;
+                case 'refresh-token':
+                    refreshToken();
+                    break;
+                case 'logout':
+                    logout();
+                    break;
+                case 'test-api':
+                    testApi();
+                    break;
+                case 'update-token-status':
+                    updateTokenStatus();
+                    break;
+                case 'clear-token':
+                    clearToken();
+                    break;
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
             updateTokenStatus();
         });
     </script>
 </body>
-</html> 
+</html>

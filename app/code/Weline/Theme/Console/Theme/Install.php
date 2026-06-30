@@ -17,6 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Register\Register;
 use Weline\Theme\Register\Installer;
 use Weline\Theme\Register\TypeInterface;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 class Install extends AbstractConsole
 {
@@ -338,10 +339,22 @@ class Install extends AbstractConsole
             $this->welineTheme->load('name', $themeName);
             $this->welineTheme->setIsActive(1);
             $this->welineTheme->save();
+            $this->clearActivationRuntimeCaches((int)$this->welineTheme->getId());
 
             $this->printing->success(__('主题 %{1} 已激活！', [$themeName]));
         } catch (\Exception $e) {
             $this->printing->error(__('激活主题时出错：%{1}', [$e->getMessage()]));
+        }
+    }
+
+    private function clearActivationRuntimeCaches(int $themeId): void
+    {
+        try {
+            ObjectManager::getInstance(ThemeRuntimeCacheCleaner::class)->clearNonGlobalCaches(
+                $themeId,
+                'theme_install_activate'
+            );
+        } catch (\Throwable) {
         }
     }
 

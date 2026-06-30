@@ -592,7 +592,19 @@ class Taglib
                         $innerContent = $hook_name_from_raw . $else_match_str . $compiled_fallback;
                     } else {
                         // 没有 <else/>，直接使用 rawContent（只是 hook 名称）
-                        $innerContent = $rawContent;
+                        $compiled_all = '';
+                        if (isset($params['childrenCode']) && is_callable($params['childrenCode'])) {
+                            $compiled_all = $params['childrenCode']();
+                        }
+                        if ($compiled_all !== '' && $compiled_all !== $rawContent) {
+                            $compiled_ltrim = ltrim($compiled_all);
+                            $raw_ltrim = ltrim($rawContent);
+                            $innerContent = ($raw_ltrim !== '' && str_starts_with($compiled_ltrim, $raw_ltrim))
+                                ? $compiled_all
+                                : $rawContent . $compiled_all;
+                        } else {
+                            $innerContent = $rawContent;
+                        }
                     }
                 } elseif (isset($params['childrenCode']) && is_callable($params['childrenCode'])) {
                     $innerContent = $params['childrenCode']();
@@ -1351,7 +1363,7 @@ class Taglib
                                         $else_content = substr($content, $min_pos);
                                     } else {
                                         // 如果没找到 HTML 或 PHP 标签，尝试提取 hook 名称（在遇到非合法字符前停止）
-                                        $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $trimmed_content);
+                                        $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $trimmed_content);
                                         $hook_name = preg_replace('/\s+/', '', $hook_name);
                                         $else_content = '';
                                     }
@@ -1369,7 +1381,7 @@ class Taglib
                             // 移除可能混入的 PHP 代码
                             $hook_name = preg_replace('/<\?[^?]+' . self::PHP_CLOSE_TAG . '/', '', $hook_name);
                             // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
-                            $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                            $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                             $hook_name = trim($hook_name);
                             
                             // 检查 hook 是否存在
@@ -1506,7 +1518,7 @@ class Taglib
                                 $hook_name = trim((string)$attributes['name']);
                                 $hook_name = preg_replace('/<[^>]+>/', '', $hook_name);
                                 $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
-                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                                 $hook_name = trim($hook_name);
                             } elseif ($tag_key === '@tag()' || $tag_key === '@tag{}') {
                                 $hook_name = trim($tag_data[1] ?? '');
@@ -1533,9 +1545,9 @@ class Taglib
                                 $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
                                 
                                 // 只保留 hook 名称（在遇到非合法字符前停止）
-                                // hook 名称格式：Module::area::type::component::position，只允许字母、数字、下划线、连字符、冒号
+                                // hook 名称允许字母、数字、下划线、点号、连字符、冒号。
                                 // 遇到空格、括号等字符时，应该截断
-                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                                 $hook_name = trim($hook_name);
                                 
                                 // 在开发环境下，检查 hook 是否有规约（在 hook.php 中定义）
@@ -1544,12 +1556,12 @@ class Taglib
                                 $hook_name = preg_replace('/<[^>]+>/', '', $hook_name); // 移除 HTML 标签
                                 $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name); // 移除 PHP 代码
                                 // 只保留 hook 名称（在遇到非合法字符前停止，防止包含后续内容）
-                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                                 $hook_name = trim($hook_name);
                             } else {
                                 // 其他格式（向后兼容）
                                 $hook_name = trim($tag_data[1] ?? '');
-                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_.\-:].*$/', '', $hook_name);
                                 $hook_name = trim($hook_name);
                             }
                             
@@ -3556,6 +3568,10 @@ class Taglib
                 
                 // 对于 hook/w:hook 标签，不递归编译子节点，因为回调函数需要原始的 <else/> 来分割内容
                 $isHookTag = ($node->name === 'hook' || $node->name === 'w:hook');
+                $isSlotTag = ($node->name === 'slot' || $node->name === 'w:slot');
+                if ($isSlotTag) {
+                    $node->children = $this->selectSlotElseFallbackNodes($node->children);
+                }
                 if (!$isHookTag) {
                     $node->children = $this->compileNodes($node->children, $tags, $template, $fileName);
                 }
@@ -3574,6 +3590,9 @@ class Taglib
                             $tagsForRender[$node->name] = $tags[$normalizedName];
                         }
                         $rendered = $this->renderTagNode($node, $tagsForRender, $template, $fileName);
+                        if ($isHookTag) {
+                            $rendered = $this->stripLeakedHookFallbackDelimiter($rendered);
+                        }
                         $result = array_merge($result, $this->compileStringToNodes($rendered, $tags, $template, $fileName));
                         continue;
                     }
@@ -3587,6 +3606,19 @@ class Taglib
     /**
      * 编译属性值中的节点（递归处理标签节点）
      */
+    private function selectSlotElseFallbackNodes(array $children): array
+    {
+        foreach ($children as $index => $child) {
+            if (($child instanceof TagNode || $child instanceof AstTagNode)
+                && ($child->name === 'else' || $child->name === 'w:else')
+            ) {
+                return array_slice($children, $index + 1);
+            }
+        }
+
+        return $children;
+    }
+
     private function compileAttributeValueNodes(array $nodes, array $tags, Template $template, string $fileName): array
     {
         $result = [];
@@ -3629,6 +3661,34 @@ class Taglib
         $ast = $this->compileAst($ast, $tags, $template, $fileName);
         $ast = $this->optimizeAst($ast);
         return $ast->children;
+    }
+
+    private function stripLeakedHookFallbackDelimiter(string $content): string
+    {
+        $patterns = [
+            '/<(?:w:)?else\s*\/?>/i',
+            '/<\?php\s*else\s*:?\s*\?>/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (!preg_match($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+
+            $delimiter = $matches[0][0];
+            $delimiterOffset = (int)$matches[0][1];
+            $candidateHookName = preg_replace('/\s+/', '', substr($content, 0, $delimiterOffset));
+            if (!is_string($candidateHookName)
+                || $candidateHookName === ''
+                || !preg_match('/^[A-Za-z0-9_.\-:]+$/', $candidateHookName)
+            ) {
+                continue;
+            }
+
+            return substr($content, $delimiterOffset + strlen($delimiter));
+        }
+
+        return $content;
     }
 
     private function optimizeAst(ProgramNode $root): ProgramNode

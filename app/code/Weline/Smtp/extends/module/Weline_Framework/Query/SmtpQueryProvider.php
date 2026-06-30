@@ -8,6 +8,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
+use Weline\Smtp\Model\SmtpSendLog;
 
 /**
  * SMTP 统一查询器
@@ -47,6 +48,13 @@ class SmtpQueryProvider implements QueryProviderInterface
         $module = (string) ($params['module'] ?? 'Weline_Smtp');
         $senders = $this->getSendersInternal($module);
         foreach ($senders as $s) {
+            if ((string)($s['source_type'] ?? 'external') === 'mail_account') {
+                $mailConfig = $this->loadMailAccountConfig((int)($s['mail_account_id'] ?? 0));
+                if ($mailConfig !== null) {
+                    return ['available' => true, 'message' => __('SMTP 已配置')];
+                }
+                continue;
+            }
             $host = trim((string) ($s['smtp_host'] ?? ''));
             $user = trim((string) ($s['smtp_username'] ?? ''));
             if ($host !== '' && $user !== '') {
@@ -141,7 +149,24 @@ class SmtpQueryProvider implements QueryProviderInterface
 
         if ($senderCode !== null && $senderCode !== '') {
             $senderConfig = $data->getSenderByCode((string) $senderCode, $module);
-            if (!$senderConfig || empty($senderConfig['smtp_host']) || empty($senderConfig['smtp_username'])) {
+            if (!$senderConfig) {
+                return ['success' => false, 'message' => __('发件人 %{1} 未配置或配置不完整', [$senderCode])];
+            }
+            if ((string)($senderConfig['source_type'] ?? 'external') === 'mail_account') {
+                return $this->sendWithMailAccountSender(
+                    $senderConfig,
+                    $from,
+                    $to,
+                    $subject,
+                    $content,
+                    $alt,
+                    $attachment,
+                    $cc,
+                    $bcc,
+                    $module
+                );
+            }
+            if (empty($senderConfig['smtp_host']) || empty($senderConfig['smtp_username'])) {
                 return ['success' => false, 'message' => __('发件人 %{1} 未配置或配置不完整', [$senderCode])];
             }
             $username = trim((string)($senderConfig['smtp_username'] ?? ''));
@@ -204,6 +229,169 @@ class SmtpQueryProvider implements QueryProviderInterface
                 'message' => __('发送失败：%{1}', [$e->getMessage()]),
             ];
         }
+    }
+
+    private function sendWithMailAccountSender(
+        array $senderConfig,
+        mixed $from,
+        mixed $to,
+        string $subject,
+        string $content,
+        string $alt,
+        mixed $attachment,
+        mixed $cc,
+        mixed $bcc,
+        string $module
+    ): array {
+        $mailAccountId = (int)($senderConfig['mail_account_id'] ?? 0);
+        $mailConfig = $this->loadMailAccountConfig($mailAccountId);
+        if ($mailConfig === null) {
+            return ['success' => false, 'message' => __('自建邮箱账号不存在或未启用')];
+        }
+
+        $mailEmail = trim((string)($mailConfig['email'] ?? ''));
+        $fromResolved = $from;
+        if (empty($fromResolved)) {
+            $fromResolved = ['email' => $mailEmail, 'name' => (string)($senderConfig['name'] ?? $mailConfig['display_name'] ?? __('系统'))];
+        } elseif (is_string($fromResolved)) {
+            $fromResolved = ['email' => $fromResolved, 'name' => __('系统')];
+        }
+
+        if (!empty($mailConfig['is_fake'])) {
+            try {
+                $result = w_query('mail', 'sendViaSmtpAccount', [
+                    'account_id' => $mailAccountId,
+                    'to' => $to,
+                    'subject' => $subject,
+                    'content' => $content,
+                ]);
+                if (is_array($result) && !empty($result['success'])) {
+                    $this->writeVirtualSendLog($fromResolved, $to, $subject, $content, $alt, $attachment, $cc, $bcc, $mailEmail, $module);
+                    return ['success' => true, 'message' => __('发送成功')];
+                }
+
+                return ['success' => false, 'message' => (string)($result['message'] ?? __('发送失败'))];
+            } catch (\Throwable $e) {
+                return ['success' => false, 'message' => __('发送失败：%{1}', [$e->getMessage()])];
+            }
+        }
+
+        $transportConfig = array_merge($senderConfig, [
+            'smtp_host' => (string)($mailConfig['smtp_host'] ?? $senderConfig['smtp_host'] ?? ''),
+            'smtp_port' => (string)($mailConfig['smtp_port'] ?? $senderConfig['smtp_port'] ?? '587'),
+            'smtp_secure' => (string)($mailConfig['smtp_secure'] ?? $senderConfig['smtp_secure'] ?? 'tls'),
+            'smtp_auth' => (string)($mailConfig['smtp_auth'] ?? $senderConfig['smtp_auth'] ?? '1'),
+            'smtp_username' => $mailEmail,
+            'smtp_password' => (string)($senderConfig['smtp_password'] ?? ''),
+        ]);
+
+        /** @var SmtpSender $sender */
+        $sender = ObjectManager::getInstance(SmtpSender::class);
+        try {
+            $ok = $sender->sendWithConfig(
+                $fromResolved,
+                $to,
+                $subject,
+                $content,
+                $alt,
+                $attachment,
+                '',
+                $cc,
+                $bcc,
+                $transportConfig,
+                $module
+            );
+            return ['success' => $ok, 'message' => $ok ? __('发送成功') : __('发送失败')];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => __('发送失败：%{1}', [$e->getMessage()])];
+        }
+    }
+
+    private function loadMailAccountConfig(int $accountId): ?array
+    {
+        if ($accountId <= 0) {
+            return null;
+        }
+
+        try {
+            $result = w_query('mail', 'getSmtpAccountConfig', ['account_id' => $accountId]);
+            if (is_array($result) && !empty($result['success']) && is_array($result['config'] ?? null)) {
+                return $result['config'];
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    private function writeVirtualSendLog(
+        string|array $from,
+        string|array $to,
+        string $subject,
+        string $content,
+        string $alt,
+        string|array $attachment,
+        string|array $cc,
+        string|array $bcc,
+        string $proxy,
+        string $module
+    ): void {
+        /** @var SmtpSendLog $sendLog */
+        $sendLog = ObjectManager::getInstance(SmtpSendLog::class);
+        $fromInfo = $this->normalizeSingleEmailEntry($from);
+        try {
+            $sendLog->clear()
+                ->setData(SmtpSendLog::schema_fields_FROM_EMAIL, $fromInfo['email'])
+                ->setData(SmtpSendLog::schema_fields_SENDER_NAME, substr($fromInfo['name'], 0, 30))
+                ->setData(SmtpSendLog::schema_fields_TO_EMAIL, json_encode($this->normalizeEmailEntries($to), JSON_UNESCAPED_UNICODE))
+                ->setData(SmtpSendLog::schema_fields_REPLY_TO, json_encode([], JSON_UNESCAPED_UNICODE))
+                ->setData(SmtpSendLog::schema_fields_SUBJECT, $subject)
+                ->setData(SmtpSendLog::schema_fields_CONTENT, $content)
+                ->setData(SmtpSendLog::schema_fields_ALT, $alt)
+                ->setData(SmtpSendLog::schema_fields_ATTACHMENT, json_encode($attachment === '' ? [] : $attachment, JSON_UNESCAPED_UNICODE))
+                ->setData(SmtpSendLog::schema_fields_CC, json_encode($this->normalizeEmailEntries($cc), JSON_UNESCAPED_UNICODE))
+                ->setData(SmtpSendLog::schema_fields_BCC, json_encode($this->normalizeEmailEntries($bcc), JSON_UNESCAPED_UNICODE))
+                ->setData(SmtpSendLog::schema_fields_IS_HTML, 1)
+                ->setData(SmtpSendLog::schema_fields_PROXY, $proxy)
+                ->setData(SmtpSendLog::schema_fields_MODULE, $module)
+                ->save();
+        } catch (\Throwable) {
+        }
+    }
+
+    private function normalizeSingleEmailEntry(string|array $entry): array
+    {
+        if (is_string($entry)) {
+            return ['email' => trim($entry), 'name' => ''];
+        }
+
+        return [
+            'email' => trim((string)($entry['email'] ?? '')),
+            'name' => trim((string)($entry['name'] ?? '')),
+        ];
+    }
+
+    private function normalizeEmailEntries(string|array $entries): array
+    {
+        if ($entries === '' || $entries === []) {
+            return [];
+        }
+
+        if (is_string($entries) || isset($entries['email'])) {
+            return [$this->normalizeSingleEmailEntry($entries)];
+        }
+
+        $normalized = [];
+        foreach ($entries as $entry) {
+            if (is_string($entry) || is_array($entry)) {
+                $item = $this->normalizeSingleEmailEntry($entry);
+                if ($item['email'] !== '') {
+                    $normalized[] = $item;
+                }
+            }
+        }
+
+        return $normalized;
     }
 
     private function test(array $params): array

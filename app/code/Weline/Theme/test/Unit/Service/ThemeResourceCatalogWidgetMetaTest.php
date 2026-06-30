@@ -26,6 +26,7 @@ final class ThemeResourceCatalogWidgetMetaTest extends TestCase
  * @widget.description {Header Logo}
  * @widget.type {header}
  * @widget.position {["header"]}
+ * @widget.supports {["layout-header-logo","layout-global-header-logo"]}
  * @widget.slot {logo}
  * @widget.page_layouts {["*"]}
  * @widget.exclusive {true}
@@ -40,6 +41,7 @@ PHTML;
         self::assertSame('logo', $meta['code']);
         self::assertSame('header', $meta['type']);
         self::assertSame(['header'], $meta['position']);
+        self::assertSame(['layout-header-logo', 'layout-global-header-logo'], $meta['supports']);
         self::assertSame('logo', $meta['slot']);
         self::assertSame(['*'], $meta['page_layouts']);
         self::assertTrue($meta['exclusive']);

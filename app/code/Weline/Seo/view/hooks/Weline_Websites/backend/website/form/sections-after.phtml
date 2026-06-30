@@ -1,0 +1,89 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 10
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Seo\Model\WebsiteProtocolConfig;
+
+$website = (array)($this->getData('website') ?? []);
+$websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'website'));
+$accordionParentId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('accordion_parent_id') ?? 'websiteFormAccordion'));
+$sectionId = $hookId . '_seo_protocol';
+$robotsFieldId = $sectionId . '_robots_enabled';
+$sitemapFieldId = $sectionId . '_sitemap_enabled';
+$googleExtendedFieldId = $sectionId . '_google_extended';
+$robotsExtraFieldId = $sectionId . '_robots_extra';
+
+$robotsEnabled = true;
+$sitemapEnabled = true;
+$googleExtended = 'allow';
+$robotsExtra = '';
+
+try {
+    if ($websiteId > 0) {
+        /** @var WebsiteProtocolConfig $protocolConfig */
+        $protocolConfig = ObjectManager::getInstance(WebsiteProtocolConfig::class)->loadByWebsiteId($websiteId);
+        $robotsEnabled = $protocolConfig->isRobotsEnabled();
+        $sitemapEnabled = $protocolConfig->isSitemapEnabled();
+        $googleExtended = $protocolConfig->getGoogleExtendedPolicy();
+        $robotsExtra = $protocolConfig->getRobotsExtra();
+    }
+} catch (\Throwable) {
+}
+?>
+<div class="accordion-item">
+    <div class="accordion-header" id="<?= htmlspecialchars($sectionId . '_heading', ENT_QUOTES, 'UTF-8') ?>">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>" aria-expanded="false" aria-controls="<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>">
+            <i class="mdi mdi-search-web"></i>
+            <span><lang>SEO 协议与搜索提交</lang></span>
+            <i class="mdi mdi-chevron-down ms-auto"></i>
+        </button>
+    </div>
+    <div id="<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>" class="accordion-collapse collapse" aria-labelledby="<?= htmlspecialchars($sectionId . '_heading', ENT_QUOTES, 'UTF-8') ?>" data-bs-parent="#<?= htmlspecialchars($accordionParentId, ENT_QUOTES, 'UTF-8') ?>">
+        <div class="accordion-body">
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <?= framework_view_process_block([
+                        'class' => \Weline\Seo\Block\Widget\WebsiteAccountEnablement::class,
+                        'website_id' => $websiteId,
+                        'website' => $website,
+                        'mode' => 'embedded',
+                        'field_prefix' => 'extensions[seo]',
+                        'show_submit' => false,
+                    ]) ?>
+                </div>
+                <div class="col-4 mb-3">
+                    <label class="form-label"><lang>robots.txt</lang></label>
+                    <input type="hidden" name="extensions[seo][robots_enabled]" value="0">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($robotsFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[seo][robots_enabled]" value="1" <?= $robotsEnabled ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="seo_robots_enabled"><lang>启用站点 robots 协议输出</lang></label>
+                    </div>
+                </div>
+                <div class="col-4 mb-3">
+                    <label class="form-label"><lang>Sitemap 声明</lang></label>
+                    <input type="hidden" name="extensions[seo][sitemap_enabled]" value="0">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($sitemapFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[seo][sitemap_enabled]" value="1" <?= $sitemapEnabled ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="seo_sitemap_enabled"><lang>在 robots 中声明 sitemap.xml</lang></label>
+                    </div>
+                </div>
+                <div class="col-4 mb-3">
+                    <label for="seo_google_extended" class="form-label"><lang>Google-Extended</lang></label>
+                    <select class="form-select" id="<?= htmlspecialchars($googleExtendedFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[seo][google_extended]">
+                        <option value="allow" <?= $googleExtended === 'allow' ? 'selected' : '' ?>><lang>允许 AI 训练抓取</lang></option>
+                        <option value="disallow" <?= $googleExtended === 'disallow' ? 'selected' : '' ?>><lang>禁止 Google-Extended</lang></option>
+                    </select>
+                </div>
+                <div class="col-12 mb-3">
+                    <label for="seo_robots_extra" class="form-label"><lang>robots.txt 追加规则</lang></label>
+                    <textarea class="form-control" id="<?= htmlspecialchars($robotsExtraFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[seo][robots_extra]" rows="5" placeholder="User-agent: *&#10;Disallow: /private/"><?= htmlspecialchars($robotsExtra, ENT_QUOTES, 'UTF-8') ?></textarea>
+                    <div class="form-text-hint"><lang>每行一条 robots 指令；基础安全规则由 Weline_Seo 自动生成。</lang></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

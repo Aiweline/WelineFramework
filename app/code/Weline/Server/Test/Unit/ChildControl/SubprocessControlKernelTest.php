@@ -139,30 +139,6 @@ PHP);
         }
     }
 
-    public function testResolveServicePortFromInstanceFile(): void
-    {
-        $instanceName = 'ut-kernel-service-port';
-        $instanceDir = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances';
-        $instanceFile = $instanceDir . DIRECTORY_SEPARATOR . $instanceName . '.json';
-        if (!\is_dir($instanceDir)) {
-            @\mkdir($instanceDir, 0777, true);
-        }
-
-        \file_put_contents($instanceFile, \json_encode([
-            'session_port' => 19970,
-            'memory_port' => 19971,
-            'session_service_updated_at' => \time(),
-            'memory_service_updated_at' => \time(),
-        ]));
-        try {
-            $this->assertSame(19970, SubprocessControlKernel::resolveServicePort($instanceName, 'session_port', 1));
-            $this->assertSame(19971, SubprocessControlKernel::resolveServicePort($instanceName, 'memory_port', 1));
-            $this->assertSame(0, SubprocessControlKernel::resolveServicePort($instanceName, 'missing_port', 0));
-        } finally {
-            @\unlink($instanceFile);
-        }
-    }
-
     public function testResolveReadyDelayMillisecondsClampsInvalidValues(): void
     {
         \putenv('WLS_E2E_WORKER_READY_DELAY_MS=-5');
@@ -479,13 +455,16 @@ PHP);
 
         self::assertNotFalse($sessionSource);
         self::assertNotFalse($redirectSource);
-        self::assertStringContainsString("\$arg === '--frontend' || \$arg === '-frontend' || \$arg === '-f'", $sessionSource);
+        self::assertStringContainsString("\$arg === '--frontend' || \$arg === '-frontend' || \$arg === '--win' || \$arg === '-win' || \$arg === '-f'", $sessionSource);
         self::assertStringContainsString('LogConfig::isDevMode() || $isFrontend', $sessionSource);
         self::assertStringNotContainsString('!$sharedService && $orphanGuard->shouldExit(', $sessionSource);
         self::assertStringContainsString('$orphanGuard->shouldExit(', $sessionSource);
+        self::assertStringContainsString('$sharedServiceUsesTokenLifecycle = $sharedService && $masterPid <= 0 && $kernel === null;', $sessionSource);
+        self::assertStringContainsString('if (!$sharedServiceUsesTokenLifecycle && $orphanGuard->shouldExit(', $sessionSource);
         self::assertStringContainsString('$server->isSharedConsumerIdleWindowOpen()', $sessionSource);
         self::assertStringContainsString('$shouldResolveControlPort = !$sharedService || $controlPort > 0 || $supervisorEnabled;', $sessionSource);
         self::assertStringContainsString("\\in_array('--frontend', \$argv, true) || \\in_array('-frontend', \$argv, true)", $redirectSource);
+        self::assertStringContainsString("\\in_array('--win', \$argv, true) || \\in_array('-win', \$argv, true)", $redirectSource);
         self::assertStringContainsString('if ($isDev || $isFrontend)', $redirectSource);
     }
 
@@ -531,7 +510,7 @@ PHP);
                     public function markReadyState(bool $isReady = true): void {}
                     public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return false; }
                     public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return false; }
-                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return false; }
+                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool { return false; }
                     public function sendStatusReport(int $connections, int $memory, int $requests): bool { return false; }
                     public function sendLogLine(string $line, string $level, string $processTag): bool { return false; }
                     public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { return false; }
@@ -592,7 +571,7 @@ PHP);
                     public function markReadyState(bool $isReady = true): void {}
                     public function sendReady(string $role = '', int $workerId = 0, int $port = 0, int $epoch = 0, string $launchId = '', string $msgId = ''): bool { return false; }
                     public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool { return false; }
-                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool { return false; }
+                    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool { return false; }
                     public function sendStatusReport(int $connections, int $memory, int $requests): bool { return false; }
                     public function sendLogLine(string $line, string $level, string $processTag): bool { return false; }
                     public function send(string $message, bool $disconnectOnWriteOverflow = true): bool { return false; }

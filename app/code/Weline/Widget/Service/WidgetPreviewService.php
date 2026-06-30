@@ -13,7 +13,8 @@ use Weline\Framework\View\Template;
 class WidgetPreviewService
 {
     public function __construct(
-        private readonly WidgetRegistry $widgetRegistry
+        private readonly WidgetRegistry $widgetRegistry,
+        private readonly ?WidgetRuntimeTemplateRenderer $runtimeTemplateRenderer = null,
     ) {
     }
 
@@ -32,12 +33,22 @@ class WidgetPreviewService
         if ($widget === null) {
             return '<div class="widget-preview-placeholder">' . htmlspecialchars($widgetCode) . '</div>';
         }
+        $finalConfig = $this->mergeWithParamDefaults($widget, $config);
+        $finalConfig['preview_mode'] = true;
+        $templateContent = (string)($widget['template_content'] ?? '');
+        if ($templateContent !== '') {
+            try {
+                $renderer = $this->runtimeTemplateRenderer ?? ObjectManager::getInstance(WidgetRuntimeTemplateRenderer::class);
+                return $this->sanitizePreviewHtml($renderer->renderContent($templateContent, $finalConfig));
+            } catch (\Throwable $e) {
+                return '<div class="widget-preview-error">' . htmlspecialchars($e->getMessage()) . '</div>';
+            }
+        }
+
         $template = $widget['template'] ?? '';
         if ($template === '') {
             return '<div class="widget-preview-placeholder">' . htmlspecialchars((string)($widget['name'] ?? $widgetCode)) . '</div>';
         }
-        $finalConfig = $this->mergeWithParamDefaults($widget, $config);
-        $finalConfig['preview_mode'] = true;
         try {
             /** @var Template $templateObj */
             $templateObj = ObjectManager::getInstance(Template::class);
@@ -93,9 +104,9 @@ class WidgetPreviewService
     }
 
     /**
-     * 预览用 HTML 清理：移除 script/iframe 与内联事件
+     * 预览用 HTML 清理：deny-by-default，仅保留安全展示所需标签与属性。
      */
-    private function sanitizePreviewHtml(string $html): string
+    public function sanitizePreviewHtml(string $html): string
     {
         if (trim($html) === '') {
             return $html;
@@ -109,34 +120,113 @@ class WidgetPreviewService
             $doc = new \DOMDocument('1.0', 'UTF-8');
             $doc->loadHTML($wrapped, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
             $xpath = new \DOMXPath($doc);
-            foreach ($xpath->query('//script') as $node) {
-                $node->parentNode?->removeChild($node);
+
+            $allowedTags = [
+                'a', 'abbr', 'article', 'aside', 'audio', 'b', 'blockquote', 'br', 'button', 'caption',
+                'cite', 'code', 'col', 'colgroup', 'dd', 'del', 'details', 'dfn', 'div', 'dl', 'dt',
+                'em', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                'header', 'hr', 'i', 'img', 'input', 'ins', 'label', 'legend', 'li', 'main', 'mark',
+                'nav', 'ol', 'option', 'p', 'picture', 'pre', 'progress', 's', 'section', 'select',
+                'small', 'source', 'span', 'strong', 'sub', 'summary', 'sup', 'table', 'tbody', 'td',
+                'textarea', 'tfoot', 'th', 'thead', 'time', 'tr', 'u', 'ul', 'video',
+            ];
+            $allowedAttr = [
+                'abbr', 'accept', 'action', 'alt', 'aria-label', 'aria-labelledby', 'aria-describedby',
+                'aria-hidden', 'aria-expanded', 'aria-controls', 'autocomplete', 'checked', 'class',
+                'cols', 'colspan', 'controls', 'datetime', 'dir', 'disabled', 'for', 'height', 'hidden',
+                'href', 'id', 'label', 'loading', 'max', 'maxlength', 'method', 'min', 'multiple', 'name',
+                'pattern', 'placeholder', 'poster', 'readonly', 'rel', 'required', 'role', 'rows',
+                'rowspan', 'selected', 'sizes', 'src', 'target', 'title', 'type', 'value', 'width',
+            ];
+            $uriAttr = ['action', 'href', 'poster', 'src'];
+            $allowedInputTypes = [
+                'button', 'checkbox', 'color', 'date', 'datetime-local', 'email', 'hidden', 'month',
+                'number', 'password', 'radio', 'range', 'reset', 'search', 'submit', 'tel', 'text',
+                'time', 'url', 'week',
+            ];
+
+            foreach ($xpath->query('//body//*') as $node) {
+                if (!$node instanceof \DOMElement) {
+                    continue;
+                }
+                $tag = strtolower($node->tagName);
+                if (!in_array($tag, $allowedTags, true)) {
+                    $node->parentNode?->removeChild($node);
+                    continue;
+                }
             }
-            foreach ($xpath->query('//iframe') as $node) {
-                $node->parentNode?->removeChild($node);
-            }
-            foreach ($xpath->query('//*[@*]') as $node) {
+
+            foreach ($xpath->query('//body//*[@*]') as $node) {
                 if (!$node instanceof \DOMElement || !$node->hasAttributes()) {
                     continue;
                 }
                 $toRemove = [];
                 foreach ($node->attributes as $attr) {
-                    if (stripos($attr->name, 'on') === 0) {
+                    $name = strtolower($attr->name);
+                    if (
+                        str_starts_with($name, 'on')
+                        || $name === 'style'
+                        || $name === 'srcdoc'
+                        || (!in_array($name, $allowedAttr, true) && !str_starts_with($name, 'data-'))
+                    ) {
                         $toRemove[] = $attr->name;
+                        continue;
+                    }
+                    if (in_array($name, $uriAttr, true) && !$this->isSafePreviewUrl((string)$attr->value)) {
+                        $toRemove[] = $attr->name;
+                        continue;
+                    }
+                    if ($name === 'target' && !in_array($attr->value, ['_blank', '_self', '_parent', '_top'], true)) {
+                        $toRemove[] = $attr->name;
+                        continue;
+                    }
+                    if ($name === 'type' && strtolower($node->tagName) === 'input' && !in_array(strtolower($attr->value), $allowedInputTypes, true)) {
+                        $node->setAttribute('type', 'text');
+                    }
+                    if ($name === 'rel' && strtolower($node->tagName) === 'a') {
+                        $node->setAttribute('rel', 'noopener noreferrer');
                     }
                 }
                 foreach ($toRemove as $name) {
                     $node->removeAttribute($name);
                 }
+                if (strtolower($node->tagName) === 'a' && $node->getAttribute('target') === '_blank') {
+                    $node->setAttribute('rel', 'noopener noreferrer');
+                }
             }
             $body = $xpath->query('//body')->item(0);
-            $result = $body ? $doc->saveHTML($body) : $html;
+            if (!$body) {
+                return '';
+            }
+            $result = $doc->saveHTML($body);
             $result = preg_replace('#^<body>|</body>$#', '', (string)$result);
-            return $result !== null ? $result : $html;
+            return $result !== null ? $result : '';
         } catch (\Throwable $e) {
-            return $html;
+            return '';
         } finally {
             libxml_use_internal_errors($prev);
         }
+    }
+
+    private function isSafePreviewUrl(string $url): bool
+    {
+        $value = trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        if ($value === '') {
+            return false;
+        }
+        if (preg_match('/[\x00-\x1F\x7F]/', $value) === 1) {
+            return false;
+        }
+        if (str_starts_with($value, '#') || str_starts_with($value, '/') || str_starts_with($value, './') || str_starts_with($value, '../')) {
+            return true;
+        }
+        if (str_starts_with($value, '//')) {
+            return true;
+        }
+        $scheme = parse_url($value, PHP_URL_SCHEME);
+        if ($scheme === null || $scheme === false || $scheme === '') {
+            return true;
+        }
+        return in_array(strtolower((string)$scheme), ['http', 'https', 'mailto', 'tel'], true);
     }
 }

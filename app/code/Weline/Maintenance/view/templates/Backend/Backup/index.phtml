@@ -15,9 +15,9 @@ $filters = $filters ?? [];
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18"><lang>备份管理</lang></h4>
             <div>
-                <button type="button" class="btn btn-primary" onclick="location.href='<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>'">
+                <a class="btn btn-primary" href="<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>">
                     <i class="mdi mdi-plus me-2"></i><lang>创建备份</lang>
-                </button>
+                </a>
             </div>
         </div>
     </div>
@@ -98,8 +98,8 @@ $filters = $filters ?? [];
                                                class="btn btn-sm btn-primary me-1">
                                                 <i class="mdi mdi-download"></i> <lang>下载</lang>
                                             </a>
-                                            <button type="button" class="btn btn-sm btn-danger" 
-                                                    onclick="MaintenanceBackup.deleteBackup(<?= $backup['backup_id'] ?? 0 ?>)">
+                                            <button type="button" class="btn btn-sm btn-danger"
+                                                    data-maintenance-backup-delete="<?= (int)($backup['backup_id'] ?? 0) ?>">
                                                 <i class="mdi mdi-delete"></i> <lang>删除</lang>
                                             </button>
                                         </td>
@@ -152,5 +152,15 @@ $filters = $filters ?? [];
             });
         }
     };
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-maintenance-backup-delete]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        MaintenanceBackup.deleteBackup(parseInt(trigger.getAttribute('data-maintenance-backup-delete') || '0', 10));
+    });
 })();
 </script>

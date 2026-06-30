@@ -1,9 +1,11 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
+$headTitle = (string)($this->getData('title') ?? '');
+$headDescription = (string)($this->getData('description') ?? '');
 ?>
 <meta charset="UTF-8">
-<title><?php echo $this->getData('title'); ?></title>
-<meta content="<?php echo $this->getData('description'); ?>" name="description"/>
+<title><?= htmlspecialchars($headTitle, ENT_QUOTES, 'UTF-8') ?></title>
+<meta content="<?= htmlspecialchars($headDescription, ENT_QUOTES, 'UTF-8') ?>" name="description"/>
 <link rel="Shortcut Icon" href="@static(Weline_Backend::img/favicon.png)">
 <link rel="Shortcut Icon" href="@static(Weline_Backend::img/favicon.png)">
 <link rel="Bookmark" href="@static(Weline_Backend::img/favicon.png)">

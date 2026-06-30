@@ -19,4 +19,9 @@ return [
 - theme_id: 主题ID
 - page_type: 页面类型'),
     ],
+    'Weline_Theme::theme_editor::result_after' => [
+        'name' => __('Theme editor result after'),
+        'description' => __('Triggered after ThemeEditor produces a string response. Payload includes action, result, controller, and request. Observers may replace result.'),
+        'doc' => 'theme_editor_result_after.md',
+    ],
 ];

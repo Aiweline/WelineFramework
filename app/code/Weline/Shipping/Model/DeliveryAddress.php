@@ -11,6 +11,8 @@ use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Service\AddressFormatter;
 #[Table(comment: '运送地址表')]
 #[Index(name: 'idx_customer_id', columns: ['customer_id'])]
 #[Index(name: 'idx_is_default', columns: ['is_default'])]
@@ -32,12 +34,26 @@ class DeliveryAddress extends AbstractModel
     public const schema_fields_CONTACT_PHONE = 'contact_phone';
     #[Col('varchar', 50, nullable: false, default: '中国', comment: '国家')]
     public const schema_fields_COUNTRY = 'country';
+    #[Col('varchar', 2, nullable: true, comment: 'ISO country code')]
+    public const schema_fields_COUNTRY_CODE = 'country_code';
     #[Col('varchar', 50, nullable: false, comment: '省份')]
     public const schema_fields_PROVINCE = 'province';
+    #[Col('varchar', 32, nullable: true, comment: 'Province/state code')]
+    public const schema_fields_PROVINCE_CODE = 'province_code';
+    #[Col('int', null, nullable: true, comment: 'Province/state region id')]
+    public const schema_fields_PROVINCE_REGION_ID = 'province_region_id';
     #[Col('varchar', 50, nullable: false, comment: '城市')]
     public const schema_fields_CITY = 'city';
+    #[Col('varchar', 32, nullable: true, comment: 'City code')]
+    public const schema_fields_CITY_CODE = 'city_code';
+    #[Col('int', null, nullable: true, comment: 'City region id')]
+    public const schema_fields_CITY_REGION_ID = 'city_region_id';
     #[Col('varchar', 50, comment: '区县')]
     public const schema_fields_DISTRICT = 'district';
+    #[Col('varchar', 32, nullable: true, comment: 'District code')]
+    public const schema_fields_DISTRICT_CODE = 'district_code';
+    #[Col('int', null, nullable: true, comment: 'District region id')]
+    public const schema_fields_DISTRICT_REGION_ID = 'district_region_id';
     #[Col('varchar', 200, nullable: false, comment: '街道地址')]
     public const schema_fields_STREET = 'street';
     #[Col('varchar', 20, comment: '邮政编码')]
@@ -70,14 +86,7 @@ class DeliveryAddress extends AbstractModel
      */
     public function getFullAddress(): string
     {
-        $parts = array_filter([
-            $this->getData(self::schema_fields_COUNTRY),
-            $this->getData(self::schema_fields_PROVINCE),
-            $this->getData(self::schema_fields_CITY),
-            $this->getData(self::schema_fields_DISTRICT),
-            $this->getData(self::schema_fields_STREET),
-        ]);
-        return implode('', $parts);
+        return ObjectManager::getInstance(AddressFormatter::class)->formatSingleLine($this->getData());
     }
     /**
      * 是否默认地址

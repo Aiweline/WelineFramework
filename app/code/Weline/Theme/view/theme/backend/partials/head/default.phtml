@@ -98,21 +98,43 @@ $baseUrl = $this->request->getBaseUrl();
 // 根据环境设置模块配置URL和基础URL
 if ($isDev) {
     // 开发模式
-    $modulesConfigUrl = '/Weline/Frontend/view/statics/base/weline.modules.js';
-    $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
+    $modulesConfigUrl = '/Weline/Backend/view/statics/base/weline.modules.js';
+    $modulesBaseUrl = '/Weline/Backend/view/statics/js/weline-api';
 } else {
     // 生产模式
-    $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
-    $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
+    $modulesConfigUrl = '/static/Weline/Backend/base/weline.modules.js';
+    $modulesBaseUrl = '/static/Weline/Backend/js/weline-api';
 }
 
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $currentCurrency = \w_env('user.currency', 'CNY');
+$defaultCurrency = \w_env('website.currency', '') ?: \Weline\Framework\App\Env::get('currency', 'CNY') ?: 'CNY';
+$availableCurrencies = [];
+try {
+    if (class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+        foreach (\Weline\Websites\Data\WebsiteData::getCurrencyCodes() as $currencyCode) {
+            $currencyCode = strtoupper(trim((string)$currencyCode));
+            if ($currencyCode !== '') {
+                $availableCurrencies[] = $currencyCode;
+            }
+        }
+    }
+} catch (\Throwable) {
+    $availableCurrencies = [];
+}
+$defaultCurrency = strtoupper(trim((string)$defaultCurrency)) ?: 'CNY';
+$availableCurrencies[] = $defaultCurrency;
+$availableCurrencies = array_values(array_unique($availableCurrencies));
+$currentCurrency = strtoupper(trim((string)$currentCurrency));
+if (!\Weline\Framework\App\State::isAllowedCurrencyCode($currentCurrency)) {
+    $currentCurrency = $defaultCurrency;
+}
 $siteName = $this->getData('site_name') ?? __('Weline Admin');
 $pageTitle = $meta['title'] ?? $this->getData('title') ?? __('Weline Admin 管理面板');
 $pageDescription = $meta['description'] ?? __('Weline Framework - 后台管理系统');
 $pageKeywords = $meta['keywords'] ?? __('Weline, Framework, Admin, PHP');
 $welineThemeColorMode = $themeData['colorMode'] ?? 'default';
+$jsonEncodeFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 
 $envConfig = [
     'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
@@ -120,13 +142,18 @@ $envConfig = [
     'PROD' => !DEV,
 ];
 // API 模块的 workerUrl 由 API 模块内部自动处理，无需在此处配置
+$__dv = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $themeConfigPayload = [
     'env' => $envConfig,
     'baseUrl' => $baseUrl,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
+    'deployVersion' => ($__dv && is_array($__dv)) ? ($__dv['deploy_version'] ?? 'dev') : 'dev',
+    'workerBuildId' => ($__dv && is_array($__dv)) ? ($__dv['worker_build_id'] ?? 'dev') : 'dev',
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
+    'defaultCurrency' => $defaultCurrency,
+    'availableCurrencies' => $availableCurrencies,
     'debug' => DEV,
     'site' => [
         'name' => $siteName,
@@ -152,7 +179,7 @@ $themeConfigPayload = [
 ];
     
 // 将配置数据序列化为JSON，供外部JS文件使用
-$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, $jsonEncodeFlags));
 $this->setData('envConfig', $envConfig);
 ?>
 <!-- Theme配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
@@ -164,7 +191,7 @@ $this->setData('envConfig', $envConfig);
             window.__WelineThemeConfig = {};
         }
         // 使用Object.assign合并，保留Frontend模块已设置的配置
-        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        const themeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFlags) ?>;
         Object.assign(window.__WelineThemeConfig, themeConfig);
         
         // 关键：确保全局变量 modulesConfigUrl 也被设置，支持 theme.js 直接访问
@@ -292,13 +319,42 @@ html {
     
     // 后台不预取站点根路径：根路径为前台首页，后台用户很少从后台跳转到前台首页，预取会徒增每次页面的一个 / 请求
 
+    function isSafeCssVariableName(varName) {
+        return typeof varName === 'string' && /^--[A-Za-z0-9_-]+$/.test(varName.trim());
+    }
+
+    function isSafeCssVariableValue(value) {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return false;
+        }
+
+        const normalizedValue = String(value).trim();
+        if (!normalizedValue || normalizedValue.length > 1024) {
+            return false;
+        }
+
+        if (/[\x00-\x1F\x7F]/.test(normalizedValue)) {
+            return false;
+        }
+
+        if (/[;{}<>\\]/.test(normalizedValue)) {
+            return false;
+        }
+
+        return !(/\/\*|\*\/|@import\b|url\s*\(|expression\s*\(|javascript\s*:|data\s*:/i.test(normalizedValue));
+    }
+
     // 监听来自Visual Editor的postMessage (Live Preview支持)
     window.addEventListener('message', function(event) {
         if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {
             const cssVars = event.data.cssVars || {};
             const root = document.documentElement;
             for (const [varName, value] of Object.entries(cssVars)) {
-                root.style.setProperty(varName, value);
+                if (!isSafeCssVariableName(varName) || !isSafeCssVariableValue(value)) {
+                    continue;
+                }
+
+                root.style.setProperty(varName.trim(), String(value).trim());
             }
             console.log('[Theme] Live preview updated:', Object.keys(cssVars).length, 'variables');
         }

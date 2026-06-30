@@ -12,9 +12,12 @@ declare(strict_types=1);
 namespace Weline\Framework\Runtime;
 
 use Weline\Framework\Context;
+use Weline\Framework\Env\WelineEnv;
 
 class RequestLifecycleTrace
 {
+    private const REQUEST_CONTEXT_ID_KEY = 'request_lifecycle_trace.request_id';
+
     private static bool $stateManagerRegistered = false;
 
     /** 极端重试/风暴时防止静态 span 无限增长导致 OOM（可被 wls.debug.request_trace_max_spans 覆盖） */
@@ -35,8 +38,35 @@ class RequestLifecycleTrace
     /** @var int|null 缓存 getMetaStringMaxBytes()（0=不截断），reset 时清空 */
     private static ?int $metaStringMaxBytesCache = null;
 
+    private static ?bool $enabledCache = null;
+
     /** @var list<array{name: string, duration_ms: float, category?: string, parent?: string, meta?: array<string, mixed>}> */
     private static array $spans = [];
+
+    private static string $requestId = '';
+
+    private static int $nextSeq = 1;
+
+    /** @var list<string> */
+    private static array $compactRows = [];
+
+    /** @var array<string, int> */
+    private static array $nameIds = [];
+
+    /** @var array<int, string> */
+    private static array $names = [];
+
+    /** @var array<string, int> */
+    private static array $categoryIds = [];
+
+    /** @var array<int, string> */
+    private static array $categories = [];
+
+    /** @var array<string, int> */
+    private static array $metaIds = [];
+
+    /** @var array<int, array<string, mixed>> */
+    private static array $metas = [];
 
     /** @var array<string, float> name => start microtime */
     private static array $startStack = [];
@@ -54,20 +84,24 @@ class RequestLifecycleTrace
      */
     public static function isEnabled(): bool
     {
+        if (self::$enabledCache !== null) {
+            return self::$enabledCache;
+        }
+
         $enabled = false;
-        if (\defined('DEV') && DEV) {
+        if (self::isExplicitPersistentTraceRequested()) {
+            $enabled = true;
+        } elseif (\defined('DEV') && DEV) {
             $enabled = true;
         } elseif (\defined('DEBUG') && DEBUG) {
             $enabled = true;
         }
 
         if (!$enabled) {
+            self::$enabledCache = false;
             return false;
         }
 
-        if (self::$recordingDisabledUntilReset) {
-            return false;
-        }
 
         // Master / Dispatcher / Session / Memory 等常驻进程不会进入请求级 init/cleanup，
         // 若在这些进程继续启用 trace，spans 会永久累积。
@@ -77,17 +111,68 @@ class RequestLifecycleTrace
 
         if (\class_exists(Runtime::class, false)
             && Runtime::isPersistent()
-            && (!\class_exists(\Weline\Framework\App\Env::class, false)
-                || !(bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', false))
+            && !self::isPersistentRequestTraceAllowed()
         ) {
+            self::$enabledCache = false;
             return false;
         }
 
         if (self::shouldSkipForCurrentRequest()) {
+            self::$enabledCache = false;
             return false;
         }
 
+        self::$enabledCache = true;
         return true;
+    }
+
+    private static function isPersistentRequestTraceAllowed(): bool
+    {
+        if (!\class_exists(\Weline\Framework\App\Env::class, false)) {
+            return self::isExplicitPersistentTraceRequested();
+        }
+
+        $panelEnabled = (bool)\Weline\Framework\App\Env::get('wls.debug.dev_tool_panel', false)
+            || (bool)\Weline\Framework\App\Env::get(
+                'wls.debug.performance_panel',
+                (\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)
+            );
+
+        return self::isExplicitPersistentTraceRequested()
+            || (bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', $panelEnabled);
+    }
+
+    private static function isExplicitPersistentTraceRequested(): bool
+    {
+        $header = (string)WelineEnv::server('HTTP_X_WELINE_TRACE', '');
+        if ($header === '1' || \strtolower($header) === 'true') {
+            return true;
+        }
+
+        $query = (string)WelineEnv::server('QUERY_STRING', '');
+        if ($query === '') {
+            $requestUri = (string)WelineEnv::server('REQUEST_URI', '');
+            if ($requestUri === '' && \function_exists('w_env_request_uri')) {
+                $requestUri = (string)\w_env_request_uri();
+            }
+            if ($requestUri === '' && \function_exists('w_env')) {
+                $requestUri = (string)\w_env('request.uri', '');
+            }
+            $parts = \parse_url($requestUri);
+            $query = \is_array($parts) ? (string)($parts['query'] ?? '') : '';
+        }
+        if ($query === '') {
+            return false;
+        }
+
+        \parse_str($query, $params);
+        $flag = $params['wls_trace'] ?? null;
+        if (\is_array($flag)) {
+            return false;
+        }
+
+        $value = \strtolower((string)$flag);
+        return $value === '1' || $value === 'true';
     }
 
     public static function shouldSkipForCurrentRequest(): bool
@@ -150,15 +235,15 @@ class RequestLifecycleTrace
         if (!self::isEnabled()) {
             return;
         }
+        if (self::$recordingDisabledUntilReset) {
+            return;
+        }
         $maxSpans = self::getMaxSpansCap();
         if (\count(self::$spans) >= $maxSpans) {
             if (!self::$maxSpansLogged) {
                 self::$maxSpansLogged = true;
                 \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) $maxSpans . '，已停止记录直至 reset');
             }
-            self::$spans = [];
-            self::$startStack = [];
-            self::$currentParentStack = [];
             self::$recordingDisabledUntilReset = true;
 
             return;
@@ -180,6 +265,183 @@ class RequestLifecycleTrace
             $span['meta'] = self::sanitizeMetaForStorage($meta);
         }
         self::$spans[] = $span;
+        self::appendCompactSpan($span);
+    }
+
+    public static function ensureRequestId(): string
+    {
+        if (self::hasRequestContextScope()) {
+            $contextRequestId = (string) RequestContext::get(self::REQUEST_CONTEXT_ID_KEY, '');
+            if ($contextRequestId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $contextRequestId)) {
+                self::$requestId = $contextRequestId;
+                return $contextRequestId;
+            }
+
+            $requestId = self::resolveContextBackedRequestId();
+            RequestContext::set(self::REQUEST_CONTEXT_ID_KEY, $requestId);
+            self::$requestId = $requestId;
+
+            return $requestId;
+        }
+
+        if (self::$requestId !== '') {
+            return self::$requestId;
+        }
+
+        self::$requestId = self::resolveNewRequestId();
+
+        return self::$requestId;
+    }
+
+    private static function resolveContextBackedRequestId(): string
+    {
+        $incoming = self::resolveIncomingRequestId();
+        if ($incoming !== '') {
+            return $incoming;
+        }
+
+        $contextId = (string)(RequestContext::getRequestId() ?? '');
+        if ($contextId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $contextId)) {
+            return $contextId;
+        }
+
+        if (self::$requestId !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', self::$requestId)) {
+            return self::$requestId;
+        }
+
+        return self::resolveNewRequestId();
+    }
+
+    private static function resolveNewRequestId(): string
+    {
+        $incoming = self::resolveIncomingRequestId();
+        if ($incoming !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $incoming)) {
+            return $incoming;
+        }
+
+        try {
+            return \bin2hex(\random_bytes(8)) . '-' . \dechex((int)(\microtime(true) * 1000000));
+        } catch (\Throwable) {
+            return \str_replace('.', '', \uniqid('req', true));
+        }
+    }
+
+    private static function resolveIncomingRequestId(): string
+    {
+        $incoming = (string)(
+            WelineEnv::server('HTTP_X_WELINE_REQUEST_ID', '')
+            ?: WelineEnv::server('HTTP_X_REQUEST_ID', '')
+            ?: ($_SERVER['HTTP_X_WELINE_REQUEST_ID'] ?? '')
+            ?: ($_SERVER['HTTP_X_REQUEST_ID'] ?? '')
+        );
+        if ($incoming !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $incoming)) {
+            return $incoming;
+        }
+
+        return '';
+    }
+
+    private static function hasRequestContextScope(): bool
+    {
+        return \class_exists(RequestContext::class, false)
+            && (RequestContext::isInitialized() || RequestContext::getRequestId() !== null);
+    }
+
+    /**
+     * @return array{request_id: string, format: string, trace: string, dict: array<string, mixed>, summary: array<string, mixed>}
+     */
+    public static function exportCompactPayload(): array
+    {
+        $spans = self::getSpansWithDbSummary();
+        if (empty(self::$compactRows) && !empty($spans)) {
+            foreach ($spans as $span) {
+                self::appendCompactSpan($span);
+            }
+        }
+
+        $dbDurationMs = 0.0;
+        $categoryCounts = [];
+        foreach ($spans as $span) {
+            $category = (string)($span['category'] ?? 'framework');
+            $categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
+            if ($category === 'db') {
+                $dbDurationMs += (float)($span['duration_ms'] ?? 0.0);
+            }
+        }
+
+        return [
+            'request_id' => self::ensureRequestId(),
+            'format' => 'compact-v1',
+            'trace' => \implode("\n", self::$compactRows),
+            'dict' => [
+                'names' => self::$names,
+                'categories' => self::$categories,
+                'metas' => self::$metas,
+            ],
+            'summary' => [
+                'span_count' => \count($spans),
+                'db_duration_ms' => \round($dbDurationMs, 2),
+                'category_counts' => $categoryCounts,
+                'truncated' => self::$recordingDisabledUntilReset,
+                'max_spans' => self::getMaxSpansCap(),
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $span
+     */
+    private static function appendCompactSpan(array $span): void
+    {
+        $seq = self::$nextSeq++;
+        $nameId = self::dictId((string)($span['name'] ?? ''), self::$nameIds, self::$names);
+        $parentId = self::dictId((string)($span['parent'] ?? ''), self::$nameIds, self::$names);
+        $categoryId = self::dictId((string)($span['category'] ?? 'framework'), self::$categoryIds, self::$categories);
+        $durationUs = (int)\round(((float)($span['duration_ms'] ?? 0.0)) * 1000);
+        $metaId = self::metaId(\is_array($span['meta'] ?? null) ? $span['meta'] : []);
+
+        self::$compactRows[] = \implode('|', [$seq, $parentId, $categoryId, $nameId, $durationUs, $metaId]);
+    }
+
+    /**
+     * @param array<string, int> $lookup
+     * @param array<int, string> $dict
+     */
+    private static function dictId(string $value, array &$lookup, array &$dict): int
+    {
+        if ($value === '') {
+            return 0;
+        }
+        if (isset($lookup[$value])) {
+            return $lookup[$value];
+        }
+        $id = \count($dict) + 1;
+        $lookup[$value] = $id;
+        $dict[$id] = $value;
+
+        return $id;
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private static function metaId(array $meta): int
+    {
+        if (empty($meta)) {
+            return 0;
+        }
+        $json = \json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (!\is_string($json) || $json === '') {
+            return 0;
+        }
+        if (isset(self::$metaIds[$json])) {
+            return self::$metaIds[$json];
+        }
+        $id = \count(self::$metas) + 1;
+        self::$metaIds[$json] = $id;
+        self::$metas[$id] = $meta;
+
+        return $id;
     }
 
     /**
@@ -405,10 +667,20 @@ class RequestLifecycleTrace
         self::$spans = [];
         self::$startStack = [];
         self::$currentParentStack = [];
+        self::$requestId = '';
+        self::$nextSeq = 1;
+        self::$compactRows = [];
+        self::$nameIds = [];
+        self::$names = [];
+        self::$categoryIds = [];
+        self::$categories = [];
+        self::$metaIds = [];
+        self::$metas = [];
         self::$maxSpansLogged = false;
         self::$recordingDisabledUntilReset = false;
         self::$maxSpansCapCache = null;
         self::$metaStringMaxBytesCache = null;
+        self::$enabledCache = null;
     }
 
     private static function currentRequestUri(): string
@@ -421,6 +693,6 @@ class RequestLifecycleTrace
             }
         }
 
-        return (string)($_SERVER['REQUEST_URI'] ?? '');
+        return (string)WelineEnv::server('REQUEST_URI', '');
     }
 }

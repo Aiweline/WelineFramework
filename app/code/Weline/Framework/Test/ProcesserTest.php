@@ -343,6 +343,55 @@ class ProcesserTest extends TestCore
         self::assertStringContainsString("echo worker-blocking\t0", $script);
     }
 
+    public function testWriteWindowsStartScriptArgvUsesWmiDetachedProcessCreation(): void
+    {
+        $scriptPath = $this->invokePrivateStatic(Processer::class, 'writeWindowsStartScriptArgv', [
+            ['C:\php\php.exe', 'bin\w', 'server:start', 'default', '--master-only'],
+            'C:\repo',
+        ]);
+
+        self::assertIsString($scriptPath);
+        self::assertFileExists($scriptPath);
+
+        try {
+            $script = (string) \file_get_contents($scriptPath);
+            self::assertStringContainsString('$commandLine = \'C:\php\php.exe bin\w server:start default --master-only\'', $script);
+            self::assertStringContainsString('$startup = ([WMIClass]\'Win32_ProcessStartup\').CreateInstance()', $script);
+            self::assertStringContainsString('$startup.ShowWindow = 0', $script);
+            self::assertStringContainsString('Invoke-WmiMethod -Class Win32_Process -Name Create', $script);
+            self::assertStringContainsString('[Console]::Out.WriteLine([string]$result.ProcessId)', $script);
+            self::assertStringNotContainsString('RedirectStandardOutput', $script);
+            self::assertStringNotContainsString('Start-Process', $script);
+        } finally {
+            @\unlink($scriptPath);
+        }
+    }
+
+    public function testWriteWindowsStartScriptUsesWmiDetachedProcessCreation(): void
+    {
+        $scriptPath = $this->invokePrivateStatic(Processer::class, 'writeWindowsStartScript', [
+            'C:\php\php.exe',
+            'bin\w server:start default --master-only',
+            'C:\repo',
+        ]);
+
+        self::assertIsString($scriptPath);
+        self::assertFileExists($scriptPath);
+
+        try {
+            $script = (string) \file_get_contents($scriptPath);
+            self::assertStringContainsString('$commandLine = \'C:\php\php.exe bin\w server:start default --master-only\'', $script);
+            self::assertStringContainsString('$startup = ([WMIClass]\'Win32_ProcessStartup\').CreateInstance()', $script);
+            self::assertStringContainsString('$startup.ShowWindow = 0', $script);
+            self::assertStringContainsString('Invoke-WmiMethod -Class Win32_Process -Name Create', $script);
+            self::assertStringContainsString('[Console]::Out.WriteLine([string]$result.ProcessId)', $script);
+            self::assertStringNotContainsString('RedirectStandardError', $script);
+            self::assertStringNotContainsString('Start-Process', $script);
+        } finally {
+            @\unlink($scriptPath);
+        }
+    }
+
     public function testTokenizeCommandLineArgumentsPreservesQuotedWindowsScriptPathBackslashes(): void
     {
         $tokens = $this->invokePrivateStatic(Processer::class, 'tokenizeCommandLineArguments', [
@@ -525,12 +574,15 @@ class ProcesserTest extends TestCore
     public function testPartitionRunningPidsSeparatesExitedProcessesBeforeFallbackKill(): void
     {
         $driver = $this->createMock(ProcessDriverInterface::class);
-        $driver->expects(self::exactly(2))
-            ->method('isRunningByPid')
-            ->willReturnMap([
-                [101, false],
-                [202, true],
+        $driver->expects(self::once())
+            ->method('batchGetProcessInfo')
+            ->with([101, 202])
+            ->willReturn([
+                101 => ['exists' => false],
+                202 => ['exists' => true],
             ]);
+        $driver->expects(self::never())
+            ->method('isRunningByPid');
 
         $reflection = new \ReflectionProperty(ProcessDriverFactory::class, 'driver');
         $reflection->setAccessible(true);

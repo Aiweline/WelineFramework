@@ -1,0 +1,102 @@
+# WelineFramework deploy webhook config example.
+#
+# 使用方式：
+# 1. 复制本文件为 dev/deploy/.config。
+# 2. 按服务器实际路径、分支和 webhook 密钥修改配置。
+# 3. 也可以在后台「系统管理 > 系统维护 > 部署配置」中配置；后台配置存在时优先于本文件。
+#    后台配置指南：app/code/Weline/Deploy/doc/backend-config.md
+# 4. 密钥、token、带密码的 Git URL 不要提交到公共仓库。
+# 5. 值里如果包含 $、反斜杠、空格或特殊字符，请使用单引号包住整段值。
+
+# 部署根目录。留空时自动使用脚本所在目录的上两级，也就是仓库根目录。
+# 示例：DEPLOY_ROOT='/www/wwwroot/weline'
+DEPLOY_ROOT=''
+
+# Git remote 名称。通常是 origin。
+GIT_REMOTE='origin'
+
+# 可选：强制设置 Git remote URL。留空时使用仓库已有 remote。
+# 私有仓库可以使用 HTTPS token URL 或服务器本机已配置好的 SSH remote。
+# 注意：这里如果写入 token，就不要把 .config 提交到仓库。
+GIT_REMOTE_URL=''
+
+# 目标分支。留空时部署当前 checkout 所在分支。
+# Webhook payload 里 ref 与该分支不一致时，监听入口会跳过部署。
+GIT_BRANCH=''
+
+# Git 更新模式。
+# reset：git fetch 后 reset --hard 到远端目标分支，部署结果最确定。
+# pull_ff_only：只允许快进 pull，遇到分叉会失败，适合不希望 reset 的环境。
+GIT_UPDATE_MODE='reset'
+
+# 是否允许在有本地已跟踪文件改动时继续 reset。
+# 0：默认保护，检测到本地改动就失败。
+# 1：允许 reset --hard 覆盖本地已跟踪改动，只建议用于专用部署 checkout。
+DEPLOY_FORCE_RESET='0'
+
+# 当前分支与 GIT_BRANCH 不一致时是否允许脚本切换分支。
+# 0：默认不切换，避免误部署。
+# 1：允许执行 git checkout <GIT_BRANCH>。
+DEPLOY_SWITCH_BRANCH='0'
+
+# 是否同步 Git submodule。
+# 0：默认不处理 submodule。
+# 1：部署后执行 git submodule update --init --recursive。
+GIT_SUBMODULE_UPDATE='0'
+
+# 是否在部署后运行 composer install。
+# 0：默认不运行，避免 webhook 隐式改变依赖。
+# 1：部署后执行 COMPOSER_COMMAND。
+RUN_COMPOSER_INSTALL='0'
+
+# RUN_COMPOSER_INSTALL=1 时执行的 composer 命令。
+# 项目生产环境常用 no-dev 和 optimize-autoloader；如需 PHP 路径请写完整命令。
+COMPOSER_COMMAND='composer install --no-dev --prefer-dist --optimize-autoloader'
+
+# 部署成功后执行的额外命令。留空表示不执行。
+# 示例：POST_DEPLOY_COMMAND='php bin/w setup:upgrade --route && php bin/w server:reload -r'
+POST_DEPLOY_COMMAND=''
+
+# 部署锁文件路径。留空时使用 <DEPLOY_ROOT>/var/deploy-webhook.lock。
+# 实际锁目录会使用该路径追加 .d，防止并发 webhook 同时部署。
+LOCK_FILE=''
+
+# 部署日志路径。留空时使用 <DEPLOY_ROOT>/var/log/deploy-webhook.log。
+LOG_FILE=''
+
+# Webhook 监听地址。默认只监听本机，建议由 Nginx/Caddy 反代到公网 HTTPS。
+# 如果直接公网监听，必须设置强密钥并做好防火墙限制。
+WEBHOOK_HOST='127.0.0.1'
+
+# Webhook 监听端口。
+WEBHOOK_PORT='9097'
+
+# Webhook 请求路径。Git 平台里填写的 URL 路径需要与这里一致。
+# 健康检查固定为 /health，不需要密钥。
+WEBHOOK_PATH='/deploy'
+
+# Webhook 密钥。listen 模式必须配置。
+# 支持 Gitee X-Gitee-Token、Gitee HMAC、GitHub X-Hub-Signature-256、
+# GitLab X-Gitlab-Token、Authorization: Bearer 和 ?token=。
+WEBHOOK_SECRET='请替换为强随机密钥'
+
+# Webhook 分支过滤。留空时使用 GIT_BRANCH；如果二者都为空则不做 ref 过滤。
+# 示例：WEBHOOK_BRANCH='master'
+WEBHOOK_BRANCH=''
+
+# 执行部署脚本时使用的 bash 命令。一般保持 bash 即可。
+# 如果服务器 bash 不在 PATH 中，可以写绝对路径，例如 /bin/bash。
+WEBHOOK_BASH='bash'
+
+# Cloudflare 缓存清理开关。当前按需求默认关闭。
+# 0：不请求 Cloudflare API。
+# 1：部署成功后使用下方 token 和 zone id 清理全站缓存。
+CLOUDFLARE_ENABLED='0'
+
+# Cloudflare API Token。仅 CLOUDFLARE_ENABLED=1 时需要。
+# Token 至少需要对应 Zone 的 Cache Purge 权限。
+CLOUDFLARE_API_TOKEN=''
+
+# Cloudflare Zone ID。仅 CLOUDFLARE_ENABLED=1 时需要。
+# 可以在 Cloudflare 站点概览页右侧 API 区域找到。
+CLOUDFLARE_ZONE_ID=''

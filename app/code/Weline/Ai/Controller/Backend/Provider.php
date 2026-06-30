@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Weline\Ai\Controller\Backend;
 
 use Weline\Admin\Controller\BaseController;
+use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Model\Provider\UsageRecord;
 use Weline\Ai\Service\Provider\AccountService;
+use Weline\Ai\Service\Provider\ModelListingProviderInterface;
 use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -32,6 +35,54 @@ class Provider extends BaseController
         AccountService $accountService
     ) {
         $this->accountService = $accountService;
+    }
+
+    private function normalizeProviderCode(string $providerCode): string
+    {
+        return strtolower(trim($providerCode));
+    }
+
+    private function normalizeProviderBaseUrl(string $providerCode, string $baseUrl): string
+    {
+        $baseUrl = rtrim(trim($baseUrl), '/');
+        if ($baseUrl === '') {
+            return '';
+        }
+        if ($this->normalizeProviderCode($providerCode) === 'vectorengine') {
+            $baseUrl = str_replace('://api.vectorengine.ai', '://api.vectorengine.cn', $baseUrl);
+            foreach (['/chat/completions', '/completions', '/embeddings', '/images/generations', '/models'] as $suffix) {
+                if (str_ends_with($baseUrl, $suffix)) {
+                    $baseUrl = substr($baseUrl, 0, -strlen($suffix));
+                    break;
+                }
+            }
+            if (!preg_match('#/v\d+(?:beta)?$#', $baseUrl)) {
+                $baseUrl .= '/v1';
+            }
+        }
+        return $baseUrl;
+    }
+
+    private function normalizeAccountBaseUrlForOutput(array $accountData): array
+    {
+        if (array_key_exists('base_url', $accountData)) {
+            $accountData['base_url'] = $this->normalizeProviderBaseUrl(
+                (string)($accountData['provider_code'] ?? ''),
+                (string)$accountData['base_url']
+            );
+        }
+        return $accountData;
+    }
+
+    private function normalizeAccountModelBaseUrl(Account $account): void
+    {
+        $account->setData(
+            Account::schema_fields_BASE_URL,
+            $this->normalizeProviderBaseUrl(
+                (string)$account->getData(Account::schema_fields_PROVIDER_CODE),
+                (string)$account->getData(Account::schema_fields_BASE_URL)
+            )
+        );
     }
 
     /**
@@ -59,7 +110,7 @@ class Provider extends BaseController
             $page = (int)($this->request->getParam('page') ?: 1);
             $limit = (int)($this->request->getParam('limit') ?: 20);
             $search = $this->request->getParam('search');
-            $providerCode = $this->request->getParam('provider_code');
+            $providerCode = $this->normalizeProviderCode((string)$this->request->getParam('provider_code'));
 
             /** @var Account $accountModel */
             $accountModel = ObjectManager::getInstance(Account::class);
@@ -101,6 +152,8 @@ class Provider extends BaseController
                     $accountData['total_spent'] = $accountData['total_spent'] ?? 0;
                     $accountData['connection_status'] = $accountData['connection_status'] ?? 'pending';
                     $accountData['created_at'] = $accountData['created_at'] ?? time();
+                    $accountData['provider_code'] = $this->normalizeProviderCode((string)($accountData['provider_code'] ?? ''));
+                    $accountData = $this->normalizeAccountBaseUrlForOutput($accountData);
                     
                     // 格式化数据
                     $accountData['provider_name'] = $this->accountService->getSupportedProviders()[$accountData['provider_code']]['name'] ?? $accountData['provider_code'];
@@ -145,7 +198,7 @@ class Provider extends BaseController
      */
     public function getAccountsForSelect()
     {
-        $providerCode = (string)($this->request->getParam('provider_code') ?? $this->request->getGet('provider_code') ?? '');
+        $providerCode = $this->normalizeProviderCode((string)($this->request->getParam('provider_code') ?? $this->request->getGet('provider_code') ?? ''));
         $q = (string)($this->request->getParam('q') ?? $this->request->getGet('q') ?? '');
         $limit = (int)($this->request->getParam('limit') ?? 50);
 
@@ -155,8 +208,7 @@ class Provider extends BaseController
 
         /** @var Account $accountModel */
         $accountModel = ObjectManager::getInstance(Account::class)
-            ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
-            ->where(Account::schema_fields_IS_ACTIVE, 1);
+            ->where(Account::schema_fields_PROVIDER_CODE, $providerCode);
         if ($q !== '') {
             $accountModel->where(Account::schema_fields_ACCOUNT_NAME, "%{$q}%", 'like');
         }
@@ -172,12 +224,206 @@ class Provider extends BaseController
         $data = [];
         foreach ($accounts as $acc) {
             $arr = is_object($acc) ? $acc->getData() : $acc;
+            $status = ((int)($arr[Account::schema_fields_IS_ACTIVE] ?? 0) === 1) ? 'enabled' : 'disabled';
+            $default = ((int)($arr[Account::schema_fields_IS_DEFAULT] ?? 0) === 1) ? ', default' : '';
             $data[] = [
                 'value' => (string)($arr['id'] ?? ''),
-                'label' => ($arr['account_name'] ?? '') . ' (' . $providerName . ')',
+                'label' => ($arr['account_name'] ?? '') . ' (' . $providerName . ', ' . $status . $default . ')',
+                'is_active' => (int)($arr[Account::schema_fields_IS_ACTIVE] ?? 0),
+                'is_default' => (int)($arr[Account::schema_fields_IS_DEFAULT] ?? 0),
+                'connection_status' => (string)($arr[Account::schema_fields_CONNECTION_STATUS] ?? ''),
             ];
         }
         return $this->fetchJson(['success' => true, 'data' => $data]);
+    }
+
+    /**
+     * Fetch model options from the selected provider account's models endpoint.
+     */
+    public function getRemoteModelsForSelect()
+    {
+        try {
+            $providerCode = $this->normalizeProviderCode((string)($this->request->getParam('provider_code') ?? $this->request->getGet('provider_code') ?? ''));
+            $accountId = (int)($this->request->getParam('account_id') ?? $this->request->getGet('account_id') ?? 0);
+            $apiKey = trim((string)($this->request->getParam('api_key') ?? $this->request->getGet('api_key') ?? ''));
+            $baseUrl = trim((string)($this->request->getParam('base_url') ?? $this->request->getGet('base_url') ?? ''));
+            $requireRemote = (string)($this->request->getParam('require_remote') ?? $this->request->getGet('require_remote') ?? '') === '1';
+
+            if ($providerCode === '') {
+                return $this->fetchJson(['success' => false, 'message' => __('请选择供应商')]);
+            }
+
+            $config = VendorConfigManager::getProviderConfig($providerCode);
+            if (!$config) {
+                return $this->fetchJson(['success' => false, 'message' => __('供应商不存在: %{1}', [$providerCode])]);
+            }
+
+            $modelsApi = $config['models_api'] ?? [];
+            if (!is_array($modelsApi) || empty($modelsApi['path'])) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'unsupported' => true,
+                    'message' => __('该供应商未配置 models 接口，请手动输入模型代码。')
+                ]);
+            }
+
+            if ($accountId > 0) {
+                /** @var Account $account */
+                $account = ObjectManager::getInstance(Account::class)->load($accountId);
+                if (!$account->getId() || $this->normalizeProviderCode((string)$account->getData(Account::schema_fields_PROVIDER_CODE)) !== $providerCode) {
+                    return $this->fetchJson(['success' => false, 'message' => __('供应商账户不存在或不属于当前供应商')]);
+                }
+                $apiKey = $account->getDecryptedApiKey();
+                $baseUrl = (string)($account->getData(Account::schema_fields_BASE_URL) ?: ($config['base_url'] ?? ''));
+            } elseif ($apiKey === '') {
+                $account = $this->accountService->getAvailableAccount($providerCode);
+                if (!$account || !$account->getId()) {
+                    /** @var Account $account */
+                    $account = ObjectManager::getInstance(Account::class)->clear()
+                        ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+                        ->where(Account::schema_fields_IS_ACTIVE, 1)
+                        ->where(Account::schema_fields_CONNECTION_STATUS, Account::STATUS_SUCCESS)
+                        ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
+                        ->order(Account::schema_fields_CREATED_AT, 'DESC')
+                        ->find()
+                        ->fetch();
+                }
+                if ($account && $account->getId()) {
+                    $apiKey = $account->getDecryptedApiKey();
+                    $baseUrl = (string)($account->getData(Account::schema_fields_BASE_URL) ?: ($config['base_url'] ?? ''));
+                }
+            }
+
+            if ($apiKey === '') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('请选择供应商账户，或在自配置模式填写 API Key 后再拉取模型。')
+                ]);
+            }
+
+            if ($baseUrl === '') {
+                $baseUrl = (string)($config['base_url'] ?? '');
+            }
+            $baseUrl = $this->normalizeProviderBaseUrl($providerCode, $baseUrl);
+
+            $provider = $this->accountService->getProviderInstance($providerCode);
+            if (!$provider instanceof ModelListingProviderInterface || !$provider->supportsModelsApi()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'unsupported' => true,
+                    'message' => __('该供应商类未实现 models 接口，请手动输入模型代码。')
+                ]);
+            }
+
+            $modelConfig = array_replace($config, [
+                'provider_code' => $providerCode,
+                'api_key' => $apiKey,
+                'base_url' => $baseUrl,
+                'models_api' => $modelsApi,
+            ]);
+            $remoteError = '';
+            try {
+                $models = $provider->listRemoteModels($modelConfig, [
+                    'provider_code' => $providerCode,
+                    'models_api' => $modelsApi,
+                ]);
+            } catch (\Throwable $remoteThrowable) {
+                $models = [];
+                $remoteError = $remoteThrowable->getMessage();
+            }
+            $source = 'models';
+            if ($models === [] && !$requireRemote) {
+                $models = $this->normalizeProviderPresetModels($config['models'] ?? []);
+                $source = $models === [] ? 'empty' : 'preset';
+            }
+            if ($models === []) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'data' => [],
+                    'unsupported' => false,
+                    'message' => $remoteError !== '' ? $remoteError : __('models 接口未返回可用模型'),
+                    'source' => $source,
+                    'default_model_code' => (string)($config['test_model'] ?? ''),
+                ]);
+            }
+            $defaultModelCode = $this->resolveDefaultModelCode($models, (string)($config['test_model'] ?? ''));
+            return $this->fetchJson([
+                'success' => true,
+                'data' => $models,
+                'unsupported' => false,
+                'source' => $source,
+                'default_model_code' => $defaultModelCode,
+                'warning' => $remoteError,
+            ]);
+        } catch (ResponseTerminateException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+    private function normalizeProviderPresetModels(array $models): array
+    {
+        $items = [];
+        foreach ($models as $model) {
+            if (is_scalar($model)) {
+                $code = trim((string)$model);
+                if ($code !== '') {
+                    $items[] = [
+                        'value' => $code,
+                        'label' => $code,
+                        'code' => $code,
+                        'name' => $code,
+                        'primary_modality' => '',
+                    ];
+                }
+                continue;
+            }
+            if (!is_array($model)) {
+                continue;
+            }
+            $code = trim((string)($model['code'] ?? $model['id'] ?? $model['model'] ?? $model['name'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $name = trim((string)($model['name'] ?? $code));
+            $items[] = [
+                'value' => $code,
+                'label' => $name !== $code ? ($name . ' (' . $code . ')') : $code,
+                'code' => $code,
+                'name' => $name,
+                'description' => (string)($model['description'] ?? ''),
+                'max_tokens' => (int)($model['max_tokens'] ?? 0),
+                'context_window' => (int)($model['context_window'] ?? 0),
+                'primary_modality' => (string)($model['primary_modality'] ?? ''),
+            ];
+        }
+        return $items;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $models
+     */
+    private function resolveDefaultModelCode(array $models, string $configuredDefault): string
+    {
+        $configuredDefault = trim($configuredDefault);
+        $first = '';
+        foreach ($models as $model) {
+            $code = trim((string)($model['code'] ?? $model['value'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            if ($first === '') {
+                $first = $code;
+            }
+            if ($configuredDefault !== '' && strcasecmp($code, $configuredDefault) === 0) {
+                return $code;
+            }
+        }
+        return $first;
     }
 
     /**
@@ -187,7 +433,7 @@ class Provider extends BaseController
      */
     public function getProviderInfo()
     {
-        $providerCode = (string)($this->request->getParam('provider_code') ?? $this->request->getGet('provider_code') ?? '');
+        $providerCode = $this->normalizeProviderCode((string)($this->request->getParam('provider_code') ?? $this->request->getGet('provider_code') ?? ''));
         if ($providerCode === '') {
             return $this->fetchJson(['success' => false, 'message' => __('供应商代码不能为空')]);
         }
@@ -200,6 +446,7 @@ class Provider extends BaseController
             'code' => $config['code'] ?? $providerCode,
             'base_url' => $config['base_url'] ?? '',
             'test_model' => $config['test_model'] ?? '',
+            'account_setup_guide' => $config['account_setup_guide'] ?? [],
             'model_config_defaults' => $config['model_config_defaults'] ?? [],
             'models' => array_map(function ($m) {
                 return [
@@ -225,6 +472,8 @@ class Provider extends BaseController
             $account = ObjectManager::getInstance(Account::class)->load($id);
             if (!$account->getId()) {
                 $account = null;
+            } else {
+                $this->normalizeAccountModelBaseUrl($account);
             }
         }
         $this->assign('account', $account);
@@ -260,6 +509,7 @@ class Provider extends BaseController
             }
 
             $this->assign('title', __('编辑供应商账户'));
+            $this->normalizeAccountModelBaseUrl($account);
             $this->assign('providers', $this->accountService->getSupportedProviders());
             $this->assign('account', $account);
             return $this->fetch();
@@ -309,7 +559,7 @@ class Provider extends BaseController
             }
 
             // 设置基本信息
-            $account->setData(Account::schema_fields_PROVIDER_CODE, $data['provider_code']);
+            $account->setData(Account::schema_fields_PROVIDER_CODE, $this->normalizeProviderCode((string)$data['provider_code']));
             $account->setData(Account::schema_fields_ACCOUNT_NAME, $data['account_name']);
             
             // 只有当提供新的API密钥时才更新
@@ -322,7 +572,10 @@ class Provider extends BaseController
                 $account->setData(Account::schema_fields_API_SECRET, $data['api_secret']);
             }
             
-            $account->setData(Account::schema_fields_BASE_URL, $data['base_url'] ?? '');
+            $account->setData(
+                Account::schema_fields_BASE_URL,
+                $this->normalizeProviderBaseUrl((string)$data['provider_code'], (string)($data['base_url'] ?? ''))
+            );
             $account->setData(Account::schema_fields_BALANCE, (float)($data['balance'] ?? 0));
             $account->setData(Account::schema_fields_CURRENCY, $data['currency'] ?? 'USD');
             $account->setData(Account::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? 0));
@@ -439,7 +692,12 @@ class Provider extends BaseController
                 throw new \Exception(__('账户不存在'));
             }
 
-            $result = $this->accountService->testConnection($account);
+            $testModelCode = trim((string)($data['model_code'] ?? $this->request->getParam('model_code') ?? ''));
+            $result = $this->accountService->testConnection(
+                $account,
+                $testModelCode !== '' ? $testModelCode : null,
+                $this->buildConnectionTestOptions($data)
+            );
             
             // 测试完成后，重新加载账户以获取最新状态
             $account->reset()->load($id);
@@ -484,9 +742,12 @@ class Provider extends BaseController
             // 创建临时账户对象进行测试
             /** @var Account $tempAccount */
             $tempAccount = ObjectManager::getInstance(Account::class);
-            $tempAccount->setData(Account::schema_fields_PROVIDER_CODE, $data['provider_code']);
+            $tempAccount->setData(Account::schema_fields_PROVIDER_CODE, $this->normalizeProviderCode((string)$data['provider_code']));
             $tempAccount->setEncryptedApiKey($data['api_key']);
-            $tempAccount->setData(Account::schema_fields_BASE_URL, $data['base_url'] ?? '');
+            $tempAccount->setData(
+                Account::schema_fields_BASE_URL,
+                $this->normalizeProviderBaseUrl((string)$data['provider_code'], (string)($data['base_url'] ?? ''))
+            );
             
             // 如果有代理配置
             if (!empty($data['proxy_enabled'])) {
@@ -501,7 +762,12 @@ class Provider extends BaseController
                 $tempAccount->setData(Account::schema_fields_PROXY_CONFIG, json_encode($proxyConfig));
             }
             
-            $result = $this->accountService->testConnection($tempAccount);
+            $testModelCode = trim((string)($data['model_code'] ?? ''));
+            $result = $this->accountService->testConnection(
+                $tempAccount,
+                $testModelCode !== '' ? $testModelCode : null,
+                $this->buildConnectionTestOptions($data)
+            );
             
             return $this->fetchJson($result);
         } catch (\Exception $e) {
@@ -510,6 +776,27 @@ class Provider extends BaseController
                 'message' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    private function buildConnectionTestOptions(array $data): array
+    {
+        $options = [];
+        $primaryModality = trim((string)($data['primary_modality'] ?? ''));
+        if ($primaryModality !== '') {
+            $options['primary_modality'] = AiModel::normalizePrimaryModality($primaryModality);
+        }
+        if (is_array($data['capabilities'] ?? null)) {
+            $options['capabilities'] = $data['capabilities'];
+        }
+        if (is_array($data['provider_config'] ?? null)) {
+            $options['provider_config'] = $data['provider_config'];
+        }
+
+        return $options;
     }
 
     /**
@@ -615,7 +902,7 @@ class Provider extends BaseController
                 ]);
             }
             
-            $accountData = $account->getData();
+            $accountData = $this->normalizeAccountBaseUrlForOutput($account->getData());
             // 安全处理：不返回明文API Key，仅返回掩码
             if (!empty($accountData['api_key'])) {
                 $len = strlen((string)$accountData['api_key']);
@@ -675,7 +962,7 @@ class Provider extends BaseController
                 ]);
             }
 
-            $accountData = $account->getData();
+            $accountData = $this->normalizeAccountBaseUrlForOutput($account->getData());
             // 安全处理：不返回明文API Key，仅返回掩码
             if (!empty($accountData['api_key'])) {
                 $len = strlen((string)$accountData['api_key']);

@@ -5,6 +5,7 @@ namespace Weline\Server\Test\Unit\Dispatcher;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Dispatcher\PassthroughCore;
+use Weline\Server\Dispatcher\RoutingCacheService;
 
 class PassthroughCoreSeedWorkerPoolTest extends TestCase
 {
@@ -65,7 +66,9 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
                 float $connectTimeoutSeconds = 5.0,
                 float $tlsTimeoutSeconds = 8.0,
                 float $writeTimeoutSeconds = 5.0,
-                float $readTimeoutSeconds = 60.0
+                float $readTimeoutSeconds = 60.0,
+                ?int $maxTargets = null,
+                bool $requireAllTargets = false
             ): array {
                 $this->homepageCalls[] = [
                     'port' => $port,
@@ -74,6 +77,8 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
                     'tls_timeout' => $tlsTimeoutSeconds,
                     'write_timeout' => $writeTimeoutSeconds,
                     'read_timeout' => $readTimeoutSeconds,
+                    'max_targets' => $maxTargets,
+                    'require_all_targets' => $requireAllTargets,
                 ];
 
                 $result = $this->homepageResults[$port] ?? true;
@@ -107,10 +112,10 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
 
             protected function warmupWorkerTrustingMasterReady(int $port): array
             {
-                return $this->warmupWorker($port);
+                return $this->fakeWarmupWorker($port);
             }
 
-            protected function warmupWorker(int $port): array
+            protected function fakeWarmupWorker(int $port): array
             {
                 $result = $this->warmupResults[$port] ?? true;
                 if ($result === true) {
@@ -180,6 +185,62 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         return [$accepted, $client, $server];
     }
 
+    /**
+     * @return array{0: mixed, 1: int}
+     */
+    private function createListeningSocket(): array
+    {
+        $server = \socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        self::assertNotFalse($server);
+        @\socket_set_option($server, SOL_SOCKET, SO_REUSEADDR, 1);
+        self::assertTrue(\socket_bind($server, '127.0.0.1', 0));
+        self::assertTrue(\socket_listen($server, 4));
+        self::assertTrue(\socket_getsockname($server, $host, $port));
+        \socket_set_nonblock($server);
+
+        return [$server, (int)$port];
+    }
+
+    public function testActiveMaintenanceRoutingBypassesCachedBusinessWorker(): void
+    {
+        RoutingCacheService::reset();
+
+        [$businessServer, $businessPort] = $this->createListeningSocket();
+        [$maintenanceServer, $maintenancePort] = $this->createListeningSocket();
+        [$clientSocket, $clientPeer, $clientServer] = $this->createConnectedSocketPair();
+        $core = new PassthroughCore('127.0.0.1', 19981, 0);
+
+        try {
+            $this->setPrivateProperty($core, 'workerPorts', [$businessPort]);
+            $this->setPrivateProperty($core, 'maintenanceWorkerPorts', [$maintenancePort]);
+
+            $cache = $this->getPrivateProperty($core, 'routingCache');
+            self::assertInstanceOf(RoutingCacheService::class, $cache);
+            $cache->cacheIpRoute('127.0.0.1', $businessPort);
+
+            $core->setMaintenanceRoutingActive(true);
+
+            self::assertTrue($core->handleNewConnection($clientSocket, '127.0.0.1'));
+
+            $connections = $this->getPrivateProperty($core, 'connections');
+            $connId = \spl_object_id($clientSocket);
+            self::assertSame($maintenancePort, $connections[$connId]['port'] ?? null);
+        } finally {
+            $connections = $this->getPrivateProperty($core, 'connections');
+            foreach ($connections as $connection) {
+                if (isset($connection['worker'])) {
+                    @\socket_close($connection['worker']);
+                }
+            }
+            @\socket_close($clientSocket);
+            @\socket_close($clientPeer);
+            @\socket_close($clientServer);
+            @\socket_close($businessServer);
+            @\socket_close($maintenanceServer);
+            RoutingCacheService::reset();
+        }
+    }
+
     public function testWorkerPoolStartsEmptyUntilMasterSync(): void
     {
         $core = new PassthroughCore('127.0.0.1', 19981, 2);
@@ -232,14 +293,16 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         $budget = (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds');
         self::assertSame(0.0, $budget);
 
-        // P0-1：默认 spin budget 受 maxHandleNewConnectionSpinBudgetSec=0.8 硬截断，
-        // 防止单次 accept 自旋阻塞事件循环超过 0.8s。
+        // 默认关闭同步自旋（maxHandleNewConnectionSpinBudgetSec=0）；显式 configure 后才启用。
         $readyCore = $this->createWarmupStubCore([
             19982 => true,
         ]);
         $readyCore->setWorkerPorts([19982]);
         $readyBudget = (float) $this->invokePrivateMethod($readyCore, 'resolvePostFailureSpinBudgetSeconds');
-        self::assertSame(0.8, $readyBudget);
+        self::assertSame(0.0, $readyBudget);
+
+        $readyCore->configure(['max_handle_new_connection_spin_budget_sec' => 0.8, 'spin_wait_max_seconds' => 3.0]);
+        self::assertSame(0.8, (float) $this->invokePrivateMethod($readyCore, 'resolvePostFailureSpinBudgetSeconds'));
     }
 
     public function testPostFailureSpinBudgetUsesFullSpinMaxWhenOnlyMaintenanceCandidatesExist(): void
@@ -247,7 +310,10 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         $core = new PassthroughCore('127.0.0.1', 19981, 2);
         $this->setPrivateProperty($core, 'maintenanceWorkerPorts', [19992]);
 
-        // P0-1：单连接默认受 0.8s 硬截断。
+        // 默认关闭；显式 configure 后才启用单次协作重试预算。
+        self::assertSame(0.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+
+        $core->configure(['max_handle_new_connection_spin_budget_sec' => 0.8, 'spin_wait_max_seconds' => 3.0]);
         self::assertSame(0.8, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
     }
 
@@ -258,7 +324,9 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
             19983 => true,
         ]);
         $core->setWorkerPorts([19982, 19983]);
-        // P0-1：默认 0.8s 硬截断（min(spinWaitMaxSeconds=3.0, budget=0.8)）。
+        self::assertSame(0.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+
+        $core->configure(['max_handle_new_connection_spin_budget_sec' => 0.8, 'spin_wait_max_seconds' => 3.0]);
         self::assertSame(0.8, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
 
         $core->blacklistWorker(19982);
@@ -294,7 +362,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         // P0-2：worker_connect_select_timeout_sec 覆盖旧硬编码 0.3-0.5s，默认 0.1s，
         // 且受 [0.01, 2.0] 钳制避免误配置引入极端阻塞。
         $core = new PassthroughCore('127.0.0.1', 19981, 2);
-        self::assertSame(0.1, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
+        self::assertSame(0.02, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
 
         $core->configure(['worker_connect_select_timeout_sec' => 0.25]);
         self::assertSame(0.25, (float) $this->getPrivateProperty($core, 'workerConnectSelectTimeoutSec'));
@@ -342,7 +410,13 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         $sslCore->configure(['spin_wait_max_seconds' => 0.0]);
         $this->setPrivateProperty($sslCore, 'workerPorts', [19982]);
 
-        // P0-1：SSL 冷启动下 spinWaitMaxSeconds=3.0s，单连接再被 0.8s 截断。
+        // 默认关闭；SSL 冷启动可通过显式 configure 恢复短窗口协作重试。
+        self::assertSame(0.0, (float) $this->invokePrivateMethod($sslCore, 'resolvePostFailureSpinBudgetSeconds'));
+
+        $sslCore->configure([
+            'spin_wait_max_seconds' => 3.0,
+            'max_handle_new_connection_spin_budget_sec' => 0.8,
+        ]);
         self::assertSame(0.8, (float) $this->invokePrivateMethod($sslCore, 'resolvePostFailureSpinBudgetSeconds'));
     }
 
@@ -483,11 +557,17 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertStringContainsString("X-WLS-Internal-Request: homepage-warmup\r\n", $request);
     }
 
-    public function testTrustingMasterReadyWarmupSkipsHomepageWarmupByDefault(): void
+    public function testTrustingMasterReadyWarmupCanDisableHomepageWarmup(): void
     {
-        $core = $this->createTrustingMasterReadyWarmupCore([
-            19982 => ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01],
-        ]);
+        $core = $this->createTrustingMasterReadyWarmupCore(
+            [
+                19982 => ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01],
+            ],
+            [],
+            [
+                'homepage_warmup_enabled' => false,
+            ]
+        );
 
         $result = $core->runTrustingMasterReadyWarmup(19982);
 
@@ -511,7 +591,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame(1.0, $core->healthCalls[0]['response_timeout']);
     }
 
-    public function testTrustingMasterReadyWarmupCanOptIntoHomepageWarmup(): void
+    public function testTrustingMasterReadyWarmupRunsHomepageWarmupByDefault(): void
     {
         $core = $this->createTrustingMasterReadyWarmupCore(
             [
@@ -519,9 +599,6 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
             ],
             [
                 19982 => 'homepage warmup timed out',
-            ],
-            [
-                'homepage_warmup_enabled' => true,
             ]
         );
 
@@ -533,16 +610,99 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertCount(1, $core->homepageCalls);
     }
 
-    public function testTrustingMasterReadyWarmupExtendsRetriesForTransientEarlyCloses(): void
+    public function testClaimJoinedWorkerHomepageWarmupOnlyOncePerMembership(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], []);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+
+        $first = $core->claimJoinedWorkerHomepageWarmup([19982, 19982]);
+        $second = $core->claimJoinedWorkerHomepageWarmup([19982]);
+
+        self::assertCount(1, $first);
+        self::assertSame(19982, $first[0]['port']);
+        self::assertGreaterThan(0, $first[0]['ticket']);
+        self::assertSame([], $second);
+    }
+
+    public function testMaintenancePoolTrustsMasterReadyWithoutStartupProbe(): void
     {
         $core = $this->createTrustingMasterReadyWarmupCore([
-            19982 => [
-                'health connection closed before response after 0.05s',
-                'health connection closed before response after 0.05s',
-                'health connection closed before response after 0.05s',
-                ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.08],
-            ],
+            19983 => 'early health probe would fail',
         ]);
+
+        $result = $core->setMaintenanceWorkerPortsFromMasterReady([19983]);
+
+        self::assertSame([19983], $result['accepted']);
+        self::assertSame([], $result['rejected']);
+        self::assertSame([19983], $core->getMaintenanceWorkerPorts());
+        self::assertSame([], $core->healthCalls);
+    }
+
+    public function testClaimJoinedWorkerHomepageWarmupCanBeDisabled(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], [], [
+            'homepage_warmup_enabled' => false,
+        ]);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+
+        self::assertSame([], $core->claimJoinedWorkerHomepageWarmup([19982]));
+    }
+
+    public function testRemovingWorkerClearsHomepageWarmupClaimForNextJoin(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], [], [
+            'homepage_warmup_enabled' => true,
+        ]);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+        $first = $core->claimJoinedWorkerHomepageWarmup([19982]);
+        $core->removeWorkerPort(19982);
+        $core->setWorkerPortsFromMasterReady([19982]);
+        $second = $core->claimJoinedWorkerHomepageWarmup([19982]);
+
+        self::assertCount(1, $first);
+        self::assertCount(1, $second);
+        self::assertNotSame($first[0]['ticket'], $second[0]['ticket']);
+    }
+
+    public function testWarmupJoinedWorkersViaHomepageSkipsStaleClaimAfterWorkerLeavesPool(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([], [
+            19982 => true,
+        ], [
+            'homepage_warmup_enabled' => true,
+        ]);
+
+        $core->setWorkerPortsFromMasterReady([19982]);
+        $claims = $core->claimJoinedWorkerHomepageWarmup([19982]);
+        $core->removeWorkerPort(19982);
+
+        $result = $core->warmupJoinedWorkersViaHomepage($claims);
+
+        self::assertSame([], $core->homepageCalls);
+        self::assertSame([], $result['warmed']);
+        self::assertSame([], $result['failed']);
+        self::assertSame([19982], $result['skipped']);
+    }
+
+    public function testTrustingMasterReadyWarmupExtendsRetriesForTransientEarlyCloses(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore(
+            [
+                19982 => [
+                    'health connection closed before response after 0.05s',
+                    'health connection closed before response after 0.05s',
+                    'health connection closed before response after 0.05s',
+                    ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.08],
+                ],
+            ],
+            [],
+            [
+                'homepage_warmup_enabled' => false,
+            ]
+        );
 
         $result = $core->runTrustingMasterReadyWarmup(19982);
 

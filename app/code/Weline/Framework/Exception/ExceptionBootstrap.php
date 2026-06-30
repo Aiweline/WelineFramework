@@ -145,7 +145,7 @@ class ExceptionBootstrap
     public static function getArea(): string
     {
         // 检查是否为 API 请求
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        $uri = \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
         
         if (str_contains($uri, '/rest/') || str_contains($uri, '/api/')) {
             return 'api';

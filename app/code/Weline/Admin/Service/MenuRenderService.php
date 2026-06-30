@@ -13,7 +13,10 @@ namespace Weline\Admin\Service;
 
 use Weline\Acl\Model\Role;
 use Weline\Admin\Model\MenuAccessLog;
+use Weline\Backend\Service\BackendWarmupContext;
 use Weline\Backend\Model\BackendUser;
+use Weline\Framework\App\Env;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
@@ -31,6 +34,9 @@ use Weline\Framework\Http\Request;
  */
 class MenuRenderService
 {
+    private const FREQUENT_MENU_CACHE_TTL = 30.0;
+    private const RENDER_MENU_CACHE_TTL = 60.0;
+
     /**
      * @var MenuAccessLog
      */
@@ -40,6 +46,21 @@ class MenuRenderService
      * @var AuthenticatedSessionInterface
      */
     private AuthenticatedSessionInterface $session;
+
+    /**
+     * @var array<string, array<string, string>>
+     */
+    private array $moduleLocaleWords = [];
+
+    /**
+     * @var array<string, array{expires: float, data: array}>
+     */
+    private static array $frequentMenusCache = [];
+
+    /**
+     * @var array<string, array{expires: float, html: string}>
+     */
+    private static array $renderedMenuCache = [];
 
     /**
      * 构造函数
@@ -109,6 +130,14 @@ class MenuRenderService
      */
     public function getCurrentUser(): ?BackendUser
     {
+        if (\class_exists(BackendWarmupContext::class)) {
+            $warmupUser = BackendWarmupContext::currentUser();
+            if ($warmupUser instanceof BackendUser) {
+                return $warmupUser;
+            }
+        }
+
+        $this->session = SessionFactory::getInstance()->createBackendSession();
         return $this->session->getLoginUser();
     }
 
@@ -148,14 +177,22 @@ class MenuRenderService
             ];
         }
 
+        $cacheKey = (int)$user->getId() . '|' . $limit . '|' . $days;
+        $now = microtime(true);
+        if (isset(self::$frequentMenusCache[$cacheKey]) && self::$frequentMenusCache[$cacheKey]['expires'] >= $now) {
+            return self::$frequentMenusCache[$cacheKey]['data'];
+        }
+
         $recentMenus = $this->menuAccessLogModel->getRecentMenus($user->getId(), $limit, $days);
         $frequentMenus = $this->menuAccessLogModel->getFrequentlyUsedMenus($user->getId(), $limit, $days);
 
-        return [
+        $data = [
             'recentMenus' => $recentMenus,
             'frequentMenus' => $frequentMenus,
             'hasFrequentMenus' => !empty($recentMenus) || !empty($frequentMenus)
         ];
+        self::$frequentMenusCache[$cacheKey] = ['expires' => $now + self::FREQUENT_MENU_CACHE_TTL, 'data' => $data];
+        return $data;
     }
 
     /**
@@ -234,7 +271,7 @@ class MenuRenderService
 
         if (
             count($segments) > 2
-            && preg_match('/^[A-Z]{3}$/', $segments[0]) === 1
+            && State::isAllowedCurrencyCode((string)$segments[0])
             && preg_match('/^[a-z]{2}_[A-Za-z]+_[A-Z]{2}$/', $segments[1]) === 1
         ) {
             $url = implode('/', array_slice($segments, 2));
@@ -410,6 +447,21 @@ class MenuRenderService
         $this->cachedCurrentUrl = null;
         $this->menuUrlActiveCache = [];
         $this->menuNodeActiveCache = [];
+
+        $user = $this->getCurrentUser();
+        $currentUrl = $this->getCurrentUrl();
+        $cacheKey = implode('|', [
+            (string)(($user && $user->getId()) ? (int)$user->getId() : 0),
+            State::getLangLocal(),
+            $this->cachedBackendUrlPrefix,
+            $this->cachedFrontendUrlPrefix,
+            $currentUrl,
+            md5(json_encode($menus, JSON_INVALID_UTF8_SUBSTITUTE) ?: ''),
+        ]);
+        $now = microtime(true);
+        if (isset(self::$renderedMenuCache[$cacheKey]) && self::$renderedMenuCache[$cacheKey]['expires'] >= $now) {
+            return self::$renderedMenuCache[$cacheKey]['html'];
+        }
         
         foreach ($menus as $menu) {
             if (!isset($menu['is_enable']) || !$menu['is_enable']) {
@@ -419,7 +471,7 @@ class MenuRenderService
             $hasNodes = isset($menu['nodes']) && !empty($menu['nodes']);
             $sourceId = htmlspecialchars($menu['source_id'] ?? '');
             $icon = htmlspecialchars($menu['icon'] ?? 'mdi mdi-circle');
-            $title = __($menu['source_name'] ?? '');
+            $title = $this->translateMenuTitle((string)($menu['source_name'] ?? ''), (string)($menu['source_id'] ?? ''));
             
             // 使用 formatMenuUrl 和 isMenuActive 来判断菜单是否有 URL 和是否激活
             $menuUrl = $this->formatMenuUrlCached($menu);
@@ -446,7 +498,7 @@ class MenuRenderService
                 
                 $html .= "<li data-source=\"{$sourceId}\" class=\"{$liClass}\">";
                 if ($hasNodes) {
-                    $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"{$aClass}\">";
+                    $html .= "<a href=\"#\" role=\"button\" data-source=\"{$sourceId}\" class=\"{$aClass}\" aria-expanded=\"{$ariaExpanded}\">";
                 } else {
                     $menuUrl = htmlspecialchars($menuUrl);
                     $html .= "<a href=\"{$menuUrl}\" data-source=\"{$sourceId}\" class=\"{$aClass}\">";
@@ -474,6 +526,7 @@ class MenuRenderService
             }
         }
         
+        self::$renderedMenuCache[$cacheKey] = ['expires' => $now + self::RENDER_MENU_CACHE_TTL, 'html' => $html];
         return $html;
     }
 
@@ -507,7 +560,7 @@ class MenuRenderService
 
             $sourceId = htmlspecialchars($submenu['source_id'] ?? '');
             $icon = htmlspecialchars($submenu['icon'] ?? 'mdi mdi-circle');
-            $title = __($submenu['source_name'] ?? '');
+            $title = $this->translateMenuTitle((string)($submenu['source_name'] ?? ''), (string)($submenu['source_id'] ?? ''));
 
             // 如果没有子菜单，渲染为普通菜单项
             if ($childCount == 0) {
@@ -532,7 +585,7 @@ class MenuRenderService
                 } else {
                     // 没有路由的菜单项，渲染为不可点击的展示项
                     $html .= "<li data-source=\"{$sourceId}\" class=\"\">";
-                    $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"waves-effect disabled\" style=\"cursor: default;\">";
+                    $html .= "<a href=\"#\" role=\"button\" data-source=\"{$sourceId}\" class=\"waves-effect disabled\" aria-disabled=\"true\" tabindex=\"-1\" style=\"cursor: default;\">";
                     $html .= "<i class=\"{$icon}\"></i>";
                     $html .= "<span>{$title}</span>";
                     $html .= "</a>";
@@ -547,7 +600,7 @@ class MenuRenderService
                 $ariaExpanded = $hasActiveChild ? 'true' : 'false';
                 
                 $html .= "<li data-source=\"{$sourceId}\" class=\"{$liClass}\">";
-                $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"{$aClass}\">";
+                $html .= "<a href=\"#\" role=\"button\" data-source=\"{$sourceId}\" class=\"{$aClass}\" aria-expanded=\"{$ariaExpanded}\">";
                 $html .= "<i class=\"{$icon}\"></i>";
                 $html .= "<span>{$title}</span>";
                 $html .= "</a>";
@@ -559,6 +612,120 @@ class MenuRenderService
         }
         
         return $html;
+    }
+
+    public function translateMenuTitle(string $title, string $sourceId = ''): string
+    {
+        if ($title === '') {
+            return '';
+        }
+
+        $moduleName = $this->extractModuleNameFromSource($sourceId);
+        if ($moduleName !== '') {
+            $moduleWords = $this->getModuleLocaleWords($moduleName, State::getLangLocal());
+            $moduleTranslate = trim((string)($moduleWords[$title] ?? ''));
+            if ($moduleTranslate !== '' && $moduleTranslate !== $title) {
+                return htmlspecialchars($moduleTranslate);
+            }
+        }
+
+        $generatedWords = $this->getGeneratedLocaleWords(State::getLangLocal());
+        $generatedTranslate = trim((string)($generatedWords[$title] ?? ''));
+        if ($generatedTranslate !== '' && $generatedTranslate !== $title) {
+            return htmlspecialchars($generatedTranslate);
+        }
+
+        return htmlspecialchars((string)__($title));
+    }
+
+    private function extractModuleNameFromSource(string $sourceId): string
+    {
+        $sourceId = trim($sourceId);
+        if ($sourceId === '' || !str_contains($sourceId, '::')) {
+            return '';
+        }
+
+        return trim(strstr($sourceId, '::', true) ?: '');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getModuleLocaleWords(string $moduleName, string $localeCode): array
+    {
+        $cacheKey = $moduleName . '|' . $localeCode;
+        if (isset($this->moduleLocaleWords[$cacheKey])) {
+            return $this->moduleLocaleWords[$cacheKey];
+        }
+
+        $this->moduleLocaleWords[$cacheKey] = [];
+        $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+        $basePath = is_array($moduleInfo) ? (string)($moduleInfo['base_path'] ?? '') : '';
+        if ($basePath === '') {
+            return [];
+        }
+
+        $csvFile = rtrim($basePath, "\\/") . DS . 'i18n' . DS . $localeCode . '.csv';
+        if (!is_file($csvFile)) {
+            return [];
+        }
+
+        $handle = @fopen($csvFile, 'r');
+        if ($handle === false) {
+            return [];
+        }
+
+        while (($row = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
+            $word = trim((string)($row[0] ?? ''));
+            $translate = trim((string)($row[1] ?? ''));
+            if ($word !== '' && $translate !== '') {
+                $this->moduleLocaleWords[$cacheKey][$word] = $translate;
+            }
+        }
+        fclose($handle);
+
+        return $this->moduleLocaleWords[$cacheKey];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getGeneratedLocaleWords(string $localeCode): array
+    {
+        $cacheKey = 'generated|' . $localeCode;
+        if (isset($this->moduleLocaleWords[$cacheKey])) {
+            return $this->moduleLocaleWords[$cacheKey];
+        }
+
+        $this->moduleLocaleWords[$cacheKey] = [];
+        $localeFile = BP . DS . 'generated' . DS . 'language' . DS . $localeCode . '.php';
+        if (!is_file($localeFile)) {
+            return [];
+        }
+
+        $words = include $localeFile;
+        if (is_array($words)) {
+            $this->flattenLocaleWords($words, $this->moduleLocaleWords[$cacheKey]);
+        }
+
+        return $this->moduleLocaleWords[$cacheKey];
+    }
+
+    /**
+     * @param array<mixed> $words
+     * @param array<string, string> $result
+     */
+    private function flattenLocaleWords(array $words, array &$result): void
+    {
+        foreach ($words as $word => $translate) {
+            if (is_array($translate)) {
+                $this->flattenLocaleWords($translate, $result);
+                continue;
+            }
+            if (is_string($word) && is_string($translate) && $word !== '' && $translate !== '') {
+                $result[$word] = $translate;
+            }
+        }
     }
 
     /**

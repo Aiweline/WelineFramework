@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "module_name": "Weline_Deploy",
+  "i18n": {
+    "source_locale": "en_US",
+    "locales": {
+      "en_US": {
+        "display_name": "WLS Deploy",
+        "description": "Provides webhook and tag-driven deployment entry points for WLS Panel managed projects."
+      },
+      "zh_Hans_CN": {
+        "display_name": "WLS 部署发布",
+        "description": "为 WLS 面板托管项目提供 webhook 和 tag 驱动的部署发布入口。"
+      }
+    }
+  },
+  "tags": [
+    {
+      "code": "module:wls",
+      "type": "module",
+      "primary": true,
+      "labels": {
+        "en_US": "WLS Panel Plugin",
+        "zh_Hans_CN": "WLS 面板插件"
+      }
+    },
+    {
+      "code": "custom:wls-deploy",
+      "type": "custom",
+      "labels": {
+        "en_US": "WLS Deploy",
+        "zh_Hans_CN": "WLS 部署发布"
+      }
+    },
+    {
+      "code": "category:server-tools",
+      "type": "category",
+      "labels": {
+        "en_US": "Server Tools",
+        "zh_Hans_CN": "服务器工具"
+      }
+    },
+    {
+      "code": "feature:tag-deploy",
+      "type": "feature",
+      "labels": {
+        "en_US": "Tag Deploy",
+        "zh_Hans_CN": "Tag 发布"
+      }
+    },
+    {
+      "code": "capability:deploy-webhook",
+      "type": "capability",
+      "labels": {
+        "en_US": "Deploy Webhook",
+        "zh_Hans_CN": "部署 Webhook"
+      }
+    },
+    {
+      "code": "capability:deploy-tag",
+      "type": "capability",
+      "labels": {
+        "en_US": "Deploy Tag",
+        "zh_Hans_CN": "Tag 部署"
+      }
+    },
+    {
+      "code": "system:true",
+      "type": "system",
+      "labels": {
+        "en_US": "System Module",
+        "zh_Hans_CN": "系统模块"
+      }
+    }
+  ],
+  "surfaces": [
+    "backend"
+  ],
+  "capabilities": {
+    "deploy.webhook": {
+      "label": {
+        "en_US": "Webhook Setup",
+        "zh_Hans_CN": "Webhook 配置"
+      },
+      "status": "shell",
+      "backend_route": "deploy/backend/wls-deploy/webhooks"
+    },
+    "deploy.tag": {
+      "label": {
+        "en_US": "Tag Release",
+        "zh_Hans_CN": "Tag 发布"
+      },
+      "status": "shell",
+      "backend_route": "deploy/backend/wls-deploy/manual-plan"
+    },
+    "project.release": {
+      "label": {
+        "en_US": "Project Release Context",
+        "zh_Hans_CN": "项目发布上下文"
+      },
+      "status": "shell",
+      "backend_route": "deploy/backend/wls-deploy/release-path"
+    }
+  },
+  "wls_panel": {
+    "menu": [
+      {
+        "key": "deploy",
+        "label": {
+          "en_US": "Deploy",
+          "zh_Hans_CN": "部署发布"
+        },
+        "description": {
+          "en_US": "Open deployment configuration, webhook setup, and release history for WLS managed projects.",
+          "zh_Hans_CN": "打开 WLS 托管项目的部署配置、Webhook 配置和发布历史。"
+        },
+        "group": "tools",
+        "order": 40,
+        "backend_route": "deploy/backend/wls-deploy",
+        "children": [
+          {
+            "key": "deploy-overview",
+            "label": {
+              "en_US": "Overview",
+              "zh_Hans_CN": "概览"
+            },
+            "order": 5,
+            "backend_route": "deploy/backend/wls-deploy/overview"
+          },
+          {
+            "key": "deploy-release-path",
+            "label": {
+              "en_US": "Release Path",
+              "zh_Hans_CN": "发布路径"
+            },
+            "order": 10,
+            "backend_route": "deploy/backend/wls-deploy/release-path"
+          },
+          {
+            "key": "deploy-configuration",
+            "label": {
+              "en_US": "Configuration",
+              "zh_Hans_CN": "配置"
+            },
+            "order": 20,
+            "backend_route": "deploy/backend/wls-deploy/configuration"
+          },
+          {
+            "key": "deploy-project-profile",
+            "label": {
+              "en_US": "Project Profile",
+              "zh_Hans_CN": "项目 Profile"
+            },
+            "order": 30,
+            "backend_route": "deploy/backend/wls-deploy/project-profile"
+          },
+          {
+            "key": "deploy-preflight",
+            "label": {
+              "en_US": "Preflight",
+              "zh_Hans_CN": "发布预检"
+            },
+            "order": 40,
+            "backend_route": "deploy/backend/wls-deploy/preflight"
+          },
+          {
+            "key": "deploy-webhooks",
+            "label": {
+              "en_US": "Webhooks",
+              "zh_Hans_CN": "Webhook"
+            },
+            "order": 50,
+            "backend_route": "deploy/backend/wls-deploy/webhooks"
+          },
+          {
+            "key": "deploy-releases",
+            "label": {
+              "en_US": "Releases",
+              "zh_Hans_CN": "发布记录"
+            },
+            "order": 60,
+            "backend_route": "deploy/backend/wls-deploy/releases"
+          },
+          {
+            "key": "deploy-manual-plan",
+            "label": {
+              "en_US": "Manual Plan",
+              "zh_Hans_CN": "手动计划"
+            },
+            "order": 70,
+            "backend_route": "deploy/backend/wls-deploy/manual-plan"
+          }
+        ]
+      }
+    ]
+  },
+  "seo": {
+    "slug": "wls-deploy"
+  }
+}

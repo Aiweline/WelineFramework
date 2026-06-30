@@ -111,6 +111,23 @@ class Parser
         return $this->_content;
     }
 
+    public function parseFile(string $file): array
+    {
+        try {
+            return $this->load($file)->xmlToArray();
+        } finally {
+            $this->releaseMemory();
+        }
+    }
+
+    public function releaseMemory(): void
+    {
+        $this->_content = [];
+        $this->_dom = new \DOMDocument();
+        $this->_currentDom = $this->_dom;
+        $this->_currentFile = '';
+    }
+
     /** 递归深度上限，防止异常 XML 导致栈溢出/内存耗尽 */
     private const XML_TO_ARRAY_MAX_DEPTH = 128;
 
@@ -202,21 +219,17 @@ class Parser
      */
     public function load(string $file): static
     {
+        $this->releaseMemory();
         $this->_currentFile = $file;
         // 检查文件是否存在
-        if (!file_exists($file)) {
+        if (!is_file($file)) {
             // 文件不存在，创建一个空的 DOMDocument
-            $this->_dom = new \DOMDocument();
-            $this->_currentDom = $this->_dom;
             return $this;
         }
         
         // 检查文件是否为空
-        $fileContent = trim(file_get_contents($file));
-        if (empty($fileContent)) {
+        if (filesize($file) === 0) {
             // 文件为空，创建一个空的 DOMDocument
-            $this->_dom = new \DOMDocument();
-            $this->_currentDom = $this->_dom;
             return $this;
         }
         

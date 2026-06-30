@@ -25,14 +25,16 @@
 $meta = $this->getData('meta') ?? [];
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::activity::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::activity::body-start</w:hook>
     
@@ -56,75 +58,111 @@ $meta = $this->getData('meta') ?? [];
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::activity::content-before</w:hook>
             
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-activity-content,layout-default-content,content,activity-content,activity-hero,activity-products,promo-banner,product-carousel"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="activity-layout__content-root-slot">
             <if condition="meta.banner">
-                <section class="activity-banner">
+                <w:slot id="activity-hero"
+                        name="活动主视觉"
+                        accept="layout-activity-hero,promo-banner,hero-slider,ad-banner,banner"
+                        exclusive="true"
+                        multiple="false"
+                        position="content"
+                        wrapper="section"
+                        class="activity-banner">
                     {{meta.banner}}
-                </section>
+                </w:slot>
             </if>
             
             <if condition="meta.highlight">
-                <section class="activity-section activity-highlight">
+                <w:slot id="activity-highlight"
+                        name="活动亮点区"
+                        accept="layout-activity-highlight,content,image-text,text-block,trust-badges"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="activity-section activity-highlight">
                     <div class="container">
                         {{meta.highlight}}
                     </div>
-                </section>
+                </w:slot>
             </if>
             
             <w:hook>Weline_Theme::frontend::layouts::activity::main-before</w:hook>
             <main class="activity-main <?= htmlspecialchars($meta['class'] ?? '') ?> default" id="activity-main" data-layout="activity">
-                <w:hook>Weline_Theme::frontend::layouts::activity::main-content-before</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::activity::main-content<else/>
-                    <if condition="meta.content">
-                        {{meta.content}}
-                    <else/>
-                        <div class="activity-default-content">
-                            <div class="container">
-                                <section class="activity-header">
-                                    <h1 class="activity-title">
-                                        <if condition="meta.title">
-                                            {{meta.title}}
-                                        <else/>
-                                            <lang>精彩活动进行中</lang>
-                                        </if>
-                                    </h1>
-                                    <p class="activity-description">
-                                        <lang>这里是活动专题默认页面，你可以通过 PageBuilder 自由配置 Banner、活动亮点和活动商品区块。</lang>
-                                    </p>
-                                </section>
-                                
-                                <section class="activity-preview">
-                                    <div class="activity-preview-grid">
-                                        <div class="activity-preview-card">
-                                            <h2 class="section-title"><lang>活动亮点示例</lang></h2>
-                                            <p class="section-text">
-                                                <lang>在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。</lang>
-                                            </p>
+                <w:slot id="activity-content"
+                        name="活动主内容"
+                        accept="layout-activity-content,layout-default-content,content,banner,product,category,faq,video"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content">
+                    <w:hook>Weline_Theme::frontend::layouts::activity::main-content-before</w:hook>
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::activity::main-content
+                        <else/>
+                        <if condition="meta.content">
+                            {{meta.content}}
+                        <else/>
+                            <div class="activity-default-content">
+                                <div class="container">
+                                    <section class="activity-header">
+                                        <h1 class="activity-title">
+                                            <if condition="meta.title">
+                                                {{meta.title}}
+                                            <else/>
+                                                <lang>精彩活动进行中</lang>
+                                            </if>
+                                        </h1>
+                                        <p class="activity-description">
+                                            <lang>这里是活动专题默认页面，你可以通过 PageBuilder 自由配置 Banner、活动亮点和活动商品区块。</lang>
+                                        </p>
+                                    </section>
+                                    
+                                    <section class="activity-preview">
+                                        <div class="activity-preview-grid">
+                                            <div class="activity-preview-card">
+                                                <h2 class="section-title"><lang>活动亮点示例</lang></h2>
+                                                <p class="section-text">
+                                                    <lang>在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。</lang>
+                                                </p>
+                                            </div>
+                                            <div class="activity-preview-card">
+                                                <h2 class="section-title"><lang>活动商品示例</lang></h2>
+                                                <p class="section-text">
+                                                    <lang>在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。</lang>
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div class="activity-preview-card">
-                                            <h2 class="section-title"><lang>活动商品示例</lang></h2>
-                                            <p class="section-text">
-                                                <lang>在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。</lang>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </section>
+                                    </section>
+                                </div>
                             </div>
-                        </div>
-                    </if>
-                </w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::activity::main-content-after</w:hook>
+                        </if>
+                    </w:hook>
+                    <w:hook>Weline_Theme::frontend::layouts::activity::main-content-after</w:hook>
+                </w:slot>
             </main>
             <w:hook>Weline_Theme::frontend::layouts::activity::main-after</w:hook>
             
             <if condition="meta.products">
                 <w:hook>Weline_Theme::frontend::layouts::activity::products-before</w:hook>
-                <section class="activity-section activity-products">
+                <w:slot id="activity-products"
+                        name="活动商品区"
+                        accept="layout-activity-products,featured-products,bestsellers,new-arrivals,product-carousel,product"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="activity-section activity-products">
                     <div class="container">
                         {{meta.products}}
                     </div>
-                </section>
+                </w:slot>
                 <w:hook>Weline_Theme::frontend::layouts::activity::products-after</w:hook>
             </if>
+            </w:slot>
             
             <w:hook>Weline_Theme::frontend::layouts::activity::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -148,7 +186,7 @@ $meta = $this->getData('meta') ?? [];
     .activity-main {
         width: 100%;
         flex: 1;
-        padding: 2rem 0;
+        padding: var(--weline-layout-spacing-xl, 2rem) 0;
     }
     
     .activity-banner {
@@ -157,85 +195,87 @@ $meta = $this->getData('meta') ?? [];
     
     .activity-section {
         width: 100%;
-        padding: 2rem 0;
+        padding: var(--weline-layout-spacing-xl, 2rem) 0;
     }
     
     .activity-default-content {
         width: 100%;
-        padding: 2rem 0 3rem;
+        padding: var(--weline-layout-spacing-xl, 2rem) 0 var(--weline-layout-spacing-2xl, 3rem);
     }
     
     .activity-header {
         text-align: left;
-        margin-bottom: 2rem;
+        margin-bottom: var(--weline-layout-spacing-xl, 2rem);
     }
     
     .activity-title {
-        font-size: 2rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
+        font-size: var(--weline-layout-font-size-3xl, 1.75rem);
+        font-weight: var(--weline-layout-font-weight-semibold, 600);
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
     
     .activity-description {
-        font-size: 0.95rem;
-        color: var(--color-text-secondary, #565959);
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        line-height: var(--weline-layout-line-height-relaxed, 1.75);
+        color: var(--weline-layout-text-secondary);
         margin: 0;
     }
     
     .activity-preview {
-        margin-top: 2rem;
+        margin-top: var(--weline-layout-spacing-xl, 2rem);
     }
     
     .activity-preview-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 1.5rem;
+        gap: var(--weline-layout-spacing-lg, 1.5rem);
     }
     
     .activity-preview-card {
-        background-color: var(--color-bg-primary, #fff);
-        border: 1px solid var(--color-border-light, #e0e0e0);
-        border-radius: 8px;
-        padding: 1.75rem;
+        background-color: var(--weline-layout-surface-primary);
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-border-color);
+        border-radius: var(--weline-layout-radius-lg, 8px);
+        padding: var(--weline-layout-spacing-lg, 1.5rem);
     }
     
     .activity-products {
-        margin-top: 1rem;
+        margin-top: var(--weline-layout-spacing-md, 1rem);
     }
     
     .activity-section .section-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
+        font-size: var(--weline-layout-font-size-xl, 1.25rem);
+        font-weight: var(--weline-layout-font-weight-semibold, 600);
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
     
     .activity-section .section-text {
-        font-size: 0.95rem;
-        color: var(--color-text-muted, #333);
-        line-height: 1.7;
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        color: var(--weline-layout-text-secondary);
+        line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin: 0;
     }
     
     @media (max-width: 768px) {
         .activity-main {
-            padding: 1.5rem 0;
+            padding: var(--weline-layout-spacing-lg, 1.5rem) 0;
         }
         
         .activity-default-content {
-            padding: 1.5rem 0 2rem;
+            padding: var(--weline-layout-spacing-lg, 1.5rem) 0 var(--weline-layout-spacing-xl, 2rem);
         }
         
         .activity-title {
-            font-size: 1.7rem;
+            font-size: var(--weline-layout-font-size-2xl, 1.5rem);
         }
         
         .activity-preview-card {
-            padding: 1.5rem;
+            padding: var(--weline-layout-spacing-lg, 1.5rem);
         }
     }
     </style>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
 

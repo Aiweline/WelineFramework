@@ -1,0 +1,11 @@
+{
+  "name": "@aiweline/binquery",
+  "version": "0.1.0",
+  "description": "Official JavaScript client for Weline BinQuery.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "license": "MIT"
+}
