@@ -230,6 +230,13 @@ final class RuntimeStrategyResolver
                 'warnings' => ['Supervisor is disabled by compatibility strategy.'],
             ];
         }
+        if ($profile->isWindows()) {
+            return [
+                'enabled' => false,
+                'reason' => 'auto disabled on Windows; legacy control plane avoids Supervisor reconnect churn',
+                'warnings' => ['Supervisor is disabled automatically on Windows; use --supervisor=on only when validating Supervisor HA.'],
+            ];
+        }
         if (!$profile->canControlProcesses()) {
             return [
                 'enabled' => false,

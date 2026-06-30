@@ -254,6 +254,10 @@ class ServiceOrchestrator
 
     /** 启动确认是否已完成：计划内进程均已上报 READY。只有完成后才能启动健康检查和拉起逻辑 */
     private bool $startupAcceptanceComplete = false;
+
+    /** 启动期 fail-fast 深度探测的上次执行时间，避免 Windows 系统命令饿死 IPC 消息泵 */
+    private float $lastStartupAcceptanceFatalProbeAt = 0.0;
+
     private float $sharedConsumerRenewIntervalSec = 10.0;
     private float $lastSharedConsumerRenewAt = 0.0;
     private bool $sharedConsumerRenewLogged = false;
@@ -2232,6 +2236,7 @@ class ServiceOrchestrator
         $deadline = \microtime(true) + $this->startupTimeout;
         $lastPending = '';
         $lastProgressLogAt = 0.0;
+        $this->lastStartupAcceptanceFatalProbeAt = 0.0;
         $acceptanceStartAt = \microtime(true);
         while (\microtime(true) < $deadline) {
             // Do a short multi-step drain first instead of a single poll(0,0).
@@ -2311,6 +2316,20 @@ class ServiceOrchestrator
             return null;
         }
 
+        $now = \microtime(true);
+        $probeInterval = (float)($context->getConfig('wls.orchestrator.startup_fatal_probe_interval_sec', 2.0) ?? 2.0);
+        $probeInterval = \max(0.5, \min(10.0, $probeInterval));
+        if ($this->lastStartupAcceptanceFatalProbeAt > 0.0
+            && ($now - $this->lastStartupAcceptanceFatalProbeAt) < $probeInterval) {
+            return null;
+        }
+        $this->lastStartupAcceptanceFatalProbeAt = $now;
+
+        // One fresh process/port table per probe round is enough. Clearing for
+        // every pending child makes Windows rerun netstat/tasklist repeatedly
+        // and can starve READY IPC packets until startup times out.
+        Processer::clearPortCache();
+
         foreach ($startupAcceptance as $role => $rule) {
             $role = (string)$role;
             if (!$this->requiresStartupPortPreflight($role)) {
@@ -2335,7 +2354,6 @@ class ServiceOrchestrator
                     continue;
                 }
 
-                Processer::clearPortCache($port);
                 $inspect = Processer::inspectPortOccupantWithHistory($port);
                 if (!($inspect['in_use'] ?? false)) {
                     if (!$processRunning) {
@@ -2345,6 +2363,10 @@ class ServiceOrchestrator
                 }
 
                 if (!($inspect['is_weline'] ?? false)) {
+                    if ($this->isLaunchPortOwnedByInstance($instance, $inspect)) {
+                        continue;
+                    }
+
                     return "{$role}#{$instance->instanceId} cannot become READY because port {$port} is occupied by a non-WLS process"
                         . ' (' . $this->describeLaunchPortOccupant($role, $port, $inspect) . ')';
                 }
@@ -2366,6 +2388,24 @@ class ServiceOrchestrator
         }
 
         return null;
+    }
+
+    /**
+     * Windows can deny transient command-line reads for just-launched PHP
+     * children. During startup acceptance, a port bound by the PID we just
+     * launched is not a foreign owner even if Processer cannot re-read --name.
+     *
+     * @param array<string, mixed> $inspect
+     */
+    private function isLaunchPortOwnedByInstance(ServiceInstance $instance, array $inspect): bool
+    {
+        $ownerPid = (int)($inspect['pid'] ?? 0);
+        if ($ownerPid <= 0 || !$instance->matchesManagedPid($ownerPid)) {
+            return false;
+        }
+
+        return (bool)($inspect['pid_running'] ?? false)
+            || $ownerPid === $instance->getTrackingPid();
     }
 
     /**

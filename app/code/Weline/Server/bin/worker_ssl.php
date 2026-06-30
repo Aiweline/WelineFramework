@@ -3100,6 +3100,13 @@ while (true) {
                 $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-Id', (string)$workerId);
                 $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-Port', (string)$port);
                 $fastPathResponse = wlsSetFormattedHttpResponseHeader($fastPathResponse, 'X-WLS-Worker-PID', (string)\getmypid());
+                $fastPathResponse = wlsDecorateFormattedFpcFastResponseForPerformancePanel(
+                    $fastPathResponse,
+                    $rawRequest,
+                    (float)$fastPathElapsedMs,
+                    $workerId,
+                    $port
+                );
                 $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
                 $fastPathResponse = \Weline\Server\Service\RouteHintService::addHintToResponse($fastPathResponse, $sni);
                 $fastPathResponse = injectWlsProcessTimeHeader($fastPathResponse, (\microtime(true) - $handleStartTime) * 1000);
@@ -4263,6 +4270,226 @@ function wlsSetFormattedHttpResponseHeader(string $response, string $name, strin
     return wlsSetFormattedHeader($headersPart, $name, $value) . "\r\n\r\n" . $bodyPart;
 }
 
+function wlsDecorateFormattedFpcFastResponseForPerformancePanel(
+    string $response,
+    string $rawRequest,
+    float $elapsedMs,
+    int $workerId,
+    int $port
+): string {
+    if (!wlsPerformancePanelAllowed($rawRequest)) {
+        return $response;
+    }
+
+    $requestId = wlsPerformancePanelRequestId($rawRequest);
+    $response = wlsSetFormattedHttpResponseHeader($response, 'X-Weline-Request-Id', $requestId);
+    wlsRecordFormattedFpcFastResponseForPerformancePanel($rawRequest, $requestId, $elapsedMs, $workerId, $port);
+
+    if (!wlsCanInjectPerformancePanelIntoFormattedResponse($rawRequest, $response)) {
+        return $response;
+    }
+
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    if ($headerEnd === false) {
+        return $response;
+    }
+
+    $headersPart = \substr($response, 0, $headerEnd);
+    $bodyPart = \substr($response, $headerEnd + 4);
+    if (\stripos($bodyPart, 'data-weline-wls-performance-bootstrap') !== false) {
+        return $response;
+    }
+
+    $bootstrap = wlsRenderPerformancePanelBootstrap($requestId);
+    $bodyClosePos = \strripos($bodyPart, '</body>');
+    $bodyPart = $bodyClosePos === false
+        ? $bodyPart . $bootstrap
+        : \substr($bodyPart, 0, $bodyClosePos) . $bootstrap . \substr($bodyPart, $bodyClosePos);
+    $headersPart = wlsSetFormattedHeader($headersPart, 'Content-Length', (string)\strlen($bodyPart));
+
+    return $headersPart . "\r\n\r\n" . $bodyPart;
+}
+
+function wlsPerformancePanelAllowed(string $rawRequest = ''): bool
+{
+    if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
+        return true;
+    }
+    if ((bool)\Weline\Framework\App\Env::get('wls.debug.performance_panel', false)) {
+        return true;
+    }
+    if (!(bool)\Weline\Framework\App\Env::get('wls.performance_panel.enable_in_prod', false)) {
+        return false;
+    }
+
+    $cookieName = (string)\Weline\Framework\App\Env::get('wls.performance_panel.cookie_name', 'w_wls_perf');
+    if ($cookieName === '') {
+        return false;
+    }
+    $cookieHeader = (string)(getHeaderValue($rawRequest ?? '', 'Cookie') ?? '');
+
+    return getCookieValue($cookieHeader, $cookieName) === '1';
+}
+
+function wlsPerformancePanelRequestId(string $rawRequest): string
+{
+    foreach (['X-Weline-Request-Id', 'X-Request-Id'] as $header) {
+        $value = getHeaderValue($rawRequest, $header);
+        if (\is_string($value) && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $value)) {
+            return $value;
+        }
+    }
+
+    try {
+        return \bin2hex(\random_bytes(8)) . '-' . \dechex((int)(\microtime(true) * 1000000));
+    } catch (\Throwable) {
+        return \str_replace('.', '', \uniqid('wls', true));
+    }
+}
+
+function wlsRecordFormattedFpcFastResponseForPerformancePanel(
+    string $rawRequest,
+    string $requestId,
+    float $elapsedMs,
+    int $workerId,
+    int $port
+): void {
+    try {
+        if (!\class_exists(\Weline\Server\Service\WlsPerformanceTraceStore::class)) {
+            return;
+        }
+        [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
+        $host = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
+        $path = '/';
+        $parsedPath = \parse_url($target, PHP_URL_PATH);
+        if (\is_string($parsedPath) && $parsedPath !== '') {
+            $path = $parsedPath;
+        }
+        $query = \parse_url($target, PHP_URL_QUERY);
+        if (\is_string($query) && $query !== '') {
+            $path .= '?' . $query;
+        }
+        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Server\Service\WlsPerformanceTraceStore::class)
+            ->record([], [
+                'request_id' => $requestId,
+                'method' => $method,
+                'uri' => $path,
+                'host' => $host,
+                'status' => 200,
+                'total_ms' => \round($elapsedMs, 2),
+                'pre_telemetry_total_ms' => \round($elapsedMs, 2),
+                'fpc_hit' => true,
+                'fpc_source' => 'worker_fastpath',
+                'worker_id' => (string)$workerId,
+                'worker_port' => (string)$port,
+                'pid' => \getmypid() ?: 0,
+            ]);
+    } catch (\Throwable) {
+    }
+}
+
+function wlsCanInjectPerformancePanelIntoFormattedResponse(string $rawRequest, string $response): bool
+{
+    [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
+    if ($method === 'HEAD') {
+        return false;
+    }
+    if (wlsPerformancePanelIsAjaxOrApiRequest($rawRequest, $target)) {
+        return false;
+    }
+
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    if ($headerEnd === false) {
+        return false;
+    }
+    $headersPart = \substr($response, 0, $headerEnd);
+    $bodyPart = \substr($response, $headerEnd + 4);
+    if ($bodyPart === ''
+        || \preg_match('/^HTTP\/\d(?:\.\d)?\s+(204|205|304)\b/i', $headersPart)
+        || \preg_match('/^Content-Encoding:/mi', $headersPart)) {
+        return false;
+    }
+    $limit = (int)\Weline\Framework\App\Env::get('wls.performance_panel.max_response_bytes', 1048576);
+    if ($limit > 0 && \strlen($bodyPart) > $limit) {
+        return false;
+    }
+    $contentType = '';
+    if (\preg_match('/^Content-Type:\s*([^\r\n]+)/mi', $headersPart, $typeMatch)) {
+        $contentType = \strtolower(\trim((string)$typeMatch[1]));
+    }
+    if ($contentType !== '' && !\str_contains($contentType, 'text/html')) {
+        return false;
+    }
+
+    return \stripos($bodyPart, '<html') !== false
+        || \stripos($bodyPart, '<!doctype') !== false
+        || \stripos($bodyPart, '<body') !== false
+        || \preg_match('/<(?:main|section|article|div|span|p|a|form|table|ul|ol|script|style)\b/i', $bodyPart) === 1;
+}
+
+function wlsPerformancePanelIsAjaxOrApiRequest(string $rawRequest, string $target): bool
+{
+    $requestedWith = \strtolower(\trim((string)(getHeaderValue($rawRequest, 'X-Requested-With') ?? '')));
+    if ($requestedWith === 'xmlhttprequest') {
+        return true;
+    }
+    $fetchDest = \strtolower(\trim((string)(getHeaderValue($rawRequest, 'Sec-Fetch-Dest') ?? '')));
+    if ($fetchDest === 'iframe') {
+        return true;
+    }
+    $accept = \strtolower((string)(getHeaderValue($rawRequest, 'Accept') ?? ''));
+    if ($accept !== '' && !\str_contains($accept, 'text/html') && !\str_contains($accept, '*/*')) {
+        return true;
+    }
+    $path = \parse_url($target, PHP_URL_PATH);
+    $path = \is_string($path) ? '/' . \ltrim($path, '/') : '/';
+    $restPrefixes = [
+        (string)\Weline\Framework\App\Env::get('router.area_routes.rest_frontend.prefix', 'api'),
+        (string)\Weline\Framework\App\Env::get('router.area_routes.rest_backend.prefix', ''),
+    ];
+    foreach ($restPrefixes as $prefix) {
+        $prefix = '/' . \trim($prefix, '/');
+        if ($prefix !== '/' && ($path === $prefix || \str_starts_with($path, $prefix . '/'))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function wlsPerformancePanelRequestLine(string $rawRequest): array
+{
+    if (\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $matches)) {
+        return [\strtoupper((string)$matches[1]), (string)$matches[2]];
+    }
+
+    return ['GET', '/'];
+}
+
+function wlsRenderPerformancePanelBootstrap(string $requestId): string
+{
+    $assetVersion = '20260629-wls-performance-panel-4';
+    $requestIdJson = wlsJsonString($requestId);
+    $cssUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.css?v=' . $assetVersion);
+    $jsUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.js?v=' . $assetVersion);
+    $apiScriptUrl = wlsJsonString('/Weline/Frontend/view/statics/js/weline-api.js?v=' . $assetVersion);
+    $apiWorkerUrl = wlsJsonString('/Weline/Frontend/view/statics/js/weline-api-worker.js?v=' . $assetVersion);
+    $apiEndpoint = wlsJsonString(\Weline\Framework\App\Env::getFrontendQueryBinPath());
+
+    return <<<HTML
+<script data-no-extract="true" data-load-order="last" data-weline-wls-performance-bootstrap="true">
+(function(d,w){"use strict";if(w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__)return;w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__=true;var command="wls";var buffer="";var cssUrl={$cssUrl};var jsUrl={$jsUrl};var requestId={$requestIdJson};var cssLoaded=false;var jsPromise=null;w.__WELINE_WLS_PANEL_CONFIG__=Object.assign({},w.__WELINE_WLS_PANEL_CONFIG__||{},{requestId:requestId,command:command,apiScriptUrl:{$apiScriptUrl},api:{workerUrl:{$apiWorkerUrl},endpoint:{$apiEndpoint},queryBinUrl:{$apiEndpoint},area:"frontend"}});function ignoredTarget(t){if(!t)return false;var tag=(t.tagName||"").toLowerCase();return tag==="input"||tag==="textarea"||tag==="select"||t.isContentEditable===true}function head(n){(d.head||d.documentElement).appendChild(n)}function loadCss(){if(cssLoaded||d.querySelector('link[data-weline-wls-panel="css"]')){cssLoaded=true;return Promise.resolve()}return new Promise(function(resolve,reject){var link=d.createElement("link");link.rel="stylesheet";link.href=cssUrl;link.setAttribute("data-weline-wls-panel","css");link.onload=function(){cssLoaded=true;resolve()};link.onerror=function(){reject(new Error("Failed to load WLS panel CSS"))};head(link)})}function loadJs(){if(w.__WELINE_WLS_PANEL__){return Promise.resolve(w.__WELINE_WLS_PANEL__)}if(jsPromise)return jsPromise;jsPromise=new Promise(function(resolve,reject){var script=d.createElement("script");script.src=jsUrl;script.defer=true;script.setAttribute("data-weline-wls-panel","js");script.onload=function(){w.__WELINE_WLS_PANEL__?resolve(w.__WELINE_WLS_PANEL__):reject(new Error("WLS panel API missing"))};script.onerror=function(){reject(new Error("Failed to load WLS panel JS"))};head(script)});return jsPromise}function openPanel(){loadCss().then(loadJs).then(function(panel){if(panel&&typeof panel.open==="function")panel.open({requestId:requestId})}).catch(function(error){if(w.console&&console.warn)console.warn("[wls-panel]",error)})}w.wlsPanel=openPanel;d.addEventListener("keydown",function(event){if(event.ctrlKey||event.metaKey||event.altKey||event.isComposing||ignoredTarget(event.target))return;if(!event.key||event.key.length!==1)return;buffer=(buffer+event.key.toLowerCase()).slice(-command.length);if(buffer!==command)return;buffer="";openPanel()},true)})(document,window);
+</script>
+HTML;
+}
+
+function wlsJsonString(string $value): string
+{
+    $encoded = \json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    return \is_string($encoded) ? $encoded : '""';
+}
+
 function wlsAddFormattedVaryAcceptEncoding(string $headersPart): string
 {
     if (!\preg_match('/^Vary:\s*([^\r\n]*)$/mi', $headersPart, $match)) {
@@ -4768,11 +4995,16 @@ function wlsTryServeFormattedFpcFastResponse(string $rawRequest, bool $keepAlive
             return null;
         }
 
+        $acceptEncoding = (string)(getHeaderValue($rawRequest, 'Accept-Encoding') ?? '');
+        if (wlsPerformancePanelAllowed($rawRequest) && !wlsPerformancePanelIsAjaxOrApiRequest($rawRequest, $target)) {
+            $acceptEncoding = '';
+        }
+
         $cached = $coordinator->getFormattedCachedResponseForFullUri(
             $fullUri,
             $method,
             (string)(getHeaderValue($rawRequest, 'Accept') ?? ''),
-            (string)(getHeaderValue($rawRequest, 'Accept-Encoding') ?? ''),
+            $acceptEncoding,
             (string)(getHeaderValue($rawRequest, 'Cookie') ?? ''),
             $keepAlive,
             !(bool)\Weline\Framework\App\Env::get('wls.worker.fpc_fastpath_shared_enabled', true)

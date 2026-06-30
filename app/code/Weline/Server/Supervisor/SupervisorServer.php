@@ -144,6 +144,10 @@ final class SupervisorServer
         $read = [$this->serverSocket];
         $write = [];
         foreach ($this->sessions as $session) {
+            if (!\is_resource($session->socket)) {
+                $this->closeSession($session->id);
+                continue;
+            }
             $read[] = $session->socket;
             if ($session->hasPendingWrites()) {
                 $write[] = $session->socket;
@@ -224,8 +228,21 @@ final class SupervisorServer
 
     private function handleReadable(SupervisorSession $session): int
     {
+        if (!\is_resource($session->socket)) {
+            $this->closeSession($session->id);
+            return 1;
+        }
+
         $data = @\fread($session->socket, 65536);
-        if ($data === false || ($data === '' && @\feof($session->socket))) {
+        if ($data === false) {
+            if (!@\feof($session->socket)) {
+                return $this->flushBufferedMessages($session);
+            }
+            $this->closeSession($session->id);
+            return 1;
+        }
+
+        if ($data === '' && @\feof($session->socket)) {
             $this->closeSession($session->id);
             return 1;
         }
@@ -237,6 +254,15 @@ final class SupervisorServer
         $session->readBuffer .= $data;
         $session->lastActivityAt = \microtime(true);
         $this->sessions[$session->id] = $session;
+
+        return $this->flushBufferedMessages($session);
+    }
+
+    private function flushBufferedMessages(SupervisorSession $session): int
+    {
+        if (!isset($this->sessions[$session->id])) {
+            return 0;
+        }
 
         $messages = 0;
         while (($newlinePos = \strpos($session->readBuffer, "\n")) !== false) {
@@ -267,8 +293,21 @@ final class SupervisorServer
             return false;
         }
 
-        $written = @\fwrite($session->socket, $session->writeBuffer);
+        if (!\is_resource($session->socket)) {
+            $this->closeSession($session->id);
+            return false;
+        }
+
+        try {
+            $written = @\fwrite($session->socket, $session->writeBuffer);
+        } catch (\Throwable) {
+            $this->closeSession($session->id);
+            return false;
+        }
         if ($written === false) {
+            if (!@\feof($session->socket)) {
+                return false;
+            }
             $this->closeSession($session->id);
             return false;
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\MemoryStateFacadeInterface;
 use Weline\Server\Session\Server\SessionProtocol;
@@ -81,72 +82,72 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
 
     public function get(string $ns, string $key): mixed
     {
-        return $this->sharedMemoryService->get($ns, $key);
+        return $this->traceOperation('wls.memory.get', ['operation' => 'get', 'namespace' => $ns], fn(): mixed => $this->sharedMemoryService->get($ns, $key));
     }
 
     public function set(string $ns, string $key, mixed $value, int $ttl = 0): bool
     {
-        return $this->sharedMemoryService->set($ns, $key, $value, $ttl);
+        return $this->traceOperation('wls.memory.set', ['operation' => 'set', 'namespace' => $ns], fn(): bool => $this->sharedMemoryService->set($ns, $key, $value, $ttl));
     }
 
     public function delete(string $ns, string $key): bool
     {
-        return $this->sharedMemoryService->delete($ns, $key);
+        return $this->traceOperation('wls.memory.delete', ['operation' => 'delete', 'namespace' => $ns], fn(): bool => $this->sharedMemoryService->delete($ns, $key));
     }
 
     public function exists(string $ns, string $key): bool
     {
-        return $this->sharedMemoryService->exists($ns, $key);
+        return $this->traceOperation('wls.memory.exists', ['operation' => 'exists', 'namespace' => $ns], fn(): bool => $this->sharedMemoryService->exists($ns, $key));
     }
 
     public function touch(string $ns, string $key, int $ttl): bool
     {
-        return $this->sharedMemoryService->touch($ns, $key, $ttl);
+        return $this->traceOperation('wls.memory.touch', ['operation' => 'touch', 'namespace' => $ns], fn(): bool => $this->sharedMemoryService->touch($ns, $key, $ttl));
     }
 
     public function mget(string $ns, array $keys): array
     {
-        return $this->sharedMemoryService->mget($ns, $keys);
+        return $this->traceOperation('wls.memory.mget', ['operation' => 'mget', 'namespace' => $ns], fn(): array => $this->sharedMemoryService->mget($ns, $keys));
     }
 
     public function mset(string $ns, array $kv, int $ttl = 0): bool
     {
-        return $this->sharedMemoryService->mset($ns, $kv, $ttl);
+        return $this->traceOperation('wls.memory.mset', ['operation' => 'mset', 'namespace' => $ns], fn(): bool => $this->sharedMemoryService->mset($ns, $kv, $ttl));
     }
 
     public function clearNamespace(string $ns): bool
     {
-        return $this->sharedMemoryService->clearNamespace($ns);
+        return $this->traceOperation('wls.memory.clear_namespace', ['operation' => 'clear_namespace', 'namespace' => $ns], fn(): bool => $this->sharedMemoryService->clearNamespace($ns));
     }
 
     public function incr(string $ns, string $key, int $delta = 1, int $ttl = 0): ?int
     {
-        return $this->sharedMemoryService->incr($ns, $key, $delta, $ttl);
+        return $this->traceOperation('wls.memory.incr', ['operation' => 'incr', 'namespace' => $ns], fn(): ?int => $this->sharedMemoryService->incr($ns, $key, $delta, $ttl));
     }
 
     public function decr(string $ns, string $key, int $delta = 1, int $ttl = 0): ?int
     {
-        return $this->sharedMemoryService->decr($ns, $key, $delta, $ttl);
+        return $this->traceOperation('wls.memory.decr', ['operation' => 'decr', 'namespace' => $ns], fn(): ?int => $this->sharedMemoryService->decr($ns, $key, $delta, $ttl));
     }
 
     public function append(string $ns, string $key, mixed $value, int $ttl = 0): bool
     {
-        return $this->sharedMemoryService->append($ns, $key, $value, $ttl);
+        return $this->traceOperation('wls.memory.append', ['operation' => 'append', 'namespace' => $ns], fn(): bool => $this->sharedMemoryService->append($ns, $key, $value, $ttl));
     }
 
     public function cas(string $ns, string $key, mixed $expected, mixed $newValue, int $ttl = 0): bool
     {
-        return $this->sharedMemoryService->cas($ns, $key, $expected, $newValue, $ttl);
+        return $this->traceOperation('wls.memory.cas', ['operation' => 'cas', 'namespace' => $ns], fn(): bool => $this->sharedMemoryService->cas($ns, $key, $expected, $newValue, $ttl));
     }
 
     public function list(array $options = []): array
     {
         $filter = \is_array($options['filter'] ?? null) ? $options['filter'] : [];
         $limit = (int) ($options['limit'] ?? 50);
-        $response = $this->stateClient->request(SessionProtocol::CMD_LIST, [
+        $response = $this->traceOperation('wls.memory.list', ['operation' => 'list'], fn(): mixed => $this->stateClient->request(SessionProtocol::CMD_LIST, [
             'filter' => $filter,
             'limit' => $limit,
-        ]);
+        ]));
 
         if (!\is_array($response) || !SessionProtocol::isSuccess($response)) {
             return [];
@@ -159,10 +160,10 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
 
     public function getAll(string $ns): array
     {
-        $response = $this->stateClient->request(SessionProtocol::CMD_GET_ALL, [
+        $response = $this->traceOperation('wls.memory.get_all', ['operation' => 'get_all', 'namespace' => $ns], fn(): mixed => $this->stateClient->request(SessionProtocol::CMD_GET_ALL, [
             'ns' => $ns,
             'sid' => '__kv__:' . $ns,
-        ]);
+        ]));
 
         if (!\is_array($response) || !SessionProtocol::isSuccess($response)) {
             return [];
@@ -175,9 +176,9 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
 
     public function gc(int $maxLifetime): int
     {
-        $response = $this->stateClient->request(SessionProtocol::CMD_GC, [
+        $response = $this->traceOperation('wls.memory.gc', ['operation' => 'gc'], fn(): mixed => $this->stateClient->request(SessionProtocol::CMD_GC, [
             'max_lifetime' => \max(1, $maxLifetime),
-        ]);
+        ]));
         if (!\is_array($response) || !SessionProtocol::isSuccess($response)) {
             return 0;
         }
@@ -189,19 +190,19 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
 
     public function persist(): bool
     {
-        $response = $this->stateClient->request(SessionProtocol::CMD_PERSIST);
+        $response = $this->traceOperation('wls.memory.persist', ['operation' => 'persist'], fn(): mixed => $this->stateClient->request(SessionProtocol::CMD_PERSIST));
 
         return \is_array($response) && SessionProtocol::isSuccess($response);
     }
 
     public function ping(): bool
     {
-        return $this->stateClient->ping();
+        return $this->traceOperation('wls.memory.ping', ['operation' => 'ping'], fn(): bool => $this->stateClient->ping());
     }
 
     public function getStats(): array
     {
-        $response = $this->stateClient->request(SessionProtocol::CMD_STATS);
+        $response = $this->traceOperation('wls.memory.stats', ['operation' => 'stats'], fn(): mixed => $this->stateClient->request(SessionProtocol::CMD_STATS));
         if (!\is_array($response) || !SessionProtocol::isSuccess($response)) {
             return [];
         }
@@ -213,32 +214,32 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
 
     public function getCache(string $poolIdentity, string $key): mixed
     {
-        return $this->cacheMemoryService->get($poolIdentity, $key);
+        return $this->traceOperation('wls.memory.cache_get', ['operation' => 'cache_get', 'pool' => $poolIdentity], fn(): mixed => $this->cacheMemoryService->get($poolIdentity, $key));
     }
 
     public function setCache(string $poolIdentity, string $key, mixed $value, int $ttl = 0): bool
     {
-        return $this->cacheMemoryService->set($poolIdentity, $key, $value, $ttl);
+        return $this->traceOperation('wls.memory.cache_set', ['operation' => 'cache_set', 'pool' => $poolIdentity], fn(): bool => $this->cacheMemoryService->set($poolIdentity, $key, $value, $ttl));
     }
 
     public function deleteCache(string $poolIdentity, string $key): bool
     {
-        return $this->cacheMemoryService->delete($poolIdentity, $key);
+        return $this->traceOperation('wls.memory.cache_delete', ['operation' => 'cache_delete', 'pool' => $poolIdentity], fn(): bool => $this->cacheMemoryService->delete($poolIdentity, $key));
     }
 
     public function hasCache(string $poolIdentity, string $key): bool
     {
-        return $this->cacheMemoryService->exists($poolIdentity, $key);
+        return $this->traceOperation('wls.memory.cache_exists', ['operation' => 'cache_exists', 'pool' => $poolIdentity], fn(): bool => $this->cacheMemoryService->exists($poolIdentity, $key));
     }
 
     public function clearCache(string $poolIdentity): bool
     {
-        return $this->cacheMemoryService->clear($poolIdentity);
+        return $this->traceOperation('wls.memory.cache_clear', ['operation' => 'cache_clear', 'pool' => $poolIdentity], fn(): bool => $this->cacheMemoryService->clear($poolIdentity));
     }
 
     public function compareAndSetCache(string $poolIdentity, string $key, mixed $expected, mixed $value, int $ttl = 0): bool
     {
-        return $this->cacheMemoryService->cas($poolIdentity, $key, $expected, $value, $ttl);
+        return $this->traceOperation('wls.memory.cache_cas', ['operation' => 'cache_cas', 'pool' => $poolIdentity], fn(): bool => $this->cacheMemoryService->cas($poolIdentity, $key, $expected, $value, $ttl));
     }
 
     public function getRuntime(): array
@@ -303,6 +304,42 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
     protected function createStateClient(string $host, int $port, array $options): SharedStateClient
     {
         return new SharedStateClient($host, $port, $options);
+    }
+
+    private function traceOperation(string $name, array $meta, callable $operation): mixed
+    {
+        $start = \class_exists(RequestLifecycleTrace::class, false) && RequestLifecycleTrace::isEnabled()
+            ? \microtime(true)
+            : 0.0;
+
+        try {
+            return $operation();
+        } finally {
+            if ($start > 0.0) {
+                RequestLifecycleTrace::recordSpan(
+                    $name,
+                    (\microtime(true) - $start) * 1000,
+                    'wls',
+                    null,
+                    $meta + $this->traceRuntimeMeta()
+                );
+            }
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function traceRuntimeMeta(): array
+    {
+        $runtime = isset($this->runtime) ? $this->runtime : [];
+
+        return [
+            'service' => 'memory',
+            'host' => (string)($runtime['host'] ?? ''),
+            'port' => (int)($runtime['port'] ?? 0),
+            'direct_connect' => (bool)($runtime['direct_connect'] ?? false),
+        ];
     }
 
     private function cleanupInitializationFailure(): void

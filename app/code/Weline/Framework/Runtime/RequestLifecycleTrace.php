@@ -132,7 +132,11 @@ class RequestLifecycleTrace
             return self::isExplicitPersistentTraceRequested();
         }
 
-        $panelEnabled = (bool)\Weline\Framework\App\Env::get('wls.debug.dev_tool_panel', false);
+        $panelEnabled = (bool)\Weline\Framework\App\Env::get('wls.debug.dev_tool_panel', false)
+            || (bool)\Weline\Framework\App\Env::get(
+                'wls.debug.performance_panel',
+                (\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)
+            );
 
         return self::isExplicitPersistentTraceRequested()
             || (bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', $panelEnabled);
@@ -324,7 +328,12 @@ class RequestLifecycleTrace
 
     private static function resolveIncomingRequestId(): string
     {
-        $incoming = (string)(WelineEnv::server('HTTP_X_WELINE_REQUEST_ID', '') ?: WelineEnv::server('HTTP_X_REQUEST_ID', ''));
+        $incoming = (string)(
+            WelineEnv::server('HTTP_X_WELINE_REQUEST_ID', '')
+            ?: WelineEnv::server('HTTP_X_REQUEST_ID', '')
+            ?: ($_SERVER['HTTP_X_WELINE_REQUEST_ID'] ?? '')
+            ?: ($_SERVER['HTTP_X_REQUEST_ID'] ?? '')
+        );
         if ($incoming !== '' && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $incoming)) {
             return $incoming;
         }

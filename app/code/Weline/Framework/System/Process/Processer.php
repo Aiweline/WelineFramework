@@ -203,6 +203,40 @@ class Processer
         return self::resolveWelinePnameByPortHint($port) !== '';
     }
 
+    private static function looksLikeWelineProcessName(string $value): bool
+    {
+        if ($value === '') {
+            return false;
+        }
+
+        return \strpos($value, self::WELINE_PROCESS_PREFIX) !== false
+            || \strpos($value, '--name=' . self::WELINE_PROCESS_PREFIX) !== false;
+    }
+
+    private static function resolveWelinePnameByPidHint(int $pid): string
+    {
+        if ($pid <= 0) {
+            return '';
+        }
+
+        $record = self::readPidIndex()[$pid] ?? null;
+        if (!\is_array($record)) {
+            return '';
+        }
+
+        foreach ([
+            (string)($record['pname'] ?? ''),
+            (string)($record['process_name'] ?? ''),
+            (string)($record['task_name'] ?? ''),
+        ] as $candidate) {
+            if (self::looksLikeWelineProcessName($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
     /**
      * 在 pid_index 中查找与该端口可能关联的 weline 进程名（用于 history 推断）。
      * 命中返回原始 pname（含 --name= 前缀时保留），否则返回空串。
@@ -224,9 +258,7 @@ class Processer
                 ? \substr($pname, 7)
                 : $pname;
 
-            $looksLikeWeline = (\strpos($taskName, self::WELINE_PROCESS_PREFIX) !== false)
-                || (\strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false);
-            if (!$looksLikeWeline) {
+            if (!self::looksLikeWelineProcessName($taskName) && !self::looksLikeWelineProcessName($pname)) {
                 continue;
             }
 
@@ -3254,12 +3286,11 @@ class Processer
             return null;
         }
 
-        $commandLine = self::buildWindowsCommandLineFromArgv(\array_map('strval', $argv));
-
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
-$commandLine = __COMMAND_LINE__
+$phpExe = __PHP__
 $wd = __WD__
+$argList = __ARGS__
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
 } catch {
@@ -3267,14 +3298,22 @@ try {
     exit 1
 }
 try {
-    $startup = ([WMIClass]'Win32_ProcessStartup').CreateInstance()
-    $startup.ShowWindow = 0
-    $result = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList $commandLine, $wd, $startup -ErrorAction Stop
-    if ([int]$result.ReturnValue -eq 0 -and [int]$result.ProcessId -gt 0) {
-        [Console]::Out.WriteLine([string]$result.ProcessId)
+    $startArgs = @{
+        FilePath = $phpExe
+        WorkingDirectory = $wd
+        WindowStyle = 'Hidden'
+        PassThru = $true
+        ErrorAction = 'Stop'
+    }
+    if ($argList.Count -gt 0) {
+        $startArgs.ArgumentList = $argList
+    }
+    $process = Start-Process @startArgs
+    if ($null -ne $process -and [int]$process.Id -gt 0) {
+        [Console]::Out.WriteLine([string]$process.Id)
         exit 0
     }
-    [Console]::Error.WriteLine("Win32_Process.Create failed: return_value=$($result.ReturnValue)")
+    [Console]::Error.WriteLine('Start-Process did not return a process id')
     exit 1
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
@@ -3283,10 +3322,11 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__COMMAND_LINE__', '__WD__'],
+            ['__PHP__', '__WD__', '__ARGS__'],
             [
-                self::toPowerShellSingleQuoted($commandLine),
+                self::toPowerShellSingleQuoted((string) $argv[0]),
                 self::toPowerShellSingleQuoted($workingDir),
+                self::buildPowerShellArrayLiteral(\array_map('strval', \array_slice($argv, 1))),
             ],
             $template
         );
@@ -3310,15 +3350,11 @@ POWERSHELL;
 
     private static function writeWindowsStartScript(string $phpBinary, string $arguments, string $workingDir): ?string
     {
-        $commandLine = self::quoteWindowsCommandLineArg($phpBinary);
-        if (\trim($arguments) !== '') {
-            $commandLine .= ' ' . \trim($arguments);
-        }
-
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
-$commandLine = '__COMMAND_LINE__'
-$wd = '__WORKING_DIR__'
+$phpExe = __PHP__
+$wd = __WD__
+$arguments = __ARGUMENTS__
 try {
     Set-Location -LiteralPath $wd -ErrorAction Stop
 } catch {
@@ -3326,14 +3362,22 @@ try {
     exit 1
 }
 try {
-    $startup = ([WMIClass]'Win32_ProcessStartup').CreateInstance()
-    $startup.ShowWindow = 0
-    $result = Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList $commandLine, $wd, $startup -ErrorAction Stop
-    if ([int]$result.ReturnValue -eq 0 -and [int]$result.ProcessId -gt 0) {
-        [Console]::Out.WriteLine([string]$result.ProcessId)
+    $startArgs = @{
+        FilePath = $phpExe
+        WorkingDirectory = $wd
+        WindowStyle = 'Hidden'
+        PassThru = $true
+        ErrorAction = 'Stop'
+    }
+    if ($arguments -ne '') {
+        $startArgs.ArgumentList = $arguments
+    }
+    $process = Start-Process @startArgs
+    if ($null -ne $process -and [int]$process.Id -gt 0) {
+        [Console]::Out.WriteLine([string]$process.Id)
         exit 0
     }
-    [Console]::Error.WriteLine("Win32_Process.Create failed: return_value=$($result.ReturnValue)")
+    [Console]::Error.WriteLine('Start-Process did not return a process id')
     exit 1
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
@@ -3342,10 +3386,11 @@ try {
 POWERSHELL;
 
         $script = \str_replace(
-            ['__COMMAND_LINE__', '__WORKING_DIR__'],
+            ['__PHP__', '__WD__', '__ARGUMENTS__'],
             [
-                self::escapePowerShellLiteral($commandLine),
-                self::escapePowerShellLiteral($workingDir),
+                self::toPowerShellSingleQuoted($phpBinary),
+                self::toPowerShellSingleQuoted($workingDir),
+                self::toPowerShellSingleQuoted(\trim($arguments)),
             ],
             $template
         );
@@ -3617,7 +3662,7 @@ POWERSHELL;
     private static function buildWindowsPowerShellProcOpenCommand(string $scriptPath): array
     {
         return [
-            'powershell',
+            self::resolveWindowsPowerShellExecutable(),
             '-NoProfile',
             '-NonInteractive',
             '-ExecutionPolicy',
@@ -3625,6 +3670,40 @@ POWERSHELL;
             '-File',
             $scriptPath,
         ];
+    }
+
+    private static function resolveWindowsPowerShellExecutable(): string
+    {
+        if (!IS_WIN) {
+            return 'powershell';
+        }
+
+        $systemRoot = \rtrim((string) (\getenv('SystemRoot') ?: \getenv('windir') ?: 'C:\\Windows'), '\\/');
+        $candidates = [
+            $systemRoot . '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+            $systemRoot . '\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe',
+            $systemRoot . '\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe',
+            $systemRoot . '\\System32\\powershell.exe',
+        ];
+
+        $path = (string) \getenv('PATH');
+        if ($path !== '') {
+            foreach (\explode(PATH_SEPARATOR, $path) as $directory) {
+                $directory = \trim($directory, " \t\n\r\0\x0B\"'");
+                if ($directory !== '') {
+                    $candidates[] = \rtrim($directory, '\\/') . '\\powershell.exe';
+                    $candidates[] = \rtrim($directory, '\\/') . '\\powershell';
+                }
+            }
+        }
+
+        foreach (\array_unique($candidates) as $candidate) {
+            if (\is_file($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return 'powershell';
     }
 
     /**
@@ -6024,8 +6103,7 @@ POWERSHELL;
         $portIndex = self::readPortIndex();
         if (isset($portIndex[$portKey])) {
             $portIndexPname = (string) $portIndex[$portKey];
-            $portIndexSuggestsWeline = (\strpos($portIndexPname, self::WELINE_PROCESS_PREFIX) !== false)
-                || (\strpos($portIndexPname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false);
+            $portIndexSuggestsWeline = self::looksLikeWelineProcessName($portIndexPname);
         }
 
         $pid = self::getProcessIdByPort($port);
@@ -6054,10 +6132,13 @@ POWERSHELL;
             ];
         }
 
-        $isWeline = $portIndexSuggestsWeline || self::isWelineServerProcess($pid);
+        $pidIndexPname = self::resolveWelinePnameByPidHint($pid);
+        $isWeline = $portIndexSuggestsWeline
+            || $pidIndexPname !== ''
+            || self::isWelineServerProcess($pid);
 
         // 命中 weline 时尽量补齐 pname，便于上层按项目作用域辨别归属。
-        $pname = $portIndexPname;
+        $pname = $portIndexPname !== '' ? $portIndexPname : $pidIndexPname;
         if ($pname === '' && $isWeline) {
             $cmdLine = self::getProcessCommandLine($pid);
             if ($cmdLine !== '') {

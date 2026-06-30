@@ -281,7 +281,7 @@ return [
             'max_accept_per_loop' => 16,
             'worker_connect_select_timeout_sec' => 0.02,
             'ssl_backend_preconnect_per_worker' => 0,
-            'homepage_warmup_enabled' => false,
+            'homepage_warmup_enabled' => true,
         ],
         'mode' => 'io',
         'max_connections' => 10000,
@@ -426,6 +426,8 @@ return [
             // 闈炲父楂樺紑閿€锛氫細璁板綍 Session / Router / URL 瑙ｆ瀽绛夌儹璺粏绮掑害鏃ュ織锛屽彧搴旂煭鏃舵墜鍔ㄦ墦寮€
             'hot_path_logs' => false,
             'dev_tool_panel' => false,
+            // WLS 性能诊断面板：开发/调试模式可通过输入 wls 打开，生产环境仍需显式授权。
+            'performance_panel' => true,
         ],
     ],
     

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\SessionStateFacadeInterface;
 use Weline\Server\Session\Client\SessionClient;
@@ -89,27 +90,27 @@ class SessionStateFacade implements SessionStateFacadeInterface
 
     public function read(string $sessionId): array
     {
-        return $this->sessionMemoryService->read($sessionId);
+        return $this->traceOperation('wls.session.read', ['operation' => 'read'], fn(): array => $this->sessionMemoryService->read($sessionId));
     }
 
     public function write(string $sessionId, array $data, int $ttl): bool
     {
-        return $this->sessionMemoryService->write($sessionId, $data, $ttl);
+        return $this->traceOperation('wls.session.write', ['operation' => 'write'], fn(): bool => $this->sessionMemoryService->write($sessionId, $data, $ttl));
     }
 
     public function destroy(string $sessionId): bool
     {
-        return $this->sessionMemoryService->destroy($sessionId);
+        return $this->traceOperation('wls.session.destroy', ['operation' => 'destroy'], fn(): bool => $this->sessionMemoryService->destroy($sessionId));
     }
 
     public function exists(string $sessionId): bool
     {
-        return $this->sessionMemoryService->exists($sessionId);
+        return $this->traceOperation('wls.session.exists', ['operation' => 'exists'], fn(): bool => $this->sessionMemoryService->exists($sessionId));
     }
 
     public function touch(string $sessionId, int $ttl): bool
     {
-        return $this->sessionMemoryService->touch($sessionId, $ttl);
+        return $this->traceOperation('wls.session.touch', ['operation' => 'touch'], fn(): bool => $this->sessionMemoryService->touch($sessionId, $ttl));
     }
 
     public function list(array $options = []): array
@@ -117,27 +118,27 @@ class SessionStateFacade implements SessionStateFacadeInterface
         $filter = \is_array($options['filter'] ?? null) ? $options['filter'] : [];
         $limit = (int) ($options['limit'] ?? 50);
 
-        return $this->sessionClient->list($filter, $limit);
+        return $this->traceOperation('wls.session.list', ['operation' => 'list'], fn(): array => $this->sessionClient->list($filter, $limit));
     }
 
     public function gc(int $maxLifetime): int
     {
-        return $this->sessionClient->gc($maxLifetime);
+        return $this->traceOperation('wls.session.gc', ['operation' => 'gc'], fn(): int => $this->sessionClient->gc($maxLifetime));
     }
 
     public function persist(): bool
     {
-        return $this->sessionClient->persist();
+        return $this->traceOperation('wls.session.persist', ['operation' => 'persist'], fn(): bool => $this->sessionClient->persist());
     }
 
     public function ping(): bool
     {
-        return $this->sessionClient->ping();
+        return $this->traceOperation('wls.session.ping', ['operation' => 'ping'], fn(): bool => $this->sessionClient->ping());
     }
 
     public function getStats(): array
     {
-        return $this->sessionClient->getStats();
+        return $this->traceOperation('wls.session.stats', ['operation' => 'stats'], fn(): array => $this->sessionClient->getStats());
     }
 
     public function getRuntime(): array
@@ -202,7 +203,43 @@ class SessionStateFacade implements SessionStateFacadeInterface
 
     protected function connectDirectClient(SessionClient $client): bool
     {
-        return $client->connect();
+        return $this->traceOperation('wls.session.connect', ['operation' => 'connect'], fn(): bool => $client->connect());
+    }
+
+    private function traceOperation(string $name, array $meta, callable $operation): mixed
+    {
+        $start = \class_exists(RequestLifecycleTrace::class, false) && RequestLifecycleTrace::isEnabled()
+            ? \microtime(true)
+            : 0.0;
+
+        try {
+            return $operation();
+        } finally {
+            if ($start > 0.0) {
+                RequestLifecycleTrace::recordSpan(
+                    $name,
+                    (\microtime(true) - $start) * 1000,
+                    'wls',
+                    null,
+                    $meta + $this->traceRuntimeMeta()
+                );
+            }
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function traceRuntimeMeta(): array
+    {
+        $runtime = isset($this->runtime) ? $this->runtime : [];
+
+        return [
+            'service' => 'session',
+            'host' => (string)($runtime['host'] ?? ''),
+            'port' => (int)($runtime['port'] ?? 0),
+            'direct_connect' => (bool)($runtime['direct_connect'] ?? false),
+        ];
     }
 
     private function cleanupInitializationFailure(): void
