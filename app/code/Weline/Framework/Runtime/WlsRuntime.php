@@ -37,6 +37,7 @@ use Weline\I18n\Parser as I18nParser;
 use Weline\Server\Log\LogConfig;
 use Weline\Server\Service\DynamicWarmup\HotPathDiscoveryService;
 use Weline\Server\Service\MemoryStateFacade;
+use Weline\Server\Service\WlsPerformanceTraceStore;
 /**
  * WLS 运行时
  * 
@@ -2743,6 +2744,7 @@ class WlsRuntime implements RuntimeInterface
                     $this->applyPerformanceHeaders($timing, $request);
                 }
                 $this->applyDynamicFirstRenderHeaders($timing, $request, true);
+                $this->decorateCachedFpcResponseForTelemetry($cachedFpcResponse, $request);
 
                 return $cachedFpcResponse->toHttpString();
             }
@@ -3123,6 +3125,7 @@ class WlsRuntime implements RuntimeInterface
             }
             $this->snapshotPendingResponseState($hc);
             if (RequestLifecycleTrace::isEnabled()) {
+                $timing['request_id'] = RequestLifecycleTrace::ensureRequestId();
                 $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
                 $traceTopLimit = $this->getRequestTraceSummaryLimit('request_trace_top_limit', 40);
                 $traceDbTopLimit = $this->getRequestTraceSummaryLimit('request_trace_db_top_limit', 20);
@@ -4126,6 +4129,7 @@ class WlsRuntime implements RuntimeInterface
     {
         $config = $this->getPerformanceConfig();
         $slowThreshold = (float)($config['slow_request_threshold_ms'] ?? 500.0);
+        $this->recordWlsPerformancePanelTiming($timing, $isDev);
         $shouldLog = ($timing['total_ms'] >= $slowThreshold) || ($isDev && !empty($config['log_all_in_dev']));
         if (!$shouldLog) {
             return;
@@ -4174,6 +4178,71 @@ class WlsRuntime implements RuntimeInterface
             if (!empty($analysis)) {
                 w_log_debug('[WLS Performance Analysis] ' . implode('; ', $analysis));
             }
+        }
+    }
+
+    private function recordWlsPerformancePanelTiming(array $timing, bool $isDev): void
+    {
+        if (!$isDev
+            && !(\defined('DEBUG') && DEBUG)
+            && !(bool)Env::get('wls.debug.performance_panel', false)
+            && !(bool)Env::get('wls.performance_panel.enable_in_prod', false)
+        ) {
+            return;
+        }
+
+        try {
+            $timing['request_id'] = (string)($timing['request_id'] ?? RequestLifecycleTrace::ensureRequestId());
+            $timing['pid'] = (int)($timing['pid'] ?? (\getmypid() ?: 0));
+            $timing['worker_id'] = (string)($timing['worker_id'] ?? ($_SERVER['WLS_WORKER_ID'] ?? $_ENV['WLS_WORKER_ID'] ?? \getenv('WLS_WORKER_ID') ?: ''));
+            $timing['worker_port'] = (string)($timing['worker_port'] ?? ($_SERVER['WLS_WORKER_PORT'] ?? $_ENV['WLS_WORKER_PORT'] ?? \getenv('WLS_WORKER_PORT') ?: ''));
+            $timing['instance'] = (string)($timing['instance'] ?? ($_SERVER['WLS_INSTANCE'] ?? $_ENV['WLS_INSTANCE'] ?? \getenv('WLS_INSTANCE') ?: ''));
+            ObjectManager::getInstance(WlsPerformanceTraceStore::class)->record([], $timing);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function decorateCachedFpcResponseForTelemetry(Response $response, Request $request): void
+    {
+        if (!$this->shouldDecorateCachedFpcResponseForTelemetry()) {
+            return;
+        }
+
+        try {
+            $body = $response->getBody();
+            if ($body === '' || $response->getHeader('Content-Encoding') !== null) {
+                return;
+            }
+            $preparedBody = TelemetryBroadcaster::broadcast($body, $request, true);
+            if ($preparedBody === $body) {
+                return;
+            }
+            $response->setBody($preparedBody);
+            if ($response->getHeader('Content-Length') !== null) {
+                $response->setHeader('Content-Length', (string)\strlen($preparedBody));
+            }
+            $response->markTelemetryPrepared(true);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function shouldDecorateCachedFpcResponseForTelemetry(): bool
+    {
+        if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
+            return true;
+        }
+        if ((bool)Env::get('wls.debug.performance_panel', false)) {
+            return true;
+        }
+        if (!(bool)Env::get('wls.performance_panel.enable_in_prod', false)) {
+            return false;
+        }
+
+        try {
+            $cookieName = (string)Env::get('wls.performance_panel.cookie_name', 'w_wls_perf');
+            return $cookieName !== '' && \Weline\Framework\Http\Cookie::get($cookieName) === '1';
+        } catch (\Throwable) {
+            return false;
         }
     }
 
