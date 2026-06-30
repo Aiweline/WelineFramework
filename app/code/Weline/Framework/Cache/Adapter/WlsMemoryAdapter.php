@@ -12,25 +12,14 @@ use Weline\Server\Service\MemoryStateFacade;
 class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, StatsInterface
 {
     /**
-     * @var array<string, array<string, int>>
+     * @var array<string, array{hits:int, misses:int}>
      */
     private static array $stats = [];
     /**
-     * @var array<int, \WeakReference|self>
+     * @var array<string, float>
      */
-    private static array $instances = [];
-    private const DEFAULT_STATS = [
-        'hits' => 0,
-        'misses' => 0,
-        'local_hits' => 0,
-        'remote_hits' => 0,
-        'remote_misses' => 0,
-        'remote_writes' => 0,
-        'remote_write_failures' => 0,
-        'pressure_bypasses' => 0,
-        'local_write_bypasses' => 0,
-        'compare_write_failures' => 0,
-    ];
+    private static array $remoteUnavailableUntil = [];
+    private const REMOTE_FAILURE_COOLDOWN_SECONDS = 2.0;
 
     /** 进程内缓存（减少网络请求） */
     private array $localCache = [];
@@ -64,7 +53,6 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         );
         $this->config = $config;
         $this->initBucket();
-        self::registerInstance($this);
     }
 
     public function __destruct()
@@ -80,33 +68,37 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
         // 先查本地缓存
         if (\array_key_exists($key, $this->localCache)) {
-            $this->recordStat('hits');
-            $this->recordStat('local_hits');
+            self::$stats[$this->identity]['hits']++;
             return $this->localCache[$key];
         }
 
-        $localPressure = $this->isLocalMemoryUnderPressure();
-        if ($localPressure) {
-            $this->recordStat('pressure_bypasses');
+        if ($this->isLocalMemoryUnderPressure()) {
+            self::$stats[$this->identity]['misses']++;
+            return null;
         }
 
-        // 本地缓存未命中，查共享内存
-        $value = $this->memoryFacade()->getCache($this->identity, $key);
+        // 本地缓存未命中，查共享内存；服务不可用时快速降级为 miss，避免 WLS 请求反复等待超时。
+        if ($this->isRemoteUnavailable()) {
+            self::$stats[$this->identity]['misses']++;
+            return null;
+        }
+
+        try {
+            $value = $this->memoryFacade()->getCache($this->identity, $key);
+            $this->markRemoteAvailable();
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            self::$stats[$this->identity]['misses']++;
+            return null;
+        }
         if ($value === null) {
-            $this->recordStat('misses');
-            $this->recordStat('remote_misses');
+            self::$stats[$this->identity]['misses']++;
             return null;
         }
 
         // 写入本地缓存
-        if ($localPressure) {
-            unset($this->localCache[$key]);
-            $this->recordStat('local_write_bypasses');
-        } else {
-            $this->setLocalCache($key, $value);
-        }
-        $this->recordStat('hits');
-        $this->recordStat('remote_hits');
+        $this->setLocalCache($key, $value);
+        self::$stats[$this->identity]['hits']++;
 
         return $value;
     }
@@ -115,55 +107,84 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     {
         $this->relieveLocalMemoryPressure(true);
 
-        $localPressure = $this->isLocalMemoryUnderPressure();
+        if ($this->isLocalMemoryUnderPressure()) {
+            unset($this->localCache[$key]);
+            return true;
+        }
 
-        $result = $this->memoryFacade()->setCache($this->identity, $key, $value, $ttl);
-        if (!$result) {
-            $this->recordStat('remote_write_failures');
+        if ($this->isRemoteUnavailable()) {
             return false;
         }
 
-        $this->recordStat('remote_writes');
-        if ($localPressure) {
-            unset($this->localCache[$key]);
-            $this->recordStat('pressure_bypasses');
-            $this->recordStat('local_write_bypasses');
-        } else {
+        try {
+            $result = $this->memoryFacade()->setCache($this->identity, $key, $value, $ttl);
+            $this->markRemoteAvailable();
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            return false;
+        }
+        if ($result) {
             // 同步更新本地缓存
             $this->setLocalCache($key, $value);
         }
-        return true;
+        return $result;
     }
 
     public function delete(string $key): bool
     {
         unset($this->localCache[$key]);
-        return $this->memoryFacade()->deleteCache($this->identity, $key);
+        if ($this->isRemoteUnavailable()) {
+            return true;
+        }
+
+        try {
+            $result = $this->memoryFacade()->deleteCache($this->identity, $key);
+            $this->markRemoteAvailable();
+            return $result;
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            return true;
+        }
     }
 
     public function clear(): bool
     {
         $this->localCache = [];
-        return $this->memoryFacade()->clearCache($this->identity);
+        if ($this->isRemoteUnavailable()) {
+            return true;
+        }
+
+        try {
+            $result = $this->memoryFacade()->clearCache($this->identity);
+            $this->markRemoteAvailable();
+            return $result;
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            return true;
+        }
     }
 
     public function compareAndSet(string $key, mixed $expected, mixed $value, int $ttl = 0): bool
     {
         $this->relieveLocalMemoryPressure(true);
 
-        $localPressure = $this->isLocalMemoryUnderPressure();
-
-        $result = $this->memoryFacade()->compareAndSetCache($this->identity, $key, $expected, $value, $ttl);
-        if (!$result) {
-            $this->recordStat('compare_write_failures');
+        if ($this->isLocalMemoryUnderPressure()) {
+            unset($this->localCache[$key]);
             return false;
         }
 
-        if ($localPressure) {
-            unset($this->localCache[$key]);
-            $this->recordStat('pressure_bypasses');
-            $this->recordStat('local_write_bypasses');
-        } else {
+        if ($this->isRemoteUnavailable()) {
+            return false;
+        }
+
+        try {
+            $result = $this->memoryFacade()->compareAndSetCache($this->identity, $key, $expected, $value, $ttl);
+            $this->markRemoteAvailable();
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            return false;
+        }
+        if ($result) {
             if ($value === null) {
                 unset($this->localCache[$key]);
             } else {
@@ -171,7 +192,7 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
             }
         }
 
-        return true;
+        return $result;
     }
 
     /**
@@ -207,7 +228,18 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
     public function has(string $key): bool
     {
-        return $this->memoryFacade()->hasCache($this->identity, $key);
+        if ($this->isRemoteUnavailable()) {
+            return false;
+        }
+
+        try {
+            $result = $this->memoryFacade()->hasCache($this->identity, $key);
+            $this->markRemoteAvailable();
+            return $result;
+        } catch (\Throwable $throwable) {
+            $this->markRemoteUnavailable($throwable);
+            return false;
+        }
     }
 
     public function getMemoryUsage(): int
@@ -322,13 +354,7 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
     public function resetStats(): void
     {
-        self::$stats[$this->identity] = self::DEFAULT_STATS;
-    }
-
-    public function getDetailedStats(): array
-    {
-        $this->initBucket();
-        return self::$stats[$this->identity] + self::DEFAULT_STATS;
+        self::$stats[$this->identity] = ['hits' => 0, 'misses' => 0];
     }
 
     public function getIdentity(): string
@@ -339,97 +365,20 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     private function initBucket(): void
     {
         if (!isset(self::$stats[$this->identity])) {
-            self::$stats[$this->identity] = self::DEFAULT_STATS;
-            return;
+            self::$stats[$this->identity] = ['hits' => 0, 'misses' => 0];
         }
-
-        self::$stats[$this->identity] += self::DEFAULT_STATS;
-    }
-
-    private function recordStat(string $key, int $amount = 1): void
-    {
-        $this->initBucket();
-        self::$stats[$this->identity][$key] = (int)(self::$stats[$this->identity][$key] ?? 0) + $amount;
-    }
-
-    public static function getStatsSnapshot(): array
-    {
-        $snapshot = [];
-        foreach (self::$stats as $identity => $stats) {
-            $snapshot[$identity] = $stats + self::DEFAULT_STATS;
-        }
-        return $snapshot;
     }
 
     public static function resetRequestState(): void
     {
         foreach (\array_keys(self::$stats) as $identity) {
-            self::$stats[$identity] = self::DEFAULT_STATS;
+            self::$stats[$identity] = ['hits' => 0, 'misses' => 0];
         }
     }
 
     public static function clearAllMemory(): void
     {
-        foreach (self::liveInstances() as $adapter) {
-            // 必须走 clear() 同步清理 Memory Server 中的命名空间数据；
-            // 仅 clearMemory() 只会丢弃 Worker 进程内本地副本，FPC 仍会命中旧页面。
-            $adapter->clear();
-        }
         self::$stats = [];
-    }
-
-    public static function clearLocalMemoryForIdentity(?string $identity = null): int
-    {
-        $cleared = 0;
-        foreach (self::liveInstances() as $adapter) {
-            if ($identity !== null && $adapter->identity !== $identity) {
-                continue;
-            }
-
-            $adapter->clearMemory();
-            $cleared++;
-        }
-
-        return $cleared;
-    }
-
-    private static function registerInstance(self $adapter): void
-    {
-        self::$instances[\spl_object_id($adapter)] = \class_exists(\WeakReference::class)
-            ? \WeakReference::create($adapter)
-            : $adapter;
-
-        if (\count(self::$instances) > 2048) {
-            self::pruneInstanceRegistry();
-        }
-    }
-
-    /**
-     * @return list<self>
-     */
-    private static function liveInstances(): array
-    {
-        $instances = [];
-        foreach (self::$instances as $id => $reference) {
-            $adapter = $reference instanceof \WeakReference ? $reference->get() : $reference;
-            if (!$adapter instanceof self) {
-                unset(self::$instances[$id]);
-                continue;
-            }
-
-            $instances[] = $adapter;
-        }
-
-        return $instances;
-    }
-
-    private static function pruneInstanceRegistry(): void
-    {
-        foreach (self::$instances as $id => $reference) {
-            if ($reference instanceof \WeakReference && !$reference->get() instanceof self) {
-                unset(self::$instances[$id]);
-            }
-        }
     }
 
     private array $config = [];
@@ -563,10 +512,40 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         if ($this->memoryFacade === null) {
             $config = $this->config;
             $config['prefer_direct_connect'] = $config['prefer_direct_connect'] ?? true;
-            $config['fail_fast_on_unhealthy'] = $config['fail_fast_on_unhealthy'] ?? false;
+            $config['fail_fast_on_unhealthy'] = $config['fail_fast_on_unhealthy'] ?? true;
             $this->memoryFacade = new MemoryStateFacade($config);
         }
 
         return $this->memoryFacade;
+    }
+
+    private function isRemoteUnavailable(): bool
+    {
+        $until = self::$remoteUnavailableUntil[$this->identity] ?? 0.0;
+        if ($until <= 0.0) {
+            return false;
+        }
+
+        if ($until > \microtime(true)) {
+            return true;
+        }
+
+        unset(self::$remoteUnavailableUntil[$this->identity]);
+        return false;
+    }
+
+    private function markRemoteUnavailable(\Throwable $throwable): void
+    {
+        unset($throwable);
+        self::$remoteUnavailableUntil[$this->identity] = \microtime(true) + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        if ($this->memoryFacade !== null) {
+            $this->memoryFacade->disconnect();
+            $this->memoryFacade = null;
+        }
+    }
+
+    private function markRemoteAvailable(): void
+    {
+        unset(self::$remoteUnavailableUntil[$this->identity]);
     }
 }
