@@ -10,20 +10,17 @@
 | 项 | 说明 |
 |----|------|
 | 默认组件 | 无参数时安装 `php` + `pgsql`（不要只装 php 或只装 pgsql） |
-| 安装目录 | `extend/server/php`、`extend/server/pgsql`、`extend/server/mysql`、`extend/server/composer.phar` |
-| Composer 状态横幅 | 安装脚本在 PHP/pgsql 之后输出 `========== Composer ==========`（已存在 / 缺失 / 无效）；`run.php` 在 Step 0c 前同样输出 |
+| 安装目录 | `extend/server/php`、`extend/server/pgsql`、`extend/server/mysql` |
 | PHP 版本来源 | 优先 `weline.env` 的 `INSTALL_PHP_VERSION`，未配置时从项目根 `composer.json` 的 `require.php` 解析主次版本（如 ^8.4 → 8.4） |
 | Linux/macOS PHP 安装方式 | 当 `extend/server/php` 不存在可用 php 时，`install.sh` 下载 `php-src` 编译安装到 `extend/server/php`；mac 依赖库编译到 `extend/server/deps`（不依赖 brew） |
 | 已存在则跳过 | 若 `extend/server/php` 下已有 php 且主次版本与 composer 一致，则跳过下载，仅做 PATH |
 | 版本提示文案 | 三种情况统一：① "matches required X" ② "Keeping existing" ③ "version check failed" |
 | weline.env | 读取 `INSTALL_PGSQL_VERSION`、`INSTALL_MYSQL_VERSION`、可选 `INSTALL_PHP_VERSION`；缺省 pgsql=16、mysql=8.0 |
 | 参数 | 支持 `--path-only`；组件名仅限 `php`、`pgsql`、`mysql` |
-| pgsql 与 env.php | 首次无 `env.php db.master` 时才初始化项目本地 PostgreSQL、建库建用户并写入 `db.master`；一旦 `env.php` 已有数据库配置，安装脚本只跟随 `env.php`，不再用 `weline.env DB_*` 覆盖 |
-| pgsql 项目端口 | 每个项目的 `extend/server/pgsql/data` 必须使用独立端口；首次安装本地 pgsql 不默认使用 5432，而是按项目路径在高位范围内选择稳定端口；只有文件 marker 与数据库 marker 的 `install_id` 匹配时才允许自愈端口，并同步 `postgresql.conf` 与 `env.php` |
-| 外部/非本项目数据库 | `env.php` 指向外部主机或非当前项目本地库时，不安装、不初始化、不启动、不停止、不检查本地 pgsql，只按 `env.php` 尝试连接 |
+| pgsql 与 env.php | 处理 pgsql 后：若 `app/etc/env.php` 已存在则**红色警告并询问**是否覆盖数据库配置；确认后写入 `db.master` 并输出账户/密码/数据库/主机及创建示例 |
 | weline.env 完整性 | **安装前**检查：若存在 weline.env，每行须为 `KEY=VALUE` 或 `#` 注释，否则红色警告并询问是否继续 |
 | 下载失败提示 | 下载 PHP 等失败时，提示「若下载失败请检查网络或 VPN 配置」 |
-| 安装后命令 | 先 `php -d opcache.enable=0 setup/server_installer/bootstrap_php_ini.php` 配置 php.ini（Windows 写入 `opcache.file_cache`），再 `php setup/server_installer/run.php`（composer、env:check、env:install、setup:upgrade×2、server:stop、server:start） |
+| 安装后命令 | 安装结束后若 php 可用则执行：`php setup/server_installer/run.php`（内部完成 composer、env:check、env:install、尝试安装 event 推荐扩展、setup:upgrade×2、server:stop、server:start） |
 
 ## 修改时检查
 
@@ -32,9 +29,5 @@
 - [ ] PHP 已存在 + 版本符合的跳过逻辑与提示是否一致
 - [ ] weline.env 的 key 与默认值是否一致
 - [ ] 新增组件或参数时，两端是否都加了
-- [ ] 首次安装是否写入 `env.php db.master`、项目文件 marker 和数据库 marker
-- [ ] 已有 `env.php` 时是否打印无密码数据库目标摘要，并确认 `weline.env DB_*` 不覆盖 env.php
-- [ ] 首次安装本地 pgsql 时 `env.php hostport`、`postgresql.conf` 和进程端口是否一致且不是 5432
-- [ ] pgsql 端口冲突时是否只在当前项目归属匹配后同步更新 `postgresql.conf` 与 `env.php`
-- [ ] 外部/非本项目数据库是否跳过所有本地 pgsql 操作，只校验 env.php 连接
-- [ ] weline.env 完整性是否安装前检查、下载失败是否提示网络/VPN、安装后是否执行 composer + setup:upgrade×2 + server:stop + server:start
+- [ ] pgsql 写入 env.php 与显示账户/密码逻辑是否一致（含 weline.env 中的 DB_*）
+- [ ] env.php 已存在时是否红色询问、weline.env 完整性是否安装前检查、下载失败是否提示网络/VPN、安装后是否执行 composer + event 推荐扩展尝试安装 + setup:upgrade×2 + server:stop + server:start
