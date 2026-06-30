@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Controller;
 
+use Weline\Cart\Service\CartService;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\ResponseTerminateException;
+use Weline\Framework\Manager\ObjectManager;
 
 class Add extends FrontendController
 {
@@ -17,15 +19,14 @@ class Add extends FrontendController
         }
 
         try {
-            $payload = w_query('cart', 'add', [
+            $data = $this->cartService()->add([
                 'product_id' => (int) $this->request->getPost('product_id', 0),
                 'qty' => (int) $this->request->getPost('qty', 1),
                 'selected_options' => $this->request->getPost('selected_options', []),
-            ], 'frontend');
+            ]);
 
-            $data = \is_array($payload) && \is_array($payload['data'] ?? null) ? $payload['data'] : [];
             $success = (bool) ($data['success'] ?? false);
-            $message = (string) ($data['message'] ?? ($payload['msg'] ?? ''));
+            $message = (string) ($data['message'] ?? '');
 
             if ($success) {
                 $this->getMessageManager()->addSuccess($message !== '' ? $message : __('已加入购物车。'));
@@ -39,6 +40,11 @@ class Add extends FrontendController
         }
 
         return $this->redirect($this->resolveRedirectUrl());
+    }
+
+    private function cartService(): CartService
+    {
+        return ObjectManager::getInstance(CartService::class);
     }
 
     private function resolveRedirectUrl(): string
