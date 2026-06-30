@@ -1,0 +1,236 @@
+<?php
+/**
+ * Cart page content.
+ *
+ * The global shell is owned by Weline_Theme cart layouts. This template only
+ * renders the cart body that the default cart layout places into its content slot.
+ */
+$cart = $this->getData('cart') ?? [];
+$items = $this->getData('items') ?? [];
+$items = \is_array($items) ? $items : [];
+$currency = (string)($cart['currency'] ?? '');
+$subtotal = (float)($cart['subtotal'] ?? 0);
+$grandTotal = (float)($cart['grand_total'] ?? $subtotal);
+
+$formatMoney = static function (float $amount) use ($currency): string {
+    $prefix = $currency !== '' ? $currency . ' ' : '';
+    return $prefix . \number_format($amount, 2);
+};
+?>
+<section class="weline-cart-shell" data-cart-content="1">
+    <div class="weline-cart-shell__header">
+        <div>
+            <h1><?= __('购物车') ?></h1>
+            <p><?= __('检查商品数量，确认无误后进入结账。') ?></p>
+        </div>
+        <a class="weline-cart-shell__continue" href="/"><?= __('继续购物') ?></a>
+    </div>
+
+    <div class="weline-cart-shell__grid">
+        <div class="weline-cart-shell__items">
+            <table>
+                <thead>
+                <tr>
+                    <th><?= __('商品') ?></th>
+                    <th><?= __('单价') ?></th>
+                    <th><?= __('数量') ?></th>
+                    <th><?= __('小计') ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($items as $item): ?>
+                    <?php if (!\is_array($item)) { continue; } ?>
+                    <tr>
+                        <td>
+                            <strong><?= \htmlspecialchars((string)($item['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <?php if (\trim((string)($item['sku'] ?? '')) !== ''): ?>
+                                <small>SKU: <?= \htmlspecialchars((string)$item['sku'], ENT_QUOTES, 'UTF-8') ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= \htmlspecialchars($formatMoney((float)($item['price'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= (int)($item['qty'] ?? 1) ?></td>
+                        <td><?= \htmlspecialchars($formatMoney((float)($item['row_total'] ?? 0)), ENT_QUOTES, 'UTF-8') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <aside class="weline-cart-shell__summary" aria-label="<?= \htmlspecialchars((string)__('订单摘要'), ENT_QUOTES, 'UTF-8') ?>">
+            <h2><?= __('订单摘要') ?></h2>
+            <div class="weline-cart-shell__summary-list">
+                <div class="weline-cart-shell__summary-row">
+                    <span><?= __('商品数量') ?></span>
+                    <strong><?= (int)($cart['cart_count'] ?? 0) ?></strong>
+                </div>
+                <div class="weline-cart-shell__summary-row">
+                    <span><?= __('小计') ?></span>
+                    <strong><?= \htmlspecialchars($formatMoney($subtotal), ENT_QUOTES, 'UTF-8') ?></strong>
+                </div>
+                <div class="weline-cart-shell__summary-row total">
+                    <span><?= __('合计') ?></span>
+                    <strong><?= \htmlspecialchars($formatMoney($grandTotal), ENT_QUOTES, 'UTF-8') ?></strong>
+                </div>
+            </div>
+            <a class="weline-cart-shell__checkout" href="/checkout"><?= __('去结算') ?></a>
+        </aside>
+    </div>
+</section>
+
+<style>
+    .weline-cart-shell {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 48px 0 64px;
+        color: var(--weline-layout-text-primary, #111827);
+    }
+
+    .weline-cart-shell__header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .weline-cart-shell h1,
+    .weline-cart-shell h2,
+    .weline-cart-shell p {
+        margin: 0;
+    }
+
+    .weline-cart-shell h1 {
+        font-size: 32px;
+        line-height: 1.2;
+    }
+
+    .weline-cart-shell p {
+        margin-top: 8px;
+        color: var(--weline-layout-text-secondary, #64748b);
+    }
+
+    .weline-cart-shell__continue {
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 14px;
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 8px;
+        color: var(--weline-layout-link-color, #2563eb);
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .weline-cart-shell__grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 24px;
+        align-items: start;
+    }
+
+    .weline-cart-shell__items,
+    .weline-cart-shell__summary {
+        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        border-radius: 8px;
+        background: var(--weline-layout-surface-primary, #fff);
+        box-shadow: var(--weline-theme-shadow-sm, 0 10px 24px rgba(15, 23, 42, .06));
+    }
+
+    .weline-cart-shell table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .weline-cart-shell th,
+    .weline-cart-shell td {
+        padding: 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+        vertical-align: top;
+    }
+
+    .weline-cart-shell tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .weline-cart-shell th {
+        font-size: 13px;
+        color: var(--weline-layout-text-secondary, #64748b);
+        font-weight: 700;
+    }
+
+    .weline-cart-shell td small {
+        display: block;
+        margin-top: 4px;
+        color: var(--weline-layout-text-secondary, #64748b);
+    }
+
+    .weline-cart-shell__summary {
+        padding: 20px;
+    }
+
+    .weline-cart-shell__summary h2 {
+        font-size: 20px;
+        line-height: 1.25;
+    }
+
+    .weline-cart-shell__summary-list {
+        margin: 14px 0 0;
+    }
+
+    .weline-cart-shell__summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
+    }
+
+    .weline-cart-shell__summary-row.total {
+        font-weight: 800;
+        font-size: 18px;
+        border-bottom: 0;
+    }
+
+    .weline-cart-shell__summary-row span,
+    .weline-cart-shell__summary-row strong {
+        margin: 0;
+    }
+
+    .weline-cart-shell__checkout {
+        min-height: 44px;
+        margin-top: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: var(--weline-layout-link-color, #2563eb);
+        color: var(--weline-theme-on-primary, #fff);
+        text-decoration: none;
+        font-weight: 800;
+    }
+
+    @media (max-width: 800px) {
+        .weline-cart-shell {
+            width: min(100% - 28px, 1180px);
+            padding: 32px 0 48px;
+        }
+
+        .weline-cart-shell__header {
+            flex-direction: column;
+        }
+
+        .weline-cart-shell__grid {
+            grid-template-columns: 1fr;
+        }
+
+        .weline-cart-shell__items {
+            overflow-x: auto;
+        }
+
+        .weline-cart-shell table {
+            min-width: 620px;
+        }
+    }
+</style>
