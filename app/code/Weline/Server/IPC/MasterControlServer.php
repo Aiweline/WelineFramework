@@ -637,11 +637,21 @@ class MasterControlServer implements ControlPlaneServerInterface
         $data = @\fread($socket, 65536);
 
         // 连接断开判定：
-        // - fread=false: 读取错误
+        // - fread=false 且 feof=true: 读取失败且对端已关闭
         // - fread='' 且 feof=true: 对端已关闭（TCP FIN）
-        // 注意：非阻塞模式下 fread='' 可能只是暂时无数据，不应直接判定断连。
-        if ($data === false || ($data === '' && @\feof($socket))) {
-            $this->removeClient($clientId, $data === false ? 'read_error' : 'peer_eof');
+        // Windows 非阻塞 socket 上 fread=false 也可能只是 EAGAIN/WouldBlock；
+        // 此时不要摘除 IPC 客户端，否则 READY 连接会反复抖动。
+        if ($data === false) {
+            if (!@\feof($socket)) {
+                $this->flushBufferedNdjsonForClient($clientId);
+                return;
+            }
+            $this->removeClient($clientId, 'read_error');
+            return;
+        }
+
+        if ($data === '' && @\feof($socket)) {
+            $this->removeClient($clientId, 'peer_eof');
             return;
         }
 

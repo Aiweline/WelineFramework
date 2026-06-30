@@ -1127,13 +1127,21 @@ HTTPS,HTTPS
 %{1}：%{2},%{1}：%{2}
 续签失败,续签失败
 "WLS Panel","WLS 面板"
+"WLS Projects","WLS Projects"
+"WLS Gateway","WLS Gateway"
+"WLS Plugin","WLS Plugin"
 "WLS Plugin Marketplace","WLS 插件商城"
 "WLS Security","WLS 安全"
+"WLS Attack Logs","WLS Attack Logs"
+"WLS Security Rules","WLS Security Rules"
+"WLS Project Security Policy","WLS Project Security Policy"
+"WLS Security Policy Audit","WLS Security Policy Audit"
 "Managed project save failed.",托管项目保存失败。
 "Managed project delete failed.",托管项目删除失败。
 "Gateway route apply failed.",网关路由应用失败。
 "Gateway mode configuration save failed.",网关模式配置保存失败。
 "Security rules save failed.",安全规则保存失败。
+"Plugin Capability","Plugin Capability"
 "Managed project saved.",托管项目已保存。
 "Managed project removed.",托管项目已移除。
 "Gateway routes applied.",网关路由已应用。
@@ -1268,6 +1276,11 @@ WLS错误扫描,WLS错误扫描
 "Resolve a WLS Panel managed project for plugin context","Resolve a WLS Panel managed project for plugin context"
 "Managed project ID","Managed project ID"
 "Managed project domain","Managed project domain"
+"Read WLS performance summary for the development panel","Read WLS performance summary for the development panel"
+"Read recent WLS performance requests for the development panel","Read recent WLS performance requests for the development panel"
+"Read one WLS performance request detail","Read one WLS performance request detail"
+"Read SessionServer and MemoryServer timing snapshots","Read SessionServer and MemoryServer timing snapshots"
+"Clear short-lived WLS performance panel traces","Clear short-lived WLS performance panel traces"
 "为当前后台浏览器设置 WLS 健康检查放行 Cookie","为当前后台浏览器设置 WLS 健康检查放行 Cookie"
 域名不能为空,域名不能为空
 "PFX 文件内容无效（Base64 解码失败）","PFX 文件内容无效（Base64 解码失败）"
@@ -1289,6 +1302,9 @@ WLS错误扫描,WLS错误扫描
 "Managed project context is empty.","Managed project context is empty."
 "Managed project was not found.","Managed project was not found."
 "Managed project context resolved.","Managed project context resolved."
+"Invalid request id","Invalid request id"
+"WLS request trace loaded","WLS request trace loaded"
+"WLS request trace was not found","WLS request trace was not found"
 本地域名证书不允许删除,本地域名证书不允许删除
 "缺少 Session ID","缺少 Session ID"
 "Session 销毁失败，请稍后重试","Session 销毁失败，请稍后重试"
@@ -1297,6 +1313,7 @@ WLS错误扫描,WLS错误扫描
 命名空间清理失败,命名空间清理失败
 缺少命名空间或键名参数,缺少命名空间或键名参数
 内存服务垃圾回收执行失败,内存服务垃圾回收执行失败
+"WLS performance panel is only available in development or authorized debug mode","WLS performance panel is only available in development or authorized debug mode"
 "Session query provider unsupported operation: %{1}","Session query provider unsupported operation: %{1}"
 "Session Query","Session Query"
 "Unified shared session facade query entry","Unified shared session facade query entry"
@@ -1844,6 +1861,7 @@ Disabled,已停用
 "Advanced JSON","高级 JSON"
 Configured,已配置
 "%{1} entries","%{1} 条"
+"WLS performance panel traces were cleared","WLS performance panel traces were cleared"
 定时器间隔必须大于0,定时器间隔必须大于0
 "定时器需要 pcntl 扩展或事件循环支持","定时器需要 pcntl 扩展或事件循环支持"
 放行健康检查（开发模式）,放行健康检查（开发模式）
@@ -2209,38 +2227,48 @@ Global,全量
 "No route modules",无路由模块
 Failed,失败
 Unknown,未知
+"Production AppStore","生产 AppStore"
+"Local AppStore","本地 AppStore"
+"Configured AppStore","已配置 AppStore"
+"Unknown AppStore","未知 AppStore"
 "Plugin Marketplace",插件商城
 Security,安全
+"Attack Logs",攻击日志
+"Security Rules",安全规则
+"Project Security Policy","Project Security Policy"
+"Policy Audit","Policy Audit"
+Projects,项目
+Gateway,网关
 Dashboard,仪表盘
 Dark,暗色
 Light,亮色
-Projects,项目
-Gateway,网关
+Overview,Overview
+"Project Policy","Project Policy"
 "Gateway Sites",网关站点
 "Direct listen first, proxy fallback",优先直连监听，代理兜底
 "%{1}/%{2} active","%{1}/%{2} 已启用"
 "WLS Runtime","WLS Runtime"
 "Workers, session, memory service",Worker、会话、内存服务
 "%{1} running, %{2} workers","%{1} 个运行中，%{2} 个 Worker"
-"Security Rules",安全规则
 "Attack rules and protection logs",攻击规则与防护日志
 "%{1} blocked in 7d","7 天内拦截 %{1} 次"
 "SSL Certificates","SSL 证书"
 "Certificate and domain binding",证书与域名绑定
-"Manage project paths from the WLS panel plugin area.","通过 WLS 面板插件区管理项目路径。"
-Pending,待处理
-"Webhook and tag driven release workflow for child projects.","面向子项目的 Webhook 与 tag 驱动发布流程。"
-"Configure PHP runtime profiles and extension checks.","配置 PHP 运行时档案与扩展检查。"
-"Store project database profiles for panel-managed sites.",保存面板托管站点的数据库配置。
 "WLS Panel navigation","WLS 面板导航"
 "WLS Standalone Backend","WLS 独立后台"
+"%{1} secondary menu","%{1} secondary menu"
 "Plugin Capabilities",插件能力
+"Toggle %{1} menu","Toggle %{1} menu"
+"Plugin secondary menu","Plugin secondary menu"
 "Independent Server Panel",独立服务器面板
 "Toggle theme",切换主题
 "Project Admin",项目后台
 "Exit to Backend",返回框架后台
 "Panel operation result",面板操作结果
 "Panel operation warning",面板操作警告
+"AppStore endpoint","AppStore 端点"
+"Marketplace Endpoint",商城端点
+Source,来源
 "Plugin refresh summary",插件刷新摘要
 "Capability Reload",能力重载
 "Panel plugin refresh result",面板插件刷新结果
@@ -2251,34 +2279,34 @@ Pending,待处理
 "Route modules",路由模块
 "WLS plugins","WLS 插件"
 "Panel menu entries",面板菜单入口
-"Online source",在线来源
-"Online WLS Plugins","在线 WLS 插件"
-"Open the AppStore with the WLS plugin tag filter applied.","打开已应用 WLS 插件标签过滤的 AppStore。"
-"Open Online Marketplace",打开在线商城
-"Installed WLS Plugins","已安装 WLS 插件"
-"Review installed modules that declared module:wls.","查看声明了 module:wls 的已安装模块。"
-"Installed Plugins",已安装插件
-Contract,契约
-"Tag Contract",标签契约
-"Only modules declaring module:wls appear in this panel marketplace flow.","只有声明 module:wls 的模块会出现在这个面板商城流程中。"
+"Marketplace controls","Marketplace controls"
+"WLS Plugin Source","WLS Plugin Source"
+"AppStore filtered by WLS module tags","AppStore filtered by WLS module tags"
+"Marketplace installation opens the AppStore with %{1} and backend surface filters. Installed modules are listed below after they declare WLS panel capability metadata.","Marketplace installation opens the AppStore with %{1} and backend surface filters. Installed modules are listed below after they declare WLS panel capability metadata."
+"Installed: %{1}","Installed: %{1}"
+"Open AppStore","Open AppStore"
+"AppStore Installed","AppStore Installed"
+"Refresh Panel Plugins",刷新面板插件
 "Panel Capabilities",面板能力
 "Installed Panel Plugins",已安装面板插件
-"Refresh Panel Plugins",刷新面板插件
+"%{1} installed","已安装 %{1} 个"
 "Installed plugin discovery failed: %{1}",已安装插件发现失败：%{1}
 "No installed WLS plugins yet.","暂未安装 WLS 插件。"
 "Install modules tagged module:wls to extend this standalone panel.","安装带有 module:wls 标签的模块即可扩展这个独立面板。"
-"Open Plugin Panel",打开插件面板
-"No panel entry declared",未声明面板入口
-"Type Tag",类型标签
-Search,搜索
-"Search WLS plugins","搜索 WLS 插件"
-Filter,过滤
-"Open Install Flow",打开安装流程
-"AppStore keeps the signature, hash, dependency, and permission checks.","AppStore 保留签名、哈希、依赖和权限校验。"
+Plugin,Plugin
+Module,Module
+Tags,Tags
+"Panel Entry","Panel Entry"
+Action,Action
+"No tags","No tags"
+"Not declared","Not declared"
+"Open Panel",打开面板
+"No panel entry","No panel entry"
+"No plugin page selected.","No plugin page selected."
+"Choose a plugin capability from the sidebar, or refresh panel plugins after installing a WLS module.","Choose a plugin capability from the sidebar, or refresh panel plugins after installing a WLS module."
+"Security Overview","Security Overview"
 Protection,防护
-"Security Rules And Attack Logs",安全规则与攻击日志
 "Advanced Rules",高级规则
-"Attack Logs",攻击日志
 "Security data warning",安全数据警告
 "Events In 7d","7 天事件"
 "Blocked In 7d","7 天拦截"
@@ -2300,7 +2328,6 @@ Critical,Critical
 "View Logs",查看日志
 "Edit Policy","Edit Policy"
 "Project security policy","Project security policy"
-"Project Security Policy","Project Security Policy"
 "Override selected protection rules for one managed domain while keeping common rules as fallback.","Override selected protection rules for one managed domain while keeping common rules as fallback."
 "Custom policy","Custom policy"
 "Select one project to edit its policy.","Select one project to edit its policy."
@@ -2401,27 +2428,35 @@ Next,下一页
 "Some dashboard data could not be loaded.",部分面板数据暂时无法加载。
 "Panel Plugins",面板插件
 "Operations Capability Center",运维能力中心
-"%{1} installed","已安装 %{1} 个"
 "%{1} required","缺少 %{1} 个"
 "Open WLS Marketplace","打开 WLS 插件商城"
 "Operation capability discovery warning: %{1}",运维能力发现警告：%{1}
 "No operation capabilities are defined.",尚未定义运维能力。
 "WLS will show PHP, database, file manager, and deploy plugin slots here.","WLS 会在这里显示 PHP、数据库、文件管理和部署插件槽位。"
-"Required Tag",必需标签
-"Feature Tag",功能标签
-"Installed plugin has not exposed a WLS panel URL yet.","已安装插件尚未暴露 WLS 面板 URL。"
-"Open the contributed WLS panel page when the plugin exposes it.","当插件暴露入口后，可打开它贡献的 WLS 面板页面。"
-"Install flow stays inside AppStore with WLS tags prefilled.","安装流程仍在 AppStore 内完成，并预填 WLS 标签。"
+Capability,Capability
+"Required Signal","Required Signal"
+Status,状态
+"No WLS panel page declared yet.","No WLS panel page declared yet."
+"Opens inside WLS panel shell.","Opens inside WLS panel shell."
+"AppStore opens with WLS tags prefilled.","AppStore opens with WLS tags prefilled."
 "Plugin Menu",插件菜单
 "WLS Panel Plugin Entries","WLS 面板插件入口"
 "Manage Plugins",管理插件
 "Plugin contribution discovery warning: %{1}",插件贡献发现警告：%{1}
 "No plugin panel entries yet.",暂无插件面板入口。
 "Installed WLS plugins can declare wls_panel.menu entries in module meta to extend this standalone panel.","已安装的 WLS 插件可以在模块 meta 中声明 wls_panel.menu 入口来扩展这个独立面板。"
-Loaded,已加载
+"Plugin Entry","Plugin Entry"
+"Secondary Menu","Secondary Menu"
 "This installed plugin declared a WLS panel menu entry.","这个已安装插件声明了一个 WLS 面板菜单入口。"
-"Open Panel Entry",打开面板入口
 "Contributed by %{1}","由 %{1} 贡献"
+"No secondary menu declared","No secondary menu declared"
+"Plugin Page","Plugin Page"
+"+%{1} more","+%{1} more"
+Open,Open
+"Uses WLS sidebar menu and native shell.","Uses WLS sidebar menu and native shell."
+"No panel entry declared",未声明面板入口
+Operations,操作
+"Gateway, Security, Runtime",网关、安全、运行时
 "Gateway Settings",网关设置
 "Advanced Gateway",高级网关
 "Gateway instance discovery failed: %{1}","Gateway 实例发现失败：%{1}"
@@ -2456,17 +2491,31 @@ Loaded,已加载
 "Apply Routes Now",立即应用路由
 "No WLS instances discovered.","未发现 WLS 实例。"
 "Start a WLS instance with Gateway enabled to apply routes from this panel.","启动启用 Gateway 的 WLS 实例后，可在此面板应用路由。"
-"Gateway listen not configured","未配置 Gateway 监听"
+"No matching WLS instances.","No matching WLS instances."
+"Showing %{1}-%{2} of %{3} instances","Showing %{1}-%{2} of %{3} instances"
+"Gateway instance list tools","Gateway instance list tools"
+"Search WLS instances","Search WLS instances"
+"Search name, listen, topology, status","Search name, listen, topology, status"
+"Rows per page","Rows per page"
+State,State
 "Main Listen",主监听
 Topology,Topology
-SO_REUSEPORT,SO_REUSEPORT
-"Control Port",控制端口
-Unavailable,不可用
-Master,Master
+Actions,Actions
 Running,运行中
 Stopped,已停止
-"Gateway Processes","Gateway 进程"
+SO_REUSEPORT,SO_REUSEPORT
 "%{1}/%{2} ready","%{1}/%{2} 就绪"
+"Unnamed WLS","Unnamed WLS"
+"Selected target","Selected target"
+"WLS runtime","WLS runtime"
+"Not configured","Not configured"
+Unavailable,不可用
+Proxy/runtime,Proxy/runtime
+Details,Details
+"Gateway listen not configured","未配置 Gateway 监听"
+"Control Port",控制端口
+Master,Master
+"Gateway Processes","Gateway 进程"
 "Project Switching",项目切换
 "Managed WLS Projects","托管 WLS 项目"
 "New Project",新建项目
@@ -2478,7 +2527,6 @@ Stopped,已停止
 "Child WLS Panel URL","子 WLS 面板 URL"
 "PHP Profile","PHP 档案"
 "Database Profile",数据库档案
-Status,状态
 "Backend Host",后端主机
 "Backend Port",后端端口
 "Backend SSL","后端 SSL"
@@ -2490,18 +2538,23 @@ Description,描述
 "%{1} plugin slots ready","%{1} 个插件槽位就绪"
 "%{1} ready projects","%{1} 个项目就绪"
 "%{1} / %{2} operation slots ready","%{1} / %{2} 个操作位就绪"
+Readiness,Readiness
+Context,Context
+"Quick Links","Quick Links"
+"No readiness data","No readiness data"
 "Safe Context",安全上下文
-"Child Panel",子面板
-"Security Policy",安全策略
 "Path ready",路径就绪
 "Path missing",路径缺失
+Admin,Admin
+Panel,Panel
+Policy,Policy
+"WLS instance list tools","WLS instance list tools"
+"Search name, domain, path, status","Search name, domain, path, status"
+Managed,Managed
 Database,数据库
 PHP,PHP
-"Open Panel",打开面板
 Edit,编辑
 Remove,移除
-Operations,操作
-"Gateway, Security, Runtime",网关、安全、运行时
 无效的监听地址：%{1},无效的监听地址：%{1}
 "Windows 模式：单进程运行","Windows 模式：单进程运行"
 "Weline Server 只能在 CLI 模式下运行","Weline Server 只能在 CLI 模式下运行"
@@ -2524,11 +2577,3 @@ Operations,操作
 "Weline Server 未运行","Weline Server 未运行"
 "Weline Server 正在运行，Master PID：%{1}","Weline Server 正在运行，Master PID：%{1}"
 "Weline Server 已停止","Weline Server 已停止"
-"Production AppStore","生产 AppStore"
-"Local AppStore","本地 AppStore"
-"Configured AppStore","已配置 AppStore"
-"Unknown AppStore","未知 AppStore"
-"AppStore endpoint","AppStore 端点"
-"Marketplace Endpoint","商城端点"
-"Local development uses https://app.weline.test:9523; deployed tests use https://app.aiweline.com from deploy current.json.","本地开发使用 https://app.weline.test:9523；部署后测试使用 deploy current.json 中的 https://app.aiweline.com。"
-Source,来源
