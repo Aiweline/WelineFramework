@@ -1127,13 +1127,21 @@ HTTPS,HTTPS
 %{1}：%{2},%{1}：%{2}
 续签失败,"Renewal failed"
 "WLS Panel","WLS Panel"
+"WLS Projects","WLS Projects"
+"WLS Gateway","WLS Gateway"
+"WLS Plugin","WLS Plugin"
 "WLS Plugin Marketplace","WLS Plugin Marketplace"
 "WLS Security","WLS Security"
+"WLS Attack Logs","WLS Attack Logs"
+"WLS Security Rules","WLS Security Rules"
+"WLS Project Security Policy","WLS Project Security Policy"
+"WLS Security Policy Audit","WLS Security Policy Audit"
 "Managed project save failed.","Managed project save failed."
 "Managed project delete failed.","Managed project delete failed."
 "Gateway route apply failed.","Gateway route apply failed."
 "Gateway mode configuration save failed.","Gateway mode configuration save failed."
 "Security rules save failed.","Security rules save failed."
+"Plugin Capability","Plugin Capability"
 "Managed project saved.","Managed project saved."
 "Managed project removed.","Managed project removed."
 "Gateway routes applied.","Gateway routes applied."
@@ -1268,6 +1276,11 @@ WLS错误扫描,"WLS error scan"
 "Resolve a WLS Panel managed project for plugin context","Resolve a WLS Panel managed project for plugin context"
 "Managed project ID","Managed project ID"
 "Managed project domain","Managed project domain"
+"Read WLS performance summary for the development panel","Read WLS performance summary for the development panel"
+"Read recent WLS performance requests for the development panel","Read recent WLS performance requests for the development panel"
+"Read one WLS performance request detail","Read one WLS performance request detail"
+"Read SessionServer and MemoryServer timing snapshots","Read SessionServer and MemoryServer timing snapshots"
+"Clear short-lived WLS performance panel traces","Clear short-lived WLS performance panel traces"
 "为当前后台浏览器设置 WLS 健康检查放行 Cookie","为当前后台浏览器设置 WLS 健康检查放行 Cookie"
 域名不能为空,"Domain cannot be empty"
 "PFX 文件内容无效（Base64 解码失败）","PFX file content is invalid (Base64 decoding failed)"
@@ -1289,6 +1302,9 @@ WLS错误扫描,"WLS error scan"
 "Managed project context is empty.","Managed project context is empty."
 "Managed project was not found.","Managed project was not found."
 "Managed project context resolved.","Managed project context resolved."
+"Invalid request id","Invalid request id"
+"WLS request trace loaded","WLS request trace loaded"
+"WLS request trace was not found","WLS request trace was not found"
 本地域名证书不允许删除,"Local domain certificate cannot be deleted"
 "缺少 Session ID","Missing Session ID"
 "Session 销毁失败，请稍后重试","Session destruction failed, please try again later"
@@ -1297,6 +1313,7 @@ WLS错误扫描,"WLS error scan"
 命名空间清理失败,"Namespace cleanup failed"
 缺少命名空间或键名参数,"Missing namespace or key name parameter"
 内存服务垃圾回收执行失败,"Memory service garbage collection execution failed"
+"WLS performance panel is only available in development or authorized debug mode","WLS performance panel is only available in development or authorized debug mode"
 "Session query provider unsupported operation: %{1}","Session query provider unsupported operation: %{1}"
 "Session Query","Session Query"
 "Unified shared session facade query entry","Unified shared session facade query entry"
@@ -1844,6 +1861,7 @@ Disabled,Disabled
 "Advanced JSON","Advanced JSON"
 Configured,Configured
 "%{1} entries","%{1} entries"
+"WLS performance panel traces were cleared","WLS performance panel traces were cleared"
 定时器间隔必须大于0,"Timer interval must be greater than 0"
 "定时器需要 pcntl 扩展或事件循环支持","Timer requires pcntl extension or event loop support"
 放行健康检查（开发模式）,"Allow health check (dev mode)"
@@ -2209,38 +2227,48 @@ Global,Global
 "No route modules","No route modules"
 Failed,Failed
 Unknown,Unknown
+"Production AppStore","Production AppStore"
+"Local AppStore","Local AppStore"
+"Configured AppStore","Configured AppStore"
+"Unknown AppStore","Unknown AppStore"
 "Plugin Marketplace","Plugin Marketplace"
 Security,Security
+"Attack Logs","Attack Logs"
+"Security Rules","Security Rules"
+"Project Security Policy","Project Security Policy"
+"Policy Audit","Policy Audit"
+Projects,Projects
+Gateway,Gateway
 Dashboard,Dashboard
 Dark,Dark
 Light,Light
-Projects,Projects
-Gateway,Gateway
+Overview,Overview
+"Project Policy","Project Policy"
 "Gateway Sites","Gateway Sites"
 "Direct listen first, proxy fallback","Direct listen first, proxy fallback"
 "%{1}/%{2} active","%{1}/%{2} active"
 "WLS Runtime","WLS Runtime"
 "Workers, session, memory service","Workers, session, memory service"
 "%{1} running, %{2} workers","%{1} running, %{2} workers"
-"Security Rules","Security Rules"
 "Attack rules and protection logs","Attack rules and protection logs"
 "%{1} blocked in 7d","%{1} blocked in 7d"
 "SSL Certificates","SSL Certificates"
 "Certificate and domain binding","Certificate and domain binding"
-"Manage project paths from the WLS panel plugin area.","Manage project paths from the WLS panel plugin area."
-Pending,Pending
-"Webhook and tag driven release workflow for child projects.","Webhook and tag driven release workflow for child projects."
-"Configure PHP runtime profiles and extension checks.","Configure PHP runtime profiles and extension checks."
-"Store project database profiles for panel-managed sites.","Store project database profiles for panel-managed sites."
 "WLS Panel navigation","WLS Panel navigation"
 "WLS Standalone Backend","WLS Standalone Backend"
+"%{1} secondary menu","%{1} secondary menu"
 "Plugin Capabilities","Plugin Capabilities"
+"Toggle %{1} menu","Toggle %{1} menu"
+"Plugin secondary menu","Plugin secondary menu"
 "Independent Server Panel","Independent Server Panel"
 "Toggle theme","Toggle theme"
 "Project Admin","Project Admin"
 "Exit to Backend","Exit to Backend"
 "Panel operation result","Panel operation result"
 "Panel operation warning","Panel operation warning"
+"AppStore endpoint","AppStore endpoint"
+"Marketplace Endpoint","Marketplace Endpoint"
+Source,Source
 "Plugin refresh summary","Plugin refresh summary"
 "Capability Reload","Capability Reload"
 "Panel plugin refresh result","Panel plugin refresh result"
@@ -2251,34 +2279,34 @@ Pending,Pending
 "Route modules","Route modules"
 "WLS plugins","WLS plugins"
 "Panel menu entries","Panel menu entries"
-"Online source","Online source"
-"Online WLS Plugins","Online WLS Plugins"
-"Open the AppStore with the WLS plugin tag filter applied.","Open the AppStore with the WLS plugin tag filter applied."
-"Open Online Marketplace","Open Online Marketplace"
-"Installed WLS Plugins","Installed WLS Plugins"
-"Review installed modules that declared module:wls.","Review installed modules that declared module:wls."
-"Installed Plugins","Installed Plugins"
-Contract,Contract
-"Tag Contract","Tag Contract"
-"Only modules declaring module:wls appear in this panel marketplace flow.","Only modules declaring module:wls appear in this panel marketplace flow."
+"Marketplace controls","Marketplace controls"
+"WLS Plugin Source","WLS Plugin Source"
+"AppStore filtered by WLS module tags","AppStore filtered by WLS module tags"
+"Marketplace installation opens the AppStore with %{1} and backend surface filters. Installed modules are listed below after they declare WLS panel capability metadata.","Marketplace installation opens the AppStore with %{1} and backend surface filters. Installed modules are listed below after they declare WLS panel capability metadata."
+"Installed: %{1}","Installed: %{1}"
+"Open AppStore","Open AppStore"
+"AppStore Installed","AppStore Installed"
+"Refresh Panel Plugins","Refresh Panel Plugins"
 "Panel Capabilities","Panel Capabilities"
 "Installed Panel Plugins","Installed Panel Plugins"
-"Refresh Panel Plugins","Refresh Panel Plugins"
+"%{1} installed","%{1} installed"
 "Installed plugin discovery failed: %{1}","Installed plugin discovery failed: %{1}"
 "No installed WLS plugins yet.","No installed WLS plugins yet."
 "Install modules tagged module:wls to extend this standalone panel.","Install modules tagged module:wls to extend this standalone panel."
-"Open Plugin Panel","Open Plugin Panel"
-"No panel entry declared","No panel entry declared"
-"Type Tag","Type Tag"
-Search,Search
-"Search WLS plugins","Search WLS plugins"
-Filter,Filter
-"Open Install Flow","Open Install Flow"
-"AppStore keeps the signature, hash, dependency, and permission checks.","AppStore keeps the signature, hash, dependency, and permission checks."
+Plugin,Plugin
+Module,Module
+Tags,Tags
+"Panel Entry","Panel Entry"
+Action,Action
+"No tags","No tags"
+"Not declared","Not declared"
+"Open Panel","Open Panel"
+"No panel entry","No panel entry"
+"No plugin page selected.","No plugin page selected."
+"Choose a plugin capability from the sidebar, or refresh panel plugins after installing a WLS module.","Choose a plugin capability from the sidebar, or refresh panel plugins after installing a WLS module."
+"Security Overview","Security Overview"
 Protection,Protection
-"Security Rules And Attack Logs","Security Rules And Attack Logs"
 "Advanced Rules","Advanced Rules"
-"Attack Logs","Attack Logs"
 "Security data warning","Security data warning"
 "Events In 7d","Events In 7d"
 "Blocked In 7d","Blocked In 7d"
@@ -2300,7 +2328,6 @@ Critical,Critical
 "View Logs","View Logs"
 "Edit Policy","Edit Policy"
 "Project security policy","Project security policy"
-"Project Security Policy","Project Security Policy"
 "Override selected protection rules for one managed domain while keeping common rules as fallback.","Override selected protection rules for one managed domain while keeping common rules as fallback."
 "Custom policy","Custom policy"
 "Select one project to edit its policy.","Select one project to edit its policy."
@@ -2401,27 +2428,35 @@ Next,Next
 "Some dashboard data could not be loaded.","Some dashboard data could not be loaded."
 "Panel Plugins","Panel Plugins"
 "Operations Capability Center","Operations Capability Center"
-"%{1} installed","%{1} installed"
 "%{1} required","%{1} required"
 "Open WLS Marketplace","Open WLS Marketplace"
 "Operation capability discovery warning: %{1}","Operation capability discovery warning: %{1}"
 "No operation capabilities are defined.","No operation capabilities are defined."
 "WLS will show PHP, database, file manager, and deploy plugin slots here.","WLS will show PHP, database, file manager, and deploy plugin slots here."
-"Required Tag","Required Tag"
-"Feature Tag","Feature Tag"
-"Installed plugin has not exposed a WLS panel URL yet.","Installed plugin has not exposed a WLS panel URL yet."
-"Open the contributed WLS panel page when the plugin exposes it.","Open the contributed WLS panel page when the plugin exposes it."
-"Install flow stays inside AppStore with WLS tags prefilled.","Install flow stays inside AppStore with WLS tags prefilled."
+Capability,Capability
+"Required Signal","Required Signal"
+Status,Status
+"No WLS panel page declared yet.","No WLS panel page declared yet."
+"Opens inside WLS panel shell.","Opens inside WLS panel shell."
+"AppStore opens with WLS tags prefilled.","AppStore opens with WLS tags prefilled."
 "Plugin Menu","Plugin Menu"
 "WLS Panel Plugin Entries","WLS Panel Plugin Entries"
 "Manage Plugins","Manage Plugins"
 "Plugin contribution discovery warning: %{1}","Plugin contribution discovery warning: %{1}"
 "No plugin panel entries yet.","No plugin panel entries yet."
 "Installed WLS plugins can declare wls_panel.menu entries in module meta to extend this standalone panel.","Installed WLS plugins can declare wls_panel.menu entries in module meta to extend this standalone panel."
-Loaded,Loaded
+"Plugin Entry","Plugin Entry"
+"Secondary Menu","Secondary Menu"
 "This installed plugin declared a WLS panel menu entry.","This installed plugin declared a WLS panel menu entry."
-"Open Panel Entry","Open Panel Entry"
 "Contributed by %{1}","Contributed by %{1}"
+"No secondary menu declared","No secondary menu declared"
+"Plugin Page","Plugin Page"
+"+%{1} more","+%{1} more"
+Open,Open
+"Uses WLS sidebar menu and native shell.","Uses WLS sidebar menu and native shell."
+"No panel entry declared","No panel entry declared"
+Operations,Operations
+"Gateway, Security, Runtime","Gateway, Security, Runtime"
 "Gateway Settings","Gateway Settings"
 "Advanced Gateway","Advanced Gateway"
 "Gateway instance discovery failed: %{1}","Gateway instance discovery failed: %{1}"
@@ -2456,17 +2491,31 @@ Loaded,Loaded
 "Apply Routes Now","Apply Routes Now"
 "No WLS instances discovered.","No WLS instances discovered."
 "Start a WLS instance with Gateway enabled to apply routes from this panel.","Start a WLS instance with Gateway enabled to apply routes from this panel."
-"Gateway listen not configured","Gateway listen not configured"
+"No matching WLS instances.","No matching WLS instances."
+"Showing %{1}-%{2} of %{3} instances","Showing %{1}-%{2} of %{3} instances"
+"Gateway instance list tools","Gateway instance list tools"
+"Search WLS instances","Search WLS instances"
+"Search name, listen, topology, status","Search name, listen, topology, status"
+"Rows per page","Rows per page"
+State,State
 "Main Listen","Main Listen"
 Topology,Topology
-SO_REUSEPORT,SO_REUSEPORT
-"Control Port","Control Port"
-Unavailable,Unavailable
-Master,Master
+Actions,Actions
 Running,Running
 Stopped,Stopped
-"Gateway Processes","Gateway Processes"
+SO_REUSEPORT,SO_REUSEPORT
 "%{1}/%{2} ready","%{1}/%{2} ready"
+"Unnamed WLS","Unnamed WLS"
+"Selected target","Selected target"
+"WLS runtime","WLS runtime"
+"Not configured","Not configured"
+Unavailable,Unavailable
+Proxy/runtime,Proxy/runtime
+Details,Details
+"Gateway listen not configured","Gateway listen not configured"
+"Control Port","Control Port"
+Master,Master
+"Gateway Processes","Gateway Processes"
 "Project Switching","Project Switching"
 "Managed WLS Projects","Managed WLS Projects"
 "New Project","New Project"
@@ -2478,7 +2527,6 @@ Stopped,Stopped
 "Child WLS Panel URL","Child WLS Panel URL"
 "PHP Profile","PHP Profile"
 "Database Profile","Database Profile"
-Status,Status
 "Backend Host","Backend Host"
 "Backend Port","Backend Port"
 "Backend SSL","Backend SSL"
@@ -2490,18 +2538,23 @@ Description,Description
 "%{1} plugin slots ready","%{1} plugin slots ready"
 "%{1} ready projects","%{1} ready projects"
 "%{1} / %{2} operation slots ready","%{1} / %{2} operation slots ready"
+Readiness,Readiness
+Context,Context
+"Quick Links","Quick Links"
+"No readiness data","No readiness data"
 "Safe Context","Safe Context"
-"Child Panel","Child Panel"
-"Security Policy","Security Policy"
 "Path ready","Path ready"
 "Path missing","Path missing"
+Admin,Admin
+Panel,Panel
+Policy,Policy
+"WLS instance list tools","WLS instance list tools"
+"Search name, domain, path, status","Search name, domain, path, status"
+Managed,Managed
 Database,Database
 PHP,PHP
-"Open Panel","Open Panel"
 Edit,Edit
 Remove,Remove
-Operations,Operations
-"Gateway, Security, Runtime","Gateway, Security, Runtime"
 无效的监听地址：%{1},"Invalid listen address: %{1}"
 "Windows 模式：单进程运行","Windows mode: single process"
 "Weline Server 只能在 CLI 模式下运行","Weline Server can only run in CLI mode"
@@ -2524,11 +2577,3 @@ Operations,Operations
 "Weline Server 未运行","Weline Server is not running"
 "Weline Server 正在运行，Master PID：%{1}","Weline Server is running, Master PID: %{1}"
 "Weline Server 已停止","Weline Server stopped"
-"Production AppStore","Production AppStore"
-"Local AppStore","Local AppStore"
-"Configured AppStore","Configured AppStore"
-"Unknown AppStore","Unknown AppStore"
-"AppStore endpoint","AppStore endpoint"
-"Marketplace Endpoint","Marketplace Endpoint"
-"Local development uses https://app.weline.test:9523; deployed tests use https://app.aiweline.com from deploy current.json.","Local development uses https://app.weline.test:9523; deployed tests use https://app.aiweline.com from deploy current.json."
-Source,Source

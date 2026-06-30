@@ -117,11 +117,18 @@ final class RuntimeStrategyResolverTest extends TestCase
             ])
         );
 
-        self::assertSame('stable', $result['status']);
+        self::assertSame('compatibility', $result['status']);
         self::assertSame('dispatcher', $result['topology']);
         self::assertSame(8, $result['worker_count']);
-        self::assertTrue($result['supervisor_enabled']);
-        self::assertSame([], $result['warnings']);
+        self::assertFalse($result['supervisor_enabled']);
+        self::assertSame(
+            'auto disabled on Windows; legacy control plane avoids Supervisor reconnect churn',
+            $result['supervisor_reason']
+        );
+        self::assertContains(
+            'Supervisor is disabled automatically on Windows; use --supervisor=on only when validating Supervisor HA.',
+            $result['warnings']
+        );
     }
 
     public function testExplicitDirectFailsWhenReusePortIsUnavailable(): void

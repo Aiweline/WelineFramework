@@ -320,7 +320,15 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return [];
         }
         $data = @\fread($this->socket, 65536);
-        if ($data === false || ($data === '' && @\feof($this->socket))) {
+        if ($data === false) {
+            if (!@\feof($this->socket)) {
+                return $this->extractMessages();
+            }
+            $this->handleDisconnect();
+            return [];
+        }
+
+        if ($data === '' && @\feof($this->socket)) {
             $this->handleDisconnect();
             return [];
         }
@@ -547,6 +555,9 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
         $written = @\fwrite($socket, \substr($this->writeBuffer, 0, 65536));
         if ($written === false) {
+            if (!@\feof($socket)) {
+                return 0;
+            }
             return -1;
         }
         if ($written === 0) {
