@@ -280,6 +280,17 @@ if ($envPhpHadDbAtStart) {
                 passthru($full, $code);
                 return (int) $code;
             };
+            $tryInstallEventExtension = function () use ($run): void {
+                if (extension_loaded('event')) {
+                    echo "event 扩展已加载，跳过自动安装。\n";
+                    return;
+                }
+                echo "event 扩展未加载，正在尝试自动安装（失败不影响 WLS 启动）...\n";
+                $code = $run('bin/w env:install event -y');
+                if ($code !== 0) {
+                    fwrite(STDERR, "WARNING: event 扩展自动安装失败 (exit $code)。WLS 将继续使用默认事件循环，可稍后运行 php bin/w env:install event -y。\n");
+                }
+            };
             $runWithUpgradeRetry = function (string $cmd, string $stage, string $setupLockPath, int $maxWaitSeconds = 120) use ($run): int {
                 $code = $run($cmd);
                 if ($code === 0 || !is_file($setupLockPath)) {
@@ -336,6 +347,7 @@ if ($envPhpHadDbAtStart) {
                 fwrite(STDERR, "ERROR: PostgreSQL 连接失败，无法执行 setup:upgrade。\n");
                 exit(1);
             }
+            $tryInstallEventExtension();
             $installModeFlagDir = $projectRoot . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'process';
             $installModeFlagFile = $installModeFlagDir . DIRECTORY_SEPARATOR . 'command_install_mode.flag';
             $setupLockPath = $installModeFlagDir . DIRECTORY_SEPARATOR . 'setup_upgrade.lock';
@@ -449,6 +461,17 @@ $run = function (string $cmd) use ($projectRoot, $phpBin): int {
     passthru($full, $code);
     return (int) $code;
 };
+$tryInstallEventExtension = function () use ($run): void {
+    if (extension_loaded('event')) {
+        echo "event 扩展已加载，跳过自动安装。\n";
+        return;
+    }
+    echo "event 扩展未加载，正在尝试自动安装（失败不影响 WLS 启动）...\n";
+    $code = $run('bin/w env:install event -y');
+    if ($code !== 0) {
+        fwrite(STDERR, "WARNING: event 扩展自动安装失败 (exit $code)。WLS 将继续使用默认事件循环，可稍后运行 php bin/w env:install event -y。\n");
+    }
+};
 // 执行裸命令（不 prepend php），用于 composer 等独立可执行命令
 $runRaw = function (string $cmd): int {
     echo "执行命令：$cmd\n";
@@ -544,6 +567,7 @@ if (!$fromStep5b) {
     if ($code !== 0) {
         fwrite(STDERR, "WARNING: env:install 有项未成功安装 (exit $code)。将继续后续步骤，请稍后运行 php bin/w env:check 验证并手动修复。\n");
     }
+    $tryInstallEventExtension();
 }
 
 // 3b. Linux/macOS 下安装 crontab 依赖（cron:install 需要）；失败不阻断
