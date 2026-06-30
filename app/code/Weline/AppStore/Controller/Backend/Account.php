@@ -5,6 +5,7 @@ namespace Weline\AppStore\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\AppStore\Service\AccountBindService;
 
@@ -25,12 +26,56 @@ class Account extends BackendController
 
         $isBound = $accountService->isBound();
         $account = $accountService->getCurrentAccount();
+        $redirectUri = $this->getOAuthRedirectUri();
+        $authorizeUrl = $accountService->getAuthorizationUrl($redirectUri, bin2hex(random_bytes(16)));
 
         $this->assign('is_bound', $isBound);
         $this->assign('account', $account);
+        $this->assign('authorize_url', $authorizeUrl);
+        $this->assign('redirect_uri', $redirectUri);
+        $this->assign('platform_url', $accountService->getPlatformUrl());
+        $this->assign('title', __('账户绑定'));
         $this->assign('page_title', __('账户绑定'));
 
-        return $this->fetch();
+        return $this->fetch('Weline_AppStore::templates/Backend/Account/index.phtml');
+    }
+
+    /**
+     * 跳转到官网授权页
+     */
+    #[Acl('Weline_AppStore::account_authorize', '官网授权', 'bi-shield-check', '跳转官网授权当前终端')]
+    public function authorize(): string
+    {
+        /** @var AccountBindService $accountService */
+        $accountService = ObjectManager::getInstance(AccountBindService::class);
+
+        return (string)$this->redirect($accountService->getAuthorizationUrl($this->getOAuthRedirectUri(), bin2hex(random_bytes(16))));
+    }
+
+    /**
+     * 官网 OAuth 回调
+     */
+    #[Acl('Weline_AppStore::account_callback', '授权回调', 'bi-arrow-left-right', '接收官网授权回调')]
+    public function callback(): string
+    {
+        /** @var AccountBindService $accountService */
+        $accountService = ObjectManager::getInstance(AccountBindService::class);
+        $code = trim((string)$this->request->getParam('code', ''));
+
+        try {
+            if ($code === '') {
+                throw new \Weline\Framework\App\Exception(__('缺少授权码'));
+            }
+
+            $this->assign('bind_result', $accountService->bindWithOAuth($code, $this->getOAuthRedirectUri()));
+        } catch (\Throwable $e) {
+            $this->assign('bind_result', [
+                'success' => false,
+                'message' => __('授权绑定失败：') . $e->getMessage(),
+            ]);
+        }
+
+        return $this->index();
     }
 
     /**
@@ -111,6 +156,7 @@ class Account extends BackendController
             'account' => $account ? [
                 'platform_email' => $account->getPlatformEmail(),
                 'platform_username' => $account->getPlatformUsername(),
+                'bound_domain' => $account->getBoundDomain(),
                 'status' => $account->getStatus(),
                 'bound_at' => $account->getBoundAt(),
                 'is_active' => $account->isActive(),
@@ -128,5 +174,40 @@ class Account extends BackendController
             'message' => $message,
             'data' => $data,
         ], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function getOAuthRedirectUri(): string
+    {
+        return $this->buildBackendSameOriginUrl('appstore/backend/account/callback');
+    }
+
+    private function buildBackendSameOriginUrl(string $path): string
+    {
+        $scheme = $this->request->isSecure() ? 'https' : 'http';
+        $host = (string)($this->request->getServer('HTTP_HOST') ?: $this->request->getServer('SERVER_NAME') ?: '');
+        if ($host === '') {
+            return $this->request->getUrlBuilder()->getBackendUrl($path);
+        }
+
+        return $scheme . '://' . $host . $this->buildBackendPathWithPrefix($path);
+    }
+
+    private function buildBackendPathWithPrefix(string $path): string
+    {
+        $backendPrefix = Env::getAreaRoutePrefix('backend');
+        $areaRoute = (string)($this->request->getServer('WELINE_AREA_ROUTE') ?? '');
+
+        if ($backendPrefix !== null && $backendPrefix !== '' && $areaRoute !== ''
+            && ($areaRoute === $backendPrefix || str_starts_with($areaRoute, $backendPrefix . '/'))) {
+            return '/' . trim($areaRoute, '/') . '/' . ltrim($path, '/');
+        }
+
+        if ($backendPrefix !== null && $backendPrefix !== '') {
+            $currency = (string)(w_env('user.currency', 'CNY') ?? 'CNY');
+            $language = (string)(w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
+            return '/' . trim($backendPrefix, '/') . '/' . $currency . '/' . $language . '/' . ltrim($path, '/');
+        }
+
+        return $this->request->getUrlBuilder()->getBackendUrlPath($path);
     }
 }

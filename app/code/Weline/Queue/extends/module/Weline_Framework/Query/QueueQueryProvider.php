@@ -6,6 +6,7 @@ namespace Weline\Queue\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\System\Process\Processer;
 use Weline\Queue\Helper\Helper;
 use Weline\Queue\Model\Queue;
 use Weline\Queue\Model\Queue\Type;
@@ -48,6 +49,7 @@ class QueueQueryProvider implements QueryProviderInterface
             'getTypeIdByClass' => $this->getTypeIdByClass($params),
             'create' => $this->createQueue($params),
             'update' => $this->updateQueue($params),
+            'takeover' => $this->takeoverQueue($params),
             'delete' => $this->deleteQueue($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Queue 查询器不支持的操作：%{1}', $operation)
@@ -85,17 +87,18 @@ class QueueQueryProvider implements QueryProviderInterface
             throw new \InvalidArgumentException((string)__('请提供 biz_key。'));
         }
         $queue = clone $this->queueModel;
-        $queue->clearData()->reset()
+        $rows = $queue->clearData()->reset()
             ->where(Queue::schema_fields_BIZ_KEY, $bizKey)
             ->order(Queue::schema_fields_ID, 'DESC')
             ->limit(1)
             ->select()
-            ->fetch();
-        if ((int)$queue->getId() <= 0) {
+            ->fetchArray();
+        $row = $rows[0] ?? [];
+        if (!is_array($row) || $row === []) {
             return null;
         }
 
-        return $queue->getData();
+        return $row;
     }
 
     /**
@@ -121,7 +124,11 @@ class QueueQueryProvider implements QueryProviderInterface
             $queue->where('t.module_name', $module);
         }
         if ($search !== '') {
-            $queue->where("concat(main_table.name,main_table.content,main_table.result) like '%$search%'");
+            $queue->where(
+                'CONCAT(main_table.name,main_table.content,main_table.result)',
+                '%' . $search . '%',
+                'LIKE'
+            );
         }
         if ($queueId > 0) {
             $queue->where('main_table.' . Queue::schema_fields_ID, $queueId);
@@ -298,14 +305,17 @@ class QueueQueryProvider implements QueryProviderInterface
         }
 
         $queue->save();
-        $queue->clearData()->load((int)$queue->getId());
+        $queueId = (int)$queue->getId();
+        if ($queueId > 0) {
+            $queue->clearData()->load($queueId);
+        }
 
         $eventData = ['queue' => $queue];
         $this->eventsManager->dispatch('Weline_Queue::edit', $eventData);
 
         return [
             'success' => true,
-            'queue_id' => (int)$queue->getId(),
+            'queue_id' => $queueId,
             'data' => $queue->getData(),
         ];
     }
@@ -316,6 +326,107 @@ class QueueQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params queue_id 或 biz_key；force 可选
      * @return array{success: bool, message?: string, queue_id?: int}
      */
+    /**
+     * Release a queue row from an old worker without executing it in this call.
+     *
+     * @param array<string, mixed> $params queue_id or biz_key; force/owner/reason optional
+     * @return array{success: bool, message?: string, queue_id?: int, data?: array<string, mixed>}
+     */
+    private function takeoverQueue(array $params): array
+    {
+        $queueIdArg = (int)($params['queue_id'] ?? $params['id'] ?? 0);
+        $bizKeyArg = \trim((string)($params['biz_key'] ?? ''));
+        if ($queueIdArg <= 0 && $bizKeyArg === '') {
+            throw new \InvalidArgumentException('Please provide queue_id or biz_key.');
+        }
+
+        $queue = $this->loadQueueByIdOrBizKey($params);
+        if ((int)$queue->getId() <= 0) {
+            return [
+                'success' => false,
+                'message' => 'Queue does not exist.',
+            ];
+        }
+
+        $queueId = (int)$queue->getId();
+        $status = \strtolower(\trim((string)$queue->getStatus()));
+        $pid = (int)($queue->getPid() ?: 0);
+        $force = !\array_key_exists('force', $params) || (bool)$params['force'];
+        $owner = \trim((string)($params['owner'] ?? 'system_scheduler'));
+        if (!\in_array($owner, ['system_scheduler', 'manual_cli'], true)) {
+            $owner = 'system_scheduler';
+        }
+        $reason = \trim((string)($params['reason'] ?? 'force_takeover'));
+        if ($reason === '') {
+            $reason = 'force_takeover';
+        }
+
+        $currentPid = (int)\getmypid();
+        $liveProcess = $pid > 0 && $pid !== $currentPid && Processer::isRunningByPid($pid);
+        if ($liveProcess) {
+            if (!$force) {
+                return [
+                    'success' => false,
+                    'queue_id' => $queueId,
+                    'message' => 'Queue process is running; takeover requires force=true.',
+                ];
+            }
+            if (!Processer::killByPid($pid, true)) {
+                return [
+                    'success' => false,
+                    'queue_id' => $queueId,
+                    'message' => 'Failed to terminate queue process pid=' . $pid . '.',
+                ];
+            }
+        }
+
+        $content = $this->decodeQueueContent((string)$queue->getContent());
+        if ($content !== []) {
+            if (!\array_key_exists('mark_force_rebuild', $params) || (bool)$params['mark_force_rebuild']) {
+                $content['_force_rebuild'] = 1;
+            }
+            $content['_queue_takeover'] = [
+                'token' => \bin2hex(\random_bytes(12)),
+                'owner' => $owner,
+                'reason' => $reason,
+                'previous_pid' => $pid,
+                'previous_status' => $status,
+                'execute_in_request' => false,
+                'taken_over_at' => \date('Y-m-d H:i:s'),
+            ];
+            $queue->setContent($this->normalizeContentValue($content));
+        }
+
+        $auto = \array_key_exists('auto', $params) ? (bool)$params['auto'] : ($owner === 'system_scheduler');
+        $line = $owner === 'manual_cli'
+            ? 'Force takeover completed; queue is manual-owned and will not be auto-dispatched.'
+            : 'Force takeover completed; queue reset to pending for system scheduler dispatch.';
+
+        $queue->setStatus(Queue::status_pending)
+            ->setPid(0)
+            ->setFinished(false)
+            ->setAuto($auto);
+        if ((bool)($params['clear_output'] ?? false)) {
+            $queue->setResult('')
+                ->setProcess($line);
+        } else {
+            $queue->setProcess(\trim((string)$queue->getProcess() . PHP_EOL . $line));
+        }
+        $queue->save();
+        $queue->clearData()->load($queueId);
+
+        $eventData = ['queue' => $queue];
+        $this->eventsManager->dispatch('Weline_Queue::takeover', $eventData);
+        $this->eventsManager->dispatch('Weline_Queue::edit', $eventData);
+
+        return [
+            'success' => true,
+            'queue_id' => $queueId,
+            'data' => $queue->getData(),
+            'message' => $line,
+        ];
+    }
+
     private function deleteQueue(array $params): array
     {
         $queueIdArg = (int)($params['queue_id'] ?? $params['id'] ?? 0);
@@ -451,7 +562,7 @@ class QueueQueryProvider implements QueryProviderInterface
     private function normalizeContentParam(mixed $content): string
     {
         if (\is_array($content)) {
-            return (string)\json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
+            return (string)\json_encode($content, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
         }
 
         return (string)$content;
@@ -460,10 +571,20 @@ class QueueQueryProvider implements QueryProviderInterface
     private function normalizeContentValue(mixed $value): string
     {
         if (\is_array($value)) {
-            return (string)\json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
+            return (string)\json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE | \JSON_THROW_ON_ERROR);
         }
 
         return (string)$value;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeQueueContent(string $content): array
+    {
+        $decoded = \json_decode($content, true);
+
+        return \is_array($decoded) ? $decoded : [];
     }
 
     private function isValidStatus(string $status): bool
@@ -547,6 +668,17 @@ class QueueQueryProvider implements QueryProviderInterface
                         ['name' => 'queue_id', 'type' => 'int', 'required' => false, 'description' => __('与 biz_key 二选一')],
                         ['name' => 'biz_key', 'type' => 'string', 'required' => false, 'description' => __('定位键')],
                         ['name' => 'patch', 'type' => 'array', 'required' => false, 'description' => __('字段补丁；也可顶层传 name/status/content 等')],
+                    ],
+                ],
+                [
+                    'name' => 'takeover',
+                    'description' => __('Force takeover a queue without executing it in the current request.'),
+                    'params' => [
+                        ['name' => 'queue_id', 'type' => 'int', 'required' => false, 'description' => __('queue_id')],
+                        ['name' => 'biz_key', 'type' => 'string', 'required' => false, 'description' => __('biz_key')],
+                        ['name' => 'force', 'type' => 'bool', 'required' => false, 'description' => __('Terminate old PID if needed')],
+                        ['name' => 'owner', 'type' => 'string', 'required' => false, 'description' => __('system_scheduler or manual_cli')],
+                        ['name' => 'reason', 'type' => 'string', 'required' => false, 'description' => __('Takeover reason')],
                     ],
                 ],
                 [

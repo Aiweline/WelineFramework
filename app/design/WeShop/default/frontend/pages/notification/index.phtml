@@ -3,36 +3,36 @@ $notifications = (array) ($this->getData('notifications') ?? []);
 $notificationCount = (int) ($this->getData('notification_count') ?? 0);
 $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
 ?>
-<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+<main class="notification-page mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
     <section class="overflow-hidden rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
         <div class="grid gap-6 p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
             <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Stay In Sync') ?></p>
-                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('Notification Center') ?></h1>
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('消息同步') ?></p>
+                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('通知中心') ?></h1>
                 <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Track order progress, account reminders, and important storefront events in one timeline.') ?>
+                    <?= __('订单进度、账户提醒和重要商城事件会集中出现在这里。') ?>
                 </p>
 
                 <div class="mt-8 flex flex-wrap gap-3 text-sm">
                     <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
-                        <?= __('Back to Account') ?>
+                        <?= __('返回个人中心') ?>
                     </a>
                     <a href="<?= $this->getUrl('catalog/category') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
-                        <?= __('Continue Shopping') ?>
+                        <?= __('继续购物') ?>
                     </a>
                 </div>
             </div>
 
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                 <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
-                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('All Notifications') ?></p>
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('全部通知') ?></p>
                     <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $notificationCount ?></p>
-                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Events currently available in your timeline.') ?></p>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('当前时间线中的全部消息。') ?></p>
                 </article>
                 <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
-                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Unread') ?></p>
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('未读') ?></p>
                     <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark" data-unread-count><?= $unreadCount ?></p>
-                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('New updates still waiting for your review.') ?></p>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('仍待查看的新提醒。') ?></p>
                 </article>
             </div>
         </div>
@@ -41,8 +41,8 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
     <section class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
         <div class="flex items-center justify-between gap-4">
             <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Timeline') ?></p>
-                <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Latest Updates') ?></h2>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('时间线') ?></p>
+                <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('最新动态') ?></h2>
             </div>
             <span class="material-symbols-outlined text-4xl text-primary">notifications</span>
         </div>
@@ -54,6 +54,8 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
                     $notificationId = (int) ($item['notification_id'] ?? 0);
                     $isRead = (int) ($item['is_read'] ?? 0) === 1;
                     $type = strtolower((string) ($item['type'] ?? 'info'));
+                    $typeLabel = (string) ($item['type_label'] ?? $item['type'] ?? 'info');
+                    $targetUrl = trim((string) ($item['target_url'] ?? ''));
                     $badgeClass = 'bg-primary/10 text-primary';
                     if ($type === 'warning') {
                         $badgeClass = 'bg-amber-100 text-amber-700';
@@ -67,19 +69,25 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
                         <div class="flex flex-wrap items-start justify-between gap-3">
                             <div>
                                 <div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] <?= $badgeClass ?>">
-                                    <?= htmlspecialchars((string) ($item['type'] ?? 'info'), ENT_QUOTES) ?>
+                                    <?= htmlspecialchars($typeLabel, ENT_QUOTES) ?>
                                 </div>
                                 <h3 class="mt-3 text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($item['title'] ?? ''), ENT_QUOTES) ?></h3>
                                 <p class="mt-2 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
                                     <?= nl2br(htmlspecialchars((string) ($item['content'] ?? ''), ENT_QUOTES)) ?>
                                 </p>
+                                <?php if ($targetUrl !== ''): ?>
+                                    <a href="<?= htmlspecialchars($targetUrl, ENT_QUOTES) ?>" class="mt-4 inline-flex items-center justify-center gap-2 rounded-2xl border border-primary px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary hover:text-white">
+                                        <span class="material-symbols-outlined text-base">keyboard_return</span>
+                                        <?= __('立即返回') ?>
+                                    </a>
+                                <?php endif; ?>
                             </div>
                             <div class="text-right">
-                                <p class="text-xs font-medium uppercase tracking-[0.15em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('Created') ?></p>
+                                <p class="text-xs font-medium uppercase tracking-[0.15em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('创建时间') ?></p>
                                 <p class="mt-1 text-sm text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($item['created_at'] ?? ''), ENT_QUOTES) ?></p>
                                 <?php if (!$isRead): ?>
                                     <button type="button" data-mark-read="<?= $notificationId ?>" class="mt-4 inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90">
-                                        <?= __('Mark as Read') ?>
+                                        <?= __('标记为已读') ?>
                                     </button>
                                 <?php endif; ?>
                             </div>
@@ -90,9 +98,9 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
         <?php else: ?>
             <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark">
                 <span class="material-symbols-outlined text-5xl text-primary">notifications_off</span>
-                <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No notifications yet') ?></h3>
+                <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('暂无通知') ?></h3>
                 <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
-                    <?= __('Once events are generated for your account, they will appear here automatically.') ?>
+                    <?= __('账户产生事件后会自动显示在这里。') ?>
                 </p>
             </div>
         <?php endif; ?>
@@ -101,6 +109,16 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
 
 <script>
     (function () {
+        var apiPromise = null;
+
+        function getNotificationApi() {
+            if (!apiPromise) {
+                apiPromise = Promise.resolve(window.Weline.Api.resource('notification'));
+            }
+
+            return apiPromise;
+        }
+
         function updateUnreadCount(nextCount) {
             document.querySelectorAll('[data-unread-count]').forEach(function (el) {
                 el.textContent = String(nextCount < 0 ? 0 : nextCount);
@@ -114,15 +132,8 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
                     return;
                 }
 
-                fetch('<?= $this->getUrl('notification/mark-read') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({ notification_id: notificationId })
-                }).then(function (response) {
-                    return response.json();
+                getNotificationApi().then(function (NotificationApi) {
+                    return NotificationApi.markRead({notification_id: parseInt(notificationId, 10)}, {silent: true});
                 }).then(function (payload) {
                     if (!payload) {
                         return;
@@ -153,3 +164,157 @@ $unreadCount = (int) ($this->getData('notification_unread_count') ?? 0);
         });
     })();
 </script>
+
+<style>
+.notification-page {
+    width: calc(100% - 32px) !important;
+    max-width: 1180px !important;
+    margin: 0 auto;
+    padding: 32px 0 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    color: var(--color-text-primary, #111827);
+}
+
+.notification-page *,
+.notification-page *::before,
+.notification-page *::after {
+    box-sizing: border-box;
+}
+
+.notification-page .material-symbols-outlined {
+    display: none;
+}
+
+.notification-page > section {
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 18px;
+    background: var(--color-bg-primary, #fff);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.07);
+}
+
+.notification-page > section:first-child {
+    overflow: hidden;
+}
+
+.notification-page > section:first-child > div {
+    display: grid;
+    gap: 24px;
+    padding: 28px;
+}
+
+.notification-page > section:nth-child(2) {
+    padding: 24px;
+}
+
+.notification-page h1,
+.notification-page h2,
+.notification-page h3,
+.notification-page p {
+    margin: 0;
+}
+
+.notification-page h1 {
+    margin-top: 10px;
+    font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.1;
+}
+
+.notification-page h2 {
+    font-size: 24px;
+}
+
+.notification-page p {
+    line-height: 1.65;
+}
+
+.notification-page a,
+.notification-page button {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 999px;
+    padding: 10px 18px;
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    background: #fff;
+    color: var(--color-primary, #b45309);
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.notification-page button {
+    background: var(--color-primary, #f59e0b);
+    border-color: var(--color-primary, #f59e0b);
+    color: #fff;
+}
+
+.notification-page .grid {
+    display: grid;
+    gap: 16px;
+}
+
+.notification-page .flex {
+    display: flex;
+    gap: 12px;
+}
+
+.notification-page .flex-wrap {
+    flex-wrap: wrap;
+}
+
+.notification-page .items-center {
+    align-items: center;
+}
+
+.notification-page .justify-between {
+    justify-content: space-between;
+}
+
+.notification-page [data-notification-item],
+.notification-page > section:first-child article {
+    border: 1px solid var(--color-border-light, #e5e7eb);
+    border-radius: 16px;
+    background: var(--color-bg-secondary, #f8fafc);
+    padding: 18px;
+}
+
+.notification-page [data-notification-item][data-notification-read="0"] {
+    border-color: rgba(245, 158, 11, 0.55);
+    background: #fffaf0;
+}
+
+.notification-page [data-notification-item] + [data-notification-item] {
+    margin-top: 14px;
+}
+
+.notification-page [data-notification-item] .rounded-full,
+.notification-page [data-notification-item] [class*="bg-primary"] {
+    width: max-content;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.14);
+    color: var(--color-primary, #b45309);
+}
+
+@media (min-width: 900px) {
+    .notification-page > section:first-child > div {
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    }
+}
+
+@media (max-width: 760px) {
+    .notification-page {
+        width: calc(100% - 24px) !important;
+        padding-top: 20px;
+    }
+
+    .notification-page > section:first-child > div,
+    .notification-page > section:nth-child(2) {
+        padding: 20px;
+    }
+}
+</style>

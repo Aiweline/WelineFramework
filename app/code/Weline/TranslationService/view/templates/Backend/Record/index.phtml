@@ -16,6 +16,14 @@ $stats = $this->getData('stats') ?? [];
 $page = $this->getData('page') ?? 1;
 $totalPages = $this->getData('totalPages') ?? 1;
 $filters = $this->getData('filters') ?? [];
+$dialogJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
+$confirmMessages = [
+    'confirmTitle' => (string)__('确认操作'),
+    'confirmButton' => (string)__('确定'),
+    'cancelButton' => (string)__('取消'),
+    'deleteRecord' => (string)__('确定要删除此记录吗？'),
+    'deleteSelected' => (string)__('确定要删除选中的记录吗？'),
+];
 ?>
 <div class="translation-record-page">
     <div class="page-header mb-4">
@@ -150,10 +158,10 @@ $filters = $this->getData('filters') ?? [];
         <div class="card-header d-flex justify-content-between align-items-center">
             <h3><?= __('翻译记录') ?></h3>
             <div>
-                <button type="button" class="btn btn-sm btn-danger" onclick="batchDelete()">
+                <button type="button" class="btn btn-sm btn-danger" data-translation-record-action="batch-delete">
                     <i class="mdi mdi-delete"></i> <?= __('批量删除') ?>
                 </button>
-                <button type="button" class="btn btn-sm btn-info" onclick="exportStats()">
+                <button type="button" class="btn btn-sm btn-info" data-translation-record-action="export-stats">
                     <i class="mdi mdi-download"></i> <?= __('导出统计') ?>
                 </button>
             </div>
@@ -169,7 +177,7 @@ $filters = $this->getData('filters') ?? [];
                         <thead>
                             <tr>
                                 <th>
-                                    <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
+                                    <input type="checkbox" id="select-all" data-translation-record-select-all>
                                 </th>
                                 <th><?= __('ID') ?></th>
                                 <th><?= __('渠道') ?></th>
@@ -242,7 +250,7 @@ $filters = $this->getData('filters') ?? [];
                                             </a>
                                             <a href="<?= $this->getBackendUrl('*/backend/record/delete', ['id' => $record->getId()]) ?>" 
                                                class="btn btn-outline-danger"
-                                               onclick="return confirm('<?= __('确定要删除此记录吗？') ?>')">
+                                               data-translation-record-confirm="deleteRecord">
                                                 <i class="mdi mdi-delete"></i>
                                             </a>
                                         </div>
@@ -293,6 +301,102 @@ $filters = $this->getData('filters') ?? [];
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
+const translationRecordMessages = <?= json_encode($confirmMessages, $dialogJsonFlags) ?>;
+
+function showLocalChoice(message) {
+    return new Promise(function(resolve) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:1055;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+
+        const dialog = document.createElement('div');
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
+        dialog.style.cssText = 'width:min(420px,100%);background:#fff;border-radius:8px;box-shadow:0 20px 60px rgba(15,23,42,.25);padding:24px;';
+
+        const title = document.createElement('h4');
+        title.textContent = translationRecordMessages.confirmTitle;
+        title.style.cssText = 'margin:0 0 12px;font-size:18px;';
+
+        const body = document.createElement('p');
+        body.textContent = message;
+        body.style.cssText = 'margin:0 0 20px;color:#475569;';
+
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.className = 'btn btn-secondary';
+        cancelButton.textContent = translationRecordMessages.cancelButton;
+
+        const confirmButton = document.createElement('button');
+        confirmButton.type = 'button';
+        confirmButton.className = 'btn btn-primary';
+        confirmButton.textContent = translationRecordMessages.confirmButton;
+
+        function close(value) {
+            document.removeEventListener('keydown', onKeydown);
+            overlay.remove();
+            resolve(value);
+        }
+
+        function onKeydown(event) {
+            if (event.key === 'Escape') {
+                close(false);
+            }
+        }
+
+        cancelButton.addEventListener('click', function() { close(false); });
+        confirmButton.addEventListener('click', function() { close(true); });
+        overlay.addEventListener('click', function(event) {
+            if (event.target === overlay) {
+                close(false);
+            }
+        });
+
+        actions.append(cancelButton, confirmButton);
+        dialog.append(title, body, actions);
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        document.addEventListener('keydown', onKeydown);
+        confirmButton.focus();
+    });
+}
+
+function showTranslationRecordChoice(message) {
+    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+        return Swal.fire({
+            icon: 'warning',
+            title: translationRecordMessages.confirmTitle,
+            text: message,
+            showCancelButton: true,
+            confirmButtonText: translationRecordMessages.confirmButton,
+            cancelButtonText: translationRecordMessages.cancelButton
+        }).then(function(result) {
+            return !!(result && result.isConfirmed);
+        });
+    }
+
+    return showLocalChoice(message);
+}
+
+document.querySelectorAll('[data-translation-record-confirm]').forEach(function(link) {
+    link.addEventListener('click', function(event) {
+        const key = link.getAttribute('data-translation-record-confirm');
+        const message = translationRecordMessages[key];
+        if (!message) {
+            return;
+        }
+
+        event.preventDefault();
+        showTranslationRecordChoice(message).then(function(confirmed) {
+            if (confirmed) {
+                window.location.href = link.href;
+            }
+        });
+    });
+});
+
 function toggleSelectAll() {
     const selectAll = document.getElementById('select-all');
     const checkboxes = document.querySelectorAll('.record-checkbox');
@@ -317,32 +421,48 @@ function batchDelete() {
         return;
     }
     
-    if (!confirm('<?= __('确定要删除选中的记录吗？') ?>')) {
-        return;
-    }
-    
-    const ids = Array.from(checked).map(function(checkbox) {
-        return checkbox.value;
+    showTranslationRecordChoice(translationRecordMessages.deleteSelected).then(function(confirmed) {
+        if (!confirmed) {
+            return;
+        }
+
+        const ids = Array.from(checked).map(function(checkbox) {
+            return checkbox.value;
+        });
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '<?= $this->getBackendUrl('*/backend/record/batchDelete') ?>';
+
+        ids.forEach(function(id) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'ids[]';
+            input.value = id;
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
     });
-    
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '<?= $this->getBackendUrl('*/backend/record/batchDelete') ?>';
-    
-    ids.forEach(function(id) {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'ids[]';
-        input.value = id;
-        form.appendChild(input);
-    });
-    
-    document.body.appendChild(form);
-    form.submit();
 }
 
 function exportStats() {
     window.location.href = '<?= $this->getBackendUrl('*/backend/record/exportStats') ?>';
 }
-</script>
 
+document.querySelectorAll('[data-translation-record-select-all]').forEach(function(checkbox) {
+    checkbox.addEventListener('change', toggleSelectAll);
+});
+
+document.querySelectorAll('[data-translation-record-action]').forEach(function(button) {
+    button.addEventListener('click', function() {
+        if (button.getAttribute('data-translation-record-action') === 'batch-delete') {
+            batchDelete();
+            return;
+        }
+
+        exportStats();
+    });
+});
+</script>

@@ -13,6 +13,12 @@ use Weline\Eav\Schema\EavAttributeSetSchema;
 use Weline\Eav\Schema\EavAttributeGroupSchema;
 use Weline\Eav\Schema\EavAttributeSchema;
 use Weline\Eav\Schema\EavAttributeOptionSchema;
+use Weline\Framework\Database\AbstractModel;
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
+use Weline\Framework\Database\Connection\Adapter\Sqlite\Connector;
+use Weline\Framework\Database\DbManager\ConfigProvider;
+use Weline\Framework\Setup\Db\ModelSetup;
 
 /**
  * @covers \Weline\Eav\Schema\SchemaRegistry
@@ -132,5 +138,131 @@ class SchemaRegistryTest extends TestCase
         
         $all = $this->registry->getAll();
         $this->assertCount(2, $all);
+    }
+
+    public function testTableExistsUsesSqliteNativeLookup(): void
+    {
+        $dbPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-eav-schema-registry-' . uniqid('', true) . '.sqlite';
+
+        try {
+            $connector = new Connector(new ConfigProvider([
+                'type' => 'sqlite',
+                'path' => $dbPath,
+                'database' => '',
+                'prefix' => '',
+            ]));
+            $connector->create();
+            $connector->query('CREATE TABLE eav_attribute_type (code varchar(255) unique not null)')->fetch();
+
+            $method = new \ReflectionMethod(SchemaRegistry::class, 'tableExists');
+            $method->setAccessible(true);
+
+            $this->assertTrue($method->invoke($this->registry, $connector, 'eav_attribute_type'));
+            $this->assertFalse($method->invoke($this->registry, $connector, 'missing_eav_attribute_type'));
+        } finally {
+            if (isset($connector)) {
+                $connector->close();
+            }
+            if (is_file($dbPath)) {
+                unlink($dbPath);
+            }
+        }
+    }
+
+    public function testCreateTableSeedsInitialDataWhenTableAlreadyExists(): void
+    {
+        $dbPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-eav-schema-registry-seed-' . uniqid('', true) . '.sqlite';
+
+        try {
+            $connector = new Connector(new ConfigProvider([
+                'type' => 'sqlite',
+                'path' => $dbPath,
+                'database' => '',
+                'prefix' => '',
+            ]));
+            $connector->create();
+            $this->createExistingAttributeTypeTable($connector);
+
+            $model = $this->getMockBuilder(AbstractModel::class)
+                ->disableOriginalConstructor()
+                ->onlyMethods(['getConnection'])
+                ->getMockForAbstractClass();
+            $model->method('getConnection')->willReturn($connector);
+
+            $setup = $this->getMockBuilder(ModelSetup::class)
+                ->disableOriginalConstructor()
+                ->onlyMethods(['getModel'])
+                ->getMock();
+            $setup->method('getModel')->willReturn($model);
+
+            $this->registry->createTable($setup, new EavAttributeTypeSchema());
+
+            $rows = $connector
+                ->query("SELECT code FROM eav_attribute_type WHERE code IN ('input_bool', 'select_yes_no', 'select_option') ORDER BY code")
+                ->fetch();
+
+            $this->assertSame(['input_bool', 'select_option', 'select_yes_no'], array_column($rows, 'code'));
+        } finally {
+            if (isset($connector)) {
+                $connector->close();
+            }
+            if (is_file($dbPath)) {
+                unlink($dbPath);
+            }
+        }
+    }
+
+    public function testCreateTableAddsMissingColumnsBeforeIndexesAndSeed(): void
+    {
+        $alter = $this->getMockBuilder(AlterInterface::class)->getMock();
+        $alter->expects($this->once())
+            ->method('forTable')
+            ->with('m_eav_attribute_type', EavAttributeTypeSchema::FIELD_ID)
+            ->willReturnSelf();
+        $alter->expects($this->atLeastOnce())
+            ->method('addColumn')
+            ->willReturnSelf();
+        $alter->expects($this->once())
+            ->method('alter')
+            ->willReturn(true);
+
+        $connector = $this->getMockBuilder(ConnectorInterface::class)->getMock();
+        $connector->method('getTableColumns')->with('m_eav_attribute_type')->willReturn([
+            ['name' => EavAttributeTypeSchema::FIELD_ID],
+        ]);
+        $connector->method('alterTable')->willReturn($alter);
+        $connector->method('getConfigProvider')->willReturn(new ConfigProvider([
+            'type' => 'pgsql',
+            'path' => '',
+            'database' => '',
+            'prefix' => 'm_',
+        ]));
+
+        $method = new \ReflectionMethod(SchemaRegistry::class, 'ensureColumns');
+        $method->setAccessible(true);
+        $method->invoke($this->registry, $connector, 'm_eav_attribute_type', new EavAttributeTypeSchema());
+    }
+
+    private function createExistingAttributeTypeTable(Connector $connector): void
+    {
+        $connector->query(
+            'CREATE TABLE eav_attribute_type (
+                type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code varchar(255) UNIQUE NOT NULL,
+                name varchar(255) NOT NULL,
+                element varchar(60) DEFAULT \'input\',
+                model_class varchar(255) DEFAULT \'\',
+                model_class_data TEXT,
+                default_value TEXT,
+                is_swatch INTEGER DEFAULT 0,
+                swatch_image INTEGER DEFAULT 0,
+                swatch_color INTEGER DEFAULT 0,
+                swatch_text INTEGER DEFAULT 0,
+                frontend_attrs varchar(255) NOT NULL,
+                required INTEGER DEFAULT 0,
+                field_type varchar(60) NOT NULL,
+                field_length INTEGER NOT NULL
+            )'
+        )->fetch();
     }
 }

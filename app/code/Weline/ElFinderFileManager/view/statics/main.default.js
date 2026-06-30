@@ -6,9 +6,18 @@
  **/
 (function(){
 	"use strict";
+	function notifyLoadError(message) {
+		var text = String(message || 'elFinder failed to load.');
+		if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+			window.BackendToast.error(text);
+			return;
+		}
+		console.error(text);
+	}
+
 	var // jQuery and jQueryUI version
-		jqver = '3.7.1',
-		uiver = '1.13.2',
+		jqver = '4.0.0',
+		uiver = '1.14.2',
 		
 		// Detect language (optional)
 		lang = (function() {
@@ -46,7 +55,7 @@
 		// Start elFinder (REQUIRED)
 		start = function(elFinder, editors, config) {
 			// load jQueryUI CSS
-			elFinder.prototype.loadCss('//cdnjs.cloudflare.com/ajax/libs/jqueryui/'+uiver+'/themes/smoothness/jquery-ui.css');
+			elFinder.prototype.loadCss('jquery-ui.min.css');
 			
 			$(function() {
 				var optEditors = {
@@ -94,7 +103,7 @@
 						);
 					});
 				} else {
-					alert('"elFinderConfig" object is wrong.');
+					notifyLoadError('"elFinderConfig" object is wrong.');
 				}
 			});
 		},
@@ -110,24 +119,19 @@
 				],
 				start,
 				function(error) {
-					alert(error.message);
+					notifyLoadError(error && error.message ? error.message : error);
 				}
 			);
-		},
+		};
 		
-		// is IE8 or :? for determine the jQuery version to use (optional)
-		old = (typeof window.addEventListener === 'undefined' && typeof document.getElementsByClassName === 'undefined')
-		       ||
-		      (!window.chrome && !document.unqueID && !window.opera && !window.sidebar && 'WebkitAppearance' in document.documentElement.style && document.body.style && typeof document.body.style.webkitFilter === 'undefined');
-
 	// config of RequireJS (REQUIRED)
 	require.config({
 		baseUrl : 'js',
 		paths : {
-			'jquery'   : '//cdnjs.cloudflare.com/ajax/libs/jquery/'+(old? '1.12.4' : jqver)+'/jquery.min',
-			'jquery-ui': '//cdnjs.cloudflare.com/ajax/libs/jqueryui/'+uiver+'/jquery-ui.min',
+			'jquery'   : '../jquery.min',
+			'jquery-ui': '../jquery-ui.min',
 			'elfinder' : 'elfinder.min',
-			'encoding-japanese': '//cdn.rawgit.com/polygonplanet/encoding.js/1.0.26/encoding.min'
+			'encoding-japanese': 'encoding-japanese'
 		},
 		waitSeconds : 10 // optional
 	});

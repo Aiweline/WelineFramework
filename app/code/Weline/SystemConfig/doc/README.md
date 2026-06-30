@@ -4,6 +4,13 @@
 
 Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存储、读取、管理功能，支持多种配置类型和配置继承机制。
 
+## 当前规划入口
+
+- AI 技能入口：开发或读取模块配置前先使用 [system-config-scope](../../../../.codex/skills/system-config-scope/SKILL.md)。
+- [SystemConfig Scope 配置树计划](./scope-config-tree-plan.md)：配置模块子计划，定义 `system_config` 如何升级为统一 scope 配置系统。
+- [SystemConfig 与 Theme 虚拟布局总计划](./scope-config-theme-layout-master-plan.md)：跨模块总计划，关联 SystemConfig、Framework Scope、Theme 虚拟布局、产品/分类布局接入。
+- [Theme 虚拟布局与产品/分类布局计划](../../Theme/doc/virtual-layout-scope-plan.md)：Theme 模块子计划，说明虚拟布局、源码编辑、可视化编辑、AI 创建和定时恢复策略。
+
 ## 主要功能
 
 ### 1. 配置存储
@@ -33,39 +40,46 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 
 ## 使用方法
 
-### 配置定义
-```php
-namespace Your\Module\Config;
+### 配置模板定义
+模块通过 Extends 模式把 PHTML 配置模板注册给 `Weline_SystemConfig`，SystemConfig 从 Extends registry 收集模板，不在 Web 运行时扫描模块目录。
 
-use Weline\SystemConfig\Model\Config;
+模块只负责提供配置模板。全局 scope 切换、模块搜索、配置搜索、继承开关、保存、校验和缓存失效都由 SystemConfig 配置中心统一处理。
 
-class YourConfig extends Config
-{
-    protected $config_group = 'your_module';
-    
-    protected $configs = [
-        'site_name' => [
-            'label' => '网站名称',
-            'type' => 'text',
-            'default' => 'Weline',
-            'required' => true
-        ],
-        'site_description' => [
-            'label' => '网站描述',
-            'type' => 'textarea',
-            'default' => '网站描述信息'
-        ],
-        'maintenance_mode' => [
-            'label' => '维护模式',
-            'type' => 'select',
-            'options' => [
-                '0' => '关闭',
-                '1' => '开启'
-            ],
-            'default' => '0'
-        ]
-    ];
-}
+推荐路径：
+
+```text
+app/code/{Vendor}/{Module}/extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml
+```
+
+示例：
+
+```html
+<!--
+@meta.title 站点基础配置
+@meta.description 配置站点名称、描述和维护模式。
+@config.area frontend
+@config.sort 10
+-->
+
+<w:config:group code="general" label="基本设置" sort="10">
+    <w:config:field
+        key="your_module/general/site_name"
+        label="网站名称"
+        type="text"
+        value-type="string"
+        default="Weline"
+        required="true"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="your_module/general/maintenance_mode"
+        label="维护模式"
+        type="select"
+        value-type="bool"
+        default="0"
+        scope="global,website,store"
+        options="0:关闭,1:开启" />
+</w:config:group>
 ```
 
 ### 配置读取
@@ -139,34 +153,12 @@ if ($validator->validate($data)) {
 - `datetime`: 日期时间选择器
 
 ### 配置存储
-在 `app/etc/system_config.php` 中配置存储相关设置：
+配置值统一存入 `system_config`；配置模板只声明后台表单、分组、字段、校验和默认值，不直接写入配置值。
 
-```php
-'system_config' => [
-    'storage' => 'database', // database, file, cache
-    'cache' => true,
-    'cache_time' => 3600,
-    'encrypt_sensitive' => true
-]
-```
+SystemConfig 只保存 `<w:config:field>` 声明过的 key，并按当前显式选择的 scope 写入。未声明字段、非法 scope、env 锁定字段和校验失败字段都应拒绝保存。
 
 ### 配置分组
-```php
-'config_groups' => [
-    'general' => [
-        'label' => '基本设置',
-        'icon' => 'fa-cog'
-    ],
-    'email' => [
-        'label' => '邮件设置',
-        'icon' => 'fa-envelope'
-    ],
-    'security' => [
-        'label' => '安全设置',
-        'icon' => 'fa-shield'
-    ]
-]
-```
+配置分组由 `<w:config:group>` 声明，不再通过独立数组维护。配置模板可以写普通 PHTML 逻辑生成选项或说明，但最终可保存字段必须落在 `<w:config:field>` 白名单内。
 
 ## 依赖关系
 

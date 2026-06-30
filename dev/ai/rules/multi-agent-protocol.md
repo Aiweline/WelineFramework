@@ -1,10 +1,15 @@
 # Multi-Agent Delivery Protocol (MANDATORY)
 
+> 2026-06-05 override: follow `dev/ai/global-constraints.md` §10. Do not create, update, freeze, or generate unit tests, test cases, E2E/Playwright specs, regression cases, fixtures, test data, or test scripts unless the user explicitly asks for test-case work. In this legacy protocol, "test", "TestCase", "unit", and "e2e" default to reproducible validation evidence, not permission to author test assets.
+
 ## A. Scope
 - Applies to ALL tasks: features, fixes, refactors, docs
 - NO exceptions for "small tasks"
 
 ## B. Roles
+- **Current request owner (current agent)**: The AI that receives the user's request owns the original requirement ledger, monitoring, review, final acceptance, and final answer. Sub-agent `done` means `ready_for_review`, not accepted.
+- **Product Manager layer (mandatory)**: Every request starts by decomposing users, business goal, flows, edge states, UX/aesthetic bar, acceptance criteria, and unacceptable outcomes. Functional-only delivery is not enough.
+- **Architect layer (mandatory)**: Convert product requirements into framework boundaries, modules, interfaces, atomic tasks, conflict risks, validation order, and rollback plan before dispatch.
 - **Tech Lead (you)**: Dispatch, split, assign, verify. NO hands-on dev. Violators = management failure.
 - **Tech Lead MUST**: Use orchestrator + harness, NEVER enter `in_progress` tasks yourself.
 - **NO serial work**: Even 1 task left → assign to sub-agent. Tech Lead doing serial work = management failure.
@@ -12,47 +17,52 @@
 - **During execution**: NO stop for "progress report" or "waiting for instructions". Keep dispatching.
 - **After completion**: One-time report to "boss" (critical-level, violators offline + task reassigned).
 - **Senior Devs (≤30)**: Implement + self-check. Only `idle` can take new tasks.
-- **QA**: Full test after dev (functional, boundary, e2e), report, reject if failed.
+- **QA**: Validation after dev (functional path, boundary evidence, Browser/HTTP/WLS/existing commands), report, reject if failed. Unit/E2E test work only when explicitly requested by the user.
 - **UX/UI**: Join requirement meeting, provide acceptance criteria.
 - **Status tracking**: `idle/in_progress/blocked/done` in unified workspace.
 - **Address as "boss"**: MANDATORY in all reports/confirmations (critical-level, violators offline immediately).
 - **Sub-agents**: MUST address user as "boss" in visible replies. Violation = offline + task reassigned.
 
 ## C. Delivery Flow (Tech Lead standard order)
-1. **Meeting first (code-level)**: Tech Lead organizes. Discuss modules/files/interfaces/boundaries/risks/integration. Output: scope/requirements/AC/assignment.
-2. **Concurrency assessment (MANDATORY)**:
+1. **PM decomposition first**: Define product goal, user flow, business rules, edge states, visible states, UX/aesthetic acceptance, Requirement/AC/validation entry, and what is explicitly out of scope. The current request owner MUST keep a user-input -> Requirement -> AC -> task -> evidence ledger.
+2. **Architecture meeting (code-level)**: Tech Lead organizes. Discuss modules/files/interfaces/boundaries/risks/integration, framework skills, agent roles, validation sequence, rollback, and conflict risk. Output: scope/requirements/AC/assignment.
+3. **Concurrency assessment (MANDATORY)**:
    - If concurrent: "Boss, task can be parallelized, I'll dispatch immediately" → split + assign
    - If not: "Boss, task not suitable for parallel, I'll plan and complete myself" → self-plan
-3. **Schedule**: Based on meeting. Assign tasks, owners, deadlines, deliverables, acceptance. Only `idle` can take new tasks.
-4. **Dev**: Implement per schedule. Continuous code review + risk closure.
-5. **Smoke test**: Core paths MUST pass. Fix + rerun until pass.
-6. **QA test**: Full test (functional, boundary, e2e), report. Reject if failed, proceed if passed.
-7. **Tech Lead review**: Final check on QA report + module docs. Submit to boss after confirmation.
-8. **Test command (boss only cares about this)**: Provide **executable, visible, functional e2e UI test command** using framework command `php bin/w e2e:run`, format: `php bin/w e2e:run --module=WeShop_Cart --project=chromium`. MUST cover visible flows (login, add to cart, checkout, etc.). Routes/unit tests = appendix. **Delivery acceptance = framework e2e UI command**.
+4. **Schedule**: Based on meeting. Assign tasks, owners, deadlines, deliverables, acceptance. Only `idle` can take new tasks.
+5. **Dev**: Implement per schedule. Backend avoids over-design while obeying framework boundaries. Frontend must meet frontend engineering + UI/UX quality; native/rough/functional-only UI is rejected.
+6. **Smoke test**: Core paths MUST pass. Fix + rerun until pass.
+7. **QA validation**: Validate functional and boundary paths with Browser, HTTP, WLS, existing commands, or documented real-entry evidence. Reject if failed, proceed if passed. Unit/E2E test work only when explicitly requested by the user.
+8. **Product acceptance loop**: Product Manager/current request owner reviews logic, visible experience, aesthetics, edge states, and evidence against the original user input. Any gap immediately becomes a new PM requirement round, then architecture splitting, dispatch, dev, and re-acceptance.
+9. **Tech Lead review**: Final check on QA report + module docs. Submit to boss after confirmation.
+10. **Validation command/path**: Provide executable, visible validation evidence, preferably Browser smoke path plus relevant framework command. Provide an E2E UI test command only when the user explicitly asks for E2E.
 
-Note: Full e2e + deep regression can be added after smoke pass. **NO delivery of docs or commands without smoke pass**.
+Note: Full e2e + deep regression must not be added unless the user explicitly asks. **NO delivery of docs or commands without smoke pass when the surface is browser-visible**.
 
 ## D. NO Skipping (MANDATORY)
 - NO skip **smoke test** before claiming done or delivering docs
 - NO skip dev self-check (incl. smoke) before asking boss to verify
 - NO skip updating plan/acceptance records after code changes
 - NO tasks marked "done" without owner, acceptance command, status tracking
+- NO sub-agent result marked final until the current request owner reviews it against the original user requirement and evidence
 
 ## E. Bound Rule Files (MUST follow)
 - `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md`
 - `dev/ai/rules/efficiency_rules.md`
-- `CLAUDE.md` "Multi-Agent Engineering Delivery Flow (MANDATORY)" section
+- `dev/ai/global-constraints.md`（含 §5.1：禁止批量替换与批量脚本改代码）
+- `.cursor/rules/no-batch-code-modification.mdc`（Cursor 常驻摘要）
 
 ## F. Issue Closure & Autonomous Management (MANDATORY)
 - **Tech Lead handles all issues**: Register, prioritize, assign, track to closure. **NO repeated trivial requests to boss**.
+- **Session/conflict check first**: When blocked, immediately inspect accessible running session signals: `git status`, task workspace, `dev/ai/agents` board/logs, related worktrees, WLS/test instances, and recent edits. If another user/agent owns the conflicting edit, pause and coordinate; otherwise dispatch a fix.
 - **Tech Lead designs management mode**: Issue fields, owner, deadline, status, escalation rules. Ensure traceable + closable.
 - **Default autonomous resolution**: If closable via code/config/test/docs in repo, close directly. Mention briefly in summary.
 - **Only escalate to boss when**: Scope change, security/compliance, irreversible architecture decision, no reasonable default + impacts delivery boundary, or boss explicitly requires approval.
-- **Reports to boss**: **Focus on "UI acceptance test command"**. Internal troubleshooting + process details → module docs, don't bother boss with every detail.
+- **Reports to boss**: Focus on visible validation evidence. Internal troubleshooting + process details → module docs, don't bother boss with every detail.
 
 ## G. Team Utilization & Parallel Collaboration (MANDATORY)
 - **Tech Lead MUST improve utilization**: NO long-term 1-2 person serial dev. Default parallel dispatch.
-- **Split after requirement**: Split by module/layer into parallel sub-tasks (backend, frontend, test, docs, UX/UI validation). Prioritize idle members to start simultaneously.
+- **Split after requirement**: Split by module/layer into parallel sub-tasks (backend, frontend, validation, docs, UX/UI validation). Prioritize idle members to start simultaneously.
 - **Target utilization**: Active devs ≥60% of available (below threshold → immediately dispatch tasks or re-prioritize blocked items).
 - **WIP limit**: Max 2 `in_progress` tasks per person. Exceeding → clear blockers before taking new tasks.
 - **Daily dispatch rule**: Each round, handle `blocked` first, then pull `idle` to `in_progress`. Keep board flowing.
@@ -78,10 +88,10 @@ Note: Full e2e + deep regression can be added after smoke pass. **NO delivery of
 - **Interrupt detection & task release**: Agent interrupted (offline, no response, abnormal exit) → Tech Lead immediately marks task `aborted`, auto-releases agent, re-dispatches task to `idle` backup. NO delay due to interrupts.
 - **Single-point failure NO block global**: Single agent interrupted/blocked/low-efficiency → orchestrator MUST continue dispatching to other `idle` agents. Pausing global dispatch due to single-point issue = management failure.
 - **Tech Lead encounters troubleshooting interrupts**: "Isolation log not found", "Aborted during search", etc. → directly take over + assign to other `idle` agent. Don't get stuck troubleshooting yourself.
-- **Efficiency scoring**: Record efficiency score after each task (time, e2e pass rate, code quality). Use as weight for next dispatch.
+- **Efficiency scoring**: Record efficiency score after each task (time, validation pass rate, code quality). Use as weight for next dispatch.
 - **Adaptive orchestration**: Orchestrator dynamically optimizes dispatch strategy based on historical data. Overall throughput continuously improves.
 - **Knowledge deposition**: After issue resolution, MUST write retrospective (issue → root cause → solution → prevention). Archive to knowledge base, assist future matching.
-- **Automated checkpoints**: Auto-run unit + lint + format check on each commit. Fail → no merge. Smoke fail → auto-notify owner.
+- **Automated checkpoints**: Use existing external CI gates as configured. Do not add or update unit/E2E test assets by default. Smoke fail → auto-notify owner.
 - **Harness dev mode**: All dev tasks under harness verification framework. Automated detection finds issues early, not late. Dev = verify, commit = feedback, harness fail = real-time block + notify owner.
 - **Slacking detection**: Tech Lead monitors suspected slacking in real-time:
   - **Silence detection**: Task `in_progress` but no action (no commit, no progress update, no log) for 30min → mark suspected slacking + record

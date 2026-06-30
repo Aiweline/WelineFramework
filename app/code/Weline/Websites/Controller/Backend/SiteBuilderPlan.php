@@ -8,6 +8,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSitePlanDraft;
 use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService;
@@ -168,15 +169,26 @@ class SiteBuilderPlan extends BackendController
             ]);
         }
 
-        $plan = $this->planGenerationService->generatePlan(
-            $payload,
-            $pendingMessage,
-            static function (string $eventType, array $data) use ($sse): void {
-                if ($sse->isAlive()) {
-                    $sse->sendEvent($eventType, $data);
+        try {
+            $plan = $this->planGenerationService->generatePlan(
+                $payload,
+                $pendingMessage,
+                static function (string $eventType, array $data) use ($sse): void {
+                    if ($sse->isAlive()) {
+                        $sse->sendEvent($eventType, $data);
+                    }
                 }
-            }
-        );
+            );
+        } catch (\Throwable $throwable) {
+            $message = (string)$throwable->getMessage();
+            $sse->sendError($message !== '' ? $message : (string)__('Plan generation failed'));
+            $sse->complete([
+                'success' => false,
+                'draft_public_id' => $draft->getPublicId(),
+                'message' => $message,
+            ]);
+            return;
+        }
 
         $version = $this->planDraftService->appendPlanVersion(
             $draft->getId(),
@@ -447,7 +459,7 @@ class SiteBuilderPlan extends BackendController
         $workspaceTrack = $buildMode === 'pagebuilder_html' ? 'html_blocks' : 'virtual_theme';
         $siteReady = $draft->getSelectedDomainSource() === AiSitePlanDraft::DOMAIN_SOURCE_LOCAL_POOL ? 1 : 0;
 
-        return [
+        $scope = [
             'created_from' => 'site_builder_plan_draft',
             'provider_code' => $draft->getProviderCode(),
             'plan_draft_public_id' => $draft->getPublicId(),
@@ -473,6 +485,87 @@ class SiteBuilderPlan extends BackendController
             'site_ready' => $siteReady,
             'fake_mode' => !empty($payload['fake_mode']) ? 1 : 0,
         ];
+
+        return $this->attachPageBuilderStageOneRouteContract($scope, $plan);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $plan
+     * @return array<string, mixed>
+     */
+    private function attachPageBuilderStageOneRouteContract(array $scope, array $plan): array
+    {
+        if ((string)($scope['provider_code'] ?? '') !== 'pagebuilder') {
+            return $scope;
+        }
+
+        $contractServiceClass = 'GuoLaiRen\\PageBuilder\\Service\\AiSiteStageOneContractService';
+        if (!\class_exists($contractServiceClass)) {
+            return $scope;
+        }
+
+        $pageTypes = $this->normalizeStringList($scope['page_types'] ?? $plan['page_types'] ?? []);
+        if ($pageTypes === []) {
+            return $scope;
+        }
+
+        $contentLocale = \trim((string)($scope['content_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? ''));
+        $planLocale = \trim((string)($scope['plan_locale'] ?? $contentLocale));
+
+        try {
+            $contractService = ObjectManager::getInstance($contractServiceClass);
+            if (!\is_object($contractService) || !\method_exists($contractService, 'build')) {
+                return $scope;
+            }
+            $stageOneContract = $contractService->build(
+                $scope,
+                $pageTypes,
+                $planLocale,
+                $contentLocale,
+                'site_builder_plan_draft'
+            );
+        } catch (\Throwable) {
+            return $scope;
+        }
+
+        if (!\is_array($stageOneContract)) {
+            return $scope;
+        }
+
+        if (\is_array($stageOneContract['page_route_contract'] ?? null)) {
+            $scope['page_route_contract'] = $stageOneContract['page_route_contract'];
+            $scope['site_plan'] = \is_array($scope['site_plan'] ?? null) ? $scope['site_plan'] : $plan;
+            $scope['site_plan']['page_route_contract'] = $stageOneContract['page_route_contract'];
+        }
+        if (\is_array($stageOneContract['navigation_address_rules'] ?? null)) {
+            $scope['navigation_address_rules'] = $stageOneContract['navigation_address_rules'];
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $raw): array
+    {
+        if (!\is_array($raw)) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($raw as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $value = \trim((string)$item);
+            if ($value !== '' && !\in_array($value, $values, true)) {
+                $values[] = $value;
+            }
+        }
+
+        return $values;
     }
 
     /**

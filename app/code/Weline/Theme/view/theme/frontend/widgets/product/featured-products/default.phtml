@@ -11,6 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["homepage", "cms_page", "category"]}
+ * @widget.supports {["layout-homepage-featured","layout-homepage-content","layout-product-list-recommendations","layout-category-recommendations","layout-cms-content","layout-default-content"]}
  * 
  * @param title {default="推荐产品",type="string",label="标题"}
  * @param subtitle {default="为您精选的优质商品",type="string",label="副标题"}
@@ -43,11 +44,14 @@ $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/t
 
 // 示例产品数据（实际应从产品服务获取）
 $products = [];
+$demoProductIds = [220, 221, 222, 223, 224, 7, 5, 10, 6, 11];
 for ($i = 1; $i <= $limit; $i++) {
+    $productId = $demoProductIds[($i - 1) % count($demoProductIds)];
     $products[] = [
-        'id' => $i,
+        'id' => $productId,
+        'product_id' => $productId,
         'name' => __('示例产品 %d', $i),
-        'url' => '/product/' . $i,
+        'url' => '/product/' . $productId,
         'image' => $placeholder,
         'price' => rand(50, 500),
         'original_price' => rand(50, 500) * 1.2,
@@ -98,17 +102,17 @@ $widgetId = 'featured-products-' . uniqid();
                             <!-- 标签 -->
                             <div class="product-badges">
                                 <?php if ($product['is_new']): ?>
-                                    <span class="badge badge-new"><?= __('NEW') ?></span>
+                                    <span class="w-badge w-badge-success badge-new"><?= __('NEW') ?></span>
                                 <?php endif; ?>
                                 <?php if ($product['is_sale']): ?>
-                                    <span class="badge badge-sale"><?= __('SALE') ?></span>
+                                    <span class="w-badge w-badge-danger badge-sale"><?= __('SALE') ?></span>
                                 <?php endif; ?>
                             </div>
                             
                             <!-- 快捷操作 -->
                             <div class="product-actions">
-                                <button class="action-btn btn-wishlist" title="<?= __('加入收藏') ?>">
-                                    <i class="ri-heart-line"></i>
+                                <button class="action-btn btn-wishlist weline-pixel::add_to_wishlist" title="<?= __('加入收藏') ?>">
+                                    <i class="ri-heart-line weline-pixel::add_to_wishlist"></i>
                                 </button>
                                 <button class="action-btn btn-quickview" title="<?= __('快速查看') ?>">
                                     <i class="ri-eye-line"></i>
@@ -144,17 +148,27 @@ $widgetId = 'featured-products-' . uniqid();
                                     <?php if ($product['original_price'] > $product['price']): ?>
                                         <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
                                     <?php endif; ?>
-                                    <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
+                                    <span class="price-current weline-pixel::add_to_cart:value" data-pixel-value="<?= htmlspecialchars((string)(float)$product['price'], ENT_QUOTES, 'UTF-8') ?>">¥<?= number_format($product['price'], 2) ?></span>
                                 </div>
                             <?php endif; ?>
                             
                             <?php if ($showAddToCart): ?>
                                 <div class="product-cart">
                                     <?php if ($product['stock'] > 0): ?>
-                                        <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
-                                            <i class="ri-shopping-cart-line"></i>
-                                            <span><?= __('加入购物车') ?></span>
-                                        </button>
+                                        <?php $cartProductId = (int) ($product['product_id'] ?? $product['id'] ?? 0); ?>
+                                        <form class="product-add-to-cart-form" action="<?= $this->getUrl('cart/frontend/cart/add') ?>" method="post">
+                                            <input type="hidden" name="product_id" value="<?= $cartProductId ?>">
+                                            <input type="hidden" name="qty" value="1">
+                                            <input type="hidden" name="redirect" value="/cart">
+                                            <button type="submit"
+                                                    class="btn-add-to-cart weline-pixel::add_to_cart"
+                                                    data-product-id="<?= $cartProductId ?>"
+                                                    data-is-configurable="0"
+                                                    data-action="add-to-cart">
+                                            <i class="ri-shopping-cart-line weline-pixel::add_to_cart"></i>
+                                            <span class="weline-pixel::add_to_cart"><?= __('加入购物车') ?></span>
+                                            </button>
+                                        </form>
                                     <?php else: ?>
                                         <button class="btn-out-of-stock" disabled>
                                             <span><?= __('暂时缺货') ?></span>
@@ -283,7 +297,7 @@ $widgetId = 'featured-products-' . uniqid();
     z-index: 2;
 }
 
-.widget-products .badge {
+.widget-products .w-badge {
     padding: 4px 10px;
     font-size: 11px;
     font-weight: 600;
@@ -577,7 +591,7 @@ $widgetId = 'featured-products-' . uniqid();
         btn.addEventListener('click', function() {
             const productId = this.dataset.productId;
             // 这里应该调用实际的加购API
-            console.log('Add to cart:', productId);
+            return;
             
             // 显示添加动画
             this.innerHTML = '<i class="ri-check-line"></i> <span><?= __('已添加') ?></span>';
@@ -587,6 +601,59 @@ $widgetId = 'featured-products-' . uniqid();
                 this.innerHTML = '<i class="ri-shopping-cart-line"></i> <span><?= __('加入购物车') ?></span>';
                 this.style.background = '';
             }, 2000);
+        });
+    });
+    function updateCartCountFromFeaturedProducts(count) {
+        document.querySelectorAll('.cart-count, [data-cart-count]').forEach(function(el) {
+            el.textContent = count;
+            el.style.display = count > 0 ? '' : 'none';
+        });
+    }
+
+    let featuredCartApiPromise = null;
+
+    function getFeaturedCartApi() {
+        if (!featuredCartApiPromise) {
+            featuredCartApiPromise = Promise.resolve(window.Weline.Api.resource('cart'));
+        }
+
+        return featuredCartApiPromise;
+    }
+
+    function postFeaturedProductAddToCart(productId, done) {
+        getFeaturedCartApi().then(function (CartApi) {
+            return CartApi.add({product_id: parseInt(productId, 10), qty: 1}, {silent: true});
+        }).then(function (response) {
+            const payload = response && response.data ? response.data : (response || {});
+            done(!!payload.success, payload);
+        }).catch(function (error) {
+            console.error('[WeShop Featured] add-to-cart exception', error);
+            done(false, { message: error && error.message ? error.message : String(error) });
+        });
+    }
+
+    widget.querySelectorAll('.btn-add-to-cart').forEach(function(btn) {
+        if (btn.closest('form.product-add-to-cart-form')) {
+            return;
+        }
+        if (btn.dataset.weshopFeaturedAddBound === '1') {
+            return;
+        }
+        btn.dataset.weshopFeaturedAddBound = '1';
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const productId = this.dataset.productId;
+            console.log('[WeShop Featured] add-to-cart click', productId);
+            postFeaturedProductAddToCart(productId, (success, payload) => {
+                if (success) {
+                    updateCartCountFromFeaturedProducts(parseInt(payload.cart_count || 0, 10));
+                    document.dispatchEvent(new CustomEvent('weshop:cart:added', { detail: payload }));
+                } else {
+                    document.dispatchEvent(new CustomEvent('weshop:cart:error', { detail: payload }));
+                }
+            });
         });
     });
 })();

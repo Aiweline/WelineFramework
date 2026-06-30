@@ -1,5 +1,9 @@
 # Frontend Layouts
 
+Full layout extension guide: `app/code/Weline/Theme/doc/layout-discovery-guide.md`.
+
+Discovery precedence: active `app/design` theme chain -> `Weline_Theme/view/theme` -> module `view/theme` contributions. Module contributions can add new layouts but cannot override `Weline_Theme` defaults; `app/design` themes can override defaults. Adjacent `*.layout.json` files follow the same precedence.
+
 前端布局按 `layouts/<layoutType>/<option>.phtml` 组织，`layoutType` 由控制器声明，
 `option` 可以来自代码显式指定，也可以来自主题配置和预览 scope。
 
@@ -30,6 +34,9 @@
 
 - `account_auth`
   - `default`
+
+- `blank`
+  - `full`
 
 - `account_logout`
   - `default`

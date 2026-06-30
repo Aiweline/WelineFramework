@@ -12,6 +12,33 @@ class WidgetEditor {
         this.widgetsData = []; // 画布中的部件数据
     }
 
+    escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value === null || value === undefined ? '' : String(value);
+        return div.innerHTML;
+    }
+
+    notify(type, message) {
+        const toast = window.BackendToast;
+        if (toast && typeof toast[type] === 'function') {
+            toast[type](message);
+            return;
+        }
+        if (toast && typeof toast.info === 'function') {
+            toast.info(message);
+            return;
+        }
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+
+    confirmAction(message, options) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(message, options || {});
+        }
+        this.notify('warning', __('确认组件不可用，操作已取消'));
+        return Promise.resolve(false);
+    }
+
     init() {
         this.initEventListeners();
         this.loadPageContent();
@@ -48,6 +75,34 @@ class WidgetEditor {
                 const widgetData = JSON.parse(item.dataset.widget || '{}');
                 this.addWidgetToCanvas(type, name, widgetData);
             });
+        });
+
+        document.addEventListener('click', (event) => {
+            const actionButton = event.target.closest('[data-widget-action]');
+            if (!actionButton) {
+                return;
+            }
+            if (!actionButton.closest('#canvas-widgets') && !actionButton.closest('#widget-properties')) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const action = actionButton.dataset.widgetAction;
+            const index = Number.parseInt(actionButton.dataset.index || '', 10);
+
+            if (action === 'edit' && Number.isInteger(index)) {
+                this.editWidget(index);
+                return;
+            }
+            if (action === 'remove' && Number.isInteger(index)) {
+                this.removeWidget(index);
+                return;
+            }
+            if (action === 'update-params') {
+                this.updateWidgetParams();
+            }
         });
     }
 
@@ -155,21 +210,23 @@ class WidgetEditor {
 
         canvas.innerHTML = this.widgetsData.map((widget, index) => {
             const widgetInfo = this.widgets[widget.type]?.[widget.name] || {};
+            const widgetTitle = this.escapeHtml(widgetInfo.name || widget.name);
+            const widgetId = this.escapeHtml(widget.id);
             return `
-                <div class="widget-container" data-widget-id="${widget.id}" data-index="${index}">
+                <div class="widget-container" data-widget-id="${widgetId}" data-index="${index}">
                     <div class="widget-actions">
-                        <button class="btn btn-sm btn-primary" onclick="widgetEditor.editWidget(${index})">
+                        <button type="button" class="btn btn-sm btn-primary" data-widget-action="edit" data-index="${index}">
                             <i class="ri-edit-line"></i>
                         </button>
-                        <button class="btn btn-sm btn-danger" onclick="widgetEditor.removeWidget(${index})">
+                        <button type="button" class="btn btn-sm btn-danger" data-widget-action="remove" data-index="${index}">
                             <i class="ri-delete-bin-line"></i>
                         </button>
                     </div>
                     <div class="widget-content">
-                        <div class="widget-preview" data-widget-id="${widget.id}">
+                        <div class="widget-preview" data-widget-id="${widgetId}">
                             <div class="text-muted p-3 text-center">
                                 <i class="ri-widget-line" style="font-size: 24px;"></i>
-                                <div class="mt-2">${widgetInfo.name || widget.name}</div>
+                                <div class="mt-2">${widgetTitle}</div>
                                 <small class="text-muted">加载中...</small>
                             </div>
                         </div>
@@ -234,19 +291,22 @@ class WidgetEditor {
         }
 
         let html = '<div class="widget-property-group">';
-        html += `<h6>${widgetInfo.name || widget.name}</h6>`;
+        html += `<h6>${this.escapeHtml(widgetInfo.name || widget.name)}</h6>`;
         
         Object.keys(params).forEach(key => {
             const param = params[key];
             const value = widget.params[key] !== undefined ? widget.params[key] : (param.default || '');
+            const keyAttr = this.escapeHtml(key);
+            const valueAttr = this.escapeHtml(value);
+            const paramLabel = this.escapeHtml(param.label || key);
             
             html += '<div class="mb-3">';
-            html += `<label class="form-label">${param.label || key}${param.required ? ' <span class="text-danger">*</span>' : ''}</label>`;
+            html += `<label class="form-label">${paramLabel}${param.required ? ' <span class="text-danger">*</span>' : ''}</label>`;
             
             switch (param.type) {
                 case 'bool':
                     html += `
-                        <select class="form-select" data-param="${key}">
+                        <select class="form-select" data-param="${keyAttr}">
                             <option value="1" ${value ? 'selected' : ''}>是</option>
                             <option value="0" ${!value ? 'selected' : ''}>否</option>
                         </select>
@@ -254,36 +314,36 @@ class WidgetEditor {
                     break;
                 case 'select':
                     const options = param.options || [];
-                    html += `<select class="form-select" data-param="${key}">`;
+                    html += `<select class="form-select" data-param="${keyAttr}">`;
                     options.forEach(opt => {
                         const optValue = typeof opt === 'object' ? opt.value : opt;
                         const optLabel = typeof opt === 'object' ? opt.label : opt;
-                        html += `<option value="${optValue}" ${value === optValue ? 'selected' : ''}>${optLabel}</option>`;
+                        html += `<option value="${this.escapeHtml(optValue)}" ${value === optValue ? 'selected' : ''}>${this.escapeHtml(optLabel)}</option>`;
                     });
                     html += '</select>';
                     break;
                 case 'color':
-                    html += `<input type="color" class="form-control form-control-color" data-param="${key}" value="${value}">`;
+                    html += `<input type="color" class="form-control form-control-color" data-param="${keyAttr}" value="${valueAttr}">`;
                     break;
                 case 'image':
                     html += `
-                        <input type="text" class="form-control" data-param="${key}" value="${value}" placeholder="图片 URL">
+                        <input type="text" class="form-control" data-param="${keyAttr}" value="${valueAttr}" placeholder="图片 URL">
                         <button type="button" class="btn btn-sm btn-secondary mt-1">选择图片</button>
                     `;
                     break;
                 default:
-                    html += `<input type="text" class="form-control" data-param="${key}" value="${value}">`;
+                    html += `<input type="text" class="form-control" data-param="${keyAttr}" value="${valueAttr}">`;
             }
             
             if (param.description) {
-                html += `<small class="form-text text-muted">${param.description}</small>`;
+                html += `<small class="form-text text-muted">${this.escapeHtml(param.description)}</small>`;
             }
             
             html += '</div>';
         });
         
         html += '</div>';
-        html += '<button type="button" class="btn btn-primary w-100" onclick="widgetEditor.updateWidgetParams()">更新</button>';
+        html += '<button type="button" class="btn btn-primary w-100" data-widget-action="update-params">更新</button>';
         
         propertiesPanel.innerHTML = html;
 
@@ -353,12 +413,27 @@ class WidgetEditor {
             );
             const result = await response.json();
             
-            if (result.success && result.html) {
-                previewElement.innerHTML = result.html;
+            if (result.success && result.preview_safe === true && typeof result.html === 'string') {
+                this.renderPreviewFrame(previewElement, result.html);
+            } else if (!result.success && result.message) {
+                previewElement.textContent = result.message;
             }
         } catch (error) {
             console.error(__('预览失败'), error);
         }
+    }
+
+    renderPreviewFrame(previewElement, html) {
+        const frame = document.createElement('iframe');
+        frame.setAttribute('sandbox', '');
+        frame.setAttribute('referrerpolicy', 'no-referrer');
+        frame.setAttribute('title', __('预览'));
+        frame.style.width = '100%';
+        frame.style.minHeight = '160px';
+        frame.style.border = '0';
+        frame.style.display = 'block';
+        frame.srcdoc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; media-src http: https: data:; font-src http: https: data:; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'; script-src 'none'; object-src 'none'"><style>html,body{margin:0;padding:0;min-height:100%;font-family:Arial,sans-serif;}img,video{max-width:100%;height:auto;}</style></head><body>${html}</body></html>`;
+        previewElement.replaceChildren(frame);
     }
 
     /**
@@ -420,7 +495,15 @@ class WidgetEditor {
      * 删除部件
      */
     removeWidget(index) {
-        if (confirm(__('确定要删除这个部件吗？'))) {
+        this.confirmAction(__('确定要删除这个部件吗？'), {
+            title: __('确认删除'),
+            type: 'danger',
+            confirmText: __('删除'),
+            cancelText: __('取消')
+        }).then((confirmed) => {
+            if (!confirmed) {
+                return;
+            }
             this.widgetsData.splice(index, 1);
             this.renderCanvas();
             this.selectedWidget = null;
@@ -430,7 +513,7 @@ class WidgetEditor {
                     <p>${__('选择一个部件进行配置')}</p>
                 </div>
             `;
-        }
+        });
     }
 
     /**
@@ -597,77 +680,38 @@ class WidgetEditor {
         const pageId = document.getElementById('page-id')?.value || 0;
 
         if (!title || !handle) {
-            alert(__('请填写页面标题和标识'));
+            this.notify('warning', __('请填写页面标题和标识'));
             return;
         }
 
         // 生成页面内容
         const content = this.generatePageContent();
-
-        try {
-            const formData = new FormData();
-            formData.append('page_id', pageId);
-            formData.append('title', title);
-            formData.append('handle', handle);
-            formData.append('content', content);
-            formData.append('status', 'draft');
-
-            const response = await fetch(this.saveUrl, {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-            
-            if (result.success) {
-                alert(__('保存成功'));
-                if (result.page_id) {
-                    document.getElementById('page-id').value = result.page_id;
-                }
-            } else {
-                alert(__('保存失败: %{1}', result.message || __('未知错误')));
-            }
-        } catch (error) {
-            console.error(__('保存失败'), error);
-            alert(__('保存失败: %{1}', error.message));
-        }
-    }
-
-    /**
-     * 生成页面内容
-     */
-    generatePageContent() {
-        return this.widgetsData.map(widget => {
-            const paramsJson = JSON.stringify(widget.params).replace(/'/g, "\\'");
-            return `<w:widget type="${widget.type}" name="${widget.name}" params='${paramsJson}' id="${widget.id}" />`;
-        }).join('\n');
-    }
-
-    /**
-     * 预览页面
-     */
-    previewPage() {
-        const content = this.generatePageContent();
-        // 打开新窗口预览
         const previewWindow = window.open('', '_blank');
-        previewWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>页面预览</title>
-                <style>
-                    body { padding: 20px; font-family: Arial, sans-serif; }
-                </style>
-            </head>
-            <body>
-                <h2>页面预览</h2>
-                <div id="preview-content">
-                    ${content.replace(/<w:widget/g, '<!-- w:widget').replace(/\/>/g, '/> -->')}
-                </div>
-                <p class="text-muted">注意：预览中 w:widget 标签需要服务器端渲染才能显示实际内容</p>
-            </body>
-            </html>
-        `);
+        if (!previewWindow) {
+            return;
+        }
+
+        const previewDocument = previewWindow.document;
+        previewDocument.title = __('Page preview');
+        previewDocument.body.textContent = '';
+
+        const style = previewDocument.createElement('style');
+        style.textContent = 'body { padding: 20px; font-family: Arial, sans-serif; }';
+        previewDocument.head.appendChild(style);
+
+        const heading = previewDocument.createElement('h2');
+        heading.textContent = __('Page preview');
+        previewDocument.body.appendChild(heading);
+
+        const previewContent = previewDocument.createElement('pre');
+        previewContent.id = 'preview-content';
+        previewContent.textContent = content;
+        previewDocument.body.appendChild(previewContent);
+
+        const note = previewDocument.createElement('p');
+        note.className = 'text-muted';
+        note.textContent = __('The w:widget tags in this preview need server-side rendering before actual widget content is shown.');
+        previewDocument.body.appendChild(note);
     }
 }
 

@@ -1,0 +1,76 @@
+<?php
+/**
+ * Layout: blank/full
+ *
+ * @meta.name {default="Blank Fullscreen Layout",name="Blank Fullscreen Layout",description="Fullscreen blank layout without site header, footer, breadcrumb, or container width limits."}
+ * @meta.description {default="A pass-through fullscreen layout for standalone tools and blank app shells.",name="Description",description="Renders standalone HTML as-is and wraps fragment content in a minimal fullscreen shell."}
+ * @preview.login {default=0,option={0:No,1:Yes},name="Requires Login",description="Whether preview requires login."}
+ * @param.title {default="",name="Page Title",description="Page title."}
+ * @param.class {default="",name="Extra CSS Class",description="Extra body/main CSS class."}
+ */
+$meta = $this->getData('meta') ?? [];
+$contentHtml = (string)($this->getData('content') ?? ($meta['content'] ?? ''));
+$hasDocumentShell = preg_match('/^\s*(?:<!doctype\s+html[^>]*>\s*)?<html\b/i', $contentHtml) === 1;
+?>
+<?php if ($hasDocumentShell): ?>
+<?php echo $contentHtml; ?>
+<?php else: ?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::blank::head-after</w:hook>
+<style>
+html,
+body {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.blank-full-layout {
+    min-height: 100vh;
+    overflow: hidden;
+    background: transparent;
+}
+
+.blank-full-content {
+    width: 100vw;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+</style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="blank-full-layout <?= htmlspecialchars((string)($meta['class'] ?? '')) ?>">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::blank::body-start</w:hook>
+    <main class="blank-full-content" id="blank-full-content" data-layout="blank_full">
+        <w:slot id="content"
+                name="内容区"
+                accept="layout-blank-full-content,layout-default-content,content,container"
+                reject="header,footer"
+                multiple="true"
+                position="content"
+                class="blank-full__content-root-slot">
+            <w:slot id="blank-full-content"
+                name="空白全屏内容"
+                accept="layout-blank-full-content,layout-default-content,content,container"
+                reject="header,footer"
+                multiple="true"
+                position="content">
+            <?php echo $contentHtml; ?>
+            </w:slot>
+        </w:slot>
+    </main>
+    <w:hook>Weline_Theme::frontend::layouts::blank::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>
+<?php endif; ?>

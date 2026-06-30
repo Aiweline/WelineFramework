@@ -13,6 +13,20 @@
         apiWidgets: '',
         apiPublish: '',
         apiPreview: '',
+        apiCompileLayout: '',
+        apiLayoutOptions: '',
+        apiLayoutConfig: '',
+        apiSaveLayoutSelection: '',
+        apiSaveLayoutConfig: '',
+        apiAiTranslateConfig: '',
+        apiVirtualThemeAiCatalog: '',
+        apiVirtualThemeCreateDraft: '',
+        apiVirtualThemeBlockAction: '',
+        apiVirtualThemeSource: '',
+        apiVirtualThemeSaveSource: '',
+        apiVirtualThemePublishVersion: '',
+        apiLayoutPreview: '',
+        apiParamRenderForm: '',
         autoSaveDelay: 1000,
         // 版本控制 API
         apiVersions: '',
@@ -38,7 +52,11 @@
     const state = {
         themeId: 0,
         pageType: 'default',
+        layoutType: 'default',
+        layoutOption: 'default',
+        layoutOptionsByType: {},
         selectedWidget: null,
+        configMode: 'layout',
         selectedArea: null, // 当前选中的区域代码
         isDragging: false,
         hasChanges: false,
@@ -48,6 +66,7 @@
         originalGroupOrder: [], // 保存原始分组顺序
         previewRefreshInFlight: false,
         previewRefreshQueued: false,
+        previewArrayItemIndexByLayout: {},
         previewStatus: 'draft', // 预览版本状态：draft（草稿）/ published（已发布）
         saveInProgress: false,   // 防止拖入保存时重复提交导致保存两个部件
         // 版本控制状态
@@ -63,10 +82,101 @@
         nestStack: [],
         nestIndex: 0,
         lastHoverPoint: null,
+        virtualThemeAiCatalog: null,
+        layoutLock: { enabled: false },
     };
 
     // DOM 元素
     let elements = {};
+    let editorModalEventsBound = false;
+
+    function ensureEditorModalEvents() {
+        if (editorModalEventsBound) {
+            return;
+        }
+        editorModalEventsBound = true;
+
+        document.addEventListener('click', function(event) {
+            const dismissButton = event.target.closest('[data-bs-dismiss="modal"]');
+            if (!dismissButton) {
+                return;
+            }
+            const modal = dismissButton.closest('.modal');
+            if (modal) {
+                event.preventDefault();
+                hideEditorModal(modal);
+            }
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape') {
+                return;
+            }
+            const openModals = Array.from(document.querySelectorAll('.modal.show'));
+            const modal = openModals[openModals.length - 1];
+            if (modal) {
+                hideEditorModal(modal);
+            }
+        });
+    }
+
+    function getEditorBackdrop() {
+        return document.querySelector('.modal-backdrop[data-theme-editor-backdrop="1"]');
+    }
+
+    function ensureEditorBackdrop() {
+        let backdrop = getEditorBackdrop();
+        if (backdrop) {
+            return backdrop;
+        }
+        backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop fade show';
+        backdrop.setAttribute('data-theme-editor-backdrop', '1');
+        backdrop.addEventListener('click', function() {
+            const openModals = Array.from(document.querySelectorAll('.modal.show'));
+            const modal = openModals[openModals.length - 1];
+            if (modal) {
+                hideEditorModal(modal);
+            }
+        });
+        document.body.appendChild(backdrop);
+        return backdrop;
+    }
+
+    function showEditorModal(modal) {
+        if (!modal) {
+            return;
+        }
+        ensureEditorModalEvents();
+        modal.style.display = 'block';
+        modal.removeAttribute('aria-hidden');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('role', 'dialog');
+        modal.classList.add('show');
+        document.body.classList.add('modal-open');
+        document.body.style.overflow = 'hidden';
+        ensureEditorBackdrop();
+    }
+
+    function hideEditorModal(modal) {
+        if (!modal) {
+            return;
+        }
+        modal.classList.remove('show');
+        modal.style.display = 'none';
+        modal.setAttribute('aria-hidden', 'true');
+        modal.removeAttribute('aria-modal');
+        modal.removeAttribute('role');
+
+        if (!document.querySelector('.modal.show')) {
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            const backdrop = getEditorBackdrop();
+            if (backdrop) {
+                backdrop.remove();
+            }
+        }
+    }
 
     /** 主题编辑器内联 SVG 图标（不依赖 Remix Icon 字体） */
     var TE_ICONS = {
@@ -100,12 +210,542 @@
         return state.pageType || state.layoutType || 'homepage';
     }
 
+    function normalizeLayoutOptionValue(value) {
+        return String(value || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').trim();
+    }
+
+    function normalizeLayoutOptionsByType(rawOptions) {
+        const result = {};
+        if (!rawOptions || typeof rawOptions !== 'object') {
+            return result;
+        }
+
+        Object.entries(rawOptions).forEach(([layoutType, options]) => {
+            const type = normalizeLayoutOptionValue(layoutType);
+            if (!type || !Array.isArray(options)) {
+                return;
+            }
+            result[type] = options
+                .map((option) => {
+                    if (typeof option === 'string') {
+                        return {
+                            value: normalizeLayoutOptionValue(option),
+                            label: option,
+                            description: '',
+                            file: ''
+                        };
+                    }
+                    if (!option || typeof option !== 'object') {
+                        return null;
+                    }
+                    const value = normalizeLayoutOptionValue(option.value);
+                    if (!value) {
+                        return null;
+                    }
+                    return {
+                        value,
+                        label: String(option.label || option.name || value),
+                        description: String(option.description || ''),
+                        file: String(option.file || '')
+                    };
+                })
+                .filter(Boolean);
+        });
+
+        return result;
+    }
+
+    function parseLayoutOptionsByType(value) {
+        if (!value) {
+            return {};
+        }
+        if (typeof value === 'object') {
+            return normalizeLayoutOptionsByType(value);
+        }
+        try {
+            return normalizeLayoutOptionsByType(JSON.parse(String(value)));
+        } catch (error) {
+            console.warn('[ThemeEditor] Invalid layout options payload:', error);
+            return {};
+        }
+    }
+
+    function parseLayoutLock(value) {
+        if (!value) {
+            return { enabled: false };
+        }
+        if (typeof value === 'object') {
+            return value && value.enabled ? value : { enabled: false };
+        }
+        try {
+            const parsed = JSON.parse(String(value));
+            return parsed && parsed.enabled ? parsed : { enabled: false };
+        } catch (error) {
+            console.warn('[ThemeEditor] Invalid layout lock payload:', error);
+            return { enabled: false };
+        }
+    }
+
+    function isLayoutLocked() {
+        return Boolean(state.layoutLock && state.layoutLock.enabled);
+    }
+
+    function getLayoutLockVirtualPayload() {
+        if (!isLayoutLocked()) {
+            return {};
+        }
+
+        return {
+            scope: state.layoutLock.scope || 'default',
+            target_type: state.layoutLock.target_type || 'global',
+            target_id: parseInt(state.layoutLock.target_id || 0, 10) || 0,
+        };
+    }
+
+    function getEffectiveLayoutType(fallback = 'homepage') {
+        const lockedType = isLayoutLocked()
+            ? normalizeLayoutOptionValue(state.layoutLock?.page_type || state.layoutLock?.layout_type || '')
+            : '';
+        return lockedType
+            || normalizeLayoutOptionValue(state.layoutType || getCurrentPageType() || fallback)
+            || fallback;
+    }
+
+    function getEffectivePageType(fallback = 'homepage') {
+        const lockedType = isLayoutLocked()
+            ? normalizeLayoutOptionValue(state.layoutLock?.page_type || state.layoutLock?.layout_type || '')
+            : '';
+        return lockedType
+            || normalizeLayoutOptionValue(state.pageType || getEffectiveLayoutType(fallback))
+            || fallback;
+    }
+
+    function getEffectiveLayoutOption(fallback = 'default') {
+        const lockedOption = isLayoutLocked()
+            ? normalizeLayoutOptionValue(state.layoutLock?.layout_option || '')
+            : '';
+        return lockedOption
+            || normalizeLayoutOptionValue(state.layoutOption || fallback)
+            || fallback;
+    }
+
+    function getEffectiveEditorArea(fallback = 'frontend') {
+        const lockedArea = isLayoutLocked() ? String(state.layoutLock?.area || '') : '';
+        const area = lockedArea || state.editorArea || fallback;
+        return area === 'backend' ? 'backend' : 'frontend';
+    }
+
+    function appendLayoutLockRuntimeParams(url) {
+        if (!isLayoutLocked() || !url || !url.searchParams) {
+            return;
+        }
+        const payload = getLayoutLockVirtualPayload();
+        if (payload.scope) {
+            url.searchParams.set('scope', String(payload.scope));
+        }
+        const targetType = String(payload.target_type || '');
+        const targetId = parseInt(payload.target_id || 0, 10) || 0;
+        if (targetType && targetType !== 'global' && targetId > 0) {
+            url.searchParams.set('theme_layout_target_type', targetType);
+            url.searchParams.set('theme_layout_target_id', String(targetId));
+            url.searchParams.set('theme_layout_source_target_type', targetType);
+            url.searchParams.set('theme_layout_source_target_id', String(targetId));
+        }
+    }
+
+    function buildLayoutLockVirtualIdentityPayload(extra = {}) {
+        const layoutType = getEffectiveLayoutType();
+        const layoutOption = getEffectiveLayoutOption();
+        return {
+            theme_id: state.themeId || 0,
+            area: getEffectiveEditorArea(),
+            page_type: layoutType,
+            layout_type: layoutType,
+            layout_option: layoutOption,
+            ...getLayoutLockVirtualPayload(),
+            ...extra,
+        };
+    }
+
+    async function saveLockedVirtualLayoutDraft() {
+        if (!config.apiVirtualThemeCreateDraft) {
+            throw new Error('Virtual layout draft endpoint is unavailable');
+        }
+        const payload = buildLayoutLockVirtualIdentityPayload({
+            use_ai: 0,
+            request_id: `virtual-layout-save-${Date.now()}`,
+            instructions: 'Save the current locked virtual layout as a draft version without AI changes.',
+        });
+        const result = await apiJson(config.apiVirtualThemeCreateDraft, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!result.success) {
+            throw new Error(result.message || 'Save virtual layout draft failed');
+        }
+        const data = result.data || {};
+        if (data.layout_option) {
+            await refreshLayoutOptions({
+                layout_type: payload.layout_type,
+                layout_option: data.layout_option,
+                silent: true,
+            });
+        }
+        return data;
+    }
+
+    async function loadLockedVirtualLayoutSource() {
+        if (!config.apiVirtualThemeSource) {
+            throw new Error('Virtual layout source endpoint is unavailable');
+        }
+        const url = new URL(config.apiVirtualThemeSource, window.location.origin);
+        Object.entries(buildLayoutLockVirtualIdentityPayload()).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && String(value) !== '') {
+                url.searchParams.set(key, String(value));
+            }
+        });
+        url.searchParams.set('_t', String(Date.now()));
+        const result = await apiJson(url.toString(), { method: 'GET' });
+        if (!result.success) {
+            throw new Error(result.message || 'Load virtual layout source failed');
+        }
+        return result.data || {};
+    }
+
+    async function publishLatestLockedVirtualLayoutVersion() {
+        if (!config.apiVirtualThemePublishVersion) {
+            throw new Error('Virtual layout publish endpoint is unavailable');
+        }
+        const source = await loadLockedVirtualLayoutSource();
+        const versionId = parseInt(source.version_id || source.draft_version_id || 0, 10) || 0;
+        if (versionId <= 0) {
+            throw new Error('No virtual layout draft version is available to publish');
+        }
+        const result = await apiJson(config.apiVirtualThemePublishVersion, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(buildLayoutLockVirtualIdentityPayload({ version_id: versionId })),
+        });
+        if (!result.success) {
+            throw new Error(result.message || 'Publish virtual layout version failed');
+        }
+        return result.data || {};
+    }
+
+    function ensureSelectOption(select, value, label = '') {
+        if (!select || !value) {
+            return;
+        }
+        const normalized = normalizeLayoutOptionValue(value);
+        if (!normalized) {
+            return;
+        }
+        const exists = Array.from(select.options || []).some(option => normalizeLayoutOptionValue(option.value) === normalized);
+        if (exists) {
+            return;
+        }
+        const option = document.createElement('option');
+        option.value = normalized;
+        option.textContent = label || normalized;
+        select.appendChild(option);
+    }
+
+    function enforceLayoutLock() {
+        if (!isLayoutLocked()) {
+            return;
+        }
+        const lock = state.layoutLock || {};
+        if (lock.page_type || lock.layout_type) {
+            const lockedType = normalizeLayoutOptionValue(lock.page_type || lock.layout_type) || state.pageType;
+            state.pageType = lockedType;
+            state.layoutType = lockedType;
+            if (elements.pageTypeSelect) {
+                elements.pageTypeSelect.value = lockedType;
+            }
+        }
+        if (lock.layout_option) {
+            state.layoutOption = normalizeLayoutOptionValue(lock.layout_option) || state.layoutOption || 'default';
+            if (elements.layoutOptionSelect) {
+                ensureSelectOption(elements.layoutOptionSelect, state.layoutOption, state.layoutOption);
+                elements.layoutOptionSelect.value = state.layoutOption;
+            }
+        }
+        if (lock.area) {
+            state.editorArea = lock.area === 'backend' ? 'backend' : 'frontend';
+            if (elements.editorAreaSelect) {
+                elements.editorAreaSelect.value = state.editorArea;
+            }
+        }
+        [elements.themeSelect, elements.pageTypeSelect, elements.layoutOptionSelect, elements.editorAreaSelect].forEach((select) => {
+            if (select) {
+                select.disabled = true;
+                select.dataset.layoutLocked = '1';
+            }
+        });
+        if (elements.btnSave) {
+            elements.btnSave.disabled = false;
+            elements.btnSave.title = translateUiText('Save locked virtual layout draft');
+        }
+        if (elements.btnPublish) {
+            elements.btnPublish.disabled = false;
+            elements.btnPublish.title = translateUiText('Publish locked virtual layout version');
+        }
+    }
+
+    function isThemeMutationBlockedByLayoutLock(url, method) {
+        if (!isLayoutLocked() || String(method || 'GET').toUpperCase() === 'GET') {
+            return false;
+        }
+        const path = String(url || '');
+        if (path.includes('/virtual-theme/')) {
+            return false;
+        }
+        if ([
+            '/save-widget',
+            '/update-config',
+            '/delete-widget',
+            '/swap-widget-order',
+            '/update-sort',
+            '/save-widget-config',
+        ].some((endpoint) => path.includes(endpoint))) {
+            return false;
+        }
+
+        return [
+            '/save-layout-selection',
+            '/save-layout-config',
+            '/save-compiled-layout',
+            '/save-version',
+            '/publish-version',
+            '/switch-version',
+            '/delete-version',
+            '/rename-version',
+            '/restore-original',
+            '/publish',
+            '/publish-and-exit',
+        ].some((endpoint) => path.includes(endpoint));
+    }
+
+    function getLayoutOptionsForType(layoutType) {
+        const type = normalizeLayoutOptionValue(layoutType || getCurrentPageType() || 'homepage');
+        return Array.isArray(state.layoutOptionsByType[type]) ? state.layoutOptionsByType[type] : [];
+    }
+
+    function getFallbackLayoutOption(layoutType) {
+        const options = getLayoutOptionsForType(layoutType);
+        const defaultOption = options.find(option => option.value === 'default');
+        return (defaultOption || options[0] || { value: 'default' }).value || 'default';
+    }
+
+    function resolveLayoutOptionForType(layoutType, requestedOption = '') {
+        const requested = normalizeLayoutOptionValue(requestedOption);
+        const options = getLayoutOptionsForType(layoutType);
+        if (isLayoutLocked() && requested) {
+            return requested;
+        }
+        if (requested && options.some(option => option.value === requested)) {
+            return requested;
+        }
+        return getFallbackLayoutOption(layoutType);
+    }
+
+    function renderLayoutOptionSelect(layoutType = state.layoutType, selectedOption = state.layoutOption) {
+        if (!elements.layoutOptionSelect) {
+            return;
+        }
+
+        const options = getLayoutOptionsForType(layoutType);
+        const selected = resolveLayoutOptionForType(layoutType, selectedOption);
+        const renderOptions = options.length > 0 ? options.slice() : [{
+            value: selected || 'default',
+            label: selected === 'default' ? 'Default' : selected,
+            description: '',
+            file: ''
+        }];
+        if (isLayoutLocked() && selected && !renderOptions.some(option => normalizeLayoutOptionValue(option.value) === selected)) {
+            renderOptions.push({
+                value: selected,
+                label: selected,
+                description: translateUiText('Virtual layout locked option'),
+                file: ''
+            });
+        }
+
+        elements.layoutOptionSelect.innerHTML = renderOptions.map(option => {
+            const value = normalizeLayoutOptionValue(option.value);
+            const label = option.label || value;
+            const description = option.description ? ` title="${escapeHtml(option.description)}"` : '';
+            return `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}${description}>${escapeHtml(label)}</option>`;
+        }).join('');
+        elements.layoutOptionSelect.value = selected;
+        elements.layoutOptionSelect.disabled = isLayoutLocked();
+        elements.layoutOptionSelect.dataset.singleOption = renderOptions.length <= 1 ? '1' : '0';
+        elements.layoutOptionSelect.title = renderOptions.length <= 1
+            ? translateUiText('当前布局类型只有一个布局选项')
+            : translateUiText('选择布局选项');
+        enforceLayoutLock();
+    }
+
+    function setCurrentLayoutSelection(layoutType, layoutOption = '') {
+        const nextType = normalizeLayoutOptionValue(layoutType || getCurrentPageType() || 'homepage') || 'homepage';
+        state.pageType = nextType;
+        state.layoutType = nextType;
+        state.layoutOption = resolveLayoutOptionForType(nextType, layoutOption || state.layoutOption);
+        if (elements.pageTypeSelect && elements.pageTypeSelect.value !== nextType) {
+            elements.pageTypeSelect.value = nextType;
+        }
+        renderLayoutOptionSelect(nextType, state.layoutOption);
+    }
+
     function getCurrentWindowUrl() {
         return new URL(window.location.href);
     }
 
     function getCurrentWindowParam(key) {
         return getCurrentWindowUrl().searchParams.get(key) || '';
+    }
+
+    function normalizeRequestHeaders(headers) {
+        const result = {};
+        if (!headers || typeof headers !== 'object') {
+            return result;
+        }
+        if (typeof headers.forEach === 'function') {
+            headers.forEach((value, name) => {
+                if (name) {
+                    result[String(name)] = String(value);
+                }
+            });
+            return result;
+        }
+        Object.keys(headers).forEach((name) => {
+            const value = headers[name];
+            if (value !== undefined && value !== null) {
+                result[String(name)] = String(value);
+            }
+        });
+        return result;
+    }
+
+    function resolveEditorApi() {
+        const candidates = [
+            window.Weline && window.Weline.Api,
+            window.WelineApiModule
+        ];
+        let providerApi = null;
+        for (const api of candidates) {
+            if (!api) {
+                continue;
+            }
+            if (api.__backend === true && typeof api.request === 'function') {
+                return {
+                    mode: 'direct',
+                    api
+                };
+            }
+            if (api.__backend !== true && typeof api.call === 'function') {
+                providerApi = api;
+            }
+        }
+        if (providerApi) {
+            return {
+                mode: 'provider',
+                api: providerApi
+            };
+        }
+        throw new Error('Weline API is not available');
+    }
+
+    function resolveSameOriginEditorUrl(url) {
+        try {
+            const resolved = new URL(String(url), window.location.href);
+            return resolved.origin === window.location.origin ? resolved.toString() : '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    async function apiRequest(url, options = {}) {
+        const headers = normalizeRequestHeaders(options.headers);
+        let body = options.body ?? null;
+        if (body instanceof URLSearchParams) {
+            body = body.toString();
+        } else if (body !== null && typeof body !== 'string') {
+            body = JSON.stringify(body);
+        }
+        const params = {
+            url: String(url),
+            method: String(options.method || 'GET').toUpperCase(),
+        };
+        if (isThemeMutationBlockedByLayoutLock(params.url, params.method)) {
+            throw new Error('Virtual layout lock mode only allows virtual layout draft actions');
+        }
+        if (Object.keys(headers).length > 0) {
+            params.headers = headers;
+        }
+        if (body !== null) {
+            params.body = body;
+        }
+        const sameOriginUrl = resolveSameOriginEditorUrl(params.url);
+        if (sameOriginUrl && typeof window.fetch === 'function') {
+            const fetchOptions = {
+                method: params.method,
+                headers,
+                credentials: 'same-origin',
+            };
+            if (body !== null) {
+                fetchOptions.body = body;
+            }
+            return window.fetch(sameOriginUrl, fetchOptions);
+        }
+        const editorApi = resolveEditorApi();
+        if (editorApi.mode === 'direct') {
+            return editorApi.api.request(params.url, {
+                method: params.method,
+                headers: headers,
+                body: body,
+            });
+        }
+        return editorApi.api.call('theme', 'editorRequest', params, { silent: options.silent === true });
+    }
+
+    async function unwrapApiPayload(response) {
+        if (response && typeof response.json === 'function') {
+            return response.json();
+        }
+        if (response && typeof response.text === 'function') {
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return text;
+            }
+        }
+        if (response && Object.prototype.hasOwnProperty.call(response, 'data') && !Object.prototype.hasOwnProperty.call(response, 'success')) {
+            return response.data;
+        }
+        return response;
+    }
+
+    async function apiJson(url, options = {}) {
+        const result = await unwrapApiPayload(await apiRequest(url, options));
+        if (typeof result === 'string') {
+            try {
+                return JSON.parse(result);
+            } catch (e) {
+                throw new Error('API returned non JSON response');
+            }
+        }
+        return result || {};
+    }
+
+    async function apiText(url, options = {}) {
+        const result = await unwrapApiPayload(await apiRequest(url, options));
+        if (typeof result === 'string') {
+            return result;
+        }
+        return result && typeof result.html === 'string' ? result.html : JSON.stringify(result || {});
     }
 
     function buildEditorUrl(overrides = {}) {
@@ -116,7 +756,6 @@
             url.searchParams.set(key, value);
         });
 
-        // Split editor shell area and preview area to avoid contaminating backend shell.
         const previewArea = (typeof overrides.preview_area === 'string' && overrides.preview_area)
             ? overrides.preview_area
             : (
@@ -128,9 +767,10 @@
         const params = Object.assign({
             theme_id: state.themeId || 0,
             page_type: getCurrentPageType(),
+            layout_option: state.layoutOption || 'default',
             status: state.previewStatus || 'draft',
         }, overrides || {});
-        params.editor_area = 'backend';
+        params.editor_area = previewArea;
         params.preview_area = previewArea;
 
         Object.entries(params).forEach(([key, value]) => {
@@ -150,13 +790,13 @@
         const currentUrl = getCurrentWindowUrl();
         const layoutType = (typeof overrides.layout_type === 'string' && overrides.layout_type)
             ? overrides.layout_type
-            : (state.layoutType || getCurrentPageType() || 'homepage');
+            : getEffectiveLayoutType();
         const pageType = (typeof overrides.page_type === 'string' && overrides.page_type)
             ? overrides.page_type
-            : (state.pageType || layoutType || 'homepage');
+            : getEffectivePageType(layoutType || 'homepage');
         const layoutOption = (typeof overrides.layout_option === 'string' && overrides.layout_option)
             ? overrides.layout_option
-            : (state.layoutOption || 'default');
+            : getEffectiveLayoutOption();
         const previewStatus = (typeof overrides.status === 'string' && overrides.status)
             ? overrides.status
             : (state.previewStatus || 'draft');
@@ -165,7 +805,7 @@
             : (
                 (typeof overrides.editor_area === 'string' && overrides.editor_area)
                     ? overrides.editor_area
-                    : (state.editorArea || currentUrl.searchParams.get('preview_area') || 'frontend')
+                    : (getEffectiveEditorArea(currentUrl.searchParams.get('preview_area') || 'frontend'))
             );
         const previewArea = requestedPreviewArea === 'backend' ? 'backend' : 'frontend';
         const themeId = overrides.theme_id || state.themeId || 0;
@@ -190,6 +830,7 @@
                 url.searchParams.set(key, String(overrideValue));
             }
         });
+        appendLayoutLockRuntimeParams(url);
 
         url.searchParams.set('_t', String(overrides._t || Date.now()));
         return url.toString();
@@ -234,11 +875,22 @@
         config.apiRenderWidget = container.dataset.apiRenderWidget || `${config.apiBase}/render-widget`;
         config.apiWidgetPreview = container.dataset.apiWidgetPreview || `${config.apiBase}/widget-preview`;
         config.apiCompileLayout = container.dataset.apiCompileLayout || `${config.apiBase}/compile-layout`;
+        config.apiLayoutOptions = container.dataset.apiLayoutOptions || `${config.apiBase}/layout-options`;
+        config.apiLayoutConfig = container.dataset.apiLayoutConfig || `${config.apiBase}/layout-config`;
+        config.apiSaveLayoutSelection = container.dataset.apiSaveLayoutSelection || `${config.apiBase}/save-layout-selection`;
+        config.apiSaveLayoutConfig = container.dataset.apiSaveLayoutConfig || `${config.apiBase}/save-layout-config`;
+        config.apiAiTranslateConfig = container.dataset.apiAiTranslateConfig || `${config.apiBase}/ai-translate-config`;
+        config.apiVirtualThemeAiCatalog = container.dataset.apiVirtualThemeAiCatalog || '/theme/backend/virtual-theme/ai-catalog';
+        config.apiVirtualThemeCreateDraft = container.dataset.apiVirtualThemeCreateDraft || '/theme/backend/virtual-theme/create-draft';
+        config.apiVirtualThemeBlockAction = container.dataset.apiVirtualThemeBlockAction || '/theme/backend/virtual-theme/block-action';
+        config.apiVirtualThemeSource = container.dataset.apiVirtualThemeSource || '/theme/backend/virtual-theme/source';
+        config.apiVirtualThemeSaveSource = container.dataset.apiVirtualThemeSaveSource || '/theme/backend/virtual-theme/save-source';
+        config.apiVirtualThemePublishVersion = container.dataset.apiVirtualThemePublishVersion || '/theme/backend/virtual-theme/publish-version';
         config.apiLayoutPreview = container.dataset.apiLayoutPreview || `${config.apiBase}/layout-preview`;
         config.apiFrontendLayoutPreview = container.dataset.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content';
         config.apiParamRenderForm = container.dataset.apiParamRenderForm || '/theme/backend/widget/paramrender/form';
         config.apiSaveCompiledLayout = container.dataset.apiSaveCompiledLayout || `${config.apiBase}/save-compiled-layout`;
-        
+
         // 版本控制 API 端点
         config.apiVersions = container.dataset.apiVersions || `${config.apiBase}/versions`;
         config.apiSaveVersion = container.dataset.apiSaveVersion || `${config.apiBase}/save-version`;
@@ -247,7 +899,7 @@
         config.apiPublishVersion = container.dataset.apiPublishVersion || `${config.apiBase}/publish-version`;
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
         config.apiRenameVersion = container.dataset.apiRenameVersion || `${config.apiBase}/rename-version`;
-        
+
         // 前端预览 API 端点
         config.apiStartPreview = container.dataset.apiStartPreview || `${config.apiBase}/start-preview`;
         config.apiExitPreview = container.dataset.apiExitPreview || `${config.apiBase}/exit-preview`;
@@ -270,15 +922,21 @@
         state.pageType = container.dataset.pageType || 'default';
         state.editorArea = container.dataset.editorArea || 'frontend';
         state.previewStatus = container.dataset.previewStatus || getCurrentWindowParam('status') || 'draft';
+        state.layoutOptionsByType = parseLayoutOptionsByType(container.dataset.layoutOptions || '{}');
+        state.layoutLock = parseLayoutLock(container.dataset.layoutLock || '{}');
 
         // 缓存 DOM 元素
         elements = {
             container: container,
             themeSelect: document.getElementById('themeSelect'),
             pageTypeSelect: document.getElementById('pageTypeSelect'),
+            layoutOptionSelect: document.getElementById('layoutOptionSelect'),
             editorAreaSelect: document.getElementById('editorAreaSelect'),
             configPanel: document.getElementById('configPanel'),
             configContent: document.getElementById('configContent'),
+            configPanelTitle: document.querySelector('#configPanel .panel-title'),
+            configModeLayout: document.getElementById('configModeLayout'),
+            configModeWidget: document.getElementById('configModeWidget'),
             widgetPanel: document.getElementById('widgetPanel'),
             widgetList: document.getElementById('widgetList'),
             widgetSearch: document.getElementById('widgetSearch'),
@@ -298,7 +956,11 @@
         // 当前布局信息
         // pageType 和 layoutType 现在是同一个概念，直接使用 pageType
         state.layoutType = state.pageType || 'homepage';
-        state.layoutOption = 'default';
+        state.layoutOption = resolveLayoutOptionForType(
+            state.layoutType,
+            container.dataset.layoutOption || getCurrentWindowParam('layout_option') || 'default'
+        );
+        renderLayoutOptionSelect(state.layoutType, state.layoutOption);
         state.slots = {}; // 页面插槽信息
         state.missingSlotWarnings = [];
 
@@ -309,9 +971,10 @@
         initDragAndDrop();
 
         // 适配部件库预览缩放
-        fitWidgetPreviews();
+        initWidgetPreviewFitObserver();
+        scheduleFitWidgetPreviews();
         window.addEventListener('resize', debounce(() => {
-            fitWidgetPreviews();
+            scheduleFitWidgetPreviews();
         }, 200));
 
         // 加载版本列表（初始化时获取当前版本显示）
@@ -319,8 +982,12 @@
             loadVersions();
         }
 
-        // 若服务端未渲染部件列表（#widgetList 为空），则请求部件接口并渲染
-        loadWidgetListIfEmpty();
+        // 部件库延迟加载：首屏不阻塞，等主预览开始加载、浏览器空闲后再异步拉取并渲染右侧部件库
+        deferWidgetLibraryLoad();
+        if (state.themeId) {
+            setConfigMode('layout');
+            loadLayoutConfig({ silent: true });
+        }
 
         console.log('Theme Editor initialized', {
             apiBase: config.apiBase,
@@ -343,57 +1010,125 @@
      * 绑定事件
      */
     function bindEvents() {
+        if (elements.configModeLayout) {
+            elements.configModeLayout.addEventListener('click', function() {
+                setConfigMode('layout');
+                loadLayoutConfig();
+            });
+        }
+        if (elements.configModeWidget) {
+            elements.configModeWidget.addEventListener('click', function() {
+                setConfigMode('widget');
+                showWidgetConfigState();
+            });
+        }
         // 主题选择（仅刷新预览，不整页跳转）
         if (elements.themeSelect) {
-            elements.themeSelect.addEventListener('change', function() {
+            elements.themeSelect.addEventListener('change', async function() {
                 const themeId = this.value;
                 if (themeId) {
                     showPreviewLoadingImmediate();
                     state.themeId = parseInt(themeId, 10) || 0;
+                    try {
+                        await refreshLayoutOptions({ layout_option: '', silent: true });
+                    } catch (error) {
+                        console.error('[ThemeEditor] refresh layout options error:', error);
+                    }
                     syncEditorUrlState({
                         theme_id: state.themeId,
                         page_type: getCurrentPageType(),
+                        layout_option: state.layoutOption || 'default',
                         preview_area: state.editorArea || 'frontend',
                     });
                     loadLayoutPreview();
+                    loadLayoutConfig({ silent: true });
                     loadVersions();
+                    reloadWidgetLibrary({ silent: true });
                 }
             });
         }
 
         // 前端/后端区域切换（仅刷新预览，不整页跳转）
         if (elements.editorAreaSelect) {
-            elements.editorAreaSelect.addEventListener('change', function() {
+            elements.editorAreaSelect.addEventListener('change', async function() {
                 const area = this.value;
                 if (state.themeId && area) {
                     showPreviewLoadingImmediate();
                     state.editorArea = area;
+                    try {
+                        await refreshLayoutOptions({ editor_area: area, layout_option: '', silent: true });
+                    } catch (error) {
+                        console.error('[ThemeEditor] refresh layout options error:', error);
+                    }
                     syncEditorUrlState({
                         theme_id: state.themeId,
                         page_type: getCurrentPageType(),
+                        layout_option: state.layoutOption || 'default',
                         preview_area: area,
                     });
                     loadLayoutPreview();
+                    loadLayoutConfig({ silent: true });
+                    reloadWidgetLibrary({ silent: true });
                 }
             });
         }
 
         // 页面类型选择（AJAX 切换，不刷新页面）
         if (elements.pageTypeSelect) {
-            elements.pageTypeSelect.addEventListener('change', function() {
+            elements.pageTypeSelect.addEventListener('change', async function() {
                 const pageType = this.value;
                 if (state.themeId && pageType) {
                     showPreviewLoadingImmediate();
-                    state.pageType = pageType;
-                    state.layoutType = pageType; // pageType 和 layoutType 是同一个概念
+                    setCurrentLayoutSelection(pageType, '');
+                    try {
+                        await refreshLayoutOptions({ layout_type: pageType, layout_option: '', silent: true });
+                    } catch (error) {
+                        console.error('[ThemeEditor] refresh layout options error:', error);
+                    }
                     syncEditorUrlState({
                         theme_id: state.themeId,
                         page_type: pageType,
+                        layout_option: state.layoutOption || 'default',
                         version_id: null,
                     });
                     loadLayoutPreview();
+                    loadLayoutConfig({ silent: true });
+                    loadVersions();
+                    reloadWidgetLibrary({ silent: true });
                     showToast(__('已切换到: ') + this.options[this.selectedIndex].text, 'info');
                 }
+            });
+        }
+
+        if (elements.layoutOptionSelect) {
+            elements.layoutOptionSelect.addEventListener('click', function() {
+                if (this.dataset.singleOption === '1') {
+                    showToast(translateUiText('当前布局类型只有一个布局选项'), 'info');
+                }
+            });
+
+            elements.layoutOptionSelect.addEventListener('change', async function() {
+                const layoutOption = normalizeLayoutOptionValue(this.value) || 'default';
+                if (!state.themeId || !layoutOption) {
+                    return;
+                }
+                showPreviewLoadingImmediate();
+                state.layoutOption = layoutOption;
+                renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+                syncEditorUrlState({
+                    theme_id: state.themeId,
+                    page_type: getCurrentPageType(),
+                    layout_option: state.layoutOption,
+                    version_id: null,
+                });
+                try {
+                    await saveLayoutSelection();
+                } catch (error) {
+                    console.error('[ThemeEditor] save layout option error:', error);
+                    showToast(error.message || 'Save layout option failed', 'error');
+                }
+                loadLayoutPreview();
+                loadLayoutConfig({ silent: true });
             });
         }
 
@@ -404,11 +1139,13 @@
             }
         });
 
-        // 部件搜索
+        // 部件搜索：服务端关键词检索（在当前插槽过滤条件内），重置分页
         if (elements.widgetSearch) {
             elements.widgetSearch.addEventListener('input', debounce(function() {
-                filterWidgets(this.value);
-            }, 300));
+                const lib = getWidgetLibState();
+                lib.keyword = (this.value || '').trim();
+                loadWidgetLibrary({ reset: true, silent: true });
+            }, 350));
         }
 
         // 组件预览按钮（部件库列表中的「预览」）
@@ -421,6 +1158,50 @@
             const code = btn.dataset.widgetCode || '';
             const name = btn.dataset.widgetName || '';
             if (module && code) openComponentPreviewModal(module, code, name);
+        });
+
+        document.addEventListener('click', function(e) {
+            const clearImageBtn = e.target.closest('[data-config-image-clear]');
+            if (clearImageBtn) {
+                e.preventDefault();
+                const fieldId = clearImageBtn.getAttribute('data-target') || '';
+                const field = fieldId ? document.getElementById(fieldId) : null;
+                if (field) {
+                    field.value = '';
+                }
+                clearImageBtn.closest('.image-preview-container')?.remove();
+                return;
+            }
+
+            const groupTitle = e.target.closest('[data-config-group-toggle]');
+            if (groupTitle) {
+                groupTitle.closest('.config-group')?.classList.toggle('collapsed');
+                return;
+            }
+
+            const slotInfoItem = e.target.closest('.slot-info-item[data-slot-id]');
+            if (slotInfoItem) {
+                e.preventDefault();
+                scrollToSlot(slotInfoItem.getAttribute('data-slot-id') || '');
+                return;
+            }
+
+            const versionButton = e.target.closest('[data-version-action][data-version-id]');
+            if (versionButton) {
+                e.preventDefault();
+                const versionId = parseInt(versionButton.getAttribute('data-version-id') || '', 10);
+                if (!Number.isFinite(versionId) || versionId <= 0) {
+                    return;
+                }
+                const action = versionButton.getAttribute('data-version-action');
+                if (action === 'preview') {
+                    previewVersion(versionId);
+                } else if (action === 'switch') {
+                    switchToVersion(versionId);
+                } else if (action === 'delete') {
+                    deleteVersion(versionId);
+                }
+            }
         });
 
         // 部件分组折叠/展开
@@ -439,6 +1220,24 @@
 
         // 点击预览区的部件或区域
         document.addEventListener('click', function(e) {
+            if (e.target.closest('.btn-edit-widget')) {
+                e.stopPropagation();
+                const widget = e.target.closest('.preview-widget-item');
+                if (widget) {
+                    openConfigModal(widget);
+                }
+                return;
+            }
+
+            if (e.target.closest('.btn-delete-widget')) {
+                e.stopPropagation();
+                const widget = e.target.closest('.preview-widget-item');
+                if (widget) {
+                    deleteWidget(widget);
+                }
+                return;
+            }
+
             const widgetItem = e.target.closest('.preview-widget-item');
             if (widgetItem) {
                 selectWidget(widgetItem);
@@ -450,7 +1249,7 @@
             const areaDescription = e.target.closest('.area-description');
             const slotPlaceholder = e.target.closest('.slot-placeholder-large');
             const previewArea = e.target.closest('.preview-area');
-            
+
             // 如果点击的是区域标签、区域描述、占位符、或非部件列表的区域空白处
             if (areaLabel || areaDescription || slotPlaceholder || (previewArea && !e.target.closest('.preview-widget-item'))) {
                 // 点击区域标签或区域空白处（排除已有部件）
@@ -460,7 +1259,7 @@
                     return;
                 }
             }
-            
+
             // 点击空白区域时，取消选中 slot 并恢复部件顺序
             const slotElement = e.target.closest('.container-slot, [data-wslot], .preview-area');
             if (!slotElement && !e.target.closest('.widget-item')) {
@@ -502,7 +1301,7 @@
 
         // 预览按钮
         elements.btnPreview?.addEventListener('click', openPreview);
-        
+
         // 前端预览按钮
         elements.btnFrontendPreview?.addEventListener('click', openFrontendPreview);
 
@@ -513,7 +1312,7 @@
                 if (e.target.id === 'widgetConfigForm') saveWidgetConfig(e.target);
             }
         });
-        
+
         // 左侧配置面板 i18n 事件委托（覆盖 renderConfigForm 生成的表单）
         if (elements.configContent) {
             elements.configContent.addEventListener('click', async function(e) {
@@ -543,6 +1342,18 @@
                         panel.style.display = 'none';
                         const fieldKey = closeBtn.dataset.field || panel.dataset.field;
                         elements.configContent.querySelector(`.w-param-btn-i18n[data-field="${fieldKey}"], .btn-i18n-edit[data-field="${fieldKey}"]`)?.classList.remove('active');
+                    }
+                    return;
+                }
+                const aiBtn = e.target.closest('[data-ai-i18n], .btn-ai-i18n');
+                if (aiBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
+                    const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
+                    const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId;
+                    if (panel && fieldKey && layoutId) {
+                        await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
                     }
                     return;
                 }
@@ -613,7 +1424,7 @@
                 }
             }
         });
-        
+
         // 配置面板删除按钮（事件委托）
         document.addEventListener('click', function(e) {
             const deleteBtn = e.target.closest('.btn-delete-config');
@@ -622,7 +1433,7 @@
                 const layoutId = deleteBtn.dataset.layoutId;
                 if (!layoutId) return;
                 // 尝试从结构面板获取 slotId
-                const structureItem = document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`);
+                const structureItem = document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
                 const slotId = structureItem?.closest('[data-slot]')?.dataset.slot || undefined;
                 handleWidgetDelete(layoutId, slotId);
             }
@@ -642,21 +1453,24 @@
             elements.previewFrame.addEventListener('error', function(e) {
                 console.error('[ThemeEditor] Iframe error:', e);
             });
-            
+
             elements.previewFrame.addEventListener('load', function() {
                 if (elements.previewLoading) {
                     elements.previewLoading.classList.add('hidden');
                 }
-                
+
+                // 主预览加载完成后，再初始化右侧部件库（仅一次），避免阻塞首屏与主预览
+                initWidgetLibraryOnce();
+
                 // 设置 iframe 内链接拦截，使链接跳转到预览模式
                 setupIframeLinkInterception();
-                
+
                 // 初始化部件 hover 操作按钮（多档延迟以兼容异步渲染的布局）
                 setTimeout(() => initWidgetHoverActions(), 100);
                 setTimeout(() => initWidgetHoverActions(), 400);
                 setTimeout(() => initWidgetHoverActions(), 1200);
             });
-            
+
             // 添加超时机制：如果 5 秒后仍未加载完成，强制隐藏加载状态
             setTimeout(function() {
                 if (elements.previewLoading && !elements.previewLoading.classList.contains('hidden')) {
@@ -695,7 +1509,8 @@
         const params = Object.assign({
             theme_id: state.themeId || 0,
             page_type: getCurrentPageType(),
-            editor_area: 'backend',
+            layout_option: state.layoutOption || 'default',
+            editor_area: state.editorArea || 'frontend',
             preview_area: state.editorArea || 'frontend',
             status: state.previewStatus || 'draft',
         }, overrides || {});
@@ -722,6 +1537,100 @@
      * 默认 PC 设计视口宽度（部件在此宽度下布局后整体缩放填满 canvas）
      */
     const WIDGET_PREVIEW_DESIGN_WIDTH = 1200;
+    let widgetPreviewFitObserver = null;
+
+    function measureWidgetPreviewContentHeight(inner) {
+        if (!inner) {
+            return 72;
+        }
+        let maxHeight = 0;
+        inner.childNodes.forEach(function (node) {
+            if (!node || node.nodeType !== 1) {
+                return;
+            }
+            const el = /** @type {HTMLElement} */ (node);
+            if (el.matches('style, script')) {
+                return;
+            }
+            const height = Math.max(el.offsetHeight || 0, el.scrollHeight || 0);
+            if (height > maxHeight) {
+                maxHeight = height;
+            }
+        });
+        if (maxHeight > 0) {
+            return Math.max(40, Math.min(maxHeight, 600));
+        }
+        const raw = inner.scrollHeight || 0;
+        return Math.max(40, Math.min(raw || 72, 600));
+    }
+
+    function initWidgetPreviewFitObserver() {
+        const panel = elements.widgetPanel;
+        if (!panel || panel.dataset.previewFitObserver === '1') {
+            return;
+        }
+        panel.dataset.previewFitObserver = '1';
+        if (typeof ResizeObserver === 'undefined') {
+            return;
+        }
+        widgetPreviewFitObserver = new ResizeObserver(function () {
+            scheduleFitWidgetPreviews();
+        });
+        widgetPreviewFitObserver.observe(panel);
+    }
+
+    function scheduleFitWidgetPreviews() {
+        fitWidgetPreviews();
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(function () {
+                fitWidgetPreviews();
+            });
+        }
+    }
+
+    async function ensureWidgetCanvasPreview(canvas, widgetModule, widgetCode) {
+        if (!canvas || canvas.dataset.previewLoading === '1' || canvas.dataset.previewLoaded === '1') {
+            return;
+        }
+        if (canvas.querySelector('[class*="widget-"]') && !canvas.querySelector('.widget-preview-placeholder, .widget-preview-error')) {
+            canvas.dataset.previewLoaded = '1';
+            scheduleFitWidgetPreviews();
+            return;
+        }
+        if (!widgetModule || !widgetCode || !config.apiWidgetPreview) {
+            return;
+        }
+        canvas.dataset.previewLoading = '1';
+        try {
+            const url = new URL(config.apiWidgetPreview, window.location.origin);
+            url.searchParams.set('widget_module', widgetModule);
+            url.searchParams.set('widget_code', widgetCode);
+            const data = await apiJson(url.toString());
+            const html = (data && data.html) ? sanitizeHtmlForEditorPreview(data.html) : '';
+            if (html.trim() !== '') {
+                canvas.innerHTML = html;
+                canvas.dataset.previewLoaded = '1';
+                scheduleFitWidgetPreviews();
+            }
+        } catch (err) {
+            console.warn('[ThemeEditor] ensureWidgetCanvasPreview failed:', widgetModule, widgetCode, err);
+        } finally {
+            delete canvas.dataset.previewLoading;
+        }
+    }
+
+    function mountWidgetPreviewHtml(canvas, previewHtml) {
+        if (!canvas) {
+            return;
+        }
+        canvas.innerHTML = '';
+        const html = sanitizeHtmlForEditorPreview(previewHtml).trim();
+        if (!html) {
+            return;
+        }
+        canvas.insertAdjacentHTML('beforeend', html);
+        canvas.dataset.previewLoaded = '1';
+    }
 
     /**
      * 适配部件库预览：按默认 PC 视口缩放，使预览内容填满 widget-preview-canvas，避免大块灰色空白
@@ -758,9 +1667,13 @@
 
             const canvasWidth = canvas.clientWidth;
             const canvasHeight = canvas.clientHeight;
-            const contentHeight = inner.scrollHeight || viewport.scrollHeight || 1;
+            const contentHeight = measureWidgetPreviewContentHeight(inner);
 
-            if (!canvasWidth || !canvasHeight) return;
+            if (!canvasWidth || !canvasHeight) {
+                canvas.dataset.previewFitPending = '1';
+                return;
+            }
+            delete canvas.dataset.previewFitPending;
 
             const scale = Math.min(1, canvasWidth / WIDGET_PREVIEW_DESIGN_WIDTH, canvasHeight / contentHeight);
             if (!isFinite(scale) || scale <= 0) return;
@@ -814,27 +1727,27 @@
      */
     function inferAreaFromSlotId(slotId) {
         if (!slotId) return 'content';
-        
+
         // 已知的 header 子插槽
         const headerSlots = ['logo', 'search', 'user-area', 'navigation', 'header-search', 'account', 'mini-cart-icon', 'language-switcher', 'currency-switcher', 'cart-icon'];
-        
+
         // 已知的 footer 子插槽
         const footerSlots = ['footer-social', 'footer-links', 'footer-copyright', 'footer-payment', 'footer-newsletter'];
-        
+
         // 精确匹配
         if (slotId === 'header') return 'header';
         if (slotId === 'footer') return 'footer';
         if (slotId === 'content') return 'content';
-        
+
         // 检查是否是 header 子插槽
         if (headerSlots.includes(slotId)) return 'header';
-        
+
         // 检查是否是 footer 子插槽（包括前缀匹配）
         if (footerSlots.includes(slotId) || slotId.startsWith('footer-')) return 'footer';
-        
+
         // 检查是否以 header- 开头
         if (slotId.startsWith('header-')) return 'header';
-        
+
         // 默认归属于 content 区域
         return 'content';
     }
@@ -842,49 +1755,69 @@
     /**
      * 处理插槽选中
      */
-    function handleSlotSelected(slot) {
-        console.log('插槽被选中:', slot);
-        
-        // 保存当前选中的插槽
-        state.selectedSlot = slot;
-        
-        // 根据插槽 ID 确定区域并过滤部件
+    function normalizeSelectedSlot(slot) {
+        if (!slot || typeof slot !== 'object') {
+            return null;
+        }
+
+        const rawAccept = slot.accept ?? '*';
+        const rawReject = slot.reject ?? '';
+        const accept = Array.isArray(rawAccept)
+            ? rawAccept.join(',')
+            : String(rawAccept);
+        const reject = Array.isArray(rawReject)
+            ? rawReject.join(',')
+            : String(rawReject);
+
+        return {
+            ...slot,
+            accept,
+            reject,
+        };
+    }
+
+    function applySlotWidgetRecommendations(slot) {
         const slotId = slot.id || '';
-        // 优先使用 slot.area（来自 position 属性），否则从 slotId 推断
-        let areaCode = slot.area || inferAreaFromSlotId(slotId);
-        
-        console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', slot.area, 'resolved areaCode:', areaCode);
-        
-        // 切换插槽前，先完全重置前次过滤状态
+        const areaCode = slot.area || inferAreaFromSlotId(slotId);
+        const rejectTypes = normalizeCodeList(slot.reject || '');
+
         restoreWidgetOrder();
-        
-        // 调用区域过滤函数，隐藏不适合该区域的部件
+
         if (areaCode) {
-            filterWidgetsByArea(areaCode);
+            filterWidgetsByArea(areaCode, rejectTypes);
             state.selectedArea = areaCode;
         }
-        
-        // 高亮右侧部件列表中可放入该插槽的部件并排序
-        let acceptCodes = slot.accept || [];
-        // 确保 acceptCodes 是数组
-        if (typeof acceptCodes === 'string') {
-            acceptCodes = acceptCodes.split(',').map(s => s.trim()).filter(s => s);
+
+        highlightAcceptableWidgets(slot.accept);
+    }
+
+    function handleSlotSelected(slot) {
+        const normalizedSlot = normalizeSelectedSlot(slot);
+        if (!normalizedSlot) {
+            return;
         }
-        if (!Array.isArray(acceptCodes)) {
-            acceptCodes = [];
-        }
-        highlightAcceptableWidgets(acceptCodes);
-        
+
+        console.log('插槽被选中:', normalizedSlot);
+
+        state.selectedSlot = normalizedSlot;
+
+        const slotId = normalizedSlot.id || '';
+        const areaCode = normalizedSlot.area || inferAreaFromSlotId(slotId);
+
+        console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', normalizedSlot.area, 'resolved areaCode:', areaCode);
+
+        applySlotWidgetRecommendations(normalizedSlot);
+
         // 滚动到高亮的部件（延迟以等待DOM更新）
         scrollToHighlightedWidgets();
-        
+
         // 更新左侧配置面板，显示插槽信息
         renderSlotInfoPanel(slot);
-        
+
         // 显示提示
         showToast(`已选中插槽: ${slot.name}`, 'info');
     }
-    
+
     /**
      * 渲染插槽信息到配置面板
      * - 如果插槽内有部件，显示所有部件的配置（可折叠）
@@ -892,12 +1825,12 @@
      */
     async function renderSlotInfoPanel(slot) {
         if (!elements.configContent) return;
-        
+
         const slotName = slot.name || slot.id || '未命名插槽';
         const slotId = slot.id || '';
         const rawAccept = slot.accept;
         const acceptCodes = Array.isArray(rawAccept) ? rawAccept : (typeof rawAccept === 'string' ? rawAccept.split(',').map(s => s.trim()).filter(Boolean) : []);
-        
+
         // 显示加载状态
         elements.configContent.innerHTML = `
             <div class="slot-loading text-center py-4">
@@ -905,11 +1838,11 @@
                 <p class="mt-2 text-muted">加载插槽配置...</p>
             </div>
         `;
-        
+
         // 查找插槽内的部件
         // 支持多种选择器：area-widgets、container-slot、data-wslot
         const widgetsInSlot = findWidgetsInSlot(slotId);
-        
+
         if (widgetsInSlot.length > 0) {
             // 有部件，加载并显示所有部件的配置
             await renderSlotWidgetsConfig(slot, widgetsInSlot);
@@ -918,14 +1851,14 @@
             renderSlotEmptyState(slot);
         }
     }
-    
+
     /**
      * 查找插槽内的部件元素
      * 注意：部件在 iframe 内，需要从 iframe 的 document 中查找
      */
     function findWidgetsInSlot(slotId) {
         const widgets = [];
-        
+
         // 获取 iframe 的 document
         let iframeDoc = null;
         try {
@@ -937,25 +1870,25 @@
         } catch (e) {
             console.warn('无法访问 iframe document:', e);
         }
-        
+
         if (!iframeDoc) {
             console.log('findWidgetsInSlot: iframe document 不可用');
             return widgets;
         }
-        
+
         // 尝试多种选择器查找部件
         // 1. 查找 widget-wrapper 容器内的部件（SlotRendererService 渲染的）
         // 2. 查找原有标记的部件元素
         const selectors = [
-            `[data-wslot="${slotId}"] .widget-wrapper`,
-            `[data-wslot="${slotId}"] [data-layout-id]`,
-            `.area-widgets[data-area="${slotId}"] .preview-widget-item`,
-            `.area-widgets[data-area="${slotId}"] [data-layout-id]`,
-            `.${slotId}-slot-widgets .preview-widget-item`,
-            `.container-slot[data-slot="${slotId}"] .preview-widget-item`,
-            `.area-slot[data-slot="${slotId}"] .preview-widget-item`,
+            `${dataAttributeSelector('data-wslot', slotId)} .widget-wrapper`,
+            `${dataAttributeSelector('data-wslot', slotId)} [data-layout-id]`,
+            `.area-widgets${dataAttributeSelector('data-area', slotId)} .preview-widget-item`,
+            `.area-widgets${dataAttributeSelector('data-area', slotId)} [data-layout-id]`,
+            `.${cssIdentifier(slotId)}-slot-widgets .preview-widget-item`,
+            `.container-slot${dataAttributeSelector('data-slot', slotId)} .preview-widget-item`,
+            `.area-slot${dataAttributeSelector('data-slot', slotId)} .preview-widget-item`,
         ];
-        
+
         for (const selector of selectors) {
             try {
                 const found = iframeDoc.querySelectorAll(selector);
@@ -968,17 +1901,17 @@
                 console.warn('选择器查询失败:', selector, e);
             }
         }
-        
+
         // 如果没找到，尝试直接查找该 slot 容器
         if (widgets.length === 0) {
             try {
-                const slotContainer = iframeDoc.querySelector(`[data-wslot="${slotId}"]`);
-                
+                const slotContainer = iframeDoc.querySelector(dataAttributeSelector('data-wslot', slotId));
+
                 if (slotContainer) {
                     console.log(`findWidgetsInSlot: 找到 slot 容器，检查内部内容...`);
                     // 检查容器内是否有任何带 data-layout-id 或 widget 相关类名的元素
                     const innerWidgets = slotContainer.querySelectorAll('[data-layout-id], .widget-wrapper, .widget-content');
-                    
+
                     if (innerWidgets.length > 0) {
                         innerWidgets.forEach(el => widgets.push(el));
                     }
@@ -987,18 +1920,18 @@
                 console.warn('slot 容器查询失败:', e);
             }
         }
-        
+
         console.log(`findWidgetsInSlot(${slotId}): 找到 ${widgets.length} 个部件`);
         return widgets;
     }
-    
+
     /**
      * 渲染插槽内所有部件的配置（可折叠手风琴）
      */
     async function renderSlotWidgetsConfig(slot, widgetElements) {
         const slotName = slot.name || slot.id || '未命名插槽';
         const slotId = slot.id || '';
-        
+
         // 收集部件信息（从 iframe 内的元素读取 data 属性）
         const widgetsData = [];
         for (const el of widgetElements) {
@@ -1010,13 +1943,13 @@
                     dataSource = wrapper;
                 }
             }
-            
+
             const layoutId = dataSource.dataset?.layoutId || dataSource.getAttribute?.('data-layout-id');
             const widgetCode = dataSource.dataset?.widgetCode || dataSource.getAttribute?.('data-widget-code');
             const widgetModule = dataSource.dataset?.widgetModule || dataSource.getAttribute?.('data-widget-module');
             const widgetType = dataSource.dataset?.widgetType || dataSource.getAttribute?.('data-widget-type');
             const widgetName = dataSource.dataset?.widgetName || dataSource.getAttribute?.('data-widget-name') || widgetCode || '未知部件';
-            
+
             // 只添加有 layoutId 的部件
             if (layoutId) {
                 widgetsData.push({
@@ -1029,21 +1962,21 @@
                 });
             }
         }
-        
+
         // 如果没有可识别的部件，显示空状态
         if (widgetsData.length === 0) {
             console.log('renderSlotWidgetsConfig: 没有找到可识别的部件，显示空状态');
             renderSlotEmptyState(slot);
             return;
         }
-        
+
         // 构建手风琴 HTML
         let accordionHtml = '';
         for (let i = 0; i < widgetsData.length; i++) {
             const widget = widgetsData[i];
             const isFirst = i === 0;
             const collapseId = `widgetConfig_${widget.layoutId || i}`;
-            
+
             // 类型图标映射
             const typeIcons = {
                 'header': 'ri-layout-top-line',
@@ -1061,11 +1994,11 @@
                 'container': 'ri-layout-grid-line',
             };
             const icon = typeIcons[widget.widgetType] || 'ri-widgets-line';
-            
+
             accordionHtml += `
                 <div class="slot-widget-accordion-item" data-layout-id="${widget.layoutId}">
-                    <div class="slot-widget-header ${isFirst ? '' : 'collapsed'}" 
-                         data-bs-toggle="collapse" 
+                    <div class="slot-widget-header ${isFirst ? '' : 'collapsed'}"
+                         data-bs-toggle="collapse"
                          data-bs-target="#${collapseId}"
                          aria-expanded="${isFirst ? 'true' : 'false'}">
                         <div class="widget-header-left">
@@ -1085,7 +2018,7 @@
                 </div>
             `;
         }
-        
+
         const html = `
             <div class="slot-config-panel">
                 <div class="slot-config-header">
@@ -1097,11 +2030,11 @@
                         <span class="widget-count-badge">${widgetsData.length} 个部件</span>
                     </div>
                 </div>
-                
+
                 <div class="slot-widgets-accordion">
                     ${accordionHtml}
                 </div>
-                
+
                 <div class="slot-add-more">
                     <button type="button" class="btn btn-sm btn-outline-primary w-100">
                         ${iconSvg('add')} 继续添加部件
@@ -1109,16 +2042,16 @@
                 </div>
             </div>
         `;
-        
+
         elements.configContent.innerHTML = html;
-        
+
         // 为每个部件加载配置表单
         for (const widget of widgetsData) {
             if (widget.layoutId) {
                 loadWidgetConfigForAccordion(widget.layoutId);
             }
         }
-        
+
         // 绑定手风琴头部点击事件（加载配置）
         document.querySelectorAll('.slot-widget-header').forEach(header => {
             header.addEventListener('click', function() {
@@ -1130,33 +2063,260 @@
             });
         });
     }
-    
+
     /**
      * 加载部件配置到手风琴面板
      */
+    function setConfigMode(mode) {
+        state.configMode = mode === 'widget' ? 'widget' : 'layout';
+        elements.configModeLayout?.classList.toggle('active', state.configMode === 'layout');
+        elements.configModeWidget?.classList.toggle('active', state.configMode === 'widget');
+        if (elements.configPanelTitle) {
+            elements.configPanelTitle.textContent = state.configMode === 'layout' ? '布局配置' : '部件配置';
+        }
+        if (elements.configPanel) {
+            elements.configPanel.classList.add('active');
+        }
+    }
+
+    function showWidgetConfigState() {
+        if (!elements.configContent) {
+            return;
+        }
+        if (state.selectedWidget) {
+            loadWidgetConfig(state.selectedWidget);
+            return;
+        }
+        elements.configContent.innerHTML = `
+            <div class="no-widget-selected">
+                <i class="ri-cursor-line"></i>
+                <p>点击预览区域中的部件进行配置</p>
+            </div>
+        `;
+    }
+
+    function buildLayoutConfigUrl(locale) {
+        const url = new URL(config.apiLayoutConfig, window.location.origin);
+        url.searchParams.set('theme_id', String(state.themeId || 0));
+        url.searchParams.set('layout_type', getEffectiveLayoutType());
+        url.searchParams.set('layout_option', getEffectiveLayoutOption());
+        url.searchParams.set('editor_area', getEffectiveEditorArea());
+        url.searchParams.set('preview_area', getEffectiveEditorArea());
+        url.searchParams.set('scope', getCurrentWindowParam('scope') || 'default');
+        if (locale) {
+            url.searchParams.set('locale', locale);
+        }
+        url.searchParams.set('_t', String(Date.now()));
+        return url.toString();
+    }
+
+    async function loadLayoutConfig(options = {}) {
+        if (!elements.configContent || !state.themeId) {
+            return;
+        }
+        setConfigMode('layout');
+        if (!options.silent) {
+            elements.configContent.innerHTML = '<div class="widget-config-loading">加载布局配置...</div>';
+        }
+        try {
+            const payload = await apiJson(buildLayoutConfigUrl(options.locale || ''));
+            if (!payload.success) {
+                throw new Error(payload.message || 'Load layout config failed');
+            }
+            const data = payload.data || {};
+            elements.configContent.innerHTML = `
+                <div class="layout-config-panel" data-config-target="layout">
+                    ${data.form_html || '<div class="w-param-empty-state"><p>当前布局没有配置字段</p></div>'}
+                </div>
+            `;
+            bindLayoutConfigEvents(elements.configContent);
+        } catch (error) {
+            console.error('[ThemeEditor] loadLayoutConfig error:', error);
+            if (!options.silent) {
+                elements.configContent.innerHTML = `<div class="w-param-empty-state"><p>${escapeHtml(error.message || '布局配置加载失败')}</p></div>`;
+            }
+        }
+    }
+
+    let layoutConfigAutoSaveTimer = null;
+
+    function bindLayoutConfigEvents(container) {
+        const form = container.querySelector('.layout-config-form');
+        if (!form) {
+            return;
+        }
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (layoutConfigAutoSaveTimer) {
+                clearTimeout(layoutConfigAutoSaveTimer);
+                layoutConfigAutoSaveTimer = null;
+            }
+            saveLayoutConfig(form);
+        });
+
+        function shouldIgnoreLayoutConfigAutoSave(target) {
+            if (!target || !target.closest) {
+                return true;
+            }
+            if (target.closest('.w-param-i18n-panel, .i18n-edit-panel')) {
+                return true;
+            }
+            if (target.closest('.btn-save-layout-config, [type="submit"]')) {
+                return true;
+            }
+            return false;
+        }
+
+        function scheduleLayoutConfigAutoSave() {
+            if (layoutConfigAutoSaveTimer) {
+                clearTimeout(layoutConfigAutoSaveTimer);
+            }
+            layoutConfigAutoSaveTimer = setTimeout(async function() {
+                layoutConfigAutoSaveTimer = null;
+                try {
+                    await saveLayoutConfig(form, '', { silent: true });
+                } catch (error) {
+                    console.error('[ThemeEditor] layout config auto-save error:', error);
+                }
+            }, 400);
+        }
+
+        form.addEventListener('input', function(e) {
+            if (shouldIgnoreLayoutConfigAutoSave(e.target)) {
+                return;
+            }
+            scheduleLayoutConfigAutoSave();
+        });
+        form.addEventListener('change', function(e) {
+            if (shouldIgnoreLayoutConfigAutoSave(e.target)) {
+                return;
+            }
+            scheduleLayoutConfigAutoSave();
+        });
+    }
+
+    async function saveLayoutConfig(form, locale, options = {}) {
+        const silent = options.silent === true;
+        const configData = collectWidgetConfigData(form);
+        const editorArea = getEffectiveEditorArea();
+        const payload = {
+            theme_id: state.themeId || 0,
+            layout_type: getEffectiveLayoutType(),
+            layout_option: getEffectiveLayoutOption(),
+            editor_area: editorArea,
+            preview_area: editorArea,
+            scope: getCurrentWindowParam('scope') || 'default',
+            locale: locale || '',
+            config: configData
+        };
+        const result = await apiJson(config.apiSaveLayoutConfig, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!result.success) {
+            throw new Error(result.message || 'Save layout config failed');
+        }
+        if (!silent) {
+            showToast(result.message || '布局配置已保存', 'success');
+        }
+        fetchLayoutSlots();
+        if (options.refreshPreview !== false) {
+            loadLayoutPreview();
+        }
+    }
+
+    async function refreshLayoutOptions(options = {}) {
+        if (!state.themeId || !config.apiLayoutOptions) {
+            renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+            return;
+        }
+
+        const layoutType = normalizeLayoutOptionValue(options.layout_type || state.layoutType || getCurrentPageType() || 'homepage') || 'homepage';
+        const requestedLayoutOption = normalizeLayoutOptionValue(
+            Object.prototype.hasOwnProperty.call(options, 'layout_option')
+                ? options.layout_option
+                : state.layoutOption
+        );
+        const editorArea = options.editor_area || state.editorArea || 'frontend';
+        const url = new URL(config.apiLayoutOptions, window.location.origin);
+        url.searchParams.set('theme_id', String(state.themeId || 0));
+        url.searchParams.set('layout_type', layoutType);
+        url.searchParams.set('page_type', layoutType);
+        url.searchParams.set('layout_option', requestedLayoutOption);
+        url.searchParams.set('editor_area', editorArea);
+        url.searchParams.set('preview_area', editorArea);
+        url.searchParams.set('scope', getCurrentWindowParam('scope') || 'default');
+        url.searchParams.set('_t', String(Date.now()));
+
+        const payload = await apiJson(url.toString(), { silent: options.silent === true });
+        if (!payload.success) {
+            throw new Error(payload.message || 'Load layout options failed');
+        }
+
+        const data = payload.data || {};
+        state.layoutOptionsByType = parseLayoutOptionsByType(data.layout_options_by_type || {});
+        state.layoutOption = resolveLayoutOptionForType(layoutType, data.layout_option || requestedLayoutOption);
+        renderLayoutOptionSelect(layoutType, state.layoutOption);
+    }
+
+    async function saveLayoutSelection(options = {}) {
+        if (!state.themeId || !config.apiSaveLayoutSelection) {
+            return;
+        }
+
+        const result = await apiJson(config.apiSaveLayoutSelection, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                theme_id: state.themeId || 0,
+                layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                page_type: getCurrentPageType() || 'homepage',
+                layout_option: state.layoutOption || 'default',
+                editor_area: state.editorArea || 'frontend',
+                preview_area: state.editorArea || 'frontend',
+                scope: getCurrentWindowParam('scope') || 'default'
+            }),
+            silent: options.silent === true
+        });
+
+        if (!result.success) {
+            throw new Error(result.message || 'Save layout option failed');
+        }
+
+        const data = result.data || {};
+        if (data.layout_options_by_type) {
+            state.layoutOptionsByType = parseLayoutOptionsByType(data.layout_options_by_type);
+        }
+        state.layoutOption = resolveLayoutOptionForType(state.layoutType, data.layout_option || state.layoutOption);
+        renderLayoutOptionSelect(state.layoutType, state.layoutOption);
+        if (!options.silent) {
+            showToast(result.message || 'Layout option saved.', 'success');
+        }
+    }
+
     async function loadWidgetConfigForAccordion(layoutId) {
-        const configBody = document.querySelector(`.slot-widget-body[data-layout-id="${layoutId}"]`);
+        const configBody = document.querySelector(`.slot-widget-body${dataLayoutIdSelector(layoutId)}`);
         if (!configBody) return;
-        
+
         // 如果已加载，跳过
         if (!configBody.querySelector('.widget-config-loading')) return;
-        
+
         try {
             const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}`;
-            const response = await fetch(apiUrl);
-            const result = await response.json();
-            
+            const result = await apiJson(apiUrl);
+
             if (result.success && result.data) {
                 const widgetData = result.data;
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
-                
+
                 // 生成配置表单
                 const formHtml = await generateWidgetConfigForm(layoutId, params, widgetConfig);
                 const searchPlaceholder = (typeof __ !== 'undefined' ? __('搜索配置项') : '搜索配置项');
                 const searchWrap = '<div class="w-param-search-wrap mb-2"><input type="text" class="w-param-search form-control form-control-sm" placeholder="' + searchPlaceholder + '" autocomplete="off"></div>';
                 configBody.innerHTML = searchWrap + formHtml;
-                
+
                 // 绑定表单事件（手风琴 + 配置搜索）
                 bindAccordionFormEvents(configBody);
                 bindParamSearch(configBody);
@@ -1173,7 +2333,7 @@
             </div>`;
         }
     }
-    
+
     /**
      * 生成部件配置表单 HTML
      * 优先使用后端 API 渲染，失败时回退到前端渲染
@@ -1185,10 +2345,10 @@
                 <p>该部件无可配置项</p>
             </div>`;
         }
-        
+
         // 尝试使用后端 API 渲染
         try {
-            const response = await fetch(config.apiParamRenderForm || '/theme/backend/widget/paramrender/form', {
+            const html = await apiText(config.apiParamRenderForm || '/theme/backend/widget/paramrender/form', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -1199,21 +2359,18 @@
                     config: JSON.stringify(formConfig || {}),
                 }),
             });
-            
-            if (response.ok) {
-                const html = await response.text();
-                if (html && !html.includes('alert-danger')) {
-                    return html;
-                }
+
+            if (html && !html.includes('alert-danger')) {
+                return html;
             }
         } catch (err) {
-            console.warn('[ThemeEditor] Backend form render failed, using fallback:', err);
+            console.debug?.('[ThemeEditor] Backend form render failed, using fallback:', err);
         }
-        
+
         // 回退到前端渲染
         return generateWidgetConfigFormFallback(layoutId, params, formConfig);
     }
-    
+
     /**
      * 前端回退渲染方法
      */
@@ -1222,7 +2379,7 @@
         const basicFields = {};
         const styleFields = {};
         const linkFields = {};
-        
+
         for (const [key, param] of Object.entries(params)) {
             if (key.includes('style') || key.includes('size') || key.includes('color') || key.includes('align') || key.includes('gap')) {
                 styleFields[key] = param;
@@ -1232,66 +2389,269 @@
                 basicFields[key] = param;
             }
         }
-        
+
         // 生成字段HTML的辅助函数
+        const normalizeArrayFieldValue = (value, fallback = []) => {
+            if (Array.isArray(value)) {
+                return value;
+            }
+
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (trimmed !== '') {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) {
+                            return parsed;
+                        }
+                    } catch (e) {
+                        // Keep non-JSON strings as scalar config values.
+                    }
+                }
+            }
+
+            return Array.isArray(fallback) ? fallback : [];
+        };
+
+        const normalizeArrayItemSchema = (param) => {
+            const candidates = [
+                param?.item_schema,
+                param?.itemSchema,
+                param?.schema?.fields,
+                param?.schema,
+                param?.fields
+            ];
+
+            for (const candidate of candidates) {
+                if (!candidate) {
+                    continue;
+                }
+
+                if (Array.isArray(candidate)) {
+                    const schema = {};
+                    candidate.forEach(field => {
+                        const fieldKey = field?.key || field?.name || field?.code;
+                        if (fieldKey) {
+                            schema[fieldKey] = field;
+                        }
+                    });
+                    if (Object.keys(schema).length > 0) {
+                        return schema;
+                    }
+                    continue;
+                }
+
+                if (typeof candidate === 'object') {
+                    return candidate;
+                }
+            }
+
+            return {};
+        };
+
+        const normalizeOptions = (options) => {
+            if (!options) {
+                return {};
+            }
+            if (Array.isArray(options)) {
+                return options.reduce((result, option) => {
+                    if (option && typeof option === 'object') {
+                        const value = option.value ?? option.key ?? option.code ?? option.id ?? '';
+                        if (value !== '') {
+                            result[value] = option.label ?? option.name ?? value;
+                        }
+                    } else if (option !== null && option !== undefined) {
+                        result[option] = option;
+                    }
+                    return result;
+                }, {});
+            }
+            return options;
+        };
+
+        const getArrayItemFieldValue = (item, fieldKey, fieldParam) => {
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+                return item[fieldKey] ?? fieldParam.default ?? '';
+            }
+            return fieldParam.default ?? '';
+        };
+
+        const renderFallbackMediaImageField = (inputId, fieldKey, value, fieldParam) => {
+            const mediaOptions = fieldParam.media_options || {};
+            const defaultDir = mediaOptions.default_directory || fieldParam.default_directory || 'banner';
+            const recommendW = mediaOptions.recommend_width || fieldParam.recommend_width || '';
+            const recommendH = mediaOptions.recommend_height || fieldParam.recommend_height || '';
+            const escapedValue = escapeHtml(value);
+            const hasImage = !!value;
+            let html = '<div class="w-param-media-image">';
+            html += `<div class="w-param-image-preview${hasImage ? ' w-param-has-image' : ''}" id="${escapeHtml(inputId)}_preview">`;
+            if (hasImage) {
+                html += `<img src="${escapedValue}" alt="预览">`;
+            }
+            html += `<div class="w-param-image-placeholder" style="${hasImage ? 'display:none;' : ''}">从媒体库选择</div>`;
+            html += '<div class="w-param-image-actions">';
+            html += `<button type="button" class="w-param-btn w-param-btn-sm w-param-btn-outline-primary w-param-media-image-select" data-target="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" data-default-dir="${escapeHtml(defaultDir)}"`;
+            if (recommendW) {
+                html += ` data-recommend-w="${escapeHtml(String(recommendW))}"`;
+            }
+            if (recommendH) {
+                html += ` data-recommend-h="${escapeHtml(String(recommendH))}"`;
+            }
+            html += '>选择</button>';
+            if (hasImage) {
+                html += `<button type="button" class="w-param-btn w-param-btn-sm w-param-btn-outline-danger w-param-image-clear" data-target="${escapeHtml(inputId)}">×</button>`;
+            }
+            html += '</div></div>';
+            html += `<input type="hidden" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" data-preview="${escapeHtml(inputId)}_preview">`;
+            html += '</div>';
+            return html;
+        };
+
+        const renderFallbackArrayItemField = (fieldId, itemIndex, fieldKey, fieldParam, item) => {
+            fieldParam = fieldParam && typeof fieldParam === 'object' ? fieldParam : { type: fieldParam || 'string' };
+            const label = fieldParam.label || fieldKey;
+            const type = getParamUiType(fieldParam);
+            const value = getArrayItemFieldValue(item, fieldKey, fieldParam);
+            const inputId = `${fieldId}_${itemIndex}_${fieldKey}`;
+            const escapedValue = escapeHtml(value);
+            let html = `<div class="array-item-field" data-array-field="${escapeHtml(fieldKey)}">`;
+            html += `<label class="array-item-label" for="${escapeHtml(inputId)}">${escapeHtml(label)}</label>`;
+
+            if (isBooleanParamType(type)) {
+                const checked = value === true || value === 1 || value === '1' || value === 'true' || value === 'on';
+                html += `<input type="checkbox" class="form-check-input" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" ${checked ? 'checked' : ''}>`;
+            } else if (type === 'select' && fieldParam.options) {
+                const options = normalizeOptions(fieldParam.options);
+                html += `<select class="form-select form-select-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}">`;
+                for (const [optVal, optLabel] of Object.entries(options)) {
+                    const selected = String(value) === String(optVal) ? ' selected' : '';
+                    html += `<option value="${escapeHtml(optVal)}"${selected}>${escapeHtml(optLabel)}</option>`;
+                }
+                html += `</select>`;
+            } else if (type === 'textarea' || type === 'html') {
+                html += `<textarea class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" rows="2">${escapedValue}</textarea>`;
+            } else if (type === 'number') {
+                html += `<input type="number" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" min="${escapeHtml(fieldParam.min || '')}" max="${escapeHtml(fieldParam.max || '')}" step="${escapeHtml(fieldParam.step || '')}">`;
+            } else if (type === 'url') {
+                html += `<input type="url" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" placeholder="https://">`;
+            } else if (type === 'media_image') {
+                html += renderFallbackMediaImageField(inputId, fieldKey, value, fieldParam);
+            } else if (type === 'image' || type === 'image_picker') {
+                const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
+                html += `<div class="array-image-field${value ? ' has-image' : ''}">
+                    <div class="array-image-preview">${safeImageUrl ? `<img src="${safeImageUrl}" alt="">` : iconSvg('image')}</div>
+                    <input type="text" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}" placeholder="图片URL">
+                </div>`;
+            } else {
+                html += `<input type="text" class="form-control form-control-sm" id="${escapeHtml(inputId)}" data-field="${escapeHtml(fieldKey)}" value="${escapedValue}">`;
+            }
+
+            html += `</div>`;
+            return html;
+        };
+
+        const renderFallbackArrayItem = (fieldId, key, item, itemIndex, itemSchema) => {
+            const schemaKeys = Object.keys(itemSchema);
+            const indexLabel = itemIndex === '__INDEX__' ? '' : Number(itemIndex) + 1;
+            let html = `<div class="array-item" data-index="${escapeHtml(itemIndex)}">`;
+            html += `<div class="array-item-handle">${iconSvg('drag')}</div>`;
+            html += `<div class="array-item-content">`;
+
+            if (schemaKeys.length === 0) {
+                const value = item === null || item === undefined || typeof item === 'object' ? '' : item;
+                html += `<input type="text" class="form-control array-item-input" value="${escapeHtml(value)}">`;
+            } else {
+                html += `<div class="array-item-title">${indexLabel ? `第 ${indexLabel} 项` : '新项目'}</div>`;
+                html += `<div class="array-item-fields">`;
+                schemaKeys.forEach(fieldKey => {
+                    html += renderFallbackArrayItemField(fieldId, itemIndex, fieldKey, itemSchema[fieldKey] || {}, item || {});
+                });
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+            html += `<div class="array-item-actions">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-remove-array-item" title="删除">
+                    ${iconSvg('delete')}
+                </button>
+            </div>`;
+            html += `</div>`;
+            return html;
+        };
+
         const renderField = (key, param, layoutId, config) => {
             const label = param.label || key;
-            const type = param.type || 'text';
+            const type = getParamUiType(param);
+            const semanticType = param.type || type;
             const value = config[key] ?? param.default ?? '';
+            const isArrayField = type === 'array'
+                || type === 'list'
+                || Array.isArray(value)
+                || Array.isArray(param.default)
+                || (param.item_schema && typeof param.item_schema === 'object')
+                || (typeof type === 'string' && type.endsWith('_items'));
+            const scalarValue = (value === null || value === undefined || typeof value === 'object') ? '' : value;
+            const arrayValue = normalizeArrayFieldValue(value, param.default);
+            const arrayItemSchema = normalizeArrayItemSchema(param);
             const description = param.description || '';
             const translatable = isFieldTranslatable(param);
             const fieldId = `config_${layoutId}_${key}`;
             const fieldClass = translatable ? 'config-field translatable-field' : 'config-field';
-            
-            let fieldHtml = `<div class="${fieldClass}" data-field-key="${key}" data-translatable="${translatable}">`;
-            
+            const safeKey = escapeHtml(key);
+            const safeLayoutId = escapeHtml(layoutId || '');
+            const safeFieldId = escapeHtml(fieldId);
+            const safeLabel = escapeHtml(label);
+            const safeDescription = escapeHtml(description);
+            const safeValue = escapeHtml(value ?? '');
+            const safeScalarValue = escapeHtml(scalarValue);
+
+            let fieldHtml = `<div class="${fieldClass}" data-field-key="${safeKey}" data-translatable="${translatable}">`;
+
             // 字段头部：标签 + 多语言按钮
             fieldHtml += `<div class="config-field-header">
-                <label class="config-label" for="${fieldId}">${label}</label>
-                ${translatable ? `<button type="button" class="btn-i18n-edit" data-field="${key}" data-layout-id="${layoutId}" title="编辑多语言">
+                <label class="config-label" for="${safeFieldId}">${safeLabel}</label>
+                ${translatable ? `<button type="button" class="btn-i18n-edit" data-field="${safeKey}" data-layout-id="${safeLayoutId}" title="编辑多语言">
                     <i class="ri-translate-2"></i>
                     <span>多语言</span>
                 </button>` : ''}
             </div>`;
-            
+
             // 输入控件
             fieldHtml += `<div class="config-field-input">`;
-            if (type === 'bool' || type === 'boolean') {
-                fieldHtml += `<div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="${fieldId}" name="${key}" ${value ? 'checked' : ''}>
-                    <label class="form-check-label" for="${fieldId}">启用</label>
-                </div>`;
+            if (isBooleanParamType(semanticType)) {
+                fieldHtml += renderBooleanSelect(fieldId, key, key, value, false, param);
             } else if (type === 'select' && param.options) {
-                fieldHtml += `<select class="form-select" id="${fieldId}" name="${key}">`;
+                fieldHtml += `<select class="form-select" id="${safeFieldId}" name="${safeKey}">`;
                 for (const [optVal, optLabel] of Object.entries(param.options)) {
-                    fieldHtml += `<option value="${optVal}" ${value == optVal ? 'selected' : ''}>${optLabel}</option>`;
+                    fieldHtml += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(optLabel)}</option>`;
                 }
                 fieldHtml += `</select>`;
             } else if (type === 'textarea' || type === 'html') {
-                fieldHtml += `<textarea class="form-control" id="${fieldId}" name="${key}" rows="3">${value}</textarea>`;
+                fieldHtml += `<textarea class="form-control" id="${safeFieldId}" name="${safeKey}" rows="3">${safeValue}</textarea>`;
             } else if (type === 'number') {
-                fieldHtml += `<input type="number" class="form-control" id="${fieldId}" name="${key}" value="${value}" min="${param.min || ''}" max="${param.max || ''}">`;
+                fieldHtml += `<input type="number" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" min="${escapeHtml(param.min || '')}" max="${escapeHtml(param.max || '')}">`;
             } else if (type === 'color') {
                 fieldHtml += `<div class="color-picker-wrapper">
-                    <input type="color" class="form-control-color" id="${fieldId}_picker" value="${value || '#000000'}">
-                    <input type="text" class="form-control" id="${fieldId}" name="${key}" value="${value || '#000000'}" placeholder="#000000">
+                    <input type="color" class="form-control-color" id="${safeFieldId}_picker" value="${escapeHtml(value || '#000000')}">
+                    <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${escapeHtml(value || '#000000')}" placeholder="#000000">
                 </div>`;
             } else if (type === 'url') {
                 fieldHtml += `<div class="input-with-icon">
                     <i class="ri-link"></i>
-                    <input type="url" class="form-control" id="${fieldId}" name="${key}" value="${value}" placeholder="https://">
+                    <input type="url" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="https://">
                 </div>`;
             } else if (type === 'image') {
+                const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
                 fieldHtml += `<div class="image-picker-wrapper">
                     <div class="image-preview-container${value ? ' has-image' : ''}">
-                        <div class="image-preview" id="${fieldId}_preview">
-                            ${value ? `<img src="${value}" alt="预览">` : `<div class="image-placeholder">${iconSvg('image')}<span>点击选择图片</span></div>`}
+                        <div class="image-preview" id="${safeFieldId}_preview">
+                            ${safeImageUrl ? `<img src="${safeImageUrl}" alt="预览">` : `<div class="image-placeholder">${iconSvg('image')}<span>点击选择图片</span></div>`}
                         </div>
                     </div>
                     <div class="image-url-input">
                         <div class="input-group">
                             <span class="input-group-text"><i class="ri-link"></i></span>
-                            <input type="text" class="form-control" id="${fieldId}" name="${key}" value="${value || ''}" placeholder="图片URL">
+                            <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="图片URL">
                         </div>
                     </div>
                 </div>`;
@@ -1301,71 +2661,79 @@
                 const step = param.step || 1;
                 fieldHtml += `<div class="range-slider-wrapper">
                     <div class="range-slider-container">
-                        <input type="range" class="form-range" id="${fieldId}_slider" min="${min}" max="${max}" step="${step}" value="${value || min}">
+                        <input type="range" class="form-range" id="${safeFieldId}_slider" min="${escapeHtml(min)}" max="${escapeHtml(max)}" step="${escapeHtml(step)}" value="${escapeHtml(value || min)}">
                     </div>
                     <div class="range-value-display">
-                        <input type="number" class="form-control range-value-input" id="${fieldId}" name="${key}" min="${min}" max="${max}" step="${step}" value="${value || min}">
+                        <input type="number" class="form-control range-value-input" id="${safeFieldId}" name="${safeKey}" min="${escapeHtml(min)}" max="${escapeHtml(max)}" step="${escapeHtml(step)}" value="${escapeHtml(value || min)}">
                     </div>
                 </div>`;
             } else if (type === 'datetime' || type === 'date' || type === 'time') {
                 const inputType = type === 'date' ? 'date' : (type === 'time' ? 'time' : 'datetime-local');
                 fieldHtml += `<div class="input-group">
                     <span class="input-group-text">${iconSvg('calendar')}</span>
-                    <input type="${inputType}" class="form-control" id="${fieldId}" name="${key}" value="${value || ''}">
+                    <input type="${inputType}" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}">
                 </div>`;
-            } else if (type === 'array') {
-                fieldHtml += `<div class="array-editor-wrapper" data-field-id="${fieldId}">
-                    <div class="array-items-container" id="${fieldId}_items">
-                        <div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>
+            } else if (isArrayField) {
+                const arrayItemsHtml = arrayValue.length > 0
+                    ? arrayValue.map((item, index) => renderFallbackArrayItem(fieldId, key, item, index, arrayItemSchema)).join('')
+                    : '<div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>';
+                const templateHtml = renderFallbackArrayItem(fieldId, key, {}, '__INDEX__', arrayItemSchema);
+                fieldHtml += `<div class="array-editor-wrapper" data-field-id="${safeFieldId}" data-max-items="${escapeHtml(param.max_items || param.maxItems || '')}">
+                    <div class="array-items-container" id="${safeFieldId}_items">
+                        ${arrayItemsHtml}
                     </div>
                     <div class="array-actions">
-                        <button type="button" class="btn btn-outline-primary btn-add-array-item" data-target="${fieldId}">
+                        <button type="button" class="btn btn-outline-primary btn-add-array-item" data-target="${safeFieldId}">
                             ${iconSvg('add')} 添加项目
                         </button>
                     </div>
-                    <input type="hidden" id="${fieldId}" name="${key}" value='${JSON.stringify(value || [])}'>
+                    <template>${templateHtml}</template>
+                    <input type="hidden" id="${safeFieldId}" name="${safeKey}" value='${escapeHtml(JSON.stringify(arrayValue))}'>
                 </div>`;
             } else if (type === 'icon') {
                 fieldHtml += `<div class="icon-picker-wrapper">
                     <div class="icon-preview">
-                        <span class="icon-preview-display">${value ? `<i class="${value}"></i>` : (iconSvg('add') || '<span class="te-icon placeholder-icon"></span>')}</span>
-                        <button type="button" class="btn btn-sm btn-outline-primary btn-icon-picker" data-target="${fieldId}">
+                        <span class="icon-preview-display">${value ? `<i class="${escapeHtml(value)}"></i>` : (iconSvg('add') || '<span class="te-icon placeholder-icon"></span>')}</span>
+                        <button type="button" class="btn btn-sm btn-outline-primary btn-icon-picker" data-target="${safeFieldId}">
                             ${iconSvg('apps')} 选择图标
                         </button>
                     </div>
-                    <input type="hidden" id="${fieldId}" name="${key}" value="${value || ''}">
+                    <input type="hidden" id="${safeFieldId}" name="${safeKey}" value="${safeValue}">
                 </div>`;
             } else {
-                fieldHtml += `<input type="text" class="form-control" id="${fieldId}" name="${key}" value="${value}">`;
+                fieldHtml += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeScalarValue}">`;
             }
             fieldHtml += `</div>`;
-            
+
             // 多语言编辑区（统一空容器，由 fetchInstalledLocales 动态填充）
             if (translatable) {
-                fieldHtml += `<div class="w-param-i18n-panel i18n-edit-panel" id="i18n_panel_${layoutId}_${key}" data-field="${key}" data-layout-id="${layoutId}" style="display:none;">
+                fieldHtml += `<div class="w-param-i18n-panel i18n-edit-panel" id="i18n_panel_${safeLayoutId}_${safeKey}" data-field="${safeKey}" data-layout-id="${safeLayoutId}" style="display:none;">
                     <div class="w-param-i18n-header i18n-panel-header">
                         <span>${iconSvg('global')} 多语言配置</span>
-                        <button type="button" class="btn-i18n-close" data-close-i18n data-field="${key}">${iconSvg('close')}</button>
+                        <button type="button" class="btn-i18n-close" data-close-i18n data-field="${safeKey}">${iconSvg('close')}</button>
                     </div>
                     <div class="w-param-i18n-body i18n-panel-body"></div>
                     <div class="w-param-i18n-footer i18n-panel-footer">
-                        <button type="button" class="btn btn-sm btn-primary btn-save-i18n" data-save-i18n data-field="${key}" data-layout-id="${layoutId}">
+                        <button type="button" class="btn btn-sm btn-outline-secondary btn-ai-i18n" data-ai-i18n data-field="${safeKey}" data-layout-id="${safeLayoutId}">
+                            AI翻译
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary btn-save-i18n" data-save-i18n data-field="${safeKey}" data-layout-id="${safeLayoutId}">
                             ${iconSvg('save')} 保存多语言
                         </button>
                     </div>
                 </div>`;
             }
-            
+
             if (description) {
-                fieldHtml += `<div class="config-field-description">${iconSvg('info')} ${description}</div>`;
+                fieldHtml += `<div class="config-field-description">${iconSvg('info')} ${safeDescription}</div>`;
             }
             fieldHtml += `</div>`;
             return fieldHtml;
         };
-        
+
         // 生成分组HTML
         let groupsHtml = '';
-        
+
         if (Object.keys(basicFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(basicFields)) {
@@ -1382,7 +2750,7 @@
                 </div>
             `;
         }
-        
+
         if (Object.keys(styleFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(styleFields)) {
@@ -1399,7 +2767,7 @@
                 </div>
             `;
         }
-        
+
         if (Object.keys(linkFields).length > 0) {
             let fieldsHtml = '';
             for (const [key, param] of Object.entries(linkFields)) {
@@ -1416,22 +2784,33 @@
                 </div>
             `;
         }
-        
+
         return `
-            <form class="widget-accordion-config-form" data-layout-id="${layoutId}">
+            <form class="widget-accordion-config-form w-param-form" data-layout-id="${escapeHtml(layoutId)}">
                 ${groupsHtml}
                 <div class="config-actions">
                     <button type="submit" class="btn btn-primary">
                         ${iconSvg('save')} 保存配置
                     </button>
-                    <button type="button" class="btn btn-outline-danger btn-delete-widget" data-layout-id="${layoutId}">
+                    <button type="button" class="btn btn-outline-danger btn-delete-widget" data-layout-id="${escapeHtml(layoutId)}">
                         ${iconSvg('delete')} 删除
                     </button>
                 </div>
             </form>
         `;
     }
-    
+
+    function initWidgetParamPickers(container) {
+        if (!container) {
+            return;
+        }
+        if (typeof window.WidgetParamTypesInit === 'function') {
+            window.WidgetParamTypesInit(container);
+        } else if (typeof window.WidgetParamTypesInitMedia === 'function') {
+            window.WidgetParamTypesInitMedia(container);
+        }
+    }
+
     /**
      * 绑定配置表单事件（多语言、颜色等）；手风琴已在 #themeEditor 根上委托
      */
@@ -1474,6 +2853,19 @@
                 return;
             }
 
+            const aiBtn = e.target.closest('[data-ai-i18n], .btn-ai-i18n');
+            if (aiBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
+                const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
+                const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId;
+                if (panel && fieldKey && layoutId) {
+                    await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
+                }
+                return;
+            }
+
             // 保存多语言按钮
             const saveBtn = e.target.closest('[data-save-i18n], .btn-save-i18n');
             if (saveBtn) {
@@ -1486,13 +2878,13 @@
                 return;
             }
         });
-        
+
         // 颜色选择器同步
         container.querySelectorAll('.color-picker-wrapper').forEach(wrapper => {
             const picker = wrapper.querySelector('.form-control-color');
             const text = wrapper.querySelector('.form-control');
             const transparentBtn = wrapper.querySelector('.btn-transparent');
-            
+
             if (picker && text) {
                 picker.addEventListener('input', () => {
                     text.value = picker.value;
@@ -1507,7 +2899,7 @@
                     }
                 });
             }
-            
+
             // 透明按钮
             if (transparentBtn) {
                 transparentBtn.addEventListener('click', function() {
@@ -1524,7 +2916,7 @@
                     }
                 });
             }
-            
+
             // 预设颜色按钮
             wrapper.querySelectorAll('.color-preset-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -1541,21 +2933,21 @@
                 });
             });
         });
-        
+
         // 范围滑块同步
         container.querySelectorAll('.range-slider-wrapper').forEach(wrapper => {
             const slider = wrapper.querySelector('.form-range');
             const input = wrapper.querySelector('.range-value-input');
             const label = wrapper.querySelector('.range-value-label');
             const hidden = wrapper.querySelector('input[type="hidden"]');
-            
+
             if (slider && (input || label || hidden)) {
                 slider.addEventListener('input', function() {
                     if (input) input.value = this.value;
                     if (label) label.textContent = this.value;
                     if (hidden) hidden.value = this.value;
                 });
-                
+
                 if (input) {
                     input.addEventListener('input', function() {
                         slider.value = this.value;
@@ -1563,7 +2955,7 @@
                 }
             }
         });
-        
+
         // 图标选择器
         container.querySelectorAll('.icon-picker-wrapper').forEach(wrapper => {
             const pickerBtn = wrapper.querySelector('.btn-icon-picker');
@@ -1571,13 +2963,13 @@
             const panel = wrapper.querySelector('.icon-picker-panel');
             const preview = wrapper.querySelector('.icon-preview-display');
             const hidden = wrapper.querySelector('input[type="hidden"]');
-            
+
             if (pickerBtn && panel) {
                 pickerBtn.addEventListener('click', function() {
                     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
                 });
             }
-            
+
             if (clearBtn && hidden && preview) {
                 clearBtn.addEventListener('click', function() {
                     hidden.value = '';
@@ -1585,7 +2977,7 @@
                     this.style.display = 'none';
                 });
             }
-            
+
             // 图标项点击
             wrapper.querySelectorAll('.icon-picker-item').forEach(item => {
                 item.addEventListener('click', function() {
@@ -1594,13 +2986,13 @@
                     if (preview) preview.innerHTML = `<i class="${icon}"></i>`;
                     if (panel) panel.style.display = 'none';
                     if (clearBtn) clearBtn.style.display = 'inline-block';
-                    
+
                     // 更新选中状态
                     wrapper.querySelectorAll('.icon-picker-item').forEach(i => i.classList.remove('selected'));
                     this.classList.add('selected');
                 });
             });
-            
+
             // 搜索过滤
             const searchInput = panel?.querySelector('.icon-picker-search input');
             if (searchInput) {
@@ -1612,7 +3004,7 @@
                     });
                 });
             }
-            
+
             // 自定义图标输入
             const customInput = panel?.querySelector('.icon-picker-custom input');
             const applyBtn = panel?.querySelector('.btn-apply-custom');
@@ -1628,7 +3020,7 @@
                 });
             }
         });
-        
+
         // 图片选择器
         container.querySelectorAll('.image-picker-wrapper').forEach(wrapper => {
             const urlInput = wrapper.querySelector('.image-url-input input');
@@ -1636,21 +3028,25 @@
             const clearBtn = wrapper.querySelector('.btn-clear-image');
             const uploadBtn = wrapper.querySelector('.btn-upload-image');
             const fileInput = wrapper.querySelector('.image-file-input');
-            
+
             // URL 输入变化时更新预览
             if (urlInput && preview) {
                 urlInput.addEventListener('input', function() {
                     const url = this.value.trim();
                     if (url) {
-                        preview.innerHTML = `<img src="${url}" alt="预览" onerror="this.parentElement.innerHTML='<div class="image-placeholder"><span>图片加载失败</span></div>'">`;
-                        preview.closest('.image-preview-container')?.classList.add('has-image');
+                        if (renderSafeImagePreview(preview, url)) {
+                            preview.closest('.image-preview-container')?.classList.add('has-image');
+                        } else {
+                            preview.innerHTML = '<div class="image-placeholder">' + (iconSvg('image') || '') + '<span>点击选择图片</span></div>';
+                            preview.closest('.image-preview-container')?.classList.remove('has-image');
+                        }
                     } else {
                         preview.innerHTML = '<div class="image-placeholder">' + (iconSvg('image') || '') + '<span>点击选择图片</span></div>';
                         preview.closest('.image-preview-container')?.classList.remove('has-image');
                     }
                 });
             }
-            
+
             // 清除按钮
             if (clearBtn && urlInput && preview) {
                 clearBtn.addEventListener('click', function() {
@@ -1659,7 +3055,7 @@
                     preview.closest('.image-preview-container')?.classList.remove('has-image');
                 });
             }
-            
+
             // 上传按钮
             if (uploadBtn && fileInput) {
                 uploadBtn.addEventListener('click', () => fileInput.click());
@@ -1669,8 +3065,7 @@
                         // TODO: 实现文件上传逻辑
                         const reader = new FileReader();
                         reader.onload = function(e) {
-                            if (preview) {
-                                preview.innerHTML = `<img src="${e.target.result}" alt="预览">`;
+                            if (preview && renderSafeImagePreview(preview, e.target.result)) {
                                 preview.closest('.image-preview-container')?.classList.add('has-image');
                             }
                         };
@@ -1679,14 +3074,14 @@
                 });
             }
         });
-        
+
         // 数组编辑器
         container.querySelectorAll('.array-editor-wrapper').forEach(wrapper => {
             const addBtn = wrapper.querySelector('.btn-add-array-item');
             const itemsContainer = wrapper.querySelector('.array-items-container');
             const hiddenInput = wrapper.querySelector('input[type="hidden"]');
             const template = wrapper.querySelector('template');
-            
+
             // 更新隐藏字段值
             const updateHiddenValue = () => {
                 if (!hiddenInput || !itemsContainer) return;
@@ -1709,22 +3104,24 @@
                     }
                 });
                 hiddenInput.value = JSON.stringify(items);
+                hiddenInput.dispatchEvent(new Event('input', { bubbles: true }));
+                hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
             };
-            
+
             // 添加项目
             if (addBtn) {
                 addBtn.addEventListener('click', function() {
                     const maxItems = parseInt(wrapper.dataset.maxItems) || Infinity;
                     const currentCount = itemsContainer?.querySelectorAll('.array-item').length || 0;
-                    
+
                     if (currentCount >= maxItems) {
                         showToast('已达到最大项目数', 'warning');
                         return;
                     }
-                    
+
                     // 移除空状态
                     itemsContainer?.querySelector('.array-empty-state')?.remove();
-                    
+
                     // 添加新项
                     if (template) {
                         const html = template.innerHTML.replace(/__INDEX__/g, Date.now().toString());
@@ -1746,23 +3143,25 @@
                         `;
                         itemsContainer?.insertAdjacentHTML('beforeend', itemHtml);
                     }
-                    
+
                     // 绑定新项的事件
                     const newItem = itemsContainer?.querySelector('.array-item:last-child');
                     if (newItem) {
+                        rememberWidgetPreviewArrayItem(newItem);
                         bindArrayItemEvents(newItem, updateHiddenValue);
+                        initWidgetParamPickers(newItem);
                     }
-                    
+
                     updateHiddenValue();
                 });
             }
-            
+
             // 绑定现有项的事件
             itemsContainer?.querySelectorAll('.array-item').forEach(item => {
                 bindArrayItemEvents(item, updateHiddenValue);
             });
         });
-        
+
         // 日期时间快捷按钮
         container.querySelectorAll('.datetime-shortcuts button').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -1770,10 +3169,10 @@
                 const targetId = this.dataset.target;
                 const input = document.getElementById(targetId);
                 if (!input) return;
-                
+
                 const now = new Date();
                 let newDate;
-                
+
                 switch (action) {
                     case 'today':
                         newDate = now;
@@ -1785,7 +3184,7 @@
                         newDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
                         break;
                 }
-                
+
                 if (newDate) {
                     if (input.type === 'date') {
                         input.value = newDate.toISOString().split('T')[0];
@@ -1795,7 +3194,7 @@
                 }
             });
         });
-        
+
         // 清除日期时间按钮
         container.querySelectorAll('.btn-clear-datetime').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -1804,7 +3203,7 @@
                 if (input) input.value = '';
             });
         });
-        
+
         // URL 测试按钮
         container.querySelectorAll('.btn-test-url').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -1815,7 +3214,7 @@
                 }
             });
         });
-        
+
         // URL 快捷链接
         container.querySelectorAll('.url-suggestion-btn').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -1825,7 +3224,7 @@
                 if (input) input.value = url;
             });
         });
-        
+
         // 多行文本自动调整高度
         container.querySelectorAll('textarea.auto-resize').forEach(textarea => {
             const adjustHeight = () => {
@@ -1835,35 +3234,34 @@
             textarea.addEventListener('input', adjustHeight);
             adjustHeight();
         });
-        
+
         // 文本域字符计数
         container.querySelectorAll('.textarea-counter').forEach(counter => {
             const wrapper = counter.closest('.textarea-wrapper');
             const textarea = wrapper?.querySelector('textarea');
             const currentCount = counter.querySelector('.current-count');
-            
+
             if (textarea && currentCount) {
                 textarea.addEventListener('input', function() {
                     currentCount.textContent = this.value.length;
                 });
             }
         });
-        
+
         // 保存按钮
         container.querySelectorAll('.w-param-form').forEach(form => {
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 const layoutId = this.dataset.layoutId;
                 const configData = collectWidgetConfigData(this);
-                
+
                 try {
-                    const response = await fetch(config.apiUpdateConfig, {
+                    const result = await apiJson(config.apiUpdateConfig, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ layout_id: layoutId, config: configData })
                     });
-                    const result = await response.json();
-                    
+
                     if (result.success) {
                         showToast('配置已保存', 'success');
                         // 更新预览
@@ -1878,12 +3276,12 @@
                 }
             });
         });
-        
+
         // 删除按钮
         container.querySelectorAll('.w-param-btn-delete-widget, .btn-delete-widget').forEach(btn => {
             btn.addEventListener('click', async function() {
                 const layoutId = this.dataset.layoutId;
-                
+
                 const confirmed = await showCustomConfirm(
                     '确认删除部件？',
                     '删除后插槽将恢复为原始内容。',
@@ -1891,13 +3289,13 @@
                     '取消'
                 );
                 if (!confirmed) return;
-                
+
                 // 从 iframe 获取 slot_id 和 area
                 let slotIdFb = '', areaFb = 'content';
                 try {
                     const iframe = elements.previewFrame;
                     if (iframe && iframe.contentDocument) {
-                        const wEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                        const wEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                         if (wEl) {
                             slotIdFb = wEl.getAttribute('data-slot-id') || wEl.closest('[data-wslot]')?.getAttribute('data-wslot') || wEl.closest('[data-slot]')?.getAttribute('data-slot') || '';
                             if (wEl.closest('header, [data-wslot-position="header"], .site-header')) areaFb = 'header';
@@ -1905,9 +3303,9 @@
                         }
                     }
                 } catch (e) {}
-                
+
                 try {
-                    const response = await fetch(config.apiDeleteWidget, {
+                    const result = await apiJson(config.apiDeleteWidget, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1919,22 +3317,21 @@
                             layout_option: state.layoutOption || 'default'
                         })
                     });
-                    const result = await response.json();
-                    
+
                     if (result.success) {
                         showToast('部件已删除', 'success');
-                        
+
                         // 恢复iframe预览区的原始内容
                         const iframe = elements.previewFrame;
                         if (iframe && iframe.contentDocument) {
-                            const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                            const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                             if (widgetEl) {
                                 const slot = widgetEl.closest('[data-wslot], [data-slot]');
                                 const actualSlotId = slot?.getAttribute('data-wslot') || slot?.getAttribute('data-slot');
-                                
+
                                 // 移除部件元素
                                 widgetEl.remove();
-                                
+
                                 // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
                                 if (slot && !slot.querySelector('[data-layout-id]')) {
                                     if (result.has_original && result.original_html) {
@@ -1961,14 +3358,14 @@
                                 }
                             }
                         }
-                        
+
                         // 从配置面板手风琴移除
                         const accordionItem = this.closest('.slot-widget-accordion-item');
                         accordionItem?.remove();
-                        
+
                         // 从结构视图移除
-                        document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`)?.remove();
-                        
+                        document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`)?.remove();
+
                         // 关闭配置面板
                         elements.configPanel.classList.remove('show');
                     } else {
@@ -1980,6 +3377,8 @@
                 }
             });
         });
+
+        initWidgetParamPickers(container);
     }
 
     /**
@@ -2032,72 +3431,160 @@
             });
         });
     }
-    
+
     /**
      * 绑定数组项事件
      */
+    function rememberWidgetPreviewArrayItem(item) {
+        const form = item.closest('form[data-layout-id]');
+        const layoutId = form?.dataset?.layoutId;
+        const itemsContainer = item.closest('.array-items-container') || item.closest('.w-param-array-items');
+        if (!form || !layoutId || !itemsContainer) {
+            return;
+        }
+
+        const itemSelector = item.classList.contains('w-param-array-item') ? '.w-param-array-item' : '.array-item';
+        const itemIndex = Array.from(itemsContainer.querySelectorAll(itemSelector)).indexOf(item);
+        if (itemIndex < 0) {
+            return;
+        }
+
+        const indexValue = String(itemIndex);
+        form.dataset.previewArrayItemIndex = indexValue;
+        state.previewArrayItemIndexByLayout[String(layoutId)] = indexValue;
+    }
+
+    function activateWidgetPreviewArrayItem(layoutId, itemIndex) {
+        const index = Number.parseInt(itemIndex, 10);
+        if (!Number.isFinite(index) || index < 0) {
+            return;
+        }
+
+        const iframe = elements.previewFrame;
+        const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+        if (!doc) {
+            return;
+        }
+
+        const widgetEl = doc.querySelector(dataLayoutIdSelector(layoutId));
+        if (!widgetEl) {
+            return;
+        }
+
+        const slides = Array.from(widgetEl.querySelectorAll('.widget-hero-slider .slide[data-index], .slider-wrapper .slide[data-index]'));
+        if (slides.length <= index) {
+            return;
+        }
+
+        slides.forEach((slide, position) => {
+            const slideIndex = Number.parseInt(slide.dataset.index || String(position), 10);
+            const active = slideIndex === index || position === index;
+            slide.classList.toggle('active', active);
+            if (!active) {
+                slide.classList.remove('prev');
+            }
+        });
+
+        const dots = Array.from(widgetEl.querySelectorAll('.widget-hero-slider .dot[data-index], .slider-dots .dot[data-index]'));
+        dots.forEach((dot, position) => {
+            const dotIndex = Number.parseInt(dot.dataset.index || String(position), 10);
+            dot.classList.toggle('active', dotIndex === index || position === index);
+        });
+    }
+
     function bindArrayItemEvents(item, updateCallback) {
         // 删除按钮
-        const removeBtn = item.querySelector('.w-param-array-remove');
+        const removeBtn = item.querySelector('.w-param-array-remove, .btn-remove-array-item');
         if (removeBtn) {
             removeBtn.addEventListener('click', function() {
-                const wrapper = item.closest('.w-param-array');
+                rememberWidgetPreviewArrayItem(item);
+                const wrapper = item.closest('.w-param-array') || item.closest('.array-editor-wrapper');
+                const isParamArray = wrapper?.classList.contains('w-param-array');
+                const itemSelector = isParamArray ? '.w-param-array-item' : '.array-item';
+                const emptyHtml = isParamArray
+                    ? '<div class="w-param-array-empty"><p>暂无项目</p></div>'
+                    : '<div class="array-empty-state"><i class="ri-list-check-2"></i><p>暂无项目</p></div>';
                 const minItems = parseInt(wrapper?.dataset?.minItems) || 0;
-                const itemsContainer = wrapper?.querySelector('.w-param-array-items');
-                const currentCount = itemsContainer?.querySelectorAll('.w-param-array-item').length || 0;
-                
+                const itemsContainer = wrapper?.querySelector(isParamArray ? '.w-param-array-items' : '.array-items-container');
+                const currentCount = itemsContainer?.querySelectorAll(itemSelector).length || 0;
+
                 if (currentCount <= minItems) {
                     showToast(`至少需要 ${minItems} 个项目`, 'warning');
                     return;
                 }
-                
+
                 item.remove();
-                
+
                 if (currentCount - 1 === 0 && itemsContainer) {
-                    itemsContainer.innerHTML = '<div class="w-param-array-empty"><p>暂无项目</p></div>';
+                    itemsContainer.innerHTML = emptyHtml;
                 }
-                
+
                 updateCallback?.();
             });
         }
-        
+
         // 输入变化
         item.querySelectorAll('input, select, textarea').forEach(input => {
-            input.addEventListener('input', updateCallback);
-            input.addEventListener('change', updateCallback);
+            const handleArrayItemChange = () => {
+                rememberWidgetPreviewArrayItem(item);
+                updateCallback?.();
+            };
+            input.addEventListener('input', handleArrayItemChange);
+            input.addEventListener('change', handleArrayItemChange);
         });
-        
+
+        item.querySelectorAll('.array-image-field input[data-field]').forEach(input => {
+            input.addEventListener('input', function() {
+                const preview = this.closest('.array-image-field')?.querySelector('.array-image-preview');
+                if (!preview) {
+                    return;
+                }
+
+                const url = this.value.trim();
+                preview.innerHTML = '';
+                if (url) {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.alt = '';
+                    preview.appendChild(img);
+                } else {
+                    preview.innerHTML = iconSvg('image');
+                }
+            });
+        });
+
         // 拖拽排序（简单实现）
-        const handle = item.querySelector('.array-item-handle');
+        const handle = item.querySelector('.array-item-handle, .w-param-array-handle');
         if (handle) {
             handle.style.cursor = 'grab';
             handle.addEventListener('mousedown', function(e) {
                 e.preventDefault();
-                const itemsContainer = item.closest('.array-items-container');
+                const itemsContainer = item.closest('.array-items-container') || item.closest('.w-param-array-items');
                 if (!itemsContainer) return;
-                
-                const items = Array.from(itemsContainer.querySelectorAll('.array-item'));
+
+                const itemSelector = item.classList.contains('w-param-array-item') ? '.w-param-array-item' : '.array-item';
+                const items = Array.from(itemsContainer.querySelectorAll(itemSelector));
                 const startIndex = items.indexOf(item);
                 let currentIndex = startIndex;
-                
+
                 const onMouseMove = (e) => {
                     // 简单的拖拽指示
                     item.style.opacity = '0.5';
                 };
-                
+
                 const onMouseUp = () => {
                     item.style.opacity = '';
                     document.removeEventListener('mousemove', onMouseMove);
                     document.removeEventListener('mouseup', onMouseUp);
                     updateCallback?.();
                 };
-                
+
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
             });
         }
     }
-    
+
     /**
      * 渲染插槽空状态
      */
@@ -2111,7 +3598,7 @@
             : (typeof rawAccept === 'string' ? rawAccept.split(',').map(s => s.trim()).filter(Boolean) : []);
         const isExclusive = slot.exclusive === true || isExclusiveSlot(slotId, '');
         const isMultiple = slot.multiple === true;
-        
+
         // 插槽模式标签
         let modeBadge = '';
         if (isExclusive) {
@@ -2119,17 +3606,17 @@
         } else if (isMultiple) {
             modeBadge = '<span class="badge bg-info"><i class="ri-stack-line"></i> 可多个部件</span>';
         }
-        
+
         // 生成接受的部件列表 HTML
         let acceptHtml = '';
         if (acceptCodes.length === 0 || acceptCodes.includes('*')) {
             acceptHtml = '<span class="badge bg-success">接受所有部件</span>';
         } else {
-            acceptHtml = acceptCodes.map(code => 
+            acceptHtml = acceptCodes.map(code =>
                 `<span class="badge bg-primary me-1 mb-1">${code}</span>`
             ).join('');
         }
-        
+
         const html = `
             <div class="slot-empty-panel">
                 <div class="slot-empty-header">
@@ -2142,7 +3629,7 @@
                         ${modeBadge ? `<div class="mt-1">${modeBadge}</div>` : ''}
                     </div>
                 </div>
-                
+
                 <div class="slot-empty-state">
                     <div class="empty-icon">
                         <i class="ri-inbox-2-line"></i>
@@ -2150,14 +3637,14 @@
                     <h6>该插槽暂无部件</h6>
                     <p class="text-muted">此区域目前显示的是原生 HTML 内容</p>
                 </div>
-                
+
                 <div class="slot-accept-info">
                     <label><i class="ri-checkbox-circle-line"></i> 可接受的部件：</label>
                     <div class="slot-accept-list">
                         ${acceptHtml}
                     </div>
                 </div>
-                
+
                 <div class="slot-action-hint">
                     <div class="action-hint-box">
                         <i class="ri-drag-drop-line"></i>
@@ -2167,20 +3654,42 @@
                 </div>
             </div>
         `;
-        
+
         elements.configContent.innerHTML = html;
     }
 
     /**
      * 处理部件拖放到插槽（iframe 传入，委托 saveWidget）
-     * @param {object} widget - 部件数据
+     * @param {object|null} widget - 部件数据
      * @param {object} slot - 插槽数据 { id, position, name, exclusive }
      * @param {number|undefined} iframeSortOrder - iframe 计算的插入位置
      */
     async function handleWidgetDropped(widget, slot, iframeSortOrder) {
-        const area = slot.position || slot.id;
+        const widgetData = widget || state.draggingWidget;
+        if (!widgetData || !widgetData.code) {
+            showToast('无法获取拖拽部件数据，请重新拖拽', 'error');
+            return null;
+        }
+        if (!slot || !slot.id) {
+            showToast('无法识别目标插槽', 'error');
+            return null;
+        }
+
+        if (!isSlotDataAccepted(slot, widgetData)) {
+            showToast(`部件 "${widgetData.name || widgetData.code}" 不能放入插槽 "${slot.name || slot.id}"`, 'warning');
+            return null;
+        }
+
+        const area = slot.position || slot.area || slot.id;
         const slotId = slot.id;
-        const exclusive = slot.exclusive === true || isExclusiveSlot(slotId, widget.code);
+        const exclusive = slot.exclusive === true || widgetData.exclusive === true || isExclusiveSlot(slotId, widgetData.code);
+
+        const maxWidgets = Number.parseInt(slot.max, 10);
+        const currentCount = Number.parseInt(slot.current_count, 10);
+        if (!exclusive && Number.isFinite(maxWidgets) && maxWidgets > 0 && Number.isFinite(currentCount) && currentCount >= maxWidgets) {
+            showToast(`插槽 "${slot.name || slotId}" 已满（${currentCount}/${maxWidgets}），无法添加更多部件`, 'warning');
+            return null;
+        }
 
         // sort_order 优先级：独占=0 > iframe 传入 > 结构视图计算
         let sortOrder;
@@ -2188,58 +3697,430 @@
         else if (iframeSortOrder != null) sortOrder = iframeSortOrder;
         else sortOrder = getNextSlotSortOrder(slotId);
 
-        return saveWidget({ area, slotId, widgetData: widget, sortOrder, exclusive, switchToPreview: false });
+        return saveWidget({ area, slotId, widgetData, sortOrder, exclusive, switchToPreview: false });
+    }
+
+    function normalizeCode(code) {
+        return String(code || '').trim().toLowerCase();
+    }
+
+    function normalizeCodeList(value) {
+        if (value == null || value === false) {
+            return [];
+        }
+
+        let items = [];
+        if (Array.isArray(value)) {
+            value.forEach(item => {
+                if (Array.isArray(item)) {
+                    items = items.concat(item);
+                } else if (item && typeof item === 'object') {
+                    items = items.concat(Object.keys(item));
+                    Object.values(item).forEach(slotConfig => {
+                        if (slotConfig && typeof slotConfig === 'object') {
+                            items.push(slotConfig.id, slotConfig.code, slotConfig.slot);
+                        }
+                    });
+                } else {
+                    items.push(item);
+                }
+            });
+        } else if (typeof value === 'object') {
+            items = items.concat(Object.keys(value));
+            Object.values(value).forEach(item => {
+                if (item && typeof item === 'object') {
+                    items.push(item.id, item.code, item.slot);
+                }
+            });
+        } else {
+            const raw = String(value).trim();
+            if (raw.startsWith('[') || raw.startsWith('{')) {
+                try {
+                    return normalizeCodeList(JSON.parse(raw));
+                } catch (err) {
+                    // Fall through to comma parsing.
+                }
+            }
+            items = raw.split(',');
+        }
+
+        const seen = new Set();
+        items.forEach(item => {
+            const code = normalizeCode(item);
+            if (code) {
+                seen.add(code);
+            }
+        });
+        return Array.from(seen);
+    }
+
+    function normalizeAcceptCodes(accept) {
+        return normalizeCodeList(accept);
+    }
+
+    function expandPageLayoutSupportCodes(pageLayouts) {
+        const layouts = normalizeCodeList(pageLayouts);
+        const codes = [];
+        const layoutType = normalizeCode(state.layoutType || getCurrentPageType() || '');
+        const layoutOption = normalizeCode(state.layoutOption || 'default');
+
+        layouts.forEach(layout => {
+            if (!layout || layout === '*') {
+                return;
+            }
+            codes.push(`layout-${layout}`);
+            if (layoutType && layout === layoutType && layoutOption && layoutOption !== 'default') {
+                codes.push(`layout-${layoutType}-${layoutOption}`);
+            }
+        });
+
+        return codes;
+    }
+
+    /**
+     * 布局变体 accept 与通用 layout 码互通（与后端 ThemePlaceableRegistry 一致）。
+     */
+    function expandAcceptCodesForLayout(acceptCodes) {
+        const normalized = normalizeCodeList(acceptCodes);
+        const expanded = new Set(normalized);
+
+        normalized.forEach(accept => {
+            const match = accept.match(/^layout-([^-]+)-([^-]+)-(.+)$/);
+            if (match) {
+                expanded.add(`layout-${match[1]}-${match[3]}`);
+            }
+        });
+
+        return Array.from(expanded);
+    }
+
+    function collectWidgetSupportCodes(widgetData) {
+        const codes = [
+            widgetData?.code,
+            widgetData?.type,
+            widgetData?.slot,
+        ];
+
+        normalizeCodeList(widgetData?.position || []).forEach(code => codes.push(code));
+        normalizeCodeList(widgetData?.supports || []).forEach(code => codes.push(code));
+        normalizeCodeList(widgetData?.slots || []).forEach(code => codes.push(code));
+        expandPageLayoutSupportCodes(widgetData?.pageLayouts || widgetData?.page_layouts || []).forEach(code => codes.push(code));
+
+        return normalizeCodeList(codes);
+    }
+
+    function collectWidgetElementSupportCodes(widgetEl) {
+        let pageLayouts = widgetEl.getAttribute('data-widget-page-layouts') || '[]';
+        try {
+            pageLayouts = JSON.parse(pageLayouts);
+        } catch (err) {
+            pageLayouts = pageLayouts.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        return collectWidgetSupportCodes({
+            code: widgetEl.getAttribute('data-widget-code') || '',
+            type: widgetEl.getAttribute('data-widget-type') || '',
+            slot: widgetEl.getAttribute('data-widget-slot') || '',
+            position: widgetEl.getAttribute('data-widget-position') || '',
+            supports: widgetEl.getAttribute('data-widget-supports') || '',
+            slots: widgetEl.getAttribute('data-widget-slots') || '',
+            pageLayouts: pageLayouts,
+        });
+    }
+
+    function slotAcceptsWidgetCodes(acceptCodes, rejectCodes, slotId, widgetCodes) {
+        const normalizedAccept = expandAcceptCodesForLayout(acceptCodes);
+        const normalizedReject = normalizeCodeList(rejectCodes);
+        const normalizedWidgetCodes = normalizeCodeList(widgetCodes);
+        const normalizedSlotId = normalizeCode(slotId);
+
+        if (normalizedReject.some(code => normalizedWidgetCodes.includes(code))) {
+            return false;
+        }
+
+        if (normalizedSlotId && normalizedWidgetCodes.includes(normalizedSlotId)) {
+            return true;
+        }
+
+        return normalizedAccept.length === 0
+            || normalizedAccept.includes('*')
+            || normalizedAccept.some(accept => normalizedWidgetCodes.includes(accept));
+    }
+
+    function isGenericSlotAcceptCode(code) {
+        return [
+            'header', 'footer', 'content', 'container', 'banner', 'carousel', 'slider',
+            'product', 'category', 'navigation', 'search', 'breadcrumb', 'pagination',
+            'social', 'newsletter', 'testimonial', 'faq', 'video', 'sidebar',
+            'left_sidebar', 'right_sidebar'
+        ].includes(normalizeCode(code));
+    }
+
+    function getRecommendationAcceptCodes(acceptCodes) {
+        const normalizedAccept = expandAcceptCodesForLayout(acceptCodes);
+        const specificAccept = normalizedAccept.filter(code => code !== '*' && !isGenericSlotAcceptCode(code));
+
+        return specificAccept.length > 0 ? specificAccept : normalizedAccept;
+    }
+
+    function removeWidgetRecommendationEmptyState() {
+        elements.widgetList?.querySelector('.widget-recommendation-empty')?.remove();
+    }
+
+    function showWidgetRecommendationEmptyState(slot) {
+        const widgetList = elements.widgetList;
+        if (!widgetList) {
+            return;
+        }
+
+        removeWidgetRecommendationEmptyState();
+        const emptyState = document.createElement('div');
+        emptyState.className = 'widget-recommendation-empty';
+        emptyState.innerHTML = `
+            <div class="empty-icon"><i class="ri-inbox-line"></i></div>
+            <div class="empty-title">当前插槽暂无匹配部件</div>
+            <div class="empty-desc">${escapeHtml(slot?.name || slot?.id || '该插槽')} 没有同类型可推荐部件</div>
+        `;
+        widgetList.appendChild(emptyState);
+    }
+
+    function clearWidgetRecommendations(slot) {
+        const widgetList = elements.widgetList;
+        if (!widgetList) {
+            return;
+        }
+
+        widgetList.querySelectorAll('.widget-item').forEach(widget => {
+            widget.style.display = 'none';
+            widget.classList.remove('highlighted', 'area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
+        });
+        widgetList.querySelectorAll('.widget-group').forEach(group => {
+            group.style.display = 'none';
+        });
+        showWidgetRecommendationEmptyState(slot);
+    }
+
+    function isSlotDataAccepted(slot, widgetData) {
+        return slotAcceptsWidgetCodes(
+            slot.accept,
+            slot.reject,
+            slot.id,
+            collectWidgetSupportCodes(widgetData)
+        );
+    }
+
+    function dataAttributeSelector(attrName, value) {
+        const safeValue = String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        return `[${attrName}="${safeValue}"]`;
+    }
+
+    function dataLayoutIdSelector(layoutId) {
+        return dataAttributeSelector('data-layout-id', layoutId);
+    }
+
+    function cssIdentifier(value) {
+        const stringValue = String(value || '');
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(stringValue);
+        }
+        return stringValue.replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+    }
+
+    function firstNonEmptyValue(...values) {
+        for (const value of values) {
+            if (value === null || value === undefined) {
+                continue;
+            }
+            if (Array.isArray(value) && !value.length) {
+                continue;
+            }
+            if (String(value) === '') {
+                continue;
+            }
+            return value;
+        }
+        return '';
+    }
+
+    function readSlotAttr(slotElement, attrName) {
+        return slotElement ? slotElement.getAttribute(attrName) : null;
+    }
+
+    function findIframeSlotElement(iframeDoc, slotId) {
+        if (!iframeDoc || !slotId) {
+            return null;
+        }
+
+        return iframeDoc.querySelector([
+            dataAttributeSelector('data-wslot', slotId),
+            dataAttributeSelector('data-slot', slotId),
+            dataAttributeSelector('data-slot-id', slotId)
+        ].join(', '));
+    }
+
+    function buildSlotInfoFromElement(slotId, slotElement) {
+        const catalogSlotCandidate = state.slots ? state.slots[slotId] : null;
+        const catalogSlot = catalogSlotCandidate && typeof catalogSlotCandidate === 'object' ? catalogSlotCandidate : {};
+        const position = firstNonEmptyValue(
+            readSlotAttr(slotElement, 'data-wslot-position'),
+            readSlotAttr(slotElement, 'data-position'),
+            catalogSlot.position,
+            catalogSlot.area,
+            inferAreaFromSlotId(slotId)
+        );
+        const exclusiveAttr = readSlotAttr(slotElement, 'data-wslot-exclusive');
+        const multipleAttr = readSlotAttr(slotElement, 'data-wslot-multiple');
+
+        return {
+            id: slotId,
+            name: firstNonEmptyValue(
+                readSlotAttr(slotElement, 'data-wslot-name'),
+                readSlotAttr(slotElement, 'data-slot-name'),
+                readSlotAttr(slotElement, 'data-name'),
+                catalogSlot.name,
+                slotId
+            ),
+            accept: firstNonEmptyValue(
+                readSlotAttr(slotElement, 'data-wslot-accept'),
+                readSlotAttr(slotElement, 'data-accept'),
+                catalogSlot.accept,
+                ''
+            ),
+            reject: firstNonEmptyValue(
+                readSlotAttr(slotElement, 'data-wslot-reject'),
+                readSlotAttr(slotElement, 'data-reject'),
+                catalogSlot.reject,
+                ''
+            ),
+            max: firstNonEmptyValue(readSlotAttr(slotElement, 'data-wslot-max'), catalogSlot.max, ''),
+            min: firstNonEmptyValue(readSlotAttr(slotElement, 'data-wslot-min'), catalogSlot.min, ''),
+            exclusive: exclusiveAttr !== null ? exclusiveAttr === 'true' : catalogSlot.exclusive === true,
+            multiple: multipleAttr !== null ? multipleAttr !== 'false' : catalogSlot.multiple !== false,
+            area: position
+        };
+    }
+
+    function resolvePreviewWidgetElement(data) {
+        const layoutId = data.layoutId || '';
+        let widgetElement = null;
+
+        if (layoutId) {
+            const selector = dataLayoutIdSelector(layoutId);
+            try {
+                const iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document;
+                widgetElement = iframeDoc?.querySelector(`.preview-widget${selector}, .widget-wrapper${selector}, [data-widget-code]${selector}`) || null;
+            } catch (err) {
+                console.warn('[ThemeEditor] Unable to read selected preview widget:', err);
+            }
+            if (!widgetElement) {
+                widgetElement = document.querySelector(`.preview-widget-item${selector}`);
+            }
+        }
+
+        if (!widgetElement) {
+            widgetElement = document.createElement('div');
+        }
+
+        widgetElement.dataset.layoutId = layoutId;
+        widgetElement.dataset.widgetCode = data.widgetCode || widgetElement.dataset.widgetCode || '';
+        widgetElement.dataset.widgetName = data.widgetName || widgetElement.dataset.widgetName || '';
+        widgetElement.dataset.widgetModule = data.widgetModule || widgetElement.dataset.widgetModule || '';
+        widgetElement.dataset.widgetType = data.widgetType || widgetElement.dataset.widgetType || '';
+        widgetElement.dataset.config = data.config || widgetElement.dataset.config || '{}';
+
+        return widgetElement;
+    }
+
+    function markPreviewWidgetSelected(layoutId) {
+        if (!layoutId) {
+            return;
+        }
+
+        const selector = dataLayoutIdSelector(layoutId);
+        document.querySelectorAll('.preview-widget-item.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        document.querySelector(`.preview-widget-item${selector}`)?.classList.add('selected');
+
+        try {
+            const iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document;
+            iframeDoc?.querySelectorAll('.preview-widget.selected, .widget-wrapper.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+            iframeDoc?.querySelector(`.preview-widget${selector}, .widget-wrapper${selector}, [data-widget-code]${selector}`)?.classList.add('selected');
+        } catch (err) {
+            console.warn('[ThemeEditor] Unable to mark selected preview widget:', err);
+        }
+    }
+
+    function handleIframeWidgetElementClick(target) {
+        const widgetWrapper = target?.closest?.('.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id]');
+        if (!widgetWrapper) {
+            return false;
+        }
+
+        const nestedSlot = target.closest('[data-wslot], [data-slot], .content-slot');
+        if (nestedSlot && nestedSlot.closest('.widget-wrapper[data-layout-id]') === widgetWrapper) {
+            return false;
+        }
+
+        handlePreviewWidgetSelected({
+            type: 'widget-selected',
+            layoutId: widgetWrapper.dataset.layoutId || widgetWrapper.getAttribute('data-layout-id') || '',
+            widgetCode: widgetWrapper.dataset.widgetCode || widgetWrapper.getAttribute('data-widget-code') || '',
+            widgetModule: widgetWrapper.dataset.widgetModule || widgetWrapper.getAttribute('data-widget-module') || '',
+            widgetType: widgetWrapper.dataset.widgetType || widgetWrapper.getAttribute('data-widget-type') || '',
+            widgetName: widgetWrapper.dataset.widgetName || widgetWrapper.getAttribute('data-widget-name') || '',
+            config: widgetWrapper.dataset.config || widgetWrapper.getAttribute('data-config') || '{}'
+        });
+        return true;
     }
 
     /**
      * 处理预览页面中选中部件
      */
     function handlePreviewWidgetSelected(data) {
-        const layoutId = data.layoutId;
-        const widgetCode = data.widgetCode;
-        let widgetConfig = {};
-        
-        try {
-            widgetConfig = JSON.parse(data.config || '{}');
-        } catch (e) {
-            widgetConfig = {};
-        }
-
-        // 打开配置模态框
-        openConfigModalForLayout(layoutId, widgetCode, widgetConfig);
+        const widgetElement = resolvePreviewWidgetElement(data);
+        state.selectedWidget = widgetElement;
+        state.selectedSlot = null;
+        setConfigMode('widget');
+        markPreviewWidgetSelected(widgetElement.dataset.layoutId);
+        loadWidgetConfig(widgetElement);
     }
 
     /**
      * 处理预览页面中点击插槽
      */
     function handlePreviewSlotClicked(data) {
-        const slot = data.slot;
-        const accept = data.accept ? data.accept.split(',').map(s => s.trim()) : [];
-        
-        // 保存当前选中的插槽
-        state.selectedSlot = { id: slot, accept: accept, name: slot };
-        
-        // 高亮右侧部件列表中可放入该插槽的部件并排序
-        highlightAcceptableWidgets(accept);
-        
-        // 滚动到高亮的部件
-        scrollToHighlightedWidgets();
-        
-        showToast(`插槽 "${slot}" 可接受: ${accept.join(', ')}`, 'info');
+        handleSlotSelected({
+            id: data.slot || '',
+            name: data.name || data.slot || '',
+            accept: data.accept ?? '',
+            reject: data.reject || '',
+            area: data.area || data.position || '',
+            exclusive: data.exclusive === true || data.exclusive === 'true',
+            multiple: data.multiple !== false && data.multiple !== 'false',
+        });
     }
 
     /**
      * 高亮可接受的部件并排序
      */
     function highlightAcceptableWidgets(acceptCodes) {
-        if (!acceptCodes || acceptCodes.length === 0) {
-            // 没有 accept 限制 → 保留区域过滤结果，不做进一步筛选
+        const slot = state.selectedSlot || { id: '', accept: acceptCodes || [], reject: '' };
+        const normalizedAccept = getRecommendationAcceptCodes(slot.accept ?? acceptCodes ?? []);
+        const normalizedReject = normalizeCodeList(slot.reject ?? []);
+        removeWidgetRecommendationEmptyState();
+
+        if (!normalizedAccept || normalizedAccept.length === 0) {
+            clearWidgetRecommendations(slot);
+            // 选中 slot 后必须给出明确推荐；没有可匹配契约时清空右侧列表，避免沿用上次推荐。
             return;
         }
 
         // accept 包含 * 表示接受所有部件，等同于无限制
-        if (acceptCodes.includes('*')) {
-            return;
+        if (normalizedAccept.includes('*')) {
+            return document.querySelectorAll('.widget-item:not([style*="display: none"])').length;
         }
 
         // 保存原始顺序（如果还没有保存）
@@ -2253,7 +4134,7 @@
         });
 
         const widgetList = elements.widgetList;
-        if (!widgetList) return;
+        if (!widgetList) return 0;
 
         let totalChecked = 0, totalMatched = 0, totalHidden = 0;
 
@@ -2270,19 +4151,18 @@
 
             allWidgets.forEach(widget => {
                 totalChecked++;
-                const widgetCode = (widget.getAttribute('data-widget-code') || '').toLowerCase();
-                const widgetSlot = (widget.getAttribute('data-widget-slot') || '').toLowerCase();
                 // 已被区域过滤隐藏的，保持隐藏不参与
                 if (widget.style.display === 'none') {
                     totalHidden++;
                     return;
                 }
-                
-                // 简单精确匹配：code 或 slot 与 accept 码一致
-                const isMatch = acceptCodes.some(ac => {
-                    const code = ac.trim().toLowerCase();
-                    return widgetCode === code || (widgetSlot && widgetSlot === code);
-                });
+
+                const isMatch = slotAcceptsWidgetCodes(
+                    normalizedAccept,
+                    normalizedReject,
+                    slot.id || '',
+                    collectWidgetElementSupportCodes(widget)
+                );
 
                 if (isMatch) {
                     hasMatch = true;
@@ -2301,7 +4181,13 @@
                 group.classList.remove('collapsed');
             }
         });
-        
+
+        if (totalMatched === 0) {
+            clearWidgetRecommendations(slot);
+        }
+
+        return totalMatched;
+
     }
 
     /**
@@ -2312,24 +4198,24 @@
         setTimeout(() => {
             const widgetPanelContent = document.querySelector('#widgetPanel .panel-content');
             if (!widgetPanelContent) return;
-            
+
             // 找到第一个高亮的部件
             const firstHighlighted = widgetPanelContent.querySelector('.widget-item.highlighted');
-            
+
             if (firstHighlighted) {
                 // 获取部件所在的组
                 const widgetGroup = firstHighlighted.closest('.widget-group');
-                
+
                 if (widgetGroup) {
                     // 计算滚动位置（组的顶部位置 - 一些间距）
                     const groupTop = widgetGroup.offsetTop;
                     const scrollOffset = Math.max(0, groupTop - 20);
-                    
-                    widgetPanelContent.scrollTo({ 
-                        top: scrollOffset, 
-                        behavior: 'smooth' 
+
+                    widgetPanelContent.scrollTo({
+                        top: scrollOffset,
+                        behavior: 'smooth'
                     });
-                    
+
                     console.log('[scrollToHighlightedWidgets] Scrolled to highlighted widget in group:', widgetGroup.dataset.type);
                 }
             } else {
@@ -2346,7 +4232,7 @@
     function saveWidgetOrder() {
         state.originalWidgetOrder.clear();
         state.originalGroupOrder = [];
-        
+
         const widgetList = elements.widgetList;
         if (!widgetList) return;
 
@@ -2361,7 +4247,7 @@
         allGroups.forEach((group, groupIndex) => {
             const groupContent = group.querySelector('.widget-group-content');
             if (!groupContent) return;
-            
+
             const widgets = Array.from(groupContent.querySelectorAll('.widget-item'));
             const order = widgets.map(widget => widget.getAttribute('data-widget-code'));
             state.originalWidgetOrder.set(groupIndex, order);
@@ -2374,6 +4260,7 @@
     function restoreWidgetOrder() {
         const widgetList = elements.widgetList;
         if (!widgetList) return;
+        removeWidgetRecommendationEmptyState();
 
         // 移除所有高亮，恢复被隐藏的部件和分组
         document.querySelectorAll('.widget-item.highlighted').forEach(el => {
@@ -2390,7 +4277,7 @@
         if (state.originalGroupOrder.length > 0) {
             const allGroups = Array.from(widgetList.querySelectorAll('.widget-group'));
             const groupMap = new Map();
-            
+
             // 创建分组映射（按 data-type）
             allGroups.forEach(group => {
                 const groupType = group.getAttribute('data-type') || '';
@@ -2462,18 +4349,23 @@
         if (state.pageType) {
             url.searchParams.set('page_type', state.pageType);
         }
+        if (state.themeId) {
+            url.searchParams.set('theme_id', String(state.themeId));
+        }
+        if (state.editorArea) {
+            url.searchParams.set('editor_area', state.editorArea);
+        }
         return url.toString();
     }
 
     /**
-     * 统一获取部件信息：优先直接 fetch(apiWidgets)，失败时用 w_query('widget','getAvailableList') 兜底
+     * 统一获取部件信息：优先使用编辑器 API，失败时用 w_query('widget','getAvailableList') 兜底
      * @returns {Promise<{success:boolean, data:Object}>}
      */
     async function fetchWidgetsData() {
         // 1) 优先使用主题编辑器自带接口（保证无 w_query 或 Query 路由异常时仍能加载）
         try {
-            const response = await fetch(getWidgetsApiUrl());
-            const result = await response.json();
+            const result = await apiJson(getWidgetsApiUrl());
             if (result && result.success && result.data && typeof result.data === 'object') {
                 const hasWidgets = Object.keys(result.data).some(function (type) {
                     const group = result.data[type];
@@ -2510,82 +4402,426 @@
         if (!listEl) return;
         const hasItems = listEl.querySelector('.widget-item');
         if (hasItems) return;
+        await reloadWidgetLibrary({ silent: true });
+    }
+
+    /**
+     * 部件库分页状态（懒加载 + 无限滚动 + 插槽/关键词过滤）
+     */
+    function getWidgetLibState() {
+        if (!state.widgetLib) {
+            state.widgetLib = {
+                offset: 0,
+                limit: 50,
+                total: 0,
+                hasMore: true,
+                loading: false,
+                initialized: false,
+                slot: null,
+                slotArea: null,
+                slotLabel: '',
+                keyword: '',
+            };
+        }
+        return state.widgetLib;
+    }
+
+    /**
+     * 延迟加载部件库：不再首屏立即拉取，而是等待主预览 iframe 加载完成后再触发；
+     * 同时设置兜底定时器，避免 iframe 长时间不触发 load 时部件库永远不出现。
+     */
+    function deferWidgetLibraryLoad() {
+        if (!state.themeId) {
+            return;
+        }
+        // 兜底：iframe 6 秒内未触发 load 时，强制初始化部件库
+        setTimeout(function () { initWidgetLibraryOnce(); }, 6000);
+    }
+
+    /**
+     * 仅初始化一次部件库（由 iframe load 或兜底定时器触发）
+     */
+    function initWidgetLibraryOnce() {
+        const lib = getWidgetLibState();
+        if (lib.initialized || !state.themeId) {
+            return;
+        }
+        lib.initialized = true;
+        initWidgetInfiniteScroll();
+        loadWidgetLibrary({ reset: true, silent: true });
+    }
+
+    /**
+     * 构造部件库分页接口 URL
+     */
+    function buildWidgetLibUrl(lib) {
+        const url = new URL(config.apiWidgets, window.location.origin);
+        if (state.pageType) url.searchParams.set('page_type', state.pageType);
+        if (state.themeId) url.searchParams.set('theme_id', String(state.themeId));
+        if (state.editorArea) url.searchParams.set('editor_area', state.editorArea);
+        url.searchParams.set('offset', String(lib.offset));
+        url.searchParams.set('limit', String(lib.limit));
+        if (lib.keyword) url.searchParams.set('keyword', lib.keyword);
+        if (lib.slot) {
+            url.searchParams.set('slot_id', lib.slot);
+            if (lib.slotArea) url.searchParams.set('area', lib.slotArea);
+        }
+        return url.toString();
+    }
+
+    /**
+     * 加载部件库（分页）。reset=true 时清空并从第 0 页开始；否则加载下一页。
+     */
+    async function loadWidgetLibrary(options = {}) {
+        const listEl = elements.widgetList;
+        if (!listEl || !state.themeId) {
+            return;
+        }
+        const lib = getWidgetLibState();
+        if (lib.loading) {
+            return;
+        }
+        if (options.reset) {
+            lib.offset = 0;
+            lib.total = 0;
+            lib.hasMore = true;
+            listEl.innerHTML = '<div class="widget-list-loading" id="widgetListLoading">'
+                + '<div class="spinner-border spinner-border-sm text-primary" role="status"></div>'
+                + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('部件库加载中...')) + '</span></div>';
+        } else if (!lib.hasMore) {
+            return;
+        }
+        lib.loading = true;
         try {
-            const result = await fetchWidgetsData();
-            if (result.success && result.data && typeof result.data === 'object' && Object.keys(result.data).length > 0) {
-                renderWidgetListToPanel(result.data);
+            const result = await apiJson(buildWidgetLibUrl(lib));
+            const items = (result && Array.isArray(result.items)) ? result.items : [];
+            if (result && typeof result.total === 'number') {
+                lib.total = result.total;
             }
+            if (options.reset) {
+                const loadingEl = document.getElementById('widgetListLoading');
+                if (loadingEl) loadingEl.remove();
+            }
+            appendWidgetItems(items);
+            lib.offset += items.length;
+            lib.hasMore = !!(result && result.has_more);
+            if (lib.offset === 0 && items.length === 0) {
+                const emptyText = lib.slot
+                    ? translateUiText('该插槽暂无可用部件')
+                    : translateUiText('当前主题暂无可用部件');
+                listEl.innerHTML = '<div class="widget-list-loading"><span class="widget-list-loading-text">'
+                    + escapeHtml(emptyText) + '</span></div>';
+                if (!options.silent) showToast(emptyText, 'info');
+            }
+            renderWidgetLoadMoreHint();
         } catch (err) {
-            console.warn('[ThemeEditor] loadWidgetListIfEmpty failed:', err);
+            console.warn('[ThemeEditor] loadWidgetLibrary failed:', err);
+            if (options.reset) {
+                const loadingEl = document.getElementById('widgetListLoading');
+                if (loadingEl) {
+                    loadingEl.innerHTML = '<span class="widget-list-loading-text">'
+                        + escapeHtml(translateUiText('当前主题暂无可用部件')) + '</span>';
+                }
+            }
+        } finally {
+            lib.loading = false;
         }
     }
 
     /**
-     * 将分组部件数据渲染到 #widgetList（与服务端模板结构一致）
+     * 兼容旧调用：主题/区域/页面类型变化时重新加载部件库（重置分页，保留插槽/关键词过滤）
      */
-    function renderWidgetListToPanel(data) {
+    async function reloadWidgetLibrary(options = {}) {
+        const lib = getWidgetLibState();
+        lib.initialized = true;
+        initWidgetInfiniteScroll();
+        await loadWidgetLibrary({ reset: true, silent: options.silent !== false });
+    }
+
+    /**
+     * 绑定部件库无限滚动（仅绑定一次）
+     */
+    function initWidgetInfiniteScroll() {
+        const scroller = (elements.widgetPanel && elements.widgetPanel.querySelector('.panel-content'))
+            || elements.widgetList;
+        if (!scroller || scroller.dataset.infiniteScrollBound === '1') {
+            return;
+        }
+        scroller.dataset.infiniteScrollBound = '1';
+        scroller.addEventListener('scroll', function () {
+            const lib = getWidgetLibState();
+            if (lib.loading || !lib.hasMore) return;
+            if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 200) {
+                loadWidgetLibrary({ silent: true });
+            }
+        });
+    }
+
+    /**
+     * 在列表底部显示"加载更多/已全部加载"提示
+     */
+    function renderWidgetLoadMoreHint() {
         const listEl = elements.widgetList;
         if (!listEl) return;
-        const exclusiveSlots = ['logo', 'search', 'main-nav', 'header-container', 'footer-container', 'content-container'];
-        let html = '';
-        for (const type in data) {
-            const group = data[type];
-            if (!group || !Array.isArray(group.widgets)) continue;
-            const groupLabel = (group.label || type || '').toString();
-            const widgets = group.widgets;
-            html += '<div class="widget-group" data-type="' + escapeHtml(type) + '">';
-            html += '<div class="widget-group-header" data-toggle="collapse">';
-            html += '<i class="ri-arrow-down-s-line toggle-icon"></i><span>' + escapeHtml(groupLabel) + '</span>';
-            html += '<span class="widget-count">' + widgets.length + '</span></div>';
-            html += '<div class="widget-group-content">';
-            for (let i = 0; i < widgets.length; i++) {
-                const w = widgets[i];
-                if (!w || typeof w !== 'object') continue;
-                const wCode = (w.code ?? '').toString();
-                const wModule = (w.module ?? '').toString();
-                const wType = (w.type ?? '').toString();
-                const wName = (w.name ?? wCode ?? '').toString();
-                const wDesc = (w.description ?? '').toString();
-                const wSlot = (w.slot ?? '').toString();
-                const wPageLayouts = w.page_layouts ?? ['*'];
-                const wIsContainer = !!(w.is_container ?? false);
-                const wExclusive = !!(w.exclusive ?? false) || (wSlot && exclusiveSlots.indexOf(wSlot) !== -1);
-                const wCompatible = !!(w.compatible ?? false);
-                const wPosition = w.position ?? [];
-                const posJson = typeof wPosition === 'string' ? wPosition : JSON.stringify(wPosition);
-                const layoutJson = typeof wPageLayouts === 'string' ? wPageLayouts : JSON.stringify(wPageLayouts);
-                const previewHtml = (w.preview_html ?? '').toString();
-                const itemClass = 'widget-item draggable' + (wIsContainer ? ' widget-container' : '') + (wExclusive ? ' widget-exclusive' : '');
-                html += '<div class="' + itemClass + '" draggable="true"';
-                html += ' data-widget-code="' + escapeHtml(wCode) + '" data-widget-module="' + escapeHtml(wModule) + '"';
-                html += ' data-widget-type="' + escapeHtml(wType) + '" data-widget-name="' + escapeHtml(wName) + '"';
-                html += ' data-widget-position="' + escapeHtml(posJson) + '" data-widget-compatible="' + (wCompatible ? '1' : '0') + '"';
-                html += ' data-widget-slot="' + escapeHtml(wSlot) + '" data-widget-exclusive="' + (wExclusive ? '1' : '0') + '"';
-                html += ' data-widget-page-layouts="' + escapeHtml(layoutJson) + '" data-widget-is-container="' + (wIsContainer ? '1' : '0') + '">';
-                html += '<div class="widget-preview"><div class="widget-preview-canvas">' + previewHtml + '</div>';
-                html += '<div class="widget-preview-overlay"><div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2">';
-                html += '<div class="widget-preview-title">' + escapeHtml(wName);
-                if (wIsContainer) html += ' <span class="badge badge-sm bg-primary ms-1" title="容器部件"><i class="ri-layout-grid-line"></i></span>';
-                if (wExclusive) html += ' <span class="badge badge-sm bg-warning ms-1" title="独占部件"><i class="ri-focus-2-line"></i></span>';
-                html += '</div>';
-                html += '<button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="预览" data-widget-module="' + escapeHtml(wModule) + '" data-widget-code="' + escapeHtml(wCode) + '" data-widget-name="' + escapeHtml(wName) + '"><i class="ri-eye-line"></i></button>';
-                html += '</div><div class="widget-preview-desc">' + escapeHtml(wDesc) + '</div></div></div></div>';
-            }
-            html += '</div></div>';
+        let hint = listEl.querySelector('.widget-load-more-hint');
+        const lib = getWidgetLibState();
+        if (lib.total <= 0 || (lib.offset === 0)) {
+            if (hint) hint.remove();
+            return;
         }
-        listEl.innerHTML = html || listEl.innerHTML;
-        listEl.querySelectorAll('.widget-group-header').forEach(function (header) {
-            header.addEventListener('click', function (e) {
-                if (e.target.closest('.widget-item')) return;
-                const group = this.closest('.widget-group');
-                if (group) group.classList.toggle('collapsed');
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.className = 'widget-load-more-hint';
+            listEl.appendChild(hint);
+        } else {
+            listEl.appendChild(hint);
+        }
+        if (lib.hasMore) {
+            hint.textContent = translateUiText('下滑加载更多...') + ' (' + lib.offset + '/' + lib.total + ')';
+        } else {
+            hint.textContent = translateUiText('已全部加载') + ' (' + lib.total + ')';
+        }
+    }
+
+    /**
+     * 确保指定分组容器存在，返回其 .widget-group-content 元素
+     */
+    function ensureWidgetGroup(listEl, type, label) {
+        let group = listEl.querySelector('.widget-group[data-type="' + cssEscape(type) + '"]');
+        if (group) {
+            return group.querySelector('.widget-group-content');
+        }
+        group = document.createElement('div');
+        group.className = 'widget-group';
+        group.setAttribute('data-type', type);
+        group.innerHTML = '<div class="widget-group-header" data-toggle="collapse">'
+            + '<i class="ri-arrow-down-s-line toggle-icon"></i><span>' + escapeHtml(label) + '</span>'
+            + '<span class="widget-count">0</span></div>'
+            + '<div class="widget-group-content"></div>';
+        group.querySelector('.widget-group-header').addEventListener('click', function (e) {
+            if (e.target.closest('.widget-item')) return;
+            group.classList.toggle('collapsed');
+        });
+        listEl.appendChild(group);
+        return group.querySelector('.widget-group-content');
+    }
+
+    /**
+     * 简单 CSS 选择器属性值转义
+     */
+    function cssEscape(value) {
+        return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    /**
+     * 追加一批部件项到列表（按 group_type 归组）
+     */
+    function appendWidgetItems(items) {
+        const listEl = elements.widgetList;
+        if (!listEl || !Array.isArray(items) || items.length === 0) return;
+        items.forEach(function (w) {
+            if (!w || typeof w !== 'object') return;
+            const type = (w.group_type ?? w.type ?? 'other').toString();
+            const label = (w.group_label ?? type).toString();
+            const contentEl = ensureWidgetGroup(listEl, type, label);
+            if (!contentEl) return;
+            const itemEl = createWidgetLibraryItem(w);
+            if (!itemEl) return;
+            itemEl.addEventListener('dragstart', handleDragStart);
+            itemEl.addEventListener('dragend', handleDragEnd);
+            contentEl.appendChild(itemEl);
+            const group = contentEl.closest('.widget-group');
+            const countEl = group && group.querySelector('.widget-count');
+            if (countEl) {
+                countEl.textContent = String(contentEl.querySelectorAll('.widget-item').length);
+            }
+        });
+        scheduleFitWidgetPreviews();
+    }
+
+    /**
+     * 创建部件库列表项（预览 HTML 单独注入 canvas，避免字符串拼接破坏 DOM）
+     */
+    function createWidgetLibraryItem(w) {
+        const exclusiveSlots = ['logo', 'search', 'main-nav', 'header-container', 'footer-container', 'content-container'];
+        const wCode = (w.code ?? '').toString();
+        const wModule = (w.module ?? '').toString();
+        const wType = (w.type ?? '').toString();
+        const wName = (w.name ?? wCode ?? '').toString();
+        const wDesc = (w.description ?? '').toString();
+        const wSlot = (w.slot ?? '').toString();
+        const wSupports = normalizeCodeList(w.supports ?? []);
+        const wSlots = normalizeCodeList(w.slots ?? []);
+        const wSupportCodes = [...new Set([...wSupports, ...wSlots])].join(',');
+        const wPageLayouts = w.page_layouts ?? ['*'];
+        const wIsContainer = !!(w.is_container ?? false);
+        const wExclusive = !!(w.exclusive ?? false) || (wSlot && exclusiveSlots.indexOf(wSlot) !== -1);
+        const wCompatible = !!(w.compatible ?? false);
+        const wPosition = w.position ?? [];
+        const posJson = typeof wPosition === 'string' ? wPosition : JSON.stringify(wPosition);
+        const layoutJson = typeof wPageLayouts === 'string' ? wPageLayouts : JSON.stringify(wPageLayouts);
+        const previewHtml = (w.preview_html ?? '').toString();
+
+        const itemEl = document.createElement('div');
+        itemEl.className = 'widget-item draggable'
+            + (wIsContainer ? ' widget-container' : '')
+            + (wExclusive ? ' widget-exclusive' : '');
+        itemEl.draggable = true;
+        itemEl.dataset.widgetCode = wCode;
+        itemEl.dataset.widgetModule = wModule;
+        itemEl.dataset.widgetType = wType;
+        itemEl.dataset.widgetName = wName;
+        itemEl.dataset.widgetPosition = posJson;
+        itemEl.dataset.widgetCompatible = wCompatible ? '1' : '0';
+        itemEl.dataset.widgetSlot = wSlot;
+        itemEl.dataset.widgetExclusive = wExclusive ? '1' : '0';
+        itemEl.dataset.widgetSupports = wSupportCodes;
+        itemEl.dataset.widgetSlots = wSlots.join(',');
+        itemEl.dataset.widgetPageLayouts = layoutJson;
+        itemEl.dataset.widgetIsContainer = wIsContainer ? '1' : '0';
+
+        const previewWrap = document.createElement('div');
+        previewWrap.className = 'widget-preview';
+
+        const canvas = document.createElement('div');
+        canvas.className = 'widget-preview-canvas';
+        mountWidgetPreviewHtml(canvas, previewHtml);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'widget-preview-overlay';
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'widget-preview-title-row d-flex align-items-center justify-content-between gap-2';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'widget-preview-title';
+        titleEl.textContent = wName;
+        if (wIsContainer) {
+            titleEl.insertAdjacentHTML('beforeend', ' <span class="badge badge-sm bg-primary ms-1" title="容器部件"><i class="ri-layout-grid-line"></i></span>');
+        }
+        if (wExclusive) {
+            titleEl.insertAdjacentHTML('beforeend', ' <span class="badge badge-sm bg-warning ms-1" title="独占部件"><i class="ri-focus-2-line"></i></span>');
+        }
+
+        const previewBtn = document.createElement('button');
+        previewBtn.type = 'button';
+        previewBtn.className = 'btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0';
+        previewBtn.title = translateUiText('预览');
+        previewBtn.dataset.widgetModule = wModule;
+        previewBtn.dataset.widgetCode = wCode;
+        previewBtn.dataset.widgetName = wName;
+        previewBtn.innerHTML = '<i class="ri-eye-line"></i>';
+
+        titleRow.appendChild(titleEl);
+        titleRow.appendChild(previewBtn);
+
+        const descEl = document.createElement('div');
+        descEl.className = 'widget-preview-desc';
+        descEl.textContent = wDesc;
+
+        overlay.appendChild(titleRow);
+        overlay.appendChild(descEl);
+        previewWrap.appendChild(canvas);
+        previewWrap.appendChild(overlay);
+        itemEl.appendChild(previewWrap);
+
+        if (!previewHtml.trim()) {
+            ensureWidgetCanvasPreview(canvas, wModule, wCode);
+        }
+
+        return itemEl;
+    }
+
+    /**
+     * 构造单个部件项 HTML（与服务端模板结构保持一致）
+     */
+    function getWidgetItemHtml(w) {
+        const exclusiveSlots = ['logo', 'search', 'main-nav', 'header-container', 'footer-container', 'content-container'];
+        const wCode = (w.code ?? '').toString();
+        const wModule = (w.module ?? '').toString();
+        const wType = (w.type ?? '').toString();
+        const wName = (w.name ?? wCode ?? '').toString();
+        const wDesc = (w.description ?? '').toString();
+        const wSlot = (w.slot ?? '').toString();
+        const wSupports = normalizeCodeList(w.supports ?? []);
+        const wSlots = normalizeCodeList(w.slots ?? []);
+        const wSupportCodes = [...new Set([...wSupports, ...wSlots])].join(',');
+        const wPageLayouts = w.page_layouts ?? ['*'];
+        const wIsContainer = !!(w.is_container ?? false);
+        const wExclusive = !!(w.exclusive ?? false) || (wSlot && exclusiveSlots.indexOf(wSlot) !== -1);
+        const wCompatible = !!(w.compatible ?? false);
+        const wPosition = w.position ?? [];
+        const posJson = typeof wPosition === 'string' ? wPosition : JSON.stringify(wPosition);
+        const layoutJson = typeof wPageLayouts === 'string' ? wPageLayouts : JSON.stringify(wPageLayouts);
+        const previewHtml = (w.preview_html ?? '').toString();
+        const itemClass = 'widget-item draggable' + (wIsContainer ? ' widget-container' : '') + (wExclusive ? ' widget-exclusive' : '');
+        let html = '<div class="' + itemClass + '" draggable="true"';
+        html += ' data-widget-code="' + escapeHtml(wCode) + '" data-widget-module="' + escapeHtml(wModule) + '"';
+        html += ' data-widget-type="' + escapeHtml(wType) + '" data-widget-name="' + escapeHtml(wName) + '"';
+        html += ' data-widget-position="' + escapeHtml(posJson) + '" data-widget-compatible="' + (wCompatible ? '1' : '0') + '"';
+        html += ' data-widget-slot="' + escapeHtml(wSlot) + '" data-widget-exclusive="' + (wExclusive ? '1' : '0') + '"';
+        html += ' data-widget-supports="' + escapeHtml(wSupportCodes) + '" data-widget-slots="' + escapeHtml(wSlots.join(',')) + '"';
+        html += ' data-widget-page-layouts="' + escapeHtml(layoutJson) + '" data-widget-is-container="' + (wIsContainer ? '1' : '0') + '">';
+        html += '<div class="widget-preview"><div class="widget-preview-canvas">' + previewHtml + '</div>';
+        html += '<div class="widget-preview-overlay"><div class="widget-preview-title-row d-flex align-items-center justify-content-between gap-2">';
+        html += '<div class="widget-preview-title">' + escapeHtml(wName);
+        if (wIsContainer) html += ' <span class="badge badge-sm bg-primary ms-1" title="容器部件"><i class="ri-layout-grid-line"></i></span>';
+        if (wExclusive) html += ' <span class="badge badge-sm bg-warning ms-1" title="独占部件"><i class="ri-focus-2-line"></i></span>';
+        html += '</div>';
+        html += '<button type="button" class="btn btn-sm btn-outline-secondary btn-preview-component flex-shrink-0" title="预览" data-widget-module="' + escapeHtml(wModule) + '" data-widget-code="' + escapeHtml(wCode) + '" data-widget-name="' + escapeHtml(wName) + '"><i class="ri-eye-line"></i></button>';
+        html += '</div><div class="widget-preview-desc">' + escapeHtml(wDesc) + '</div></div></div></div>';
+        return html;
+    }
+
+    /**
+     * 设置/清除部件库的插槽过滤条件，并刷新搜索框中的插槽标签（chip）
+     * @param {string|null} slotId  插槽/区域代码，null 表示清除
+     * @param {string} slotLabel    展示名
+     * @param {string|null} slotArea 区域代码（可选，传给后端 getWidgetsForSlot）
+     */
+    function setWidgetSlotFilter(slotId, slotLabel, slotArea) {
+        const lib = getWidgetLibState();
+        lib.slot = slotId || null;
+        lib.slotArea = slotArea || null;
+        lib.slotLabel = slotLabel || '';
+        renderWidgetSlotChip();
+        loadWidgetLibrary({ reset: true, silent: true });
+    }
+
+    /**
+     * 渲染搜索框上方的"当前插槽"标签（可点击移除）
+     */
+    function renderWidgetSlotChip() {
+        const search = elements.widgetPanel && elements.widgetPanel.querySelector('.panel-search');
+        if (!search) return;
+        let chip = search.querySelector('#widgetSlotChip');
+        const lib = getWidgetLibState();
+        if (!lib.slot) {
+            if (chip) chip.remove();
+            if (elements.widgetSearch) {
+                elements.widgetSearch.placeholder = translateUiText('搜索部件...');
+            }
+            return;
+        }
+        if (!chip) {
+            chip = document.createElement('div');
+            chip.id = 'widgetSlotChip';
+            chip.className = 'widget-slot-chip';
+            search.insertBefore(chip, search.firstChild);
+        }
+        chip.innerHTML = '<span class="widget-slot-chip-label"><i class="ri-focus-3-line"></i> '
+            + escapeHtml(translateUiText('插槽')) + '：' + escapeHtml(lib.slotLabel || lib.slot) + '</span>'
+            + '<button type="button" class="widget-slot-chip-clear" title="' + escapeHtml(translateUiText('移除插槽过滤')) + '">'
+            + '<i class="ri-close-line"></i></button>';
+        const clearBtn = chip.querySelector('.widget-slot-chip-clear');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                setWidgetSlotFilter(null, '', null);
             });
-        });
-        listEl.querySelectorAll('.widget-item.draggable').forEach(function (item) {
-            item.addEventListener('dragstart', handleDragStart);
-            item.addEventListener('dragend', handleDragEnd);
-        });
-        fitWidgetPreviews();
+        }
+        if (elements.widgetSearch) {
+            elements.widgetSearch.placeholder = translateUiText('在该插槽内搜索...');
+        }
     }
 
     /**
@@ -2597,7 +4833,7 @@
             const result = await fetchWidgetsData();
 
             if (result.success) {
-                
+
                 // 查找匹配的部件
                 let widgetMeta = null;
                 for (const type in result.data) {
@@ -2625,7 +4861,7 @@
 
     /**
      * 渲染单个表单字段
-     * 
+     *
      * 支持的类型：
      * - string: 文本输入
      * - number: 数字输入（支持 min/max/step）
@@ -2646,34 +4882,37 @@
      * - radio: 单选按钮组
      */
     function renderFormField(key, param, value) {
-        const type = param.type || 'string';
+        const type = getParamUiType(param);
+        const semanticType = param.type || type;
         const label = param.label || key;
         const required = param.required || false;
         const description = param.description || '';
         const placeholder = param.placeholder || '';
         const options = param.options || {};
+        const fieldId = `config_${key}`;
+        const safeKey = escapeHtml(key);
+        const safeFieldId = escapeHtml(fieldId);
+        const safeFieldIdJs = escapeJsString(fieldId);
+        const safeValue = escapeHtml(value);
 
         let html = `<div class="form-group mb-3" data-field-type="${escapeHtml(type)}">`;
-        html += `<label for="config_${key}" class="form-label">${escapeHtml(label)}`;
+        html += `<label for="${safeFieldId}" class="form-label">${escapeHtml(label)}`;
         if (required) html += ' <span class="text-danger">*</span>';
         html += `</label>`;
 
         if (type === 'string' || type === 'text') {
-            html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+            html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
         } else if (type === 'number') {
-            const min = param.min !== undefined ? `min="${param.min}"` : '';
-            const max = param.max !== undefined ? `max="${param.max}"` : '';
-            const step = param.step !== undefined ? `step="${param.step}"` : '';
-            html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${min} ${max} ${step} ${required ? 'required' : ''}>`;
-        } else if (type === 'bool' || type === 'boolean') {
-            html += `<div class="form-check">
-                <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
-                <label class="form-check-label" for="config_${key}">${escapeHtml(param.checkbox_label || '启用')}</label>
-            </div>`;
+            const min = param.min !== undefined ? `min="${escapeHtml(param.min)}"` : '';
+            const max = param.max !== undefined ? `max="${escapeHtml(param.max)}"` : '';
+            const step = param.step !== undefined ? `step="${escapeHtml(param.step)}"` : '';
+            html += `<input type="number" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${min} ${max} ${step} ${required ? 'required' : ''}>`;
+        } else if (isBooleanParamType(semanticType)) {
+            html += renderBooleanSelect(`config_${key}`, key, key, value, required, param);
         } else if (type === 'select') {
-            html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
+            html += `<select class="form-select" id="${safeFieldId}" name="${safeKey}" ${required ? 'required' : ''}>
                 <option value="">-- 请选择 --</option>`;
             for (const optVal in options) {
                 html += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
@@ -2681,7 +4920,7 @@
             html += `</select>`;
         } else if (type === 'multiselect') {
             const selectedValues = Array.isArray(value) ? value : (value ? String(value).split(',') : []);
-            html += `<select class="form-select" id="config_${key}" name="${key}[]" multiple ${required ? 'required' : ''} style="min-height: 120px;">`;
+            html += `<select class="form-select" id="${safeFieldId}" name="${safeKey}[]" multiple ${required ? 'required' : ''} style="min-height: 120px;">`;
             for (const optVal in options) {
                 const isSelected = selectedValues.includes(String(optVal));
                 html += `<option value="${escapeHtml(optVal)}" ${isSelected ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
@@ -2689,62 +4928,66 @@
             html += `</select>`;
             html += `<small class="form-text text-muted">按住 Ctrl/Cmd 可多选</small>`;
         } else if (type === 'url') {
-            html += `<input type="url" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>`;
+            html += `<input type="url" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>`;
         } else if (type === 'image' || type === 'image_picker') {
+            const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
             html += `<div class="input-group">
-                <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片URL">
-                <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}">
+                <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="图片URL">
+                <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="${safeFieldId}">
                     ${iconSvg('image')} 选择
                 </button>
             </div>`;
-            if (value) {
+            if (safeImageUrl) {
                 html += `<div class="mt-2 image-preview-container">
-                    <img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 100px;">
-                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="document.getElementById('config_${key}').value='';this.parentElement.remove();">
+                    <img src="${safeImageUrl}" class="img-thumbnail" style="max-height: 100px;">
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" data-config-image-clear data-target="${safeFieldId}">
                         ${iconSvg('delete')}
                     </button>
                 </div>`;
             }
         } else if (type === 'file') {
             html += `<div class="input-group">
-                <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="文件路径">
-                <button type="button" class="btn btn-outline-secondary btn-select-file" data-target="config_${key}" data-accept="${escapeHtml(param.accept || '*')}">
+                <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="文件路径">
+                <button type="button" class="btn btn-outline-secondary btn-select-file" data-target="${safeFieldId}" data-accept="${escapeHtml(param.accept || '*')}">
                     ${iconSvg('folder')} 浏览
                 </button>
             </div>`;
         } else if (type === 'color') {
             html += `<div class="input-group">
-                <input type="color" class="form-control form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}" style="width: 50px;">
-                <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000">
+                <input type="color" class="form-control form-control-color" id="${safeFieldId}_picker" value="${escapeHtml(value || '#000000')}" style="width: 50px;">
+                <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="#000000">
             </div>`;
         } else if (type === 'textarea') {
-            html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="${param.rows || 4}" 
-                     placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+            html += `<textarea class="form-control" id="${safeFieldId}" name="${safeKey}" rows="${escapeHtml(param.rows || 4)}"
+                     placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${safeValue}</textarea>`;
         } else if (type === 'rich_text') {
-            html += `<textarea class="form-control rich-text-editor" id="config_${key}" name="${key}" rows="${param.rows || 6}" 
-                     placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+            html += `<textarea class="form-control rich-text-editor" id="${safeFieldId}" name="${safeKey}" rows="${escapeHtml(param.rows || 6)}"
+                     placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${safeValue}</textarea>`;
             html += `<small class="form-text text-muted">支持 HTML 格式</small>`;
         } else if (type === 'date') {
-            html += `<input type="date" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+            html += `<input type="date" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" ${required ? 'required' : ''}>`;
         } else if (type === 'datetime') {
-            html += `<input type="datetime-local" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+            html += `<input type="datetime-local" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" ${required ? 'required' : ''}>`;
         } else if (type === 'eav_select') {
             // EAV 属性选择器
             const entityCode = param.entity_code || 'product';
-            html += `<select class="form-select eav-attribute-select" id="config_${key}" name="${key}" 
-                     data-entity-code="${escapeHtml(entityCode)}" ${required ? 'required' : ''}>
+            const safeEntityCode = escapeHtml(entityCode);
+            html += `<select class="form-select eav-attribute-select" id="${safeFieldId}" name="${safeKey}"
+                     data-entity-code="${safeEntityCode}" ${required ? 'required' : ''}>
                 <option value="">-- 加载中... --</option>
             </select>`;
             // 延迟加载 EAV 属性
             html += `<script>
                 (function() {
-                    const select = document.getElementById('config_${key}');
+                    const select = document.getElementById('${escapeHtml(safeFieldIdJs)}');
                     if (!select) return;
-                    fetch('/weline/eav/api/options/attributes?entity_code=${escapeHtml(entityCode)}')
-                        .then(r => r.json())
+                    (window.ThemeEditor && window.ThemeEditor.apiJson
+                        ? window.ThemeEditor.apiJson('/weline/eav/api/options/attributes?entity_code=${encodeURIComponent(entityCode)}', { silent: true })
+                        : Promise.reject(new Error('ThemeEditor API is not available')))
+                        .then(r => (r && typeof r.json === 'function') ? r.json() : ((r && r.data) || r))
                         .then(data => {
                             if (data.success && data.data.attributes) {
                                 select.innerHTML = '<option value="">-- 请选择属性 --</option>';
@@ -2752,7 +4995,7 @@
                                     const opt = document.createElement('option');
                                     opt.value = attr.code;
                                     opt.textContent = attr.name + ' (' + attr.code + ')';
-                                    if ('${escapeHtml(value)}' === attr.code) opt.selected = true;
+                                    if ('${escapeHtml(escapeJsString(value))}' === attr.code) opt.selected = true;
                                     select.appendChild(opt);
                                 });
                             }
@@ -2767,22 +5010,26 @@
             const entityCode = param.entity_code || 'product';
             const attributeCode = param.attribute_code || '';
             const multiple = param.multiple || false;
-            html += `<select class="form-select eav-options-select" id="config_${key}" name="${key}${multiple ? '[]' : ''}" 
-                     data-entity-code="${escapeHtml(entityCode)}" data-attribute-code="${escapeHtml(attributeCode)}" 
+            const safeEntityCode = escapeHtml(entityCode);
+            const safeAttributeCode = escapeHtml(attributeCode);
+            html += `<select class="form-select eav-options-select" id="${safeFieldId}" name="${safeKey}${multiple ? '[]' : ''}"
+                     data-entity-code="${safeEntityCode}" data-attribute-code="${safeAttributeCode}"
                      ${multiple ? 'multiple style="min-height: 120px;"' : ''} ${required ? 'required' : ''}>
                 <option value="">-- 加载中... --</option>
             </select>`;
             if (attributeCode) {
                 html += `<script>
                     (function() {
-                        const select = document.getElementById('config_${key}');
+                        const select = document.getElementById('${escapeHtml(safeFieldIdJs)}');
                         if (!select) return;
-                        fetch('/weline/eav/api/options?entity_code=${escapeHtml(entityCode)}&attribute_code=${escapeHtml(attributeCode)}')
-                            .then(r => r.json())
+                        (window.ThemeEditor && window.ThemeEditor.apiJson
+                            ? window.ThemeEditor.apiJson('/weline/eav/api/options?entity_code=${encodeURIComponent(entityCode)}&attribute_code=${encodeURIComponent(attributeCode)}', { silent: true })
+                            : Promise.reject(new Error('ThemeEditor API is not available')))
+                            .then(r => (r && typeof r.json === 'function') ? r.json() : ((r && r.data) || r))
                             .then(data => {
                                 if (data.success && data.data.options) {
                                     select.innerHTML = '<option value="">-- 请选择 --</option>';
-                                    const currentValues = ${multiple ? JSON.stringify(Array.isArray(value) ? value : (value ? String(value).split(',') : [])) : `['${escapeHtml(value)}']`};
+                                    const currentValues = ${multiple ? jsonForScript(Array.isArray(value) ? value : (value ? String(value).split(',') : [])) : jsonForScript([value])};
                                     data.data.options.forEach(opt => {
                                         const option = document.createElement('option');
                                         option.value = opt.id;
@@ -2799,32 +5046,34 @@
                 </script>`;
             }
         } else if (type === 'checkbox_group') {
-            html += `<div class="checkbox-group" id="config_${key}_group">`;
+            html += `<div class="checkbox-group" id="${safeFieldId}_group">`;
             const selectedValues = Array.isArray(value) ? value : (value ? String(value).split(',') : []);
             for (const optVal in options) {
                 const isChecked = selectedValues.includes(String(optVal));
+                const safeOptId = `${safeFieldId}_${escapeHtml(optVal)}`;
                 html += `<div class="form-check">
-                    <input type="checkbox" class="form-check-input" id="config_${key}_${escapeHtml(optVal)}" 
-                           name="${key}[]" value="${escapeHtml(optVal)}" ${isChecked ? 'checked' : ''}>
-                    <label class="form-check-label" for="config_${key}_${escapeHtml(optVal)}">${escapeHtml(options[optVal])}</label>
+                    <input type="checkbox" class="form-check-input" id="${safeOptId}"
+                           name="${safeKey}[]" value="${escapeHtml(optVal)}" ${isChecked ? 'checked' : ''}>
+                    <label class="form-check-label" for="${safeOptId}">${escapeHtml(options[optVal])}</label>
                 </div>`;
             }
             html += `</div>`;
         } else if (type === 'radio') {
-            html += `<div class="radio-group" id="config_${key}_group">`;
+            html += `<div class="radio-group" id="${safeFieldId}_group">`;
             for (const optVal in options) {
                 const isChecked = String(value) === String(optVal);
+                const safeOptId = `${safeFieldId}_${escapeHtml(optVal)}`;
                 html += `<div class="form-check">
-                    <input type="radio" class="form-check-input" id="config_${key}_${escapeHtml(optVal)}" 
-                           name="${key}" value="${escapeHtml(optVal)}" ${isChecked ? 'checked' : ''}>
-                    <label class="form-check-label" for="config_${key}_${escapeHtml(optVal)}">${escapeHtml(options[optVal])}</label>
+                    <input type="radio" class="form-check-input" id="${safeOptId}"
+                           name="${safeKey}" value="${escapeHtml(optVal)}" ${isChecked ? 'checked' : ''}>
+                    <label class="form-check-label" for="${safeOptId}">${escapeHtml(options[optVal])}</label>
                 </div>`;
             }
             html += `</div>`;
         } else {
             // 默认为文本输入
-            html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                     value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+            html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                     value="${safeValue}" ${required ? 'required' : ''}>`;
         }
 
         if (description) {
@@ -2851,8 +5100,8 @@
 
         if (modalBody) {
             const params = widgetMeta.params || {};
-            let formHtml = `<form id="modalConfigForm" data-layout-id="${layoutId}" data-widget-code="${widgetMeta.code}" data-widget-module="${widgetMeta.module || ''}">`;
-            
+            let formHtml = `<form id="modalConfigForm" data-layout-id="${escapeHtml(layoutId)}" data-widget-code="${escapeHtml(widgetMeta.code || '')}" data-widget-module="${escapeHtml(widgetMeta.module || '')}">`;
+
             // 添加预览区域
             formHtml += `
                 <div class="config-preview-area mb-3">
@@ -2905,8 +5154,7 @@
             }
 
             // 显示模态框
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
+            showEditorModal(modal);
 
             // T012: 使用静态预览提示代替实时 API 请求
             const previewBox = document.getElementById('modalWidgetPreview');
@@ -2918,7 +5166,7 @@
 
     /**
      * 更新模态框中的实时预览
-     * 
+     *
      * @deprecated T012: 实时预览已移除，改为保存后刷新。
      *             此函数保留但不再被调用，预览通过 saveConfigFromModal 返回的 preview_html 更新。
      */
@@ -2930,7 +5178,7 @@
 
     /**
      * 保存模态框配置
-     * 
+     *
      * T012: 配置保存后使用返回的 preview_html 更新预览，不再使用实时 API
      */
     async function saveConfigFromModal(form, widgetMeta) {
@@ -2943,7 +5191,7 @@
         const configData = collectWidgetConfigData(form);
 
         try {
-            const response = await fetch(config.apiUpdateConfig, {
+            const result = await apiJson(config.apiUpdateConfig, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2952,26 +5200,23 @@
                 }),
             });
 
-            const result = await response.json();
-
             if (result.success) {
                 showToast('配置已保存', 'success');
-                
+
                 // T012: 使用返回的 preview_html 更新预览，不再触发 layout-preview 请求
                 if (result.preview_html) {
                     const previewBox = document.getElementById('modalWidgetPreview');
                     if (previewBox) {
-                        previewBox.innerHTML = result.preview_html;
+                        previewBox.innerHTML = sanitizeHtmlForEditorPreview(result.preview_html);
                     }
-                    
+
                     // 更新 iframe 中对应部件的预览（如果存在）
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);
                 }
-                
+
                 // 关闭模态框
-                const modal = bootstrap.Modal.getInstance(document.getElementById('widgetConfigModal'));
-                if (modal) modal.hide();
-                
+                hideEditorModal(document.getElementById('widgetConfigModal'));
+
                 // 注意：不再调用 refreshPreview()，已通过 preview_html 更新
             } else {
                 // T015: 保存失败时保持当前预览，仅显示错误提示
@@ -2987,10 +5232,10 @@
 
     /**
      * 更新 iframe 中指定部件的预览 HTML
-     * 
+     *
      * T012: 使用服务端返回的 preview_html 替换 iframe 中对应部件
      * 改进: 添加重试逻辑和 fallback 到完整刷新
-     * 
+     *
      * @param {string|number} layoutId 部件布局ID
      * @param {string} previewHtml 预览HTML内容
      * @param {boolean} isNewWidget 是否为新添加的部件（默认false）
@@ -2998,6 +5243,7 @@
      */
     function updateWidgetPreviewInIframe(layoutId, previewHtml, isNewWidget = false, targetSlotId = null) {
         const iframe = elements.previewFrame;
+        const safePreviewHtml = sanitizeHtmlForEditorPreview(previewHtml);
         if (!iframe) {
             console.warn('[ThemeEditor] iframe not found, triggering full refresh');
             loadLayoutPreview();
@@ -3025,8 +5271,8 @@
                     return;
                 }
 
-                const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
-                
+                const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
+
                 if (widgetEl) {
                     // 找到部件，更新其内容
                     let contentEl = widgetEl.querySelector('.widget-content');
@@ -3043,9 +5289,10 @@
                         contentEl.className = 'widget-content';
                         widgetEl.appendChild(contentEl);
                     }
-                    contentEl.innerHTML = previewHtml;
+                    contentEl.innerHTML = safePreviewHtml;
+                    activateWidgetPreviewArrayItem(layoutId, state.previewArrayItemIndexByLayout[String(layoutId)]);
                     console.log(`[ThemeEditor] Widget ${layoutId} preview updated successfully`);
-                    
+
                     // 高亮更新的部件（短暂视觉反馈）
                     widgetEl.classList.add('widget-updated');
                     setTimeout(() => widgetEl.classList.remove('widget-updated'), 1000);
@@ -3053,36 +5300,37 @@
                     // 新部件 - 尝试在对应插槽中插入（优先使用调用方传入的 targetSlotId，避免依赖全局 state 导致插入到错误区域）
                     const slotId = targetSlotId || state.selectedSlot?.id || state.draggingWidget?.slot;
                     let slotEl = null;
-                    
+
                     if (slotId) {
                         // 尝试多种方式查找插槽
-                        slotEl = iframe.contentDocument.querySelector(`[data-wslot="${slotId}"]`) ||
-                                 iframe.contentDocument.querySelector(`[data-slot="${slotId}"]`) ||
-                                 iframe.contentDocument.querySelector(`.slot-${slotId}`) ||
-                                 iframe.contentDocument.querySelector(`#slot-${slotId}`);
+                        const safeSlotId = cssIdentifier(slotId);
+                        slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
+                                 iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId)) ||
+                                 iframe.contentDocument.querySelector(`.slot-${safeSlotId}`) ||
+                                 iframe.contentDocument.querySelector(`#slot-${safeSlotId}`);
                     }
-                    
+
                     if (slotEl) {
                         // 确保 iframe 中有样式
                         injectStylesIntoIframe();
-                        
+
                         // 找到插槽，插入新部件
                         const wrapper = iframe.contentDocument.createElement('div');
                         wrapper.setAttribute('data-layout-id', layoutId);
                         wrapper.setAttribute('data-slot-id', slotId);
                         wrapper.classList.add('widget-wrapper', 'widget-new');
                         wrapper.style.position = 'relative';
-                        
+
                         // 判断是否独占（从 DOM 属性或 isExclusiveSlot 判断）
-                        const isExclusive = slotEl.getAttribute('data-wslot-exclusive') === 'true' 
+                        const isExclusive = slotEl.getAttribute('data-wslot-exclusive') === 'true'
                             || isExclusiveSlot(slotId, state.draggingWidget?.code || '');
-                        
+
                         // 生成操作按钮
                         const actionsHtml = generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, true, true);
-                        
+
                         // 组装部件内容
-                        wrapper.innerHTML = actionsHtml + '<div class="widget-content">' + previewHtml + '</div>';
-                        
+                        wrapper.innerHTML = actionsHtml + '<div class="widget-content">' + safePreviewHtml + '</div>';
+
                         // 整块区域插槽（footer/header）：模板中整块 <footer>/<header> 带 data-wslot，
                         // 若按独占清空会抹掉全部底部/顶部内容，导致“整块变白”。只追加到内部容器，绝不清空整块。
                         const isContainerSlot = slotId === 'footer' || slotId === 'header' ||
@@ -3100,18 +5348,18 @@
                             widgetContainer.querySelectorAll('.slot-placeholder').forEach(p => p.remove());
                             widgetContainer.appendChild(wrapper);
                         }
-                        
+
                         // 绑定按钮事件（如果还没有绑定）
                         if (!iframe.contentDocument.body._widgetActionsInitialized) {
                             bindWidgetActionEvents(iframe.contentDocument);
                             iframe.contentDocument.body._widgetActionsInitialized = true;
                         }
-                        
+
                         console.log(`[ThemeEditor] New widget ${layoutId} inserted into slot ${slotId} with hover actions`);
 
                         // 为新插入的部件启用 draggable（委托已绑在 body 上，无需再绑事件）
                         setDraggableOnSlotWidgets(iframe.contentDocument);
-                        
+
                         // 高亮新部件
                         setTimeout(() => wrapper.classList.remove('widget-new'), 1500);
                     } else {
@@ -3133,13 +5381,13 @@
             } catch (err) {
                 // iframe 跨域或其他错误
                 console.warn('[ThemeEditor] Error updating iframe:', err.message);
-                
+
                 retryCount++;
                 if (retryCount < maxRetries) {
                     setTimeout(tryUpdate, retryDelay);
                     return;
                 }
-                
+
                 // 重试超限，触发完整刷新
                 console.warn('[ThemeEditor] iframe update failed after retries, triggering full refresh');
                 loadLayoutPreview();
@@ -3228,19 +5476,19 @@
      */
     function getSlotInfo(slotEl) {
         if (!slotEl) return { exclusive: false, multiple: true, max: -1, currentCount: 0 };
-        
+
         const exclusiveAttr = slotEl.dataset.wslotExclusive || slotEl.dataset.slotExclusive || slotEl.dataset.exclusive;
         const multipleAttr = slotEl.dataset.wslotMultiple || slotEl.dataset.slotMultiple || slotEl.dataset.multiple;
         const maxAttr = slotEl.dataset.wslotMax || slotEl.dataset.slotMax;
         const slotId = slotEl.dataset.wslot || slotEl.dataset.slot;
-        
+
         const exclusive = exclusiveAttr === 'true';
         const multiple = multipleAttr !== 'false'; // 默认允许多个
         const max = maxAttr ? parseInt(maxAttr, 10) : -1; // -1 表示无限制
-        
+
         // 如果 exclusive 为 true，max 固定为 1
         const effectiveMax = exclusive ? 1 : max;
-        
+
         // 统计当前已有部件数量
         let currentCount = 0;
         if (slotEl.classList.contains('preview-area') || slotEl.classList.contains('area-slot')) {
@@ -3258,7 +5506,7 @@
                 currentCount = slotEl.querySelectorAll('.preview-widget-item, .widget-wrapper[data-layout-id]').length;
             }
         }
-        
+
         return {
             slotId,
             exclusive,
@@ -3278,7 +5526,7 @@
     function getInsertionIndex(container, mouseY) {
         const items = container.querySelectorAll('.preview-widget-item');
         if (items.length === 0) return 0;
-        
+
         for (let i = 0; i < items.length; i++) {
             const rect = items[i].getBoundingClientRect();
             const midY = rect.top + rect.height / 2;
@@ -3297,27 +5545,27 @@
     function showInsertionIndicator(container, mouseY) {
         // 先移除旧的指示器
         removeInsertionIndicators(container);
-        
+
         const items = container.querySelectorAll('.preview-widget-item');
         if (items.length === 0) {
             // 空容器：显示整体高亮
             container.classList.add('drag-insert-empty');
             return;
         }
-        
+
         const insertIndex = getInsertionIndex(container, mouseY);
-        
+
         // 创建指示器
         const indicator = document.createElement('div');
         indicator.className = 'drag-insert-indicator';
         indicator.innerHTML = '<span class="drag-insert-dot"></span><span class="drag-insert-line"></span><span class="drag-insert-dot"></span>';
-        
+
         if (insertIndex < items.length) {
             items[insertIndex].before(indicator);
         } else {
             container.appendChild(indicator);
         }
-        
+
         // 保存插入索引
         state.dragInsertIndex = insertIndex;
     }
@@ -3343,7 +5591,7 @@
     function showSlotHint(slotEl, text, type) {
         // 避免重复
         slotEl.querySelectorAll('.drag-slot-hint').forEach(el => el.remove());
-        
+
         const hint = document.createElement('div');
         hint.className = `drag-slot-hint drag-slot-hint-${type}`;
         hint.textContent = text;
@@ -3387,19 +5635,16 @@
      */
     function isSlotAccepted(slot, widgetData) {
         const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
-        const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const acceptCodes = normalizeCodeList(acceptAttr);
         const rejectAttr = slot.dataset.wslotReject || '';
-        const rejectCodes = rejectAttr ? rejectAttr.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const rejectCodes = normalizeCodeList(rejectAttr);
         const slotId = slot.dataset.wslot || slot.dataset.slot;
 
-        const rejected = rejectCodes.includes(widgetData.type) || rejectCodes.includes(widgetData.code);
-        if (rejected) return false;
-        // 通配：accept="*" 表示接受任意部件
-        if (acceptCodes.includes('*')) return true;
-        return (
-            (widgetData.slot && widgetData.slot === slotId) ||
-            acceptCodes.includes(widgetData.code) ||
-            acceptCodes.length === 0
+        return slotAcceptsWidgetCodes(
+            acceptCodes,
+            rejectCodes,
+            slotId,
+            collectWidgetSupportCodes(widgetData)
         );
     }
 
@@ -3430,7 +5675,11 @@
 
         const payload = {
             theme_id: state.themeId,
-            page_type: state.pageType,
+            page_type: getEffectivePageType(state.pageType || 'homepage'),
+            layout_type: getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage'),
+            layout_option: getEffectiveLayoutOption(state.layoutOption || 'default'),
+            editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+            ...getLayoutLockVirtualPayload(),
             area: area,
             slot_id: slotId || null,
             widget_code: widgetData.code,
@@ -3442,13 +5691,11 @@
         };
 
         try {
-            const response = await fetch(config.apiSaveWidget, {
+            const result = await apiJson(config.apiSaveWidget, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-
-            const result = await response.json();
 
 
             if (result.success) {
@@ -3522,6 +5769,8 @@
             compatible: this.dataset.widgetCompatible === '1',
             // 插槽相关属性
             slot: this.dataset.widgetSlot || null,
+            supports: normalizeCodeList(this.dataset.widgetSupports || ''),
+            slots: normalizeCodeList(this.dataset.widgetSlots || ''),
             exclusive: this.dataset.widgetExclusive === '1' || this.dataset.widgetExclusive === 'true',
             // 布局和容器属性
             pageLayouts: pageLayouts,
@@ -3529,7 +5778,7 @@
         };
 
         // 检查部件是否支持当前布局
-        if (!isWidgetAllowedForLayout(pageLayouts, state.layoutType)) {
+        if (!isWidgetAllowedForLayout(pageLayouts, state.layoutType, widgetData)) {
             showToast(`部件 "${widgetData.name}" 不支持当前布局 "${state.layoutType}"`, 'warning');
             e.preventDefault();
             return;
@@ -3540,7 +5789,10 @@
 
         console.log('Drag start - widget:', widgetData.name, 'position:', widgetData.position, 'slot:', widgetData.slot, 'exclusive:', widgetData.exclusive, 'pageLayouts:', widgetData.pageLayouts);
 
-        e.dataTransfer.setData('application/json', JSON.stringify(widgetData));
+        const dragPayload = JSON.stringify(widgetData);
+        e.dataTransfer.setData('application/json', dragPayload);
+        // Chromium can drop custom MIME payloads when dragging into an iframe; text/plain survives that boundary.
+        e.dataTransfer.setData('text/plain', dragPayload);
         e.dataTransfer.effectAllowed = 'copy';
 
         // 高亮可放置区域
@@ -3550,18 +5802,34 @@
     /**
      * 检查部件是否支持指定的布局
      */
-    function isWidgetAllowedForLayout(widgetPageLayouts, currentLayout) {
-        // * 表示所有布局都可用
-        if (widgetPageLayouts.includes('*')) {
+    function isWidgetAllowedForLayout(widgetPageLayouts, currentLayout, widgetData = null) {
+        const layouts = normalizeCodeList(widgetPageLayouts);
+        const layout = normalizeCode(currentLayout);
+
+        if (layouts.includes('*')) {
             return true;
         }
-        // 检查是否包含当前布局
-        if (widgetPageLayouts.includes(currentLayout)) {
+        if (layout && layouts.includes(layout)) {
             return true;
         }
-        // default 布局在所有页面都可用
-        if (widgetPageLayouts.includes('default')) {
+        if (layouts.includes('default')) {
             return true;
+        }
+
+        const layoutOption = normalizeCode(state.layoutOption || 'default');
+        const widgetCodes = collectWidgetSupportCodes(widgetData);
+        if (layout && widgetCodes.includes(`layout-${layout}`)) {
+            return true;
+        }
+        const supportPrefix = layout ? `layout-${layout}-` : '';
+        if (supportPrefix && widgetCodes.some(code => code === `layout-${layout}` || code.startsWith(supportPrefix))) {
+            return true;
+        }
+        if (layout && layoutOption && layoutOption !== 'default') {
+            const optionPrefix = `layout-${layout}-${layoutOption}-`;
+            if (widgetCodes.some(code => code.startsWith(optionPrefix) || code === `layout-${layout}-${layoutOption}`)) {
+                return true;
+            }
         }
         return false;
     }
@@ -3571,9 +5839,13 @@
      */
     function handleDragEnd(e) {
         state.isDragging = false;
-        state.draggingWidget = null;
         state.dragInsertIndex = null;
         this.classList.remove('dragging');
+        setTimeout(() => {
+            if (!state.isDragging) {
+                state.draggingWidget = null;
+            }
+        }, 250);
 
         // 移除区域高亮
         document.querySelectorAll('.preview-area').forEach(area => {
@@ -3584,7 +5856,7 @@
         document.querySelectorAll('.container-slot, [data-wslot]').forEach(slot => {
             slot.classList.remove('drag-over', 'drag-invalid', 'drag-allowed', 'drag-replace');
         });
-        
+
         // 移除所有插入位置指示器和提示
         removeInsertionIndicators();
     }
@@ -3596,13 +5868,13 @@
     function handleDragOver(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const area = this.classList.contains('preview-area') ? this : this.closest('.preview-area');
         if (!area) return;
-        
+
         const areaCode = area.dataset.area;
         if (!areaCode) return;
-        
+
         const widgetData = state.draggingWidget;
         if (!widgetData) {
             e.dataTransfer.dropEffect = 'none';
@@ -3610,7 +5882,7 @@
             area.classList.remove('drag-over');
             return;
         }
-        
+
         // 检查是否允许放置
         const allowed = isAllowedArea(widgetData.position, areaCode, widgetData.type);
         if (!allowed) {
@@ -3620,10 +5892,10 @@
             removeInsertionIndicators(area);
             return;
         }
-        
+
         // 获取插槽信息（exclusive / max / currentCount）
         const info = getSlotInfo(area);
-        
+
         // 独占插槽：显示替换提示
         if (info.exclusive && info.currentCount > 0) {
             e.dataTransfer.dropEffect = 'copy';
@@ -3633,7 +5905,7 @@
             showSlotHint(area, '松开替换现有部件', 'replace');
             return;
         }
-        
+
         // 已满插槽：阻止放置
         if (info.isFull) {
             e.dataTransfer.dropEffect = 'none';
@@ -3643,12 +5915,12 @@
             showSlotHint(area, `已满（${info.currentCount}/${info.max}）`, 'full');
             return;
         }
-        
+
         // 多部件区域：显示插入位置指示器
         e.dataTransfer.dropEffect = 'copy';
         area.classList.add('drag-over');
         area.classList.remove('drag-invalid', 'drag-replace');
-        
+
         const widgetsContainer = area.querySelector('.area-widgets');
         if (widgetsContainer) {
             showInsertionIndicator(widgetsContainer, e.clientY);
@@ -3690,6 +5962,7 @@
 
         const areaCode = area.dataset.area;
         if (!areaCode) return;
+        const slotId = area.dataset.wslot || area.dataset.slot || null;
 
         // 获取部件数据（委托 getDropWidgetData）
         const widgetData = getDropWidgetData(e);
@@ -3714,10 +5987,12 @@
         }
 
         // 使用拖拽时计算的插入索引，如果没有则追加到末尾
-        const sortOrder = state.dragInsertIndex != null ? state.dragInsertIndex : getNextSortOrder(areaCode);
+        const sortOrder = state.dragInsertIndex != null
+            ? state.dragInsertIndex
+            : (slotId ? getNextSlotSortOrder(slotId) : getNextSortOrder(areaCode));
         state.dragInsertIndex = null;
 
-        saveWidget({ area: areaCode, slotId: null, widgetData, sortOrder, exclusive: info.exclusive });
+        saveWidget({ area: areaCode, slotId, widgetData, sortOrder, exclusive: info.exclusive });
     }
 
     /**
@@ -3727,16 +6002,16 @@
     function handleSlotDragOver(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         const slot = resolveSlotElement(this);
         if (!slot) return;
-        
+
         const widgetData = state.draggingWidget;
         if (!widgetData) {
             e.dataTransfer.dropEffect = 'none';
             return;
         }
-        
+
         // accept / reject 检查（委托 isSlotAccepted）
         if (!isSlotAccepted(slot, widgetData)) {
             e.dataTransfer.dropEffect = 'none';
@@ -3745,10 +6020,10 @@
             removeInsertionIndicators(slot);
             return;
         }
-        
+
         // 获取插槽容量信息
         const info = getSlotInfo(slot);
-        
+
         // 独占插槽：有部件时显示替换提示
         if (info.exclusive && info.currentCount > 0) {
             e.dataTransfer.dropEffect = 'copy';
@@ -3758,7 +6033,7 @@
             showSlotHint(slot, '松开替换现有部件', 'replace');
             return;
         }
-        
+
         // 已满：阻止放置
         if (info.isFull) {
             e.dataTransfer.dropEffect = 'none';
@@ -3768,12 +6043,12 @@
             showSlotHint(slot, `已满（${info.currentCount}/${info.max}）`, 'full');
             return;
         }
-        
+
         // 多部件插槽：显示插入位置指示器
         e.dataTransfer.dropEffect = 'copy';
         slot.classList.add('drag-over');
         slot.classList.remove('drag-invalid', 'drag-replace');
-        
+
         // 在插槽的部件容器中显示插入指示器
         const widgetsContainer = slot.querySelector('.slot-widgets') || slot;
         showInsertionIndicator(widgetsContainer, e.clientY);
@@ -3867,7 +6142,7 @@
     /**
      * 添加部件到结构视图面板
      * 在保存成功后更新左侧结构视图，无需刷新页面
-     * 
+     *
      * @param {string} area 区域代码
      * @param {string} slotId 插槽ID
      * @param {object} widgetData 部件数据
@@ -3891,18 +6166,25 @@
             'content': 'ri-file-text-line',
             'container': 'ri-layout-grid-line',
         };
-        
+
         const icon = typeIcons[widgetData.type] || 'ri-widgets-line';
         const widgetName = widgetData.name || widgetData.code;
-        
+        const widgetDomId = `widget_${String(layoutId || '').replace(/[^\w:-]/g, '_')}`;
+        const safeLayoutId = escapeHtml(layoutId || '');
+        const safeSlotId = escapeHtml(slotId || '');
+        const safeWidgetCode = escapeHtml(widgetData.code || '');
+        const safeWidgetModule = escapeHtml(widgetData.module || '');
+        const safeWidgetType = escapeHtml(widgetData.type || '');
+
         // 创建部件项 HTML
         const widgetHtml = `
-            <div class="preview-widget-item widget-new" 
-                 id="widget_${layoutId}"
-                 data-layout-id="${layoutId}"
-                 data-widget-code="${escapeHtml(widgetData.code)}"
-                 data-widget-module="${escapeHtml(widgetData.module || '')}"
-                 data-widget-type="${escapeHtml(widgetData.type || '')}"
+            <div class="preview-widget-item widget-new"
+                 id="${escapeHtml(widgetDomId)}"
+                 data-layout-id="${safeLayoutId}"
+                 data-slot-id="${safeSlotId}"
+                 data-widget-code="${safeWidgetCode}"
+                 data-widget-module="${safeWidgetModule}"
+                 data-widget-type="${safeWidgetType}"
                  data-config='{}'>
                 <div class="widget-header">
                     <span class="widget-name">
@@ -3923,64 +6205,64 @@
                 </div>
             </div>
         `;
-        
+
         // 查找目标容器 - 简化后的三区域布局
         let targetContainer = null;
-        
+
         // 根据区域查找对应的容器
         const areaContainerMap = {
             'header': '.header-slot-widgets',
             'content': '.content-slot-widgets',
             'footer': '.footer-slot-widgets',
         };
-        
+
         // 优先使用区域映射
         if (areaContainerMap[area]) {
             targetContainer = document.querySelector(areaContainerMap[area]);
         }
-        
+
         // 如果没找到，尝试查找通用的 area-widgets 容器
         if (!targetContainer) {
-            targetContainer = document.querySelector(`.area-widgets[data-area="${area}"]`);
+            targetContainer = document.querySelector(`.area-widgets${dataAttributeSelector('data-area', area)}`);
         }
-        
+
         // 如果还是没有，查找旧版插槽容器（兼容性）
         if (!targetContainer && slotId) {
-            targetContainer = document.querySelector(`.slot-widgets[data-slot="${slotId}"]`);
+            targetContainer = document.querySelector(`.slot-widgets${dataAttributeSelector('data-slot', slotId)}`);
         }
-        
+
         if (!targetContainer) {
             console.warn(`[ThemeEditor] Structure view container not found for area: ${area}, slot: ${slotId}`);
             return;
         }
-        
+
         // 如果是独占模式，先清空容器中的现有部件
         if (exclusive) {
             const existingWidgets = targetContainer.querySelectorAll('.preview-widget-item');
             existingWidgets.forEach(el => el.remove());
         }
-        
+
         // 移除占位符（如果存在）
         const placeholder = targetContainer.querySelector('.slot-placeholder, .content-slot-placeholder, .slot-placeholder-large');
         if (placeholder) {
             placeholder.remove();
         }
-        
+
         // 插入新部件
         targetContainer.insertAdjacentHTML('beforeend', widgetHtml);
-        
+
         // 添加视觉反馈动画
-        const newWidget = targetContainer.querySelector(`#widget_${layoutId}`);
+        const newWidget = targetContainer.querySelector(dataLayoutIdSelector(layoutId));
         if (newWidget) {
             // 短暂延迟后移除 widget-new 类（动画效果）
             setTimeout(() => {
                 newWidget.classList.remove('widget-new');
             }, 1500);
-            
+
             // 滚动到新部件
             newWidget.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
-        
+
         console.log(`[ThemeEditor] Widget added to structure view: ${widgetName} in ${area}/${slotId || 'default'}`);
     }
 
@@ -3988,7 +6270,7 @@
      * 获取插槽内下一个排序值
      */
     function getNextSlotSortOrder(slotId) {
-        const slotWidgets = document.querySelector(`.slot-widgets[data-slot="${slotId}"]`);
+        const slotWidgets = document.querySelector(`.slot-widgets${dataAttributeSelector('data-slot', slotId)}`);
         if (!slotWidgets) return 0;
         return slotWidgets.querySelectorAll('.preview-widget-item').length;
     }
@@ -4001,7 +6283,7 @@
         const widgetData = state.draggingWidget;
         const widgetType = widgetData ? widgetData.type : null;
         console.log('highlightAllowedAreas - positions:', positions, 'type:', widgetType, 'widget:', widgetData);
-        
+
         // 区域互斥规则：每个区域不接受哪些类型的部件
         // content 区域不接受 header 和 footer 类型
         // header 区域不接受 footer 类型
@@ -4011,7 +6293,7 @@
             'header': ['footer'],                  // header 区域排除 footer 类型
             'footer': ['header'],                  // footer 区域排除 header 类型
         };
-        
+
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
         // 注意：container 类型部件应严格按其 position 属性过滤
         const typeToAreasMap = {
@@ -4035,7 +6317,7 @@
             'content': ['content', 'left_sidebar', 'right_sidebar'],
             'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
-        
+
         // 位置到区域的映射（与后端 POSITION_TO_AREA_MAP 保持一致）
         const positionToAreaMap = {
             'header': ['header'],
@@ -4092,7 +6374,7 @@
             // 去重
             allowedAreas = [...new Set(allowedAreas)];
         }
-        
+
         // 应用区域互斥规则：过滤掉类型被拒绝的区域
         if (widgetType) {
             allowedAreas = allowedAreas.filter(area => {
@@ -4120,22 +6402,19 @@
 
         // 高亮匹配的容器内插槽（支持新旧两种属性标记）
         if (widgetData) {
-            const widgetCode = widgetData.code;
-            const widgetSlot = widgetData.slot;
-            
+            const widgetCodes = collectWidgetSupportCodes(widgetData);
+
             // 查找所有插槽（包括新旧两种标记方式）
             document.querySelectorAll('.container-slot, [data-wslot]').forEach(slot => {
                 // 获取插槽ID（兼容新旧属性）
                 const slotId = slot.dataset.wslot || slot.dataset.slot;
                 // 获取接受的部件类型（兼容新旧属性）
                 const acceptAttr = slot.dataset.wslotAccept || slot.dataset.accept || '';
-                const acceptCodes = acceptAttr ? acceptAttr.split(',').map(s => s.trim()) : [];
-                
-                // 检查是否匹配
-                const matches = (widgetSlot && widgetSlot === slotId) || 
-                               acceptCodes.includes(widgetCode) ||
-                               acceptCodes.length === 0;
-                
+                const acceptCodes = normalizeCodeList(acceptAttr);
+                const rejectCodes = normalizeCodeList(slot.dataset.wslotReject || '');
+
+                const matches = slotAcceptsWidgetCodes(acceptCodes, rejectCodes, slotId, widgetCodes);
+
                 if (matches) {
                     slot.classList.add('drag-allowed');
                     slot.classList.remove('drag-invalid');
@@ -4166,7 +6445,7 @@
      */
     function isAllowedArea(positions, areaCode, widgetType = null) {
         console.log('isAllowedArea - positions:', positions, 'areaCode:', areaCode, 'type:', widgetType);
-        
+
         // 区域互斥规则：每个区域不接受哪些类型的部件
         // content 区域不接受 header 和 footer 类型
         // header 区域不接受 footer 类型
@@ -4176,7 +6455,7 @@
             'header': ['footer'],                  // header 区域排除 footer 类型
             'footer': ['header'],                  // footer 区域排除 header 类型
         };
-        
+
         // 检查部件类型是否被当前区域拒绝
         if (widgetType && areaExclusiveTypes[areaCode]) {
             if (areaExclusiveTypes[areaCode].includes(widgetType)) {
@@ -4184,7 +6463,7 @@
                 return false;
             }
         }
-        
+
         // 类型到允许区域的映射（与后端 WidgetPositionResolver::inferAreasFromType 保持一致）
         // 注意：container 类型部件应严格按其 position 属性过滤
         const typeToAreasMap = {
@@ -4208,7 +6487,7 @@
             'content': ['content', 'left_sidebar', 'right_sidebar'],
             'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
-        
+
         // 如果没有 position 限制，根据 type 推断
         if (!positions || !Array.isArray(positions) || positions.length === 0) {
             if (widgetType && typeToAreasMap[widgetType]) {
@@ -4256,7 +6535,7 @@
         allowedAreas = [...new Set(allowedAreas)]; // 去重
 
         console.log('isAllowedArea - allowedAreas:', allowedAreas, 'target:', areaCode);
-        
+
         const result = allowedAreas.includes(areaCode);
         console.log('isAllowedArea - result:', result);
         return result;
@@ -4278,12 +6557,12 @@
 
     /**
      * 判断插槽是否为独占类型（兜底逻辑）
-     * 
+     *
      * 优先从插槽 DOM 的 data-wslot-exclusive="true" 判断，
      * 此函数仅作为 DOM 属性不可用时的兜底。
-     * 
+     *
      * 独占插槽：同一插槽只能有一个部件，新部件会替换旧部件。
-     * 
+     *
      * 与模板保持一致：
      * - exclusive=true 的插槽：header, logo, search, navigation, footer,
      *   footer-social, footer-copyright, widget-hero, list-grid, list-pagination
@@ -4346,7 +6625,10 @@
         moveDown: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 13.1716L16.9497 8.22185L15.5355 6.80764L12 10.3431L8.46447 6.80764L7.05025 8.22185L12 13.1716ZM12 18L17.6569 12.3432L16.2426 10.929L12 15.1716L7.75736 10.929L6.34315 12.3432L12 18Z"></path></svg>`,
         info: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z"/></svg>`,
         penetrateUp: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 10.828L7.05 15.778 5.636 14.364 12 8l6.364 6.364L16.95 15.778 12 10.828z"/></svg>`,
-        penetrateDown: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 13.172l4.95-4.95 1.414 1.414L12 16l-6.364-6.364L7.05 10.222 12 13.172z"/></svg>`
+        penetrateDown: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 13.172l4.95-4.95 1.414 1.414L12 16l-6.364-6.364L7.05 10.222 12 13.172z"/></svg>`,
+        aiEdit: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 5.5L18.5 8.5L8.75 18.25H5.75V15.25L15.5 5.5ZM17 4L20 7L21.06 5.94C21.65 5.35 21.65 4.4 21.06 3.81L20.19 2.94C19.6 2.35 18.65 2.35 18.06 2.94L17 4ZM3 20H21V22H3V20Z"></path></svg>`,
+        aiRebuild: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2L13.09 8.26L19 6L15.74 11.35L21 15L14.73 15.9L15 22L12 16.5L9 22L9.27 15.9L3 15L8.26 11.35L5 6L10.91 8.26L12 2Z"></path></svg>`,
+        aiImage: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5 3H19C20.1 3 21 3.9 21 5V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V5C3 3.9 3.9 3 5 3ZM5 5V14.5L8.5 11L12.5 15L15 12L19 16.5V5H5ZM7.5 10C8.33 10 9 9.33 9 8.5S8.33 7 7.5 7S6 7.67 6 8.5S6.67 10 7.5 10Z"></path></svg>`
     };
 
     /**
@@ -4359,10 +6641,12 @@
      * @returns {string} 操作按钮 HTML
      */
     function generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, isFirst = true, isLast = true) {
-        let html = `<div class="widget-hover-actions" data-layout-id="${layoutId}">`;
-        
+        const safeLayoutId = escapeHtml(layoutId || '');
+        const safeSlotId = escapeHtml(slotId || '');
+        let html = `<div class="widget-hover-actions" data-layout-id="${safeLayoutId}">`;
+
         // 嵌套距离：信息、上级、下级（仅这三者按栈下标；替换/删除/移动仍用最外层）
-        html += `<button class="btn-widget-info" title="信息" data-action="info" data-layout-id="${layoutId}">
+        html += `<button class="btn-widget-info" title="信息" data-action="info" data-layout-id="${safeLayoutId}">
                     ${WIDGET_ACTION_ICONS.info}
                  </button>`;
         html += `<button class="btn-penetrate-up" title="上级" data-action="penetrate-up" style="display:none;">
@@ -4371,27 +6655,36 @@
         html += `<button class="btn-penetrate-down" title="下穿" data-action="penetrate-down" style="display:none;">
                     ${WIDGET_ACTION_ICONS.penetrateDown}
                  </button>`;
-        
+        html += `<button class="btn-widget-ai-edit" title="AI编辑" data-action="ai-edit" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
+                    ${WIDGET_ACTION_ICONS.aiEdit}
+                 </button>`;
+        html += `<button class="btn-widget-ai-rebuild" title="AI重建" data-action="ai-rebuild" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
+                    ${WIDGET_ACTION_ICONS.aiRebuild}
+                 </button>`;
+        html += `<button class="btn-widget-ai-image" title="AI图片资源重新生成" data-action="ai-image" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
+                    ${WIDGET_ACTION_ICONS.aiImage}
+                 </button>`;
+
         // 替换按钮 - 所有部件都有
-        html += `<button class="btn-widget-replace" title="替换部件" data-action="replace" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+        html += `<button class="btn-widget-replace" title="替换部件" data-action="replace" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.replace}
                  </button>`;
-        
+
         // 删除按钮 - 所有部件都有
-        html += `<button class="btn-widget-delete" title="删除部件" data-action="delete" data-layout-id="${layoutId}" data-slot-id="${slotId}">
+        html += `<button class="btn-widget-delete" title="删除部件" data-action="delete" data-layout-id="${safeLayoutId}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.delete}
                  </button>`;
-        
+
         // 非独占部件显示上下移动按钮
         if (!isExclusive) {
-            html += `<button class="btn-widget-move-up" title="上移" data-action="move-up" data-layout-id="${layoutId}" ${isFirst ? 'disabled' : ''}>
+            html += `<button class="btn-widget-move-up" title="上移" data-action="move-up" data-layout-id="${safeLayoutId}" ${isFirst ? 'disabled' : ''}>
                         ${WIDGET_ACTION_ICONS.moveUp}
                      </button>`;
-            html += `<button class="btn-widget-move-down" title="下移" data-action="move-down" data-layout-id="${layoutId}" ${isLast ? 'disabled' : ''}>
+            html += `<button class="btn-widget-move-down" title="下移" data-action="move-down" data-layout-id="${safeLayoutId}" ${isLast ? 'disabled' : ''}>
                         ${WIDGET_ACTION_ICONS.moveDown}
                      </button>`;
         }
-        
+
         html += '</div>';
         return html;
     }
@@ -4432,8 +6725,8 @@
         const idx = state.nestIndex;
         if (!stack.length || idx < 0 || idx >= stack.length) return;
         const layoutId = stack[idx];
-        const wrapper = doc.querySelector(`.widget-wrapper[data-layout-id="${layoutId}"]`) ||
-            doc.querySelector(`[data-layout-id="${layoutId}"]`);
+        const wrapper = doc.querySelector(`.widget-wrapper${dataLayoutIdSelector(layoutId)}`) ||
+            doc.querySelector(dataLayoutIdSelector(layoutId));
         if (wrapper) {
             wrapper.classList.add('show-actions');
         }
@@ -4464,14 +6757,14 @@
     function injectStylesIntoIframe() {
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
-        
+
         const iframeDoc = iframe.contentDocument;
-        
+
         // 检查是否已注入
         if (iframeDoc.getElementById('widget-hover-styles')) {
             return;
         }
-        
+
         const style = iframeDoc.createElement('style');
         style.id = 'widget-hover-styles';
         style.textContent = `
@@ -4550,6 +6843,11 @@
             .widget-hover-actions .btn-widget-replace:hover {
                 background: rgba(74, 144, 217, 0.85);
             }
+            .widget-hover-actions .btn-widget-ai-edit:hover,
+            .widget-hover-actions .btn-widget-ai-rebuild:hover,
+            .widget-hover-actions .btn-widget-ai-image:hover {
+                background: rgba(124, 92, 255, 0.9);
+            }
             .widget-hover-actions .btn-widget-move-up:hover,
             .widget-hover-actions .btn-widget-move-down:hover {
                 background: rgba(40, 167, 69, 0.85);
@@ -4604,7 +6902,7 @@
             }
         `;
         iframeDoc.head.appendChild(style);
-        
+
         // 同时注入 Remix Icon 如果不存在（使用本地资源，禁止外网 CDN）
         if (!iframeDoc.querySelector('link[href*="remixicon"]')) {
             const link = iframeDoc.createElement('link');
@@ -4616,7 +6914,7 @@
                 iframeDoc.head.appendChild(link);
             }
         }
-        
+
         console.log('[ThemeEditor] Styles injected into iframe');
     }
 
@@ -4628,12 +6926,12 @@
         if (!iframe || !iframe.contentDocument) {
             return;
         }
-        
+
         // 先注入样式
         injectStylesIntoIframe();
-        
+
         const iframeDoc = iframe.contentDocument;
-        
+
         // 查找所有部件包装器（服务端输出 .widget-wrapper[data-layout-id]；无 class 时用 [data-layout-id] 且无父级同属性避免重复）
         let widgetWrappers = Array.from(iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id]'));
         if (widgetWrappers.length === 0) {
@@ -4642,47 +6940,47 @@
                 return !parent || !parent.closest('[data-layout-id]');
             });
         }
-        
+
         widgetWrappers.forEach((wrapper) => {
             const layoutId = wrapper.getAttribute('data-layout-id');
             const slotId = wrapper.getAttribute('data-slot-id') ||
                            wrapper.closest('[data-wslot]')?.getAttribute('data-wslot') ||
                            wrapper.closest('[data-slot]')?.getAttribute('data-slot') || '';
             const isExclusive = isExclusiveSlot(slotId, '');
-            
+
             // 检查是否已有操作按钮
             if (wrapper.querySelector('.widget-hover-actions')) return;
-            
+
             // 确保是 relative 定位
             if (getComputedStyle(wrapper).position === 'static') {
                 wrapper.style.position = 'relative';
             }
             wrapper.classList.add('widget-wrapper');
-            
+
             // 计算同层部件位置
             const siblings = wrapper.parentElement?.querySelectorAll('[data-layout-id]') || [];
             const siblingArray = Array.from(siblings);
             const currentIndex = siblingArray.indexOf(wrapper);
             const isFirst = currentIndex === 0;
             const isLast = currentIndex === siblingArray.length - 1;
-            
+
             // 添加操作按钮
             const actionsHtml = generateWidgetHoverActionsHtml(layoutId, slotId, isExclusive, isFirst, isLast);
             wrapper.insertAdjacentHTML('afterbegin', actionsHtml);
         });
-        
+
         // 绑定按钮事件
         bindWidgetActionEvents(iframeDoc);
-        
+
         // 嵌套距离：mousemove 用 elementsFromPoint 更新栈，按 nestIndex 决定在哪一层显示操作条
         bindPenetrateStateEvents(iframeDoc);
-        
+
         // 绑定 slot 点击事件（选中 slot 后过滤部件并滚动）
         bindSlotClickEvents(iframeDoc);
-        
+
         // 初始化拖拽排序
         initWidgetSortable();
-        
+
         console.log('[ThemeEditor] Widget hover actions initialized,', widgetWrappers.length, 'widgets processed');
     }
 
@@ -4693,7 +6991,7 @@
         if (!doc || !doc.body) return;
         if (doc.body._penetrateStateBound) return;
         doc.body._penetrateStateBound = true;
-        
+
         doc.body.addEventListener('mousemove', function(e) {
             state.lastHoverPoint = { x: e.clientX, y: e.clientY };
             const stack = getWidgetStackAtPoint(doc, e.clientX, e.clientY);
@@ -4708,7 +7006,7 @@
             }
             setShowActionsByNest();
         });
-        
+
         doc.body.addEventListener('mouseleave', function() {
             state.nestStack = [];
             state.nestIndex = 0;
@@ -4724,27 +7022,34 @@
         // 防止重复绑定 — 每个 iframe document 只绑定一次
         if (doc.body._widgetActionsEventsBound) return;
         doc.body._widgetActionsEventsBound = true;
-        
+
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
             const button = e.target.closest('.widget-hover-actions button');
-            
+
             // 立即阻止事件传播（在检查之前）
             if (e.target.closest('.widget-hover-actions')) {
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
             }
-            
-            if (!button) return;
-            
+
+            if (!button) {
+                if (handleIframeWidgetElementClick(e.target)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }
+                return;
+            }
+
             console.log('[ThemeEditor] Widget action button clicked:', button.dataset.action);
-            
+
             const action = button.dataset.action;
             const bar = button.closest('.widget-hover-actions');
             const layoutId = bar ? bar.dataset.layoutId : button.dataset.layoutId;
             const slotId = button.dataset.slotId;
-            
+
             switch (action) {
                 case 'info': {
                     const effectiveLayoutId = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
@@ -4778,6 +7083,25 @@
                         setShowActionsByNest();
                     }
                     break;
+                case 'ai-edit':
+                case 'ai-rebuild':
+                case 'ai-image': {
+                    const effectiveLayoutId = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
+                        ? state.nestStack[state.nestIndex]
+                        : layoutId;
+                    let effectiveSlotId = slotId;
+                    const iframe = elements.previewFrame;
+                    if (iframe && iframe.contentDocument) {
+                        const targetWidget = iframe.contentDocument.querySelector(`[data-layout-id="${effectiveLayoutId}"]`);
+                        if (targetWidget) {
+                            effectiveSlotId = targetWidget.getAttribute('data-slot-id') ||
+                                targetWidget.closest('[data-wslot]')?.getAttribute('data-wslot') ||
+                                targetWidget.closest('[data-slot]')?.getAttribute('data-slot') || slotId;
+                        }
+                    }
+                    handleWidgetAiAction(action, effectiveLayoutId, effectiveSlotId, button);
+                    break;
+                }
                 case 'replace':
                 case 'delete':
                 case 'move-up':
@@ -4803,40 +7127,353 @@
         }, true); // 使用捕获阶段
     }
 
+    function getWidgetAiActionLabel(action) {
+        switch (action) {
+            case 'ai-edit':
+                return 'AI编辑';
+            case 'ai-rebuild':
+                return 'AI重建';
+            case 'ai-image':
+                return 'AI图片资源重新生成';
+            default:
+                return 'AI操作';
+        }
+    }
+
+    function setWidgetAiButtonLoading(button, loading) {
+        if (!button) return;
+        if (loading) {
+            button.dataset.originalTitle = button.getAttribute('title') || '';
+            button.disabled = true;
+            button.setAttribute('aria-busy', 'true');
+            button.setAttribute('title', 'AI处理中');
+            return;
+        }
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+        if (button.dataset.originalTitle) {
+            button.setAttribute('title', button.dataset.originalTitle);
+        }
+        delete button.dataset.originalTitle;
+    }
+
+    async function loadVirtualThemeAiCatalog(force = false) {
+        if (!force && state.virtualThemeAiCatalog) {
+            return state.virtualThemeAiCatalog;
+        }
+        const url = new URL(config.apiVirtualThemeAiCatalog, window.location.origin);
+        url.searchParams.set('adapter_code', 'theme');
+        const result = await apiJson(url.toString(), { silent: true });
+        if (!result.success) {
+            throw new Error(result.message || 'AI目录加载失败');
+        }
+        state.virtualThemeAiCatalog = result.data || {};
+        return state.virtualThemeAiCatalog;
+    }
+
+    function normalizeCatalogItems(catalog, key) {
+        const bucket = catalog && catalog[key] ? catalog[key] : {};
+        return Array.isArray(bucket.items) ? bucket.items : [];
+    }
+
+    function injectVirtualThemeAiDialogStyle() {
+        if (document.getElementById('virtual-theme-ai-dialog-style')) return;
+        const style = document.createElement('style');
+        style.id = 'virtual-theme-ai-dialog-style';
+        style.textContent = `
+            .virtual-theme-ai-dialog {
+                position: fixed;
+                inset: 0;
+                z-index: 10080;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .virtual-theme-ai-dialog__overlay {
+                position: absolute;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.45);
+            }
+            .virtual-theme-ai-dialog__panel {
+                position: relative;
+                width: min(560px, calc(100vw - 32px));
+                max-height: calc(100vh - 48px);
+                overflow: auto;
+                background: #fff;
+                border: 1px solid rgba(15, 23, 42, 0.12);
+                border-radius: 8px;
+                box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+            }
+            .virtual-theme-ai-dialog__head,
+            .virtual-theme-ai-dialog__foot {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 14px 16px;
+                border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+            }
+            .virtual-theme-ai-dialog__foot {
+                justify-content: flex-end;
+                border-top: 1px solid rgba(15, 23, 42, 0.08);
+                border-bottom: 0;
+            }
+            .virtual-theme-ai-dialog__body {
+                display: grid;
+                gap: 14px;
+                padding: 16px;
+            }
+            .virtual-theme-ai-dialog__title {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 700;
+            }
+            .virtual-theme-ai-dialog__field {
+                display: grid;
+                gap: 6px;
+            }
+            .virtual-theme-ai-dialog__label {
+                font-size: 12px;
+                color: #475569;
+                font-weight: 600;
+            }
+            .virtual-theme-ai-dialog__textarea,
+            .virtual-theme-ai-dialog__input {
+                width: 100%;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 8px 10px;
+                font: inherit;
+            }
+            .virtual-theme-ai-dialog__textarea {
+                min-height: 96px;
+                resize: vertical;
+            }
+            .virtual-theme-ai-dialog__grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+            }
+            .virtual-theme-ai-dialog__choice {
+                display: flex;
+                gap: 8px;
+                align-items: flex-start;
+                padding: 8px;
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                min-width: 0;
+            }
+            .virtual-theme-ai-dialog__choice span {
+                min-width: 0;
+                overflow-wrap: anywhere;
+                font-size: 12px;
+            }
+            .virtual-theme-ai-dialog__empty {
+                color: #64748b;
+                font-size: 12px;
+            }
+            @media (max-width: 640px) {
+                .virtual-theme-ai-dialog__grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function renderAiSkillChoices(items) {
+        if (!items.length) {
+            return '<div class="virtual-theme-ai-dialog__empty">暂无可选技能</div>';
+        }
+        return items.map((item) => {
+            const code = String(item.code || '');
+            const checked = item.locked || item.manual ? 'checked' : '';
+            const disabled = item.readonly && !item.locked && !item.manual ? 'disabled' : '';
+            return `<label class="virtual-theme-ai-dialog__choice">
+                <input type="checkbox" name="virtual_ai_skill" value="${escapeHtml(code)}" ${checked} ${disabled}>
+                <span><strong>${escapeHtml(item.name || code)}</strong><br><small>${escapeHtml(item.description || code)}</small></span>
+            </label>`;
+        }).join('');
+    }
+
+    function renderAiStyleChoices(items) {
+        const auto = `<label class="virtual-theme-ai-dialog__choice">
+            <input type="radio" name="virtual_ai_style" value="" checked>
+            <span><strong>自动匹配</strong><br><small>由 Theme AI 根据当前指令选择方向</small></span>
+        </label>`;
+        if (!items.length) {
+            return auto;
+        }
+        return auto + items.map((item) => {
+            const code = String(item.code || '');
+            return `<label class="virtual-theme-ai-dialog__choice">
+                <input type="radio" name="virtual_ai_style" value="${escapeHtml(code)}">
+                <span><strong>${escapeHtml(item.name || code)}</strong><br><small>${escapeHtml(item.description || code)}</small></span>
+            </label>`;
+        }).join('');
+    }
+
+    function readCheckedValues(root, selector) {
+        return Array.from(root.querySelectorAll(selector))
+            .filter(input => input.checked && !input.disabled)
+            .map(input => String(input.value || '').trim())
+            .filter(Boolean);
+    }
+
+    async function openVirtualThemeAiDialog(action, layoutId, slotId) {
+        let catalog = {};
+        try {
+            catalog = await loadVirtualThemeAiCatalog(false);
+        } catch (err) {
+            console.warn('[ThemeEditor] AI catalog unavailable:', err);
+        }
+        const label = getWidgetAiActionLabel(action);
+        const skillItems = normalizeCatalogItems(catalog, 'skills');
+        const styleItems = normalizeCatalogItems(catalog, 'styles');
+        injectVirtualThemeAiDialogStyle();
+
+        return new Promise((resolve) => {
+            const container = document.createElement('div');
+            container.className = 'virtual-theme-ai-dialog';
+            container.innerHTML = `
+                <div class="virtual-theme-ai-dialog__overlay" data-virtual-ai-cancel></div>
+                <div class="virtual-theme-ai-dialog__panel" role="dialog" aria-modal="true">
+                    <div class="virtual-theme-ai-dialog__head">
+                        <h3 class="virtual-theme-ai-dialog__title">${escapeHtml(label)}</h3>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-virtual-ai-cancel>×</button>
+                    </div>
+                    <div class="virtual-theme-ai-dialog__body">
+                        <div class="virtual-theme-ai-dialog__field">
+                            <label class="virtual-theme-ai-dialog__label">指令</label>
+                            <textarea class="virtual-theme-ai-dialog__textarea" data-virtual-ai-instructions placeholder="说明这个 block 要如何变化"></textarea>
+                        </div>
+                        <div class="virtual-theme-ai-dialog__field">
+                            <label class="virtual-theme-ai-dialog__label">技能</label>
+                            <div class="virtual-theme-ai-dialog__grid">${renderAiSkillChoices(skillItems)}</div>
+                        </div>
+                        <div class="virtual-theme-ai-dialog__field">
+                            <label class="virtual-theme-ai-dialog__label">方向</label>
+                            <div class="virtual-theme-ai-dialog__grid">${renderAiStyleChoices(styleItems)}</div>
+                        </div>
+                        <input type="hidden" data-virtual-ai-layout-id value="${escapeHtml(layoutId)}">
+                        <input type="hidden" data-virtual-ai-slot-id value="${escapeHtml(slotId || '')}">
+                    </div>
+                    <div class="virtual-theme-ai-dialog__foot">
+                        <button type="button" class="btn btn-outline-secondary" data-virtual-ai-cancel>取消</button>
+                        <button type="button" class="btn btn-primary" data-virtual-ai-confirm>${escapeHtml(label)}</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(container);
+            const cleanup = (value) => {
+                container.remove();
+                resolve(value);
+            };
+            container.querySelectorAll('[data-virtual-ai-cancel]').forEach(btn => {
+                btn.addEventListener('click', () => cleanup(null));
+            });
+            container.querySelector('[data-virtual-ai-confirm]')?.addEventListener('click', () => {
+                cleanup({
+                    instructions: String(container.querySelector('[data-virtual-ai-instructions]')?.value || ''),
+                    selected_skill_codes: readCheckedValues(container, 'input[name="virtual_ai_skill"]'),
+                    selected_style_codes: readCheckedValues(container, 'input[name="virtual_ai_style"]'),
+                    use_ai: true,
+                });
+            });
+            container.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') cleanup(null);
+            });
+            container.querySelector('[data-virtual-ai-instructions]')?.focus();
+        });
+    }
+
+    async function handleWidgetAiAction(action, layoutId, slotId, button) {
+        if (!layoutId) {
+            showToast('缺少 block 身份', 'warning');
+            return;
+        }
+        const dialog = await openVirtualThemeAiDialog(action, layoutId, slotId);
+        if (!dialog) {
+            return;
+        }
+
+        setWidgetAiButtonLoading(button, true);
+        try {
+            const result = await apiJson(config.apiVirtualThemeBlockAction, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: action,
+                    theme_id: state.themeId || 0,
+                    area: state.editorArea || 'frontend',
+                    page_type: state.layoutType || getCurrentPageType() || 'homepage',
+                    layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                    layout_option: state.layoutOption || 'default',
+                    layout_id: layoutId,
+                    slot_id: slotId || '',
+                    request_id: `block-${action}-${layoutId}-${Date.now()}`,
+                    instructions: dialog.instructions,
+                    selected_skill_codes: dialog.selected_skill_codes,
+                    selected_style_codes: dialog.selected_style_codes,
+                    use_ai: 1,
+                    ...getLayoutLockVirtualPayload(),
+                })
+            });
+            if (!result.success) {
+                throw new Error(result.message || `${getWidgetAiActionLabel(action)}失败`);
+            }
+
+            const data = result.data || {};
+            if (data.layout_option) {
+                await refreshLayoutOptions({
+                    layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                    layout_option: data.layout_option,
+                    silent: true
+                });
+            }
+            showToast(result.message || `${getWidgetAiActionLabel(action)}草稿已生成`, 'success');
+        } catch (err) {
+            console.error('[ThemeEditor] block AI action failed:', err);
+            showToast(err.message || `${getWidgetAiActionLabel(action)}失败`, 'error');
+        } finally {
+            setWidgetAiButtonLoading(button, false);
+        }
+    }
+
     /**
      * 绑定 iframe 内 slot 的点击事件
      * 点击 slot 时：选中该 slot，过滤右侧部件列表，并滚动到匹配的部件
      */
     function bindSlotClickEvents(doc) {
         if (!doc || !doc.body) return;
-        
+
         // 防止重复绑定 — 每个 iframe document 只绑定一次
         if (doc.body._slotClickEventsBound) return;
         doc.body._slotClickEventsBound = true;
-        
+
         // 使用事件委托，监听所有 slot 的点击
         doc.body.addEventListener('click', function(e) {
             // 操作按钮点击始终跳过
             if (e.target.closest('.widget-hover-actions')) {
                 return;
             }
-            
+
             // 查找点击的 slot 元素（支持多种标记方式）
-            const slotEl = e.target.closest('[data-slot]') || 
+            const slotEl = e.target.closest('[data-slot]') ||
                           e.target.closest('[data-wslot]') ||
                           e.target.closest('.content-slot');
-            
+
             if (!slotEl) return;
-            
+
             // 如果点击的是 widget-wrapper 内的子插槽，优先处理子插槽选择
             // 只有点击 widget-wrapper 但没有命中子插槽时才跳过
             const inWidgetWrapper = e.target.closest('.widget-wrapper') || e.target.closest('[data-layout-id]');
             if (inWidgetWrapper && !e.target.closest('[data-wslot]') && !e.target.closest('[data-slot]')) {
                 return;
             }
-            
+
             // 获取 slot 信息
-            const slotId = slotEl.getAttribute('data-slot') || 
+            const slotId = slotEl.getAttribute('data-slot') ||
                           slotEl.getAttribute('data-wslot') || '';
             const slotName = slotEl.getAttribute('data-name') ||
                             slotEl.getAttribute('data-wslot-name') ||
@@ -4844,34 +7481,40 @@
                             slotId;
             const acceptAttr = slotEl.getAttribute('data-accept') ||
                               slotEl.getAttribute('data-wslot-accept') || '*';
-            
+            const rejectAttr = slotEl.getAttribute('data-wslot-reject') || '';
+
             if (!slotId) return;
-            
+
             // 读取 slot 的 position 属性（区域定位）
-            const positionAttr = slotEl.getAttribute('data-wslot-position') || 
+            const positionAttr = slotEl.getAttribute('data-wslot-position') ||
                                 slotEl.getAttribute('data-position') || '';
-            
+
             console.log('[ThemeEditor] Slot clicked in iframe:', slotId, 'accept:', acceptAttr, 'position:', positionAttr);
-            
+
             // 构造 slot 信息，area 优先使用 position 属性
             const slotInfo = {
                 id: slotId,
                 name: slotName,
                 accept: acceptAttr,
+                reject: rejectAttr,
+                max: slotEl.getAttribute('data-wslot-max') || '',
+                min: slotEl.getAttribute('data-wslot-min') || '',
+                exclusive: slotEl.getAttribute('data-wslot-exclusive') === 'true',
+                multiple: slotEl.getAttribute('data-wslot-multiple') !== 'false',
                 area: positionAttr || ''  // 使用 position 作为区域
             };
-            
+
             // 调用 slot 选中处理函数（这会过滤部件并滚动）
             handleSlotSelected(slotInfo);
-            
+
             // 高亮被点击的 slot
             doc.querySelectorAll('[data-slot], [data-wslot], .content-slot').forEach(el => {
                 el.classList.remove('slot-selected');
             });
             slotEl.classList.add('slot-selected');
-            
+
         }, false);
-        
+
         console.log('[ThemeEditor] Slot click events bound in iframe');
     }
 
@@ -4880,42 +7523,43 @@
      */
     function handleWidgetReplace(layoutId, slotId) {
         console.log('[ThemeEditor] Replace widget:', layoutId, 'in slot:', slotId);
-        
+
         // 选中对应的插槽
         if (slotId) {
             // 构造插槽信息并触发选中
-            const slotInfo = { 
-                id: slotId, 
+            const slotInfo = {
+                id: slotId,
                 name: slotId,
                 accept: '*'  // 默认接受所有部件，后续可通过插槽配置获取
             };
-            
+
             // 尝试从 iframe 获取插槽的 accept 属性
             const iframe = elements.previewFrame;
             if (iframe && iframe.contentDocument) {
-                const slotEl = iframe.contentDocument.querySelector(`[data-wslot="${slotId}"]`) ||
-                               iframe.contentDocument.querySelector(`[data-slot="${slotId}"]`);
+                const slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
+                               iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId));
                 if (slotEl) {
-                    slotInfo.accept = slotEl.getAttribute('data-wslot-accept') || 
+                    slotInfo.accept = slotEl.getAttribute('data-wslot-accept') ||
                                       slotEl.getAttribute('data-accept') || '*';
-                    slotInfo.name = slotEl.getAttribute('data-wslot-name') || 
+                    slotInfo.reject = slotEl.getAttribute('data-wslot-reject') || '';
+                    slotInfo.name = slotEl.getAttribute('data-wslot-name') ||
                                     slotEl.getAttribute('data-name') || slotId;
                 }
             }
-            
+
             // 使用现有的插槽选中处理函数
             handleSlotSelected(slotInfo);
         }
-        
+
         // 滚动部件面板到顶部
         const widgetPanel = document.querySelector('.editor-widget-panel .widget-list');
         if (widgetPanel) {
             widgetPanel.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        
+
         // 高亮显示符合的部件
         highlightCompatibleWidgets(slotId);
-        
+
         showToast('请从右侧选择新部件进行替换', 'info');
     }
 
@@ -4927,14 +7571,16 @@
         document.querySelectorAll('.widget-item.highlight').forEach(el => {
             el.classList.remove('highlight');
         });
-        
+
         // 如果有选中的插槽信息
         if (state.selectedSlot && state.selectedSlot.accept) {
-            const acceptList = state.selectedSlot.accept.split(',').map(s => s.trim());
-            
             document.querySelectorAll('.widget-item').forEach(item => {
-                const widgetCode = item.dataset.widgetCode;
-                if (acceptList.includes('*') || acceptList.includes(widgetCode)) {
+                if (slotAcceptsWidgetCodes(
+                    state.selectedSlot.accept,
+                    state.selectedSlot.reject,
+                    state.selectedSlot.id || slotId,
+                    collectWidgetElementSupportCodes(item)
+                )) {
                     item.classList.add('highlight');
                 }
             });
@@ -4951,7 +7597,7 @@
      */
     async function handleWidgetDelete(layoutId, slotId) {
         console.log('[ThemeEditor] Delete widget:', layoutId, 'in slot:', slotId);
-        
+
         // 确认删除 - 使用自定义对话框
         const confirmed = await showCustomConfirm(
             '确认删除部件？',
@@ -4959,17 +7605,17 @@
             '确认删除',
             '取消'
         );
-        
+
         if (!confirmed) {
             return;
         }
-        
+
         // 从 iframe DOM 推断 area（header/footer/content）
         let area = 'content';
         try {
             const iframe = elements.previewFrame;
             if (iframe && iframe.contentDocument) {
-                const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                 if (widgetEl) {
                     // 检查是否在 header/footer 区域
                     if (widgetEl.closest('header, [data-wslot-position="header"], .site-header')) {
@@ -4980,10 +7626,10 @@
                 }
             }
         } catch (e) { /* iframe access error */ }
-        
+
         try {
             // 调用删除 API - 传递 slot_id 和 area 作为后端 fallback
-            const response = await fetch(config.apiDeleteWidget, {
+            const result = await apiJson(config.apiDeleteWidget, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4998,23 +7644,21 @@
                     layout_option: state.layoutOption || 'default'
                 })
             });
-            
-            const result = await response.json();
-            
+
             if (result.success) {
                 // 从 iframe 中移除部件并恢复原始内容
                 const iframe = elements.previewFrame;
                 if (iframe && iframe.contentDocument) {
-                    const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                    const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                     if (widgetEl) {
                         const slot = widgetEl.closest('[data-wslot], [data-slot]');
                         const actualSlotId = slot?.getAttribute('data-wslot') || slot?.getAttribute('data-slot');
-                        
+
                         // 移除部件元素
                         widgetEl.remove();
-                        
+
                         const remainingWidgets = slot ? slot.querySelector('[data-layout-id]') : null;
-                        
+
                         // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
                         if (slot && !remainingWidgets) {
                             if (result.has_original && result.original_html) {
@@ -5040,15 +7684,15 @@
                         }
                     }
                 }
-                
+
                 // 从结构视图中移除
-                const structureItem = document.querySelector(`.preview-widget-item[data-layout-id="${layoutId}"]`);
+                const structureItem = document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
                 if (structureItem) {
                     structureItem.remove();
                 }
-                
+
                 showToast('部件已删除', 'success');
-                
+
                 // 更新同层部件的移动按钮状态（如果有的话）
                 if (slotId) {
                     updateSiblingMoveButtons(slotId);
@@ -5071,7 +7715,7 @@
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
 
-        const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+        const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
         if (!widgetEl) return;
 
         const prevWidget = widgetEl.previousElementSibling;
@@ -5098,7 +7742,7 @@
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
 
-        const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+        const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
         if (!widgetEl) return;
 
         const nextWidget = widgetEl.nextElementSibling;
@@ -5122,7 +7766,7 @@
      */
     async function swapWidgetOrder(layoutId1, layoutId2) {
         try {
-            const response = await fetch(config.apiBase + '/swap-widget-order', {
+            const result = await apiJson(config.apiBase + '/swap-widget-order', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5134,8 +7778,6 @@
                     layout_id_2: layoutId2
                 })
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 const iframe = elements.previewFrame;
@@ -5172,20 +7814,20 @@
     function updateSiblingMoveButtons(slotId) {
         const iframe = elements.previewFrame;
         if (!iframe || !iframe.contentDocument) return;
-        
+
         // 找到插槽
-        let slotEl = iframe.contentDocument.querySelector(`[data-wslot="${slotId}"]`) ||
-                     iframe.contentDocument.querySelector(`[data-slot="${slotId}"]`);
-        
+        let slotEl = iframe.contentDocument.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
+                     iframe.contentDocument.querySelector(dataAttributeSelector('data-slot', slotId));
+
         if (!slotEl) return;
-        
+
         // 获取插槽内所有部件
         const widgets = slotEl.querySelectorAll('[data-layout-id]');
-        
+
         widgets.forEach((widget, index) => {
             const upBtn = widget.querySelector('.btn-widget-move-up');
             const downBtn = widget.querySelector('.btn-widget-move-down');
-            
+
             if (upBtn) {
                 upBtn.disabled = (index === 0);
             }
@@ -5373,8 +8015,8 @@
         if (!iframe || !iframe.contentDocument || !slotId) return false;
 
         const iframeDoc = iframe.contentDocument;
-        const slotEl = iframeDoc.querySelector(`[data-wslot="${slotId}"]`) ||
-                       iframeDoc.querySelector(`[data-slot="${slotId}"]`);
+        const slotEl = iframeDoc.querySelector(dataAttributeSelector('data-wslot', slotId)) ||
+                       iframeDoc.querySelector(dataAttributeSelector('data-slot', slotId));
         if (!slotEl) return false;
 
         // 找到装部件的容器：取第一个带 data-layout-id 的节点的 parentNode
@@ -5391,7 +8033,7 @@
         });
 
         try {
-            const response = await fetch(config.apiBase + '/update-sort', {
+            const result = await apiJson(config.apiBase + '/update-sort', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5402,8 +8044,6 @@
                     sort_data: sortData
                 })
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast('排序已保存', 'success');
@@ -5455,7 +8095,7 @@
      * 获取下一个排序值
      */
     function getNextSortOrder(area) {
-        const areaWidgets = document.querySelector(`.area-widgets[data-area="${area}"]`);
+        const areaWidgets = document.querySelector(`.area-widgets${dataAttributeSelector('data-area', area)}`);
         if (!areaWidgets) return 0;
         return areaWidgets.querySelectorAll('.preview-widget-item').length;
     }
@@ -5474,6 +8114,7 @@
         state.selectedWidget = widgetElement;
 
         // 加载配置面板
+        setConfigMode('widget');
         loadWidgetConfig(widgetElement);
     }
 
@@ -5518,8 +8159,6 @@
     async function openConfigModal(widgetElement) {
         const modal = document.getElementById('widgetConfigModal');
         const modalBody = document.getElementById('widgetConfigModalBody');
-        const modalInstance = bootstrap.Modal.getOrCreateInstance(modal);
-        
         // 显示加载状态
         modalBody.innerHTML = `
             <div class="text-center py-4">
@@ -5528,10 +8167,10 @@
                 </div>
             </div>
         `;
-        
+
         // 打开模态框
-        modalInstance.show();
-        
+        showEditorModal(modal);
+
         // 加载配置
         await loadWidgetConfigForModal(widgetElement, modalBody);
     }
@@ -5547,6 +8186,14 @@
         const responsiveViewport = document.getElementById('componentPreviewViewportResponsive');
         const responsiveInput = document.getElementById('componentPreviewResponsiveWidth');
         const responsiveLabel = document.getElementById('componentPreviewResponsiveWidthLabel');
+        const renderPreviewError = function(el, message) {
+            if (!el) return;
+            el.innerHTML = '';
+            const error = document.createElement('div');
+            error.className = 'widget-preview-error';
+            error.textContent = message || (typeof __ !== 'undefined' ? __('加载失败') : '加载失败');
+            el.appendChild(error);
+        };
 
         if (!modal || !inners.length) return;
 
@@ -5554,20 +8201,24 @@
         loadingEl?.classList.add('visible');
         inners.forEach(el => { el.innerHTML = ''; });
 
-        const modalInstance = bootstrap.Modal.getOrCreateInstance(modal);
-        modalInstance.show();
+        showEditorModal(modal);
 
         try {
             const url = new URL(config.apiWidgetPreview, window.location.origin);
             url.searchParams.set('widget_module', widgetModule);
             url.searchParams.set('widget_code', widgetCode);
-            const res = await fetch(url.toString());
-            const data = await res.json();
-            const html = (data && data.html) ? data.html : (data.success === false ? '<div class="widget-preview-error">' + (data.message || '') + '</div>' : '');
-            inners.forEach(el => { el.innerHTML = html; });
+            const data = await apiJson(url.toString());
+            if (data && data.html) {
+                const html = sanitizeHtmlForEditorPreview(data.html);
+                inners.forEach(el => { el.innerHTML = html; });
+            } else if (data && data.success === false) {
+                inners.forEach(el => renderPreviewError(el, data.message || ''));
+            } else {
+                inners.forEach(el => { el.innerHTML = ''; });
+            }
         } catch (err) {
             const errMsg = err && err.message ? err.message : String(err);
-            inners.forEach(el => { el.innerHTML = '<div class="widget-preview-error">' + (errMsg || '加载失败') + '</div>'; });
+            inners.forEach(el => renderPreviewError(el, errMsg || ''));
         }
         loadingEl?.classList.remove('visible');
 
@@ -5577,7 +8228,7 @@
                 responsiveViewport.style.width = w + 'px';
                 responsiveLabel.textContent = w + 'px';
             };
-            responsiveInput.oninput = updateResponsiveWidth;
+            responsiveInput.addEventListener('input', updateResponsiveWidth);
             updateResponsiveWidth();
         }
     }
@@ -5585,6 +8236,74 @@
     /**
      * 加载部件配置（用于模态框）
      */
+    function buildSavedWidgetConfigUrl(layoutId, locale) {
+        const apiUrl = new URL(`${config.apiBase}/widget-config`, window.location.origin);
+        apiUrl.searchParams.set('layout_id', layoutId);
+        if (locale) {
+            apiUrl.searchParams.set('locale', locale);
+        }
+        return apiUrl.toString();
+    }
+
+    async function loadSavedWidgetConfig(layoutId, locale) {
+        const result = await apiJson(buildSavedWidgetConfigUrl(layoutId, locale));
+        if (!result || !result.success || !result.data) {
+            throw new Error((result && result.message) || 'Widget config load failed');
+        }
+        return result.data;
+    }
+
+    function getWidgetElementMeta(widgetElement, widgetCode, params) {
+        const name = widgetElement?.querySelector('.widget-name')?.textContent?.replace(/\s+/g, ' ').trim() || widgetCode || '';
+        const description = widgetElement?.querySelector('.widget-preview')?.textContent?.replace(/\s+/g, ' ').trim() || '';
+        return { name, description, params: params || {} };
+    }
+
+    async function renderWidgetConfigModalWithMeta(layoutId, widgetMeta, widgetConfig, modalBody, widgetElement, widgetCode, widgetType, widgetModule) {
+        const params = (widgetMeta && widgetMeta.params && typeof widgetMeta.params === 'object') ? widgetMeta.params : {};
+        const formHtml = await generateWidgetConfigForm(layoutId, params, widgetConfig);
+        if (formHtml && formHtml.trim() && !formHtml.includes('alert-danger') && (formHtml.includes('w-param-form') || formHtml.includes('<form'))) {
+            const typeIcons = { 'header': 'ri-layout-top-line', 'footer': 'ri-layout-bottom-line', 'sidebar': 'ri-layout-left-line', 'banner': 'ri-image-line', 'carousel': 'ri-slideshow-line', 'product': 'ri-shopping-bag-line', 'category': 'ri-folder-line', 'navigation': 'ri-menu-line', 'search': 'ri-search-line', 'social': 'ri-share-line', 'newsletter': 'ri-mail-line', 'content': 'ri-file-text-line' };
+            const icon = typeIcons[widgetType] || 'ri-widgets-line';
+            const widgetName = escapeHtml(widgetMeta?.name || widgetCode || '');
+            const widgetDesc = escapeHtml((widgetMeta?.description || '') + '');
+            const headerHtml = `<div class="widget-config-panel"><div class="config-header"><div class="config-widget-info"><div class="widget-icon"><i class="${icon}"></i></div><div class="widget-meta"><h4 class="widget-name">${widgetName}</h4><p class="widget-desc">${widgetDesc}</p></div></div></div>`;
+            const searchWrap = '<div class="w-param-search-wrap mb-2"><input type="text" class="w-param-search form-control form-control-sm" placeholder="Search config" autocomplete="off"></div>';
+            modalBody.innerHTML = headerHtml + searchWrap + formHtml + '<div class="config-actions"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button></div></div>';
+            const form = modalBody.querySelector('.w-param-form');
+            if (form) {
+                form.id = 'widgetConfigFormModal';
+                form.setAttribute('data-layout-id', layoutId);
+                if (widgetElement) {
+                    form.setAttribute('data-widget-element-id', 'widget_' + layoutId);
+                }
+                const debounceMs = 400;
+                let autoSaveTimer = null;
+                function scheduleAutoSave() {
+                    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+                    autoSaveTimer = setTimeout(function() {
+                        autoSaveTimer = null;
+                        saveWidgetConfigFromModal(form, widgetElement, { autoSave: true });
+                    }, debounceMs);
+                }
+                form.addEventListener('input', scheduleAutoSave);
+                form.addEventListener('change', scheduleAutoSave);
+            }
+            bindAccordionFormEvents(modalBody);
+            bindParamSearch(modalBody);
+            return;
+        }
+
+        renderConfigFormToModal({
+            layout_id: layoutId,
+            widget_code: widgetCode,
+            widget_module: widgetModule,
+            widget_type: widgetType,
+            config: widgetConfig,
+            meta: widgetMeta,
+        }, params, modalBody, widgetElement);
+    }
+
     async function loadWidgetConfigForModal(widgetElement, modalBody) {
         modalBody.setAttribute('data-theme-editor-config-modal', '1');
         const layoutId = widgetElement.dataset.layoutId;
@@ -5592,6 +8311,28 @@
         const widgetCode = widgetElement.dataset.widgetCode;
         const widgetType = widgetElement.dataset.widgetType;
         let widgetConfig = {};
+
+        if (layoutId) {
+            try {
+                const savedData = await loadSavedWidgetConfig(layoutId);
+                const params = (savedData.params && typeof savedData.params === 'object') ? savedData.params : {};
+                const savedConfig = (savedData.config && typeof savedData.config === 'object') ? savedData.config : {};
+                const meta = getWidgetElementMeta(widgetElement, savedData.widget_code || widgetCode, params);
+                await renderWidgetConfigModalWithMeta(
+                    layoutId,
+                    meta,
+                    savedConfig,
+                    modalBody,
+                    widgetElement,
+                    savedData.widget_code || widgetCode,
+                    savedData.widget_type || widgetType,
+                    savedData.widget_module || widgetModule
+                );
+                return;
+            } catch (err) {
+                console.warn('[ThemeEditor] saved widget config endpoint failed, try widget library:', err);
+            }
+        }
 
         try {
             widgetConfig = JSON.parse(widgetElement.dataset.config || '{}');
@@ -5676,6 +8417,26 @@
         const widgetType = widgetElement.dataset.widgetType;
         let widgetConfig = {};
 
+        if (layoutId) {
+            try {
+                const savedData = await loadSavedWidgetConfig(layoutId);
+                const params = (savedData.params && typeof savedData.params === 'object') ? savedData.params : {};
+                const savedConfig = (savedData.config && typeof savedData.config === 'object') ? savedData.config : {};
+                const meta = getWidgetElementMeta(widgetElement, savedData.widget_code || widgetCode, params);
+                await renderConfigFormWithBackend({
+                    layout_id: layoutId,
+                    widget_code: savedData.widget_code || widgetCode,
+                    widget_module: savedData.widget_module || widgetModule,
+                    widget_type: savedData.widget_type || widgetType,
+                    config: savedConfig,
+                    meta,
+                }, params);
+                return;
+            } catch (err) {
+                console.warn('[ThemeEditor] saved widget config endpoint failed, try widget library:', err);
+            }
+        }
+
         try {
             widgetConfig = JSON.parse(widgetElement.dataset.config || '{}');
         } catch (e) {
@@ -5701,7 +8462,7 @@
                 }
 
                 if (widgetMeta) {
-                    renderConfigForm({
+                    await renderConfigFormWithBackend({
                         layout_id: layoutId,
                         widget_code: widgetCode,
                         widget_module: widgetModule,
@@ -5742,6 +8503,8 @@
         const widgetName = widget.meta?.name || widget.widget_code;
         const widgetDesc = widget.meta?.description || '';
         const savedConfig = widget.config || {};
+        const safeLayoutId = escapeHtml(widget.layout_id || '');
+        const safeWidgetElementId = widgetElement ? escapeHtml('widget_' + widget.layout_id) : '';
 
         let html = `
             <div class="widget-config-panel">
@@ -5756,7 +8519,7 @@
                         </div>
                     </div>
                 </div>
-                <form class="config-form" id="widgetConfigFormModal" data-layout-id="${widget.layout_id}" data-widget-element-id="${widgetElement ? 'widget_' + widget.layout_id : ''}">
+                <form class="config-form" id="widgetConfigFormModal" data-layout-id="${safeLayoutId}" data-widget-element-id="${safeWidgetElementId}">
         `;
 
         if (Object.keys(params).length === 0) {
@@ -5767,7 +8530,8 @@
         } else {
             for (const key in params) {
                 const param = params[key];
-                const type = param.type || 'string';
+                const type = getParamUiType(param);
+                const semanticType = param.type || type;
                 const label = param.label || key;
                 const defaultVal = param.default || '';
                 const value = savedConfig[key] !== undefined ? savedConfig[key] : defaultVal;
@@ -5776,9 +8540,12 @@
                 const placeholder = param.placeholder || '';
                 const options = param.options || {};
                 const translatable = isFieldTranslatable(param);
+                const safeKey = escapeHtml(key);
+                const safeFieldId = escapeHtml(`config_${key}`);
+                const safeValue = escapeHtml(value);
 
                 html += `<div class="config-field${translatable ? ' translatable-field' : ''}">`;
-                html += `<label class="config-label" for="config_${key}">`;
+                html += `<label class="config-label" for="${safeFieldId}">`;
                 html += escapeHtml(label);
                 if (required) html += ' <span class="required-mark">*</span>';
                 if (translatable) html += ' <i class="ri-translate-2 translatable-icon" title="支持多语言"></i>';
@@ -5786,18 +8553,15 @@
                 html += `<div class="config-field-input">`;
 
                 if (type === 'string') {
-                    html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                    html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                             value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
                 } else if (type === 'number') {
-                    html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
-                } else if (type === 'boolean') {
-                    html += `<div class="form-check form-switch">
-                        <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
-                        <label class="form-check-label" for="config_${key}">启用</label>
-                    </div>`;
+                    html += `<input type="number" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                             value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                } else if (isBooleanParamType(semanticType)) {
+                    html += renderBooleanSelect(`config_${key}`, key, key, value, required, param);
                 } else if (type === 'select') {
-                    html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
+                    html += `<select class="form-select" id="${safeFieldId}" name="${safeKey}" ${required ? 'required' : ''}>
                         <option value="">-- 请选择 --</option>`;
                     for (const optVal in options) {
                         html += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
@@ -5806,30 +8570,31 @@
                 } else if (type === 'url') {
                     html += `<div class="input-with-icon">
                         <i class="ri-link"></i>
-                        <input type="url" class="form-control" id="config_${key}" name="${key}" 
-                               value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
+                        <input type="url" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                               value="${safeValue}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
                     </div>`;
                 } else if (type === 'image') {
+                    const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
                     html += `<div class="input-group">
-                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片 URL 或上传">
-                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}" title="选择图片">
+                        <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="图片 URL 或上传">
+                        <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="${safeFieldId}" title="选择图片">
                             ${iconSvg('image')}
                         </button>
                     </div>`;
-                    if (value) {
-                        html += `<div class="mt-2"><img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
+                    if (safeImageUrl) {
+                        html += `<div class="mt-2"><img src="${safeImageUrl}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
                     }
                 } else if (type === 'color') {
                     html += `<div class="color-picker-wrapper">
-                        <input type="color" class="form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}">
-                        <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000" style="font-family: monospace;">
+                        <input type="color" class="form-control-color" id="${safeFieldId}_picker" value="${escapeHtml(value || '#000000')}">
+                        <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="#000000" style="font-family: monospace;">
                     </div>`;
                 } else if (type === 'textarea') {
-                    html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="4" 
-                             placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+                    html += `<textarea class="form-control" id="${safeFieldId}" name="${safeKey}" rows="4"
+                             placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${safeValue}</textarea>`;
                 } else {
-                    html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                             value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+                    html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                             value="${safeValue}" ${required ? 'required' : ''}>`;
                 }
 
                 html += `</div>`; // .config-field-input
@@ -5853,7 +8618,7 @@
         `;
 
         modalBody.innerHTML = html;
-        
+
         // 实时保存：任意修改后防抖保存，不关闭模态框
         const form = document.getElementById('widgetConfigFormModal');
         if (form) {
@@ -5870,7 +8635,7 @@
             form.addEventListener('input', scheduleAutoSave);
             form.addEventListener('change', scheduleAutoSave);
         }
-        
+
         // 绑定颜色选择器同步
         modalBody.querySelectorAll('.form-control-color').forEach(colorPicker => {
             colorPicker.addEventListener('input', function() {
@@ -5885,6 +8650,81 @@
     /**
      * 渲染配置表单（左侧面板，保留兼容性）
      */
+    async function renderConfigFormWithBackend(widget, params) {
+        const typeIcons = {
+            'header': 'ri-layout-top-line',
+            'footer': 'ri-layout-bottom-line',
+            'sidebar': 'ri-layout-left-line',
+            'banner': 'ri-image-line',
+            'carousel': 'ri-slideshow-line',
+            'product': 'ri-shopping-bag-line',
+            'category': 'ri-folder-line',
+            'navigation': 'ri-menu-line',
+            'search': 'ri-search-line',
+            'social': 'ri-share-line',
+            'newsletter': 'ri-mail-line',
+            'content': 'ri-file-text-line',
+        };
+        const icon = typeIcons[widget.widget_type] || 'ri-widgets-line';
+        const widgetName = widget.meta?.name || widget.widget_code;
+        const widgetDesc = widget.meta?.description || '';
+        const layoutId = widget.layout_id || '';
+        const formHtml = await generateWidgetConfigForm(layoutId, params, widget.config || {});
+        const searchPlaceholder = (typeof __ !== 'undefined' ? __('Search config') : 'Search config');
+
+        elements.configContent.innerHTML = `
+            <div class="widget-config-panel">
+                <div class="config-header">
+                    <div class="config-widget-info">
+                        <div class="widget-icon">
+                            <i class="${icon}"></i>
+                        </div>
+                        <div class="widget-meta">
+                            <h4 class="widget-name">${escapeHtml(widgetName)}</h4>
+                            <p class="widget-desc">${escapeHtml(widgetDesc)}</p>
+                        </div>
+                    </div>
+                    <div class="config-lang-switcher">
+                        <select class="form-select form-select-sm" id="configLangSwitcher" data-widget-layout-id="${layoutId}">
+                            <option value="">&#40664;&#35748;&#65288;&#20840;&#35821;&#35328;&#65289;</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="w-param-search-wrap mb-2">
+                    <input type="text" class="w-param-search form-control form-control-sm" placeholder="${searchPlaceholder}" autocomplete="off">
+                </div>
+                ${formHtml}
+            </div>
+        `;
+
+        const form = elements.configContent.querySelector('.w-param-form, .widget-accordion-config-form');
+        if (form) {
+            form.id = 'widgetConfigForm';
+            form.setAttribute('data-layout-id', layoutId);
+        }
+        bindAccordionFormEvents(elements.configContent);
+        bindParamSearch(elements.configContent);
+        bindConfigLangSwitcher();
+    }
+
+    function bindConfigLangSwitcher() {
+        const langSwitcher = document.getElementById('configLangSwitcher');
+        if (!langSwitcher) return;
+        fetchInstalledLocales().then(locales => {
+            for (const loc of locales) {
+                const opt = document.createElement('option');
+                opt.value = loc.code;
+                opt.textContent = loc.name;
+                langSwitcher.appendChild(opt);
+            }
+        });
+        langSwitcher.addEventListener('change', async function() {
+            const locale = this.value || null;
+            const layoutId = this.dataset.widgetLayoutId;
+            await reloadWidgetConfigWithLocale(layoutId, locale);
+        });
+    }
+
     function renderConfigForm(widget, params) {
         const typeIcons = {
             'header': 'ri-layout-top-line',
@@ -5941,7 +8781,7 @@
                 if (!groups[groupName]) groups[groupName] = [];
                 groups[groupName].push({ key, ...param });
             }
-            
+
             const groupIcons = {
                 '基础配置': 'ri-settings-3-line',
                 '样式': 'ri-palette-line',
@@ -5949,25 +8789,26 @@
                 '数据': 'ri-database-2-line',
                 '高级': 'ri-code-s-slash-line',
             };
-            
+
             for (const groupName in groups) {
                 const groupFields = groups[groupName];
                 const groupIcon = groupIcons[groupName] || 'ri-folder-settings-line';
                 const isSingleGroup = Object.keys(groups).length === 1;
-                
+
                 // 单分组不显示分组标题，直接展示字段
                 if (!isSingleGroup) {
                     html += `<div class="config-group">
-                        <h5 class="config-group-title" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <h5 class="config-group-title" data-config-group-toggle>
                             <i class="${groupIcon}"></i> ${escapeHtml(groupName)}
                             ${iconSvg('arrowDown')}
                         </h5>
                         <div class="config-fields">`;
                 }
-                
+
                 for (const field of groupFields) {
                     const key = field.key;
-                    const type = field.type || 'string';
+                    const type = getParamUiType(field);
+                    const semanticType = field.type || type;
                     const label = field.label || key;
                     const defaultVal = field.default || '';
                     const value = savedConfig[key] !== undefined ? savedConfig[key] : defaultVal;
@@ -5976,9 +8817,12 @@
                     const placeholder = field.placeholder || '';
                     const options = field.options || {};
                     const translatable = isFieldTranslatable(field);
-                    
+                    const safeKey = escapeHtml(key);
+                    const safeFieldId = escapeHtml(`config_${key}`);
+                    const safeValue = escapeHtml(value);
+
                     html += `<div class="config-field${translatable ? ' translatable-field' : ''}">`;
-                    html += `<label class="config-label" for="config_${key}">`;
+                    html += `<label class="config-label" for="${safeFieldId}">`;
                     html += escapeHtml(label);
                     if (required) html += ' <span class="required-mark">*</span>';
                     if (translatable) html += ' <i class="ri-translate-2 translatable-icon" title="支持多语言"></i>';
@@ -5986,18 +8830,15 @@
                     html += `<div class="config-field-input">`;
 
                     if (type === 'string') {
-                        html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                                 value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                        html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                                 value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
                     } else if (type === 'number') {
-                        html += `<input type="number" class="form-control" id="config_${key}" name="${key}" 
-                                 value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
-                    } else if (type === 'boolean') {
-                        html += `<div class="form-check form-switch">
-                            <input type="checkbox" class="form-check-input" id="config_${key}" name="${key}" value="1" ${value ? 'checked' : ''}>
-                            <label class="form-check-label" for="config_${key}">启用</label>
-                        </div>`;
+                        html += `<input type="number" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                                 value="${safeValue}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>`;
+                    } else if (isBooleanParamType(semanticType)) {
+                        html += renderBooleanSelect(`config_${key}`, key, key, value, required, field);
                     } else if (type === 'select') {
-                        html += `<select class="form-select" id="config_${key}" name="${key}" ${required ? 'required' : ''}>
+                        html += `<select class="form-select" id="${safeFieldId}" name="${safeKey}" ${required ? 'required' : ''}>
                             <option value="">-- 请选择 --</option>`;
                         for (const optVal in options) {
                             html += `<option value="${escapeHtml(optVal)}" ${value == optVal ? 'selected' : ''}>${escapeHtml(options[optVal])}</option>`;
@@ -6006,30 +8847,31 @@
                     } else if (type === 'url') {
                         html += `<div class="input-with-icon">
                             <i class="ri-link"></i>
-                            <input type="url" class="form-control" id="config_${key}" name="${key}" 
-                                   value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
+                            <input type="url" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                                   value="${safeValue}" placeholder="${escapeHtml(placeholder || 'https://')}" ${required ? 'required' : ''}>
                         </div>`;
                     } else if (type === 'image') {
+                        const safeImageUrl = escapeHtml(sanitizeUrlForAttribute(value, ''));
                         html += `<div class="input-group">
-                            <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="图片 URL 或上传">
-                            <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="config_${key}" title="选择图片">
+                            <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="图片 URL 或上传">
+                            <button type="button" class="btn btn-outline-secondary btn-select-image" data-target="${safeFieldId}" title="选择图片">
                                 ${iconSvg('image')}
                             </button>
                         </div>`;
-                        if (value) {
-                            html += `<div class="mt-2"><img src="${escapeHtml(value)}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
+                        if (safeImageUrl) {
+                            html += `<div class="mt-2"><img src="${safeImageUrl}" class="img-thumbnail" style="max-height: 80px; border-radius: 8px;"></div>`;
                         }
                     } else if (type === 'color') {
                         html += `<div class="color-picker-wrapper">
-                            <input type="color" class="form-control-color" id="config_${key}_picker" value="${escapeHtml(value || '#000000')}">
-                            <input type="text" class="form-control" id="config_${key}" name="${key}" value="${escapeHtml(value)}" placeholder="#000000" style="font-family: monospace;">
+                            <input type="color" class="form-control-color" id="${safeFieldId}_picker" value="${escapeHtml(value || '#000000')}">
+                            <input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}" value="${safeValue}" placeholder="#000000" style="font-family: monospace;">
                         </div>`;
                     } else if (type === 'textarea') {
-                        html += `<textarea class="form-control" id="config_${key}" name="${key}" rows="4" 
-                                 placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${escapeHtml(value)}</textarea>`;
+                        html += `<textarea class="form-control" id="${safeFieldId}" name="${safeKey}" rows="4"
+                                 placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''}>${safeValue}</textarea>`;
                     } else {
-                        html += `<input type="text" class="form-control" id="config_${key}" name="${key}" 
-                                 value="${escapeHtml(value)}" ${required ? 'required' : ''}>`;
+                        html += `<input type="text" class="form-control" id="${safeFieldId}" name="${safeKey}"
+                                 value="${safeValue}" ${required ? 'required' : ''}>`;
                     }
 
                     html += `</div>`; // .config-field-input
@@ -6040,7 +8882,7 @@
 
                     html += `</div>`; // .config-field
                 }
-                
+
                 if (!isSingleGroup) {
                     html += `</div></div>`; // .config-fields, .config-group
                 }
@@ -6058,7 +8900,7 @@
         `;
 
         elements.configContent.innerHTML = html;
-        
+
         // 动态填充语言切换器
         const langSwitcher = document.getElementById('configLangSwitcher');
         if (langSwitcher) {
@@ -6089,8 +8931,7 @@
     async function fetchInstalledLocales() {
         if (_installedLocalesCache) return _installedLocalesCache;
         try {
-            const resp = await fetch(`${config.apiBase}/installed-locales`);
-            const result = await resp.json();
+            const result = await apiJson(`${config.apiBase}/installed-locales`);
             if (result.success && result.locales) {
                 _installedLocalesCache = result.locales;
                 return _installedLocalesCache;
@@ -6109,16 +8950,44 @@
         if (!body || body.children.length > 0) return;
 
         const locales = await fetchInstalledLocales();
-        const fieldKey = panel.dataset.field;
+        const fieldKey = panel.dataset.field || '';
         const p = 'w-param-';
-        let html = '';
+        const fragment = document.createDocumentFragment();
         for (const loc of locales) {
-            html += `<div class="${p}i18n-row">`;
-            html += `<label class="${p}i18n-label">${loc.flag ? '<span class="lang-flag-svg">' + loc.flag + '</span> ' : ''}${escapeHtml(loc.code)}</label>`;
-            html += `<input type="text" class="${p}input i18n-input" data-locale="${escapeHtml(loc.code)}" data-field="${escapeHtml(fieldKey)}" placeholder="${escapeHtml(loc.name)}">`;
-            html += `</div>`;
+            const row = document.createElement('div');
+            row.className = `${p}i18n-row`;
+
+            const label = document.createElement('label');
+            label.className = `${p}i18n-label`;
+            const rawFlag = String(loc.flag || '').trim().replace(/<\?xml[^?]*\?>/i, '');
+            if (rawFlag) {
+                const flag = document.createElement('span');
+                flag.className = 'lang-flag-svg';
+                const safeFlagHtml = /^<svg[\s\S]*<\/svg>\s*$/i.test(rawFlag)
+                    ? sanitizeHtmlForEditorPreview(rawFlag)
+                    : '';
+                if (safeFlagHtml && /^<svg[\s\S]*<\/svg>\s*$/i.test(safeFlagHtml.trim())) {
+                    flag.innerHTML = safeFlagHtml;
+                } else {
+                    flag.textContent = rawFlag;
+                }
+                label.appendChild(flag);
+                label.appendChild(document.createTextNode(' '));
+            }
+            label.appendChild(document.createTextNode(String(loc.code || '')));
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = `${p}input i18n-input`;
+            input.dataset.locale = String(loc.code || '');
+            input.dataset.field = fieldKey;
+            input.placeholder = String(loc.name || '');
+
+            row.appendChild(label);
+            row.appendChild(input);
+            fragment.appendChild(row);
         }
-        body.innerHTML = html;
+        body.replaceChildren(fragment);
     }
 
     /**
@@ -6144,6 +9013,10 @@
         return cur ?? '';
     }
 
+    function isLayoutConfigPanel(panel) {
+        return !!panel.closest('.layout-config-panel, .layout-config-form');
+    }
+
     /**
      * 加载面板内所有语言的值
      */
@@ -6154,17 +9027,164 @@
 
         for (const locale of locales) {
             try {
-                const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}&locale=${locale}`;
-                const resp = await fetch(apiUrl);
-                const result = await resp.json();
-                if (result.success && result.data && result.data.config) {
-                    const value = getConfigValueByPath(result.data.config, fieldKey);
+                let result;
+                if (isLayoutConfigPanel(panel)) {
+                    result = await apiJson(buildLayoutConfigUrl(locale));
+                } else {
+                    result = await apiJson(`${config.apiBase}/widget-config?layout_id=${layoutId}&locale=${locale}`);
+                }
+                const data = result.data || {};
+                if (result.success && data.config) {
+                    const value = getConfigValueByPath(data.config, fieldKey);
                     const input = panel.querySelector(`.i18n-input[data-locale="${locale}"]`);
                     if (input) input.value = value;
                 }
             } catch (err) {
                 console.error(`Load i18n ${locale} error:`, err);
             }
+        }
+    }
+
+    function translateUiText(text) {
+        return (typeof __ === 'function') ? __(text) : text;
+    }
+
+    function readI18nMainFieldValue(fieldKey, panel) {
+        const form = panel.closest('form') || panel.closest('.layout-config-panel, .slot-widget-body, .config-field') || elements.configContent;
+        if (!form) {
+            return '';
+        }
+
+        const controls = Array.from(form.querySelectorAll('[name]')).filter(control => control.getAttribute('name') === fieldKey);
+        for (const control of controls) {
+            const type = (control.getAttribute('type') || '').toLowerCase();
+            if (type === 'radio') {
+                if (control.checked) {
+                    return String(control.value || '');
+                }
+                continue;
+            }
+            if (type === 'checkbox') {
+                if (control.checked) {
+                    return String(control.value || '1');
+                }
+                continue;
+            }
+            if (typeof control.value !== 'undefined' && String(control.value).trim() !== '') {
+                return String(control.value);
+            }
+        }
+
+        return '';
+    }
+
+    function resolveI18nSourceValue(fieldKey, panel, inputs) {
+        const preferred = inputs.find(input => input.dataset.locale === 'zh_Hans_CN' && String(input.value || '').trim() !== '');
+        if (preferred) {
+            return {
+                sourceLocale: preferred.dataset.locale,
+                sourceText: String(preferred.value || ''),
+            };
+        }
+
+        const mainValue = readI18nMainFieldValue(fieldKey, panel);
+        if (String(mainValue).trim() !== '') {
+            return {
+                sourceLocale: 'zh_Hans_CN',
+                sourceText: String(mainValue),
+            };
+        }
+
+        const firstFilled = inputs.find(input => String(input.value || '').trim() !== '');
+        if (firstFilled) {
+            return {
+                sourceLocale: firstFilled.dataset.locale || 'zh_Hans_CN',
+                sourceText: String(firstFilled.value || ''),
+            };
+        }
+
+        return {
+            sourceLocale: 'zh_Hans_CN',
+            sourceText: '',
+        };
+    }
+
+    function setI18nAiButtonLoading(button, loading) {
+        if (!button) {
+            return;
+        }
+        if (loading) {
+            button.dataset.originalText = button.textContent || translateUiText('AI翻译');
+            button.disabled = true;
+            button.textContent = translateUiText('正在翻译...');
+            button.setAttribute('aria-busy', 'true');
+            return;
+        }
+
+        button.disabled = false;
+        button.textContent = button.dataset.originalText || translateUiText('AI翻译');
+        button.removeAttribute('aria-busy');
+        delete button.dataset.originalText;
+    }
+
+    async function translateI18nValues(layoutId, fieldKey, panel, button) {
+        await ensurePanelRendered(panel);
+        const inputs = Array.from(panel.querySelectorAll('.i18n-input'));
+        const { sourceLocale, sourceText } = resolveI18nSourceValue(fieldKey, panel, inputs);
+        if (String(sourceText).trim() === '') {
+            showToast(translateUiText('请先填写源文案'), 'warning');
+            return;
+        }
+
+        const targetInputs = inputs.filter(input => input.dataset.locale && input.dataset.locale !== sourceLocale);
+        const targetLocales = [...new Set(targetInputs.map(input => input.dataset.locale).filter(Boolean))];
+        if (targetLocales.length === 0) {
+            showToast(translateUiText('没有需要翻译的目标语言'), 'warning');
+            return;
+        }
+
+        setI18nAiButtonLoading(button, true);
+        try {
+            const result = await apiJson(config.apiAiTranslateConfig, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_text: sourceText,
+                    source_locale: sourceLocale,
+                    target_locales: targetLocales,
+                    field_key: fieldKey,
+                    layout_id: layoutId,
+                    layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                    layout_option: state.layoutOption || 'default',
+                    context: isLayoutConfigPanel(panel) ? 'layout_config' : 'widget_config'
+                })
+            });
+            if (!result.success) {
+                throw new Error(result.message || translateUiText('AI翻译失败'));
+            }
+
+            const translations = (result.data && result.data.translations) || result.translations || {};
+            let filledCount = 0;
+            for (const input of targetInputs) {
+                const locale = input.dataset.locale;
+                if (!Object.prototype.hasOwnProperty.call(translations, locale)) {
+                    continue;
+                }
+                input.value = String(translations[locale] ?? '');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                filledCount++;
+            }
+
+            if (filledCount > 0) {
+                showToast(result.message || translateUiText('AI翻译已回填'), 'success');
+            } else {
+                showToast(translateUiText('AI翻译未返回目标语言结果'), 'warning');
+            }
+        } catch (err) {
+            console.error('AI i18n translate error:', err);
+            showToast(err.message || translateUiText('AI翻译失败'), 'error');
+        } finally {
+            setI18nAiButtonLoading(button, false);
         }
     }
 
@@ -6179,16 +9199,32 @@
             const locale = input.dataset.locale;
             const value = input.value;
             try {
-                const resp = await fetch(`${config.apiBase}/save-widget-config`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        layout_id: layoutId,
-                        config: { [fieldKey]: value },
-                        locale: locale
-                    })
-                });
-                const result = await resp.json();
+                let result;
+                if (isLayoutConfigPanel(panel)) {
+                    result = await apiJson(config.apiSaveLayoutConfig, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            theme_id: state.themeId || 0,
+                            layout_type: state.layoutType || getCurrentPageType() || 'homepage',
+                            layout_option: state.layoutOption || 'default',
+                            editor_area: state.editorArea || 'frontend',
+                            scope: getCurrentWindowParam('scope') || 'default',
+                            config: { [fieldKey]: value },
+                            locale: locale
+                        })
+                    });
+                } else {
+                    result = await apiJson(`${config.apiBase}/save-widget-config`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            layout_id: layoutId,
+                            config: { [fieldKey]: value },
+                            locale: locale
+                        })
+                    });
+                }
                 if (result.success) successCount++;
             } catch (err) {
                 console.error(`Save i18n ${locale} error:`, err);
@@ -6201,7 +9237,7 @@
             showToast('保存失败', 'error');
         }
     }
-    
+
     /**
      * 重新加载部件配置（支持多语言）
      * @param {string} layoutId 布局ID
@@ -6209,22 +9245,21 @@
      */
     async function reloadWidgetConfigWithLocale(layoutId, locale) {
         if (!layoutId) return;
-        
+
         try {
-            const apiUrl = `${config.apiBase}/widget-config?layout_id=${layoutId}${locale ? '&locale=' + locale : ''}`;
-            const response = await fetch(apiUrl);
-            const result = await response.json();
-            
+            const apiUrl = `${config.apiBase}/widget-config?layout_id=${encodeURIComponent(layoutId)}${locale ? '&locale=' + encodeURIComponent(locale) : ''}`;
+            const result = await apiJson(apiUrl);
+
             if (result.success && result.data) {
                 const widgetData = result.data;
                 const params = widgetData.params || {};
                 const widgetConfig = widgetData.config || {};
-                
+
                 // 更新表单中的值
                 const form = document.getElementById('widgetConfigForm');
                 if (form) {
                     for (const [key, value] of Object.entries(widgetConfig)) {
-                        const input = form.querySelector(`[name="${key}"]`);
+                        const input = form.querySelector(dataAttributeSelector('name', key));
                         if (input) {
                             if (input.type === 'checkbox') {
                                 input.checked = !!value;
@@ -6234,7 +9269,7 @@
                         }
                     }
                 }
-                
+
                 showToast(locale ? `已切换到 ${locale} 语言` : '已切换到默认语言', 'success');
             } else {
                 showToast('加载配置失败', 'error');
@@ -6244,7 +9279,7 @@
             showToast('加载配置失败', 'error');
         }
     }
-    
+
     /**
      * 保存部件配置（支持多语言）
      * @param {number} layoutId 布局ID
@@ -6254,7 +9289,7 @@
     async function saveWidgetConfigWithLocale(layoutId, configData, locale) {
         try {
             const apiUrl = `${config.apiBase}/save-widget-config`;
-            const response = await fetch(apiUrl, {
+            const result = await apiJson(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6265,9 +9300,7 @@
                     locale: locale
                 })
             });
-            
-            const result = await response.json();
-            
+
             if (result.success) {
                 showToast(result.message || '配置已保存', 'success');
                 return true;
@@ -6281,7 +9314,7 @@
             return false;
         }
     }
-    
+
     /**
      * 收集表单配置，保留数组字段与多选字段的结构。
      */
@@ -6322,6 +9355,31 @@
             }
         });
 
+        form.querySelectorAll('.array-editor-wrapper input[type="hidden"][name], .w-param-array input[type="hidden"][name]').forEach(input => {
+            let key = input.name;
+            if (!key) {
+                return;
+            }
+            if (key.endsWith('[]')) {
+                key = key.slice(0, -2);
+            }
+
+            const rawValue = String(input.value || '').trim();
+            if (rawValue === '') {
+                configData[key] = [];
+                return;
+            }
+
+            try {
+                const parsedValue = JSON.parse(rawValue);
+                if (Array.isArray(parsedValue)) {
+                    configData[key] = parsedValue;
+                }
+            } catch (e) {
+                // Keep the submitted value if it is not valid JSON.
+            }
+        });
+
         return configData;
     }
 
@@ -6339,7 +9397,7 @@
         const configData = collectWidgetConfigData(form);
 
         try {
-            const response = await fetch(config.apiUpdateConfig, {
+            const result = await apiJson(config.apiUpdateConfig, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6350,8 +9408,6 @@
                 }),
             });
 
-            const result = await response.json();
-
             if (result.success) {
                 if (!autoSave) showToast('配置已保存', 'success');
                 // 更新部件的 data-config
@@ -6360,8 +9416,7 @@
                     widgetElement.dataset.config = JSON.stringify(normalizedConfig);
                 }
                 if (!autoSave) {
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('widgetConfigModal'));
-                    if (modal) modal.hide();
+                    hideEditorModal(document.getElementById('widgetConfigModal'));
                 }
                 if (result.preview_html) {
                     updateWidgetPreviewInIframe(layoutId, result.preview_html);
@@ -6387,7 +9442,7 @@
         const configData = collectWidgetConfigData(form);
 
         try {
-            const response = await fetch(config.apiUpdateConfig, {
+            const result = await apiJson(config.apiUpdateConfig, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6397,8 +9452,6 @@
                     config: configData,
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 if (!silent) showToast('配置已保存', 'success');
@@ -6441,7 +9494,7 @@
         try {
             const iframe = elements.previewFrame;
             if (iframe && iframe.contentDocument) {
-                const iframeWidget = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                const iframeWidget = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                 if (iframeWidget) {
                     if (iframeWidget.closest('header, [data-wslot-position="header"], .site-header')) {
                         areaFromEl = 'header';
@@ -6453,7 +9506,7 @@
         } catch (e) { /* iframe access error */ }
 
         try {
-            const response = await fetch(config.apiDeleteWidget, {
+            const result = await apiJson(config.apiDeleteWidget, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6468,19 +9521,17 @@
                 }),
             });
 
-            const result = await response.json();
-
             if (result.success) {
                 // 从 iframe 中移除部件并恢复原始内容
                 const iframe = elements.previewFrame;
                 if (iframe && iframe.contentDocument) {
-                    const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+                    const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
                     if (widgetEl) {
                         const slot = widgetEl.closest('[data-wslot], [data-slot]');
-                        
+
                         // 移除部件元素
                         widgetEl.remove();
-                        
+
                         // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
                         if (slot && !slot.querySelector('[data-layout-id]')) {
                             if (result.has_original && result.original_html) {
@@ -6505,7 +9556,7 @@
                         }
                     }
                 }
-                
+
                 // 从结构视图移除
                 widgetElement.remove();
                 showToast('部件已删除', 'success');
@@ -6527,7 +9578,7 @@
         if (!iframe || !iframe.contentDocument) return;
 
         try {
-            const widgetEl = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId}"]`);
+            const widgetEl = iframe.contentDocument.querySelector(dataLayoutIdSelector(layoutId));
             if (widgetEl) {
                 widgetEl.remove();
             }
@@ -6540,6 +9591,17 @@
      * 保存布局为新版本
      */
     async function saveLayout() {
+        if (isLayoutLocked()) {
+            try {
+                showToast('Saving virtual layout draft...', 'info');
+                const data = await saveLockedVirtualLayoutDraft();
+                showToast(data.version_id ? `Virtual layout draft saved: #${data.version_id}` : 'Virtual layout draft saved', 'success');
+            } catch (error) {
+                console.error('[ThemeEditor] Save virtual layout draft error:', error);
+                showToast(error.message || 'Save virtual layout draft failed', 'error');
+            }
+            return;
+        }
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
             return;
@@ -6548,11 +9610,11 @@
         try {
             // 弹出输入版本名称的对话框
             const versionName = await showPromptDialog(
-                '保存新版本',
-                '请输入版本名称（可选）：',
+                'Save new version',
+                'Enter a version name (optional).',
                 '',
-                '保存',
-                '取消'
+                'Save',
+                'Cancel'
             );
 
             // 如果用户取消了对话框
@@ -6560,9 +9622,9 @@
                 return;
             }
 
-            showToast('正在保存版本...', 'info');
+            showToast('Saving version...', 'info');
 
-            const response = await fetch(config.apiSaveVersion, {
+            const result = await apiJson(config.apiSaveVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6574,18 +9636,16 @@
                 }),
             });
 
-            const result = await response.json();
-
             if (result.success) {
-                showToast(result.message || '版本已保存', 'success');
+                showToast(result.message || 'Version saved', 'success');
                 // 刷新版本列表
                 await loadVersions();
             } else {
-                showToast(result.message || '保存失败', 'error');
+                showToast(result.message || 'Save failed', 'error');
             }
         } catch (error) {
             console.error('[ThemeEditor] Save version error:', error);
-            showToast('保存版本失败：' + error.message, 'error');
+            showToast('Save version failed: ' + error.message, 'error');
         }
     }
 
@@ -6593,25 +9653,45 @@
      * 发布主题（发布当前版本）
      */
     async function publishTheme() {
+        if (isLayoutLocked()) {
+            const confirmed = await showCustomConfirm(
+                'Publish virtual layout?',
+                'Publish the latest locked virtual layout version for this page context.',
+                'Publish',
+                'Cancel'
+            );
+            if (!confirmed) {
+                return;
+            }
+            try {
+                showToast('Publishing virtual layout...', 'info');
+                const data = await publishLatestLockedVirtualLayoutVersion();
+                showToast(data.version_id ? `Virtual layout version published: #${data.version_id}` : 'Virtual layout version published', 'success');
+            } catch (error) {
+                console.error('[ThemeEditor] Publish virtual layout error:', error);
+                showToast(error.message || 'Publish virtual layout version failed', 'error');
+            }
+            return;
+        }
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
             return;
         }
 
         const confirmed = await showCustomConfirm(
-            '确认发布主题？',
-            '确定要发布当前版本吗？发布后将生成缓存文件，前台将显示此版本的布局。',
-            '确认发布',
-            '取消'
+            'Confirm publish theme?',
+            'Publish the current version and refresh generated cache files?',
+            'Publish',
+            'Cancel'
         );
         if (!confirmed) {
             return;
         }
 
         try {
-            showToast('正在发布...', 'info');
+            showToast('Publishing...', 'info');
 
-            const response = await fetch(config.apiPublishVersion, {
+            const result = await apiJson(config.apiPublishVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6625,8 +9705,6 @@
                     status: state.previewStatus || 'draft',
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast(result.message || '发布成功', 'success');
@@ -6643,7 +9721,7 @@
 
     /**
      * 打开新窗口预览（草稿预览）
-     * 
+     *
      * 使用 preview_mode=1 参数，让前台以草稿模式渲染
      * 用户可以在新窗口中预览未发布的更改
      */
@@ -6657,10 +9735,10 @@
         // 可以额外添加 status 参数来明确指定版本
         window.open(buildLayoutPreviewUrl(), '_blank');
     }
-    
+
     /**
      * 打开前端真实 URL 预览
-     * 
+     *
      * 生成预览 Token 并跳转到真实的前端页面
      * 预览模式下会显示可拖动的退出预览浮窗
      */
@@ -6673,7 +9751,7 @@
         try {
             showToast('正在启动预览...', 'info');
 
-            const response = await fetch(config.apiStartPreview, {
+            const result = await apiJson(config.apiStartPreview, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -6684,11 +9762,10 @@
                     backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
                     editor_area: 'frontend',
                     page_type: state.pageType,
+                    layout_option: state.layoutOption || 'default',
                     status: state.previewStatus || 'draft',
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success && result.data && result.data.preview_url) {
                 // 打开新窗口预览
@@ -6702,7 +9779,7 @@
             showToast('启动预览失败', 'error');
         }
     }
-    
+
     /**
      * 打开新窗口预览已发布版本
      */
@@ -6715,10 +9792,10 @@
         // 使用 status=published 明确指定查看已发布版本
         window.open(buildLayoutPreviewUrl({status: 'published'}), '_blank');
     }
-    
+
     /**
      * 切换编辑器预览版本（draft/published）
-     * 
+     *
      * @param {string} status - 'draft' 或 'published'
      */
     function switchPreviewStatus(status) {
@@ -6726,7 +9803,7 @@
             console.warn('无效的预览状态:', status);
             return;
         }
-        
+
         state.previewStatus = status;
         clearSlotSelection();
         deselectArea();
@@ -6734,16 +9811,16 @@
         if (status !== 'draft') {
             switchPreviewView('preview');
         }
-        
+
         // 刷新编辑器 iframe 预览
         refreshPreview();
-        
+
         // 更新 UI 状态指示
         updatePreviewStatusUI(status);
-        
+
         showToast(status === 'draft' ? '已切换到草稿版本' : '已切换到已发布版本', 'info');
     }
-    
+
     /**
      * 更新预览状态 UI 指示
      */
@@ -6760,13 +9837,13 @@
             structureTab.classList.toggle('disabled', !enabled);
             structureTab.setAttribute('aria-disabled', enabled ? 'false' : 'true');
         }
-        
+
         // 更新切换按钮状态
         document.querySelectorAll('.preview-status-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.status === status);
         });
     }
-    
+
     /**
      * 获取当前预览状态
      */
@@ -6855,7 +9932,7 @@
             'content': ['content', 'left_sidebar', 'right_sidebar'],
             'container': [],  // container 类型必须有明确的 position，不使用 type 推断
         };
-        
+
         // 位置到区域的映射（与后端 POSITION_TO_AREA_MAP 保持一致）
         const positionToAreaMap = {
             'header': ['header'],
@@ -6866,7 +9943,7 @@
             'content': ['content', 'banner'],
             'footer': ['footer'],
         };
-        
+
         // 合并传入的拒绝类型和区域互斥规则
         const finalRejectTypes = [...rejectTypes];
         if (areaExclusiveTypes[areaCode]) {
@@ -6876,7 +9953,7 @@
                 }
             });
         }
-        
+
         let hasMatchInGroup = new Map();
 
         document.querySelectorAll('.widget-item.draggable').forEach(item => {
@@ -6884,7 +9961,7 @@
             let widgetPositions = [];
             const widgetType = item.dataset.widgetType || '';
             const widgetCode = item.dataset.widgetCode || '';
-            
+
             try {
                 widgetPositions = JSON.parse(positionsStr);
             } catch (e) {
@@ -6895,7 +9972,7 @@
             let allowedAreas = [];
             let isUniversal = false;
             let isExactMatch = false;
-            
+
             if (!widgetPositions || widgetPositions.length === 0) {
                 // 没有 position 限制，根据 type 推断
                 if (widgetType && typeToAreasMap[widgetType]) {
@@ -6928,13 +10005,13 @@
                 allowedAreas = [...new Set(allowedAreas)]; // 去重
                 isExactMatch = true;
             }
-            
+
             // 检查部件类型是否被当前区域拒绝
             const isTypeRejected = finalRejectTypes.includes(widgetType);
-            
+
             // 只有当区域允许且类型未被拒绝时才能放置
             const canPlace = allowedAreas.includes(areaCode) && !isTypeRejected;
-            
+
             // 清除所有匹配相关的类
             item.classList.remove('area-matched', 'area-universal', 'area-not-matched', 'area-rejected');
 
@@ -6967,15 +10044,15 @@
                 }
             }
         });
-        
+
         // 隐藏没有匹配部件的分组，展开有匹配的分组
         document.querySelectorAll('.widget-group').forEach(group => {
             const groupType = group.dataset.type || '';
             const hasMatch = hasMatchInGroup.get(groupType);
-            
+
             // 如果整个分组类型在拒绝列表中，直接隐藏整个分组
             const isGroupRejected = finalRejectTypes.includes(groupType);
-            
+
             if (isGroupRejected) {
                 group.style.display = 'none';
             } else if (hasMatch) {
@@ -6985,7 +10062,7 @@
                 group.style.display = 'none';
             }
         });
-        
+
         console.log('[filterWidgetsByArea] Area:', areaCode, 'Reject types:', finalRejectTypes);
     }
 
@@ -7002,22 +10079,22 @@
         setTimeout(() => {
             const widgetPanelContent = document.querySelector('#widgetPanel .panel-content');
             if (!widgetPanelContent) return;
-            
+
             // 找到第一个可见的匹配部件（area-matched 或 area-universal）
             const firstMatchedWidget = widgetPanelContent.querySelector('.widget-item.area-matched, .widget-item.area-universal');
-            
+
             if (firstMatchedWidget) {
                 // 获取部件所在的组
                 const widgetGroup = firstMatchedWidget.closest('.widget-group');
-                
+
                 if (widgetGroup) {
                     // 计算滚动位置（组的顶部位置 - 一些间距）
                     const groupTop = widgetGroup.offsetTop;
                     const scrollOffset = Math.max(0, groupTop - 20); // 留出20px间距
-                    
-                    widgetPanelContent.scrollTo({ 
-                        top: scrollOffset, 
-                        behavior: 'smooth' 
+
+                    widgetPanelContent.scrollTo({
+                        top: scrollOffset,
+                        behavior: 'smooth'
                     });
                 }
             } else {
@@ -7048,22 +10125,13 @@
         areaElement.classList.add('area-selected');
         state.selectedArea = areaCode;
 
-        // 按区域过滤部件
-        filterWidgetsByArea(areaCode);
-
-        // 滚动到匹配的部件
-        scrollToMatchedWidgets(areaCode);
-
-        // 更新部件面板标题（如果有）
-        const widgetPanelTitle = document.querySelector('.widget-panel-title, .editor-widget-panel .panel-header h3');
-        if (widgetPanelTitle) {
-            widgetPanelTitle.innerHTML = `${iconSvg('apps')} 部件库 <span class="area-filter-badge" onclick="window.ThemeEditor?.deselectArea?.()">${areaName} ${iconSvg('close')}</span>`;
-        }
+        // 按区域/插槽在服务端重新过滤加载部件库（分页），并在搜索框显示当前插槽标签
+        setWidgetSlotFilter(areaCode, areaName, areaCode);
 
         // 显示提示
         showToast(`已筛选 "${areaName}" 区域的部件`, 'info');
 
-        console.log('[ThemeEditor] Area selected:', areaCode, '- showing compatible widgets');
+        console.log('[ThemeEditor] Area selected:', areaCode, '- reloading slot-filtered widgets');
     }
 
     /**
@@ -7076,13 +10144,10 @@
         });
         state.selectedArea = null;
 
-        // 显示所有部件
-        filterWidgetsByArea(null);
-
-        // 恢复部件面板标题
-        const widgetPanelTitle = document.querySelector('.widget-panel-title, .editor-widget-panel .panel-header h3');
-        if (widgetPanelTitle) {
-            widgetPanelTitle.innerHTML = `${iconSvg('apps')} 部件库`;
+        // 清除插槽过滤，恢复完整部件库（分页）
+        const lib = getWidgetLibState();
+        if (lib.slot) {
+            setWidgetSlotFilter(null, '', null);
         }
     }
 
@@ -7133,7 +10198,7 @@
                     </div>
                 </div>
             `;
-            
+
             dialog.style.cssText = `
                 position: fixed;
                 top: 0;
@@ -7142,7 +10207,7 @@
                 bottom: 0;
                 z-index: 100000;
             `;
-            
+
             // 添加样式
             const style = document.createElement('style');
             style.textContent = `
@@ -7217,28 +10282,28 @@
                 }
             `;
             dialog.appendChild(style);
-            
+
             document.body.appendChild(dialog);
-            
+
             // 绑定按钮事件
             const btnConfirm = dialog.querySelector('.btn-confirm');
             const btnCancel = dialog.querySelector('.btn-cancel');
-            
+
             const cleanup = () => {
                 dialog.style.opacity = '0';
                 setTimeout(() => dialog.remove(), 200);
             };
-            
+
             btnConfirm.addEventListener('click', () => {
                 cleanup();
                 resolve(true);
             });
-            
+
             btnCancel.addEventListener('click', () => {
                 cleanup();
                 resolve(false);
             });
-            
+
             // 点击遮罩层关闭
             dialog.querySelector('.custom-confirm-overlay').addEventListener('click', () => {
                 cleanup();
@@ -7264,8 +10329,52 @@
      */
     function isFieldTranslatable(param) {
         if (param.hasOwnProperty('i18n')) return !!param.i18n;
-        const type = param.type || 'string';
+        const type = getParamUiType(param);
         return TRANSLATABLE_TYPES.includes(type);
+    }
+
+    function getParamUiType(param) {
+        if (!param || typeof param !== 'object') {
+            return 'string';
+        }
+        return param.ui_type || param.input || param.type || 'string';
+    }
+
+    function isBooleanParamType(type) {
+        return type === 'bool' || type === 'boolean';
+    }
+
+    function normalizeBooleanSelectValue(value) {
+        if (value === true || value === 1 || value === '1' || value === 'true' || value === 'on') {
+            return '1';
+        }
+        if (value === false || value === 0 || value === '0' || value === 'false' || value === 'off') {
+            return '0';
+        }
+        return value ? '1' : '0';
+    }
+
+    function getBooleanSelectOptions(key, param) {
+        const explicitOptions = param && param.options && Object.keys(param.options).length > 0 ? param.options : null;
+        if (explicitOptions) {
+            return explicitOptions;
+        }
+        const normalizedKey = String(key || '').toLowerCase();
+        if (normalizedKey.startsWith('show') || normalizedKey.includes('visible')) {
+            return { '1': '显示', '0': '隐藏' };
+        }
+        return { '1': '是', '0': '否' };
+    }
+
+    function renderBooleanSelect(fieldId, name, key, value, required, param) {
+        const selectedValue = normalizeBooleanSelectValue(value);
+        const options = getBooleanSelectOptions(key, param);
+        let html = `<select class="form-select" id="${escapeHtml(fieldId)}" name="${escapeHtml(name)}" ${required ? 'required' : ''}>`;
+        for (const [optVal, optLabel] of Object.entries(options)) {
+            html += `<option value="${escapeHtml(optVal)}" ${String(optVal) === selectedValue ? 'selected' : ''}>${escapeHtml(optLabel)}</option>`;
+        }
+        html += `</select>`;
+        return html;
     }
 
     /**
@@ -7281,26 +10390,119 @@
             .replace(/'/g, '&#039;');
     }
 
+    function sanitizeUrlForAttribute(value, fallback = '') {
+        if (value === null || value === undefined) return fallback;
+        const raw = String(value).trim();
+        if (!raw) return fallback;
+
+        const normalized = raw.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+        if (normalized.startsWith('javascript:') || normalized.startsWith('vbscript:')) {
+            return fallback;
+        }
+        if (normalized.startsWith('data:') && !/^data:image\/(png|jpe?g|gif|webp);/i.test(raw)) {
+            return fallback;
+        }
+
+        return raw;
+    }
+
+    function escapeJsString(value) {
+        return String(value ?? '')
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+            .replace(/</g, '\\x3C')
+            .replace(/>/g, '\\x3E')
+            .replace(/&/g, '\\x26')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029');
+    }
+
+    function jsonForScript(value) {
+        return JSON.stringify(value)
+            .replace(/</g, '\\u003c')
+            .replace(/>/g, '\\u003e')
+            .replace(/&/g, '\\u0026')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029');
+    }
+
+    function renderSafeImagePreview(preview, rawUrl) {
+        if (!preview) return false;
+
+        const safeUrl = sanitizeUrlForAttribute(rawUrl, '');
+        if (!safeUrl) return false;
+
+        preview.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = safeUrl;
+        img.alt = '预览';
+        img.addEventListener('error', function() {
+            preview.innerHTML = '<div class="image-placeholder"><span>图片加载失败</span></div>';
+        });
+        preview.appendChild(img);
+        return true;
+    }
+
+    function sanitizeHtmlForEditorPreview(html) {
+        if (!html) return '';
+
+        const template = document.createElement('template');
+        template.innerHTML = String(html);
+
+        template.content
+            .querySelectorAll('script, style, link, meta, object, embed, iframe, frame, frameset, base, form, input, button, textarea, select, option')
+            .forEach(el => el.remove());
+
+        template.content.querySelectorAll('*').forEach(el => {
+            Array.from(el.attributes).forEach(attr => {
+                const name = attr.name.toLowerCase();
+                const value = String(attr.value || '').trim().replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+
+                if (name.startsWith('on') || name === 'srcdoc') {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+
+                if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'formaction') && (
+                    value.startsWith('javascript:') ||
+                    value.startsWith('vbscript:') ||
+                    (value.startsWith('data:') && !value.startsWith('data:image/'))
+                )) {
+                    el.removeAttribute(attr.name);
+                    return;
+                }
+
+                if (name === 'style' && /expression\s*\(|url\s*\(\s*['"]?\s*(?:javascript|vbscript|data):/i.test(attr.value)) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+        });
+
+        return template.innerHTML;
+    }
+
     /**
      * 从 HTML 字符串中剥离 widget-wrapper 和操作按钮
-     * 
+     *
      * 后端渲染 original_html 时，SlotRendererService 可能将其他 widget 注入到模板中，
      * 导致 "原始内容" 实际包含 widget-wrapper 元素。
      * 此函数将这些 wrapper 的内容提取出来（保留子内容），移除操作按钮。
-     * 
+     *
      * @param {string} html - 原始 HTML 字符串
      * @returns {string} - 剥离后的 HTML
      */
     function stripWidgetWrappersFromHtml(html) {
         if (!html) return html;
-        
+
         // 使用临时 DOM 解析
         const temp = document.createElement('div');
         temp.innerHTML = html;
-        
+
         // 移除所有 widget-hover-actions 操作按钮
         temp.querySelectorAll('.widget-hover-actions').forEach(el => el.remove());
-        
+
         // 将 widget-wrapper[data-layout-id] 替换为其内部内容（展开子节点）
         temp.querySelectorAll('.widget-wrapper[data-layout-id]').forEach(wrapper => {
             while (wrapper.firstChild) {
@@ -7308,13 +10510,86 @@
             }
             wrapper.remove();
         });
-        
+
         // 移除残留的 data-layout-id 属性（防止 initWidgetHoverActions 误识别）
         temp.querySelectorAll('[data-layout-id]').forEach(el => {
             el.removeAttribute('data-layout-id');
         });
-        
-        return temp.innerHTML;
+
+        return sanitizeHtmlForEditorPreview(temp.innerHTML);
+    }
+
+    function buildStructurePlaceholderHtml(areaEl, areaCode) {
+        const defaults = {
+            header: {
+                icon: 'ri-layout-top-2-line',
+                title: 'Header Area',
+                text: 'Drag into header widget',
+                tips: [
+                    ['ri-image-line', 'Logo'],
+                    ['ri-menu-line', 'Navigation'],
+                    ['ri-search-line', 'Search'],
+                    ['ri-user-line', 'Account'],
+                    ['ri-shopping-cart-line', 'Shopping Cart'],
+                ],
+            },
+            content: {
+                icon: 'ri-layout-grid-line',
+                title: 'Content Area',
+                text: 'Drag widgets or containers here',
+                tips: [
+                    ['ri-layout-row-line', 'Row layout'],
+                    ['ri-layout-column-line', 'Column layout'],
+                    ['ri-image-line', 'Banner'],
+                    ['ri-slideshow-line', 'Carousel'],
+                    ['ri-shopping-bag-line', 'Product'],
+                ],
+            },
+            footer: {
+                icon: 'ri-layout-bottom-2-line',
+                title: 'Footer Area',
+                text: 'Drag in footer components',
+                tips: [
+                    ['ri-links-line', 'Links'],
+                    ['ri-mail-line', 'Subscribe'],
+                    ['ri-share-line', 'Social'],
+                    ['ri-copyright-line', 'Copyright'],
+                ],
+            },
+        };
+
+        const meta = defaults[areaCode] || defaults.content;
+        const title = areaEl?.dataset?.slotName || meta.title;
+        const tipsHtml = meta.tips
+            .map(([icon, label]) => `<span class="tip-item"><i class="${icon}"></i> ${escapeHtml(label)}</span>`)
+            .join('');
+
+        return `
+            <div class="slot-placeholder-large">
+                <div class="placeholder-icon">
+                    <i class="${meta.icon}"></i>
+                </div>
+                <div class="placeholder-title">${escapeHtml(title)}</div>
+                <div class="placeholder-text">${escapeHtml(meta.text)}</div>
+                <div class="placeholder-tips">
+                    ${tipsHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    function resetStructureViewToEmptySlots() {
+        document.querySelectorAll('#previewViewStructure .area-slot').forEach(areaEl => {
+            const areaCode = areaEl.dataset.area || areaEl.dataset.slot || 'content';
+            const widgetsContainer = areaEl.querySelector('.area-widgets');
+            if (!widgetsContainer) {
+                return;
+            }
+
+            widgetsContainer.querySelectorAll('.preview-widget-item').forEach(el => el.remove());
+            widgetsContainer.querySelectorAll('.slot-placeholder, .content-slot-placeholder, .slot-placeholder-large').forEach(el => el.remove());
+            widgetsContainer.insertAdjacentHTML('beforeend', buildStructurePlaceholderHtml(areaEl, areaCode));
+        });
     }
 
     // 添加 CSS 动画
@@ -7333,7 +10608,7 @@
 
     /**
      * 恢复原始布局（带自动备份）
-     * 
+     *
      * 新行为：
      * 1. 自动创建当前状态的备份版本
      * 2. 清空工作区恢复到主题模板原始状态
@@ -7355,7 +10630,7 @@
         try {
             showToast('正在恢复原始布局...', 'info');
 
-            const response = await fetch(config.apiRestoreOriginal, {
+            const result = await apiJson(config.apiRestoreOriginal, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -7366,14 +10641,17 @@
                 }),
             });
 
-            const result = await response.json();
-
             if (result.success) {
                 showToast(result.message || '已恢复到原始布局', 'success');
-                
+                clearSlotSelection();
+                deselectArea();
+                deselectWidget();
+                resetStructureViewToEmptySlots();
+
                 // 刷新版本列表
                 await loadVersions();
-                
+                await fetchLayoutSlots();
+
                 // 刷新预览
                 setTimeout(() => {
                     refreshPreview();
@@ -7389,7 +10667,7 @@
 
     /**
      * 刷新预览（仅用于手动刷新按钮）
-     * 
+     *
      * 注意：此函数只刷新 iframe，不会发起额外的 fetch 请求。
      * 部件的添加/修改/删除通过 updateWidgetPreviewInIframe() / removeWidgetFromIframe() 处理。
      */
@@ -7446,23 +10724,23 @@
     function setupIframeLinkInterception() {
         const iframe = elements.previewFrame;
         if (!iframe) return;
-        
+
         try {
             const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
             if (!iframeDoc) {
                 console.warn('[ThemeEditor] Cannot access iframe document for link interception');
                 return;
             }
-            
+
             // 获取当前站点的基础 URL
             const currentOrigin = window.location.origin;
             const baseUrl = config.apiBase?.replace(/\/theme\/backend\/theme-editor.*$/, '') || '';
-            
+
             // iframe 内区域点击事件处理，用于过滤部件面板
             iframeDoc.addEventListener('click', function(e) {
                 // data-editor-interactive 标记的元素保持原生交互，编辑器不拦截
                 if (e.target.closest('[data-editor-interactive]')) return;
-                
+
                 // 检查是否点击了区域元素
                 const themeArea = e.target.closest('.theme-area[data-area]');
                 if (themeArea && !e.target.closest('[data-layout-id]') && !e.target.closest('a')) {
@@ -7482,26 +10760,26 @@
                     }
                 }
             });
-            
+
             // 拦截所有链接点击
             iframeDoc.addEventListener('click', function(e) {
                 // data-editor-interactive 标记的元素保持原生交互，编辑器不拦截
                 if (e.target.closest('[data-editor-interactive]')) return;
-                
+
                 const link = e.target.closest('a');
                 if (!link) return;
-                
+
                 const href = link.getAttribute('href');
                 if (!href) return;
-                
+
                 // 跳过 JavaScript 链接和锚点
                 if (href.startsWith('#') || href.startsWith('javascript:')) {
                     return;
                 }
-                
+
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 // 判断是否为内部链接
                 let targetUrl;
                 try {
@@ -7510,20 +10788,20 @@
                     console.warn('[ThemeEditor] Invalid URL:', href);
                     return;
                 }
-                
+
                 // 外部链接 - 在新标签页打开
                 if (targetUrl.origin !== currentOrigin) {
                     window.open(href, '_blank');
                     showToast('外部链接已在新标签页打开', 'info');
                     return;
                 }
-                
+
                 // 内部链接 - 转换为预览模式 URL
                 // 根据目标路径判断页面类型（pageType = layoutType = 布局目录名）
                 const pathname = targetUrl.pathname;
                 let pageType = 'homepage';
                 let layoutType = 'homepage';
-                
+
                 // 路径到页面类型的映射（使用布局目录名）
                 if (pathname === '/' || pathname === '' || pathname.endsWith('/index')) {
                     pageType = 'homepage';
@@ -7551,12 +10829,13 @@
                     pageType = 'cms_page';
                     layoutType = 'cms_page';
                 }
-                
+
                 // 构建预览 URL
                 showToast(`已切换到 ${pageType} 布局`, 'info');
                 console.log('[ThemeEditor] Link intercepted:', href, '-> Editor page type:', pageType);
                 navigateEditorShell({
                     page_type: pageType,
+                    layout_option: resolveLayoutOptionForType(pageType, ''),
                 });
                 return;
 
@@ -7567,26 +10846,26 @@
                 previewUrl.searchParams.set('editor_mode', '1');
                 previewUrl.searchParams.set('status', state.previewStatus || 'draft');
                 previewUrl.searchParams.set('_t', Date.now());
-                
+
                 // 更新状态
                 state.pageType = pageType;
                 state.layoutType = layoutType;
-                
+
                 // 更新 iframe
                 iframe.src = previewUrl.toString();
-                
+
                 // 更新页面类型选择器（如果有）
                 if (elements.pageTypeSelect) {
                     elements.pageTypeSelect.value = pageType;
                 }
-                
+
                 showToast(`已切换到 ${pageType} 布局预览`, 'info');
                 console.log('[ThemeEditor] Link intercepted:', href, '-> Preview:', previewUrl.toString());
             }, true); // 使用捕获阶段
-            
+
             // 添加编辑器模式的视觉提示
             iframeDoc.body?.classList.add('editor-mode');
-            
+
             console.log('[ThemeEditor] Link interception setup complete');
         } catch (err) {
             console.warn('[ThemeEditor] Error setting up link interception:', err.message);
@@ -7595,7 +10874,7 @@
 
     /**
      * 加载布局预览（编译后的页面）
-     * 
+     *
      * 后台编辑器 iframe 使用 editor_mode=1 参数，
      * 支持通过 status 参数切换 draft/published 版本
      */
@@ -7634,34 +10913,30 @@
     /**
      * 获取布局的插槽信息
      */
-    async function fetchLayoutSlots() {
+    async function fetchLayoutSlots(overrides = {}) {
         if (!state.themeId) return;
 
         try {
             const url = new URL(config.apiCompileLayout, window.location.origin);
             url.searchParams.set('theme_id', state.themeId);
-            url.searchParams.set('page_type', getCurrentPageType());
-            url.searchParams.set('layout_type', state.layoutType);
-            url.searchParams.set('layout_option', state.layoutOption);
-            url.searchParams.set('editor_area', state.editorArea || 'frontend');
-            url.searchParams.set('status', state.previewStatus || 'draft');
-
-            const response = await fetch(url);
-            const contentType = response.headers.get('Content-Type') || '';
-            if (!response.ok || contentType.indexOf('application/json') === -1) {
-                const text = await response.text();
-                if (text && text.trim().startsWith('<')) {
-                    console.warn('获取插槽信息: 接口返回非 JSON（可能为错误页或登录页），已跳过');
-                }
-                return;
+            url.searchParams.set('page_type', overrides.page_type || getEffectivePageType());
+            url.searchParams.set('layout_type', overrides.layout_type || getEffectiveLayoutType());
+            url.searchParams.set('layout_option', overrides.layout_option || getEffectiveLayoutOption());
+            url.searchParams.set('editor_area', overrides.editor_area || getEffectiveEditorArea());
+            url.searchParams.set('preview_mode', overrides.preview_mode || 'live');
+            url.searchParams.set('status', overrides.status || state.previewStatus || 'draft');
+            url.searchParams.set('include_html', '0');
+            appendLayoutLockRuntimeParams(url);
+            if (overrides.version_id) {
+                url.searchParams.set('version_id', String(overrides.version_id));
             }
-            const result = await response.json();
 
+            const result = await apiJson(url.toString(), { silent: true });
             if (result.success && result.slots) {
                 state.slots = result.slots;
                 state.missingSlotWarnings = Array.isArray(result.missing_slot_warnings) ? result.missing_slot_warnings : [];
                 renderSlotsInfo(result.slots, state.missingSlotWarnings);
-                
+
                 // 显示插槽面板
                 if (elements.slotsInfoPanel) {
                     elements.slotsInfoPanel.classList.add('active');
@@ -7687,7 +10962,7 @@
             ).join('');
 
             html += `
-                <div class="slot-info-item" data-slot-id="${escapeHtml(slotId)}" onclick="scrollToSlot('${escapeHtml(slotId)}')">
+                <div class="slot-info-item" data-slot-id="${escapeHtml(slotId)}">
                     <div class="slot-name">${escapeHtml(slot.name || slotId)}</div>
                     <div class="slot-accept">${acceptTags || '<span>任意部件</span>'}</div>
                 </div>
@@ -7722,41 +10997,51 @@
         `;
     }
 
+    /**
+     * 全局暴露：滚动并选中预览里的目标 slot。
+     */
     window.scrollToSlot = function(slotId) {
-        if (!elements.previewFrame || !elements.previewFrame.contentWindow) return;
+        const normalizedSlotId = String(slotId || '').trim();
+        if (!normalizedSlotId) {
+            return;
+        }
+
+        let slotElement = null;
 
         try {
-            const iframeDoc = elements.previewFrame.contentDocument || elements.previewFrame.contentWindow.document;
-            const slotElement = iframeDoc.querySelector(`[data-slot-id="${slotId}"]`);
-            
-            if (slotElement) {
-                slotElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                // 高亮插槽
-                slotElement.classList.add('slot-highlight');
-                setTimeout(() => slotElement.classList.remove('slot-highlight'), 2000);
+            if (elements.previewFrame && elements.previewFrame.contentWindow) {
+                const iframeDoc = elements.previewFrame.contentDocument || elements.previewFrame.contentWindow.document;
+                slotElement = findIframeSlotElement(iframeDoc, normalizedSlotId);
+
+                if (slotElement) {
+                    iframeDoc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id], .content-slot').forEach(element => {
+                        element.classList.remove('slot-selected');
+                    });
+                    slotElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    slotElement.classList.add('slot-highlight', 'slot-selected');
+                    setTimeout(() => slotElement.classList.remove('slot-highlight'), 2000);
+                }
             }
         } catch (err) {
-            console.error('无法访问 iframe 内容:', err);
+            console.error('Scroll to slot failed:', err);
         }
+
+        handleSlotSelected(buildSlotInfoFromElement(normalizedSlotId, slotElement));
     };
-    
-    /**
-     * 全局暴露：切换预览版本
-     * 可从 UI 按钮调用：onclick="switchPreviewStatus('draft')" 或 onclick="switchPreviewStatus('published')"
-     */
+
     window.switchPreviewStatus = switchPreviewStatus;
-    
+
     /**
      * 全局暴露：打开草稿预览（新窗口）
      */
     window.openPreview = openPreview;
-    
+    window.previewVersion = previewVersion;
+
     /**
      * 全局暴露：打开已发布版本预览（新窗口）
      */
     window.openPublishedPreview = openPublishedPreview;
-    
+
     /**
      * 全局暴露：获取当前预览状态
      */
@@ -7765,20 +11050,505 @@
     /**
      * 全局暴露：取消区域选中（用于清除部件过滤）
      */
+    function getPreviewDocument() {
+        try {
+            return elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document || null;
+        } catch (err) {
+            console.warn('[ThemeEditor] Unable to access preview document:', err);
+            return null;
+        }
+    }
+
+    function normalizePlacementSlotInfo(slot) {
+        if (!slot || typeof slot !== 'object') {
+            return null;
+        }
+        const id = String(slot.id || slot.slot_id || '').trim();
+        if (!id) {
+            return null;
+        }
+        const accept = normalizeCodeList(slot.accept ?? slot.accept_codes ?? []);
+        const reject = normalizeCodeList(slot.reject ?? slot.reject_codes ?? []);
+        return {
+            id,
+            slot_id: id,
+            name: slot.name || id,
+            area: slot.area || inferAreaFromSlotId(id),
+            accept,
+            reject,
+            exclusive: slot.exclusive === true || slot.exclusive === 'true',
+            multiple: slot.multiple !== false && slot.multiple !== 'false',
+            max: slot.max ?? '',
+            min: slot.min ?? '',
+            source: slot.source || 'registry',
+        };
+    }
+
+    function collectWidgetPlacementSlots() {
+        const slotsById = new Map();
+        Object.entries(state.slots || {}).forEach(([slotId, slot]) => {
+            const normalized = normalizePlacementSlotInfo({
+                ...(slot && typeof slot === 'object' ? slot : {}),
+                id: slotId,
+                source: 'registry',
+            });
+            if (normalized) {
+                slotsById.set(normalized.id, normalized);
+            }
+        });
+
+        const iframeDoc = getPreviewDocument();
+        if (iframeDoc) {
+            iframeDoc.querySelectorAll('[data-wslot], [data-slot], [data-slot-id]').forEach(slotEl => {
+                const slotId = slotEl.getAttribute('data-wslot') || slotEl.getAttribute('data-slot') || slotEl.getAttribute('data-slot-id') || '';
+                if (!slotId) {
+                    return;
+                }
+                const normalized = normalizePlacementSlotInfo({
+                    ...buildSlotInfoFromElement(slotId, slotEl),
+                    source: 'dom',
+                });
+                if (normalized) {
+                    slotsById.set(normalized.id, {
+                        ...(slotsById.get(normalized.id) || {}),
+                        ...normalized,
+                    });
+                }
+            });
+        }
+
+        return Array.from(slotsById.values());
+    }
+
+    function buildWidgetPlacementSlotTree(slots, anchors) {
+        const areas = ['header', 'content', 'footer'];
+        const root = {
+            id: 'page',
+            label: '页面',
+            type: 'page',
+            children: areas.map(area => ({
+                id: area,
+                label: area === 'header' ? '页头' : area === 'footer' ? '页脚' : '内容',
+                type: 'area',
+                area,
+                children: [],
+            })),
+        };
+        const areaNodes = new Map(root.children.map(node => [node.area, node]));
+
+        slots.forEach(slot => {
+            const area = slot.area || inferAreaFromSlotId(slot.id);
+            const areaNode = areaNodes.get(area) || areaNodes.get('content');
+            areaNode.children.push({
+                id: slot.id,
+                label: slot.name || slot.id,
+                type: 'slot',
+                area,
+                slot,
+                children: [],
+            });
+        });
+
+        const slotNodes = new Map();
+        root.children.forEach(areaNode => {
+            areaNode.children.forEach(slotNode => slotNodes.set(slotNode.id, slotNode));
+        });
+
+        anchors.forEach(anchor => {
+            const slotNode = slotNodes.get(anchor.slot_id);
+            if (!slotNode) {
+                return;
+            }
+            const anchorNode = {
+                id: `widget:${anchor.layout_id}`,
+                label: anchor.widget_name || anchor.widget_code || anchor.layout_id,
+                type: 'widget',
+                area: anchor.area,
+                anchor,
+                children: [],
+            };
+            (anchor.inner_slots || []).forEach(innerSlot => {
+                anchorNode.children.push({
+                    id: innerSlot.id,
+                    label: innerSlot.name || innerSlot.id,
+                    type: 'slot',
+                    area: innerSlot.area || anchor.area,
+                    slot: innerSlot,
+                    children: [],
+                });
+            });
+            slotNode.children.push(anchorNode);
+        });
+
+        return root;
+    }
+
+    function collectWidgetPlacementAnchors() {
+        const anchors = [];
+        const seen = new Set();
+        const iframeDoc = getPreviewDocument();
+        const collectFromElement = (element, source) => {
+            if (!element) {
+                return;
+            }
+            const layoutId = element.dataset.layoutId || element.getAttribute('data-layout-id') || '';
+            if (!layoutId || seen.has(layoutId)) {
+                return;
+            }
+            seen.add(layoutId);
+            const slotEl = element.closest('[data-wslot], [data-slot], [data-slot-id]');
+            const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
+            const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
+            const innerSlots = [];
+            element.querySelectorAll?.('[data-wslot], [data-slot], [data-slot-id]')?.forEach(inner => {
+                if (inner === slotEl) {
+                    return;
+                }
+                const innerSlotId = inner.getAttribute('data-wslot') || inner.getAttribute('data-slot') || inner.getAttribute('data-slot-id') || '';
+                const normalized = normalizePlacementSlotInfo({
+                    ...buildSlotInfoFromElement(innerSlotId, inner),
+                    source: 'inner_dom',
+                });
+                if (normalized) {
+                    innerSlots.push(normalized);
+                }
+            });
+            anchors.push({
+                layout_id: layoutId,
+                widget_code: element.dataset.widgetCode || element.getAttribute('data-widget-code') || '',
+                widget_module: element.dataset.widgetModule || element.getAttribute('data-widget-module') || '',
+                widget_type: element.dataset.widgetType || element.getAttribute('data-widget-type') || '',
+                widget_name: element.dataset.widgetName || element.getAttribute('data-widget-name') || '',
+                slot_id: slotId,
+                area,
+                source,
+                inner_slots: innerSlots,
+            });
+        };
+
+        if (iframeDoc) {
+            iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id]').forEach(el => collectFromElement(el, 'preview'));
+        }
+        document.querySelectorAll('.preview-widget-item[data-layout-id]').forEach(el => collectFromElement(el, 'structure'));
+
+        return anchors;
+    }
+
+    function getSelectedWidgetPlacementTarget(slots, anchors) {
+        if (state.selectedSlot) {
+            const selected = normalizePlacementSlotInfo(state.selectedSlot);
+            if (selected) {
+                return {
+                    type: 'slot',
+                    area: selected.area,
+                    slot_id: selected.id,
+                    insert_mode: 'into_slot',
+                    slot: selected,
+                };
+            }
+        }
+        if (state.selectedWidget) {
+            const layoutId = state.selectedWidget.dataset?.layoutId || state.selectedWidget.getAttribute?.('data-layout-id') || '';
+            const anchor = anchors.find(item => String(item.layout_id) === String(layoutId));
+            if (anchor) {
+                return {
+                    type: 'widget',
+                    area: anchor.area,
+                    slot_id: anchor.slot_id,
+                    anchor_layout_id: anchor.layout_id,
+                    insert_mode: 'after',
+                    anchor,
+                };
+            }
+        }
+        const firstSlot = slots.find(slot => slot.area === 'content') || slots[0] || null;
+        return firstSlot ? {
+            type: 'slot',
+            area: firstSlot.area,
+            slot_id: firstSlot.id,
+            insert_mode: 'into_slot',
+            slot: firstSlot,
+        } : null;
+    }
+
+    function getWidgetPlacementContext() {
+        const slots = collectWidgetPlacementSlots();
+        const anchors = collectWidgetPlacementAnchors();
+        return {
+            theme_id: state.themeId,
+            page_type: state.pageType,
+            layout_type: state.layoutType,
+            layout_option: state.layoutOption,
+            editor_area: state.editorArea || 'frontend',
+            preview_status: state.previewStatus || 'draft',
+            slots,
+            slot_tree: buildWidgetPlacementSlotTree(slots, anchors),
+            widget_anchors: anchors,
+            selected_target: getSelectedWidgetPlacementTarget(slots, anchors),
+        };
+    }
+
+    function collectThemeAiCssVariables(sourceDoc, sourceName) {
+        const result = {};
+        if (!sourceDoc || !sourceDoc.documentElement || !window.getComputedStyle) {
+            return result;
+        }
+        let styles = null;
+        try {
+            styles = sourceDoc.defaultView?.getComputedStyle(sourceDoc.documentElement) || window.getComputedStyle(sourceDoc.documentElement);
+        } catch (error) {
+            return result;
+        }
+        if (!styles) {
+            return result;
+        }
+        const allowed = /^(--te-|--theme-|--weline-|--color-|--font-|--space-|--spacing-|--radius-|--shadow-|--layout-)/i;
+        for (let i = 0; i < styles.length; i++) {
+            const name = styles[i];
+            if (!name || !name.startsWith('--') || !allowed.test(name)) {
+                continue;
+            }
+            const value = String(styles.getPropertyValue(name) || '').trim();
+            if (value !== '') {
+                result[`${sourceName}.${name}`] = value;
+            }
+            if (Object.keys(result).length >= 80) {
+                break;
+            }
+        }
+        return result;
+    }
+
+    function collectThemeAiCurrentValues() {
+        const values = {
+            theme_id: state.themeId,
+            page_type: state.pageType,
+            layout_type: state.layoutType,
+            layout_option: state.layoutOption,
+            editor_area: state.editorArea || 'frontend',
+            preview_status: state.previewStatus || 'draft',
+        };
+        const themeSelect = document.querySelector('#themeSelect');
+        const layoutSelect = document.querySelector('#layoutOptionSelect');
+        const areaSelect = document.querySelector('#editorAreaSelect, [name="editor_area"]');
+        if (themeSelect) {
+            values.theme_label = themeSelect.options?.[themeSelect.selectedIndex]?.textContent?.trim() || '';
+        }
+        if (layoutSelect) {
+            values.layout_option_label = layoutSelect.options?.[layoutSelect.selectedIndex]?.textContent?.trim() || '';
+        }
+        if (areaSelect) {
+            values.editor_area_label = areaSelect.options?.[areaSelect.selectedIndex]?.textContent?.trim() || '';
+        }
+        return values;
+    }
+
+    function getThemeWidgetAiContext() {
+        const iframeDoc = getPreviewDocument();
+        return {
+            provider: 'Weline_Theme',
+            kind: 'theme_editor_context',
+            guidance: 'Optional reference only. Use these current theme values and variables when they help the user request; user prompt and Widget slot protocol have priority.',
+            current_values: collectThemeAiCurrentValues(),
+            css_variables: {
+                editor: collectThemeAiCssVariables(document, 'editor'),
+                preview: collectThemeAiCssVariables(iframeDoc, 'preview'),
+            },
+            placement_context: getWidgetPlacementContext(),
+        };
+    }
+
+    function registerThemeWidgetAiContextProvider() {
+        const provider = {
+            id: 'theme',
+            label: '主题上下文',
+            description: '当前主题、布局、slot 树、CSS 变量和当前值。默认参考，可取消。',
+            defaultSelected: true,
+            optional: true,
+            getContext: getThemeWidgetAiContext,
+        };
+        if (typeof window.WelineRegisterWidgetAiContextProvider === 'function') {
+            window.WelineRegisterWidgetAiContextProvider(provider);
+            return;
+        }
+        window.WelineWidgetAiContextProviders = window.WelineWidgetAiContextProviders || [];
+        window.WelineWidgetAiContextProviders.push(provider);
+    }
+
+    function resolveAnchorPlacementInfo(layoutId) {
+        const iframeDoc = getPreviewDocument();
+        const widgetEl = iframeDoc?.querySelector(dataLayoutIdSelector(layoutId)) || document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
+        if (!widgetEl) {
+            return null;
+        }
+        const slotEl = widgetEl.closest('[data-wslot], [data-slot], [data-slot-id]');
+        const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
+        const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
+        const siblingContainer = widgetEl.parentElement;
+        const siblings = siblingContainer ? Array.from(siblingContainer.children).filter(el => el.hasAttribute('data-layout-id')) : [];
+        const index = siblings.findIndex(el => String(el.getAttribute('data-layout-id')) === String(layoutId));
+        return { widgetEl, slotEl, slotId, area, index: index < 0 ? 0 : index };
+    }
+
+    function normalizeProviderWidgetData(widgetData) {
+        const defaultConfig = widgetData.default_config || widgetData.defaultConfig || {};
+        return {
+            code: widgetData.code || widgetData.widget_code || '',
+            module: widgetData.module || 'Weline_Widget',
+            type: widgetData.type || 'content',
+            name: widgetData.name || widgetData.code || widgetData.widget_code || 'Widget',
+            position: widgetData.position || [],
+            compatible: widgetData.compatible !== false,
+            slot: widgetData.slot || null,
+            supports: widgetData.supports || [],
+            slots: widgetData.slots || [],
+            exclusive: widgetData.exclusive === true || widgetData.exclusive === 'true',
+            pageLayouts: widgetData.page_layouts || widgetData.pageLayouts || ['*'],
+            isContainer: widgetData.is_container === true || widgetData.isContainer === true,
+            config: widgetData.config || defaultConfig || {},
+        };
+    }
+
+    async function deleteLayoutWidgetForPlacement(layoutId, slotId, area) {
+        if (!layoutId) {
+            return true;
+        }
+        const result = await apiJson(config.apiDeleteWidget, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                layout_id: layoutId,
+                theme_id: state.themeId,
+                slot_id: slotId || '',
+                area: area || inferAreaFromSlotId(slotId),
+                layout_type: state.layoutType || state.pageType || 'homepage',
+                layout_option: state.layoutOption || 'default',
+            })
+        });
+        return !!result?.success;
+    }
+
+    async function placeWidgetFromProvider(widgetData, placementTarget = {}) {
+        const normalizedWidget = normalizeProviderWidgetData(widgetData || {});
+        if (!normalizedWidget.code) {
+            showToast('生成的部件缺少 code，无法放置', 'error');
+            return null;
+        }
+
+        const mode = placementTarget.insert_mode || placementTarget.mode || 'into_slot';
+        const anchorInfo = placementTarget.anchor_layout_id ? resolveAnchorPlacementInfo(placementTarget.anchor_layout_id) : null;
+        const selectedSlot = state.selectedSlot ? normalizePlacementSlotInfo(state.selectedSlot) : null;
+        let slotId = placementTarget.slot_id || placementTarget.parent_slot_id || anchorInfo?.slotId || selectedSlot?.id || normalizedWidget.slot || '';
+        let area = placementTarget.area || anchorInfo?.area || selectedSlot?.area || inferAreaFromSlotId(slotId);
+        let sortOrder = placementTarget.sort_order != null ? Number(placementTarget.sort_order) : null;
+
+        if ((mode === 'before' || mode === 'after' || mode === 'replace') && anchorInfo) {
+            slotId = slotId || anchorInfo.slotId;
+            area = area || anchorInfo.area;
+            if (sortOrder === null || Number.isNaN(sortOrder)) {
+                sortOrder = mode === 'after' ? anchorInfo.index + 1 : anchorInfo.index;
+            }
+        }
+
+        if (!slotId && selectedSlot) {
+            slotId = selectedSlot.id;
+            area = selectedSlot.area;
+        }
+        if (!slotId) {
+            showToast('请先选择要放置的 slot', 'warning');
+            return null;
+        }
+
+        if (mode === 'replace' && anchorInfo?.widgetEl) {
+            const deleted = await deleteLayoutWidgetForPlacement(placementTarget.anchor_layout_id, slotId, area);
+            if (!deleted) {
+                showToast('替换目标删除失败，已停止放置', 'error');
+                return null;
+            }
+        }
+
+        if (sortOrder === null || Number.isNaN(sortOrder)) {
+            sortOrder = getNextSlotSortOrder(slotId);
+        }
+
+        const exclusive = placementTarget.exclusive !== undefined
+            ? !!placementTarget.exclusive
+            : (mode === 'replace' && isExclusiveSlot(slotId, normalizedWidget.code)) || normalizedWidget.exclusive || isExclusiveSlot(slotId, normalizedWidget.code);
+
+        return saveWidget({
+            area,
+            slotId,
+            widgetData: normalizedWidget,
+            sortOrder,
+            exclusive,
+            switchToPreview: true,
+        });
+    }
+
+    function registerWidgetLibraryItem(item) {
+        if (!item || item.__themeEditorWidgetBound) {
+            return;
+        }
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+        item.__themeEditorWidgetBound = true;
+        scheduleFitWidgetPreviews();
+    }
+
     window.ThemeEditor = window.ThemeEditor || {};
+    window.ThemeEditor.apiJson = apiJson;
     window.ThemeEditor.deselectArea = deselectArea;
     window.ThemeEditor.selectArea = selectArea;
     window.ThemeEditor.filterWidgetsByArea = filterWidgetsByArea;
+    window.ThemeEditor.getWidgetPlacementContext = getWidgetPlacementContext;
+    window.ThemeEditor.getWidgetAiContext = getThemeWidgetAiContext;
+    window.ThemeEditor.placeWidgetFromProvider = placeWidgetFromProvider;
+    window.ThemeEditor.registerWidgetLibraryItem = registerWidgetLibraryItem;
+    registerThemeWidgetAiContextProvider();
 
     // ==================== 版本控制功能 ====================
+
+    function versionIdEquals(left, right) {
+        if (left === null || left === undefined || right === null || right === undefined) {
+            return false;
+        }
+        return String(left) === String(right);
+    }
+
+    function setVersionPanelStatus(message, options = {}) {
+        const versionList = document.getElementById('versionList');
+        const currentVersionDisplay = document.getElementById('currentVersionDisplay');
+        const text = message || '版本历史加载失败';
+
+        if (currentVersionDisplay && options.updateCurrent !== false) {
+            currentVersionDisplay.textContent = text;
+        }
+
+        if (versionList) {
+            const className = options.error ? 'version-item empty error' : 'version-item empty';
+            versionList.innerHTML = `<div class="${className}">${escapeHtml(text)}</div>`;
+        }
+    }
+
+    function resetVersionState() {
+        state.versions = [];
+        state.currentVersionId = null;
+        state.publishedVersionId = null;
+    }
 
     /**
      * 加载版本列表
      */
-    async function loadVersions() {
+    async function loadVersions(options = {}) {
+        const notifyOnError = options.notifyOnError === true;
+
         if (!state.themeId) {
+            resetVersionState();
+            setVersionPanelStatus('请选择主题后查看版本历史', { error: true });
             return;
         }
+
+        setVersionPanelStatus('加载中...', { updateCurrent: state.versions.length === 0 });
 
         try {
             const url = new URL(config.apiVersions, window.location.origin);
@@ -7786,19 +11556,34 @@
             url.searchParams.set('page_type', state.pageType);
             url.searchParams.set('limit', '20');
 
-            const response = await fetch(url.toString());
-            const result = await response.json();
+            const result = await apiJson(url.toString());
 
-            if (result.success && result.data) {
-                state.versions = result.data.versions || [];
-                state.currentVersionId = result.data.current_version_id;
-                state.publishedVersionId = result.data.published_version_id;
-
-                // 更新版本面板 UI
-                renderVersionPanel();
+            if (!result.success || !result.data) {
+                const message = result.message || '版本历史加载失败';
+                resetVersionState();
+                setVersionPanelStatus(message, { error: true });
+                if (notifyOnError) {
+                    showToast(message, 'error');
+                }
+                return;
             }
+
+            state.versions = Array.isArray(result.data.versions) ? result.data.versions : [];
+            state.currentVersionId = result.data.current_version_id;
+            state.publishedVersionId = result.data.published_version_id;
+
+            // 更新版本面板 UI
+            renderVersionPanel();
         } catch (error) {
             console.error('[ThemeEditor] Load versions error:', error);
+            const message = error && error.message
+                ? `版本历史加载失败：${error.message}`
+                : '版本历史加载失败';
+            resetVersionState();
+            setVersionPanelStatus(message, { error: true });
+            if (notifyOnError) {
+                showToast(message, 'error');
+            }
         }
     }
 
@@ -7815,7 +11600,7 @@
 
         // 更新当前版本显示
         if (currentVersionDisplay) {
-            const currentVersion = state.versions.find(v => v.version_id === state.currentVersionId);
+            const currentVersion = state.versions.find(v => versionIdEquals(v.version_id, state.currentVersionId));
             currentVersionDisplay.textContent = currentVersion ? currentVersion.display_name : '无版本';
         }
 
@@ -7827,12 +11612,17 @@
 
         let html = '';
         for (const version of state.versions) {
-            const isCurrent = version.version_id === state.currentVersionId;
-            const isPublished = version.version_id === state.publishedVersionId;
+            const safeVersionId = parseInt(version.version_id || '', 10);
+            if (!Number.isFinite(safeVersionId) || safeVersionId <= 0) {
+                continue;
+            }
+            version.version_id = safeVersionId;
+            const isCurrent = versionIdEquals(version.version_id, state.currentVersionId);
+            const isPublished = versionIdEquals(version.version_id, state.publishedVersionId);
             const isAutoBackup = version.is_auto_backup;
 
             html += `
-                <div class="version-item ${isCurrent ? 'current' : ''} ${isAutoBackup ? 'backup' : ''}" 
+                <div class="version-item ${isCurrent ? 'current' : ''} ${isAutoBackup ? 'backup' : ''}"
                      data-version-id="${version.version_id}">
                     <div class="version-info">
                         <span class="version-name">
@@ -7850,10 +11640,13 @@
                         ${version.description ? `<span class="version-desc">${escapeHtml(version.description)}</span>` : ''}
                     </div>
                     <div class="version-actions">
-                        ${!isCurrent ? `<button class="btn btn-sm btn-outline-primary" onclick="switchToVersion(${version.version_id})">
-                            <i class="fa fa-undo"></i> 切换
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-version-action="preview" data-version-id="${escapeHtml(version.version_id)}" title="Preview this version">
+                            <i class="fa fa-eye"></i> 预览
+                        </button>
+                        ${!isCurrent ? `<button class="btn btn-sm btn-outline-primary" type="button" data-version-action="switch" data-version-id="${escapeHtml(version.version_id)}" title="Restore draft to this version">回撤
+                            <i class="fa fa-undo"></i>
                         </button>` : ''}
-                        ${!isCurrent && !isPublished ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteVersion(${version.version_id})">
+                        ${!isCurrent && !isPublished ? `<button class="btn btn-sm btn-outline-danger" type="button" data-version-action="delete" data-version-id="${escapeHtml(version.version_id)}">
                             <i class="fa fa-trash"></i>
                         </button>` : ''}
                     </div>
@@ -7864,8 +11657,31 @@
         versionList.innerHTML = html;
     }
 
+    async function previewVersion(versionId) {
+        if (!state.themeId || !versionId || !elements.previewFrame) {
+            return;
+        }
+
+        const version = state.versions.find(item => Number(item.version_id) === Number(versionId));
+        const previewOverrides = {
+            preview_mode: 'version',
+            version_id: versionId,
+            status: 'draft',
+            editor_mode: '1',
+            _t: Date.now(),
+        };
+
+        switchPreviewView('preview');
+        clearSlotSelection();
+        deselectArea();
+        deselectWidget();
+        elements.previewFrame.src = buildLayoutPreviewUrl(previewOverrides);
+        await fetchLayoutSlots(previewOverrides);
+        showToast(version ? `正在预览版本：${version.display_name}` : '正在预览版本', 'info');
+    }
+
     /**
-     * 切换到指定版本
+     * 回撤到指定版本
      */
     async function switchToVersion(versionId) {
         if (!state.themeId || !versionId) {
@@ -7873,9 +11689,9 @@
         }
 
         const confirmed = await showCustomConfirm(
-            '切换版本',
-            '确定要切换到此版本吗？当前工作区的未保存修改将被替换。',
-            '确认切换',
+            '回撤版本',
+            '确定要回撤到此版本吗？当前工作区的未保存修改将被替换。',
+            '确认回撤',
             '取消'
         );
 
@@ -7884,9 +11700,9 @@
         }
 
         try {
-            showToast('正在切换版本...', 'info');
+            showToast('正在回撤版本...', 'info');
 
-            const response = await fetch(config.apiSwitchVersion, {
+            const result = await apiJson(config.apiSwitchVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -7898,15 +11714,13 @@
                 }),
             });
 
-            const result = await response.json();
-
             if (result.success) {
                 navigateEditorShell({
                     page_type: state.pageType,
                     version_id: null,
                 });
                 return;
-                showToast(result.message || '已切换版本', 'success');
+                showToast(result.message || '已回撤版本', 'success');
 
                 // 刷新版本列表
                 await loadVersions();
@@ -7914,11 +11728,11 @@
                 // 刷新预览
                 refreshPreview();
             } else {
-                showToast(result.message || '切换失败', 'error');
+                showToast(result.message || '回撤失败', 'error');
             }
         } catch (error) {
             console.error('[ThemeEditor] Switch version error:', error);
-            showToast('切换版本失败：' + error.message, 'error');
+            showToast('回撤版本失败：' + error.message, 'error');
         }
     }
 
@@ -7942,7 +11756,7 @@
         }
 
         try {
-            const response = await fetch(config.apiDeleteVersion, {
+            const result = await apiJson(config.apiDeleteVersion, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -7951,8 +11765,6 @@
                     version_id: versionId,
                 }),
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 showToast(result.message || '版本已删除', 'success');
@@ -7979,7 +11791,7 @@
         if (state.versionPanelOpen) {
             panel.classList.add('open');
             // 加载版本列表
-            loadVersions();
+            loadVersions({ notifyOnError: true });
         } else {
             panel.classList.remove('open');
         }
@@ -8004,7 +11816,7 @@
                 align-items: center;
                 justify-content: center;
             `;
-            
+
             container.innerHTML = `
                 <div class="prompt-dialog-overlay" style="
                     position: absolute;
@@ -8085,7 +11897,7 @@
                 cleanup();
                 resolve(null);
             });
-            
+
             // 点击遮罩关闭
             overlay.addEventListener('click', () => {
                 cleanup();
@@ -8176,7 +11988,7 @@
         }
 
         try {
-            const response = await fetch(config.apiUpdateActivity, {
+            const result = await apiJson(config.apiUpdateActivity, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -8187,8 +11999,6 @@
                     page_type: getCurrentPageType(),
                 }),
             });
-
-            const result = await response.json();
             if (!(result && result.success)) {
                 state.lockHeld = false;
                 stopLockHeartbeat();
@@ -8238,7 +12048,7 @@
 
         try {
             if (keepalive) {
-                fetch(config.apiReleaseLock, {
+                apiJson(config.apiReleaseLock, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -8250,7 +12060,7 @@
                 return true;
             }
 
-            const response = await fetch(config.apiReleaseLock, {
+            const result = await apiJson(config.apiReleaseLock, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -8258,8 +12068,7 @@
                 },
                 body: payload,
             });
-
-            return response.ok;
+            return !(result && result.success === false);
         } catch (error) {
             console.warn('[ThemeEditor] Release lock failed:', error);
             return false;
@@ -8276,12 +12085,11 @@
             url.searchParams.set('theme_id', String(state.themeId));
             url.searchParams.set('page_type', getCurrentPageType());
 
-            const response = await fetch(url.toString(), {
+            const result = await apiJson(url.toString(), {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                 },
             });
-            const result = await response.json();
 
             if (result && result.success) {
                 state.lockHeld = true;

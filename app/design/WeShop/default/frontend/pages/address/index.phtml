@@ -135,7 +135,7 @@ $countries = (array) ($this->getData('countries') ?? []);
                 </button>
             </div>
 
-            <form id="weshop-address-form" class="mt-6 grid gap-4 sm:grid-cols-2" data-save-url="<?= $this->getUrl('address/save') ?>">
+            <form id="weshop-address-form" class="mt-6 grid gap-4 sm:grid-cols-2">
                 <input type="hidden" name="address_id" id="weshop-address-id" value="">
                 <div class="space-y-2">
                     <label for="weshop-address-firstname" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('First Name') ?></label>
@@ -212,6 +212,7 @@ $countries = (array) ($this->getData('countries') ?? []);
             postcode: document.getElementById('weshop-address-postcode'),
             is_default: document.getElementById('weshop-address-default')
         };
+        var addressApiPromise = null;
 
         function showFeedback(message, isError) {
             if (!feedback) {
@@ -247,16 +248,32 @@ $countries = (array) ($this->getData('countries') ?? []);
             form.scrollIntoView({behavior: 'smooth', block: 'start'});
         }
 
-        function postAction(url, body) {
-            return fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: new URLSearchParams(body).toString()
-            }).then(function (response) {
-                return response.json();
+        function getAddressApi() {
+            if (!addressApiPromise) {
+                addressApiPromise = window.Weline && window.Weline.Api
+                    ? window.Weline.Api.resource('address')
+                    : Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+            return addressApiPromise;
+        }
+
+        function formDataToObject(formData) {
+            var payload = {};
+            formData.forEach(function (value, key) {
+                payload[key] = value;
+            });
+            payload.address_id = parseInt(payload.address_id || '0', 10) || 0;
+            payload.is_default = payload.is_default === '1' || payload.is_default === 'true';
+            return payload;
+        }
+
+        function addressAction(operation, body, errorMessage) {
+            return getAddressApi().then(function (AddressApi) {
+                return AddressApi[operation](body, {
+                    onError: function (_status, error) {
+                        showFeedback((error && error.message) || errorMessage, true);
+                    }
+                });
             });
         }
 
@@ -271,30 +288,34 @@ $countries = (array) ($this->getData('countries') ?? []);
 
         document.querySelectorAll('[data-address-default]').forEach(function (button) {
             button.addEventListener('click', function () {
-                postAction('<?= $this->getUrl('address/default-address') ?>', {
-                    address_id: this.getAttribute('data-address-default') || ''
-                }).then(function (payload) {
+                addressAction('setDefault', {
+                    address_id: parseInt(this.getAttribute('data-address-default') || '0', 10) || 0
+                }, '<?= addslashes((string) __('Unable to update the default address.')) ?>').then(function (payload) {
                     if (payload && payload.success) {
                         window.location.reload();
                         return;
                     }
 
                     showFeedback((payload && payload.message) || '<?= addslashes((string) __('Unable to update the default address.')) ?>', true);
+                }).catch(function (error) {
+                    showFeedback((error && error.message) || '<?= addslashes((string) __('Unable to update the default address.')) ?>', true);
                 });
             });
         });
 
         document.querySelectorAll('[data-address-delete]').forEach(function (button) {
             button.addEventListener('click', function () {
-                postAction('<?= $this->getUrl('address/delete') ?>', {
-                    address_id: this.getAttribute('data-address-delete') || ''
-                }).then(function (payload) {
+                addressAction('delete', {
+                    address_id: parseInt(this.getAttribute('data-address-delete') || '0', 10) || 0
+                }, '<?= addslashes((string) __('Unable to remove the address.')) ?>').then(function (payload) {
                     if (payload && payload.success) {
                         window.location.reload();
                         return;
                     }
 
                     showFeedback((payload && payload.message) || '<?= addslashes((string) __('Unable to remove the address.')) ?>', true);
+                }).catch(function (error) {
+                    showFeedback((error && error.message) || '<?= addslashes((string) __('Unable to remove the address.')) ?>', true);
                 });
             });
         });
@@ -306,26 +327,17 @@ $countries = (array) ($this->getData('countries') ?? []);
 
         form.addEventListener('submit', function (event) {
             event.preventDefault();
-            var formData = new FormData(form);
+            var payloadData = formDataToObject(new FormData(form));
 
-            fetch(form.getAttribute('data-save-url') || '', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: new URLSearchParams(formData).toString()
-            }).then(function (response) {
-                return response.json();
-            }).then(function (payload) {
+            addressAction('save', payloadData, '<?= addslashes((string) __('Unable to save the address.')) ?>').then(function (payload) {
                 if (payload && payload.success) {
                     window.location.reload();
                     return;
                 }
 
                 showFeedback((payload && payload.message) || '<?= addslashes((string) __('Unable to save the address.')) ?>', true);
-            }).catch(function () {
-                showFeedback('<?= addslashes((string) __('Unable to save the address.')) ?>', true);
+            }).catch(function (error) {
+                showFeedback((error && error.message) || '<?= addslashes((string) __('Unable to save the address.')) ?>', true);
             });
         });
     })();

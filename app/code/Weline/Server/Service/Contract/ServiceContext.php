@@ -29,7 +29,8 @@ class ServiceContext
         public readonly string $mode,
         public readonly bool $daemon,
         public readonly bool $debug,
-        public readonly bool $frontend,
+        /** Windows 子进程可见窗口等（原 frontend 语义中的「窗口」部分） */
+        public readonly bool $windowMode,
         public readonly array $envConfig,
         public readonly int $httpRedirectPort = 0,
         // 运行态字段：由 Start.php 计算后传入，优先级高于 envConfig
@@ -39,6 +40,7 @@ class ServiceContext
         public readonly ?int $workerPort = null,
         /** 浏览器/对外展示的访问主机名（可与实际 bind 的 host 不同，例如 bind 127.0.0.1 而展示 *.weline.test） */
         public readonly ?string $publicHost = null,
+        public readonly string $controlToken = '',
     ) {}
 
     /**
@@ -59,7 +61,8 @@ class ServiceContext
             mode: $this->mode,
             daemon: $this->daemon,
             debug: $this->debug,
-            frontend: $this->frontend,
+            controlToken: $this->controlToken,
+            windowMode: $this->windowMode,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,
             dispatcherEnabled: $this->dispatcherEnabled,
@@ -85,7 +88,8 @@ class ServiceContext
             mode: $this->mode,
             daemon: $this->daemon,
             debug: $this->debug,
-            frontend: $this->frontend,
+            controlToken: $this->controlToken,
+            windowMode: $this->windowMode,
             envConfig: $this->envConfig,
             httpRedirectPort: $this->httpRedirectPort,
             dispatcherEnabled: $this->dispatcherEnabled,

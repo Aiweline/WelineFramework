@@ -41,7 +41,7 @@ $themeId = $theme ? (is_object($theme) && method_exists($theme, 'getId') ? $them
                             <h4 class="mb-sm-0"><?= __('主题配置编辑') ?></h4>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript:void(0);"><?= __('系统') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="#" data-theme-config-noop-link><?= __('系统') ?></a></li>
                                     <li class="breadcrumb-item"><a href="<?= $this->getUrl('theme/backend/index') ?>"><?= __('主题管理') ?></a></li>
                                     <li class="breadcrumb-item active"><?= __('主题配置') ?></li>
                                 </ol>
@@ -49,6 +49,16 @@ $themeId = $theme ? (is_object($theme) && method_exists($theme, 'getId') ? $them
                         </div>
                     </div>
                 </div>
+                <script>
+                (function () {
+                    document.addEventListener('click', function (event) {
+                        const noopLink = event.target.closest('[data-theme-config-noop-link]');
+                        if (noopLink) {
+                            event.preventDefault();
+                        }
+                    });
+                })();
+                </script>
 
                 <!-- 主题选择栏 -->
                 <div class="row mb-3">

@@ -69,8 +69,11 @@ class Account extends BackendController
 
             // 搜索过滤
             if (!empty($search)) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                $searchPattern = "%{$search}%";
+                $query->where([
+                    [AccountModel::schema_fields_NAME, 'LIKE', $searchPattern, 'OR'],
+                    [AccountModel::schema_fields_DESCRIPTION, 'LIKE', $searchPattern],
+                ]);
             }
 
             // 适配器过滤

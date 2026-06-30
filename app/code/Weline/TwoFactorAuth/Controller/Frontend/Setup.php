@@ -20,7 +20,6 @@ class Setup extends FrontendController
     public function __construct(
         TwoFactorAuthService $twoFactorAuthService
     ) {
-        parent::__construct();
         $this->twoFactorAuthService = $twoFactorAuthService;
     }
 

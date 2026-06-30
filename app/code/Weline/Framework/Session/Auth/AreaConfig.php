@@ -39,9 +39,10 @@ final class AreaConfig
             'cookie_path' => '/',
         ],
         'rest_backend' => [
-            'login_key' => 'WF_REST_BACKEND_USER',
-            'login_id_key' => 'WF_REST_BACKEND_USER_ID',
-            'user_model_key' => 'WF_REST_BACKEND_USER_MODEL',
+            // rest_backend is a route/API area, not a separate browser login realm.
+            'login_key' => 'WF_BACKEND_USER',
+            'login_id_key' => 'WF_BACKEND_USER_ID',
+            'user_model_key' => 'WF_BACKEND_USER_MODEL',
             'cookie_path' => '/',
         ],
         'checkout' => [

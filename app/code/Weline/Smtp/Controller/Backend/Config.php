@@ -36,6 +36,7 @@ class Config extends BackendController
     public function index(): string
     {
         $senders = $this->data->getSenders('Weline_Smtp');
+        $mailAccounts = $this->loadMailSmtpAccounts();
         $contacts = [];
         foreach ($senders as $s) {
             $code = $s['code'] ?? '';
@@ -45,6 +46,7 @@ class Config extends BackendController
         }
         $legacy = $this->data->get();
         $this->assign('senders', $senders);
+        $this->assign('mail_accounts', $mailAccounts);
         $this->assign('sender_contacts', $contacts);
         $this->assign('legacy', $legacy);
         return $this->fetch('Weline_Smtp::Backend/Config');
@@ -75,7 +77,7 @@ class Config extends BackendController
         } else {
             $this->getMessageManager()->addError($has_error);
         }
-        $this->redirect($this->getBackendUrl('smtp/backend/config'));
+        $this->redirect($this->_url->getBackendUrl('smtp/backend/config'));
     }
 
     #[Acl('Weline_Smtp::smtp_config_test', '测试发送', 'mdi-send', '测试 SMTP 发送', 'Weline_Smtp::system_smtp_config')]
@@ -116,7 +118,7 @@ class Config extends BackendController
                 $this->getMessageManager()->addError($e->getMessage());
             }
         }
-        $this->redirect($this->getBackendUrl('smtp/backend/config'));
+        $this->redirect($this->_url->getBackendUrl('smtp/backend/config'));
     }
 
     /** 保存多发件人配置（JSON）及联系人 */
@@ -127,8 +129,17 @@ class Config extends BackendController
             return $this->jsonError(__('无效的请求方法'));
         }
         $module = 'Weline_Smtp';
-        $sendersJson = $this->request->getPost('senders');
-        $contactsJson = $this->request->getPost('sender_contacts');
+        $sendersJson = $this->getRequestPayloadValue('senders');
+        if ($sendersJson === null || $sendersJson === '') {
+            $sendersJson = $this->getRequestPayloadValue('smtp_senders_json');
+        }
+        $contactsJson = $this->getRequestPayloadValue('sender_contacts');
+        if ($contactsJson === null || $contactsJson === '') {
+            $contactsJson = $this->getRequestPayloadValue('smtp_sender_contacts_json');
+        }
+        if (($sendersJson === null || $sendersJson === '') && ($contactsJson === null || $contactsJson === '')) {
+            return $this->jsonError(__('缺少发件人配置数据'));
+        }
         if ($sendersJson !== null && $sendersJson !== '') {
             $senders = json_decode($sendersJson, true);
             if (is_array($senders)) {
@@ -141,9 +152,37 @@ class Config extends BackendController
                     }
                 }
                 foreach ($senders as &$s) {
-                    $code = $s['code'] ?? '';
+                    $code = trim((string)($s['code'] ?? ''));
+                    $s['code'] = $code;
                     if ($code !== '' && (trim((string)($s['smtp_password'] ?? '')) === '') && isset($existingByCode[$code]['smtp_password'])) {
                         $s['smtp_password'] = $existingByCode[$code]['smtp_password'];
+                    }
+                    $sourceType = (string)($s['source_type'] ?? 'external');
+                    $sourceType = in_array($sourceType, ['external', 'mail_account'], true) ? $sourceType : 'external';
+                    $s['source_type'] = $sourceType;
+                    if ($sourceType === 'mail_account') {
+                        $mailAccountId = (int)($s['mail_account_id'] ?? 0);
+                        if ($mailAccountId <= 0) {
+                            return $this->jsonError(__('请选择自建邮箱账号'));
+                        }
+                        $mailConfig = $this->loadMailSmtpAccountConfig($mailAccountId);
+                        if ($mailConfig === null) {
+                            return $this->jsonError(__('自建邮箱账号不存在或未启用'));
+                        }
+                        $s['mail_account_id'] = (string)$mailAccountId;
+                        $s['mail_account_email'] = (string)($mailConfig['email'] ?? '');
+                        $s['mail_domain_id'] = (string)($mailConfig['domain_id'] ?? '');
+                        $s['mail_domain_name'] = (string)($mailConfig['domain_name'] ?? '');
+                        $s['mail_engine'] = (string)($mailConfig['engine'] ?? '');
+                        $s['mail_is_fake'] = !empty($mailConfig['is_fake']) ? '1' : '0';
+                        $s['smtp_host'] = (string)($mailConfig['smtp_host'] ?? '');
+                        $s['smtp_port'] = (string)($mailConfig['smtp_port'] ?? '587');
+                        $s['smtp_secure'] = (string)($mailConfig['smtp_secure'] ?? 'tls');
+                        $s['smtp_auth'] = (string)($mailConfig['smtp_auth'] ?? '1');
+                        $s['smtp_username'] = (string)($mailConfig['email'] ?? '');
+                        if (trim((string)($s['name'] ?? '')) === '') {
+                            $s['name'] = (string)($mailConfig['display_name'] ?? $mailConfig['email'] ?? $code);
+                        }
                     }
                 }
                 unset($s);
@@ -163,6 +202,45 @@ class Config extends BackendController
         return $this->jsonSuccess(__('保存成功'));
     }
 
+    private function getRequestPayloadValue(string $key): ?string
+    {
+        $value = $this->request->getPost($key);
+        if ($value !== null && $value !== '') {
+            return is_scalar($value) ? (string)$value : json_encode($value, JSON_UNESCAPED_UNICODE);
+        }
+
+        $bodyParams = $this->request->getBodyParams(true);
+        if (is_array($bodyParams) && array_key_exists($key, $bodyParams)) {
+            $bodyValue = $bodyParams[$key];
+            return is_scalar($bodyValue) ? (string)$bodyValue : json_encode($bodyValue, JSON_UNESCAPED_UNICODE);
+        }
+
+        $rawBody = '';
+        if (method_exists($this->request, 'getParameterBag')) {
+            $rawBody = (string)$this->request->getParameterBag()->getRawBody();
+        }
+        if ($rawBody === '') {
+            return null;
+        }
+
+        $trimmed = ltrim($rawBody);
+        if ($trimmed !== '' && ($trimmed[0] === '{' || $trimmed[0] === '[')) {
+            $json = json_decode($rawBody, true);
+            if (is_array($json) && array_key_exists($key, $json)) {
+                $jsonValue = $json[$key];
+                return is_scalar($jsonValue) ? (string)$jsonValue : json_encode($jsonValue, JSON_UNESCAPED_UNICODE);
+            }
+        }
+
+        parse_str($rawBody, $params);
+        if (array_key_exists($key, $params)) {
+            $paramValue = $params[$key];
+            return is_scalar($paramValue) ? (string)$paramValue : json_encode($paramValue, JSON_UNESCAPED_UNICODE);
+        }
+
+        return null;
+    }
+
     private function jsonSuccess(string $msg): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
@@ -173,5 +251,31 @@ class Config extends BackendController
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode(['success' => false, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function loadMailSmtpAccounts(): array
+    {
+        try {
+            $result = w_query('mail', 'getSmtpAccounts', ['limit' => 200]);
+            if (is_array($result) && !empty($result['success']) && is_array($result['items'] ?? null)) {
+                return $result['items'];
+            }
+        } catch (\Throwable) {
+        }
+
+        return [];
+    }
+
+    private function loadMailSmtpAccountConfig(int $accountId): ?array
+    {
+        try {
+            $result = w_query('mail', 'getSmtpAccountConfig', ['account_id' => $accountId]);
+            if (is_array($result) && !empty($result['success']) && is_array($result['config'] ?? null)) {
+                return $result['config'];
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
     }
 }

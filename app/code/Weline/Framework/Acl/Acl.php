@@ -38,7 +38,10 @@ use Weline\Framework\Manager\ObjectManager;
         string $icon, 
         string $document='', 
         string $parent_source = '', 
-        string $rewrite = '')
+        string $rewrite = '',
+        string $accessMode = '',
+        string $scopeGroup = '',
+        bool $apiExposable = false)
     {
         if ($source_id === $parent_source) {
             throw new Exception(__('source_id与parent_source不能相同！'));
@@ -50,6 +53,9 @@ use Weline\Framework\Manager\ObjectManager;
             'document' => __($document),
             'parent_source' => $parent_source,
             'rewrite' => $rewrite,
+            'access_mode' => $accessMode,
+            'scope_group' => $scopeGroup,
+            'api_exposable' => (int)$apiExposable,
         ]);
     }
 
@@ -76,6 +82,21 @@ use Weline\Framework\Manager\ObjectManager;
     function setMethod(string $method = ''): Acl
     {
         return $this->setData('method', $method);
+    }
+
+    function setAccessMode(string $accessMode = ''): Acl
+    {
+        return $this->setData('access_mode', $accessMode);
+    }
+
+    function setScopeGroup(string $scopeGroup = ''): Acl
+    {
+        return $this->setData('scope_group', $scopeGroup);
+    }
+
+    function setApiExposable(bool|int|string $apiExposable = false): Acl
+    {
+        return $this->setData('api_exposable', (int)filter_var($apiExposable, FILTER_VALIDATE_BOOLEAN));
     }
 
     function setIsEnable(bool $is_enable = true): Acl
@@ -136,6 +157,21 @@ use Weline\Framework\Manager\ObjectManager;
     function getMethod(): string
     {
         return $this->getData('method');
+    }
+
+    function getAccessMode(): string
+    {
+        return (string)($this->getData('access_mode') ?? '');
+    }
+
+    function getScopeGroup(): string
+    {
+        return (string)($this->getData('scope_group') ?? '');
+    }
+
+    function getApiExposable(): bool
+    {
+        return (bool)$this->getData('api_exposable');
     }
 
     function getRouter(): string

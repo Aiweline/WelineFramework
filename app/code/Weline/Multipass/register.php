@@ -16,7 +16,8 @@ Register::register(
     [
         'Weline_Framework',
         'Weline_Backend',
-        'Weline_Frontend'
+        'Weline_Frontend',
+        'Weline_Customer'
     ]
 );
 

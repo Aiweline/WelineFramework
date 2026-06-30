@@ -182,9 +182,9 @@ DOC
                 $action = $request->getUrlBuilder()->getUrl($parent[$action_field]);
             }
         } else {
-            $action = 'javascript: void(0);';
+            $action = '#';
         }
-        $html .= "<li class='breadcrumb-item'><a href='{$action}'>{$name}</a></li>";
+        $html .= "<li class='breadcrumb-item'><a href='" . htmlspecialchars((string)$action, ENT_QUOTES, 'UTF-8') . "'>" . htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') . "</a></li>";
         return $html;
     }
 

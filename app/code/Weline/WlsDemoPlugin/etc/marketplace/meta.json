@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "module_name": "Weline_WlsDemoPlugin",
+  "i18n": {
+    "source_locale": "zh_Hans_CN",
+    "locales": {
+      "zh_Hans_CN": {
+        "display_name": "WLS Demo 插件",
+        "description": "用于验证 WLS 面板可以通过 module:wls 标签从商城发现并安装专属插件的最小演示模块。"
+      },
+      "en_US": {
+        "display_name": "WLS Demo Plugin",
+        "description": "A minimal demo module used to verify that WLS Panel can discover and install WLS-specific plugins from the marketplace through the module:wls tag."
+      }
+    }
+  },
+  "tags": [
+    {
+      "code": "module:wls",
+      "type": "module",
+      "primary": true,
+      "labels": {
+        "zh_Hans_CN": "WLS 面板插件",
+        "en_US": "WLS Panel Plugin"
+      }
+    },
+    {
+      "code": "custom:wls-demo-plugin",
+      "type": "custom",
+      "labels": {
+        "zh_Hans_CN": "WLS Demo 插件",
+        "en_US": "WLS Demo Plugin"
+      }
+    },
+    {
+      "code": "category:server-tools",
+      "type": "category",
+      "labels": {
+        "zh_Hans_CN": "服务器工具",
+        "en_US": "Server Tools"
+      }
+    },
+    {
+      "code": "feature:marketplace-demo",
+      "type": "feature",
+      "labels": {
+        "zh_Hans_CN": "商城安装演示",
+        "en_US": "Marketplace Install Demo"
+      }
+    },
+    {
+      "code": "system:false",
+      "type": "system",
+      "labels": {
+        "zh_Hans_CN": "非系统模块",
+        "en_US": "Non-system Module"
+      }
+    }
+  ],
+  "surfaces": [
+    "backend"
+  ],
+  "capabilities": {
+    "demo.install": {
+      "label": {
+        "zh_Hans_CN": "商城安装链路验证",
+        "en_US": "Marketplace Install Chain Verification"
+      },
+      "status": "demo"
+    }
+  },
+  "wls_panel": {
+    "menu": [
+      {
+        "key": "demo-plugin",
+        "label": {
+          "zh_Hans_CN": "Demo 插件",
+          "en_US": "Demo Plugin"
+        },
+        "description": {
+          "zh_Hans_CN": "用于验证 WLS Panel 插件发现与安装链路。",
+          "en_US": "Verifies the WLS Panel plugin discovery and installation path."
+        },
+        "group": "tools",
+        "order": 95
+      }
+    ]
+  },
+  "seo": {
+    "slug": "wls-demo-plugin"
+  }
+}

@@ -4,16 +4,22 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Extends\Module\Weline_Framework\Query;
 
+use Weline\Ai\Exception\AiBillingException;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Php\FiberTaskRunner;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Framework\Session\SessionFactory;
+
+require_once __DIR__ . '/AiProviderAccountQueryProvider.php';
 
 class AiQueryProvider implements QueryProviderInterface
 {
     private const DEFAULT_CONCURRENCY_CAP = 8;
+    private ?AiProviderAccountQueryProvider $providerAccountQueryProvider = null;
 
     public function __construct(
-        private readonly AiService $aiService
+        private readonly AiService $aiService,
+        private readonly SessionFactory $sessionFactory
     ) {
     }
 
@@ -30,8 +36,17 @@ class AiQueryProvider implements QueryProviderInterface
             'resolveModel' => $this->resolveModel($params),
             'listModels' => $this->listModels($params),
             'getAdapterModelBindings' => $this->getAdapterModelBindings($params),
+            'chat' => $this->chat($params),
             'generateStream' => $this->generateStream($params),
             'generateStreamBatch' => $this->generateStreamBatch($params),
+            'providerListAccounts' => $this->providerAccountQueryProvider()->execute('listAccounts', $params),
+            'providerGetAccount' => $this->providerAccountQueryProvider()->execute('getAccount', $params),
+            'providerSaveAccount' => $this->providerAccountQueryProvider()->execute('saveAccount', $params),
+            'providerTestConnection' => $this->providerAccountQueryProvider()->execute('testConnection', $params),
+            'providerRemoteModelsForSelect' => $this->providerAccountQueryProvider()->execute('remoteModelsForSelect', $params),
+            'providerGetUsageList' => $this->providerAccountQueryProvider()->execute('getUsageList', $params),
+            'providerToggleActive' => $this->providerAccountQueryProvider()->execute('toggleActive', $params),
+            'providerDeleteAccount' => $this->providerAccountQueryProvider()->execute('deleteAccount', $params),
             default => throw new \InvalidArgumentException(
                 (string)__('Ai 查询器不支持的操作：%{1}', $operation)
             ),
@@ -40,25 +55,83 @@ class AiQueryProvider implements QueryProviderInterface
 
     private function generate(array $params): string
     {
-        return $this->aiService->generate(
-            $this->requireNonEmptyString($params, 'prompt'),
-            $this->optionalString($params, 'model_code'),
-            $this->optionalString($params, 'scenario_code'),
-            $this->optionalString($params, 'locale'),
-            $this->optionalArray($params, 'params'),
-            $this->optionalInt($params, 'user_id'),
-            (bool)($params['is_backend'] ?? false)
-        );
+        try {
+            return $this->aiService->generate(
+                $this->requireNonEmptyString($params, 'prompt'),
+                $this->optionalString($params, 'model_code'),
+                $this->optionalString($params, 'scenario_code'),
+                $this->optionalString($params, 'locale'),
+                $this->optionalArray($params, 'params'),
+                $this->optionalInt($params, 'user_id'),
+                (bool)($params['is_backend'] ?? false)
+            );
+        } catch (AiBillingException $billingException) {
+            throw $billingException;
+        }
+    }
+
+    private function chat(array $params): array
+    {
+        $session = $this->sessionFactory->createFrontendSession();
+        if (!$session->isLoggedIn() && (int)($session->getUserId() ?? 0) <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('璇峰厛鐧诲綍'),
+            ];
+        }
+
+        $message = $this->requireNonEmptyString($params, 'message');
+        $modelCode = $this->optionalString($params, 'model_code');
+        $scenarioCode = $this->optionalString($params, 'scenario_code');
+        $locale = $this->optionalString($params, 'locale');
+
+        try {
+            $response = $this->aiService->generate($message, $modelCode, $scenarioCode, $locale);
+            return [
+                'success' => true,
+                'data' => [
+                    'message' => $message,
+                    'response' => $response,
+                    'model_code' => $modelCode,
+                    'scenario_code' => $scenarioCode,
+                    'timestamp' => time(),
+                ],
+            ];
+        } catch (\Throwable $throwable) {
+            return [
+                'success' => false,
+                'message' => (string)__('鐢熸垚澶辫触锛?1', $throwable->getMessage()),
+            ];
+        }
     }
 
     private function generateImage(array $params): array
     {
-        return $this->aiService->generateImage(
-            $this->requireNonEmptyString($params, 'prompt'),
-            $this->optionalString($params, 'model_code'),
-            $this->optionalString($params, 'scenario_code'),
-            $this->optionalArray($params, 'params')
-        );
+        try {
+            return $this->aiService->generateImage(
+                $this->requireNonEmptyString($params, 'prompt'),
+                $this->optionalString($params, 'model_code'),
+                $this->optionalString($params, 'scenario_code'),
+                $this->optionalArray($params, 'params')
+            );
+        } catch (AiBillingException $billingException) {
+            return [
+                'success' => false,
+                'code' => $billingException->getBillingCode(),
+                'message' => $billingException->getMessage(),
+            ];
+        } catch (\Throwable $throwable) {
+            $billingCode = AiBillingException::classifyMessageToCode($throwable->getMessage());
+            if ($billingCode !== '') {
+                return [
+                    'success' => false,
+                    'code' => $billingCode,
+                    'message' => $throwable->getMessage(),
+                ];
+            }
+
+            throw $throwable;
+        }
     }
 
     private function resolveModel(array $params): ?array
@@ -196,7 +269,81 @@ class AiQueryProvider implements QueryProviderInterface
             'name' => __('AI 模型查询'),
             'description' => __('对外暴露 AiService 的统一调用入口'),
             'module' => 'Weline_Ai',
+            'operations' => array_merge([
+                [
+                    'name' => 'generate',
+                    'description' => __('生成文本内容，供后台适配器创建草稿、配置或模板内容。'),
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 10,
+                    'auth' => 'backend_or_service',
+                    'params' => [
+                        ['name' => 'prompt', 'type' => 'string', 'required' => true, 'description' => __('生成提示词')],
+                        ['name' => 'model_code', 'type' => 'string|null', 'required' => false, 'description' => __('可选模型编码')],
+                        ['name' => 'scenario_code', 'type' => 'string|null', 'required' => false, 'description' => __('可选场景编码')],
+                        ['name' => 'locale', 'type' => 'string|null', 'required' => false, 'description' => __('可选语言')],
+                        ['name' => 'params', 'type' => 'array|null', 'required' => false, 'description' => __('传给模型适配器的上下文参数')],
+                        ['name' => 'user_id', 'type' => 'int|null', 'required' => false, 'description' => __('可选用户 ID')],
+                        ['name' => 'is_backend', 'type' => 'bool', 'required' => false, 'description' => __('是否后台调用')],
+                    ],
+                    'returns' => ['type' => 'string'],
+                    'summary' => 'Generate text through AiService',
+                ],
+                [
+                    'name' => 'chat',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 10,
+                    'auth' => 'customer',
+                    'params' => [
+                        'message' => ['type' => 'string', 'max_length' => 4000],
+                        'model_code' => ['type' => 'string', 'max_length' => 100],
+                        'scenario_code' => ['type' => 'string', 'max_length' => 100],
+                        'locale' => ['type' => 'string', 'max_length' => 20],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Send storefront AI chat message',
+                ],
+            ], $this->getProviderAccountOperationDescriptors()),
         ];
+    }
+
+    private function getProviderAccountOperationDescriptors(): array
+    {
+        $descriptor = $this->providerAccountQueryProvider()->getDescriptor();
+        $operationMap = [
+            'listAccounts' => 'providerListAccounts',
+            'getAccount' => 'providerGetAccount',
+            'saveAccount' => 'providerSaveAccount',
+            'testConnection' => 'providerTestConnection',
+            'remoteModelsForSelect' => 'providerRemoteModelsForSelect',
+            'getUsageList' => 'providerGetUsageList',
+            'toggleActive' => 'providerToggleActive',
+            'deleteAccount' => 'providerDeleteAccount',
+        ];
+        $operations = [];
+        foreach (($descriptor['operations'] ?? []) as $operation) {
+            $name = (string)($operation['name'] ?? '');
+            if (!isset($operationMap[$name])) {
+                continue;
+            }
+            $operation['name'] = $operationMap[$name];
+            $operation['summary'] = 'Backend AI provider account operation: ' . $name;
+            $operations[] = $operation;
+        }
+        return $operations;
+    }
+
+    private function providerAccountQueryProvider(): AiProviderAccountQueryProvider
+    {
+        if ($this->providerAccountQueryProvider === null) {
+            $this->providerAccountQueryProvider = new AiProviderAccountQueryProvider(
+                \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Ai\Service\Provider\AccountService::class),
+                $this->sessionFactory
+            );
+        }
+        return $this->providerAccountQueryProvider;
     }
 
     private function requireNonEmptyString(array $params, string $key, ?string $alias = null): string

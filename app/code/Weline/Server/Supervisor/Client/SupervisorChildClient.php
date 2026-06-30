@@ -23,6 +23,7 @@ final class SupervisorChildClient implements ChildControlClientInterface
     private string $selfTag = 'SupervisorChild';
     private bool $readyDesired = false;
     private bool $readyConfirmed = false;
+    private string $lastConnectError = '';
     private int $reconnectFailCount = 0;
     private float $lastReconnectAt = 0.0;
     private float $reconnectIntervalSec = 2.0;
@@ -62,12 +63,15 @@ final class SupervisorChildClient implements ChildControlClientInterface
         $endpoint = $this->endpoint ?? $this->endpointResolver->resolve($this->instanceName);
         $errno = 0;
         $errstr = '';
-        $this->socket = @\stream_socket_client($endpoint->uri(), $errno, $errstr, 3);
+        $uri = $endpoint->uri();
+        $this->socket = @\stream_socket_client($uri, $errno, $errstr, 3);
         if (!\is_resource($this->socket)) {
             $this->socket = null;
+            $this->lastConnectError = \trim("supervisor_uri={$uri}, errno={$errno}, errstr={$errstr}");
             return false;
         }
 
+        $this->lastConnectError = '';
         \stream_set_blocking($this->socket, false);
         @\stream_set_write_buffer($this->socket, 0);
         $this->readBuffer = '';
@@ -82,6 +86,11 @@ final class SupervisorChildClient implements ChildControlClientInterface
     public function isConnected(): bool
     {
         return \is_resource($this->socket);
+    }
+
+    public function getLastConnectError(): string
+    {
+        return $this->lastConnectError;
     }
 
     public function getSocket()
@@ -141,14 +150,17 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return false;
         }
 
+        [$slotId, $leaseId, $generation] = $this->resolveLeaseIdentityFromRuntimeArgs($role, $workerId, $launchId, $epoch);
         $hello = SupervisorMessage::hello(
             instance: $this->instanceName,
             channel: $this->channelId,
             role: $role,
-            slotId: $this->buildSlotId($role, $workerId),
+            slotId: $slotId,
             pid: $pid,
             launchNonce: $launchId !== '' ? $launchId : $msgId,
             msgId: $msgId !== '' ? $msgId : $launchId,
+            leaseId: $leaseId,
+            generation: $generation,
         );
 
         if (!$this->sendRaw($hello)) {
@@ -254,9 +266,9 @@ final class SupervisorChildClient implements ChildControlClientInterface
         return true;
     }
 
-    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = ''): bool
+    public function sendDrainingComplete(int $workerId = 0, int $port = 0, string $msgId = '', string $reason = ''): bool
     {
-        unset($workerId, $port, $msgId);
+        unset($workerId, $port, $msgId, $reason);
         return true;
     }
 
@@ -308,7 +320,15 @@ final class SupervisorChildClient implements ChildControlClientInterface
             return [];
         }
         $data = @\fread($this->socket, 65536);
-        if ($data === false || ($data === '' && @\feof($this->socket))) {
+        if ($data === false) {
+            if (!@\feof($this->socket)) {
+                return $this->extractMessages();
+            }
+            $this->handleDisconnect();
+            return [];
+        }
+
+        if ($data === '' && @\feof($this->socket)) {
             $this->handleDisconnect();
             return [];
         }
@@ -391,6 +411,46 @@ final class SupervisorChildClient implements ChildControlClientInterface
             'maintenance' => 'maintenance#' . ($workerId > 0 ? $workerId : 1),
             default => $role . '#1',
         };
+    }
+
+    /**
+     * @return array{0:string,1:string,2:int}
+     */
+    private function resolveLeaseIdentityFromRuntimeArgs(string $role, int $workerId, string $launchId, int $epoch): array
+    {
+        $slotId = $this->buildSlotId($role, $workerId);
+        $leaseId = $launchId !== '' ? $launchId : (string)($this->registerInfo['lease_id'] ?? '');
+        $generation = $epoch > 0 ? $epoch : (int)($this->registerInfo['generation'] ?? 0);
+        $argv = $GLOBALS['argv'] ?? ($_SERVER['argv'] ?? []);
+        if (!\is_array($argv)) {
+            return [$slotId, $leaseId, $generation];
+        }
+
+        foreach ($argv as $arg) {
+            $arg = (string)$arg;
+            if (\str_starts_with($arg, '--slot-id=')) {
+                $value = (string)\substr($arg, 10);
+                if ($value !== '') {
+                    $slotId = $value;
+                }
+                continue;
+            }
+            if (\str_starts_with($arg, '--lease-id=')) {
+                $value = (string)\substr($arg, 11);
+                if ($value !== '') {
+                    $leaseId = $value;
+                }
+                continue;
+            }
+            if (\str_starts_with($arg, '--slot-generation=')) {
+                $value = (int)\substr($arg, 18);
+                if ($value > 0) {
+                    $generation = $value;
+                }
+            }
+        }
+
+        return [$slotId, $leaseId, $generation];
     }
 
     private function sendRaw(string $message): bool
@@ -495,6 +555,9 @@ final class SupervisorChildClient implements ChildControlClientInterface
 
         $written = @\fwrite($socket, \substr($this->writeBuffer, 0, 65536));
         if ($written === false) {
+            if (!@\feof($socket)) {
+                return 0;
+            }
             return -1;
         }
         if ($written === 0) {

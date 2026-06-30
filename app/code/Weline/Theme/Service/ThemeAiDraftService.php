@@ -195,6 +195,7 @@ class ThemeAiDraftService implements ThemeAiDraftServiceInterface
             pageLayouts: $this->normalizeStringArray($meta['page_layouts'] ?? ['*'], ['*']),
             slots: is_array($meta['slots'] ?? null) ? $meta['slots'] : [],
             slot: !empty($meta['slot']) ? (string)$meta['slot'] : null,
+            supports: $this->normalizeStringArray($meta['supports'] ?? [], []),
             exclusive: (bool)($meta['exclusive'] ?? false),
             compatible: !array_key_exists('compatible', $meta) || (bool)$meta['compatible'],
             isContainer: (bool)($meta['is_container'] ?? false),

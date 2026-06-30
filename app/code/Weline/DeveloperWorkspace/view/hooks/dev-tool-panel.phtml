@@ -1329,7 +1329,7 @@ $panelType = $panelType ?? 'frontend';
     <div class="dev-tool-container">
         <!-- 头部区域 -->
         <div class="dev-tool-header" title="双击此处收起面板">
-            <button class="dev-tool-close-btn" onclick="DevToolPanel.closePanel()" title="关闭开发工具面板">
+            <button class="dev-tool-close-btn" data-dev-tool-action="close-panel" title="关闭开发工具面板">
                 <i class="fa fa-times"></i>
             </button>
             <h3>
@@ -1352,16 +1352,16 @@ $panelType = $panelType ?? 'frontend';
         
         <!-- 标签页 -->
         <div class="dev-tool-tabs">
-            <button class="dev-tool-tab" data-tab="routes" onclick="DevToolPanel.switchMainTab(this, 'routes')">
+            <button class="dev-tool-tab" data-tab="routes" data-dev-tool-action="switch-main-tab">
                 <i class="fa fa-exchange"></i> 路由
             </button>
-            <button class="dev-tool-tab active" data-tab="docs" onclick="DevToolPanel.switchMainTab(this, 'docs')">
+            <button class="dev-tool-tab active" data-tab="docs" data-dev-tool-action="switch-main-tab">
                 <i class="fa fa-file-text"></i> 文档
             </button>
-            <button class="dev-tool-tab" data-tab="performance" onclick="DevToolPanel.switchMainTab(this, 'performance')">
+            <button class="dev-tool-tab" data-tab="performance" data-dev-tool-action="switch-main-tab">
                 <i class="fa fa-clock-o"></i> 耗时统计
             </button>
-            <button class="dev-tool-tab" data-tab="trace" onclick="DevToolPanel.switchMainTab(this, 'trace')">
+            <button class="dev-tool-tab" data-tab="trace" data-dev-tool-action="switch-main-tab">
                 <i class="fa fa-list-alt"></i> 请求链路
             </button>
             <?= $extraTabsHtml ?? '' ?>
@@ -1372,30 +1372,30 @@ $panelType = $panelType ?? 'frontend';
             <!-- 路由搜索 (routes tab) -->
             <div id="route-search-area" style="display: none;">
                 <div class="dev-tool-search-mode">
-                    <button class="search-mode-btn active" data-type="<?php echo $panelType; ?>" onclick="DevToolPanel.switchRouteTab(this, '<?php echo $panelType; ?>')">
+                    <button class="search-mode-btn active" data-type="<?php echo htmlspecialchars($panelType, ENT_QUOTES, 'UTF-8'); ?>" data-dev-tool-action="switch-route-tab">
                         当前模式
                     </button>
-                    <button class="search-mode-btn" data-type="<?php echo $isBackend ? 'frontend' : 'backend'; ?>" onclick="DevToolPanel.switchRouteTab(this, '<?php echo $isBackend ? 'frontend' : 'backend'; ?>')">
+                    <button class="search-mode-btn" data-type="<?php echo $isBackend ? 'frontend' : 'backend'; ?>" data-dev-tool-action="switch-route-tab">
                         <?php echo $isBackend ? 'Frontend' : 'Backend'; ?>
                     </button>
                 </div>
-                <input type="text" id="route-search-input" placeholder="🔍 搜索路由..." onkeyup="DevToolPanel.searchRoutes(event)">
+                <input type="text" id="route-search-input" placeholder="🔍 搜索路由..." data-dev-tool-keyup-action="search-routes">
             </div>
             
             <!-- 文档搜索 (docs tab) -->
             <div id="doc-search-area">
                 <div class="dev-tool-search-mode">
-                    <button class="search-mode-btn active" data-mode="all" onclick="DevToolPanel.switchDocSearchMode(this, 'all')">
+                    <button class="search-mode-btn active" data-mode="all" data-dev-tool-action="switch-doc-search-mode">
                         全部搜索
                     </button>
-                    <button class="search-mode-btn" data-mode="module" onclick="DevToolPanel.switchDocSearchMode(this, 'module')">
+                    <button class="search-mode-btn" data-mode="module" data-dev-tool-action="switch-doc-search-mode">
                         按模块搜索
                     </button>
                 </div>
-                <select id="doc-module-select" class="dev-tool-module-select" onchange="DevToolPanel.onModuleChange()">
+                <select id="doc-module-select" class="dev-tool-module-select" data-dev-tool-change-action="doc-module-change">
                     <option value="">加载中...</option>
                 </select>
-                <input type="text" id="doc-search-input" placeholder="🔍 搜索文档标题或内容..." onkeyup="DevToolPanel.searchDocs(event)">
+                <input type="text" id="doc-search-input" placeholder="🔍 搜索文档标题或内容..." data-dev-tool-keyup-action="search-docs">
             </div>
             
             <!-- 性能统计区域 (performance tab) -->
@@ -1446,6 +1446,7 @@ const DevToolPanel = (function() {
         currentRouteType: '<?php echo $panelType; ?>',
         routeSearchKeyword: '',
         allRouteModules: [],
+        loadedRouteTypes: {},
         
         // 文档相关
         docSearchMode: 'all', // 'all' or 'module'
@@ -1455,6 +1456,9 @@ const DevToolPanel = (function() {
         docList: [],
         currentDocId: null,
         currentDocScrollPos: 0,
+        modulesLoaded: false,
+        docsInitialized: false,
+        docSearchTimer: null,
         
         // 拖拽相关
         panelX: 0,
@@ -1473,6 +1477,9 @@ const DevToolPanel = (function() {
         traceCodeLayout: 'tree',
         // 请求链路「DB」视图：normal=常规顺序，duration=按耗时倒序
         traceDbLayout: 'normal',
+        traceLoaded: false,
+        traceSpans: null,
+        traceSummary: null,
     };
 
     // ========== LocalStorage 管理 ==========
@@ -1507,12 +1514,110 @@ const DevToolPanel = (function() {
         }
     }
 
+    function bindPanelActions(panel) {
+        if (!panel || panel.dataset.devToolActionsBound === '1') {
+            return;
+        }
+
+        panel.dataset.devToolActionsBound = '1';
+        panel.addEventListener('click', handlePanelActionClick);
+        panel.addEventListener('change', handlePanelActionChange);
+        panel.addEventListener('keyup', handlePanelActionKeyup);
+        panel.addEventListener('keydown', handlePanelActionKeydown);
+    }
+
+    function handlePanelActionClick(event) {
+        if (event.target.closest('.route-path')) {
+            event.stopPropagation();
+            return;
+        }
+
+        const actionEl = event.target.closest('[data-dev-tool-action]');
+        if (!actionEl) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        switch (actionEl.dataset.devToolAction) {
+            case 'close-panel':
+                closePanel();
+                break;
+            case 'switch-main-tab':
+                switchMainTab(actionEl, actionEl.dataset.tab || 'docs');
+                break;
+            case 'switch-route-tab':
+                switchRouteTab(actionEl, actionEl.dataset.type || state.currentRouteType || 'frontend');
+                break;
+            case 'switch-doc-search-mode':
+                switchDocSearchMode(actionEl, actionEl.dataset.mode || 'all');
+                break;
+            case 'toggle-module':
+                toggleModule(actionEl);
+                break;
+            case 'open-route':
+                openRoute(actionEl.dataset.routeUrl || '');
+                break;
+            case 'open-doc':
+                {
+                    const docId = Number.parseInt(actionEl.dataset.docId || '', 10);
+                    if (Number.isFinite(docId)) {
+                        openDoc(docId);
+                    }
+                }
+                break;
+            case 'back-to-doc-list':
+                backToDocList();
+                break;
+        }
+    }
+
+    function handlePanelActionChange(event) {
+        const actionEl = event.target.closest('[data-dev-tool-change-action]');
+        if (!actionEl) {
+            return;
+        }
+
+        if (actionEl.dataset.devToolChangeAction === 'doc-module-change') {
+            onModuleChange();
+        }
+    }
+
+    function handlePanelActionKeyup(event) {
+        const actionEl = event.target.closest('[data-dev-tool-keyup-action]');
+        if (!actionEl) {
+            return;
+        }
+
+        if (actionEl.dataset.devToolKeyupAction === 'search-routes') {
+            searchRoutes(event);
+        } else if (actionEl.dataset.devToolKeyupAction === 'search-docs') {
+            searchDocs(event);
+        }
+    }
+
+    function handlePanelActionKeydown(event) {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
+
+        const actionEl = event.target.closest('[data-dev-tool-action]');
+        if (!actionEl) {
+            return;
+        }
+
+        event.preventDefault();
+        actionEl.click();
+    }
+
     // ========== 初始化 ==========
     function init() {
         loadState();
         
         // 恢复面板状态
         const panel = document.getElementById('dev-tool-panel');
+        bindPanelActions(panel);
         if (!state.collapsed) {
             panel.classList.remove('collapsed');
         }
@@ -1525,32 +1630,32 @@ const DevToolPanel = (function() {
         );
         
         // 加载模块列表
-        const modulePromise = loadModules() || Promise.resolve();
+        const modulePromise = state.collapsed ? Promise.resolve() : (loadModules() || Promise.resolve());
         modulePromise.then(() => {
             // 恢复文档搜索状态
-            if (state.activeMainTab === 'docs') {
+            if (!state.collapsed && state.activeMainTab === 'docs') {
                 restoreDocSearchState();
             }
         }).catch(error => {
             console.warn('[DevToolPanel] Module loading error:', error);
             // 即使加载失败也要恢复搜索状态
-            if (state.activeMainTab === 'docs') {
+            if (!state.collapsed && state.activeMainTab === 'docs') {
                 restoreDocSearchState();
             }
         });
         
         // 如果是路由标签，加载路由
-        if (state.activeMainTab === 'routes') {
+        if (!state.collapsed && state.activeMainTab === 'routes') {
             loadRoutes(state.currentRouteType);
         }
         
         // 如果是性能标签，渲染性能统计
-        if (state.activeMainTab === 'performance') {
+        if (!state.collapsed && state.activeMainTab === 'performance') {
             renderPerformanceStats();
         }
         
         // 如果是请求链路标签，渲染请求链路
-        if (state.activeMainTab === 'trace') {
+        if (!state.collapsed && state.activeMainTab === 'trace') {
             renderRequestTrace();
         }
         
@@ -2168,6 +2273,11 @@ const DevToolPanel = (function() {
         // 展开时更新展开方向
         if (!state.collapsed) {
             updateExpandDirection();
+            switchMainTab(
+                document.querySelector('.dev-tool-tab[data-tab="' + state.activeMainTab + '"]'),
+                state.activeMainTab,
+                false
+            );
         }
         
         // 保存状态（触发器位置保持不变）
@@ -2224,6 +2334,9 @@ const DevToolPanel = (function() {
         if (traceSearchArea) traceSearchArea.style.display = 'none';
         // 隐藏所有扩展搜索区（约定 id 为 dev-tool-search-area-{tabId}）
         document.querySelectorAll('[id^="dev-tool-search-area-"]').forEach(el => { el.style.display = 'none'; });
+        if (state.collapsed) {
+            return;
+        }
         
         // 扩展标签：若加载器尚未注册则短时重试，最多重试几次；重试前检查用户是否已切换标签，避免覆盖
         const isExtensionTab = tab !== 'routes' && tab !== 'docs' && tab !== 'performance' && tab !== 'trace';
@@ -2268,11 +2381,7 @@ const DevToolPanel = (function() {
         } else {
             window._devToolExtensionRetryCount = {};
             docSearchArea.style.display = 'block';
-            if (state.currentDocId) {
-                loadDocDetail(state.currentDocId);
-            } else {
-                searchDocsAPI();
-            }
+            ensureDocsLoaded();
         }
     }
     
@@ -2341,10 +2450,10 @@ const DevToolPanel = (function() {
             if (!module.routes || module.routes.length === 0) return;
             
             html += '<div class="module-group">';
-            html += '<div class="module-header" onclick="DevToolPanel.toggleModule(this)">';
+            html += '<div class="module-header" data-dev-tool-action="toggle-module" role="button" tabindex="0">';
             html += '<div class="module-name">';
             html += '<i class="fa fa-cube"></i>';
-            html += module.name;
+            html += escapeHtml(module.name || '');
             html += '<span class="badge badge-primary">' + module.routes.length + '</span>';
             html += '</div>';
             html += '<i class="fa fa-chevron-down module-toggle"></i>';
@@ -2352,9 +2461,13 @@ const DevToolPanel = (function() {
             html += '<div class="module-routes">';
             
             module.routes.forEach(route => {
-                html += '<div class="route-item" onclick="DevToolPanel.openRoute(\'' + route.url + '\')">';
-                html += '<a href="' + route.url + '" class="route-path" onclick="event.stopPropagation()">' + (route.path || route.url) + '</a>';
-                html += '<div class="route-info">' + route.method + ' · ' + route.controller.split('\\').pop() + '</div>';
+                const routeUrl = String(route.url || '');
+                const routePath = route.path || routeUrl;
+                const controller = String(route.controller || '');
+                const controllerName = controller ? controller.split('\\').pop() : '';
+                html += '<div class="route-item" data-dev-tool-action="open-route" data-route-url="' + escapeAttr(routeUrl) + '">';
+                html += '<a href="' + escapeAttr(routeUrl || '#') + '" class="route-path">' + escapeHtml(routePath) + '</a>';
+                html += '<div class="route-info">' + escapeHtml(route.method || '') + ' · ' + escapeHtml(controllerName) + '</div>';
                 html += '</div>';
             });
             
@@ -2414,7 +2527,19 @@ const DevToolPanel = (function() {
      * 优先 window.api，其次 window.site.api_host；无可用 base 时返回空字符串。
      */
     function getDevToolApiUrl(path, params) {
-        const basePath = 'dev/tool/rest/v1/' + (path || '').replace(/^\//, '');
+        const cleanPath = (path || '').replace(/^\//, '');
+        const configApiBase = (window.__WELINE_DEV_TOOL__ && window.__WELINE_DEV_TOOL__.apiBase)
+            ? String(window.__WELINE_DEV_TOOL__.apiBase).replace(/^\/+|\/+$/g, '')
+            : '';
+        if (configApiBase) {
+            const url = window.location.origin.replace(/\/$/, '') + '/' + configApiBase + '/' + cleanPath;
+            if (params && typeof params === 'object' && Object.keys(params).length > 0) {
+                const q = new URLSearchParams(params).toString();
+                return q ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + q) : url;
+            }
+            return url;
+        }
+        const basePath = 'dev/tool/rest/v1/' + cleanPath;
         if (typeof window.api === 'function') {
             return window.api(basePath, params || {});
         }
@@ -2432,6 +2557,9 @@ const DevToolPanel = (function() {
     }
 
     function loadModules() {
+        if (state.modulesLoaded) {
+            return Promise.resolve();
+        }
         const url = getDevToolApiUrl('document/modules');
         if (!url) {
             console.warn('[DevToolPanel] Cannot build document API URL (missing window.api / window.site.api_host)');
@@ -2447,6 +2575,7 @@ const DevToolPanel = (function() {
             .then(data => {
                 if (data && Number(data.code) === 200) {
                     state.allModules = data.data || [];
+                    state.modulesLoaded = true;
                     updateModuleSelect();
                 } else {
                     console.warn('[DevToolPanel] Failed to load modules:', data?.msg || 'Unknown error');
@@ -2461,6 +2590,28 @@ const DevToolPanel = (function() {
                 // 不要阻塞初始化
                 return Promise.resolve();
             });
+    }
+
+    function ensureDocsLoaded() {
+        const content = document.getElementById('dev-tool-content');
+        if (!content) return Promise.resolve();
+        if (state.docsInitialized) {
+            if (state.currentDocId) {
+                loadDocDetail(state.currentDocId);
+            } else {
+                searchDocsAPI();
+            }
+            return Promise.resolve();
+        }
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载文档...</div></div>';
+        return (loadModules() || Promise.resolve()).then(function() {
+            state.docsInitialized = true;
+            restoreDocSearchState();
+        }).catch(function(error) {
+            console.warn('[DevToolPanel] Module loading error:', error);
+            state.docsInitialized = true;
+            restoreDocSearchState();
+        });
     }
 
     function updateModuleSelect() {
@@ -2509,7 +2660,13 @@ const DevToolPanel = (function() {
         const keyword = event.target.value.trim();
         state.docSearchKeyword = keyword;
         saveState();
-        searchDocsAPI();
+        if (state.docSearchTimer) {
+            clearTimeout(state.docSearchTimer);
+        }
+        state.docSearchTimer = setTimeout(function() {
+            state.currentDocId = null;
+            searchDocsAPI();
+        }, 250);
     }
 
     function searchDocsAPI() {
@@ -2533,11 +2690,11 @@ const DevToolPanel = (function() {
                     state.docList = data.data.items || [];
                     renderDocList(state.docList);
                 } else {
-                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data.msg || '搜索失败') + '</div>';
+                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + escapeHtml(data && data.msg ? data.msg : '搜索失败') + '</div>';
                 }
             })
             .catch(error => {
-                content.innerHTML = '<div class="dev-tool-empty">❌ 搜索失败: ' + error.message + '</div>';
+                content.innerHTML = '<div class="dev-tool-empty">❌ 搜索失败: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
@@ -2551,14 +2708,16 @@ const DevToolPanel = (function() {
         
         let html = '';
         docs.forEach(doc => {
+            const docId = Number.parseInt(doc.id, 10);
+            if (!Number.isFinite(docId)) return;
             const isActive = doc.id === state.currentDocId ? ' active' : '';
-            html += '<div class="doc-list-item' + isActive + '" onclick="DevToolPanel.openDoc(' + doc.id + ')">';
-            html += '<div class="doc-title">' + (doc.title || '无标题') + '</div>';
+            html += '<div class="doc-list-item' + isActive + '" data-dev-tool-action="open-doc" data-doc-id="' + docId + '" role="button" tabindex="0">';
+            html += '<div class="doc-title">' + escapeHtml(doc.title || '无标题') + '</div>';
             html += '<div class="doc-meta">';
-            html += '<span class="doc-module-tag">' + (doc.module_display || doc.module_name) + '</span>';
+            html += '<span class="doc-module-tag">' + escapeHtml(doc.module_display || doc.module_name) + '</span>';
             if (doc.summary) {
                 const summary = doc.summary.length > 60 ? doc.summary.substring(0, 60) + '...' : doc.summary;
-                html += '<span>' + summary + '</span>';
+                html += '<span>' + escapeHtml(summary) + '</span>';
             }
             html += '</div>';
             html += '</div>';
@@ -2589,11 +2748,11 @@ const DevToolPanel = (function() {
                 if (data && Number(data.code) === 200) {
                     renderDocContent(data.data);
                 } else {
-                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + (data.msg || '加载失败') + '</div>';
+                    content.innerHTML = '<div class="dev-tool-empty">⚠️ ' + escapeHtml(data && data.msg ? data.msg : '加载失败') + '</div>';
                 }
             })
             .catch(error => {
-                content.innerHTML = '<div class="dev-tool-empty">❌ 加载失败: ' + error.message + '</div>';
+                content.innerHTML = '<div class="dev-tool-empty">❌ 加载失败: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
@@ -2601,7 +2760,7 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         
         // 简单 Markdown 转换为 HTML
-        let html = doc.content || '';
+        let html = escapeHtml(doc.content || '');
         html = html
             .replace(/^### (.+)$/gm, '<h3>$1</h3>')
             .replace(/^## (.+)$/gm, '<h2>$1</h2>')
@@ -2610,7 +2769,10 @@ const DevToolPanel = (function() {
             .replace(/\*(.+?)\*/g, '<em>$1</em>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
             .replace(/```([\s\S]+?)```/g, '<pre><code>$1</code></pre>')
-            .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+            .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, function(match, label, href) {
+                const safeHref = sanitizeDocHref(href);
+                return safeHref ? '<a href="' + safeHref + '" target="_blank" rel="noopener noreferrer">' + label + '</a>' : label;
+            })
             .replace(/\n\n/g, '</p><p>')
             .replace(/\n/g, '<br>');
         
@@ -2618,13 +2780,13 @@ const DevToolPanel = (function() {
         
         content.innerHTML = '<div class="doc-content-view show">' +
             '<div class="doc-content-header">' +
-                '<button class="doc-back-btn" onclick="DevToolPanel.backToDocList()">' +
+                '<button class="doc-back-btn" data-dev-tool-action="back-to-doc-list">' +
                     '<i class="fa fa-arrow-left"></i> 返回列表' +
                 '</button>' +
             '</div>' +
-            '<div class="doc-content-title">' + (doc.title || '无标题') + '</div>' +
-            '<div class="doc-meta" style="margin-bottom: 12px;">' +
-                '<span class="doc-module-tag">' + (doc.module_display || doc.module_name) + '</span>' +
+                '<div class="doc-content-title">' + escapeHtml(doc.title || '无标题') + '</div>' +
+                '<div class="doc-meta" style="margin-bottom: 12px;">' +
+                    '<span class="doc-module-tag">' + escapeHtml(doc.module_display || doc.module_name) + '</span>' +
             '</div>' +
             '<div class="doc-content-body">' + html + '</div>' +
         '</div>';
@@ -2864,11 +3026,11 @@ const DevToolPanel = (function() {
             html += '<span style="font-size:11px;color:#5c574f;margin-right:6px;">' + escapeHtml(opToShort(operation)) + '</span>';
             html += '<span style="font-size:11px;color:#7d7870;">' + escapeHtml(table || '—') + '</span>';
             html += '<span class="performance-value" style="margin-left:auto;font-size:11px;">' + dur + '</span>';
-            if (hasSql) html += ' <span class="dev-tool-db-expand-btn" role="button" tabindex="0" title="' + escapeHtml(operation || '') + '">▶</span>';
+            if (hasSql) html += ' <span class="dev-tool-db-expand-btn" role="button" tabindex="0" title="' + escapeAttr(operation || '') + '">▶</span>';
             html += '</div>';
             if (hasSql) {
                 html += '<div class="dev-tool-db-expand-row" style="display:none;padding-left:' + (depth * 14 + 18) + 'px;">';
-                html += '<pre class="dev-tool-db-sql-block" data-sql="' + escapeHtml(sql) + '">' + escapeHtml(sql) + '</pre>';
+                html += '<pre class="dev-tool-db-sql-block" data-sql="' + escapeAttr(sql) + '">' + escapeHtml(sql) + '</pre>';
                 html += '<div class="dev-tool-db-sql-actions"><button type="button" class="dev-tool-db-btn dev-tool-db-copy">复制 SQL</button>';
                 html += '<button type="button" class="dev-tool-db-btn dev-tool-db-explain">EXPLAIN</button></div>';
                 html += '<div class="dev-tool-db-explain-result" style="display:none;"></div></div>';
@@ -2948,13 +3110,111 @@ const DevToolPanel = (function() {
     function renderRequestTrace() {
         const content = document.getElementById('dev-tool-content');
         if (!content) return;
-        const spans = (typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined' && Array.isArray(window.__WELINE_REQUEST_TRACE__))
-            ? window.__WELINE_REQUEST_TRACE__
-            : [];
+
+        if (Array.isArray(state.traceSpans)) {
+            renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
+            return;
+        }
+
+        if (typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined' && Array.isArray(window.__WELINE_REQUEST_TRACE__)) {
+            state.traceSpans = window.__WELINE_REQUEST_TRACE__;
+            state.traceSummary = null;
+            renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
+            return;
+        }
+
+        const config = window.__WELINE_DEV_TOOL__ || {};
+        const requestId = config.requestId || window.__WELINE_REQUEST_ID__ || '';
+        if (!requestId) {
+            content.innerHTML = '<div class="dev-tool-empty">当前页面没有 request_id，请刷新页面。</div>';
+            return;
+        }
+
+        content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载请求链路...</div></div>';
+        const url = getDevToolApiUrl('trace', { id: requestId });
+        if (!url) {
+            content.innerHTML = '<div class="dev-tool-empty">无法构建 trace API 地址。</div>';
+            return;
+        }
+
+        fetch(url)
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error(response.status === 404 ? '请求链路不存在或已过期，请刷新页面重试' : ('HTTP ' + response.status));
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (!data || Number(data.code) !== 200) {
+                    throw new Error((data && (data.msg || data.message)) || 'trace load failed');
+                }
+                const payload = data.data || {};
+                state.traceSummary = payload.summary || null;
+                state.traceSpans = decodeCompactTracePayload(payload);
+                renderRequestTraceFromSpans(state.traceSpans, state.traceSummary);
+            })
+            .catch(function(error) {
+                content.innerHTML = '<div class="dev-tool-empty">' + escapeHtml(error.message || '请求链路不存在或已过期，请刷新页面重试') + '</div>';
+            });
+    }
+
+    function decodeCompactTracePayload(payload) {
+        if (!payload || payload.format !== 'compact-v1') {
+            return [];
+        }
+        const dict = payload.dict || {};
+        const names = dict.names || {};
+        const categories = dict.categories || {};
+        const metas = dict.metas || {};
+        const rows = String(payload.trace || '').split('\n').filter(Boolean);
+        const spans = rows.map(function(row) {
+            const parts = row.split('|');
+            const parentId = Number(parts[1] || 0);
+            const categoryId = Number(parts[2] || 0);
+            const nameId = Number(parts[3] || 0);
+            const durationUs = Number(parts[4] || 0);
+            const metaId = Number(parts[5] || 0);
+            const span = {
+                seq: Number(parts[0] || 0),
+                name: names[nameId] || '',
+                duration_ms: Math.round((durationUs / 1000) * 100) / 100,
+                category: categories[categoryId] || 'framework'
+            };
+            if (parentId > 0 && names[parentId]) span.parent = names[parentId];
+            if (metaId > 0 && metas[metaId]) span.meta = metas[metaId];
+            return span;
+        }).filter(function(span) {
+            return span.name;
+        });
+
+        const dbByParent = {};
+        spans.forEach(function(span) {
+            if ((span.category || '') === 'db' && span.parent) {
+                dbByParent[span.parent] = (dbByParent[span.parent] || 0) + (Number(span.duration_ms) || 0);
+            }
+        });
+        spans.forEach(function(span) {
+            if ((span.category || '') !== 'db' && dbByParent[span.name]) {
+                span.db_duration_ms = Math.round(dbByParent[span.name] * 100) / 100;
+            }
+        });
+
+        return spans;
+    }
+
+    function renderRequestTraceFromSpans(spans, summary) {
+        const content = document.getElementById('dev-tool-content');
+        if (!content) return;
         const codeSpans = spans.filter(function(s) { return (s.category || '') !== 'db'; });
         const dbSpans = spans.filter(function(s) { return (s.category || '') === 'db'; });
 
         let html = '<div class="performance-stats">';
+        if (summary && summary.truncated) {
+            const maxSpans = Number(summary.max_spans || spans.length || 0);
+            html += '<div style="margin-bottom:8px;padding:8px 10px;border:1px solid #f0d98a;border-radius:6px;background:#fff8e1;color:#8a6d3b;font-size:12px;line-height:1.5;">';
+            html += '当前请求链路已达到记录上限，仅展示前 ' + escapeHtml(String(maxSpans)) + ' 条阶段数据。';
+            html += '</div>';
+        }
 
         // 子 Tab：编码 / DB
         html += '<div style="display:flex;border-bottom:1px solid #eee;margin-bottom:6px;">';
@@ -3057,7 +3317,7 @@ const DevToolPanel = (function() {
                 const dur = (durationNum >= 0 && durationNum < 1e9) ? formatTime(durationNum) : '—';
                 const hasSql = sql.length > 0;
                 html += '<tr class="dev-tool-db-data-row" data-has-sql="' + (hasSql ? '1' : '0') + '">';
-                html += '<td class="col-op" title="' + escapeHtml(operation || '—') + '">' + escapeHtml(opToShort(operation));
+                html += '<td class="col-op" title="' + escapeAttr(operation || '—') + '">' + escapeHtml(opToShort(operation));
                 if (hasSql) html += ' <span class="dev-tool-db-expand-btn" role="button" tabindex="0">▶</span>';
                 html += '</td>';
                 html += '<td class="col-table">' + escapeHtml(table || '—') + '</td>';
@@ -3066,7 +3326,7 @@ const DevToolPanel = (function() {
                 html += '</tr>';
                 if (hasSql) {
                     html += '<tr class="dev-tool-db-expand-row" style="display:none;"><td colspan="4">';
-                    html += '<pre class="dev-tool-db-sql-block" data-sql="' + escapeHtml(sql) + '">' + escapeHtml(sql) + '</pre>';
+                    html += '<pre class="dev-tool-db-sql-block" data-sql="' + escapeAttr(sql) + '">' + escapeHtml(sql) + '</pre>';
                     html += '<div class="dev-tool-db-sql-actions">';
                     html += '<button type="button" class="dev-tool-db-btn dev-tool-db-copy">复制 SQL</button>';
                     html += '<button type="button" class="dev-tool-db-btn dev-tool-db-explain">EXPLAIN</button>';
@@ -3103,7 +3363,7 @@ const DevToolPanel = (function() {
                 const dur = (durationNum >= 0 && durationNum < 1e9) ? formatTime(durationNum) : '—';
                 const hasSql = sql.length > 0;
                 html += '<tr class="dev-tool-db-data-row" data-has-sql="' + (hasSql ? '1' : '0') + '">';
-                html += '<td class="col-op" title="' + escapeHtml(operation || '—') + '">' + escapeHtml(opToShort(operation));
+                html += '<td class="col-op" title="' + escapeAttr(operation || '—') + '">' + escapeHtml(opToShort(operation));
                 if (hasSql) html += ' <span class="dev-tool-db-expand-btn" role="button" tabindex="0">▶</span>';
                 html += '</td>';
                 html += '<td class="col-table">' + escapeHtml(table || '—') + '</td>';
@@ -3112,7 +3372,7 @@ const DevToolPanel = (function() {
                 html += '</tr>';
                 if (hasSql) {
                     html += '<tr class="dev-tool-db-expand-row" style="display:none;"><td colspan="4">';
-                    html += '<pre class="dev-tool-db-sql-block" data-sql="' + escapeHtml(sql) + '">' + escapeHtml(sql) + '</pre>';
+                    html += '<pre class="dev-tool-db-sql-block" data-sql="' + escapeAttr(sql) + '">' + escapeHtml(sql) + '</pre>';
                     html += '<div class="dev-tool-db-sql-actions">';
                     html += '<button type="button" class="dev-tool-db-btn dev-tool-db-copy">复制 SQL</button>';
                     html += '<button type="button" class="dev-tool-db-btn dev-tool-db-explain">EXPLAIN</button>';
@@ -3300,8 +3560,24 @@ const DevToolPanel = (function() {
 
     function escapeHtml(s) {
         const div = document.createElement('div');
-        div.textContent = s;
+        div.textContent = s == null ? '' : String(s);
         return div.innerHTML;
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function sanitizeDocHref(value) {
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = value == null ? '' : String(value);
+        const href = textarea.value.trim();
+
+        if (!/^(https?:|mailto:|\/|#)/i.test(href)) {
+            return '';
+        }
+
+        return escapeAttr(href);
     }
 
     function renderPerformanceStats() {

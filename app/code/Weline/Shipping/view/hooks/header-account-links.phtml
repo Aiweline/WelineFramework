@@ -1,27 +1,17 @@
 <?php
 /**
- * 
- * @hook-priority 50   Hook优先级：50（默认值）
- * @hook-sort-order 0  Hook排序顺序：0（默认值）
- * @hook-solo false    Hook独享：false（不独占）
+ * @hook-priority 50
+ * @hook-sort-order 0
+ * @hook-solo false
  */
 
 use Weline\Framework\Session\SessionFactory;
 
-// 获取 CustomerSession
 $session = SessionFactory::getInstance()->createFrontendSession();
-
-// 获取前端URL（使用模板的 getUrl 方法更安全）
-$frontendUrl = $this->getUrl('');
-
-// 检查是否登录
 $isLoggedIn = $session->isLoggedIn();
 ?>
 
 <?php if ($isLoggedIn): ?>
-    <!-- 发货地址管理链接 -->
-    <li role="none"><a href="<?= $frontendUrl ?>shipping/address/index" role="menuitem"><?= __('发货地址管理') ?></a></li>
-    <!-- 收货地址管理链接 -->
-    <li role="none"><a href="<?= $frontendUrl ?>shipping/delivery/index" role="menuitem"><?= __('收货地址管理') ?></a></li>
+    <li role="none"><a href="@url{'customer/account/index'}#shipping-address" role="menuitem"><?= __('发货地址') ?></a></li>
+    <li role="none"><a href="@url{'customer/account/index'}#delivery-address" role="menuitem"><?= __('收货地址') ?></a></li>
 <?php endif; ?>
-

@@ -120,6 +120,16 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
 
 <script>
     (function () {
+        var apiPromise = null;
+
+        function getRecentlyViewedApi() {
+            if (!apiPromise) {
+                apiPromise = Promise.resolve(window.Weline.Api.resource('recentlyViewed'));
+            }
+
+            return apiPromise;
+        }
+
         document.querySelectorAll('[data-remove-recently-viewed]').forEach(function (button) {
             button.addEventListener('click', function () {
                 var viewId = this.getAttribute('data-remove-recently-viewed');
@@ -127,15 +137,8 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
                     return;
                 }
 
-                fetch('<?= $this->getUrl('recently-viewed/remove') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify({ view_id: viewId })
-                }).then(function (response) {
-                    return response.json();
+                getRecentlyViewedApi().then(function (RecentlyViewedApi) {
+                    return RecentlyViewedApi.remove({view_id: parseInt(viewId, 10)}, {silent: true});
                 }).then(function (payload) {
                     if (payload && payload.success) {
                         window.location.reload();

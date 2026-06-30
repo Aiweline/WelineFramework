@@ -199,6 +199,7 @@ class Words extends BaseController
         try {
             $this->localeDictionary->insert($data, $this->localeDictionary::schema_fields_MD5, $this->localeDictionary::schema_fields_TRANSLATE)->fetch();
             $this->localeDictionary->commit();
+            $this->clearRuntimeTranslationCaches();
             return $this->fetchJson($this->success(__('成功保存！')));
         } catch (\Exception $exception) {
             $this->localeDictionary->rollBack();
@@ -223,6 +224,7 @@ class Words extends BaseController
         // 恢复原词
         $this->localeDictionary->setData($this->localeDictionary::schema_fields_TRANSLATE, $this->localeDictionary->getData
         ($this->localeDictionary::schema_fields_WORD))->save(true);
+        $this->clearRuntimeTranslationCaches();
         return $this->fetchJson($this->success(__('恢复成功！'), $this->localeDictionary->getData($this->localeDictionary::schema_fields_WORD)));
     }
 
@@ -289,8 +291,7 @@ REGISTER_CONTENT;
         }
         file_put_contents($pack_file, $pack_file_content);
         // 清理i18n缓存
-        w_cache('i18n')->clear();
-        w_cache('phrase')->clear();
+        $this->clearRuntimeTranslationCaches();
         Message::success(__('成功清理i18n缓存！'));
         // 清理生成的模板缓存文件
         /**@var System $system */
@@ -299,6 +300,30 @@ REGISTER_CONTENT;
         Message::success(__('成功清理系统模板缓存文件！'));
         Message::success(__('成功发布！'));
         $this->redirect('*/backend/countries/locale/words', $this->request->getParams());
+    }
+
+    private function clearRuntimeTranslationCaches(): void
+    {
+        try {
+            w_cache('i18n')->clear();
+        } catch (\Throwable) {
+        }
+
+        try {
+            w_cache('phrase')->clear();
+        } catch (\Throwable) {
+        }
+
+        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+        \Weline\I18n\Parser::clearWorkerCaches();
+
+        $dispatchClass = '\\Weline\\Server\\Service\\Control\\BroadcastControlDispatchService';
+        if (class_exists($dispatchClass)) {
+            try {
+                ObjectManager::getInstance($dispatchClass)->cacheClear();
+            } catch (\Throwable) {
+            }
+        }
     }
 
     public function enable()

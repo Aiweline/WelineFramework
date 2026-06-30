@@ -62,12 +62,64 @@ class SseTerminalTaglibTest extends TestCore
         $this->assertStringNotContainsString('dispatchSseEvent(eventName, data);', $html);
         $this->assertStringContainsString('"total"', $html);
         $this->assertStringContainsString('.weline-sse-terminal-line.total', $html);
-        $this->assertStringContainsString("var shouldFinalizeStream = eventName === 'done';", $html);
-        $this->assertStringContainsString('finally {', $html);
-        $this->assertStringContainsString('stop({ internal: true });', $html);
-        $this->assertStringNotContainsString(
-            "if (eventName === 'done' || eventName === 'failed' || eventName === 'error')",
+        $this->assertStringContainsString(
+            "var shouldFinalizeStream = eventName === 'done' || eventName === 'failed' || eventName === 'error' || eventName === 'close';",
             $html
         );
+        $this->assertStringContainsString('finally {', $html);
+        $this->assertStringContainsString(
+            "stop({ internal: true, keepStatus: eventName === 'failed' || eventName === 'error' });",
+            $html
+        );
+    }
+
+    public function testSseTerminalMarkupIncludesChunkRafCleanupAndDefaultDomLineLimit(): void
+    {
+        $callback = SseTerminal::callback();
+
+        $html = $callback(
+            'single',
+            [],
+            [''],
+            [
+                'id' => 'demo-terminal',
+                'title' => 'Demo',
+                'show-start-toggle' => 'false',
+            ]
+        );
+
+        $this->assertIsString($html);
+        $this->assertStringContainsString('var maxDomLines = 200;', $html);
+        $this->assertStringContainsString("commonEvents = [\"start\",\"progress\",\"chunk\",\"total\",\"done\",\"failed\",\"error\",\"close\"", $html);
+        $this->assertStringContainsString('var chunkRafId = null;', $html);
+        $this->assertStringContainsString('var chunkRafGeneration = 0;', $html);
+        $this->assertStringContainsString('function clearChunkRaf()', $html);
+        $this->assertStringContainsString('cancelAnimationFrame(chunkRafId);', $html);
+        $this->assertStringContainsString('flushChunkRaf(generation);', $html);
+        $this->assertStringContainsString('if (generation !== chunkRafGeneration)', $html);
+        $this->assertStringContainsString('clearChunkRaf();', $html);
+        $this->assertStringNotContainsString('chunkRafPending = \'\';' . "\n" . '    chunkRafScheduled = false;' . "\n" . '    isRunning = false;', $html);
+    }
+
+    public function testSseTerminalMarkupAllowsExplicitDomLineLimitOverride(): void
+    {
+        $callback = SseTerminal::callback();
+
+        $html = $callback(
+            'single',
+            [],
+            [''],
+            [
+                'id' => 'demo-terminal',
+                'title' => 'Demo',
+                'max-dom-lines' => '60',
+                'events' => 'chunk',
+                'show-start-toggle' => 'false',
+            ]
+        );
+
+        $this->assertIsString($html);
+        $this->assertStringContainsString('var maxDomLines = 60;', $html);
+        $this->assertStringContainsString('"chunk","done","failed","error","close","thinking","reasoning"', $html);
     }
 }

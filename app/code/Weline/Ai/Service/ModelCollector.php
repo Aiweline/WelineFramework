@@ -527,6 +527,20 @@ class ModelCollector
         $newCapabilities = $modelData['capabilities'] ?? [];
         // 合并 capabilities：新配置只填充现有配置中不存在的键
         $mergedCapabilities = $existingCapabilities;
+        $removeCapabilities = \array_map(
+            static fn(mixed $value): string => \strtolower(\trim((string)$value)),
+            \is_array($modelData['capabilities_remove'] ?? null) ? $modelData['capabilities_remove'] : []
+        );
+        $removeCapabilities = \array_values(\array_filter($removeCapabilities, static fn(string $value): bool => $value !== ''));
+        if ($removeCapabilities !== []) {
+            foreach ($mergedCapabilities as $key => $value) {
+                $capability = \is_string($key) ? $key : (string)$value;
+                if (\in_array(\strtolower(\trim($capability)), $removeCapabilities, true)) {
+                    unset($mergedCapabilities[$key]);
+                }
+            }
+            $mergedCapabilities = \array_values($mergedCapabilities);
+        }
         foreach ($newCapabilities as $key => $value) {
             if (!isset($mergedCapabilities[$key]) || empty($mergedCapabilities[$key])) {
                 $mergedCapabilities[$key] = $value;

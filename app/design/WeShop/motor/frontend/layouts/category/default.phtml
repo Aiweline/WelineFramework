@@ -159,7 +159,7 @@ if (!$useCanonicalFilterContainer && !empty($filters)) {
             <?php endif; ?>
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <p class="text-sm text-gray-500 font-semibold uppercase tracking-wide">
-                    <?= __('Showing %1 products', count($products)) ?>
+                    <?= __('Showing %{1} products', count($products)) ?>
                 </p>
                 <div class="flex items-center gap-4">
                     <div class="flex items-center gap-2">
@@ -262,6 +262,25 @@ if (!$useCanonicalFilterContainer && !empty($filters)) {
 <script>
 (function() {
     'use strict';
+    var cartApiPromise = null;
+    var wishlistApiPromise = null;
+
+    function getCartApi() {
+        if (!cartApiPromise) {
+            cartApiPromise = Promise.resolve(window.Weline.Api.resource('cart'));
+        }
+
+        return cartApiPromise;
+    }
+
+    function getWishlistApi() {
+        if (!wishlistApiPromise) {
+            wishlistApiPromise = Promise.resolve(window.Weline.Api.resource('wishlist'));
+        }
+
+        return wishlistApiPromise;
+    }
+
     window.motorSetViewMode = function(mode) {
         var url = new URL(window.location.href);
         url.searchParams.set('view', mode);
@@ -274,21 +293,19 @@ if (!$useCanonicalFilterContainer && !empty($filters)) {
             var btn = this;
             btn.disabled = true;
             btn.innerHTML = '<span class="material-symbols-outlined animate-spin">refresh</span>';
-            fetch('<?= $this->getUrl('cart/add') ?>', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ product_id: productId, qty: 1 })
+            getCartApi().then(function(CartApi) {
+                return CartApi.add({ product_id: parseInt(productId, 10), qty: 1 }, {silent: true});
             })
-            .then(function(response) { return response.json(); })
             .then(function(data) {
+                var payload = data && data.data ? data.data : (data || {});
                 btn.disabled = false;
                 btn.innerHTML = '<span class="flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">check</span><?= __('Added') ?></span>';
                 setTimeout(function() {
                     btn.innerHTML = '<span class="flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">shopping_cart</span><?= __('Add to Cart') ?></span>';
                 }, 2000);
-                if (data.cart_count) {
+                if (payload.cart_count) {
                     document.querySelectorAll('.cart-count').forEach(function(el) {
-                        el.textContent = data.cart_count;
+                        el.textContent = payload.cart_count;
                     });
                 }
             })
@@ -305,12 +322,9 @@ if (!$useCanonicalFilterContainer && !empty($filters)) {
             e.stopPropagation();
             var productId = this.dataset.productId;
             var icon = this.querySelector('.material-symbols-outlined');
-            fetch('<?= $this->getUrl('wishlist/add') ?>', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ product_id: productId })
+            getWishlistApi().then(function(WishlistApi) {
+                return WishlistApi.add({ product_id: parseInt(productId, 10) }, {silent: true});
             })
-            .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
                     icon.style.fontVariationSettings = "'FILL' 1";

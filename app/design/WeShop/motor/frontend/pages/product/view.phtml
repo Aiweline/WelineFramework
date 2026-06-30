@@ -97,12 +97,12 @@ $breadcrumbs = $this->getData('breadcrumbs') ?? [];
                 <!-- Price -->
                 <div class="flex items-baseline gap-4 py-4 border-y border-border-light dark:border-border-dark">
                     <?php if ($product['special_price'] ?? null): ?>
-                        <span class="font-heading text-3xl md:text-4xl font-bold text-primary"><?= $this->formatPrice($product['special_price']) ?></span>
+                        <span class="font-heading text-3xl md:text-4xl font-bold text-primary weline-pixel::add_to_cart:value" data-pixel-value="<?= htmlspecialchars((string)(float)($product['special_price'] ?? 0), ENT_QUOTES, 'UTF-8') ?>"><?= $this->formatPrice($product['special_price']) ?></span>
                         <span class="text-xl font-semibold text-gray-400 line-through"><?= $this->formatPrice($product['price']) ?></span>
                         <?php $discount = round((1 - $product['special_price'] / $product['price']) * 100); ?>
                         <span class="motor-badge">-<?= $discount ?>%</span>
                     <?php else: ?>
-                        <span class="font-heading text-3xl md:text-4xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
+                        <span class="font-heading text-3xl md:text-4xl font-bold text-text-primary-light dark:text-text-primary-dark weline-pixel::add_to_cart:value" data-pixel-value="<?= htmlspecialchars((string)(float)($product['price'] ?? 0), ENT_QUOTES, 'UTF-8') ?>"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
                     <?php endif; ?>
                 </div>
 
@@ -148,12 +148,12 @@ $breadcrumbs = $this->getData('breadcrumbs') ?? [];
 
                     <!-- Add to Cart -->
                     <div class="flex flex-col sm:flex-row gap-3">
-                        <button type="submit" class="flex-1 motor-btn-primary inline-flex items-center justify-center py-4 text-base font-bold uppercase tracking-wide gap-2">
-                            <span class="material-symbols-outlined">shopping_cart</span>
+                        <button type="submit" class="flex-1 motor-btn-primary inline-flex items-center justify-center py-4 text-base font-bold uppercase tracking-wide gap-2 weline-pixel::add_to_cart">
+                            <span class="material-symbols-outlined weline-pixel::add_to_cart">shopping_cart</span>
                             <?= __('Add to Cart') ?>
                         </button>
-                        <button type="button" class="w-full sm:w-auto px-6 py-4 border-2 border-gray-300 dark:border-gray-700 text-text-primary-light dark:text-text-primary-dark rounded inline-flex items-center justify-center text-base font-bold uppercase tracking-wide gap-2 hover:border-primary hover:text-primary transition-colors" data-product-id="<?= $product['product_id'] ?? 0 ?>">
-                            <span class="material-symbols-outlined">favorite_border</span>
+                        <button type="button" class="w-full sm:w-auto px-6 py-4 border-2 border-gray-300 dark:border-gray-700 text-text-primary-light dark:text-text-primary-dark rounded inline-flex items-center justify-center text-base font-bold uppercase tracking-wide gap-2 hover:border-primary hover:text-primary transition-colors weline-pixel::add_to_wishlist" data-product-id="<?= $product['product_id'] ?? 0 ?>">
+                            <span class="material-symbols-outlined weline-pixel::add_to_wishlist">favorite_border</span>
                         </button>
                     </div>
                     <w:hook name="WeShop_Product::detail::after_add_to_cart"/>

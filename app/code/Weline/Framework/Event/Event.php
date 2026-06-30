@@ -15,6 +15,7 @@ use Weline\Framework\Event\Console\Event\Data;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Debug\Printing;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Event extends \Weline\Framework\DataObject\DataObject
@@ -72,7 +73,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
                 $eventData->setData($key);
             } elseif (is_array($eventData)) {
                 foreach ($key as $k => $item) {
-                    $eventData[$k] = $value;
+                    $eventData[$k] = $item;
                 }
             } else {
                 $eventData = $value;
@@ -210,6 +211,8 @@ class Event extends \Weline\Framework\DataObject\DataObject
         if ($needLog && !empty($observers)) {
             $this->initLogFile();
         }
+
+        $traceEnabled = RequestLifecycleTrace::isEnabled();
         
         // 遍历观察者配置，按需实例化并执行
         // 注意：模块激活状态已在 EventsManager::filterActiveObservers() 中过滤，此处不再重复检查
@@ -222,7 +225,11 @@ class Event extends \Weline\Framework\DataObject\DataObject
                 }
                 
                 // 按需实例化观察者
-                $observer = ObjectManager::getInstance($observerConfig['instance']);
+                $observerClass = $this->getUsableObserverClass($observerConfig);
+                if ($observerClass === null) {
+                    continue;
+                }
+                $observer = ObjectManager::getInstance($observerClass);
                 
                 if (!($observer instanceof ObserverInterface)) {
                     if (DEV) {
@@ -234,10 +241,10 @@ class Event extends \Weline\Framework\DataObject\DataObject
                     continue;
                 }
                 
-                $observerSpanStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
-                $observerName = str_replace('\\', '::', get_class($observer));
-                $observerSpanName = 'observer::' . $observerName;
-                if (RequestLifecycleTrace::isEnabled()) {
+                $observerSpanStart = $traceEnabled ? microtime(true) : 0.0;
+                $observerSpanName = null;
+                if ($traceEnabled) {
+                    $observerSpanName = 'observer::' . str_replace('\\', '::', get_class($observer));
                     RequestLifecycleTrace::pushCurrentParent($observerSpanName);
                 }
                 try {
@@ -248,11 +255,11 @@ class Event extends \Weline\Framework\DataObject\DataObject
                         $observer->execute($this);
                     }
                 } finally {
-                    if (RequestLifecycleTrace::isEnabled()) {
+                    if ($traceEnabled) {
                         RequestLifecycleTrace::popCurrentParent();
                     }
                 }
-                if ($observerSpanStart > 0) {
+                if ($observerSpanStart > 0 && $observerSpanName !== null) {
                     $observerDurationMs = (microtime(true) - $observerSpanStart) * 1000;
                     RequestLifecycleTrace::recordSpan($observerSpanName, $observerDurationMs, 'observer', 'event::' . $this->getName());
                 }
@@ -270,6 +277,30 @@ class Event extends \Weline\Framework\DataObject\DataObject
     /**
      * @DESC         |打印事件头部信息
      */
+    private function getUsableObserverClass(mixed $observerConfig): ?string
+    {
+        if (!is_array($observerConfig)) {
+            w_log_warning(__('事件 %{1} 跳过无效观察者配置。', [$this->getName()]), [], 'event_dispatch.log');
+            return null;
+        }
+
+        $instance = ltrim(trim((string)($observerConfig['instance'] ?? '')), '\\');
+        if ($instance === '') {
+            w_log_warning(__('事件 %{1} 跳过缺少 instance 的观察者配置。', [$this->getName()]), [], 'event_dispatch.log');
+            return null;
+        }
+
+        if (!RegistryModulePresence::classExists($instance)) {
+            w_log_warning(__('事件 %{1} 跳过不存在的观察者类：%{2}', [
+                $this->getName(),
+                $instance,
+            ]), [], 'event_dispatch.log');
+            return null;
+        }
+
+        return $instance;
+    }
+
     private function printEventHeader(): void
     {
         echo "\n";

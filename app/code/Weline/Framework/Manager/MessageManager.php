@@ -104,7 +104,7 @@ class MessageManager
         $flash = self::flashRead();
         if ($flash !== null && $flash['f'] === 'has-error') {
             self::flashDelete();
-            return strip_tags($flash['c'], '<strong><a><button>');
+            return self::flashContentToPlainText($flash['c']);
         }
         return null;
     }
@@ -191,7 +191,7 @@ class MessageManager
         $flash = self::flashRead();
         if ($flash !== null && $flash['f'] === 'has-success') {
             self::flashDelete();
-            return strip_tags($flash['c'], '<strong><a><button>');
+            return self::flashContentToPlainText($flash['c']);
         }
         return null;
     }
@@ -323,6 +323,9 @@ class MessageManager
     /** 本请求是否已 render（用于 flushRequestSessions 前决定是否清除所有 Session 的消息键） */
     private static bool $messagesRenderedThisRequest = false;
 
+    /** 本请求是否已输出 flash 关闭按钮代理脚本 */
+    private static bool $flashDismissScriptRenderedThisRequest = false;
+
     /** 供 Session::flushRequestSessions 调用，避免耦合 */
     public static function shouldClearMessagesBeforeFlush(): bool
     {
@@ -333,6 +336,7 @@ class MessageManager
     public static function resetRequestState(): void
     {
         self::$messagesRenderedThisRequest = false;
+        self::$flashDismissScriptRenderedThisRequest = false;
     }
 
     /**
@@ -354,6 +358,19 @@ class MessageManager
     }
 
     /**
+     * Flash 展示用 modifier（仅允许 [a-z0-9_-]+），与 storefront `.wflash--{modifier}` 对应；非 Bootstrap / 第三方 UI 库类名。
+     */
+    private static function normalizeFlashModifier(string $html_class): string
+    {
+        $c = strtolower(trim($html_class));
+        if ($c === 'error') {
+            $c = 'danger';
+        }
+        $slug = preg_replace('/[^a-z0-9_-]+/', '', $c) ?? '';
+        return $slug !== '' ? $slug : 'info';
+    }
+
+    /**
      * @param string $msg
      * @param string $title
      * @param string $html_class
@@ -362,18 +379,33 @@ class MessageManager
      */
     public function processMessage(string $msg, string $title, string $html_class = 'error'): string
     {
-        return '<div class="alert alert-' . $html_class . ' alert-dismissible fade show" role="alert">
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            <strong>' . $title . '</strong> ' . $msg . '
-        </div>';
+        return self::process_message($msg, $title, $html_class);
     }
 
     public static function process_message(string $msg, string $title, string $html_class = 'error'): string
     {
-        return '<div class="alert alert-' . $html_class . ' alert-dismissible fade show" role="alert">
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            <strong>' . $title . '</strong> ' . $msg . '
-        </div>';
+        $mod = self::normalizeFlashModifier($html_class);
+        $closeLabel = htmlspecialchars(__('Close'), ENT_QUOTES, 'UTF-8');
+        $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+        $safeMsg = htmlspecialchars($msg, ENT_QUOTES, 'UTF-8');
+
+        return self::flashDismissScript()
+            . '<div class="wflash wflash--' . $mod . ' wflash--dismissible" role="alert">'
+            . '<button type="button" class="wflash__close" aria-label="' . $closeLabel . '" data-wflash-dismiss="1"></button>'
+            . '<strong class="wflash__title">' . $safeTitle . '</strong> '
+            . '<span class="wflash__body">' . $safeMsg . '</span>'
+            . '</div>';
+    }
+
+    private static function flashDismissScript(): string
+    {
+        if (self::$flashDismissScriptRenderedThisRequest) {
+            return '';
+        }
+
+        self::$flashDismissScriptRenderedThisRequest = true;
+
+        return '<script data-wflash-dismiss-proxy="1">(function(){var root=document.documentElement;if(root.dataset.wflashDismissProxyBound==="1")return;root.dataset.wflashDismissProxyBound="1";document.addEventListener("click",function(event){var target=event.target;if(!(target instanceof Element))return;var trigger=target.closest("[data-wflash-dismiss]");if(!trigger)return;var alert=trigger.closest("[role=alert]");if(alert)alert.remove();});})();</script>';
     }
 
     /**
@@ -390,5 +422,15 @@ class MessageManager
     public function __toString(): string
     {
         return $this->render();
+    }
+
+    /**
+     * Cookie Flash 中 historically 存的是 `.wflash` / 旧版 alert HTML；供控制器/模板当作纯文案展示时须去掉全部标签，避免 htmlspecialchars 后用户看到原始标签串。
+     */
+    private static function flashContentToPlainText(string $html): string
+    {
+        $text = strip_tags($html);
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return trim(preg_replace('/\s+/u', ' ', $text) ?? '');
     }
 }

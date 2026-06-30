@@ -9,6 +9,7 @@ Current priority order:
 3. `default` theme compatibility and missing slot/hook warnings
 4. Backend IA, menu resources, and module management closure
 5. Test closure and continuous expansion
+6. Supplier, seller, and store capability review tracked in `supplier-review-checklist.md`
 
 Current closed slices:
 
@@ -28,3 +29,7 @@ API path notes:
 - WeShop frontend REST APIs follow `/{rest_frontend_prefix}/{module_router}/rest/v1/...`
 - In the current environment the externally reachable auth contract is:
   - `https://127.0.0.1:9982/api123/api/rest/v1/weshop/auth/*`
+
+Active review documents:
+
+- `supplier-review-checklist.md` keeps the supplier capability review taxonomy, QA checklist template, current documentation gaps, and documentation update boundary for WEL-58.

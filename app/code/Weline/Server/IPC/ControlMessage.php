@@ -49,15 +49,6 @@ class ControlMessage
     /** Master → Dispatcher：将指定端口从黑名单移除 */
     public const TYPE_UNDRAIN = 'undrain';
 
-    /** Master → Dispatcher：动态添加 Worker 端口到负载均衡池 */
-    public const TYPE_ADD_WORKER = 'add_worker';
-
-    /** Master → Dispatcher：从负载均衡池移除端口 */
-    public const TYPE_REMOVE_WORKER = 'remove_worker';
-
-    /** Master → Dispatcher：一次性替换负载均衡端口列表（维护模式切换用） */
-    public const TYPE_SET_WORKER_POOL = 'set_worker_pool';
-
     /** Master → Dispatcher：设置 HTTP 重定向端口（用于明文 HTTP 请求转发） */
     public const TYPE_SET_REDIRECT_PORT = 'set_redirect_port';
 
@@ -106,6 +97,20 @@ class ControlMessage
     public const TYPE_HEARTBEAT = 'heartbeat';
     /** Dispatcher → Master：Worker 入池检查回执（闭环确认） */
     public const TYPE_WORKER_POOL_ACK = 'worker_pool_ack';
+
+    /** Master → Dispatcher：版本化全量路由表，是 Dispatcher 唯一路由权威输入。 */
+    public const TYPE_SET_ROUTE_TABLE = 'set_route_table';
+
+    /** Dispatcher → Master：路由表版本回执。 */
+    public const TYPE_ROUTE_TABLE_ACK = 'route_table_ack';
+
+    /**
+     * Worker/Dispatcher → Master：身份/路由观察上报（B-i 阶段引入，仅落观测日志）。
+     *
+     * 用于后续 slot/lease/generation 校验：进程发现自身 slot/lease/generation 与
+     * Master 推送的版本化路由表不一致时上报，Master 可在 B-ii/B-iii 阶段据此触发收敛。
+     */
+    public const TYPE_ROUTE_OBSERVATION = 'route_observation';
 
     /** Master → CLI：滚动重启完成事件 */
     public const TYPE_RELOAD_COMPLETED = 'reload_completed';
@@ -177,6 +182,8 @@ class ControlMessage
     // ========== CLI 命令动作 ==========
 
     public const ACTION_STOP = 'stop';
+    /** CLI 诊断：探测 STOP 链路（不实际停机） */
+    public const ACTION_STOP_TEST = 'stop_test';
     public const ACTION_RELOAD = 'reload';
     /** 重载并等待完成：Master 滚动重启完成后才返回结果 */
     public const ACTION_RELOAD_WAIT = 'reload_wait';
@@ -482,22 +489,67 @@ class ControlMessage
     }
 
     /**
+     * 构建 Master 下发给 Dispatcher 的权威路由表。
+     *
      * @param int[] $ports
+     * @param array<int, array<string, mixed>> $workers 规范化 worker 描述（role/slot_id/lease_id/generation/port/state）
      */
-    public static function setWorkerPool(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string
+    public static function setRouteTable(
+        array $ports,
+        string $role = self::ROLE_WORKER,
+        array $workers = [],
+        int $routeVersion = 0,
+        int $epoch = 0,
+        string $traceId = ''
+    ): string
     {
+        $normalizedPorts = \array_values(\array_map('intval', $ports));
+        \sort($normalizedPorts, \SORT_NUMERIC);
+        $normalizedWorkers = $workers !== [] ? self::normalizeWorkerDescriptors($workers, $role) : [];
+
+        $checksum = self::computeRouteTableChecksum($role, $routeVersion, $epoch, $normalizedPorts, $normalizedWorkers);
+
         $data = [
-            'type'  => self::TYPE_SET_WORKER_POOL,
-            'ports' => \array_values(\array_map('intval', $ports)),
-            'role' => $role,
+            'type'          => self::TYPE_SET_ROUTE_TABLE,
+            'role'          => $role,
+            'ports'         => $normalizedPorts,
+            'route_version' => $routeVersion,
+            'checksum'      => $checksum,
         ];
-        if ($workers !== []) {
-            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
+        if ($normalizedWorkers !== []) {
+            $data['workers'] = $normalizedWorkers;
         }
-        if ($version > 0) {
-            $data['version'] = $version;
+        if ($epoch > 0) {
+            $data['epoch'] = $epoch;
         }
+        self::appendTraceId($data, $traceId);
         return self::encode($data);
+    }
+
+    /**
+     * 计算路由表内容校验和（B-i：内部使用，亦供单元测试 / Dispatcher 端二次校验）。
+     *
+     * 输入 ports / workers 必须已规范化（见 setRouteTable 内的预处理）。
+     *
+     * @param int[] $normalizedPorts
+     * @param array<int, array<string, mixed>> $normalizedWorkers
+     */
+    public static function computeRouteTableChecksum(
+        string $role,
+        int $routeVersion,
+        int $epoch,
+        array $normalizedPorts,
+        array $normalizedWorkers
+    ): string
+    {
+        $material = [
+            'role'          => $role,
+            'route_version' => $routeVersion,
+            'epoch'         => $epoch,
+            'ports'         => $normalizedPorts,
+            'workers'       => $normalizedWorkers,
+        ];
+        return \sha1((string) \json_encode($material, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
     }
 
     /**
@@ -568,12 +620,17 @@ class ControlMessage
     /**
      * 构建 drain 消息
      */
-    public static function drain(array $ports): string
+    public static function drain(array $ports, int $drainTimeoutSec = 0): string
     {
-        return self::encode([
+        $payload = [
             'type'  => self::TYPE_DRAIN,
             'ports' => $ports,
-        ]);
+        ];
+        if ($drainTimeoutSec > 0) {
+            $payload['drain_timeout_sec'] = $drainTimeoutSec;
+        }
+
+        return self::encode($payload);
     }
 
     /**
@@ -585,44 +642,6 @@ class ControlMessage
             'type'  => self::TYPE_UNDRAIN,
             'ports' => $ports,
         ]);
-    }
-
-    /**
-     * 构建 add_worker 消息
-     */
-    public static function addWorker(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string
-    {
-        $data = [
-            'type'  => self::TYPE_ADD_WORKER,
-            'ports' => $ports,
-            'role' => $role,
-        ];
-        if ($workers !== []) {
-            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
-        }
-        if ($version > 0) {
-            $data['version'] = $version;
-        }
-        return self::encode($data);
-    }
-
-    /**
-     * 构建 remove_worker 消息
-     */
-    public static function removeWorker(array $ports, string $role = self::ROLE_WORKER, array $workers = [], int $version = 0): string
-    {
-        $data = [
-            'type'  => self::TYPE_REMOVE_WORKER,
-            'ports' => $ports,
-            'role' => $role,
-        ];
-        if ($workers !== []) {
-            $data['workers'] = self::normalizeWorkerDescriptors($workers, $role);
-        }
-        if ($version > 0) {
-            $data['version'] = $version;
-        }
-        return self::encode($data);
     }
 
     /**
@@ -639,7 +658,7 @@ class ControlMessage
     /**
      * 构建 draining_complete 消息
      */
-    public static function drainingComplete(int $workerId, int $port, string $msgId = ''): string
+    public static function drainingComplete(int $workerId, int $port, string $msgId = '', string $reason = ''): string
     {
         $data = [
             'type'      => self::TYPE_DRAINING_COMPLETE,
@@ -649,20 +668,37 @@ class ControlMessage
         if ($msgId !== '') {
             $data['msg_id'] = $msgId;
         }
+        if ($reason !== '') {
+            $data['reason'] = $reason;
+        }
         return self::encode($data);
     }
 
     /**
      * 构建 status_report 消息
      */
-    public static function statusReport(int $connections, int $memory, int $requests): string
+    public static function statusReport(int $connections, int $memory, int $requests, array $context = []): string
     {
-        return self::encode([
+        $data = [
             'type'        => self::TYPE_STATUS_REPORT,
             'connections' => $connections,
             'memory'      => $memory,
             'requests'    => $requests,
-        ]);
+        ];
+
+        foreach ($context as $key => $value) {
+            if (!\is_string($key) || \preg_match('/^[a-zA-Z0-9_]{1,64}$/', $key) !== 1) {
+                continue;
+            }
+            if (\in_array($key, ['type', 'connections', 'memory', 'requests'], true)) {
+                continue;
+            }
+            if (\is_scalar($value) || $value === null) {
+                $data[$key] = $value;
+            }
+        }
+
+        return self::encode($data);
     }
 
     /**
@@ -726,7 +762,7 @@ class ControlMessage
      * @param string $reloadType 重载类型（仅 reload 时用）
      * @param array $payload 可选载荷（如 security_unblock 时传 ip / clear_all）
      */
-    public static function command(string $action, string $reloadType = '', array $payload = []): string
+    public static function command(string $action, string $reloadType = '', array $payload = [], string $controlToken = ''): string
     {
         $data = [
             'type'   => self::TYPE_COMMAND,
@@ -734,6 +770,9 @@ class ControlMessage
         ];
         if ($reloadType !== '') {
             $data['reload_type'] = $reloadType;
+        }
+        if ($controlToken !== '' && !isset($payload['control_token'])) {
+            $data['control_token'] = $controlToken;
         }
         foreach ($payload as $k => $v) {
             $data[$k] = $v;
@@ -814,11 +853,22 @@ class ControlMessage
      * @param string $reason 退出原因
      * @param int $code 可选退出码
      */
-    public static function exitReason(string $reason, int $code = 0): string
+    public static function exitReason(string $reason, int $code = 0, array $context = []): string
     {
         $data = ['type' => self::TYPE_EXIT_REASON, 'reason' => $reason];
         if ($code !== 0) {
             $data['code'] = $code;
+        }
+        foreach ($context as $key => $value) {
+            if (!\is_string($key) || \preg_match('/^[a-zA-Z0-9_]{1,64}$/', $key) !== 1) {
+                continue;
+            }
+            if (\in_array($key, ['type', 'reason', 'code'], true)) {
+                continue;
+            }
+            if (\is_scalar($value) || $value === null) {
+                $data[$key] = $value;
+            }
         }
         return self::encode($data);
     }
@@ -1017,6 +1067,78 @@ class ControlMessage
     }
 
     /**
+     * 构建 route_table_ack 消息（B-i 阶段引入）。
+     *
+     * Dispatcher → Master：确认已接收并应用（或忽略）某个版本的路由表。
+     *
+     * @param string $status  applied | duplicate | rejected
+     * @param string $reason  当 status != applied 时的简要原因（便于排障，避免增加新消息类型）
+     */
+    public static function routeTableAck(
+        int $routeVersion,
+        string $checksum,
+        string $status = 'applied',
+        string $role = self::ROLE_WORKER,
+        int $epoch = 0,
+        string $reason = '',
+        string $traceId = ''
+    ): string
+    {
+        $data = [
+            'type'          => self::TYPE_ROUTE_TABLE_ACK,
+            'role'          => $role,
+            'route_version' => $routeVersion,
+            'checksum'      => $checksum,
+            'status'        => $status,
+        ];
+        if ($epoch > 0) {
+            $data['epoch'] = $epoch;
+        }
+        if ($reason !== '') {
+            $data['reason'] = $reason;
+        }
+        self::appendTraceId($data, $traceId);
+        return self::encode($data);
+    }
+
+    /**
+     * 构建 route_observation 消息（B-i 阶段引入：仅观测，不联动 Worker 生死）。
+     *
+     * 子进程 → Master：上报自身观察到的身份/路由偏差，例如：
+     * - 进程被分配的 slot/lease/generation 与版本化路由表不一致；
+     * - Dispatcher 出现路由命中率异常等（B-ii 后再补充语义）。
+     *
+     * 字段约定（最小集，所有字段都可选，缺省时不写入）：
+     *   role / slot_id / lease_id / generation / port / event / detail
+     */
+    public static function routeObservation(
+        string $event,
+        string $role = self::ROLE_WORKER,
+        string $slotId = '',
+        string $leaseId = '',
+        int $generation = 0,
+        int $port = 0,
+        string $detail = '',
+        string $traceId = ''
+    ): string
+    {
+        $data = [
+            'type'  => self::TYPE_ROUTE_OBSERVATION,
+            'role'  => $role,
+            'event' => $event,
+        ];
+        if ($port > 0) {
+            $data['port'] = $port;
+        }
+        if ($detail !== '') {
+            $data['detail'] = $detail;
+        }
+        self::appendLeaseIdentity($data, $slotId, $leaseId, $generation);
+        self::appendTraceId($data, $traceId);
+        return self::encode($data);
+    }
+
+    /**
      * @param array<string, mixed> $data
      */
     private static function appendLeaseIdentity(array &$data, string $slotId, string $leaseId, int $generation): void
@@ -1029,6 +1151,16 @@ class ControlMessage
         }
         if ($generation > 0) {
             $data['generation'] = $generation;
+        }
+    }
+
+    /**
+     * 把 traceId 写入消息 payload。
+     */
+    private static function appendTraceId(array &$data, string $traceId): void
+    {
+        if ($traceId !== '') {
+            $data['trace_id'] = $traceId;
         }
     }
 

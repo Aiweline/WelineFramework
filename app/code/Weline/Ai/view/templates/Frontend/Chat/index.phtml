@@ -17,9 +17,23 @@ $is_logged_in = $this->is_logged_in ?? false;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
+            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
+            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            api: {
+                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
+                endpoint: '/api/framework/query-bin',
+                queryBinUrl: '/api/framework/query-bin'
+            }
+        });
+        window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        window.WelineApiConfig = Object.assign(window.WelineApiConfig || {}, window.__WelineThemeConfig.api);
+    </script>
+    <script src="/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2"></script>
     <title><?= __('AI聊天') ?> - AI助手平台</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.5.95/css/materialdesignicons.min.css" rel="stylesheet">
+    <link href="@static(Weline_Frontend::assets/css/bootstrap.min.css)" rel="stylesheet">
+    <link href="@static(Weline_Frontend::assets/css/icons.min.css)" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -196,10 +210,10 @@ $is_logged_in = $this->is_logged_in ?? false;
         <div class="chat-header">
             <h3><i class="mdi mdi-robot"></i> <?= __('AI聊天助手') ?></h3>
             <div class="chat-settings">
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleSettings()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-ai-chat-action="toggle-settings">
                     <i class="mdi mdi-cog"></i> <?= __('设置') ?>
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearChat()">
+                <button type="button" class="btn btn-sm btn-outline-danger" data-ai-chat-action="clear-chat">
                     <i class="mdi mdi-delete"></i> <?= __('清空') ?>
                 </button>
             </div>
@@ -254,13 +268,12 @@ $is_logged_in = $this->is_logged_in ?? false;
         </div>
 
         <div class="chat-input-container">
-            <form id="chatForm" onsubmit="sendMessage(); return false;">
+            <form id="chatForm">
                 <div class="input-group">
                     <textarea class="form-control" 
                               id="messageInput" 
                               placeholder="<?= __('请输入您的消息...') ?>" 
-                              rows="1"
-                              onkeydown="handleKeyDown(event)"></textarea>
+                              rows="1"></textarea>
                     <div class="input-group-append">
                         <button class="btn btn-primary" type="submit" id="sendButton">
                             <i class="mdi mdi-send"></i>
@@ -274,25 +287,114 @@ $is_logged_in = $this->is_logged_in ?? false;
 
 <script>
 let isProcessing = false;
+let aiApiPromise = null;
+
+function getAiApi() {
+    if (!aiApiPromise) {
+        aiApiPromise = (async function() {
+            if (window.Weline && typeof window.Weline.load === 'function') {
+                await window.Weline.load('api');
+            }
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                throw new Error('Weline.Api.resource is unavailable.');
+            }
+            return window.Weline.Api.resource('ai');
+        })();
+    }
+    return aiApiPromise;
+}
 
 function toggleSettings() {
     const panel = document.getElementById('settingsPanel');
     panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
-function clearChat() {
-    if (!confirm('<?= __('确定要清空聊天记录吗？') ?>')) {
+function appendTextMessage(target, className, prefix, message) {
+    target.textContent = '';
+    const span = document.createElement('span');
+    if (className) {
+        span.className = className;
+    }
+    span.textContent = String(prefix || '') + String(message || '');
+    target.appendChild(span);
+}
+
+function createWelcomeMessage() {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'welcome-message';
+
+    const icon = document.createElement('i');
+    icon.className = 'mdi mdi-robot mdi-48px';
+
+    const title = document.createElement('h4');
+    title.textContent = '<?= addslashes(__('欢迎使用AI聊天助手！')) ?>';
+
+    const copy = document.createElement('p');
+    copy.textContent = '<?= addslashes(__('请输入您的问题，我会尽力为您解答。')) ?>';
+
+    wrapper.appendChild(icon);
+    wrapper.appendChild(title);
+    wrapper.appendChild(copy);
+    return wrapper;
+}
+
+function confirmClearChat() {
+    return new Promise(function(resolve) {
+        const overlay = document.createElement('div');
+        overlay.className = 'chat-confirm-overlay';
+
+        const dialog = document.createElement('div');
+        dialog.className = 'chat-confirm-dialog';
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
+
+        const message = document.createElement('p');
+        message.textContent = '<?= addslashes(__('确定要清空聊天记录吗？')) ?>';
+
+        const actions = document.createElement('div');
+        actions.className = 'chat-confirm-actions';
+
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'btn btn-sm btn-outline-secondary';
+        cancel.textContent = '<?= addslashes(__('取消')) ?>';
+
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'btn btn-sm btn-danger';
+        clear.textContent = '<?= addslashes(__('清空')) ?>';
+
+        const close = function(value) {
+            overlay.remove();
+            resolve(value);
+        };
+
+        cancel.addEventListener('click', function() { close(false); });
+        clear.addEventListener('click', function() { close(true); });
+        overlay.addEventListener('click', function(event) {
+            if (event.target === overlay) {
+                close(false);
+            }
+        });
+
+        actions.appendChild(cancel);
+        actions.appendChild(clear);
+        dialog.appendChild(message);
+        dialog.appendChild(actions);
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        cancel.focus();
+    });
+}
+
+async function clearChat() {
+    if (!(await confirmClearChat())) {
         return;
     }
 
     const messagesContainer = document.getElementById('chatMessages');
-    messagesContainer.innerHTML = `
-        <div class="welcome-message">
-            <i class="mdi mdi-robot mdi-48px"></i>
-            <h4><?= __('欢迎使用AI聊天助手！') ?></h4>
-            <p><?= __('请输入您的问题，我会尽力为您解答。') ?></p>
-        </div>
-    `;
+    messagesContainer.textContent = '';
+    messagesContainer.appendChild(createWelcomeMessage());
 }
 
 function handleKeyDown(event) {
@@ -301,6 +403,33 @@ function handleKeyDown(event) {
         sendMessage();
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const chatForm = document.getElementById('chatForm');
+    const messageInput = document.getElementById('messageInput');
+    if (chatForm) {
+        chatForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            sendMessage();
+        });
+    }
+    if (messageInput) {
+        messageInput.addEventListener('keydown', handleKeyDown);
+    }
+    document.addEventListener('click', function(event) {
+        const trigger = event.target.closest('[data-ai-chat-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+        const action = trigger.getAttribute('data-ai-chat-action');
+        if (action === 'toggle-settings') {
+            toggleSettings();
+        } else if (action === 'clear-chat') {
+            clearChat();
+        }
+    });
+});
 
 async function sendMessage() {
     if (isProcessing) {
@@ -331,18 +460,20 @@ async function sendMessage() {
         const scenarioCode = document.getElementById('scenarioSelect').value;
 
         // 调用API
-        var url = '<?= $this->getFrontendUrl('*/frontend/chat/send') ?>';
-        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `message=${encodeURIComponent(message)}&model_code=${modelCode}&scenario_code=${scenarioCode}` };
-        var res = await window.Weline.Api.request(url, opts);
-        const data = (res && res.data) || res;
+        const aiApi = await getAiApi();
+        const data = await aiApi.chat({
+            message: message,
+            model_code: modelCode,
+            scenario_code: scenarioCode
+        }, { silent: true });
 
         if (data.success) {
-            aiContentDiv.textContent = data.data.response;
+            aiContentDiv.textContent = data && data.data ? String(data.data.response || '') : '';
         } else {
-            aiContentDiv.innerHTML = `<span class="text-danger"><?= __('错误：') ?>${data.message}</span>`;
+            appendTextMessage(aiContentDiv, 'text-danger', '<?= addslashes(__('错误：')) ?>', data ? data.message : '');
         }
     } catch (error) {
-        aiContentDiv.innerHTML = `<span class="text-danger"><?= __('请求失败：') ?>${error.message}</span>`;
+        appendTextMessage(aiContentDiv, 'text-danger', '<?= addslashes(__('请求失败：')) ?>', error ? error.message : '');
     } finally {
         isProcessing = false;
         sendButton.disabled = false;
@@ -363,12 +494,20 @@ function addMessage(content, type) {
 
     const messageDiv = document.createElement('div');
     messageDiv.className = `message message-${type}`;
-    messageDiv.innerHTML = `
-        <div class="message-avatar">
-            <i class="mdi mdi-${type === 'user' ? 'account' : 'robot'}"></i>
-        </div>
-        <div class="message-content">${content}</div>
-    `;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+
+    const icon = document.createElement('i');
+    icon.className = type === 'user' ? 'mdi mdi-account' : 'mdi mdi-robot';
+    avatar.appendChild(icon);
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    contentDiv.textContent = String(content || '');
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
 
     messagesContainer.appendChild(messageDiv);
     return messageDiv;
@@ -499,6 +638,35 @@ function scrollToBottom() {
 .chat-input-container textarea {
     resize: none;
     max-height: 150px;
+}
+
+.chat-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.45);
+}
+
+.chat-confirm-dialog {
+    width: min(320px, calc(100vw - 40px));
+    padding: 18px;
+    border-radius: 10px;
+    background: #fff;
+    color: #333;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.2);
+}
+
+.chat-confirm-dialog p {
+    margin: 0 0 14px;
+}
+
+.chat-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
 #sendButton {

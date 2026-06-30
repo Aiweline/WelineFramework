@@ -54,6 +54,17 @@
 设置语言失败：%{1},"언어 설정 실패: %{1}"
 客服消息翻译,"고객 서비스 메시지 번역"
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,"고객 서비스 모듈은 이 이벤트를 통해 번역 서비스를 요청합니다. 이벤트 데이터에는 번역할 텍스트, 소스 언어, 대상 언어 등이 포함됩니다. 번역 모듈은 이 이벤트를 수신하여 번역 서비스를 제공할 수 있습니다."
+"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
+"Session and message content are required.","Session and message content are required."
+"Session ID is required.","Session ID is required."
+"Language code is required.","Language code is required."
+"Language updated.","Language updated."
+"Please enter a valid email address.","Please enter a valid email address."
+"Session token is required.","Session token is required."
+"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
+"Verification email has been sent.","Verification email has been sent."
+"Customer Service Query","Customer Service Query"
+"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","고객 서비스 - 이메일 연결 인증"
 客服系统,"고객 서비스 시스템"
 客服服务,"고객 서비스"
@@ -61,8 +72,6 @@
 设置,설정
 收起,최소화
 我的语言,"내 언어"
-简体中文,"간체 중국어"
-繁體中文,"번체 중국어"
 显示模式,"표시 모드"
 仅显示译文,"번역만 표시"
 原文+译文,원문+번역
@@ -70,11 +79,12 @@
 欢迎使用客服服务！,"고객 서비스에 오신 것을 환영합니다！"
 请输入您的问题，我们的客服将尽快为您解答。,"질문을 입력해주세요. 고객 서비스가 최대한 빨리 답변해드리겠습니다."
 输入消息...,"메시지 입력..."
-绑定邮箱,"이메일 연결"
-绑定邮箱后，您可以收到客服回复的邮件通知。,"이메일을 연결하면 고객 서비스 답변 이메일 알림을 받을 수 있습니다."
-邮箱地址,"이메일 주소"
-请输入您的邮箱,"이메일을 입력하세요"
-取消,취소
+接收客服回复与优惠通知,接收客服回复与优惠通知
+留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
+仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
+接收通知的邮箱,接收通知的邮箱
+请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
+稍后再说,稍后再说
 发送验证邮件,"인증 이메일 전송"
 等待中,"대기 중"
 暂无消息,"메시지 없음"
@@ -86,9 +96,13 @@
 发送失败,"전송 실패"
 发送失败，请稍后重试,"전송 실패. 잠시 후 다시 시도해주세요"
 确定要接单此会话吗？,"이 세션을 수주하시겠습니까？"
+确认接单,确认接单
+取消,취소
 分配失败,"할당 실패"
 分配失败，请稍后重试,"할당 실패. 잠시 후 다시 시도해주세요"
 确定要关闭此会话吗？,"이 세션을 닫으시겠습니까？"
+确认关闭,确认关闭
+关闭,닫기
 请选择一个会话开始聊天,"채팅을 시작할 세션을 선택하세요"
 关闭失败,"닫기 실패"
 关闭失败，请稍后重试,"닫기 실패. 잠시 후 다시 시도해주세요"
@@ -103,9 +117,11 @@
 分钟,분
 最长,"가장 김"
 秒,초
-客服在线,"고객 서비스 온라인"
+欢迎使用客服服务,欢迎使用客服服务
+客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
+鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服","AI 고객 서비스"
-客服离线,"고객 서비스 오프라인"
+鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
 请输入有效的邮箱地址,"유효한 이메일 주소를 입력하세요"
 会话未初始化，请刷新页面重试,"세션이 초기화되지 않았습니다. 페이지를 새로고침하고 다시 시도하세요"
 验证邮件已发送，请查收您的邮箱,"인증 이메일을 전송했습니다. 이메일함을 확인해주세요"
@@ -155,6 +171,7 @@ ID,ID
 启用客服服务,"고객 서비스 활성화"
 启用,启用
 默认客服语言,"기본 담당자 언어"
+简体中文,"간체 중국어"
 English,English
 默认客户语言,"기본 고객 언어"
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","서비스 담당자가 온라인에 없을 때 AI가 고객 메시지에 자동으로 답변하도록 활성화할 수 있습니다."
@@ -188,7 +205,6 @@ English,English
 客服语言,"담당자 언어"
 创建时间,"생성 시간"
 查看,보기
-关闭,닫기
 返回列表,"목록으로 돌아가기"
 会话信息,"세션 정보"
 客服ID,"담당자 ID"

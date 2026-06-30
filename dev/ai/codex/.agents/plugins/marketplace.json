@@ -1,0 +1,20 @@
+{
+  "name": "weline-framework",
+  "interface": {
+    "displayName": "WelineFramework"
+  },
+  "plugins": [
+    {
+      "name": "weline-codex-plugin",
+      "source": {
+        "source": "local",
+        "path": "./plugins/weline-codex-plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Development"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+---
+description: Git 提交后必须连续推送到 origin（Gitee）与 github（GitHub）双端
+alwaysApply: true
+---
+
+# Git 提交与双端推送（强制）
+
+- **仅当用户明确要求提交**时才 `git commit`；不得擅自提交。
+- 用户要求提交时，**commit 与 push 同一交付**：`commit` 成功后必须**连续**执行 `git push origin HEAD` 与 `git push github HEAD`（或当前分支名）；禁止只推一端。
+- 远程约定：`origin` = Gitee，`github` = GitHub；推送前 `git remote -v` 确认。
+- 任一端 push 失败：报告哪端成功/失败及错误，不得声称已完成；修复后补推失败端。
+- 禁止对 `main`/`master` 使用 `--force` / `--force-with-lease`，除非用户明确授权。
+- 禁止提交密钥、token、`.env` 等敏感文件。
+
+详见：`dev/ai/global-constraints.md` 第 13 节。

@@ -48,4 +48,14 @@ final class ThemeDataConnectionScopeTest extends TestCase
         RequestContext::setConnectionId('conn-theme-a');
         self::assertSame('frontend', ThemeData::getCurrentArea());
     }
+
+    public function testArrayParamValuesDecodeStoredJsonStrings(): void
+    {
+        self::assertSame([], ThemeData::normalizeParamValueForDefinition('[]', ['default' => []]));
+        self::assertSame(
+            [['label' => '保存']],
+            ThemeData::normalizeParamValueForDefinition('[{"label":"保存"}]', ['type' => 'array', 'default' => []])
+        );
+        self::assertSame('not-json', ThemeData::normalizeParamValueForDefinition('not-json', ['default' => []]));
+    }
 }

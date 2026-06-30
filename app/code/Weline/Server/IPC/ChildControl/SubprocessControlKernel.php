@@ -11,6 +11,7 @@ use Weline\Server\IPC\MasterResurrectionCoordinator;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Supervisor\Client\SupervisorChildClient;
 use Weline\Server\Supervisor\Endpoint\ControlEndpointResolver;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 final class SubprocessControlKernel
 {
@@ -20,6 +21,7 @@ final class SubprocessControlKernel
     private const CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC = 30;
     private const CONTROL_PORT_POLL_USEC = 100000;
     private const CONTROL_CONNECT_SELF_HEAL_TIMEOUT_MS = 30000;
+    private const IPC_FLUSH_BUDGET_SEC = 0.05;
 
     /** 最近一次 connect 成功使用的 control port，供 onDisconnect 自愈用 */
     private int $lastControlPort = 0;
@@ -52,22 +54,11 @@ final class SubprocessControlKernel
     }
 
     /**
-     * 从实例文件发现 Master 控制端口（支持轮询等待，带心跳检查）
+     * Resolve the Master control endpoint during process bootstrap.
      *
-     * 优先级：
-     * 1. 命令行参数 --control-port=PORT （兼容旧启动方式）
-     * 2. 从实例 JSON 中查找 control_port 字段（主要机制，支持并发启动）
-     * 3. 如果实例 JSON 不存在，循环等待 Master 写入（轮询发现）
-     *
-     * 自愈窗口：
-     * - 实例文件不存在、JSON 未写完整、control_port=0、updated_at 过旧时继续重读真实文件
-     * - 最多等待 30 秒；30 秒后仍未发现可用 control_port 才返回 0
-     * - 目的：并发启动时不因短暂实例文件竞态导致子进程直接断开并被反复复活
-     *
-     * @param string $instanceName 实例名称
-     * @param int $controlPort 命令行参数传入的端口（0 表示未传入）
-     * @param int $maxWaitSec 最多等待秒数（0 = 不等待，立即返回；上限 30 秒）
-     * @return int 发现的 Master 控制端口，或 0 if timeout/not found/Master stale
+     * The endpoint file is a Master-written bootstrap pointer only. Child
+     * processes must not use instance JSON as runtime topology or recovery
+     * consensus after this initial lookup.
      */
     public static function resolveControlPort(string $instanceName, int $controlPort = 0, int $maxWaitSec = self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC): int
     {
@@ -76,17 +67,17 @@ final class SubprocessControlKernel
             return $controlPort;
         }
 
-        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        $endpointFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
         $maxWaitSec = \max(0, \min(self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC, $maxWaitSec));
         $deadline = \microtime(true) + $maxWaitSec;
         $masterHeartbeatTimeout = self::CONTROL_PORT_SELF_HEAL_TIMEOUT_SEC;
 
-        // 循环等待实例文件和 control_port 字段出现
+        // Wait for the Master endpoint pointer to appear during bootstrap.
         do {
             $now = \time();
             
-            if (\is_file($instanceFile)) {
-                $instanceData = @\json_decode((string)\file_get_contents($instanceFile), true);
+            if (\is_file($endpointFile)) {
+                $instanceData = @\json_decode((string)\file_get_contents($endpointFile), true);
                 if (\is_array($instanceData) && isset($instanceData['control_port'])) {
                     $port = (int)($instanceData['control_port']);
                     $updatedAt = (int)($instanceData['updated_at'] ?? 0);
@@ -101,52 +92,8 @@ final class SubprocessControlKernel
                 break;
             }
 
-            \usleep(self::CONTROL_PORT_POLL_USEC);
+            SchedulerSystem::usleep(self::CONTROL_PORT_POLL_USEC);
         } while (\microtime(true) < $deadline);
-
-        return 0;
-    }
-
-    /**
-     * 从实例文件发现任意服务端口（Session、Memory 等）
-     *
-     * 机制：
-     * - Session Server 和 Memory Server 在启动后会将自己的端口写入实例 JSON
-     * - Worker 启动时调用此方法查询这些端口，然后建立连接池
-     * - 支持轮询等待，最多等待 $maxWaitSec 秒
-     *
-     * @param string $instanceName 实例名称
-     * @param string $serviceKey JSON 中的字段名（如 'session_port', 'memory_port'）
-     * @param int $maxWaitSec 最多等待秒数（0 = 不等待，立即返回）
-     * @return int 发现的服务端口，或 0 if timeout/not found
-     */
-    public static function resolveServicePort(string $instanceName, string $serviceKey, int $maxWaitSec = 6): int
-    {
-        $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
-        $deadline = \time() + $maxWaitSec;
-        $pollCount = 0;
-
-        // 循环等待服务端口出现
-        while (\time() < $deadline) {
-            if (\is_file($instanceFile)) {
-                $instanceData = @\json_decode((string)\file_get_contents($instanceFile), true);
-                if (\is_array($instanceData) && isset($instanceData[$serviceKey])) {
-                    $port = (int)($instanceData[$serviceKey]);
-                    if ($port > 0) {
-                        return $port;
-                    }
-                }
-            }
-
-            // 等待 100ms 后重试
-            $pollCount++;
-            if ($pollCount * 0.1 < $maxWaitSec) {
-                \usleep(100000); // 100ms
-                continue;
-            }
-
-            break;
-        }
 
         return 0;
     }
@@ -176,7 +123,7 @@ final class SubprocessControlKernel
         return \min($delayMs, self::E2E_READY_DELAY_LIMIT_MS);
     }
 
-    public function connectAndRegister(int $controlPort): bool
+    public function connectAndRegister(int $controlPort, bool $sendReady = true): bool
     {
         if ($controlPort <= 0 && !$this->shouldUseSupervisorTransport() && !\is_callable($this->clientFactory)) {
             return false;
@@ -189,22 +136,9 @@ final class SubprocessControlKernel
         $maxStartupRetries = \max(1, \min($maxStartupRetries, $maxRetriesBySelfHealWindow));
         $retryAttempt = 0;
         $lastError = '';
-        $instanceInfoGateway = $this->instanceCode !== '' ? new InstanceInfoGateway($this->instanceCode) : null;
 
         while ($retryAttempt < $maxStartupRetries) {
             $retryAttempt++;
-            if ($instanceInfoGateway !== null) {
-                $latestControlPort = $instanceInfoGateway->getLatestControlPort($controlPort);
-                if ($latestControlPort > 0 && $latestControlPort !== $controlPort) {
-                    // 端口更新后，先探测新端口是否已进入 LISTEN，避免切换到“尚未就绪端口”导致持续拒绝连接
-                    if (self::isTcpPortReachable('127.0.0.1', $latestControlPort, 180)) {
-                        $this->log("检测到 Master control_port 更新: {$controlPort} -> {$latestControlPort}");
-                        $controlPort = $latestControlPort;
-                    } else {
-                        $this->log("检测到 Master control_port 更新候选: {$controlPort} -> {$latestControlPort}，但新端口未就绪，暂继续使用旧端口");
-                    }
-                }
-            }
             $client = $this->createClient();
             $this->client = $client;
             $client->setSelfTag($this->selfTag);
@@ -221,7 +155,7 @@ final class SubprocessControlKernel
                 $this->instanceCode,
                 $this->identity->launchId !== '' ? $this->identity->launchId : ''
             );
-            $client->markReadyState(true);
+            $client->markReadyState($sendReady);
             $kernel = $this;
             $client->onMessage(static function (array $msg, ChildControlClientInterface $client) use ($kernel): void {
                 $kernel->handler->onMessage($msg, $kernel);
@@ -233,12 +167,14 @@ final class SubprocessControlKernel
 
             $this->lastControlPort = $controlPort;
             if (!$client->connect('127.0.0.1', $controlPort)) {
-                $lastError = "[连接失败]";
+                $connectError = \method_exists($client, 'getLastConnectError') ? (string) $client->getLastConnectError() : '';
+                $lastError = $connectError !== '' ? "[连接失败: {$connectError}]" : '[连接失败]';
                 if ($retryAttempt < $maxStartupRetries) {
-                    $this->log("连接 Master 失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    $this->log("连接 Master 失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试... {$lastError}");
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
+                $this->log("连接 Master 失败，次数上限已达 {$maxStartupRetries}，{$lastError}");
                 return false;
             }
 
@@ -259,21 +195,26 @@ final class SubprocessControlKernel
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("向 Master 注册失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
             }
             
-            if (!$client->flushPendingWrites(2.0)) {
+            if (!$client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC)) {
                 $lastError = "[刷新缓冲失败]";
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("向 Master 发送消息失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
+            }
+
+            if (!$sendReady) {
+                $this->log("Connected to Master and registered; READY will be sent after async child bootstrap completes (attempt {$retryAttempt})");
+                return true;
             }
 
             $this->applyE2EReadyDelayIfNeeded();
@@ -291,18 +232,18 @@ final class SubprocessControlKernel
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("发送 Ready 消息失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
             }
             
-            if (!$client->flushPendingWrites(2.0)) {
+            if (!$client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC)) {
                 $lastError = "[Ready 刷新失败]";
                 $client->close();
                 if ($retryAttempt < $maxStartupRetries) {
                     $this->log("发送 Ready 消息后刷新失败 (第 {$retryAttempt}/{$maxStartupRetries} 次)，{$retryDelayMs}ms 后重试...");
-                    \usleep($retryDelayMs * 1000);
+                    SchedulerSystem::usleep($retryDelayMs * 1000);
                     continue;
                 }
                 return false;
@@ -317,25 +258,25 @@ final class SubprocessControlKernel
         return false;
     }
 
-    private static function isTcpPortReachable(string $host, int $port, int $timeoutMs = 150): bool
+    public function sendReady(): bool
     {
-        if ($port <= 0) {
+        if ($this->client === null || !$this->client->isConnected()) {
             return false;
         }
-        $errno = 0;
-        $errstr = '';
-        $timeoutSec = \max(0.05, $timeoutMs / 1000);
-        $socket = @\stream_socket_client(
-            "tcp://{$host}:{$port}",
-            $errno,
-            $errstr,
-            $timeoutSec
-        );
-        if (!\is_resource($socket)) {
+
+        $this->applyE2EReadyDelayIfNeeded();
+        if (!$this->client->sendReady(
+            $this->identity->role,
+            $this->identity->workerId,
+            $this->identity->port,
+            $this->identity->epoch,
+            $this->identity->launchId,
+            $this->identity->launchId !== '' ? $this->identity->launchId : ''
+        )) {
             return false;
         }
-        @\fclose($socket);
-        return true;
+
+        return $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
     }
 
     private function applyE2EReadyDelayIfNeeded(): void
@@ -346,7 +287,7 @@ final class SubprocessControlKernel
         }
 
         $this->log("E2E startup hook: delaying READY by {$delayMs}ms");
-        \usleep($delayMs * 1000);
+        SchedulerSystem::usleep($delayMs * 1000);
     }
 
     public function tick(): void
@@ -457,14 +398,21 @@ final class SubprocessControlKernel
             return;
         }
         $this->client->send(\Weline\Server\IPC\ControlMessage::exitReason($reason, $code));
+        $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
     }
 
-    public function sendDrainingComplete(): void
+    public function sendDrainingComplete(string $reason = 'kernel_drain_complete'): void
     {
         if ($this->client === null || !$this->client->isConnected()) {
             return;
         }
-        $this->client->sendDrainingComplete($this->identity->workerId, $this->identity->port, $this->identity->launchId !== '' ? $this->identity->launchId : '');
+        $this->client->sendDrainingComplete(
+            $this->identity->workerId,
+            $this->identity->port,
+            $this->identity->launchId !== '' ? $this->identity->launchId : '',
+            $reason
+        );
+        $this->client->flushPendingWrites(self::IPC_FLUSH_BUDGET_SEC);
     }
 
     public function close(): void

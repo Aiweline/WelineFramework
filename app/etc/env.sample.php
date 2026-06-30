@@ -218,17 +218,70 @@ return [
             'request_log_enabled' => null,
             // 错误日志开关；null 表示沿用现有 DEV 判断
             'error_log_enabled' => null,
+            // Persistent WLS FPC stampede guard: only wait briefly for the worker holding the build lock to publish.
+            'fpc_build_wait_timeout_ms' => 80,
+            // Serve stale public FPC during rebuild lock contention instead of blocking readers.
+            'fpc_stale_ttl_seconds' => 86400,
+            'fpc_serve_stale_before_build' => true,
             'runtime_log_file' => 'var/log/wls/runtime.log',
             'timing_log_file' => 'var/log/wls/timing.log',
+        ],
+        // Dispatcher startup must not cold-render many frontend pages. Keep this
+        // explicit for manual FPC prebuild flows; default dispatcher warmup is
+        // cheap TLS/health only.
+        'homepage_warmup_paths' => ['/'],
+        'homepage_warmup_variants' => [
+            ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+            ['lang' => 'en_US', 'currency' => 'USD'],
+            ['lang' => 'hi_IN', 'currency' => 'INR'],
+        ],
+        // WLS worker READY 后错峰预载 router/hook/event/extends/query/i18n 等进程级注册表。
+        // 显式设为 false/0/off 可关闭；默认开启，避免首个用户请求承担扫描成本。
+        // 设为 sync 才会在 READY 前同步预热；默认不允许任何预热卡住启动。
+        'worker_bootstrap_warmup' => true,
+        // Worker READY 后错峰协程执行主题/分类/store 等 observer 预热；显式 false/0/off 可关闭。
+        'worker_deferred_bootstrap_warmup' => true,
+        'worker_bootstrap_observer_warmup' => false,
+        'worker_deferred_bootstrap_roles' => ['maintenance'],
+        // Worker #1 READY 前先构建少量首访关键 FPC，避免 reload 后第一位用户承担分类/产品冷渲染。
+        'worker' => [
+            'fpc_buildahead_roles' => ['maintenance'],
         ],
         'worker_count' => 'auto',
         // Worker/维护 Worker 子进程 PHP memory_limit。纯数字按 MB 处理；支持 512M、1G、-1。
         'worker_memory_limit' => '256M',
         // Dispatcher 子进程 PHP memory_limit；不配置时默认跟随 worker_memory_limit。
         'dispatcher_memory_limit' => '256M',
-        // EventLoop 后端：auto=优先 event 扩展，不可用回退 select
+        // WLS Panel mode keeps the independent server panel separate from the
+        // ordinary project backend. When enabled and the generic memory limit
+        // is still 256M, server:start raises worker/dispatcher memory to the
+        // panel worker_memory_limit below. Explicit worker/dispatcher memory
+        // values in env or CLI always win.
+        'panel' => [
+            'enabled' => false,
+            'mode' => 'standalone',
+            'worker_memory_limit' => '512M',
+        ],
+        'ssl' => [
+            'engine' => 'stream', // stream|event_buffer; native Windows only supports stream
+            'event_buffer_enabled' => false,
+            'event_buffer_max_connections_per_worker' => 0,
+            'event_buffer_read_high_watermark' => 1048576,
+            'event_buffer_write_high_watermark' => 1048576,
+            'handshake_max_advance_per_loop' => 16,
+            'handshake_queue_high_watermark' => 512,
+            'idle_select_timeout_usec' => 5000,
+        ],
+        // EventLoop 后端：auto 当前保持稳定 select；event 需显式开启并通过压测后再进入 auto。
         'loop' => [
             'driver' => 'auto', // auto|select|event
+        ],
+        'dispatcher' => [
+            'fast_tls_path_enabled' => true,
+            'max_accept_per_loop' => 16,
+            'worker_connect_select_timeout_sec' => 0.02,
+            'ssl_backend_preconnect_per_worker' => 0,
+            'homepage_warmup_enabled' => true,
         ],
         'mode' => 'io',
         'max_connections' => 10000,
@@ -331,6 +384,8 @@ return [
             'worker_emergency_restart' => true,
             // worker_emergency_cooldown_sec：两次「零存活紧急整组拉起」之间的最短间隔（秒），防止异常循环疯狂 fork。
             'worker_emergency_cooldown_sec' => 20,
+            // Windows startup port checks use a bind probe instead of netstat/Get-NetTCPConnection.
+            'fast_bind_probe_port_check' => true,
             // master_self_audit_interval_sec：Master 周期性自检（控制面、各角色 READY+IPC+PID、缺槽/僵死则补齐或回收重启）。
             //   0 = 关闭。默认 20。
             'master_self_audit_interval_sec' => 20,
@@ -340,8 +395,12 @@ return [
             // worker_three_batch_min_count：Worker 槽位数 ≥ 此值时，滚动重启/代码重载均分为三批并行摘流量；
             //   每批内全部 READY 后再通知 Dispatcher 加回端口；低于此值则逐个槽位重启（每批 1 个）。
             'worker_three_batch_min_count' => 7,
+            // worker_reload_batch_count：达到 worker_three_batch_min_count 后的 reload 批次数；默认 1 批，避免本地 reload 被串行批次拖到几十秒。
+            'worker_reload_batch_count' => 1,
             // drain_timeout_sec：滚动重启/单实例 DRAIN 时 Master 等待 draining_complete 的上限（秒）；下发给 Worker 作强制收尾上限。
-            'drain_timeout_sec' => 120,
+            'drain_timeout_sec' => 5,
+            // reload_drain_timeout_sec：代码重载专用 DRAIN 上限。长连接会主动断开重连，不允许把滚动重载拖到分钟级。
+            'reload_drain_timeout_sec' => 1,
             // maintenance_connection_drain_timeout_sec：启用维护时，Dispatcher 已切至维护 Worker 后，等待各业务 Worker 排空存量 TCP 再 ACK 的上限（秒）。
             'maintenance_connection_drain_timeout_sec' => 300,
             // maintenance_ready_timeout_sec：维护 Worker 子进程全部 READY 的等待上限（秒）。
@@ -351,20 +410,24 @@ return [
             //   false = 传统模式：先停旧 Worker 再启新 Worker（有短暂服务中断）
             'zero_downtime_rolling_restart' => true,
             // stop_all_ipc_disconnect_wait_sec：stopAll 阶段 4 等待「子服务 IPC」断开的上限（秒），不含 control/CLI。
-            'stop_all_ipc_disconnect_wait_sec' => 30.0,
+            'stop_all_ipc_disconnect_wait_sec' => 2.0,
             // stop_ipc_flush_before_close_sec：关闭 IPC 监听前冲刷出站写缓冲的上限（秒）。
-            'stop_ipc_flush_before_close_sec' => 2.0,
+            'stop_ipc_flush_before_close_sec' => 0.2,
             // force_stop_ipc_flush_sec / force_stop_ipc_post_kill_wait_sec：二次 Ctrl+C 等强制停机路径上，杀进程前/后的短 IPC 窗口（秒）。
             'force_stop_ipc_flush_sec' => 0.5,
             'force_stop_ipc_post_kill_wait_sec' => 0.35,
             // control_poll_slice_usec：启动验收等控制面等待时 stream_select 超时（微秒），替代叠 sleep。
             'control_poll_slice_usec' => 100000,
+            // skip_bulk_launch_port_reprobe：Start CLI 已完成端口预检后，Master 批量拉起阶段不再逐端口重复探测。
+            'skip_bulk_launch_port_reprobe' => true,
         ],
         // WLS 常驻 Worker 下开发面板默认不注入（避免大段 HTML）；本地调试 ?dev_tool=1 时仍须此项为 true
         'debug' => [
             // 闈炲父楂樺紑閿€锛氫細璁板綍 Session / Router / URL 瑙ｆ瀽绛夌儹璺粏绮掑害鏃ュ織锛屽彧搴旂煭鏃舵墜鍔ㄦ墦寮€
             'hot_path_logs' => false,
             'dev_tool_panel' => false,
+            // WLS 性能诊断面板：开发/调试模式可通过输入 wls 打开，生产环境仍需显式授权。
+            'performance_panel' => true,
         ],
     ],
     

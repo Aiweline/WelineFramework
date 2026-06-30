@@ -50,6 +50,8 @@ class SslCertificateService
     private const LOCAL_CA_CERT_FILENAME = 'rootCA.pem';
     private const LOCAL_CA_KEY_FILENAME = 'rootCA.key';
     private const LOCAL_CA_SERIAL_FILENAME = 'serial.txt';
+    private const GLOBAL_LOCAL_CA_VENDOR_DIR = 'Weline';
+    private const GLOBAL_LOCAL_CA_APP_DIR = 'WLS';
 
     /**
      * ACME 申请进行中锁文件（位于 app/etc/ssl/{domain}/），用于避免颁发过程中 sync/页面同步覆盖证书记录
@@ -89,6 +91,15 @@ class SslCertificateService
      * ACME 提供商
      */
     protected string $acmeProvider = self::PROVIDER_LETS_ENCRYPT;
+
+    /**
+     * Cache local CA trust results by certificate fingerprint for the current
+     * process. Importing a root CA can trigger OS credential prompts, so one CA
+     * must never attempt trust import once per generated leaf certificate.
+     *
+     * @var array<string,array{success:bool,trusted:bool,message:string}>
+     */
+    protected array $localCaTrustResultCache = [];
     
     /**
      * ACME 目录缓存
@@ -742,9 +753,8 @@ class SslCertificateService
             return false;
         }
 
-        $publicFromPrivate = @\openssl_pkey_get_public($privateKey);
         $publicFromCert = @\openssl_pkey_get_public($certResource);
-        if ($publicFromPrivate === false || $publicFromCert === false) {
+        if ($publicFromCert === false) {
             return false;
         }
 
@@ -901,12 +911,6 @@ CNF;
         return $this->isLocalDomain($domain) || $this->resolvesToLoopback($domain);
     }
 
-    protected function shouldPreferTrustedLocalSelfSignedCertificate(string $domain): bool
-    {
-        return \in_array($this->getOsFamily(), ['Windows', 'Darwin', 'Linux'], true)
-            && $this->shouldUseTrustedLocalCertificateAuthority($domain);
-    }
-
     protected function getLocalCaDir(): string
     {
         $dir = Env::VAR_DIR . 'server' . DS . self::LOCAL_CA_DIRNAME . DS;
@@ -930,6 +934,187 @@ CNF;
     protected function getLocalCaSerialPath(): string
     {
         return $this->getLocalCaDir() . self::LOCAL_CA_SERIAL_FILENAME;
+    }
+
+    protected function getGlobalLocalCaDir(bool $create = true): string
+    {
+        $configured = '';
+        try {
+            $value = Env::get('wls.ssl.local_ca_dir');
+            if (\is_string($value)) {
+                $configured = \trim($value);
+            }
+        } catch (\Throwable) {
+            $configured = '';
+        }
+
+        if ($configured !== '') {
+            $dir = \rtrim($configured, "\\/") . DS;
+        } else {
+            $baseDir = $this->resolveUserStateBaseDir();
+            if ($baseDir === '') {
+                return '';
+            }
+            $dir = \rtrim($baseDir, "\\/") . DS
+                . self::GLOBAL_LOCAL_CA_VENDOR_DIR . DS
+                . self::GLOBAL_LOCAL_CA_APP_DIR . DS
+                . self::LOCAL_CA_DIRNAME . DS;
+        }
+
+        if ($create && !\is_dir($dir)) {
+            @\mkdir($dir, 0700, true);
+        }
+
+        return \is_dir($dir) || !$create ? $dir : '';
+    }
+
+    protected function resolveUserStateBaseDir(): string
+    {
+        $candidates = [];
+        if ($this->getOsFamily() === 'Windows') {
+            $candidates = [
+                (string) \getenv('LOCALAPPDATA'),
+                (string) \getenv('APPDATA'),
+                (string) \getenv('USERPROFILE'),
+            ];
+        } else {
+            $home = (string) \getenv('HOME');
+            $candidates = [
+                (string) \getenv('XDG_STATE_HOME'),
+                $home !== '' ? $home . DS . '.local' . DS . 'state' : '',
+                $home,
+            ];
+        }
+
+        foreach ($candidates as $candidate) {
+            $candidate = \trim($candidate);
+            if ($candidate !== '' && \is_dir($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    protected function getGlobalLocalCaCertPath(): string
+    {
+        $dir = $this->getGlobalLocalCaDir();
+
+        return $dir !== '' ? $dir . self::LOCAL_CA_CERT_FILENAME : '';
+    }
+
+    protected function getGlobalLocalCaKeyPath(): string
+    {
+        $dir = $this->getGlobalLocalCaDir();
+
+        return $dir !== '' ? $dir . self::LOCAL_CA_KEY_FILENAME : '';
+    }
+
+    protected function getGlobalLocalCaSerialPath(): string
+    {
+        $dir = $this->getGlobalLocalCaDir();
+
+        return $dir !== '' ? $dir . self::LOCAL_CA_SERIAL_FILENAME : '';
+    }
+
+    protected function canUseLocalCertificateAuthorityPair(string $certPath, string $keyPath): bool
+    {
+        return \is_file($certPath)
+            && \is_file($keyPath)
+            && $this->isCertificateValid($certPath)
+            && $this->isCertificateSelfSigned($certPath)
+            && $this->isCertificateAuthority($certPath)
+            && $this->canReuseConfiguredCertificate($certPath, $keyPath);
+    }
+
+    protected function certificateFilesHaveSameFingerprint(string $leftPath, string $rightPath): bool
+    {
+        $left = $this->getCertificateSha1Fingerprint($leftPath);
+        $right = $this->getCertificateSha1Fingerprint($rightPath);
+
+        return $left !== '' && $right !== '' && $left === $right;
+    }
+
+    protected function localAndGlobalCertificateAuthorityMatch(): bool
+    {
+        $localCertPath = $this->getLocalCaCertPath();
+        $globalCertPath = $this->getGlobalLocalCaCertPath();
+        if ($globalCertPath === '' || !\is_file($localCertPath) || !\is_file($globalCertPath)) {
+            return false;
+        }
+
+        return $this->certificateFilesHaveSameFingerprint($localCertPath, $globalCertPath);
+    }
+
+    protected function syncGlobalLocalCertificateAuthority(string $certPath, string $keyPath): bool
+    {
+        if (!$this->canUseLocalCertificateAuthorityPair($certPath, $keyPath)) {
+            return false;
+        }
+
+        $globalCertPath = $this->getGlobalLocalCaCertPath();
+        $globalKeyPath = $this->getGlobalLocalCaKeyPath();
+        if ($globalCertPath === '' || $globalKeyPath === '') {
+            return false;
+        }
+
+        if ($this->canUseLocalCertificateAuthorityPair($globalCertPath, $globalKeyPath)) {
+            return $this->certificateFilesHaveSameFingerprint($certPath, $globalCertPath);
+        }
+
+        if (@\copy($certPath, $globalCertPath) === false || @\copy($keyPath, $globalKeyPath) === false) {
+            w_log_warning(__('[SslCertificateService] Failed to persist reusable global local CA files to %{1}', [\dirname($globalCertPath)]), [], 'ssl_cert');
+            return false;
+        }
+
+        $localSerialPath = $this->getLocalCaSerialPath();
+        $globalSerialPath = $this->getGlobalLocalCaSerialPath();
+        if ($globalSerialPath !== '' && \is_file($localSerialPath)) {
+            @\copy($localSerialPath, $globalSerialPath);
+        }
+
+        @\chmod($globalCertPath, 0644);
+        @\chmod($globalKeyPath, 0600);
+        w_log_info(__('[SslCertificateService] Local CA is now reusable across projects from %{1}', [\dirname($globalCertPath)]));
+
+        return true;
+    }
+
+    protected function restoreProjectLocalCertificateAuthorityFromGlobal(): ?array
+    {
+        $globalCertPath = $this->getGlobalLocalCaCertPath();
+        $globalKeyPath = $this->getGlobalLocalCaKeyPath();
+        if ($globalCertPath === '' || $globalKeyPath === '') {
+            return null;
+        }
+
+        if (!$this->canUseLocalCertificateAuthorityPair($globalCertPath, $globalKeyPath)) {
+            return null;
+        }
+
+        $certPath = $this->getLocalCaCertPath();
+        $keyPath = $this->getLocalCaKeyPath();
+        if (@\copy($globalCertPath, $certPath) === false || @\copy($globalKeyPath, $keyPath) === false) {
+            w_log_warning(__('[SslCertificateService] Failed to restore project local CA files from global reusable CA'), [], 'ssl_cert');
+            return null;
+        }
+
+        $globalSerialPath = $this->getGlobalLocalCaSerialPath();
+        if ($globalSerialPath !== '' && \is_file($globalSerialPath)) {
+            @\copy($globalSerialPath, $this->getLocalCaSerialPath());
+        }
+
+        @\chmod($certPath, 0644);
+        @\chmod($keyPath, 0600);
+        w_log_info(__('[SslCertificateService] Reusing global Weline local CA for this project'));
+
+        return [
+            'success' => true,
+            'cert_path' => $certPath,
+            'key_path' => $keyPath,
+            'is_new' => false,
+            'reused_global' => true,
+        ];
     }
 
     protected function buildLocalCaOpenSslConfig(): string
@@ -1120,48 +1305,27 @@ CNF;
         return \is_string($normalized) && $normalized !== '' ? \strtolower($normalized) : $ip;
     }
 
-    protected function ensureReusableLocalCaCertificate(string $domain, string $certPath, int $websiteId = 0): array
-    {
-        if (!$this->shouldUseTrustedLocalCertificateAuthority($domain)) {
-            return [
-                'usable' => false,
-                'regenerated' => false,
-                'cert_path' => $certPath,
-                'key_path' => '',
-            ];
-        }
-
-        if ($this->prepareExistingLocalCaCertificateForReuse($certPath)) {
-            return [
-                'usable' => true,
-                'regenerated' => false,
-                'cert_path' => $certPath,
-                'key_path' => $this->getCertificateDir($domain) . 'privkey.pem',
-            ];
-        }
-
-        $generated = $this->generateLocalCaSignedCertificate($domain, $websiteId);
-
-        return [
-            'usable' => (bool)($generated['success'] ?? false),
-            'regenerated' => (bool)($generated['success'] ?? false),
-            'cert_path' => (string)($generated['cert_path'] ?? ''),
-            'key_path' => (string)($generated['key_path'] ?? ''),
-            'message' => (string)($generated['message'] ?? ''),
-        ];
-    }
-
     protected function ensureLocalCertificateAuthority(): array
     {
         $certPath = $this->getLocalCaCertPath();
         $keyPath = $this->getLocalCaKeyPath();
-        if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
+        if ($this->canUseLocalCertificateAuthorityPair($certPath, $keyPath)) {
+            $this->syncGlobalLocalCertificateAuthority($certPath, $keyPath);
             return [
                 'success' => true,
                 'cert_path' => $certPath,
                 'key_path' => $keyPath,
                 'is_new' => false,
             ];
+        }
+
+        $globalCa = $this->restoreProjectLocalCertificateAuthorityFromGlobal();
+        if ($globalCa !== null) {
+            return $globalCa;
+        }
+
+        if ($this->hasLocalCertificateAuthorityInSystemStore()) {
+            w_log_warning(__('[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key'), [], 'ssl_cert');
         }
 
         // 首次生成 CA（或既有 CA 失效）时 RSA 2048 可能很慢：
@@ -1215,6 +1379,7 @@ CNF;
 
         @\chmod($certPath, 0644);
         @\chmod($keyPath, 0600);
+        $this->syncGlobalLocalCertificateAuthority($certPath, $keyPath);
 
         $caMs = (int) \round((\hrtime(true) - $caGenStart) / 1_000_000.0);
         w_log_info(\sprintf('[SslCertificateService] local CA generated in %dms', $caMs));
@@ -1309,6 +1474,34 @@ CNF;
         return \trim($this->runTrustCommand($probe, $exitCode)) !== '' && $exitCode === 0;
     }
 
+    protected function hasLocalCertificateAuthorityInSystemStore(): bool
+    {
+        if ($this->getOsFamily() === 'Windows') {
+            if (!$this->commandExists('certutil.exe')) {
+                return false;
+            }
+            $output = $this->runTrustCommand(
+                'certutil -user -store Root ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
+                $exitCode
+            );
+
+            return $exitCode === 0
+                && $output !== ''
+                && !\preg_match('/command\s+FAILED|0x80092004|NOT_FOUND|Cannot\s+find|找不到/i', $output);
+        }
+
+        if ($this->getOsFamily() === 'Darwin' && $this->commandExists('security')) {
+            $output = $this->runTrustCommand(
+                '/usr/bin/security find-certificate -a -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
+                $exitCode
+            );
+
+            return $exitCode === 0 && $output !== '' && !\preg_match('/could not be found|error/i', $output);
+        }
+
+        return false;
+    }
+
     protected function isLocalCertificateAuthorityTrustedOnWindows(string $caCertPath): bool
     {
         if (!\is_file($caCertPath) || !\function_exists('openssl_x509_fingerprint')) {
@@ -1333,9 +1526,10 @@ CNF;
         }
 
         $storeOutput = $this->runTrustCommand(
-            'certutil -user -store Root ' . \escapeshellarg($thumb) . ' 2>&1'
+            'certutil -user -store Root ' . \escapeshellarg($thumb) . ' 2>&1',
+            $exitCode
         );
-        if ($storeOutput === '') {
+        if ($exitCode !== 0 || $storeOutput === '') {
             return false;
         }
 
@@ -1343,8 +1537,11 @@ CNF;
             return false;
         }
 
-        return \str_contains($storeOutput, '================ Certificate')
-            || \str_contains($storeOutput, 'Certificate:');
+        // certutil output is localized on non-English Windows builds. A zero
+        // exit code without explicit NOT_FOUND/FAILED markers is the stable
+        // signal here; matching English "Certificate:" caused false negatives
+        // and repeated Root-store import prompts.
+        return true;
     }
 
     protected function isLocalCertificateAuthorityTrustedOnMacos(string $caCertPath): bool
@@ -1353,27 +1550,111 @@ CNF;
             return false;
         }
 
+        if (!$this->isMacosCaRootTrustedForSsl($caCertPath)) {
+            return false;
+        }
+
+        $leafPath = $this->resolveLocalDevelopmentProbeLeafPath();
+        if ($leafPath === '') {
+            return true;
+        }
+
+        return $this->isLocalDevelopmentSslChainCryptographicallyValid($caCertPath, $leafPath);
+    }
+
+    protected function isMacosCaRootTrustedForSsl(string $caCertPath): bool
+    {
         $exitCode = 1;
         $output = $this->runTrustCommand(
             '/usr/bin/security verify-cert -c ' . \escapeshellarg($caCertPath) . ' -p ssl 2>&1',
             $exitCode
         );
-        if ($exitCode === 0 && !\preg_match('/CSSMERR_|failed|error/i', $output)) {
-            return true;
-        }
 
-        $thumb = $this->getCertificateSha1Fingerprint($caCertPath);
-        if ($thumb === '') {
+        return $exitCode === 0 && !\preg_match('/CSSMERR_|failed|error/i', (string) $output);
+    }
+
+    /**
+     * 用已签发的本地叶子证书验证整条 SSL 链是否被 macOS 信任。
+     * 仅检查 CA 文件或 find-certificate 会误判「已在钥匙串但未设为信任根」。
+     */
+    protected function isLocalDevelopmentSslChainTrustedOnMacos(): bool
+    {
+        $caPath = $this->getLocalCaCertPath();
+        if (!\is_file($caPath) || !$this->isMacosCaRootTrustedForSsl($caPath)) {
             return false;
         }
 
-        $findExit = 1;
-        $findOutput = $this->runTrustCommand(
-            '/usr/bin/security find-certificate -a -Z -c ' . \escapeshellarg(self::ISSUER_LOCAL_CA) . ' 2>&1',
-            $findExit
+        $leafPath = $this->resolveLocalDevelopmentProbeLeafPath();
+        if ($leafPath === '') {
+            return true;
+        }
+
+        return $this->isLocalDevelopmentSslChainCryptographicallyValid($caPath, $leafPath);
+    }
+
+    protected function isLocalDevelopmentSslChainCryptographicallyValid(string $caCertPath, string $leafPath): bool
+    {
+        if (!$this->commandExists('openssl')) {
+            return false;
+        }
+
+        $exitCode = 1;
+        $output = $this->runTrustCommand(
+            'openssl verify -CAfile ' . \escapeshellarg($caCertPath) . ' '
+            . \escapeshellarg($leafPath) . ' 2>&1',
+            $exitCode
         );
 
-        return $findExit === 0 && \str_contains($this->normalizeCertificateFingerprint($findOutput), $thumb);
+        return $exitCode === 0 && \str_contains((string) $output, ': OK');
+    }
+
+    protected function resolveLocalDevelopmentProbeLeafPath(): string
+    {
+        if (!\is_dir($this->certBaseDir)) {
+            return '';
+        }
+
+        foreach (\scandir($this->certBaseDir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $logical = self::logicalDomainFromStorageSegment($entry);
+            if (!LocalDomainPolicy::isManagedLocalDomain($logical)
+                || LocalDomainPolicy::isManagedWildcardDomain($logical)) {
+                continue;
+            }
+            $leafPath = $this->certBaseDir . $entry . DS . 'fullchain.pem';
+            if (\is_file($leafPath) && $this->isCertificateValid($leafPath)) {
+                return $leafPath;
+            }
+        }
+
+        $wildcard = LocalDomainPolicy::currentWildcardDomain();
+        $wildcardPath = $this->getCertificateDir($wildcard) . 'fullchain.pem';
+        if (\is_file($wildcardPath) && $this->isCertificateValid($wildcardPath)) {
+            return $wildcardPath;
+        }
+
+        return '';
+    }
+
+    /**
+     * 确保本地开发 CA 已写入系统信任库（macOS Keychain / Windows / Linux）。
+     *
+     * @return array{success:bool,trusted:bool,message:string}
+     */
+    public function ensureLocalDevelopmentCaTrusted(): array
+    {
+        $ca = $this->ensureLocalCertificateAuthority();
+        if (!($ca['success'] ?? false)) {
+            return [
+                'success' => false,
+                'trusted' => false,
+                'message' => (string) ($ca['message'] ?? __('Failed to prepare local CA')),
+            ];
+        }
+
+        return $this->trustLocalCertificateAuthority((string) $ca['cert_path']);
     }
 
     protected function isLocalCertificateAuthorityTrustedOnLinux(string $caCertPath): bool
@@ -1534,17 +1815,11 @@ CNF;
             return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by macOS Keychain')];
         }
 
-        $loginKeychain = $this->resolveMacosLoginKeychain();
-        $loginCommand = '/usr/bin/security add-trusted-cert -r trustRoot -p ssl -p basic -k '
-            . \escapeshellarg($loginKeychain) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
-        $exitCode = 1;
-        $output = $this->runInteractiveTrustCommand($loginCommand, $exitCode);
-        if ($exitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
-            return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
-        }
-
+        $output = '';
         $manual = 'sudo /usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain '
             . \escapeshellarg($caCertPath);
+
+        // Safari / Chrome 主要读取系统钥匙串；优先写入 System，再回退 login。
         if ($this->commandExists('sudo')) {
             $sudoArgs = $this->canUseInteractivePrivilegePrompt()
                 ? ' -p ' . \escapeshellarg('[WLS] sudo password for macOS CA trust: ')
@@ -1556,8 +1831,18 @@ CNF;
             if ($systemExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
                 return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS System Keychain')];
             }
-            $output = \trim($output . "\n" . $systemOutput);
+            $output = \trim($systemOutput);
         }
+
+        $loginKeychain = $this->resolveMacosLoginKeychain();
+        $loginCommand = '/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -p basic -k '
+            . \escapeshellarg($loginKeychain) . ' ' . \escapeshellarg($caCertPath) . ' 2>&1';
+        $loginExitCode = 1;
+        $loginOutput = $this->runInteractiveTrustCommand($loginCommand, $loginExitCode);
+        if ($loginExitCode === 0 && $this->isLocalCertificateAuthorityTrustedOnMacos($caCertPath)) {
+            return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into macOS login Keychain')];
+        }
+        $output = \trim($output . "\n" . $loginOutput);
 
         return [
             'success' => false,
@@ -1572,59 +1857,87 @@ CNF;
             return ['success' => false, 'trusted' => false, 'message' => __('Local CA certificate file is missing: %{1}', [$caCertPath])];
         }
 
+        $cacheKey = $this->getCertificateSha1Fingerprint($caCertPath);
+        if ($cacheKey !== '' && isset($this->localCaTrustResultCache[$cacheKey])) {
+            return $this->localCaTrustResultCache[$cacheKey];
+        }
+
+        $remember = function (array $result) use ($cacheKey): array {
+            $normalized = [
+                'success' => (bool)($result['success'] ?? false),
+                'trusted' => (bool)($result['trusted'] ?? false),
+                'message' => (string)($result['message'] ?? ''),
+            ];
+            if ($cacheKey !== '') {
+                $this->localCaTrustResultCache[$cacheKey] = $normalized;
+            }
+
+            return $normalized;
+        };
+
         if ($this->getOsFamily() === 'Windows') {
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
-                return ['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')];
+                return $remember(['success' => true, 'trusted' => true, 'message' => __('Local CA is already trusted by the current Windows user')]);
             }
 
             if (!$this->commandExists('certutil.exe')) {
-                return [
+                return $remember([
                     'success' => false,
                     'trusted' => false,
                     'message' => __('Failed to find certutil.exe; import %{1} into Current User > Trusted Root Certification Authorities manually', [$caCertPath]),
-                ];
+                ]);
             }
 
             $this->runTrustCommand('certutil -user -addstore Root ' . \escapeshellarg($caCertPath) . ' 2>&1');
             if ($this->isLocalCertificateAuthorityTrustedOnWindows($caCertPath)) {
-                return ['success' => true, 'trusted' => true, 'message' => __('Local CA imported into Current User Root store')];
+                return $remember(['success' => true, 'trusted' => true, 'message' => __('Local CA imported into Current User Root store')]);
             }
 
-            return [
+            return $remember([
                 'success' => false,
                 'trusted' => false,
                 'message' => __('Local CA was generated, but automatic trust import failed. Import %{1} into Current User > Trusted Root Certification Authorities manually', [$caCertPath]),
-            ];
+            ]);
         }
 
         if ($this->getOsFamily() === 'Darwin') {
-            return $this->trustLocalCertificateAuthorityOnMacos($caCertPath);
+            return $remember($this->trustLocalCertificateAuthorityOnMacos($caCertPath));
         }
 
         if ($this->getOsFamily() === 'Linux') {
-            return $this->trustLocalCertificateAuthorityOnLinux($caCertPath);
+            return $remember($this->trustLocalCertificateAuthorityOnLinux($caCertPath));
         }
 
-        return [
+        return $remember([
             'success' => true,
             'trusted' => false,
             'message' => __('Local CA was generated. Trust it manually in your OS/browser with %{1}', [$caCertPath]),
-        ];
+        ]);
     }
 
     protected function nextLocalCaSerial(): int
     {
-        $serialPath = $this->getLocalCaSerialPath();
+        $serialPaths = [$this->getLocalCaSerialPath()];
+        $globalSerialPath = $this->getGlobalLocalCaSerialPath();
+        if ($globalSerialPath !== '' && $this->localAndGlobalCertificateAuthorityMatch()) {
+            \array_unshift($serialPaths, $globalSerialPath);
+        }
+
         $current = 1000;
-        if (\is_file($serialPath)) {
+        foreach (\array_values(\array_unique($serialPaths)) as $serialPath) {
+            if (!\is_file($serialPath)) {
+                continue;
+            }
             $stored = (int) \trim((string) @\file_get_contents($serialPath));
             if ($stored > 0) {
-                $current = $stored;
+                $current = \max($current, $stored);
             }
         }
 
         $next = $current + 1;
-        @\file_put_contents($serialPath, (string) $next);
+        foreach (\array_values(\array_unique($serialPaths)) as $serialPath) {
+            @\file_put_contents($serialPath, (string) $next);
+        }
 
         return $current;
     }
@@ -3248,6 +3561,11 @@ CNF;
         }
 
         $caCertPath = $this->getLocalCaCertPath();
+        $existingPem = \is_file($caCertPath) ? (string) @\file_get_contents($caCertPath) : '';
+        if (\trim($existingPem) === \trim($localCaPem)) {
+            return;
+        }
+
         if (@\file_put_contents($caCertPath, $localCaPem) === false) {
             w_log_warning(__('[SslCertificateService] Failed to recover local CA certificate to %{1}', [$caCertPath]), [], 'ssl_cert');
             return;
@@ -4063,15 +4381,6 @@ CNF;
         return (bool) \file_put_contents($this->accountKeyPath, $privateKey);
     }
     
-    protected function getServerPort(): int
-    {
-        $config = Env::getInstance()->getConfig('wls');
-        if (\is_array($config)) {
-            return (int)($config['port'] ?? 80);
-        }
-        return 80;
-    }
-
     /**
      * 是否可使用 HTTP-01 验证（ACME 需访问 http://domain/.well-known/...）
      * 主端口 80 可直接用；主端口 443 时 WLS 会起 80 重定向监听，也可用 HTTP-01。
@@ -5799,7 +6108,7 @@ CNF;
                 continue;
             }
             foreach ($files as $file) {
-                ServerInstanceManager::atomicUpdateJsonStatic((string) $file, $clearModifier);
+                ServerInstanceManager::updateJsonFileAtomically((string) $file, $clearModifier);
             }
         }
     }

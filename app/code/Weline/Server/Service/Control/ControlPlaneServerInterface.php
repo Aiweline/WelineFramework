@@ -21,11 +21,18 @@ interface ControlPlaneServerInterface
 
     public function setExpectedInstanceCode(string $instanceCode): void;
 
+    public function setExpectedControlToken(string $controlToken): void;
+
     public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int;
 
     public function sendTo(int $clientId, string $message): bool;
 
     public function sendToRole(string $role, string $message): void;
+
+    /**
+     * @return int[] IPC client IDs that accepted the outbound message.
+     */
+    public function sendToRoleAndCollectTargets(string $role, string $message): array;
 
     public function clientExists(int $clientId): bool;
 

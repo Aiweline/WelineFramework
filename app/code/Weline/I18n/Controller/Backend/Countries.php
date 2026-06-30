@@ -33,11 +33,11 @@ class Countries extends BaseController
         $this->lifecycle = ObjectManager::getInstance(CountryLocaleLifecycleService::class);
         $this->countryDataUpdateService = ObjectManager::getInstance(CountryDataUpdateService::class);
 
-        $currentLang = Cookie::getLangLocal();
+        $currentLang = $this->getSafeCurrentLocaleCode();
         $joinCondition = sprintf(
             'main_table.code=cln.country_code AND cln.%s=\'%s\'',
             Name::schema_fields_DISPLAY_LOCALE_CODE,
-            addslashes($currentLang)
+            $currentLang
         );
 
         $this->countries->joinModel(
@@ -49,25 +49,32 @@ class Countries extends BaseController
         );
     }
 
+    private function getSafeCurrentLocaleCode(): string
+    {
+        $localeCode = (string)Cookie::getLangLocal();
+        if (!\preg_match('/\A[A-Za-z0-9_.-]{1,32}\z/', $localeCode)) {
+            return 'zh_Hans_CN';
+        }
+
+        return $localeCode;
+    }
+
     public function __init()
     {
         parent::__init();
 
         if ($search = trim((string)$this->request->getGet('search', ''))) {
-            $search = addslashes($search);
             $code = $this->countries::schema_fields_CODE;
             $name = Name::schema_fields_DISPLAY_NAME;
             $this->countries->concat_like('main_table.' . $code . ',cln.' . $name, '%' . $search . '%');
         }
 
         if ($searchCode = trim((string)$this->request->getGet('search_code', ''))) {
-            $searchCode = addslashes($searchCode);
-            $this->countries->like('main_table.' . $this->countries::schema_fields_CODE, '%' . $searchCode . '%');
+            $this->countries->where('main_table.' . $this->countries::schema_fields_CODE, '%' . $searchCode . '%', 'LIKE');
         }
 
         if ($searchName = trim((string)$this->request->getGet('search_name', ''))) {
-            $searchName = addslashes($searchName);
-            $this->countries->like('cln.' . Name::schema_fields_DISPLAY_NAME, '%' . $searchName . '%');
+            $this->countries->where('cln.' . Name::schema_fields_DISPLAY_NAME, '%' . $searchName . '%', 'LIKE');
         }
 
         if ($searchStatus = trim((string)$this->request->getGet('search_status', ''))) {
@@ -332,7 +339,7 @@ class Countries extends BaseController
                 'installed_locale_count' => (int)$country->getData('installed_locale_count'),
                 'active_locale_count' => (int)$country->getData('active_locale_count'),
                 'preferred_locale' => $country->getData('preferred_locale'),
-                'display_locale_code' => $country->getData('display_locale_code') ?: Cookie::getLangLocal(),
+                'display_locale_code' => $country->getData('display_locale_code') ?: $this->getSafeCurrentLocaleCode(),
             ];
         }
 
@@ -356,7 +363,7 @@ class Countries extends BaseController
                 'search' => $search,
                 'stats' => $stats,
                 'recommendations' => $recommendations,
-                'current_locale' => Cookie::getLangLocal(),
+                'current_locale' => $this->getSafeCurrentLocaleCode(),
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
@@ -372,7 +379,7 @@ class Countries extends BaseController
     private function autoUpdateMissingCountryNames(): void
     {
         try {
-            $currentLang = Cookie::getLangLocal();
+            $currentLang = $this->getSafeCurrentLocaleCode();
             $countryNames = $this->i18n->getCountries($currentLang);
             if (empty($countryNames)) {
                 return;

@@ -176,7 +176,7 @@ $product = $this->getData('product');
         }
         
         .weshop-content-wrapper {
-            max-width: 1280px;
+            max-width: 1440px;
             margin: 0 auto;
         }
         
@@ -656,8 +656,10 @@ $product = $this->getData('product');
             color: var(--weshop-text-primary);
         }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="weshop-product-detail-1">
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product::body-start</w:hook>
     
@@ -946,5 +948,6 @@ $product = $this->getData('product');
             console.log('Add to wishlist:', productId);
         }
     </script>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

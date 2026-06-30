@@ -1,0 +1,581 @@
+.weline-seo-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(4, 8, 12, 0.72);
+  backdrop-filter: blur(6px);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #e8eef4;
+}
+
+.weline-seo-panel[hidden] {
+  display: none;
+}
+
+.weline-seo-panel__dialog {
+  width: min(960px, 100%);
+  max-height: min(88vh, 920px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 215, 0, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #101820 0%, #0a1218 100%);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+.weline-seo-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.weline-seo-panel__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffd700;
+}
+
+.weline-seo-panel__subtitle {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #9fb0c0;
+  word-break: break-all;
+}
+
+.weline-seo-panel__close {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.weline-seo-panel__body {
+  overflow: auto;
+  padding: 16px 18px 20px;
+  display: grid;
+  gap: 0;
+}
+
+.weline-seo-panel__tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.weline-seo-panel__tab {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #c7d4df;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.weline-seo-panel__tab.is-active {
+  color: #101820;
+  background: linear-gradient(180deg, #ffd700 0%, #f5b800 100%);
+  border-color: rgba(255, 215, 0, 0.65);
+}
+
+.weline-seo-panel__tab-panel {
+  display: none;
+  gap: 16px;
+}
+
+.weline-seo-panel__tab-panel.is-active {
+  display: grid;
+}
+
+.weline-seo-panel__check-group h4 {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  color: #dbe7f2;
+}
+
+.weline-seo-panel__check-group + .weline-seo-panel__check-group {
+  margin-top: 14px;
+}
+
+.weline-seo-panel__summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .weline-seo-panel__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.weline-seo-panel__stat {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.weline-seo-panel__stat strong {
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.weline-seo-panel__stat span {
+  font-size: 0.75rem;
+  color: #9fb0c0;
+}
+
+.weline-seo-panel__stat--pass strong {
+  color: #4ade80;
+}
+
+.weline-seo-panel__stat--fail strong {
+  color: #f87171;
+}
+
+.weline-seo-panel__stat--warn strong {
+  color: #fbbf24;
+}
+
+.weline-seo-panel__stat--info strong {
+  color: #67e8f9;
+}
+
+.weline-seo-panel__section h3 {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  color: #ffd700;
+}
+
+.weline-seo-panel__grid {
+  display: grid;
+  gap: 8px;
+}
+
+.weline-seo-panel__field {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.weline-seo-panel__field dt {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8fa0b0;
+}
+
+.weline-seo-panel__field dd {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.weline-seo-panel__checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.weline-seo-panel__check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.weline-seo-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.weline-seo-panel__badge--pass {
+  background: rgba(74, 222, 128, 0.16);
+  color: #4ade80;
+}
+
+.weline-seo-panel__badge--fail {
+  background: rgba(248, 113, 113, 0.16);
+  color: #f87171;
+}
+
+.weline-seo-panel__badge--warn {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+}
+
+.weline-seo-panel__badge--info {
+  background: rgba(103, 232, 249, 0.14);
+  color: #67e8f9;
+}
+
+.weline-seo-panel__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #9fb0c0;
+}
+
+.weline-seo-panel__heading-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.weline-seo-panel__heading-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.weline-seo-panel__heading-count--h1 { color: #ffd700; }
+.weline-seo-panel__heading-count--h2 { color: #fbbf24; }
+.weline-seo-panel__heading-count--h3 { color: #fb923c; }
+.weline-seo-panel__heading-count--h4 { color: #f472b6; }
+.weline-seo-panel__heading-count--h5 { color: #a78bfa; }
+.weline-seo-panel__heading-count--h6 { color: #67e8f9; }
+
+.weline-seo-panel__heading-tree,
+.weline-seo-panel__heading-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.weline-seo-panel__heading-tree ul {
+  margin-left: 14px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.weline-seo-panel__heading-node {
+  margin: 0 0 8px;
+}
+
+.weline-seo-panel__heading-node.is-issue .weline-seo-panel__heading-row {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.weline-seo-panel__heading-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.weline-seo-panel__heading-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.weline-seo-panel__heading-node--h1 .weline-seo-panel__heading-tag { background: rgba(255, 215, 0, 0.16); color: #ffd700; }
+.weline-seo-panel__heading-node--h2 .weline-seo-panel__heading-tag { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+.weline-seo-panel__heading-node--h3 .weline-seo-panel__heading-tag { background: rgba(251, 146, 60, 0.16); color: #fb923c; }
+.weline-seo-panel__heading-node--h4 .weline-seo-panel__heading-tag { background: rgba(244, 114, 182, 0.16); color: #f472b6; }
+.weline-seo-panel__heading-node--h5 .weline-seo-panel__heading-tag { background: rgba(167, 139, 250, 0.16); color: #a78bfa; }
+.weline-seo-panel__heading-node--h6 .weline-seo-panel__heading-tag { background: rgba(103, 232, 249, 0.16); color: #67e8f9; }
+
+.weline-seo-panel__heading-text {
+  font-size: 0.84rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.weline-seo-panel__heading-zone {
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9fb0c0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.weline-seo-panel__ga4-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.weline-seo-panel__ga4-note {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(103, 232, 249, 0.18);
+  background: rgba(103, 232, 249, 0.06);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #cfe8ef;
+}
+
+.weline-seo-panel__ga4-checks {
+  margin-top: 12px;
+}
+
+.weline-seo-panel__ga4-events-intro {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #cfe8ef;
+}
+
+.weline-seo-panel__ga4-event-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+
+.weline-seo-panel__ga4-event-chip {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.weline-seo-panel__ga4-event-chip span {
+  font-size: 0.72rem;
+  color: #ffd700;
+  font-weight: 700;
+}
+
+.weline-seo-panel__ga4-event-chip strong {
+  font-size: 0.84rem;
+}
+
+.weline-seo-panel__ga4-event-chip small {
+  font-size: 0.72rem;
+  color: #9fb0c0;
+}
+
+.weline-seo-panel__ga4-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.weline-seo-panel__ga4-event {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.weline-seo-panel__ga4-event-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.weline-seo-panel__ga4-event-head strong {
+  font-size: 0.86rem;
+  color: #e8eef4;
+}
+
+.weline-seo-panel__ga4-event-pos {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.24);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.weline-seo-panel__ga4-event-text {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  color: #dbe7f2;
+}
+
+.weline-seo-panel__ga4-event-meta {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.weline-seo-panel__ga4-event-meta div {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+}
+
+.weline-seo-panel__ga4-event-meta dt {
+  margin: 0;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: #8fa0b0;
+}
+
+.weline-seo-panel__ga4-event-meta dd {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: #9fb0c0;
+  word-break: break-word;
+}
+
+.weline-seo-panel__ga4-chip {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.weline-seo-panel__ga4-chip span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8fa0b0;
+}
+
+.weline-seo-panel__ga4-chip strong {
+  font-size: 0.86rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.weline-seo-panel__ga4-chip--pass {
+  border-color: rgba(74, 222, 128, 0.28);
+}
+
+.weline-seo-panel__ga4-chip--pass strong {
+  color: #4ade80;
+}
+
+.weline-seo-panel__ga4-chip--warn {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.weline-seo-panel__ga4-chip--warn strong {
+  color: #fbbf24;
+}
+
+.weline-seo-panel__ga4-chip--fail {
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+.weline-seo-panel__ga4-chip--fail strong {
+  color: #f87171;
+}
+
+.weline-seo-panel__ga4-chip--info {
+  border-color: rgba(103, 232, 249, 0.28);
+}
+
+.weline-seo-panel__ga4-chip--info strong {
+  color: #67e8f9;
+}
+
+.weline-seo-panel__ga4-trigger-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.weline-seo-panel__ga4-trigger {
+  border: 1px solid rgba(103, 232, 249, 0.18);
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+  background: rgba(8, 47, 73, 0.35);
+}
+
+.weline-seo-panel__ga4-trigger-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.weline-seo-panel__ga4-trigger-head strong {
+  font-size: 0.92rem;
+}
+
+.weline-seo-panel__ga4-trigger-time {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: rgba(226, 232, 240, 0.65);
+}
+
+.weline-seo-panel__ga4-trigger-text {
+  margin: 0 0 0.45rem;
+  font-size: 0.86rem;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+@media (max-width: 720px) {
+  .weline-seo-panel__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .weline-seo-panel__ga4-grid {
+    grid-template-columns: 1fr;
+  }
+}

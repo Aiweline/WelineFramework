@@ -18,7 +18,7 @@ class Panel extends FrontendController
      */
     public function index(): string
     {
-        return $this->fetch('Weline_Visitor::analytics/panel.phtml');
+        return $this->fetch('Weline_Visitor::templates/analytics/panel.phtml');
     }
 }
 

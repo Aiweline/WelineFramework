@@ -540,7 +540,7 @@
             html += '<div class="mmf-item' + (sel ? ' selected' : '') + '" data-hash="' + f.hash + '" data-mime="' + (f.mime || '') + '">';
             html += '<div class="mmf-item-icon">';
             if (thumbUrl) {
-                html += '<img src="' + escAttr(thumbUrl) + '" alt="" loading="lazy" onerror="this.parentNode.innerHTML=\'<span class=mmf-icon-placeholder>' + fileIcon(f.mime, isDir) + '</span>\'">';
+                html += '<img src="' + escAttr(thumbUrl) + '" alt="" loading="lazy" class="mmf-thumb" data-fallback-icon="' + escAttr(fileIcon(f.mime, isDir)) + '">';
             } else {
                 html += '<span class="mmf-icon-placeholder">' + fileIcon(f.mime, isDir) + '</span>';
             }
@@ -550,7 +550,22 @@
         });
         container.innerHTML = html;
 
+        bindThumbnailFallbacks(container);
         bindFileEvents(container);
+    }
+
+    function bindThumbnailFallbacks(container) {
+        qsa('img.mmf-thumb[data-fallback-icon]', container).forEach(function (img) {
+            img.addEventListener('error', function () {
+                var holder = img.parentElement;
+                if (!holder) return;
+
+                var fallback = document.createElement('span');
+                fallback.className = 'mmf-icon-placeholder';
+                fallback.textContent = img.dataset.fallbackIcon || fileIcon('', false);
+                holder.replaceChildren(fallback);
+            }, {once: true});
+        });
     }
 
     function renderPath() {

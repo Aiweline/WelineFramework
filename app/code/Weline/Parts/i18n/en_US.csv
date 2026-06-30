@@ -1,15 +1,13 @@
-﻿"w-auto-complete: debounce方法不存在，请自行引入debounce.js 标签引入：<\js:part name=\"debounce\"\/>","w-auto-complete: debounce方法不存在，请自行引入debounce.js 标签引入：<\js:part name=\"debounce\"\/>"
-"w-auto-complete: jQueryUI组件未引入，请自行引入jquery-ui.min.js","w-auto-complete: jQueryUI组件未引入，请自行引入jquery-ui.min.js"
-"w-auto-complete: 标签需要上面提到的依赖：请引入依赖！","w-auto-complete: 标签需要上面提到的依赖：请引入依赖！"
-元素上w-url属性找不到！,元素上w-url属性找不到！
-"w-check: debounce方法不存在，请自行引入debounce.js 标签引入：<\js:part name=\"debounce\"\/>","w-check: debounce方法不存在，请自行引入debounce.js 标签引入：<\js:part name=\"debounce\"\/>"
-"w-check: jQuery组件未引入，请自行引入jquery.min.js","w-check: jQuery组件未引入，请自行引入jquery.min.js"
-"w-check: 标签需要上面提到的依赖：请引入依赖！","w-check: 标签需要上面提到的依赖：请引入依赖！"
-"w-check: w-check-type属性未设置，请设置！","w-check: w-check-type属性未设置，请设置！"
-"w-check: w-check-id-field属性未设置，请设置！","w-check: w-check-id-field属性未设置，请设置！"
+﻿"w-auto-complete: debounce method is missing.","w-auto-complete: debounce method is missing."
+"w-auto-complete: jQuery UI autocomplete is missing.","w-auto-complete: jQuery UI autocomplete is missing."
+"element w-url is missing.","element w-url is missing."
+"w-check: debounce method is missing.","w-check: debounce method is missing."
+"w-check: jQuery is missing.","w-check: jQuery is missing."
+"w-check: w-check-type is required.","w-check: w-check-type is required."
+"w-check: w-check-id-field is required.","w-check: w-check-id-field is required."
 确认,Confirm
 取消,Cancel
 删除成功,"Delete successful"
 删除失败,"Delete failed"
-删除请求失败,删除请求失败
-确认删除吗？,确认删除吗？
+删除请求失败,"Delete request failed"
+确认删除吗？,"Confirm deletion?"

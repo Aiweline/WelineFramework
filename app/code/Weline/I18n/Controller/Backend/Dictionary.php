@@ -19,17 +19,26 @@ use Weline\I18n\Model\Locale;
 use Weline\Framework\Manager\Message;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 use Weline\I18n\Model\Dictionary as WordDictionary;
+use Weline\I18n\Service\AiTranslationQueueService;
 
 class Dictionary extends BaseController
 {
     private \Weline\I18n\Model\Dictionary $dictionary;
     private LocaleDictionary $localeDictionary;
+    private AiTranslationQueueService $aiTranslationQueueService;
 
-    function __construct(Locale $locale, I18n $i18n, \Weline\I18n\Model\Dictionary $dictionary, LocaleDictionary $localeDictionary)
+    function __construct(
+        Locale $locale,
+        I18n $i18n,
+        \Weline\I18n\Model\Dictionary $dictionary,
+        LocaleDictionary $localeDictionary,
+        AiTranslationQueueService $aiTranslationQueueService
+    )
     {
         parent::__construct($locale, $i18n);
         $this->dictionary = $dictionary;
         $this->localeDictionary = $localeDictionary;
+        $this->aiTranslationQueueService = $aiTranslationQueueService;
     }
 
     function get()
@@ -627,7 +636,8 @@ class Dictionary extends BaseController
                 'data' => [
                     'new_count' => $successCount,
                     'update_count' => $updateCount,
-                    'total_count' => $successCount + $updateCount
+                    'total_count' => $successCount + $updateCount,
+                    'queue_count' => count($queued)
                 ]
             ]);
             
@@ -1042,15 +1052,26 @@ class Dictionary extends BaseController
                      }
                      $this->localeDictionary->reset()
                      ->insert($insertDataItemDefault, $this->localeDictionary::schema_fields_MD5)
-                     ->fetch();
+                      ->fetch();
                 }
+            }
+
+            $queued = [];
+            if ($collectedCount > 0) {
+                $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_collect');
             }
 
            
             
+            $queued = [];
+            if (($successCount + $updateCount) > 0) {
+                $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_import');
+            }
+
             return $this->fetchJson([
                 'success' => true,
                 'count' => $collectedCount,
+                'queue_count' => count($queued),
                 'message' => __('收集完成')
             ]);
             

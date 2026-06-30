@@ -193,9 +193,11 @@ wait
 ```javascript
 let lastEventId = 0;
 
-function connectSSE() {
-    const url = `/stream-sse?public_id=${publicId}&last_event_id=${lastEventId}`;
-    const eventSource = new EventSource(url);
+async function connectSSE() {
+    const eventSource = await Weline.Api.stream('pagebuilder.logs', {
+        public_id: publicId,
+        last_event_id: lastEventId,
+    });
 
     eventSource.addEventListener('log', (e) => {
         const data = JSON.parse(e.data);

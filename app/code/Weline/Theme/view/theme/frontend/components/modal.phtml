@@ -18,7 +18,9 @@
 // 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
 $metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('components.modal');
 foreach ($metaParams as $key => $value) {
-    $this->setData("meta.{$key}", $value);
+    if ($this->getData("meta.{$key}") === null) {
+        $this->setData("meta.{$key}", $value);
+    }
 }
 
 $id = $this->getData("meta.id") ?? '';
@@ -31,8 +33,9 @@ $keyboard = $this->getData("meta.keyboard") ?? true;
 $closeButton = $this->getData("meta.closeButton") ?? true;
 
 // 构建CSS类
-$modalClass = 'modal';
-$modalContentClass = 'modal-content modal-' . htmlspecialchars($size);
+$modalClass = 'w-modal modal';
+$modalSizeClass = 'w-modal-' . htmlspecialchars($size) . ' modal-' . htmlspecialchars($size);
+$modalContentClass = 'w-modal-content modal-content ' . $modalSizeClass;
 ?>
 <div class="<?= $modalClass ?>" 
      id="<?= htmlspecialchars($id) ?>"
@@ -42,18 +45,18 @@ $modalContentClass = 'modal-content modal-' . htmlspecialchars($size);
      aria-hidden="true"
      data-backdrop="<?= $backdrop ? 'true' : 'false' ?>"
      data-keyboard="<?= $keyboard ? 'true' : 'false' ?>">
-    <div class="modal-dialog" role="document">
+    <div class="w-modal-dialog modal-dialog <?= $modalSizeClass ?>" role="document">
         <div class="<?= $modalContentClass ?>">
             <?php if ($title || $closeButton): ?>
-                <div class="modal-header">
+                <div class="w-modal-header modal-header">
                     <?php if ($title): ?>
-                        <h5 class="modal-title" id="<?= htmlspecialchars($id) ?>Label">
+                        <h5 class="w-modal-title modal-title" id="<?= htmlspecialchars($id) ?>Label">
                             <?= htmlspecialchars($title) ?>
                         </h5>
                     <?php endif; ?>
                     <?php if ($closeButton): ?>
                         <button type="button" 
-                                class="close" 
+                                class="w-modal-close close"
                                 data-dismiss="modal" 
                                 aria-label="Close">
                             <span aria-hidden="true">&times;</span>
@@ -62,12 +65,12 @@ $modalContentClass = 'modal-content modal-' . htmlspecialchars($size);
                 </div>
             <?php endif; ?>
             
-            <div class="modal-body">
+            <div class="w-modal-body modal-body">
                 {{content}}
             </div>
             
             <?php if ($footer): ?>
-                <div class="modal-footer">
+                <div class="w-modal-footer modal-footer">
                     {{footer}}
                 </div>
             <?php endif; ?>

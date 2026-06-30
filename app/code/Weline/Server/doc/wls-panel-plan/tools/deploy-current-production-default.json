@@ -1,0 +1,9 @@
+{
+  "release_id": "codex-fixture",
+  "deploy_version": "codex-fixture",
+  "deploy_mode": "prod",
+  "deploy_mode_source": "production_default_missing_config",
+  "appstore_environment": "production",
+  "appstore_platform_url": "https://app.aiweline.com",
+  "appstore_platform_url_source": "production_default"
+}

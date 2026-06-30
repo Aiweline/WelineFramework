@@ -18,4 +18,9 @@ return [
         'description' => __('在域名管理页面的标签页内容区域动态追加标签页内容面板。与 tabs Hook 配合使用，注入对应的 Tab 内容。'),
         'doc' => 'backend/partials/domain/tabs-content.md',
     ],
+    'Weline_Websites::backend::website::form::sections-after' => [
+        'name' => __('网站编辑表单扩展区'),
+        'description' => __('在网站编辑表单核心配置之后追加模块配置区。SEO/GEO 等模块应通过此 Hook 注入字段，Website 模块不直接依赖业务模块。'),
+        'doc' => 'backend/website/form/sections-after.md',
+    ],
 ];

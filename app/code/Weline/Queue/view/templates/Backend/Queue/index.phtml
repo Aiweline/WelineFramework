@@ -393,7 +393,7 @@
         apiBatch: '<?= $this->getBackendUrl("*/backend/queue/api-batch") ?>',
         snapshotUrl: '<?= $this->getBackendUrl("*/backend/queue/snapshot") ?>',
         baseUrl: '<?= $this->getBackendUrl("*/backend/queue") ?>',
-        pollIntervalMs: 3000,
+        pollIntervalMs: 10000,
         actionRefreshDelayMs: 600,
         text: {
             deleteConfirm: '<?= addslashes(__("确定要删除队列「%{1}」吗？此操作不可恢复。")) ?>',
@@ -482,18 +482,33 @@
         });
     }
 
-    function activateInlineScripts(root) {
-        if (!(root instanceof Element)) {
-            return;
-        }
-        root.querySelectorAll('script').forEach(function(oldScript) {
-            var newScript = document.createElement('script');
-            Array.prototype.slice.call(oldScript.attributes || []).forEach(function(attr) {
-                newScript.setAttribute(attr.name, attr.value);
-            });
-            newScript.text = oldScript.text || oldScript.textContent || '';
-            oldScript.parentNode.replaceChild(newScript, oldScript);
+    function sanitizeSnapshotHtml(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+
+        template.content.querySelectorAll('script, style, iframe, object, embed, base, meta, link').forEach(function(node) {
+            node.remove();
         });
+
+        template.content.querySelectorAll('*').forEach(function(node) {
+            Array.prototype.slice.call(node.attributes || []).forEach(function(attr) {
+                var name = String(attr.name || '').toLowerCase();
+                var compactValue = String(attr.value || '').replace(/[\u0000-\u001f\u007f\s]+/g, '').toLowerCase();
+
+                if (
+                    name.indexOf('on') === 0 ||
+                    name === 'srcdoc' ||
+                    name === 'style' ||
+                    compactValue.indexOf('javascript:') === 0 ||
+                    compactValue.indexOf('vbscript:') === 0 ||
+                    compactValue.indexOf('data:text/html') === 0
+                ) {
+                    node.removeAttribute(attr.name);
+                }
+            });
+        });
+
+        return template.innerHTML;
     }
 
     function applySnapshot(payload) {
@@ -502,14 +517,13 @@
         var selectedIds = getSelectedIds();
 
         if (statsRegion && typeof payload.stats_html === 'string' && payload.stats_html !== lastSnapshotStatsHtml) {
-            statsRegion.innerHTML = payload.stats_html;
+            statsRegion.innerHTML = sanitizeSnapshotHtml(payload.stats_html);
             lastSnapshotStatsHtml = payload.stats_html;
         }
         if (listingRegion && typeof payload.listing_html === 'string' && payload.listing_html !== lastSnapshotListingHtml) {
             cleanupManagedQueueResultModals();
             cleanupManagedQueueOffcanvases();
-            listingRegion.innerHTML = payload.listing_html;
-            activateInlineScripts(listingRegion);
+            listingRegion.innerHTML = sanitizeSnapshotHtml(payload.listing_html);
             lastSnapshotListingHtml = payload.listing_html;
         }
 
@@ -751,6 +765,13 @@
         document.addEventListener('click', function(event) {
             var target = event.target;
             if (!(target instanceof Element)) {
+                return;
+            }
+
+            var copyResultBtn = target.closest('[data-queue-result-copy]');
+            if (copyResultBtn) {
+                event.preventDefault();
+                copyQueueResult(copyResultBtn.dataset.queueResultModalId || '');
                 return;
             }
 

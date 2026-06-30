@@ -11,6 +11,16 @@ $cssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-console.css
 $statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
 $jsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-console.js');
 $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-statistics.js');
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
+$jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
+    return htmlspecialchars(json_encode($value, $jsonForScriptFlags), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+};
 ?>
 <link rel="stylesheet" href="<?= $cssUrl ?>">
 <link rel="stylesheet" href="<?= $statisticsCssUrl ?>">
@@ -139,9 +149,9 @@ $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-sta
                 <h3 class="section-title"><?= __('等待分配') ?></h3>
                 <div class="session-list" id="waiting-sessions-list">
                     <?php foreach ($waitingSessions as $session): ?>
-                    <div class="session-item waiting" data-session-id="<?= $session['session_id'] ?>">
+                    <div class="session-item waiting" data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
                         <div class="session-header">
-                            <span class="session-id">#<?= $session['session_id'] ?></span>
+                            <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
                             <span class="session-status badge-waiting"><?= __('等待中') ?></span>
                         </div>
                         <div class="session-preview">
@@ -152,7 +162,7 @@ $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-sta
                             <?php endif; ?>
                         </div>
                         <div class="session-actions">
-                            <button class="btn-assign" onclick="assignSession(<?= $session['session_id'] ?>)">
+                            <button class="btn-assign" data-assign-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
                                 <?= __('接单') ?>
                             </button>
                         </div>
@@ -173,10 +183,10 @@ $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-sta
                     <?php else: ?>
                         <?php foreach ($sessions as $session): ?>
                         <div class="session-item <?= $session['unread_count'] > 0 ? 'unread' : '' ?>" 
-                             data-session-id="<?= $session['session_id'] ?>"
-                             onclick="loadSession(<?= $session['session_id'] ?>)">
+                             data-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>"
+                             data-load-session-id="<?= $jsonForHtmlAttr((int)($session['session_id'] ?? 0)) ?>">
                             <div class="session-header">
-                                <span class="session-id">#<?= $session['session_id'] ?></span>
+                                <span class="session-id">#<?= (int)($session['session_id'] ?? 0) ?></span>
                                 <?php if ($session['unread_count'] > 0): ?>
                                     <span class="unread-badge"><?= $session['unread_count'] ?></span>
                                 <?php endif; ?>
@@ -219,13 +229,13 @@ $statisticsJsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-sta
 <script>
     // 初始化工作台
     const consoleConfig = {
-        consoleUrl: '<?= $consoleUrl ?>',
-        agentId: <?= $agent['agent_id'] ?? 0 ?>
+        consoleUrl: <?= json_encode($consoleUrl, $jsonForScriptFlags) ?>,
+        agentId: <?= json_encode((int)($agent['agent_id'] ?? 0), $jsonForScriptFlags) ?>
     };
     
     CustomerServiceConsole.init(consoleConfig);
     CustomerServiceStatistics.init({
-        consoleUrl: '<?= $consoleUrl ?>',
+        consoleUrl: <?= json_encode($consoleUrl, $jsonForScriptFlags) ?>,
         currentPeriod: 'today'
     });
 </script>

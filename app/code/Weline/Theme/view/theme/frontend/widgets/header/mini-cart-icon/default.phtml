@@ -12,6 +12,7 @@
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {user-area}
+ * @widget.supports {["layout-header-actions","layout-global-header-actions"]}
  * 
  * @param show_quantity {default=true,type="bool",label="显示数量"}
  * @param show_subtotal {default=true,type="bool",label="显示小计"}
@@ -80,8 +81,8 @@ $cartSubtotal = '¥299.00';
                 <span class="total-amount"><?= htmlspecialchars($cartSubtotal) ?></span>
             </div>
             <div class="mini-cart-actions">
-                <a href="/cart" class="btn btn-outline"><?= __('查看购物车') ?></a>
-                <a href="/checkout" class="btn btn-primary"><?= __('去结算') ?></a>
+                <a href="/cart" class="w-btn w-btn-outline"><?= __('查看购物车') ?></a>
+                <a href="/checkout" class="w-btn w-btn-primary"><?= __('去结算') ?></a>
             </div>
         </div>
     </div>
@@ -260,7 +261,7 @@ $cartSubtotal = '¥299.00';
     gap: 10px;
 }
 
-.widget-mini-cart-icon .mini-cart-actions .btn {
+.widget-mini-cart-icon .mini-cart-actions .w-btn {
     flex: 1;
     padding: 10px 15px;
     text-align: center;
@@ -271,24 +272,24 @@ $cartSubtotal = '¥299.00';
     transition: all 0.3s;
 }
 
-.widget-mini-cart-icon .btn-outline {
+.widget-mini-cart-icon .w-btn-outline {
     border: 1px solid #ddd;
     color: #333;
     background: #fff;
 }
 
-.widget-mini-cart-icon .btn-outline:hover {
+.widget-mini-cart-icon .w-btn-outline:hover {
     border-color: var(--primary-color, #007bff);
     color: var(--primary-color, #007bff);
 }
 
-.widget-mini-cart-icon .btn-primary {
+.widget-mini-cart-icon .w-btn-primary {
     background: var(--primary-color, #007bff);
     color: #fff;
     border: none;
 }
 
-.widget-mini-cart-icon .btn-primary:hover {
+.widget-mini-cart-icon .w-btn-primary:hover {
     background: var(--primary-dark, #0056b3);
 }
 </style>

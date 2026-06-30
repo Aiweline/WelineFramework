@@ -9,10 +9,19 @@
 
 namespace Weline\Theme\Block;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\PostResponseTaskQueue;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
+use Weline\Server\Service\MemoryStateFacade;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
@@ -33,10 +42,35 @@ class Partials extends Block
      * @var array<string, array>
      */
     private static array $partialsMetaCache = [];
+    private static ?\WeakMap $fiberRenderYieldAt = null;
+    private const PARTIAL_OUTPUT_CACHE_TTL = 300.0;
+    private const WLS_RENDER_YIELD_MIN_INTERVAL_US = 10000;
+    /** @var array<string, true> */
+    private const CACHEABLE_PARTIAL_TYPES = [
+        'head' => true,
+        'header' => true,
+        'footer' => true,
+        'breadcrumb' => true,
+        'loading' => true,
+        'topbar' => true,
+        'topnav' => true,
+        'sidebar' => true,
+        'right-sidebar' => true,
+        'scripts' => true,
+    ];
+    private const PARTIAL_OUTPUT_STALE_TTL = 600;
+    private const PARTIAL_OUTPUT_REFRESH_LOCK_TTL = 10;
+    /** @var array<string, array{fresh_until: float, stale_until: float, html: string}> */
+    private static array $partialOutputCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
 
     public static function clearMetaCache(): void
     {
         self::$partialsMetaCache = [];
+        self::$partialOutputCache = [];
+        self::$runtimeCache = null;
+        self::$runtimeCacheResolved = false;
     }
 
     /**
@@ -95,6 +129,305 @@ class Partials extends Block
         // 如果没有指定 type，返回空（保持向后兼容）
         return '';
     }
+
+    private function fetchCachedPartialHtml(
+        string $fileName,
+        array $dictionary,
+        string $area,
+        string $type,
+        string $defaultOption
+    ): string {
+        if (!isset(self::CACHEABLE_PARTIAL_TYPES[$type])) {
+            return $this->fetchHtml($fileName, $dictionary);
+        }
+
+        $cacheContext = $this->resolvePartialOutputCacheContext($area, $type, $defaultOption, $dictionary);
+        if ($cacheContext === null) {
+            return $this->fetchHtml($fileName, $dictionary);
+        }
+
+        $comFileName = $this->getFetchFile($fileName);
+        $stat = @stat($comFileName);
+        if (!\is_array($stat)) {
+            return $this->ob_file($comFileName, $dictionary);
+        }
+
+        $cacheKey = \sha1($fileName . '|' . $comFileName . '|' . (int)$stat['mtime'] . '|' . (int)$stat['size'] . '|' . $cacheContext);
+        $cached = $this->readPartialOutputCache($cacheKey);
+        if ($cached['status'] !== 'miss') {
+            if ($this->isEmptyPartialHtml((string)$cached['html'])) {
+                unset(self::$partialOutputCache[$cacheKey]);
+                $this->logPartialCacheDiagnostic('skip_empty_partial_output_cache', [
+                    'file' => $fileName,
+                    'type' => $type,
+                    'cache_key' => $cacheKey,
+                    'status' => (string)$cached['status'],
+                ]);
+            } else {
+            if ($cached['status'] === 'stale') {
+                $this->queuePartialOutputRefresh($cacheKey, $comFileName, $dictionary);
+            }
+            return (string)$cached['html'];
+            }
+        }
+        $runtimeCached = $this->readRuntimePartialOutputCache('partial.output.' . $cacheKey);
+        if ($runtimeCached['status'] !== 'miss') {
+            if ($this->isEmptyPartialHtml((string)$runtimeCached['html'])) {
+                $this->runtimeCacheDelete('partial.output.' . $cacheKey);
+                $this->logPartialCacheDiagnostic('skip_empty_runtime_partial_output_cache', [
+                    'file' => $fileName,
+                    'type' => $type,
+                    'cache_key' => $cacheKey,
+                    'status' => (string)$runtimeCached['status'],
+                ]);
+            } else {
+            $this->rememberPartialOutput($cacheKey, (string)$runtimeCached['html'], (string)$runtimeCached['status']);
+            if ($runtimeCached['status'] === 'stale') {
+                $this->queuePartialOutputRefresh($cacheKey, $comFileName, $dictionary);
+            }
+            return (string)$runtimeCached['html'];
+            }
+        }
+
+        $html = $this->ob_file($comFileName, $dictionary);
+        if ($this->isEmptyPartialHtml($html)) {
+            $this->logPartialCacheDiagnostic('skip_empty_partial_output_store', [
+                'file' => $fileName,
+                'type' => $type,
+                'cache_key' => $cacheKey,
+            ]);
+            return $html;
+        }
+        $this->rememberPartialOutput($cacheKey, $html);
+        $this->runtimeCacheSet('partial.output.' . $cacheKey, $html, $this->partialOutputCacheTtl());
+
+        return $html;
+    }
+
+    private function resolvePartialOutputCacheContext(string $area, string $type, string $defaultOption, array $data): ?string
+    {
+        $area = \strtolower($area);
+        $type = \strtolower($type);
+        if (($area !== 'frontend' && $area !== 'backend') || $this->shouldBypassPartialOutputCache()) {
+            return null;
+        }
+
+        try {
+            $requestUri = (string)\w_env_request_uri();
+            $pathContext = $this->resolvePartialPathCacheContext($area, $type, $requestUri);
+            $themeData = \is_array($data['theme'] ?? null) ? (array)$data['theme'] : [];
+            $theme = $themeData['theme'] ?? null;
+            $themeId = \is_object($theme) && \method_exists($theme, 'getId') ? (string)$theme->getId() : '';
+            $authContext = $area === 'backend'
+                ? $this->backendAuthCacheContext()
+                : ($type === 'header' ? $this->frontendHeaderAuthCacheContext() : '');
+
+            return KeyBuilder::environmentHash([
+                'area' => $area,
+                'type' => $type,
+                'option' => $defaultOption,
+                'base_url' => (string)$this->request->getBaseUrl(),
+                'backend_base_url' => $area === 'backend' ? (string)($this->request->getUrlBuilder()->getBackendUrl('/') ?? '') : '',
+                'uri' => $pathContext,
+                'year' => $type === 'footer' ? \date('Y') : '',
+                'theme_id' => $themeId,
+                'theme_area' => (string)($themeData['area'] ?? ''),
+                'theme_color_mode' => (string)($themeData['colorMode'] ?? ''),
+                'layout_type' => (string)($themeData['layoutType'] ?? ''),
+                'layout_option' => (string)($themeData['layoutOption'] ?? ''),
+                'website_id' => $area === 'backend' ? (string)($this->request->getData('website_id') ?? $this->request->getParam('website_id', '')) : '',
+                'auth' => $authContext,
+                'data' => $this->resolvePartialCacheDataContext($type, $data),
+            ]);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function resolvePartialPathCacheContext(string $area, string $type, string $requestUri): string
+    {
+        if ($area === 'frontend') {
+            return $type === 'header' || $type === 'footer' ? '' : $requestUri;
+        }
+
+        return $type === 'head' ? $requestUri : '';
+    }
+
+    private function resolvePartialCacheDataContext(string $type, array $data): mixed
+    {
+        if ($type === 'header') {
+            return $this->normalizePartialCacheData([
+                'q' => (string)$this->request->getParam('q', ''),
+                'category' => (string)$this->request->getParam('category', ''),
+                'cart_count' => $data['cart_count'] ?? 0,
+                'cart_total' => $data['cart_total'] ?? 0,
+                'logo' => $data['logo'] ?? null,
+                'logoText' => $data['logoText'] ?? null,
+                'navItems' => $data['navItems'] ?? null,
+                'showSearch' => $data['showSearch'] ?? null,
+                'showUserMenu' => $data['showUserMenu'] ?? null,
+            ]);
+        }
+
+        if ($type === 'footer') {
+            return $this->normalizePartialCacheData([
+                'footerLinks' => $data['footerLinks'] ?? null,
+                'socialLinks' => $data['socialLinks'] ?? null,
+                'newsletter' => $data['newsletter'] ?? null,
+            ]);
+        }
+
+        if ($type === 'head') {
+            return $this->normalizeHeadPartialCacheData($data);
+        }
+
+        if (isset(self::CACHEABLE_PARTIAL_TYPES[$type])) {
+            return $this->normalizeChromePartialCacheData($data);
+        }
+
+        return $this->normalizePartialCacheData($data);
+    }
+
+    private function normalizeChromePartialCacheData(array $data): mixed
+    {
+        $meta = \is_array($data['meta'] ?? null) ? $data['meta'] : [];
+        $layout = \is_array($data['layout'] ?? null) ? $data['layout'] : [];
+        unset(
+            $meta['content'],
+            $meta['contentRenderKey'],
+            $meta['child_html'],
+            $meta['controller'],
+            $meta['request'],
+            $meta['req'],
+            $meta['session'],
+            $layout['content'],
+            $layout['contentRenderKey'],
+            $layout['child_html'],
+            $layout['controller'],
+            $layout['request'],
+            $layout['req'],
+            $layout['session']
+        );
+
+        return $this->normalizePartialCacheData([
+            'meta' => $meta,
+            'layout' => $layout,
+            'theme' => $data['theme'] ?? null,
+            'colors' => $data['colors'] ?? null,
+        ]);
+    }
+
+    private function frontendHeaderAuthCacheContext(): string
+    {
+        try {
+            $session = SessionFactory::getInstance()->createFrontendSession();
+            if (!$session->isLoggedIn()) {
+                return 'frontend-auth:0';
+            }
+
+            $userId = \method_exists($session, 'getUserId') ? (string)($session->getUserId() ?? '') : '';
+            $username = \method_exists($session, 'getUsername') ? (string)($session->getUsername() ?? '') : '';
+
+            return 'frontend-auth:1:' . \sha1($userId . '|' . $username);
+        } catch (\Throwable) {
+            return 'frontend-auth:unknown';
+        }
+    }
+
+    private function backendAuthCacheContext(): string
+    {
+        $cached = RequestContext::get('theme.backend_partial_auth_context', null);
+        if (\is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        try {
+            $session = SessionFactory::getInstance()->createBackendSession();
+            if (!$session->isLoggedIn()) {
+                $context = 'backend-auth:0';
+            } else {
+                $userId = \method_exists($session, 'getLoginUserID') ? (string)($session->getLoginUserID() ?? '') : '';
+                $username = \method_exists($session, 'getLoginUsername') ? (string)($session->getLoginUsername() ?? '') : '';
+                $context = 'backend-auth:1:' . \sha1($userId . '|' . $username);
+            }
+        } catch (\Throwable) {
+            $context = 'backend-auth:unknown';
+        }
+
+        RequestContext::set('theme.backend_partial_auth_context', $context);
+        return $context;
+    }
+
+    private function normalizeHeadPartialCacheData(array $data): mixed
+    {
+        $meta = \is_array($data['meta'] ?? null) ? $data['meta'] : [];
+        unset(
+            $meta['content'],
+            $meta['contentRenderKey'],
+            $meta['child_html'],
+            $meta['controller'],
+            $meta['request'],
+            $meta['req'],
+            $meta['session']
+        );
+
+        $layout = \is_array($data['layout'] ?? null) ? $data['layout'] : [];
+        unset(
+            $layout['content'],
+            $layout['contentRenderKey'],
+            $layout['child_html'],
+            $layout['controller'],
+            $layout['request'],
+            $layout['req'],
+            $layout['session']
+        );
+
+        return $this->normalizePartialCacheData([
+            'meta' => $meta,
+            'layout' => $layout,
+            'theme' => $data['theme'] ?? null,
+            'colors' => $data['colors'] ?? null,
+            'site_name' => $data['site_name'] ?? null,
+        ]);
+    }
+
+    private function shouldBypassPartialOutputCache(): bool
+    {
+        try {
+            $requestPath = \strtolower((string)($this->request->getPathInfo() ?: \w_env_request_uri()));
+            return (string)$this->request->getGet('visual_editor', '') === '1'
+                || (string)$this->request->getGet('preview', '') === '1'
+                || (string)$this->request->getGet('debug_hooks', '') === '1'
+                || \str_contains($requestPath, 'workspace-preview');
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    private function normalizePartialCacheData(mixed $value, int $depth = 0): mixed
+    {
+        if ($depth > 4) {
+            return '*depth*';
+        }
+        if ($value === null || \is_scalar($value)) {
+            return $value;
+        }
+        if (\is_array($value)) {
+            $normalized = [];
+            foreach ($value as $key => $item) {
+                $normalized[(string)$key] = $this->normalizePartialCacheData($item, $depth + 1);
+            }
+            \ksort($normalized);
+            return $normalized;
+        }
+        if (\is_object($value)) {
+            $id = \method_exists($value, 'getId') ? (string)$value->getId() : '';
+            return ['class' => $value::class, 'id' => $id];
+        }
+
+        return (string)\gettype($value);
+    }
+
     /**
      * 获取 partials 模板路径
      *
@@ -113,6 +446,288 @@ class Partials extends Block
      * @param string $defaultOption 默认选项（如果配置中没有指定）
      * @return string|null 模板路径（模块格式或绝对路径）
      */
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get('theme_runtime', $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    /**
+     * @return array{status: string, html: ?string}
+     */
+    private function readPartialOutputCache(string $cacheKey): array
+    {
+        $entry = $this->normalizePartialSwrEntry(self::$partialOutputCache[$cacheKey] ?? null);
+        if ($entry === null) {
+            unset(self::$partialOutputCache[$cacheKey]);
+            return ['status' => 'miss', 'html' => null];
+        }
+        self::$partialOutputCache[$cacheKey] = $entry;
+
+        return $this->partialSwrEntryStatus($entry);
+    }
+
+    /**
+     * @return array{status: string, html: ?string}
+     */
+    private function readRuntimePartialOutputCache(string $key): array
+    {
+        $entry = $this->normalizePartialSwrEntry($this->runtimeCacheGet($key));
+        if ($entry === null) {
+            return ['status' => 'miss', 'html' => null];
+        }
+
+        return $this->partialSwrEntryStatus($entry);
+    }
+
+    private function rememberPartialOutput(string $cacheKey, string $html, string $status = 'fresh'): void
+    {
+        if (\count(self::$partialOutputCache) > 96) {
+            self::$partialOutputCache = [];
+        }
+
+        self::$partialOutputCache[$cacheKey] = $this->makePartialSwrEntry($html, $status);
+    }
+
+    /**
+     * @param array<string, mixed> $dictionary
+     */
+    private function queuePartialOutputRefresh(string $cacheKey, string $comFileName, array $dictionary): void
+    {
+        if (!$this->acquirePartialRefreshLock($cacheKey)) {
+            return;
+        }
+
+        PostResponseTaskQueue::enqueue('theme-partial-output:' . $cacheKey, function () use ($cacheKey, $comFileName, $dictionary): void {
+            $html = $this->ob_file($comFileName, $dictionary);
+            if (!\is_string($html)) {
+                return;
+            }
+            if ($this->isEmptyPartialHtml($html)) {
+                $this->logPartialCacheDiagnostic('skip_empty_partial_output_refresh', [
+                    'cache_key' => $cacheKey,
+                    'compiled_file' => $comFileName,
+                ]);
+                return;
+            }
+            $this->rememberPartialOutput($cacheKey, $html);
+            $this->runtimeCacheSet('partial.output.' . $cacheKey, $html, $this->partialOutputCacheTtl());
+        });
+    }
+
+    /**
+     * @return array{fresh_until: float, stale_until: float, html: string}|null
+     */
+    private function normalizePartialSwrEntry(mixed $entry): ?array
+    {
+        $ttl = $this->partialOutputCacheTtl();
+        $now = \microtime(true);
+        if (\is_string($entry)) {
+            return [
+                'fresh_until' => $now + $ttl,
+                'stale_until' => $now + $ttl + $this->partialOutputStaleTtl(),
+                'html' => $entry,
+            ];
+        }
+        if (!\is_array($entry)) {
+            return null;
+        }
+        $html = $entry['html'] ?? $entry['value'] ?? null;
+        if (!\is_string($html)) {
+            return null;
+        }
+        $freshUntil = (float)($entry['fresh_until'] ?? $entry['expires_at'] ?? 0);
+        if ($freshUntil <= 0) {
+            $freshUntil = $now + $ttl;
+        }
+        $staleUntil = (float)($entry['stale_until'] ?? ($freshUntil + $this->partialOutputStaleTtl()));
+        if ($staleUntil < $freshUntil) {
+            $staleUntil = $freshUntil;
+        }
+
+        return [
+            'fresh_until' => $freshUntil,
+            'stale_until' => $staleUntil,
+            'html' => $html,
+        ];
+    }
+
+    /**
+     * @param array{fresh_until: float, stale_until: float, html: string} $entry
+     * @return array{status: string, html: ?string}
+     */
+    private function partialSwrEntryStatus(array $entry): array
+    {
+        $html = (string)($entry['html'] ?? '');
+        $now = \microtime(true);
+        if ((float)$entry['fresh_until'] >= $now) {
+            return ['status' => 'fresh', 'html' => $html];
+        }
+        if ((float)$entry['stale_until'] >= $now) {
+            return ['status' => 'stale', 'html' => $html];
+        }
+
+        return ['status' => 'miss', 'html' => null];
+    }
+
+    /**
+     * @return array{fresh_until: float, stale_until: float, html: string}
+     */
+    private function makePartialSwrEntry(string $html, string $status = 'fresh'): array
+    {
+        $ttl = $this->partialOutputCacheTtl();
+        $now = \microtime(true);
+        $freshUntil = $status === 'stale' ? $now - 0.001 : $now + $ttl;
+
+        return [
+            'fresh_until' => $freshUntil,
+            'stale_until' => $freshUntil + $this->partialOutputStaleTtl(),
+            'html' => $html,
+        ];
+    }
+
+    private function isEmptyPartialHtml(string $html): bool
+    {
+        return \trim($html) === '';
+    }
+
+    private function logPartialCacheDiagnostic(string $event, array $context = []): void
+    {
+        if (!\function_exists('w_log_warning')) {
+            return;
+        }
+
+        try {
+            $context += [
+                'request_id' => (string)(RequestContext::getId() ?? ''),
+                'uri' => \function_exists('w_env_request_uri') ? (string)\w_env_request_uri() : '',
+                'lang' => (string)State::getLang(),
+                'lang_local' => (string)State::getLangLocal(),
+                'currency' => (string)State::getCurrency(),
+            ];
+        } catch (\Throwable) {
+        }
+
+        $payload = \json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        \w_log_warning('[PartialCacheDiagnostics] ' . $event . ' ' . ($payload ?: '{}'));
+    }
+
+    private function partialOutputStaleTtl(): int
+    {
+        return self::cachePolicy()->ttl('theme.partial_output_stale_ttl', self::PARTIAL_OUTPUT_STALE_TTL, 1, 86400);
+    }
+
+    private function partialRefreshLockTtl(): int
+    {
+        return self::cachePolicy()->ttl('theme.partial_output_refresh_lock_ttl', self::PARTIAL_OUTPUT_REFRESH_LOCK_TTL, 1, 300);
+    }
+
+    private function acquirePartialRefreshLock(string $cacheKey): bool
+    {
+        $cache = self::runtimeCache();
+        $lockKey = 'partial.output.' . $cacheKey . '.refresh_lock';
+        if ($cache !== null) {
+            try {
+                return $cache->incr('theme_runtime', $lockKey, 1, $this->partialRefreshLockTtl()) === 1;
+            } catch (\Throwable) {
+                self::$runtimeCache = null;
+                self::$runtimeCacheResolved = true;
+            }
+        }
+
+        static $localLocks = [];
+        $now = \microtime(true);
+        $expiresAt = (float)($localLocks[$lockKey] ?? 0);
+        if ($expiresAt >= $now) {
+            return false;
+        }
+        $localLocks[$lockKey] = $now + $this->partialRefreshLockTtl();
+
+        return true;
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $ttl = \max(1, $ttl);
+            $now = \microtime(true);
+            $staleTtl = $this->partialOutputStaleTtl();
+            $cache->set('theme_runtime', $key, [
+                'fresh_until' => $now + $ttl,
+                'stale_until' => $now + $ttl + $staleTtl,
+                'value' => $value,
+            ], $ttl + $staleTtl);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private function runtimeCacheDelete(string $key): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->delete('theme_runtime', $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$runtimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'theme_runtime_partial',
+                'prefer_direct_connect' => true,
+                'pool_size' => 1,
+                'auto_start' => false,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function partialOutputCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('theme.partial_output_ttl', (int)self::PARTIAL_OUTPUT_CACHE_TTL);
+    }
+
+    private static function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
+    }
+
     public function getPartialsPath(string $area, string $type, string $defaultOption = 'default'): ?string
     {
         /** @var ThemeContextService $ctx */
@@ -273,7 +888,7 @@ class Partials extends Block
 
             return $this->traceCall(
                 $tracePrefix . '::fetch_html',
-                fn() => $this->fetchHtml($path, $data)
+                fn() => $this->fetchCachedPartialHtml($path, $data, $area, $type, $defaultOption)
             );
         });
     }
@@ -351,9 +966,15 @@ class Partials extends Block
     private function traceCall(string $name, callable $callback, string $category = 'theme'): mixed
     {
         if (!RequestLifecycleTrace::isEnabled()) {
-            return $callback();
+            self::cooperativeRenderYield();
+            try {
+                return $callback();
+            } finally {
+                self::cooperativeRenderYield();
+            }
         }
 
+        self::cooperativeRenderYield();
         $start = microtime(true);
         RequestLifecycleTrace::pushCurrentParent($name);
         try {
@@ -361,6 +982,33 @@ class Partials extends Block
         } finally {
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, $category);
+            self::cooperativeRenderYield();
         }
+    }
+
+    private static function cooperativeRenderYield(): void
+    {
+        if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive()) {
+            return;
+        }
+
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+
+        $now = \microtime(true);
+        self::$fiberRenderYieldAt ??= new \WeakMap();
+        $lastYieldAt = (float)(self::$fiberRenderYieldAt[$fiber] ?? 0.0);
+        if ($lastYieldAt <= 0.0) {
+            self::$fiberRenderYieldAt[$fiber] = $now;
+            return;
+        }
+        if ($lastYieldAt > 0.0 && (($now - $lastYieldAt) * 1000000) < self::WLS_RENDER_YIELD_MIN_INTERVAL_US) {
+            return;
+        }
+
+        self::$fiberRenderYieldAt[$fiber] = $now;
+        SchedulerSystem::yield();
     }
 }

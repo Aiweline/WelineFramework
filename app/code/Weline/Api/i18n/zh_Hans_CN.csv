@@ -1,4 +1,15 @@
-﻿用户名和密码不能为空,用户名和密码不能为空
+﻿应用创建成功,应用创建成功
+应用授权范围,应用授权范围
+"应用 token 不能批准新的应用授权","应用 token 不能批准新的应用授权"
+应用授权成功,应用授权成功
+授权码或客户端凭证无效,授权码或客户端凭证无效
+"Token 发放成功","Token 发放成功"
+"刷新 token 无效","刷新 token 无效"
+"Token 刷新成功","Token 刷新成功"
+"Token 不能为空","Token 不能为空"
+"Token 不存在或已失效","Token 不存在或已失效"
+"Token 已撤销","Token 已撤销"
+用户名和密码不能为空,用户名和密码不能为空
 用户不存在,用户不存在
 用户已被禁用,用户已被禁用
 密码错误,密码错误
@@ -81,6 +92,13 @@ API文档导入测试成功,API文档导入测试成功
 "User agent does not match.","User agent does not match."
 "This token cannot access backend APIs.","This token cannot access backend APIs."
 "This token cannot access frontend customer APIs.","This token cannot access frontend customer APIs."
+应用名称不能为空,应用名称不能为空
+回调地址不能为空,回调地址不能为空
+应用不存在或已禁用,应用不存在或已禁用
+回调地址不匹配,回调地址不匹配
+安装目标无效或未注册解析器,安装目标无效或未注册解析器
+"授权 scope 不能为空","授权 scope 不能为空"
+"以下 scope 不存在、已禁用或不允许外部授权：%{1}","以下 scope 不存在、已禁用或不允许外部授权：%{1}"
 API模块配置,API模块配置
 配置API令牌刷新周期等参数,配置API令牌刷新周期等参数
 令牌刷新配置,令牌刷新配置
@@ -98,6 +116,7 @@ API模块配置,API模块配置
 建议值：2592000秒（30天）。范围：86400-31536000秒,建议值：2592000秒（30天）。范围：86400-31536000秒
 保存配置,保存配置
 返回,返回
+保存配置失败，请重试,保存配置失败，请重试
 API集成,API集成
 API用户,API用户
 启用用户,启用用户

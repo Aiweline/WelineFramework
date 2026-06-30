@@ -87,5 +87,5 @@ class WebsiteSitemapProvider implements SitemapProviderInterface
 在 `Weline_Websites` 模块中，只需要在模块根目录下创建：  
 `extends/module/Weline_Seo/SitemapProvider/WebsiteSitemapProvider.php`，并实现上面的接口即可。
 
-Seo 的 `ExtendsScanner` 会在扫描 `extends.php` 后，自动将该目录下的类注册为 `Weline_Seo` 的 `SitemapProvider` 扩展，`SitemapRegistryService` 再通过 `ExtendsData` 统一读取这些实现。这样，在 Seo 的 `Cron\SitemapSubmit` 执行时，就会自动发现 `WebsiteSitemapProvider`，调用其 `generateSitemaps()` 生成 sitemap，并根据对应 `scope=website`、`module=Weline_Websites` 的 `SeoAccount` 配置，使用适配器（如 Google Indexing API）进行提交。
+Seo 的 `ExtendsScanner` 会在扫描 `extends.php` 后，自动将该目录下的类注册为 `Weline_Seo` 的 `SitemapProvider` 扩展，`SitemapRegistryService` 再通过 `ExtendsData` 统一读取这些实现。这样，在 Seo 的 `Cron\SitemapSubmit` 执行时，就会自动发现 `WebsiteSitemapProvider`，调用其 `generateSitemaps()` 生成 sitemap，并根据对应 `scope=website`、`module=Weline_Websites` 的 `SeoAccount` 配置，使用适配器（如 Google Search Console Sitemap API 或 IndexNow）进行提交。
 

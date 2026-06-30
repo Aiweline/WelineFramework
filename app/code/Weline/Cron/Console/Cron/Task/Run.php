@@ -111,46 +111,22 @@ class Run implements CommandInterface
             $task->setData($task::schema_fields_RUNTIME, $task_end_time);
             # 运行完毕将进程ID设置为0
             $task->setData($task::schema_fields_PID, 0);
+            $task->save();
             exit;
         }
-        # 读取给定的任务
-        $pageSize = 1;
-        if ($task_names) {
-            foreach ($task_names as $taskName) {
-                $this->cronTask->where($this->cronTask::schema_fields_EXECUTE_NAME, $taskName);
-            }
-            $pageSize = count($task_names);
-        }
-        $this->cronTask->order('update_time', 'asc')
-            ->pagination(1, $pageSize)
-            ->select()
-            ->fetch();
-        # 读取给定的任务
-        if ($task_names) {
-            foreach ($task_names as $taskName) {
-                $this->cronTask->where($this->cronTask::schema_fields_EXECUTE_NAME, $taskName);
-            }
-        }
-        # 分页读取任务
-        $taskTotal = (int)$this->cronTask->pagination['totalSize'];
-        $taskPages = (int)$this->cronTask->pagination['lastPage'];
+        $tasks = $this->loadTaskSnapshot($task_names);
+        $taskTotal = \count($tasks);
         if ($taskTotal == 0) {
             ObjectManager::getInstance(Printing::class)->error(__('没有要执行的任务：%{1} , 参数：', [implode(' ', $task_names), implode(' ', $args)]));
             exit;
         }
 
-        for ($taskPage = 1; $taskPage <= $taskPages; $taskPage++) {
-            $offset = ($taskPage - 1) * $pageSize;
-            $currentTotal = $offset + $pageSize;
-            CronStatus::displayProgressBar(__('任务进度：页(%{1}=>%{2})/目(%{3}/%{4})', [$taskPages, $taskPage, $taskTotal, $taskPage]), $currentTotal,
-                $taskTotal, false);
-            $tasks = $this->cronTask->limit($pageSize, $offset)
-                ->select()
-                ->fetch()
-                ->getItems();
-            # 进程信息管理
-            /**@var CronTask $taskModel */
-            foreach ($tasks as $key => $taskModel) {
+        # 进程信息管理
+        /**@var CronTask $taskModel */
+        foreach ($tasks as $key => $taskModel) {
+                $currentTotal = $key + 1;
+                CronStatus::displayProgressBar(__('任务进度：页(%{1}=>%{2})/目(%{3}/%{4})', [$taskTotal, $currentTotal, $taskTotal, $currentTotal]), $currentTotal,
+                    $taskTotal, false);
                 $execute_name = Process::initTaskName($taskModel->getData($taskModel::schema_fields_EXECUTE_NAME));
                 # 进程名
                 $command_file = BP . 'bin' . DS . 'w';
@@ -165,10 +141,10 @@ class Run implements CommandInterface
                 $taskModel->setData($taskModel::schema_fields_NEXT_RUN_DATE, $cron->getNextRunDate()->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::schema_fields_MAX_NEXT_RUN_DATE, $cron->getNextRunDate('now', 3)->format('Y-m-d H:i:s'));
                 $taskModel->setData($taskModel::schema_fields_PRE_RUN_DATE, $cron->getPreviousRunDate()->format('Y-m-d H:i:s'));
-                # ----------使用进程名检测任务进程是否在运行---------------
+                # ----------优先使用已记录 PID 检测，避免 Windows 每个任务都全表扫描进程---------------
 
-                # 使用进程名检查该进程是否在运行
-                $pid = Process::getPidByName($process_name);
+                $storedPid = (int) ($taskModel->getData($taskModel::schema_fields_PID) ?: 0);
+                $pid = $this->resolveRunningPid($taskModel, $process_name, (bool) $force, $storedPid);
                 if ($pid) {
                     $output = Process::getProcessOutput($process_name);
                     $taskModel->setData($taskModel::schema_fields_RUNTIME_ERROR, $output . __('进程已存在，请检查进程状态！进程名：%{1}', $process_name))
@@ -194,8 +170,9 @@ class Run implements CommandInterface
                         $taskModel->setData($taskModel::schema_fields_RUNTIME_ERROR, $output . $msg)->save();
                     }
                     continue;
-                } elseif ($pid = ($taskModel->getData($taskModel::schema_fields_PID) ?: 0)) {
+                } elseif ($storedPid > 0) {
                     # -----------如果数据库存在PID,说明程序结束---------------
+                    $pid = $storedPid;
                     $msg = __('%{1} 程序ID:%{2} 已运行完毕!', [$process_name, $pid]);
                     $taskModel->setData($taskModel::schema_fields_RUN_TIMES, (int)$taskModel->getData($taskModel::schema_fields_RUN_TIMES) + 1);
                     # 设置程序运行数据
@@ -231,7 +208,7 @@ class Run implements CommandInterface
                         }
                     } else {
                         # 到了程序下次运行的时间，但是程序仍然处于block阻塞状态，设置程序运行阻塞数据
-                        $taskModel->setData($taskModel::schema_fields_BLOCK_TIME, $task_start_time - $task_start_time);
+                        $taskModel->setData($taskModel::schema_fields_BLOCK_TIME, microtime(true) - $task_start_time);
                         if ($block_time = $taskModel->getData($taskModel::schema_fields_BLOCK_TIME)) {
                             if ($block_time > ($taskModel->getData($taskModel::schema_fields_BLOCK_UNLOCK_TIMEOUT) * 60)) {
                                 $taskModel->setData($taskModel::schema_fields_BLOCK_TIMES, (int)$taskModel->getData($taskModel::schema_fields_BLOCK_TIMES) + 1);
@@ -244,9 +221,54 @@ class Run implements CommandInterface
                 } else {
                     $taskModel->setData($taskModel::schema_fields_STATUS, CronStatus::PENDING->value)->save();
                 }
-            }
         }
 
+    }
+
+    private function resolveRunningPid(CronTask $taskModel, string $processName, bool $force, int $storedPid): int
+    {
+        if ($storedPid > 0) {
+            return Process::isProcessRunning($storedPid) ? $storedPid : 0;
+        }
+
+        $status = (string) ($taskModel->getData(CronTask::schema_fields_STATUS) ?? '');
+        if (!$force && !\in_array($status, [CronStatus::BLOCK->value, CronStatus::RUNNING->value], true)) {
+            return 0;
+        }
+
+        return Process::getPidByName($processName);
+    }
+
+    /**
+     * @param array<int, string> $taskNames
+     * @return array<int, CronTask>
+     */
+    private function loadTaskSnapshot(array $taskNames): array
+    {
+        if ($taskNames) {
+            $tasks = [];
+            foreach (\array_values(\array_unique($taskNames)) as $taskName) {
+                /** @var CronTask $task */
+                $task = ObjectManager::make(CronTask::class)->reset()
+                    ->where(CronTask::schema_fields_EXECUTE_NAME, $taskName)
+                    ->find()
+                    ->fetch();
+                if ($task->getId()) {
+                    $tasks[] = $task;
+                }
+            }
+
+            return $tasks;
+        }
+
+        /** @var CronTask $task */
+        $task = ObjectManager::make(CronTask::class);
+
+        return $task->reset()
+            ->order(CronTask::schema_fields_ID, 'asc')
+            ->select()
+            ->fetch()
+            ->getItems();
     }
 
     private function flushCronCliStreams(): void

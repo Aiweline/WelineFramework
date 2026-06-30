@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Log\Master;
 
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Log\LogLevel;
 use Weline\Server\Log\WlsLogger;
 
@@ -157,15 +158,7 @@ class ProcessMonitor
         }
 
         if (\defined('PHP_WINDOWS_VERSION_BUILD')) {
-            // Windows
-            $output = [];
-            @\exec("tasklist /FI \"PID eq {$pid}\" /NH 2>NUL", $output);
-            foreach ($output as $line) {
-                if (\str_contains($line, (string)$pid)) {
-                    return true;
-                }
-            }
-            return false;
+            return Processer::processExists($pid);
         } else {
             // Linux/Unix
             // kill -0 不发送信号，只检查进程是否存在

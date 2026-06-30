@@ -56,27 +56,9 @@ final class DetectWebsiteTest extends TestCase
             WebsiteDomain::schema_fields_STATUS => WebsiteDomain::STATUS_ACTIVE,
         ]];
 
-        $websiteModel = $this->getMockBuilder(Website::class)
-            ->disableOriginalConstructor()
-            ->addMethods(['reset', 'clearQuery', 'select', 'fetchArray'])
-            ->getMock();
-        $websiteModel->expects($this->once())->method('reset')->willReturnSelf();
-        $websiteModel->expects($this->once())->method('clearQuery')->willReturnSelf();
-        $websiteModel->expects($this->once())->method('select')->willReturnSelf();
-        $websiteModel->expects($this->once())->method('fetchArray')->willReturn($websiteRows);
-
-        $websiteDomainModel = $this->getMockBuilder(WebsiteDomain::class)
-            ->disableOriginalConstructor()
-            ->addMethods(['clearQuery', 'where', 'select', 'fetchArray'])
-            ->getMock();
-        $websiteDomainModel->expects($this->once())->method('clearQuery')->willReturnSelf();
-        $websiteDomainModel->expects($this->once())->method('where')->willReturnSelf();
-        $websiteDomainModel->expects($this->once())->method('select')->willReturnSelf();
-        $websiteDomainModel->expects($this->once())->method('fetchArray')->willReturn($domainRows);
-
         $instances = $this->objectManagerInstancesBackup;
-        $instances[Website::class] = $websiteModel;
-        $instances[WebsiteDomain::class] = $websiteDomainModel;
+        $instances[Website::class] = new DetectWebsiteRowsStub($websiteRows);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub($domainRows);
         $this->setObjectManagerInstances($instances);
 
         $cache = new DetectWebsiteCachePoolSpy();
@@ -121,43 +103,9 @@ final class DetectWebsiteTest extends TestCase
             WebsiteDomain::schema_fields_STATUS => WebsiteDomain::STATUS_ACTIVE,
         ]];
 
-        $websiteModel = $this->getMockBuilder(Website::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['setData', 'getData', 'getUrl', 'getWebsiteId', 'getCode', 'getDefaultCurrency', 'getDefaultLanguage', 'getDefaultTimezone'])
-            ->addMethods(['reset', 'clearQuery', 'select', 'fetchArray'])
-            ->getMock();
-        $websiteModel->method('reset')->willReturnSelf();
-        $websiteModel->method('clearQuery')->willReturnSelf();
-        $websiteModel->method('select')->willReturnSelf();
-        $websiteModel->expects($this->once())->method('fetchArray')->willReturn($websiteRows);
-        $websiteModel->method('setData')->willReturnSelf();
-        $websiteModel->method('getData')->willReturnMap([
-            ['url', 'https://example.com/weshop'],
-            ['website_id', 2],
-            ['code', 'shop'],
-            ['default_currency', 'USD'],
-            ['default_language', 'en_US'],
-            ['default_timezone', 'UTC'],
-        ]);
-        $websiteModel->method('getUrl')->willReturn('https://example.com/weshop');
-        $websiteModel->method('getWebsiteId')->willReturn(2);
-        $websiteModel->method('getCode')->willReturn('shop');
-        $websiteModel->method('getDefaultCurrency')->willReturn('USD');
-        $websiteModel->method('getDefaultLanguage')->willReturn('en_US');
-        $websiteModel->method('getDefaultTimezone')->willReturn('UTC');
-
-        $websiteDomainModel = $this->getMockBuilder(WebsiteDomain::class)
-            ->disableOriginalConstructor()
-            ->addMethods(['clearQuery', 'where', 'select', 'fetchArray'])
-            ->getMock();
-        $websiteDomainModel->method('clearQuery')->willReturnSelf();
-        $websiteDomainModel->method('where')->willReturnSelf();
-        $websiteDomainModel->method('select')->willReturnSelf();
-        $websiteDomainModel->expects($this->once())->method('fetchArray')->willReturn($domainRows);
-
         $instances = $this->objectManagerInstancesBackup;
-        $instances[Website::class] = $websiteModel;
-        $instances[WebsiteDomain::class] = $websiteDomainModel;
+        $instances[Website::class] = new DetectWebsiteRowsStub($websiteRows);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub($domainRows);
         $this->setObjectManagerInstances($instances);
 
         $cache = new DetectWebsiteCachePoolSpy();
@@ -179,6 +127,46 @@ final class DetectWebsiteTest extends TestCase
         $this->assertSame(2, $secondEvent->getData('website_id'));
         $this->assertSame('https://example.com/weshop', $secondEvent->getData('website_url'));
         $this->assertSame(2, $cache->getCalls, 'Expected matched-site resolution to reuse process cache across observer lifecycles.');
+    }
+
+    public function testStandardProjectHostIsReservedForSystemHomepage(): void
+    {
+        $websiteRows = [[
+            'website_id' => 268,
+            'code' => 'pagebuilder-ai-card-game',
+            'url' => 'http://p11005ce4.weline.test',
+            'default_currency' => 'USD',
+            'default_language' => 'en_US',
+            'default_timezone' => 'UTC',
+        ]];
+
+        $domainRows = [[
+            WebsiteDomain::schema_fields_WEBSITE_ID => 268,
+            WebsiteDomain::schema_fields_DOMAIN => 'p11005ce4.weline.test',
+            WebsiteDomain::schema_fields_SUB_PATH => '',
+            WebsiteDomain::schema_fields_STATUS => WebsiteDomain::STATUS_ACTIVE,
+        ]];
+
+        $instances = $this->objectManagerInstancesBackup;
+        $instances[Website::class] = new DetectWebsiteRowsStub($websiteRows);
+        $instances[WebsiteDomain::class] = new DetectWebsiteDomainRowsStub($domainRows);
+        $this->setObjectManagerInstances($instances);
+
+        $observer = new DetectWebsite();
+        $this->setObserverCache($observer, new DetectWebsiteCachePoolSpy());
+
+        $sitesEvent = new Event(['get_sites' => true]);
+        $observer->execute($sitesEvent);
+
+        $siteUrls = \array_column($sitesEvent->getData('sites') ?: [], 'url');
+        $this->assertNotContains('http://p11005ce4.weline.test', $siteUrls);
+        $this->assertNotContains('https://p11005ce4.weline.test', $siteUrls);
+
+        RequestContext::init();
+        $matchEvent = new Event(['data' => new DataObject(['url' => 'https://p11005ce4.weline.test/'])]);
+        $observer->execute($matchEvent);
+
+        $this->assertNull($matchEvent->getData('website_id'));
     }
 
     /**
@@ -302,5 +290,141 @@ final class DetectWebsiteCachePoolSpy implements CachePoolInterface
             'hit_ratio' => 0.0,
             'permanent' => false,
         ];
+    }
+}
+
+final class DetectWebsiteRowsStub extends Website
+{
+    /**
+     * @var array<string, mixed>
+     */
+    private array $data = [];
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     */
+    public function __construct(private array $rows)
+    {
+    }
+
+    public function clearData(bool $with_query = true): static
+    {
+        return $this;
+    }
+
+    public function clearQuery(string $type = ''): static
+    {
+        return $this;
+    }
+
+    public function select(string $fields = ''): static
+    {
+        return $this;
+    }
+
+    public function fetch(string $model_class = ''): mixed
+    {
+        return $this;
+    }
+
+    public function getItems(): array
+    {
+        return $this->rows;
+    }
+
+    public function reset(): static
+    {
+        $this->data = [];
+        return $this;
+    }
+
+    public function setData($key, $value = null, bool $is_unique = false): static
+    {
+        if (\is_array($key)) {
+            $this->data = $key;
+            return $this;
+        }
+
+        $this->data[$key] = $value;
+        return $this;
+    }
+
+    public function getData(string $key = '', $index = null): mixed
+    {
+        if ($key === '') {
+            return $this->data;
+        }
+
+        return $this->data[$key] ?? null;
+    }
+
+    public function getUrl(): string
+    {
+        return (string)($this->data['url'] ?? '');
+    }
+
+    public function getWebsiteId(): int
+    {
+        return (int)($this->data['website_id'] ?? 0);
+    }
+
+    public function getCode(): string
+    {
+        return (string)($this->data['code'] ?? '');
+    }
+
+    public function getDefaultCurrency(): string
+    {
+        return (string)($this->data['default_currency'] ?? '');
+    }
+
+    public function getDefaultLanguage(): string
+    {
+        return (string)($this->data['default_language'] ?? '');
+    }
+
+    public function getDefaultTimezone(): string
+    {
+        return (string)($this->data['default_timezone'] ?? 'UTC');
+    }
+}
+
+final class DetectWebsiteDomainRowsStub extends WebsiteDomain
+{
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     */
+    public function __construct(private array $rows)
+    {
+    }
+
+    public function clearData(bool $with_query = true): static
+    {
+        return $this;
+    }
+
+    public function clearQuery(string $type = ''): static
+    {
+        return $this;
+    }
+
+    public function where(array|string $field, mixed $value = null, string $condition = '=', string $where_logic = 'AND', string $array_where_logic_type = 'AND'): static
+    {
+        return $this;
+    }
+
+    public function select(string $fields = ''): static
+    {
+        return $this;
+    }
+
+    public function fetch(string $model_class = ''): mixed
+    {
+        return $this;
+    }
+
+    public function getItems(): array
+    {
+        return $this->rows;
     }
 }

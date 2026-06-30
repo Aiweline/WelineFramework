@@ -14,12 +14,12 @@
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
- * @param showSidebar {default=true,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
+ * @param showSidebar {default=false,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
  * @param showRelatedProducts {default=true,name="是否显示相关产品",description="是否显示相关产品推荐区域"}
  * @param showTabs {default=true,name="是否显示详情标签",description="是否显示产品详情标签区域"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
- * @param layout.rightsider {default=1,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
+ * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
  *
  * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
  * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
@@ -39,14 +39,16 @@ $meta['showTabs'] = $showTabs;
 $this->assign('meta', $meta);
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::product::body-start</w:hook>
     
@@ -77,17 +79,24 @@ $this->assign('meta', $meta);
             <w:hook>Weline_Theme::frontend::layouts::product::content-before</w:hook>
 
             <!-- ========== 商品详情页主体区域 ========== -->
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-product-content,layout-default-content,content,product-detail,product-main,product-sidebar,product-tabs,related-products,bestsellers,recently-viewed,cross-sell"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="product-detail-layout__content-root-slot">
             <main class="product-detail-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-detail-main" data-layout="product-detail">
                 <div class="product-detail-layout__container">
                     <div class="product-detail-layout__wrapper">
                         <!-- ========== 产品主内容区域 ========== -->
                         <w:slot id="product-main"
                                 name="产品主内容区域"
-                                accept="product-gallery,product-info,product-options,add-to-cart"
+                                accept="layout-product-main,product-gallery,product-info,product-options,add-to-cart"
                                 multiple="true"
                                 position="content"
                                 class="product-detail-layout__main-content">
-                            <w:hook>Weline_Theme::frontend::layouts::product::main-content-before</w:hook>
+                            <w:hook>WeShop_Product::frontend::layouts::product::main-content-before</w:hook>
                             <w:hook>WeShop_Product::frontend::layouts::product::main-content<else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
@@ -102,29 +111,29 @@ $this->assign('meta', $meta);
                                     </div>
                                 </if>
                             </w:hook>
-                            <w:hook>Weline_Theme::frontend::layouts::product::main-content-after</w:hook>
+                            <w:hook>WeShop_Product::frontend::layouts::product::main-content-after</w:hook>
                         </w:slot>
 
                         <!-- ========== 产品侧边栏区域 ========== -->
                         <if condition="meta.showSidebar">
-                            <w:slot id="product-sidebar"
-                                    name="产品侧边栏"
-                                    accept="related-products,up-sell,cross-sell,recently-viewed,sidebar-ads"
-                                    multiple="true"
-                                    position="sidebar"
-                                    wrapper="aside"
-                                    class="product-detail-layout__sidebar">
-                                <w:hook>Weline_Theme::frontend::layouts::product::sidebar-before</w:hook>
-                                <div class="product-detail-layout__placeholder" data-placeholder="product-sidebar">
-                                    <div class="product-detail-layout__placeholder-icon">
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
+                            <aside class="product-detail-layout__sidebar">
+                                <w:slot id="product-sidebar"
+                                        name="产品侧边栏"
+                                        accept="layout-product-sidebar,related-products,up-sell,cross-sell,recently-viewed,bestsellers,sidebar-ads"
+                                        multiple="true"
+                                        position="sidebar">
+                                    <w:hook>Weline_Theme::frontend::layouts::product::sidebar-before</w:hook>
+                                    <div class="product-detail-layout__placeholder" data-placeholder="product-sidebar">
+                                        <div class="product-detail-layout__placeholder-icon">
+                                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </div>
+                                        <span class="product-detail-layout__placeholder-text"><lang>侧边栏区域 - 拖拽推荐部件到此处</lang></span>
                                     </div>
-                                    <span class="product-detail-layout__placeholder-text"><lang>侧边栏区域 - 拖拽推荐部件到此处</lang></span>
-                                </div>
-                                <w:hook>Weline_Theme::frontend::layouts::product::sidebar-after</w:hook>
-                            </w:slot>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::sidebar-after</w:hook>
+                                </w:slot>
+                            </aside>
                         </if>
                     </div>
                 </div>
@@ -132,14 +141,8 @@ $this->assign('meta', $meta);
 
             <!-- ========== 产品详情标签区域 ========== -->
             <if condition="meta.showTabs">
-                <w:slot id="product-tabs"
-                        name="产品详情标签区域"
-                        accept="product-description,product-specs,product-reviews,product-qa"
-                        multiple="true"
-                        position="content"
-                        wrapper="section"
-                        class="product-detail-layout__tabs">
-                    <w:hook>Weline_Theme::frontend::layouts::product::tabs-before</w:hook>
+                <section class="product-detail-layout__tabs">
+                    <w:hook>WeShop_Product::frontend::layouts::product::tabs-before</w:hook>
                     <div class="product-detail-layout__tabs-container">
                         <w:hook>WeShop_Product::frontend::layouts::product::tabs-content<else/>
                             <div class="product-detail-layout__placeholder" data-placeholder="product-tabs">
@@ -151,34 +154,71 @@ $this->assign('meta', $meta);
                                 <span class="product-detail-layout__placeholder-text"><lang>产品详情标签区域 - 拖拽详情/评价/问答部件到此处</lang></span>
                             </div>
                         </w:hook>
+                        <w:slot id="product-tabs"
+                                name="产品详情标签区域"
+                                accept="layout-product-tabs,product-description,product-specs,product-reviews,product-qa"
+                                multiple="true"
+                                position="content"
+                                wrapper="div"
+                                class="product-detail-layout__tabs-slot">
+                            <w:hook>WeShop_Product::frontend::layouts::product::tabs-slot-content</w:hook>
+                        </w:slot>
                     </div>
-                    <w:hook>Weline_Theme::frontend::layouts::product::tabs-after</w:hook>
-                </w:slot>
+                    <w:hook>WeShop_Product::frontend::layouts::product::tabs-after</w:hook>
+                </section>
             </if>
 
             <!-- ========== 相关产品推荐区域 ========== -->
             <if condition="meta.showRelatedProducts">
-                <w:slot id="product-related"
-                        name="相关产品推荐"
-                        accept="related-products,you-may-like,recently-viewed,cross-sell,up-sell,product-carousel"
-                        multiple="true"
-                        position="content"
-                        wrapper="section"
-                        class="product-detail-layout__related">
-                    <w:hook>Weline_Theme::frontend::layouts::product::related-before</w:hook>
+                <section class="product-detail-layout__related">
                     <div class="product-detail-layout__related-container">
-                        <div class="product-detail-layout__placeholder" data-placeholder="product-related">
-                            <div class="product-detail-layout__placeholder-icon">
-                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
+                        <w:hook>WeShop_Product::frontend::layouts::product::related-before</w:hook>
+                        <w:hook>WeShop_Product::frontend::layouts::product::recommendations-content<else/>
+                            <div class="product-detail-layout__recommendations-stack">
+                                <w:slot id="product-related-products"
+                                        name="相关产品列表"
+                                        accept="related-products,you-may-like,product-carousel"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="div"
+                                        class="product-detail-layout__related-slot product-detail-layout__related-slot--related">
+                                    <w:hook>WeShop_Product::frontend::layouts::product::related-products</w:hook>
+                                </w:slot>
+                                <w:slot id="product-bestsellers"
+                                        name="热销商品"
+                                        accept="bestsellers,product-carousel"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="div"
+                                        class="product-detail-layout__related-slot product-detail-layout__related-slot--bestsellers">
+                                    <w:hook>WeShop_Product::frontend::layouts::product::bestsellers</w:hook>
+                                </w:slot>
+                                <w:slot id="product-recently-viewed"
+                                        name="最近浏览"
+                                        accept="recently-viewed,product-carousel"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="div"
+                                        class="product-detail-layout__related-slot product-detail-layout__related-slot--recently-viewed">
+                                    <w:hook>WeShop_Product::frontend::layouts::product::recently-viewed</w:hook>
+                                </w:slot>
+                                <w:slot id="product-cross-sell"
+                                        name="搭配推荐"
+                                        accept="cross-sell,up-sell,product-carousel"
+                                        multiple="true"
+                                        position="content"
+                                        wrapper="div"
+                                        class="product-detail-layout__related-slot product-detail-layout__related-slot--cross-sell">
+                                    <w:hook>WeShop_Product::frontend::layouts::product::cross-sell</w:hook>
+                                </w:slot>
                             </div>
-                            <span class="product-detail-layout__placeholder-text"><lang>相关产品推荐区域 - 拖拽推荐部件到此处</lang></span>
-                        </div>
+                        </w:hook>
+                        <w:hook>WeShop_Product::frontend::layouts::product::related-after</w:hook>
                     </div>
-                    <w:hook>Weline_Theme::frontend::layouts::product::related-after</w:hook>
-                </w:slot>
+                </section>
             </if>
+
+            </w:slot>
 
             <w:hook>Weline_Theme::frontend::layouts::product::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -213,9 +253,10 @@ $this->assign('meta', $meta);
 
     .product-detail-layout__container {
         width: 100%;
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
     }
 
     .product-detail-layout__wrapper {
@@ -249,9 +290,15 @@ $this->assign('meta', $meta);
 
     .product-detail-layout__tabs-container {
         width: 100%;
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__tabs-slot {
+        width: 100%;
+        min-width: 0;
     }
 
     /* ---- 相关产品区域 ---- */
@@ -261,9 +308,77 @@ $this->assign('meta', $meta);
 
     .product-detail-layout__related-container {
         width: 100%;
-        max-width: var(--layout-max-width, 1600px);
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
         margin: 0 auto;
-        padding: 0 var(--spacing-4, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__recommendations-stack {
+        width: 100%;
+    }
+
+    .product-detail-layout__related-slot {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .product-detail-layout__related-slot > .widget-wrapper {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .product-detail-layout__related-slot > .widget-wrapper > .widget-products {
+        max-width: none !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    .product-detail-layout__related .widget-products,
+    .product-detail-layout__related .widget-wrapper > .widget-products,
+    .product-detail-layout__main ~ .widget-products,
+    .weline-main-content > .widget-products {
+        width: 100%;
+        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
+        margin: 0 auto;
+        padding: var(--spacing-6, 2rem) var(--weline-layout-content-padding-inline, var(--spacing-4, 1.5rem));
+        box-sizing: border-box;
+    }
+
+    .product-detail-layout__related .widget-products .products-grid,
+    .product-detail-layout__main ~ .widget-products .products-grid,
+    .weline-main-content > .widget-products .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: var(--spacing-4, 1rem);
+        width: 100%;
+    }
+
+    .product-detail-layout__related .widget-products .product-card,
+    .product-detail-layout__main ~ .widget-products .product-card,
+    .weline-main-content > .widget-products .product-card {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        overflow: hidden;
+        border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color-subtle);
+        border-radius: var(--radius-lg, 12px);
+        background: var(--weline-layout-surface-primary);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+
+    /*
+     * Some product-detail render paths currently nest the global footer
+     * under the detail container in the final DOM. When that happens,
+     * force the footer to break out of the centered container and span
+     * the viewport width so the visible layout stays correct.
+     */
+    .product-detail-layout__container > .weline-footer,
+    .product-detail-layout__container > footer.font-display {
+        width: 100vw;
+        max-width: 100vw;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
     }
 
     /* ---- 占位符 ---- */
@@ -307,7 +422,7 @@ $this->assign('meta', $meta);
         }
 
         .product-detail-layout__container {
-            padding: 0 var(--spacing-3, 0.75rem);
+            padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-3, 0.75rem));
         }
 
         .product-detail-layout__wrapper {
@@ -321,11 +436,12 @@ $this->assign('meta', $meta);
 
         .product-detail-layout__tabs-container,
         .product-detail-layout__related-container {
-            padding: 0 var(--spacing-3, 0.75rem);
+            padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-3, 0.75rem));
         }
     }
     </style>
 
     <!-- 编辑模式脚本由 ThemeEditor 控制器注入 -->
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

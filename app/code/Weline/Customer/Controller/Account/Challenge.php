@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller\Account;
 
-use WeShop\Auth\Model\PendingAuthChallenge;
-use WeShop\Customer\Service\CustomerWebAuthService;
+use Weline\Customer\Api\CustomerLoginChallengeHandlerInterface;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\View\Template;
 
 class Challenge extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account_auth';
+    protected ?string $layoutType = 'account.auth';
 
     public function __construct(
         private readonly Template $template,
-        private readonly CustomerWebAuthService $customerWebAuthService
+        private readonly CustomerLoginChallengeHandlerInterface $challengeHandler
     ) {
     }
 
@@ -23,22 +23,19 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
     {
         $challengeToken = trim((string) ($this->request->getParam('challenge_token') ?? ''));
         if ($challengeToken === '') {
-            $this->getMessageManager()->addError(__('The login challenge token is missing.'));
+            MessageManager::error((string)__('缺少登录验证令牌。'));
             return $this->redirect('/customer/account/login');
         }
 
-        $challenge = $this->customerWebAuthService->getChallenge($challengeToken);
-        if (!$challenge) {
-            $this->getMessageManager()->addError(__('The login challenge is invalid or has expired.'));
+        $expiresAt = $this->challengeHandler->getChallengeExpiresAt($challengeToken);
+        if ($expiresAt === null) {
+            MessageManager::error((string)__('登录验证已失效或已过期。'));
             return $this->redirect('/customer/account/login');
         }
 
         $this->assign('challenge_token', $challengeToken);
-        $this->assign('expires_at', (int) $challenge->getData(PendingAuthChallenge::schema_fields_EXPIRES_AT));
-        $this->assign('title', __('Two-Factor Verification'));
-
-        $this->assign('error_message', MessageManager::get_error_message());
-        $this->assign('success_message', MessageManager::get_success_message());
+        $this->assign('expires_at', $expiresAt);
+        $this->assign('title', __('两步验证'));
 
         return $this->fetch('Weline_Customer::templates/frontend/account/challenge.phtml');
     }
@@ -49,24 +46,79 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
         $code = trim((string) ($this->request->getPost('code') ?? ''));
 
         if ($challengeToken === '' || $code === '') {
-            $this->getMessageManager()->addError(__('Please enter the verification code.'));
-            return $this->redirect('/customer/account/challenge?challenge_token=' . urlencode($challengeToken));
+            return $this->respondFailure(
+                (string)__('请输入验证码。'),
+                $challengeToken
+            );
         }
 
         try {
-            $result = $this->customerWebAuthService->completeChallenge($challengeToken, $code);
-            $this->getMessageManager()->addSuccess(__('Two-factor verification succeeded.'));
-            return $this->redirect($this->normalizeRedirectPath((string) ($result['redirect_url'] ?? 'customer/account')));
+            $result = $this->challengeHandler->completeChallenge($challengeToken, $code);
+            return $this->respondSuccess(
+                (string)__('两步验证成功。'),
+                (string)($result['redirect_url'] ?? 'customer/account')
+            );
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $throwable) {
-            $this->getMessageManager()->addError($throwable->getMessage());
-            return $this->redirect('/customer/account/challenge?challenge_token=' . urlencode($challengeToken));
+            return $this->respondFailure($throwable->getMessage(), $challengeToken);
         }
+    }
+
+    private function respondSuccess(string $message, string $redirectUrl): string
+    {
+        $redirect = $this->normalizeRedirectPath($redirectUrl);
+        if ($this->expectsJsonResponse()) {
+            return $this->fetchJson([
+                'success' => true,
+                'status' => 'authenticated',
+                'message' => $message,
+                'redirect' => $redirect,
+            ]);
+        }
+
+        MessageManager::success($message);
+        return $this->redirect($redirect);
+    }
+
+    private function respondFailure(string $message, string $challengeToken): string
+    {
+        if ($this->expectsJsonResponse()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $message,
+            ]);
+        }
+
+        MessageManager::error($message);
+        return $this->redirect('/customer/account/challenge?challenge_token=' . rawurlencode($challengeToken));
+    }
+
+    private function expectsJsonResponse(): bool
+    {
+        if ($this->request->isAjax()) {
+            return true;
+        }
+
+        $acceptHeader = strtolower((string)($this->request->getHeader('Accept') ?? ''));
+        return str_contains($acceptHeader, 'application/json');
     }
 
     private function normalizeRedirectPath(string $redirectUrl): string
     {
-        $normalized = ltrim(trim($redirectUrl), '/');
-        if ($normalized === '' || $normalized === 'customer/account/index' || $normalized === 'weshop/customer/account/index') {
+        $redirectUrl = trim($redirectUrl);
+        if ($redirectUrl === '') {
+            return '/customer/account';
+        }
+
+        if ((bool)preg_match('/^[a-z][a-z0-9+.-]*:/i', $redirectUrl)) {
+            $path = trim((string)(parse_url($redirectUrl, PHP_URL_PATH) ?? ''), '/');
+            $query = trim((string)(parse_url($redirectUrl, PHP_URL_QUERY) ?? ''));
+            $redirectUrl = $path . ($query !== '' ? '?' . $query : '');
+        }
+
+        $normalized = ltrim($redirectUrl, '/');
+        if ($normalized === '' || $normalized === 'customer/account/index') {
             return '/customer/account';
         }
 

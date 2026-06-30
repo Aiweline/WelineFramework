@@ -66,14 +66,8 @@
                                         <td>
                                             <a href="<?= $this->getUrl('*/backend/method/edit', ['code' => $method->getData('code')]) ?>" 
                                                class="btn btn-sm btn-primary">
-                                                <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                                                <i class="mdi mdi-eye-outline"></i> <?= __('查看配置') ?>
                                             </a>
-                                            <button type="button" 
-                                                    class="btn btn-sm btn-<?= $method->isActive() ? 'warning' : 'success' ?> weline-payment-toggle-status"
-                                                    data-code="<?= htmlspecialchars($method->getData('code')) ?>">
-                                                <i class="mdi mdi-<?= $method->isActive() ? 'close' : 'check' ?>"></i> 
-                                                <?= $method->isActive() ? __('禁用') : __('启用') ?>
-                                            </button>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -85,56 +79,3 @@
         </div>
     </div>
 </div>
-
-<script>
-(function() {
-    'use strict';
-    
-    function performToggle(code) {
-        var url = '<?= $this->getUrl("*/backend/method/toggle") ?>';
-        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'code=' + encodeURIComponent(code) };
-        var req = window.Weline.Api.request(url, opts);
-        req.then(function(res) {
-            var data = (res && res.data) || res;
-            if (data.success) {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.success('<?= __('状态已切换') ?>');
-                }
-                setTimeout(function() { location.reload(); }, 1500);
-            } else {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error(data.message || '<?= __('操作失败') ?>');
-                }
-            }
-        })
-        .catch(function(error) {
-            console.error('Error:', error);
-            if (typeof BackendToast !== 'undefined') {
-                BackendToast.error('<?= __('操作失败，请重试') ?>');
-            }
-        });
-    }
-    
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.weline-payment-toggle-status').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                var code = this.getAttribute('data-code');
-                
-                if (typeof AdminConfirm !== 'undefined') {
-                    AdminConfirm.show({
-                        title: '<?= __('确认切换状态') ?>',
-                        message: '<?= __('确定要切换支付方式状态吗？') ?>',
-                        confirmText: '<?= __('确定切换') ?>',
-                        cancelText: '<?= __('取消') ?>',
-                        onConfirm: function() {
-                            performToggle(code);
-                        }
-                    });
-                } else {
-                    performToggle(code);
-                }
-            });
-        });
-    });
-})();
-</script>

@@ -14,6 +14,29 @@ const CustomerServiceConsole = (function() {
         heartbeatInterval: null,
         lastMessageId: 0
     };
+
+    function notify(type, message) {
+        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+            window.BackendToast[type](message);
+            return;
+        }
+
+        if (window.BackendToast && typeof window.BackendToast.info === 'function') {
+            window.BackendToast.info(message);
+            return;
+        }
+
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+
+    function confirmAction(message, options) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(message, options || {});
+        }
+
+        console.warn('[Weline CustomerService] BackendConfirm is unavailable; action cancelled.');
+        return Promise.resolve(false);
+    }
     
     /**
      * 初始化
@@ -47,6 +70,35 @@ const CustomerServiceConsole = (function() {
             if (e.target.classList.contains('btn-send') || e.target.closest('.btn-send')) {
                 e.preventDefault();
                 sendMessage();
+            }
+
+            const assignButton = e.target.closest('[data-assign-session-id]');
+            if (assignButton) {
+                e.preventDefault();
+                const sessionId = normalizePositiveInt(assignButton.getAttribute('data-assign-session-id'));
+                if (sessionId > 0) {
+                    assignSession(sessionId);
+                }
+                return;
+            }
+
+            const sessionItem = e.target.closest('[data-load-session-id]');
+            if (sessionItem) {
+                e.preventDefault();
+                const sessionId = normalizePositiveInt(sessionItem.getAttribute('data-load-session-id'));
+                if (sessionId > 0) {
+                    loadSession(sessionId);
+                }
+                return;
+            }
+
+            const closeButton = e.target.closest('[data-close-session-id]');
+            if (closeButton) {
+                e.preventDefault();
+                const sessionId = normalizePositiveInt(closeButton.getAttribute('data-close-session-id'));
+                if (sessionId > 0) {
+                    closeSession(sessionId);
+                }
             }
         });
         
@@ -91,16 +143,16 @@ const CustomerServiceConsole = (function() {
         if (waitingList) {
             if (waitingSessions && waitingSessions.length > 0) {
                 waitingList.innerHTML = waitingSessions.map(session => `
-                    <div class="session-item waiting" data-session-id="${session.session_id}">
+                    <div class="session-item waiting" data-session-id="${normalizePositiveInt(session.session_id)}">
                         <div class="session-header">
-                            <span class="session-id">#${session.session_id}</span>
+                            <span class="session-id">#${normalizePositiveInt(session.session_id)}</span>
                             <span class="session-status badge-waiting">${__('等待中')}</span>
                         </div>
                         <div class="session-preview">
                             <p class="last-message">${session.last_message ? escapeHtml(session.last_message.substring(0, 50)) : __('暂无消息')}</p>
                         </div>
                         <div class="session-actions">
-                            <button class="btn-assign" onclick="assignSession(${session.session_id})">
+                            <button class="btn-assign" data-assign-session-id="${normalizePositiveInt(session.session_id)}">
                                 ${__('接单')}
                             </button>
                         </div>
@@ -116,11 +168,11 @@ const CustomerServiceConsole = (function() {
         if (mySessionsList) {
             if (sessions && sessions.length > 0) {
                 mySessionsList.innerHTML = sessions.map(session => `
-                    <div class="session-item ${session.unread_count > 0 ? 'unread' : ''} ${session.session_id === state.currentSessionId ? 'active' : ''}" 
-                         data-session-id="${session.session_id}"
-                         onclick="loadSession(${session.session_id})">
+                    <div class="session-item ${session.unread_count > 0 ? 'unread' : ''} ${normalizePositiveInt(session.session_id) === state.currentSessionId ? 'active' : ''}"
+                         data-session-id="${normalizePositiveInt(session.session_id)}"
+                         data-load-session-id="${normalizePositiveInt(session.session_id)}">
                         <div class="session-header">
-                            <span class="session-id">#${session.session_id}</span>
+                            <span class="session-id">#${normalizePositiveInt(session.session_id)}</span>
                             ${session.unread_count > 0 ? `<span class="unread-badge">${session.unread_count}</span>` : ''}
                         </div>
                         <div class="session-preview">
@@ -139,6 +191,11 @@ const CustomerServiceConsole = (function() {
      * 加载会话
      */
     window.loadSession = async function(sessionId) {
+        sessionId = normalizePositiveInt(sessionId);
+        if (sessionId <= 0) {
+            return;
+        }
+
         if (state.currentSessionId === sessionId) {
             return;
         }
@@ -180,6 +237,7 @@ const CustomerServiceConsole = (function() {
      * 渲染聊天区域
      */
     function renderChatArea(sessionId, messages) {
+        sessionId = normalizePositiveInt(sessionId);
         const container = document.getElementById('chat-container');
         
         container.innerHTML = `
@@ -188,7 +246,7 @@ const CustomerServiceConsole = (function() {
                     <h3>${__('会话')} #${sessionId}</h3>
                 </div>
                 <div class="chat-header-actions">
-                    <button class="btn-close-session" onclick="closeSession(${sessionId})">
+                    <button class="btn-close-session" data-close-session-id="${sessionId}">
                         ${__('关闭会话')}
                     </button>
                 </div>
@@ -209,7 +267,7 @@ const CustomerServiceConsole = (function() {
         
         // 更新最后一条消息ID
         if (messages.length > 0) {
-            state.lastMessageId = messages[messages.length - 1].message_id;
+            state.lastMessageId = normalizePositiveInt(messages[messages.length - 1].message_id);
         }
     }
     
@@ -222,7 +280,7 @@ const CustomerServiceConsole = (function() {
         const time = formatTime(message.created_at);
         
         return `
-            <div class="message-item ${isAgent ? 'agent' : 'customer'}" data-message-id="${message.message_id}">
+            <div class="message-item ${isAgent ? 'agent' : 'customer'}" data-message-id="${normalizePositiveInt(message.message_id)}">
                 <div class="message-bubble">
                     <p class="message-content">${escapeHtml(content)}</p>
                 </div>
@@ -284,11 +342,11 @@ const CustomerServiceConsole = (function() {
                 // 刷新会话列表
                 refreshSessions();
             } else {
-                alert(data.message || __('发送失败'));
+                notify('error', data.message || __('发送失败'));
             }
         } catch (error) {
             console.error('Failed to send message:', error);
-            alert(__('发送失败，请稍后重试'));
+            notify('error', __('发送失败，请稍后重试'));
         } finally {
             input.disabled = false;
             if (sendButton) {
@@ -319,14 +377,24 @@ const CustomerServiceConsole = (function() {
         scrollToBottom();
         
         // 更新最后一条消息ID
-        state.lastMessageId = message.message_id;
+        state.lastMessageId = normalizePositiveInt(message.message_id);
     }
     
     /**
      * 分配会话
      */
     window.assignSession = async function(sessionId) {
-        if (!confirm(__('确定要接单此会话吗？'))) {
+        sessionId = normalizePositiveInt(sessionId);
+        if (sessionId <= 0) {
+            return;
+        }
+
+        if (!(await confirmAction(__('确定要接单此会话吗？'), {
+            title: __('确认接单'),
+            type: 'warning',
+            confirmText: __('接单'),
+            cancelText: __('取消')
+        }))) {
             return;
         }
         
@@ -350,11 +418,11 @@ const CustomerServiceConsole = (function() {
                 // 加载会话
                 loadSession(sessionId);
             } else {
-                alert(data.message || __('分配失败'));
+                notify('error', data.message || __('分配失败'));
             }
         } catch (error) {
             console.error('Failed to assign session:', error);
-            alert(__('分配失败，请稍后重试'));
+            notify('error', __('分配失败，请稍后重试'));
         }
     };
     
@@ -362,7 +430,17 @@ const CustomerServiceConsole = (function() {
      * 关闭会话
      */
     window.closeSession = async function(sessionId) {
-        if (!confirm(__('确定要关闭此会话吗？'))) {
+        sessionId = normalizePositiveInt(sessionId);
+        if (sessionId <= 0) {
+            return;
+        }
+
+        if (!(await confirmAction(__('确定要关闭此会话吗？'), {
+            title: __('确认关闭'),
+            type: 'warning',
+            confirmText: __('关闭'),
+            cancelText: __('取消')
+        }))) {
             return;
         }
         
@@ -398,11 +476,11 @@ const CustomerServiceConsole = (function() {
                 state.currentSessionId = null;
                 stopMessagePolling();
             } else {
-                alert(data.message || __('关闭失败'));
+                notify('error', data.message || __('关闭失败'));
             }
         } catch (error) {
             console.error('Failed to close session:', error);
-            alert(__('关闭失败，请稍后重试'));
+            notify('error', __('关闭失败，请稍后重试'));
         }
     };
     
@@ -541,6 +619,11 @@ const CustomerServiceConsole = (function() {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function normalizePositiveInt(value) {
+        const parsed = parseInt(value, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
     }
     
     /**

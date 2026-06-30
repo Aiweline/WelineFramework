@@ -204,8 +204,11 @@ HTML;
         .back-link {
             display: inline-block;
             padding: 10px 30px;
+            border: 0;
             background: #333;
             color: #fff;
+            cursor: pointer;
+            font: inherit;
             text-decoration: none;
             border-radius: 5px;
         }
@@ -217,8 +220,23 @@ HTML;
         <p class="error-code">{$code}</p>
         <h1 class="error-title">{$title}</h1>
         <p class="error-message">抱歉，服务器发生了错误。请稍后重试。</p>
-        <a href="javascript:history.back()" class="back-link">返回</a>
+        <button type="button" class="back-link" data-action="go-back">返回</button>
     </div>
+    <script>
+        document.addEventListener('click', function (event) {
+            var button = event.target.closest('[data-action="go-back"]');
+            if (!button) {
+                return;
+            }
+
+            if (window.history.length > 1) {
+                window.history.go(-1);
+                return;
+            }
+
+            window.location.href = '/';
+        });
+    </script>
 </body>
 </html>
 HTML;

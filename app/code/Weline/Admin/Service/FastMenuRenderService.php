@@ -40,7 +40,7 @@ final class FastMenuRenderService extends MenuRenderService
     {
         $sourceId = htmlspecialchars((string)($menu['source_id'] ?? ''));
         $icon = htmlspecialchars((string)($menu['icon'] ?? 'mdi mdi-circle'));
-        $title = __((string)($menu['source_name'] ?? ''));
+        $title = $this->translateMenuTitle((string)($menu['source_name'] ?? ''), (string)($menu['source_id'] ?? ''));
         $route = (string)($menu['route'] ?? '');
         $nodes = is_array($menu['nodes'] ?? null) ? $menu['nodes'] : [];
         $hasNodes = $nodes !== [];
@@ -59,7 +59,7 @@ final class FastMenuRenderService extends MenuRenderService
 
         $html = "<li data-source=\"{$sourceId}\">";
         if ($hasNodes) {
-            $html .= "<a href=\"javascript: void(0);\" data-source=\"{$sourceId}\" class=\"has-arrow waves-effect\">";
+            $html .= "<a href=\"#\" role=\"button\" data-source=\"{$sourceId}\" class=\"has-arrow waves-effect\" aria-expanded=\"false\">";
         } else {
             $menuUrl = htmlspecialchars($this->formatMenuUrl($menu));
             $html .= "<a href=\"{$menuUrl}\" data-source=\"{$sourceId}\" class=\"waves-effect\">";

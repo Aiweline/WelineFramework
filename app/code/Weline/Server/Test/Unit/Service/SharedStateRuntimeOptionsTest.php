@@ -19,23 +19,8 @@ class SharedStateRuntimeOptionsTest extends TestCase
         }
     }
 
-    public function testCliArgsOverrideInstanceAndEnvRuntime(): void
+    public function testCliArgsOverrideEnvRuntime(): void
     {
-        $this->writeInstanceFile('shared-state-cli', [
-            'shared_state' => [
-                'session' => [
-                    'host' => '127.0.0.10',
-                    'port' => 21001,
-                    'token_file_name' => 'session.instance.token',
-                ],
-                'memory' => [
-                    'host' => '127.0.0.11',
-                    'port' => 21002,
-                    'token_file_name' => 'memory.instance.token',
-                ],
-            ],
-        ]);
-
         $options = SharedStateRuntimeOptions::fromCliArgs(
             [
                 'worker.php',
@@ -78,7 +63,7 @@ class SharedStateRuntimeOptionsTest extends TestCase
         );
     }
 
-    public function testInstanceRuntimeFallsBackWhenCliArgsMissing(): void
+    public function testInstanceRuntimeFileIsIgnoredWhenCliArgsMissing(): void
     {
         $this->writeInstanceFile('shared-state-instance', [
             'shared_state' => [
@@ -111,16 +96,30 @@ class SharedStateRuntimeOptionsTest extends TestCase
                         'port' => 19972,
                         'token_file_name' => 'memory.env.token',
                     ],
+                    'shared_state' => [
+                        'runtime' => [
+                            'session' => [
+                                'host' => '127.0.0.30',
+                                'port' => 23001,
+                                'token_file_name' => 'session.runtime.token',
+                            ],
+                            'memory' => [
+                                'host' => '127.0.0.31',
+                                'port' => 23002,
+                                'token_file_name' => 'memory.runtime.token',
+                            ],
+                        ],
+                    ],
                 ],
             ]
         );
 
         self::assertSame(
-            ['host' => '127.0.0.20', 'port' => 22001, 'token_file_name' => 'session.instance.token'],
+            ['host' => '127.0.0.30', 'port' => 23001, 'token_file_name' => 'session.runtime.token'],
             $options->getSession()
         );
         self::assertSame(
-            ['host' => '127.0.0.21', 'port' => 22002, 'token_file_name' => 'memory.instance.token'],
+            ['host' => '127.0.0.31', 'port' => 23002, 'token_file_name' => 'memory.runtime.token'],
             $options->getMemory()
         );
     }

@@ -24,6 +24,7 @@ class MasterControlServer implements ControlPlaneServerInterface
 {
     /** 当前 Master 允许接入的实例编码 */
     private string $expectedInstanceCode = '';
+    private string $expectedControlToken = '';
 
     // ========== Worker 状态常量 ==========
 
@@ -120,6 +121,11 @@ class MasterControlServer implements ControlPlaneServerInterface
     public function setExpectedInstanceCode(string $instanceCode): void
     {
         $this->expectedInstanceCode = \trim($instanceCode);
+    }
+
+    public function setExpectedControlToken(string $controlToken): void
+    {
+        $this->expectedControlToken = \trim($controlToken);
     }
 
     public function setWindowsNativeSocketBridgeEnabled(bool $enabled): void
@@ -414,6 +420,16 @@ class MasterControlServer implements ControlPlaneServerInterface
         }
     }
 
+    private function isAuthorizedControlCommand(array $msg): bool
+    {
+        if ($this->expectedControlToken === '') {
+            return true;
+        }
+
+        $token = \trim((string)($msg['control_token'] ?? ''));
+        return $token !== '' && \hash_equals($this->expectedControlToken, $token);
+    }
+
     private function normalizeLifecyclePeerHost(string $peerName): string
     {
         $peerName = \trim($peerName);
@@ -479,6 +495,10 @@ class MasterControlServer implements ControlPlaneServerInterface
         }
         $parts = [];
         foreach ($payload as $k => $v) {
+            if ((string)$k === 'control_token') {
+                $parts[] = "{$k}=[redacted]";
+                continue;
+            }
             if (\is_array($v)) {
                 $parts[] = "{$k}=" . \json_encode($v, JSON_UNESCAPED_UNICODE);
             } else {
@@ -617,11 +637,21 @@ class MasterControlServer implements ControlPlaneServerInterface
         $data = @\fread($socket, 65536);
 
         // 连接断开判定：
-        // - fread=false: 读取错误
+        // - fread=false 且 feof=true: 读取失败且对端已关闭
         // - fread='' 且 feof=true: 对端已关闭（TCP FIN）
-        // 注意：非阻塞模式下 fread='' 可能只是暂时无数据，不应直接判定断连。
-        if ($data === false || ($data === '' && @\feof($socket))) {
-            $this->removeClient($clientId, $data === false ? 'read_error' : 'peer_eof');
+        // Windows 非阻塞 socket 上 fread=false 也可能只是 EAGAIN/WouldBlock；
+        // 此时不要摘除 IPC 客户端，否则 READY 连接会反复抖动。
+        if ($data === false) {
+            if (!@\feof($socket)) {
+                $this->flushBufferedNdjsonForClient($clientId);
+                return;
+            }
+            $this->removeClient($clientId, 'read_error');
+            return;
+        }
+
+        if ($data === '' && @\feof($socket)) {
+            $this->removeClient($clientId, 'peer_eof');
             return;
         }
 
@@ -674,6 +704,17 @@ class MasterControlServer implements ControlPlaneServerInterface
 
     private function dispatchDecodedControlMessage(int $clientId, array $msg): void
     {
+        if (($msg['type'] ?? '') === ControlMessage::TYPE_COMMAND && !$this->isAuthorizedControlCommand($msg)) {
+            $this->clients[$clientId]['role'] = self::ROLE_CONTROL;
+            $this->ipcLog("[IPC-Master] REJECT unauthorized control command from " . $this->formatClientTag($clientId));
+            $this->sendTo(
+                $clientId,
+                ControlMessage::commandResult(false, [], 'Unauthorized control command.')
+            );
+            $this->removeClient($clientId, 'control_auth_failed');
+            return;
+        }
+
         $this->classifyClientFromMessage($clientId, $msg);
         $type = $msg['type'] ?? 'unknown';
         $tag  = $this->formatClientTag($clientId);
@@ -722,6 +763,10 @@ class MasterControlServer implements ControlPlaneServerInterface
                     }
                 }
                 WlsLogger::getInstance()->appendLineForMaster($line);
+            }
+
+            if ($this->messageHandler) {
+                ($this->messageHandler)($msg, $clientId, $this);
             }
 
             return;
@@ -1036,6 +1081,24 @@ class MasterControlServer implements ControlPlaneServerInterface
     public function sendToRole(string $role, string $message): void
     {
         $this->broadcast($message, $role);
+    }
+
+    /**
+     * @return int[] IPC client IDs that accepted the outbound message.
+     */
+    public function sendToRoleAndCollectTargets(string $role, string $message): array
+    {
+        $targets = [];
+        foreach ($this->clients as $clientId => $client) {
+            if ($client['role'] !== $role) {
+                continue;
+            }
+            if ($this->sendTo($clientId, $message)) {
+                $targets[] = (int)$clientId;
+            }
+        }
+
+        return $targets;
     }
 
     /**

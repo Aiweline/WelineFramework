@@ -61,30 +61,113 @@ $pageSize = $this->getData('page_size') ?: 20;
     <?php endif; ?>
 </div>
 
+<?php
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
+?>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var orderApiPromise = null;
+    var cancelOrderConfirmMessage = <?= json_encode((string)__('确定要取消此订单吗？'), $jsonForScriptFlags) ?>;
+    var cancelOrderConfirmText = <?= json_encode((string)__('确定取消'), $jsonForScriptFlags) ?>;
+    var cancelOrderDismissText = <?= json_encode((string)__('保留订单'), $jsonForScriptFlags) ?>;
+    var cancelOrderFailedMessage = <?= json_encode((string)__('取消订单失败，请稍后重试'), $jsonForScriptFlags) ?>;
+
+    function getOrderApi() {
+        if (!orderApiPromise) {
+            orderApiPromise = Promise.resolve(window.Weline.Api.resource('order'));
+        }
+
+        return orderApiPromise;
+    }
+
+    function showOrderMessage(type, message) {
+        var toast = window.FrontendToast || window.BackendToast || null;
+        if (toast && typeof toast[type] === 'function') {
+            toast[type](message);
+            return;
+        }
+        if (type === 'error') {
+            console.error(message);
+        } else {
+            console.log(message);
+        }
+    }
+
+    function confirmCancelOrder(button, message) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(message);
+        }
+
+        return new Promise(function(resolve) {
+            var existing = document.querySelector('.cancel-order-confirm');
+            if (existing) {
+                existing.remove();
+            }
+
+            var panel = document.createElement('div');
+            panel.className = 'alert alert-warning mt-2 mb-0 cancel-order-confirm';
+
+            var text = document.createElement('span');
+            text.textContent = message;
+
+            var actions = document.createElement('span');
+            actions.className = 'd-inline-flex gap-2 ms-2';
+
+            var confirmButton = document.createElement('button');
+            confirmButton.type = 'button';
+            confirmButton.className = 'btn btn-sm btn-danger';
+            confirmButton.textContent = cancelOrderConfirmText;
+
+            var cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
+            cancelButton.className = 'btn btn-sm btn-outline-secondary';
+            cancelButton.textContent = cancelOrderDismissText;
+
+            confirmButton.addEventListener('click', function() {
+                panel.remove();
+                resolve(true);
+            });
+            cancelButton.addEventListener('click', function() {
+                panel.remove();
+                resolve(false);
+            });
+
+            actions.appendChild(confirmButton);
+            actions.appendChild(cancelButton);
+            panel.appendChild(text);
+            panel.appendChild(actions);
+            button.insertAdjacentElement('afterend', panel);
+        });
+    }
+
     // 取消订单
     document.querySelectorAll('.cancel-order').forEach(function(btn) {
         btn.addEventListener('click', function() {
             const orderId = this.getAttribute('data-order-id');
-            if (confirm('<?= __('确定要取消此订单吗？') ?>')) {
+            confirmCancelOrder(this, cancelOrderConfirmMessage).then(function(confirmed) {
+                if (!confirmed) {
+                    return;
+                }
                 // 发送取消请求
-                fetch('<?= $this->getUrl('checkout/frontend/order/cancel') ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'order_id=' + orderId
-                })
-                .then(response => response.json())
+                getOrderApi()
+                .then(OrderApi => OrderApi.cancel({order_id: parseInt(orderId, 10)}, {silent: true}))
                 .then(data => {
                     if (data.success) {
                         location.reload();
                     } else {
-                        alert(data.message);
+                        showOrderMessage('error', data.message || cancelOrderFailedMessage);
                     }
+                })
+                .catch(error => {
+                    showOrderMessage('error', (error && error.message) || cancelOrderFailedMessage);
                 });
-            }
+            });
         });
     });
 });

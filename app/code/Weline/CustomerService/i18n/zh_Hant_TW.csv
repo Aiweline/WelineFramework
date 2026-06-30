@@ -54,6 +54,17 @@
 设置语言失败：%{1},设置语言失败：%{1}
 客服消息翻译,客服消息翻译
 客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。,客服模块通过此事件请求翻译服务。事件数据包含待翻译文本、源语言、目标语言等。翻译模块可以监听此事件并提供翻译服务。
+"Unsupported customer service provider operation: %{1}","Unsupported customer service provider operation: %{1}"
+"Session and message content are required.","Session and message content are required."
+"Session ID is required.","Session ID is required."
+"Language code is required.","Language code is required."
+"Language updated.","Language updated."
+"Please enter a valid email address.","Please enter a valid email address."
+"Session token is required.","Session token is required."
+"Unable to send verification email. Please try again later.","Unable to send verification email. Please try again later."
+"Verification email has been sent.","Verification email has been sent."
+"Customer Service Query","Customer Service Query"
+"Provides frontend customer-service chat operations through the worker API.","Provides frontend customer-service chat operations through the worker API."
 "客服服务 - 邮箱绑定验证","客服服务 - 邮箱绑定验证"
 客服系统,客服系统
 客服服务,客服服务
@@ -61,8 +72,6 @@
 设置,设置
 收起,收起
 我的语言,我的语言
-简体中文,簡體中文
-繁體中文,繁體中文
 显示模式,显示模式
 仅显示译文,仅显示译文
 原文+译文,原文+译文
@@ -70,11 +79,12 @@
 欢迎使用客服服务！,欢迎使用客服服务！
 请输入您的问题，我们的客服将尽快为您解答。,请输入您的问题，我们的客服将尽快为您解答。
 输入消息...,输入消息...
-绑定邮箱,绑定邮箱
-绑定邮箱后，您可以收到客服回复的邮件通知。,绑定邮箱后，您可以收到客服回复的邮件通知。
-邮箱地址,邮箱地址
-请输入您的邮箱,请输入您的邮箱
-取消,取消
+接收客服回复与优惠通知,接收客服回复与优惠通知
+留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。,留下邮箱后，客服可将本次咨询的回复、报价进展和可用优惠发送到您的邮箱。
+仅用于本次客服咨询相关通知，不是简报订阅。,仅用于本次客服咨询相关通知，不是简报订阅。
+接收通知的邮箱,接收通知的邮箱
+请输入用于接收客服通知的邮箱,请输入用于接收客服通知的邮箱
+稍后再说,稍后再说
 发送验证邮件,发送验证邮件
 等待中,等待中
 暂无消息,暂无消息
@@ -86,9 +96,13 @@
 发送失败,发送失败
 发送失败，请稍后重试,发送失败，请稍后重试
 确定要接单此会话吗？,确定要接单此会话吗？
+确认接单,确认接单
+取消,取消
 分配失败,分配失败
 分配失败，请稍后重试,分配失败，请稍后重试
 确定要关闭此会话吗？,确定要关闭此会话吗？
+确认关闭,确认关闭
+关闭,关闭
 请选择一个会话开始聊天,请选择一个会话开始聊天
 关闭失败,关闭失败
 关闭失败，请稍后重试,关闭失败，请稍后重试
@@ -103,9 +117,11 @@
 分钟,分钟
 最长,最长
 秒,秒
-客服在线,客服在线
+欢迎使用客服服务,欢迎使用客服服务
+客服会话初始化失败，请稍后重试,客服会话初始化失败，请稍后重试
+鐎广垺婀囬崷銊у殠,鐎广垺婀囬崷銊у殠
 "AI 智能客服","AI 智能客服"
-客服离线,客服离线
+鐎广垺婀囩粋鑽ゅ殠,鐎广垺婀囩粋鑽ゅ殠
 请输入有效的邮箱地址,请输入有效的邮箱地址
 会话未初始化，请刷新页面重试,会话未初始化，请刷新页面重试
 验证邮件已发送，请查收您的邮箱,验证邮件已发送，请查收您的邮箱
@@ -155,6 +171,7 @@ ID,ID
 启用客服服务,启用客服服务
 启用,启用
 默认客服语言,默认客服语言
+简体中文,簡體中文
 English,English
 默认客户语言,默认客户语言
 "当没有客服人员在线时，可启用 AI 自动回复客户消息。","当没有客服人员在线时，可启用 AI 自动回复客户消息。"
@@ -188,7 +205,6 @@ English,English
 客服语言,客服语言
 创建时间,创建时间
 查看,查看
-关闭,关闭
 返回列表,返回列表
 会话信息,会话信息
 客服ID,客服ID

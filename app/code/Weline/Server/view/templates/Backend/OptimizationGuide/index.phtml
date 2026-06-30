@@ -23,7 +23,7 @@ $apiUrl = $this->getBackendUrl('*/backend/optimization-guide/api-data');
         <div class="alert alert-danger">
             <h5><i class="bi bi-exclamation-triangle me-2"></i><?= __('加载失败') ?></h5>
             <p id="error-message"></p>
-            <button class="btn btn-outline-danger" onclick="loadGuideData()">
+            <button class="btn btn-outline-danger" data-guide-action="load">
                 <i class="bi bi-arrow-clockwise"></i> <?= __('重试') ?>
             </button>
         </div>
@@ -58,7 +58,30 @@ $apiUrl = $this->getBackendUrl('*/backend/optimization-guide/api-data');
 const API_URL = '<?= $apiUrl ?>';
 
 // 页面加载时获取数据
-document.addEventListener('DOMContentLoaded', loadGuideData);
+document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('optimization-guide-container');
+    if (container) {
+        container.addEventListener('click', handleGuideClick);
+    }
+    loadGuideData();
+});
+
+function handleGuideClick(event) {
+    const trigger = event.target.closest('[data-guide-action]');
+    const container = document.getElementById('optimization-guide-container');
+    if (!trigger || !container || !container.contains(trigger)) {
+        return;
+    }
+
+    const action = trigger.dataset.guideAction;
+    if (action === 'load') {
+        loadGuideData();
+        return;
+    }
+    if (action === 'copy') {
+        copyText(decodeCopyText(trigger.dataset.copyText || ''));
+    }
+}
 
 async function loadGuideData() {
     showLoading();
@@ -143,7 +166,7 @@ function renderContent(data) {
                             <th><?= __('PHP 可执行文件') ?></th>
                             <td>
                                 <code class="user-select-all">${escapeHtml(php_info.binary)}</code>
-                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('${escapeJs(php_info.binary)}')">
+                                <button class="btn btn-sm btn-outline-secondary ms-2" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.binary || ''))}">
                                     <i class="bi bi-clipboard"></i>
                                 </button>
                             </td>
@@ -152,7 +175,7 @@ function renderContent(data) {
                             <th><?= __('php.ini 配置文件') ?></th>
                             <td>
                                 <code class="user-select-all">${escapeHtml(php_info.ini_path)}</code>
-                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('${escapeJs(php_info.ini_path)}')">
+                                <button class="btn btn-sm btn-outline-secondary ms-2" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.ini_path || ''))}">
                                     <i class="bi bi-clipboard"></i>
                                 </button>
                             </td>
@@ -161,7 +184,7 @@ function renderContent(data) {
                             <th><?= __('扩展目录') ?></th>
                             <td>
                                 <code class="user-select-all">${escapeHtml(php_info.ext_dir)}</code>
-                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('${escapeJs(php_info.ext_dir)}')">
+                                <button class="btn btn-sm btn-outline-secondary ms-2" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(php_info.ext_dir || ''))}">
                                     <i class="bi bi-clipboard"></i>
                                 </button>
                             </td>
@@ -265,7 +288,7 @@ function renderContent(data) {
                     <code class="user-select-all fs-5">php bin/w server:stop && php bin/w server:start</code>
                 </div>
                 
-                <button class="btn btn-primary" onclick="copyText('php bin/w server:stop && php bin/w server:start')">
+                <button class="btn btn-primary" data-guide-action="copy" data-copy-text="php%20bin%2Fw%20server%3Astop%20%26%26%20php%20bin%2Fw%20server%3Astart">
                     <i class="bi bi-clipboard"></i> <?= __('复制命令') ?>
                 </button>
                 
@@ -297,7 +320,7 @@ function renderInstallSteps(steps, phpInfo) {
                 <div class="mb-2">
                     <strong><?= __('文件位置：') ?></strong>
                     <code class="user-select-all">${escapeHtml(step.path)}</code>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="copyText('${escapeJs(step.path)}')">
+                    <button class="btn btn-sm btn-outline-secondary" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(step.path || ''))}">
                         <i class="bi bi-clipboard"></i>
                     </button>
                 </div>
@@ -309,7 +332,7 @@ function renderInstallSteps(steps, phpInfo) {
                 <div class="mb-2">
                     <strong><?= __('添加内容：') ?></strong>
                     <pre class="bg-dark text-light p-2 rounded user-select-all">${escapeHtml(step.content)}</pre>
-                    <button class="btn btn-sm btn-outline-primary" onclick="copyText(\`${escapeJs(step.content)}\`)">
+                    <button class="btn btn-sm btn-outline-primary" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(step.content || ''))}">
                         <i class="bi bi-clipboard"></i> <?= __('复制') ?>
                     </button>
                 </div>
@@ -321,7 +344,7 @@ function renderInstallSteps(steps, phpInfo) {
                 <div class="mb-2">
                     <strong><?= __('执行命令：') ?></strong>
                     <pre class="bg-dark text-light p-2 rounded user-select-all">${escapeHtml(step.command)}</pre>
-                    <button class="btn btn-sm btn-outline-primary" onclick="copyText('${escapeJs(step.command)}')">
+                    <button class="btn btn-sm btn-outline-primary" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(step.command || ''))}">
                         <i class="bi bi-clipboard"></i> <?= __('复制') ?>
                     </button>
                 </div>
@@ -335,7 +358,7 @@ function renderInstallSteps(steps, phpInfo) {
                     <div class="mb-2">
                         <span class="badge bg-info me-2">${escapeHtml(os)}</span>
                         <code class="user-select-all">${escapeHtml(cmd)}</code>
-                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('${escapeJs(cmd)}')">
+                        <button class="btn btn-sm btn-outline-secondary ms-2" data-guide-action="copy" data-copy-text="${encodeURIComponent(String(cmd || ''))}">
                             <i class="bi bi-clipboard"></i>
                         </button>
                     </div>
@@ -380,6 +403,14 @@ function escapeHtml(text) {
 function escapeJs(text) {
     if (text === null || text === undefined) return '';
     return String(text).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+}
+
+function decodeCopyText(text) {
+    try {
+        return decodeURIComponent(text);
+    } catch (error) {
+        return text;
+    }
 }
 
 function copyText(text) {

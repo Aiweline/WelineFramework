@@ -252,7 +252,15 @@ if ($search !== '') {
                 return !!result.isConfirmed;
             });
         }
-        return Promise.resolve(true);
+        var unavailableMessage = <?= json_encode((string)__('确认组件不可用，请刷新页面后重试'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR) ?>;
+        if (typeof BackendToast !== 'undefined' && BackendToast.warning) {
+            BackendToast.warning(unavailableMessage);
+        } else if (typeof Swal !== 'undefined' && Swal.fire) {
+            Swal.fire({text: unavailableMessage, icon: 'warning'});
+        } else {
+            console.warn(unavailableMessage);
+        }
+        return Promise.resolve(false);
     }
 
     document.addEventListener('submit', function (event) {

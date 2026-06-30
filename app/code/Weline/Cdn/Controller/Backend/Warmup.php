@@ -70,7 +70,7 @@ class Warmup extends BackendController
 
             // 搜索过滤
             if (!empty($search)) {
-                $query->where(WarmupUrl::schema_fields_URL, 'like', "%{$search}%");
+                $query->where(WarmupUrl::schema_fields_URL, "%{$search}%", 'LIKE');
             }
 
             // 模块过滤

@@ -52,4 +52,48 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('value="secure-payment" selected', $html);
         $this->assertStringContainsString('value="free-shipping" selected', $html);
     }
+
+    public function testRenderFieldPrefersUiTypeOverSemanticType(): void
+    {
+        $renderer = new ParamTypeRenderer();
+
+        $colorHtml = $renderer->renderField('accent', [
+            'type' => 'string',
+            'ui_type' => 'color',
+            'label' => 'Accent',
+        ], '#ff0000', 10);
+        $this->assertStringContainsString('w-param-color', $colorHtml);
+        $this->assertStringContainsString('type="color"', $colorHtml);
+
+        $imageHtml = $renderer->renderField('hero_image', [
+            'type' => 'string',
+            'ui_type' => 'media_image',
+            'label' => 'Hero Image',
+        ], '/media/banner.jpg', 10);
+        $this->assertStringContainsString('w-param-media-image', $imageHtml);
+        $this->assertStringContainsString('w-param-media-image-select', $imageHtml);
+    }
+
+    public function testProcessConfigPreservesExplicitEmptyString(): void
+    {
+        $renderer = new ParamTypeRenderer();
+
+        $processed = $renderer->processConfig([
+            'title' => [
+                'type' => 'string',
+                'label' => 'Title',
+                'default' => 'Default title',
+            ],
+            'subtitle' => [
+                'type' => 'string',
+                'label' => 'Subtitle',
+                'default' => 'Default subtitle',
+            ],
+        ], [
+            'title' => '',
+        ]);
+
+        $this->assertSame('', $processed['title']);
+        $this->assertSame('Default subtitle', $processed['subtitle']);
+    }
 }

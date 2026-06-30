@@ -22,14 +22,16 @@
 $meta = $this->getData('meta') ?? [];
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
 </head>
 <body>
+    <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy::body-start</w:hook>
     
@@ -53,10 +55,26 @@ $meta = $this->getData('meta') ?? [];
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::policy::content-before</w:hook>
             
+            <w:slot id="content"
+                    name="内容区"
+                    accept="layout-policy-content,layout-default-content,content,policy-content,cms-content,faq"
+                    reject="header,footer"
+                    multiple="true"
+                    position="content"
+                    class="policy-main__content-root-slot">
             <w:hook>Weline_Theme::frontend::layouts::policy::main-before</w:hook>
             <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> default" id="policy-main" data-layout="policy">
+                <w:slot id="policy-content"
+                        name="政策正文内容"
+                        accept="layout-policy-content,layout-cms-content,policy-content,content,faq"
+                        reject="header,footer"
+                        multiple="true"
+                        position="content"
+                        class="policy-main__content-slot">
                 <w:hook>Weline_Theme::frontend::layouts::policy::main-content-before</w:hook>
-                <w:hook>Weline_Theme::frontend::layouts::policy::main-content<else/>
+                <w:hook>
+                    Weline_Theme::frontend::layouts::policy::main-content
+                    <else/>
                     <if condition="meta.content">
                         {{meta.content}}
                     <else/>
@@ -258,19 +276,18 @@ $meta = $this->getData('meta') ?? [];
                                 
                                 <section class="policy-footer">
                                     <p class="policy-update-time">
-                                        <lang>最后更新时间：</lang><span id="policy-update-date"></span>
+                                        <lang>最后更新时间：</lang><span><?= date('Y-m-d') ?></span>
                                     </p>
-                                    <script>
-                                        document.getElementById('policy-update-date').textContent = new Date().toLocaleDateString('zh-CN');
-                                    </script>
                                 </section>
                             </div>
                         </div>
                     </if>
                 </w:hook>
                 <w:hook>Weline_Theme::frontend::layouts::policy::main-content-after</w:hook>
+                </w:slot>
             </main>
             <w:hook>Weline_Theme::frontend::layouts::policy::main-after</w:hook>
+            </w:slot>
             
             <w:hook>Weline_Theme::frontend::layouts::policy::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
@@ -294,29 +311,30 @@ $meta = $this->getData('meta') ?? [];
     .policy-main {
         width: 100%;
         flex: 1;
-        padding: 2rem 0;
+        padding: var(--weline-layout-spacing-xl, 2rem) 0;
     }
     
     .policy-default-content {
         width: 100%;
-        padding: 2rem 0 3rem;
+        padding: var(--weline-layout-spacing-xl, 2rem) 0 var(--weline-layout-spacing-2xl, 3rem);
     }
     
     .policy-header {
         text-align: left;
-        margin-bottom: 2rem;
+        margin-bottom: var(--weline-layout-spacing-xl, 2rem);
     }
     
     .policy-title {
-        font-size: 2rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
+        font-size: var(--weline-layout-font-size-3xl, 1.75rem);
+        font-weight: var(--weline-layout-font-weight-semibold, 600);
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
     
     .policy-description {
-        font-size: 0.95rem;
-        color: var(--color-text-secondary, #565959);
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        line-height: var(--weline-layout-line-height-relaxed, 1.75);
+        color: var(--weline-layout-text-secondary);
         margin: 0;
     }
     
@@ -325,16 +343,16 @@ $meta = $this->getData('meta') ?? [];
     }
     
     .policy-section .section-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
+        font-size: var(--weline-layout-font-size-xl, 1.25rem);
+        font-weight: var(--weline-layout-font-weight-semibold, 600);
+        color: var(--weline-layout-text-primary);
         margin: 0 0 0.75rem 0;
     }
     
     .policy-section .section-text {
-        font-size: 0.95rem;
-        color: var(--color-text-muted, #333);
-        line-height: 1.7;
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        color: var(--weline-layout-text-secondary);
+        line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin: 0 0 0.75rem 0;
     }
     
@@ -345,40 +363,40 @@ $meta = $this->getData('meta') ?? [];
     }
     
     .policy-list li {
-        font-size: 0.95rem;
-        color: var(--color-text-muted, #333);
-        line-height: 1.7;
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        color: var(--weline-layout-text-secondary);
+        line-height: var(--weline-layout-line-height-relaxed, 1.75);
         margin-bottom: 0.5rem;
     }
     
     .policy-footer {
-        margin-top: 3rem;
-        padding-top: 2rem;
-        border-top: 1px solid var(--color-border-light, #e0e0e0);
+        margin-top: var(--weline-layout-spacing-2xl, 3rem);
+        padding-top: var(--weline-layout-spacing-xl, 2rem);
+        border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-border-color);
         text-align: center;
     }
     
     .policy-update-time {
-        font-size: 0.875rem;
-        color: var(--color-text-muted, #888);
+        font-size: var(--weline-layout-font-size-sm, 0.875rem);
+        color: var(--weline-layout-text-tertiary);
         margin: 0;
     }
     
     @media (max-width: 768px) {
         .policy-main {
-            padding: 1.5rem 0;
+            padding: var(--weline-layout-spacing-lg, 1.5rem) 0;
         }
         
         .policy-default-content {
-            padding: 1.5rem 0 2rem;
+            padding: var(--weline-layout-spacing-lg, 1.5rem) 0 var(--weline-layout-spacing-xl, 2rem);
         }
         
         .policy-title {
-            font-size: 1.5rem;
+            font-size: var(--weline-layout-font-size-2xl, 1.5rem);
         }
         
         .policy-section .section-title {
-            font-size: 1.1rem;
+            font-size: var(--weline-layout-font-size-lg, 1.125rem);
         }
         
         .policy-list {
@@ -386,16 +404,17 @@ $meta = $this->getData('meta') ?? [];
         }
         
         .policy-list li {
-            font-size: 0.9rem;
+            font-size: var(--weline-layout-font-size-sm, 0.875rem);
             margin-bottom: 0.4rem;
         }
         
         .policy-footer {
-            margin-top: 2rem;
-            padding-top: 1.5rem;
+            margin-top: var(--weline-layout-spacing-xl, 2rem);
+            padding-top: var(--weline-layout-spacing-lg, 1.5rem);
         }
     }
     </style>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>
 

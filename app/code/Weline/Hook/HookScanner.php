@@ -13,6 +13,9 @@ namespace Weline\Hook;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Module\Service\ModuleScanService;
+use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\System\File\Scan;
 
 /**
  * Hook 扫描服务
@@ -20,6 +23,16 @@ use Weline\Framework\Extends\ExtendsData;
  */
 class HookScanner
 {
+    private ModuleScanService $moduleScanService;
+
+    public function __construct(
+        $moduleScanService = null
+    ) {
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService(new Scan());
+    }
+
     /**
      * 扫描所有模块的 Hook 规约信息
      *
@@ -41,18 +54,36 @@ class HookScanner
     {
         $result = [];
         $modules = Env::getInstance()->getModuleList();
+        $totalModules = 0;
+        foreach ($modules as $module) {
+            $basePath = $module['base_path'] ?? '';
+            if (!empty($basePath) && ($module['status'] ?? false)) {
+                $totalModules++;
+            }
+        }
+        $moduleIndex = 0;
 
         foreach ($modules as $moduleName => $module) {
             $basePath = $module['base_path'] ?? '';
             if (empty($basePath) || !($module['status'] ?? false)) {
                 continue;
             }
+            $moduleIndex++;
+            RegistryProgress::module('Hook spec scan module', $moduleIndex, $totalModules, (string)$moduleName, 'start');
 
             // 扫描模块的 hook.php 规约文件（位于模块根目录）
             $hooksConfig = $this->scanModuleHookConfig($moduleName, $basePath);
+            RegistryProgress::module(
+                'Hook spec scan module',
+                $moduleIndex,
+                $totalModules,
+                (string)$moduleName,
+                sprintf('done hook.php=%s hooks=%d', !empty($hooksConfig) ? 'yes' : 'no', count($hooksConfig ?? []))
+            );
             if (!empty($hooksConfig)) {
                 $result[$moduleName] = $hooksConfig;
             }
+            unset($hooksConfig);
         }
 
         return $result;
@@ -69,9 +100,9 @@ class HookScanner
     private function scanModuleHookConfig(string $moduleName, string $basePath): ?array
     {
         // 扫描模块根目录下的 hook.php 文件
-        $hookFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'hook.php';
+        $hookFile = $this->moduleScanService->resolveFile($basePath, 'hook.php');
         
-        if (!file_exists($hookFile)) {
+        if ($hookFile === null) {
             return null;
         }
 
@@ -101,12 +132,13 @@ class HookScanner
             if (!empty($docFileName)) {
                 // 检查 doc/hook/ 目录下的文档文件
                 // 将文档路径中的斜杠统一为系统目录分隔符，确保跨平台兼容
-                $normalizedDocFileName = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $docFileName);
-                $docFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'doc' . DIRECTORY_SEPARATOR . 'hook' . DIRECTORY_SEPARATOR . $normalizedDocFileName;
-                if (file_exists($docFile)) {
+                $docRelativePath = 'doc/hook/' . $docFileName;
+                $docFile = $this->moduleScanService->resolveFile($basePath, $docRelativePath);
+                if ($docFile !== null) {
                     $hasDoc = true;
                     $docPath = 'doc/hook/' . $docFileName;
                 } else {
+                    $expectedDocFile = $this->moduleScanService->buildPath($basePath, $docRelativePath);
                     // 配置了doc但文档不存在，抛出异常（在收集阶段就检测）
                     $errorMessage = sprintf(
                         "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
@@ -128,9 +160,9 @@ class HookScanner
                         $hookName,
                         $hookConfig['name'] ?? $hookName,
                         $docFileName,
-                        $docFile,
+                        $expectedDocFile,
                         $basePath,
-                        $docFile
+                        $expectedDocFile
                     );
                     throw new \RuntimeException($errorMessage);
                 }
@@ -147,6 +179,7 @@ class HookScanner
             ];
         }
 
+        unset($config);
         return !empty($result) ? $result : null;
     }
 
@@ -160,22 +193,36 @@ class HookScanner
     {
         $result = [];
         $modules = Env::getInstance()->getModuleList();
+        $totalModules = count($moduleNames);
+        $moduleIndex = 0;
 
         foreach ($moduleNames as $moduleName) {
+            $moduleIndex++;
             if (!isset($modules[$moduleName])) {
+                RegistryProgress::module('Hook spec scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip missing');
                 continue;
             }
             
             $module = $modules[$moduleName];
             $basePath = $module['base_path'] ?? '';
             if (empty($basePath) || !($module['status'] ?? false)) {
+                RegistryProgress::module('Hook spec scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip inactive');
                 continue;
             }
 
+            RegistryProgress::module('Hook spec scan module', $moduleIndex, $totalModules, (string)$moduleName, 'start');
             $hooksConfig = $this->scanModuleHookConfig($moduleName, $basePath);
+            RegistryProgress::module(
+                'Hook spec scan module',
+                $moduleIndex,
+                $totalModules,
+                (string)$moduleName,
+                sprintf('done hook.php=%s hooks=%d', !empty($hooksConfig) ? 'yes' : 'no', count($hooksConfig ?? []))
+            );
             if (!empty($hooksConfig)) {
                 $result[$moduleName] = $hooksConfig;
             }
+            unset($hooksConfig);
         }
 
         return $result;
@@ -209,6 +256,10 @@ class HookScanner
         // 提取 Hook 名前缀（第一个 :: 之前的部分）
         $parts = explode('::', $hookName, 2);
         $prefix = $parts[0] ?? '';
+
+        if ($this->isLegacyShortHookName($hookName, $moduleName)) {
+            return true;
+        }
 
         // 检查前缀是否以模块名开头
         if (!str_starts_with($prefix, $moduleName)) {
@@ -250,5 +301,22 @@ class HookScanner
         }
 
         return true;
+    }
+
+    private function isLegacyShortHookName(string $hookName, string $moduleName): bool
+    {
+        $parts = explode('::', $hookName);
+        if (count($parts) < 2) {
+            return false;
+        }
+
+        $prefix = $parts[0] ?? '';
+        if ($prefix === '' || !preg_match('/^[a-z][a-z0-9_-]*$/', $prefix)) {
+            return false;
+        }
+
+        $moduleShortName = strtolower((string)preg_replace('/^.*_/', '', $moduleName));
+
+        return strtolower($prefix) === $moduleShortName;
     }
 }

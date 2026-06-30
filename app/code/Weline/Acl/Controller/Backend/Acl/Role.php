@@ -74,7 +74,7 @@ class Role extends \Weline\Admin\Controller\BaseController
                 $postData = $this->request->getPost();
             }
             
-            $role_name = $postData['role_name'] ?? '';
+            $role_name = trim((string)($postData['role_name'] ?? ''));
             if (empty($role_name)) {
                 if ($this->request->isAjax()) {
                     return $this->jsonResponse(false, __('角色名不能为空！'));
@@ -85,9 +85,7 @@ class Role extends \Weline\Admin\Controller\BaseController
             }
             
             // 检查角色是否已存在（创建新实例避免状态污染；clearQuery 确保无残留条件导致误判）
-            /** @var \Weline\Acl\Model\Role $checkRole */
-            $checkRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
-            $existingRole = $checkRole->clearQuery()->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, $role_name)->find()->fetch();
+            $existingRole = $this->findRoleByName($role_name);
             if ($existingRole->getId()) {
                 if ($this->request->isAjax()) {
                     return $this->jsonResponse(false, __('角色已存在！'));
@@ -101,18 +99,24 @@ class Role extends \Weline\Admin\Controller\BaseController
                 // 创建新实例保存，避免状态污染
                 /** @var \Weline\Acl\Model\Role $newRole */
                 $newRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
-                $save_result = $newRole->setData($postData)
-                    ->save(true, \Weline\Acl\Model\Role::schema_fields_ROLE_NAME);
+                $save_result = $newRole->setData([
+                    \Weline\Acl\Model\Role::schema_fields_ROLE_NAME => $role_name,
+                    \Weline\Acl\Model\Role::schema_fields_ROLE_DESCRIPTION => trim((string)($postData['role_description'] ?? '')),
+                ])->save();
+                $savedRole = $newRole->getId() ? $newRole : $this->findRoleByName($role_name);
+                $savedRoleId = (int)($savedRole->getId() ?: (is_numeric($save_result) ? $save_result : 0));
                 
                 if ($this->request->isAjax()) {
-                    if ($save_result) {
-                        return $this->jsonResponse(true, __('角色创建成功！'));
+                    if ($savedRoleId > 0) {
+                        return $this->jsonResponse(true, __('角色创建成功！'), [
+                            'role_id' => $savedRoleId,
+                        ]);
                     } else {
                         return $this->jsonResponse(false, __('角色创建失败！'));
                     }
                 }
                 
-                if ($save_result) {
+                if ($savedRoleId > 0) {
                     $this->getMessageManager()->addSuccess(__('角色创建成功！'));
                 } else {
                     $this->getMessageManager()->addError(__('角色创建失败！'));
@@ -120,9 +124,9 @@ class Role extends \Weline\Admin\Controller\BaseController
             } catch (\Exception $exception) {
                 if ($this->request->isAjax()) {
                     $error_msg = $exception->getMessage();
-                    // 唯一约束错误：角色已被创建（可能由并发请求或重复提交导致），视为成功
-                    if (str_contains($error_msg, 'duplicate key') || str_contains($error_msg, 'Unique violation')) {
-                        return $this->jsonResponse(true, __('角色创建成功！'));
+                    $existingAfterFailure = $this->findRoleByName($role_name);
+                    if ($existingAfterFailure->getId()) {
+                        return $this->jsonResponse(false, __('角色已存在！'));
                     }
                     return $this->jsonResponse(false, $error_msg);
                 }
@@ -316,12 +320,22 @@ class Role extends \Weline\Admin\Controller\BaseController
      */
     private function jsonResponse(bool $success, string $message, array $data = []): string
     {
-        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-        return json_encode([
+        return $this->fetchJson([
             'success' => $success,
             'message' => $message,
+            'msg' => $message,
             'data' => $data,
-        ], JSON_UNESCAPED_UNICODE);
+        ]);
+    }
+
+    private function findRoleByName(string $roleName): \Weline\Acl\Model\Role
+    {
+        /** @var \Weline\Acl\Model\Role $role */
+        $role = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
+        return $role->clearQuery()
+            ->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, $roleName)
+            ->find()
+            ->fetch();
     }
 
     #[\Weline\Framework\Acl\Acl('Weline_Acl::acl_role_search', '角色搜索', '', '搜索角色列表')]

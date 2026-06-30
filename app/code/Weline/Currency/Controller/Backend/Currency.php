@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Currency\Controller\Backend;
 
 use Weline\Currency\Model\Currency as CurrencyModel;
+use Weline\Currency\Service\CurrencyLocalDescriptionService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -25,6 +26,7 @@ class Currency extends BackendController
      * @var CurrencyModel
      */
     private CurrencyModel $currencyModel;
+    private ?CurrencyLocalDescriptionService $localDescriptionService = null;
 
     /**
      * 构造函数
@@ -74,6 +76,7 @@ class Currency extends BackendController
     {
         $currency = clone $this->currencyModel->clear();
         $this->assign('currency', $currency);
+        $this->assignLocalDescriptionFormData($currency);
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('currency/backend/currency/postAdd'));
         return $this->fetch('form');
     }
@@ -91,6 +94,7 @@ class Currency extends BackendController
             return $this->redirect('currency/backend/currency/index');
         }
         $this->assign('currency', $currency);
+        $this->assignLocalDescriptionFormData($currency);
         $this->assign('action', $this->request->getUrlBuilder()->getBackendUrl('currency/backend/currency/postEdit', $this->request->getGet()));
         return $this->fetch('form');
     }
@@ -140,6 +144,11 @@ class Currency extends BackendController
                 ->setDecimalSeparator($this->request->getPost('decimal_separator', '.'))
                 ->setBaseCurrency(strtoupper($this->request->getPost('base_currency', 'CNY')))
                 ->save();
+
+            $this->localDescriptionService()->saveLocalNames(
+                $currency,
+                (array)$this->request->getPost('local_names', [])
+            );
             
             $this->getMessageManager()->addSuccess(__('保存成功！'));
             $this->redirect('currency/backend/currency/index');
@@ -182,7 +191,9 @@ class Currency extends BackendController
                 throw new \Exception(__('不能删除基准货币'));
             }
             
+            $currencyId = (int)$currency->getId();
             $currency->delete();
+            $this->localDescriptionService()->deleteLocalNames($currencyId);
             
             // 返回 JSON 响应（w-delete 组件需要）
             return $this->fetchJson([
@@ -198,6 +209,24 @@ class Currency extends BackendController
                 'msg' => __('删除失败: %{1}', $e->getMessage())
             ]);
         }
+    }
+
+    private function assignLocalDescriptionFormData(CurrencyModel $currency): void
+    {
+        $this->assign('currency_locales', $this->localDescriptionService()->getAvailableLocales());
+        $this->assign(
+            'currency_local_names',
+            $this->localDescriptionService()->getLocalNames((int)$currency->getId())
+        );
+    }
+
+    private function localDescriptionService(): CurrencyLocalDescriptionService
+    {
+        if ($this->localDescriptionService === null) {
+            $this->localDescriptionService = ObjectManager::getInstance(CurrencyLocalDescriptionService::class);
+        }
+
+        return $this->localDescriptionService;
     }
 }
 

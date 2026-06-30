@@ -31,6 +31,7 @@ class App extends BackendController
             $content = file_get_contents($pwaPath);
             // 替换相对路径为正确的资源路径（相对于当前URL）
             $content = str_replace('href="style.css"', 'href="./css"', $content);
+            $content = str_replace('src="jsQR.min.js"', 'src="./jsqr"', $content);
             $content = str_replace('src="app.js"', 'src="./js"', $content);
             $content = str_replace('src="qr-scanner.min.js"', 'src="./qr-scanner"', $content);
             
@@ -82,6 +83,21 @@ class App extends BackendController
             throw new \Weline\Framework\Http\ResponseTerminateException(200, $content, ['Content-Type' => 'application/javascript; charset=utf-8']);
         } else {
             throw new \Weline\Framework\Http\ResponseTerminateException(404, '// QR扫描器文件不存在', ['Content-Type' => 'application/javascript; charset=utf-8']);
+        }
+    }
+
+    /**
+     * 提供本地 jsQR 二维码解析库
+     */
+    public function jsqr()
+    {
+        $jsQrPath = __DIR__ . '/../../view/statics/twofa-app/jsQR.min.js';
+
+        if (file_exists($jsQrPath)) {
+            $content = file_get_contents($jsQrPath);
+            throw new \Weline\Framework\Http\ResponseTerminateException(200, $content, ['Content-Type' => 'application/javascript; charset=utf-8']);
+        } else {
+            throw new \Weline\Framework\Http\ResponseTerminateException(404, '// jsQR文件不存在', ['Content-Type' => 'application/javascript; charset=utf-8']);
         }
     }
 }

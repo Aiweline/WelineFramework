@@ -131,13 +131,13 @@ class Install implements InstallInterface
                 return;
             }
 
-            $allLocales = \Symfony\Component\Intl\Locales::getLocales();
             $insertData = [];
             $i18nModel = ObjectManager::getInstance(I18n::class);
+            $allLocales = $i18nModel->getAvailableLocaleCodes();
 
             foreach ($allLocales as $locale) {
                 try {
-                    $localeName = \Symfony\Component\Intl\Locales::getName($locale, 'en');
+                    $localeName = $i18nModel->getLocaleName($locale, 'en');
                 } catch (\Exception $e) {
                     if (defined('DEV') && DEV) {
                         w_log_warning("I18n: 无法获取locale '{$locale}' 的名称，跳过: " . $e->getMessage(), [], 'i18n');

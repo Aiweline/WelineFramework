@@ -15,9 +15,12 @@ namespace Weline\Server\Console\Server;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\System\Process\Processer;
+use Weline\Framework\Output\PrintInterface as OutputPrintInterface;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\CliServerService;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
@@ -83,12 +86,11 @@ class Listing extends CommandAbstract
         // 2. 获取所有 Weline Server 实例（通过 ServerInstanceManager）
         if ($typeFilter === null || $typeFilter === 'weline') {
             $manager = $this->getInstanceManager();
-            $allInfo = $manager->getAllInstanceInfo(false);
+            $allInfo = $manager->getAllPersistedInstanceInfo();
             $processInfoMap = $this->buildProcessInfoMap($allInfo);
             
             foreach ($allInfo as $name => $info) {
-                $runtimeStats = $manager->getRuntimeStatsForInstance($info, false);
-                $isRunning = $this->isInstanceRunning($info, $runtimeStats, $processInfoMap);
+                $isRunning = $this->isInstanceRunning($info, $processInfoMap);
                 
                 if ($runningOnly && !$isRunning) {
                     continue;
@@ -122,33 +124,29 @@ class Listing extends CommandAbstract
      */
     protected function buildProcessInfoMap(array $instances): array
     {
-        $pids = [];
-        foreach ($instances as $info) {
-            if ($info->masterPid > 0) {
-                $pids[$info->masterPid] = $info->masterPid;
-            }
-        }
-
-        return $pids === [] ? [] : Processer::batchGetProcessInfo(\array_values($pids));
+        return [];
     }
 
     /**
-     * @param array{instance_running: bool, workers: int, dispatchers: int, ports: int[]} $runtimeStats
      * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
      */
-    protected function isInstanceRunning(ServerInstanceInfo $info, array $runtimeStats, array $processInfoMap): bool
+    protected function isInstanceRunning(ServerInstanceInfo $info, array $processInfoMap): bool
     {
-        if ($runtimeStats['instance_running']) {
-            return true;
-        }
-
-        if ($info->masterPid <= 0) {
+        if ($info->controlPort <= 0) {
             return false;
         }
 
-        return (bool) ($processInfoMap[$info->masterPid]['exists'] ?? false);
+        $gateway = new IpcControlGateway();
+        $status = $gateway->getStatusBrief($info->name, 0.5);
+        return $status['success'] && (bool)($status['data']['running'] ?? false);
     }
-    
+
+    protected function isSharedDependencyService(ServiceInfo $service): bool
+    {
+        return $service->role === ControlMessage::ROLE_SESSION_SERVER
+            || $service->role === ControlMessage::ROLE_MEMORY_SERVER;
+    }
+
     /**
      * 格式化运行时长
      */
@@ -185,84 +183,157 @@ class Listing extends CommandAbstract
     }
     
     /**
-     * 显示简洁列表
+     * 显示详细列表
      */
     protected function showSimpleList(array $instances, bool $runningOnly): void
     {
+        $boxInnerWidth = 90;
+        $typeWidth = 5;
+        $statusWidth = \max(
+            $this->displayWidth((string) __('运行中')),
+            $this->displayWidth((string) __('已停止'))
+        );
+        $portWidth = 5;
+        $pidWidth = 7;
+        $uptimeWidth = 8;
+
         $this->printer->note(__(''));
-        $this->printer->note(__('┌──────────────────────────────────────────────────────────────────────────────────────┐'));
-        $this->printer->note(__('│                           服务器实例列表                                             │'));
-        $this->printer->note(__('├──────────────────────────────────────────────────────────────────────────────────────┤'));
-        
+        $this->printer->note('╭' . \str_repeat('─', $boxInnerWidth) . '╮');
+        $this->printer->note($this->renderBoxContent((string) __('服务器实例列表'), $boxInnerWidth, STR_PAD_BOTH));
+        $this->printer->note('├' . \str_repeat('─', $boxInnerWidth) . '┤');
+
         if (empty($instances)) {
-            $this->printer->note(__('│  没有找到任何服务器实例                                                               │'));
-            $this->printer->note(__('│  使用 php bin/w server:start [name] 启动 Weline Server                                │'));
-            $this->printer->note(__('│  使用 php bin/w server:start --cli 启动 CLI 服务器                                    │'));
-            $this->printer->note(__('└──────────────────────────────────────────────────────────────────────────────────────┘'));
+            $emptyText = $runningOnly ? __('没有找到运行中的服务器实例') : __('没有找到任何服务器实例');
+            $this->printer->note($this->renderBoxContent((string) $emptyText, $boxInnerWidth));
+            $this->printer->note($this->renderBoxContent((string) __('使用 php bin/w server:start [name] 启动 Weline Server'), $boxInnerWidth));
+            $this->printer->note($this->renderBoxContent((string) __('使用 php bin/w server:start --cli 启动 CLI 服务器'), $boxInnerWidth));
+            $this->printer->note('╰' . \str_repeat('─', $boxInnerWidth) . '╯');
             return;
         }
-        
+
+        $sampleType = $this->padDisplayWidth('[WLS]', $typeWidth);
+        $sampleStatus = $this->padDisplayWidth((string) __('运行中'), $statusWidth);
+        $samplePort = $this->padDisplayWidth('9502', $portWidth);
+        $samplePid = $this->padDisplayWidth('1234567', $pidWidth);
+        $sampleUptime = $this->padDisplayWidth('123d 12h', $uptimeWidth, STR_PAD_LEFT);
+        $rowFixedWidth = $this->displayWidth("● {$sampleType}  {$sampleStatus}  Port: {$samplePort}  PID: {$samplePid}  {$sampleUptime}") + 2;
+        $nameWidth = 12;
+        foreach ($instances as $name => $_status) {
+            $nameWidth = \max($nameWidth, $this->displayWidth((string) $name));
+        }
+        $nameWidth = \min($nameWidth, \max(12, $boxInnerWidth - $rowFixedWidth));
+
         $welineRunning = 0;
         $welineStopped = 0;
         $cliRunning = 0;
-        
+
         foreach ($instances as $name => $status) {
             $isRunning = ($status['status'] ?? '') === 'running' || ($status['is_running'] ?? false);
             $type = $status['type'] ?? 'weline';
-            
+
             if ($isRunning) {
-                $statusIcon = '●';
-                $statusText = __('运行中');
                 if ($type === 'cli') {
                     $cliRunning++;
                 } else {
                     $welineRunning++;
                 }
-            } else {
-                $statusIcon = '○';
-                $statusText = __('已停止');
+            } elseif ($type !== 'cli') {
                 $welineStopped++;
             }
-            
+
             $typeLabel = $type === 'cli' ? '[CLI]' : '[WLS]';
-            
-            $line = sprintf(
-                '│  %s %s %-12s  %s  Port: %-5s  PID: %-7s  %s',
-                $statusIcon,
-                $typeLabel,
-                $name,
-                $statusText,
-                $status['port'] ?? '-',
-                $status['pid'] ?? '-',
-                str_pad($status['running_time'] ?? '-', 12)
-            );
-            
-            $line = str_pad($line, 91) . '│';
-            $this->printer->note($line);
+            $statusIcon = $isRunning ? '●' : '○';
+            $statusIconColor = $isRunning ? OutputPrintInterface::SUCCESS : OutputPrintInterface::NOTE;
+            $statusText = $isRunning ? (string) __('运行中') : (string) __('已停止');
+            $statusColor = $isRunning ? OutputPrintInterface::SUCCESS : OutputPrintInterface::NOTE;
+            $statusColumn = $this->colorizeSegment($this->padDisplayWidth($statusText, $statusWidth), $statusColor);
+            $typeColumn = $this->padDisplayWidth($typeLabel, $typeWidth);
+            $nameColumn = $this->padDisplayWidth((string) $name, $nameWidth);
+            $portColumn = $this->padDisplayWidth((string) ($status['port'] ?? '-'), $portWidth);
+            $pidColumn = $this->padDisplayWidth((string) ($status['pid'] ?? '-'), $pidWidth);
+            $uptimeColumn = $this->padDisplayWidth((string) ($status['running_time'] ?? '-'), $uptimeWidth, STR_PAD_LEFT);
+            $plainStatusColumn = $this->padDisplayWidth($statusText, $statusWidth);
+            $rowPrefix = " {$typeColumn} {$nameColumn}  ";
+            $rowSuffix = "  Port: {$portColumn}  PID: {$pidColumn}  {$uptimeColumn}";
+            $plainRowContent = "{$statusIcon}{$rowPrefix}{$plainStatusColumn}{$rowSuffix}";
+            $rowPadding = \str_repeat(' ', \max(0, $boxInnerWidth - $this->displayWidth($plainRowContent)));
+
+            echo $this->colorizeSegment('│', OutputPrintInterface::NOTE)
+                . $this->colorizeSegment($statusIcon, $statusIconColor)
+                . $this->colorizeSegment($rowPrefix, OutputPrintInterface::NOTE)
+                . $statusColumn
+                . $this->colorizeSegment($rowSuffix . $rowPadding . '│', OutputPrintInterface::NOTE)
+                . PHP_EOL;
         }
-        
-        $this->printer->note(__('├──────────────────────────────────────────────────────────────────────────────────────┤'));
-        
-        $total = count($instances);
-        $totalRunning = $welineRunning + $cliRunning;
-        $summaryLine = '│  ' . __('总计：%{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}', [
-            'total' => $total,
+
+        $this->printer->note('├' . \str_repeat('─', $boxInnerWidth) . '┤');
+        $summaryLine = (string) __('总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}', [
+            'total' => \count($instances),
             'wrun' => $welineRunning,
             'wstop' => $welineStopped,
             'clirun' => $cliRunning,
         ]);
-        $summaryLine = \str_pad($summaryLine, 91) . '│';
-        $this->printer->note($summaryLine);
-        
-        $this->printer->note(__('└──────────────────────────────────────────────────────────────────────────────────────┘'));
+        $this->printer->note($this->renderBoxContent($summaryLine, $boxInnerWidth));
+        $this->printer->note('╰' . \str_repeat('─', $boxInnerWidth) . '╯');
         $this->printer->note(__(''));
-        $this->printer->note(__('[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器 (开发)'));
+        $this->printer->note(__('[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)'));
         $this->printer->note(__(''));
     }
-    
-    /**
-     * 显示详细列表
-     */
+
+    protected function renderBoxContent(string $content, int $width, int $padType = STR_PAD_RIGHT): string
+    {
+        return '│' . $this->padDisplayWidth($content, $width, $padType) . '│';
+    }
+
+    protected function padDisplayWidth(string $text, int $width, int $padType = STR_PAD_RIGHT): string
+    {
+        if ($width <= 0) {
+            return '';
+        }
+
+        $plainText = $text;
+        $displayWidth = $this->displayWidth($plainText);
+        if ($displayWidth > $width) {
+            if (\function_exists('mb_strimwidth')) {
+                $plainText = (string) \mb_strimwidth($plainText, 0, $width, '', 'UTF-8');
+            } else {
+                $plainText = \substr($plainText, 0, $width);
+            }
+            $displayWidth = $this->displayWidth($plainText);
+        }
+
+        $padding = $width - $displayWidth;
+        if ($padding <= 0) {
+            return $plainText;
+        }
+
+        return match ($padType) {
+            STR_PAD_LEFT => \str_repeat(' ', $padding) . $plainText,
+            STR_PAD_BOTH => \str_repeat(' ', intdiv($padding, 2)) . $plainText . \str_repeat(' ', $padding - intdiv($padding, 2)),
+            default => $plainText . \str_repeat(' ', $padding),
+        };
+    }
+
+    protected function displayWidth(string $text): int
+    {
+        $plainText = \preg_replace('/\e\[[\d;]*m/', '', $text) ?? $text;
+
+        if (\function_exists('mb_strwidth')) {
+            return \mb_strwidth($plainText, 'UTF-8');
+        }
+
+        return \strlen($plainText);
+    }
+
+    protected function colorizeSegment(string $text, string $color): string
+    {
+        if (\method_exists($this->printer, 'colorize')) {
+            return $this->printer->colorize($text, $color);
+        }
+
+        return $text;
+    }
+
     protected function showDetailedList(array $instances): void
     {
         if (empty($instances)) {

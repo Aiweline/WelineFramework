@@ -1,0 +1,12 @@
+---
+description: PHP 控制器用户提示必须使用 MessageManager 静态门面 + __()
+alwaysApply: true
+---
+
+# MessageManager 静态提示（强制）
+
+- **PHP 控制器**中面向用户的 Flash（成功 / 警告 / 错误）必须使用 **`Weline\Framework\Manager\MessageManager` 静态方法**，并与 **`__()`** 组合。
+- **推荐形态**：`MessageManager::warning(__('你已经登录了，请先退出登录。'));`、`MessageManager::error(...)`、`MessageManager::success(...)`。
+- **禁止**：`$this->getMessageManager()->addWarning()`、`addError()`、`addSuccess()` 等实例调用（除非仓库文档明文允许的极少数例外）。
+
+详见：`dev/ai/global-constraints.md`。

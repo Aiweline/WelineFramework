@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 
 class ThemePreviewContentRenderer
@@ -51,18 +52,22 @@ class ThemePreviewContentRenderer
         ThemeLayout::PAGE_TYPE_DEFAULT => ['default-content', 'content', 'main-content'],
     ];
 
+    private readonly ThemeLayoutVersionService $versionService;
+
     public function __construct(
         private readonly ThemeLayoutService $layoutService,
         private readonly DefaultLayoutSeeder $defaultLayoutSeeder,
         private readonly SlotRendererService $slotRendererService,
         private readonly ThemePageTypeResolver $pageTypeResolver,
+        ?ThemeLayoutVersionService $versionService = null,
     ) {
+        $this->versionService = $versionService ?? ObjectManager::getInstance(ThemeLayoutVersionService::class);
     }
 
     /**
      * @return array{content:string,meta:array,page_type:string,status:string,used_seed:bool}
      */
-    public function build(int $themeId, string $layoutType, string $status = ThemeLayout::STATUS_DRAFT): array
+    public function build(int $themeId, string $layoutType, string $status = ThemeLayout::STATUS_DRAFT, ?int $versionId = null): array
     {
         $baseLayoutType = $this->pageTypeResolver->extractBaseLayoutType($layoutType);
         if ($baseLayoutType === '') {
@@ -70,7 +75,18 @@ class ThemePreviewContentRenderer
         }
 
         $pageType = $this->pageTypeResolver->mapLayoutTypeToPageType($baseLayoutType);
-        [$layout, $resolvedPageType, $resolvedStatus, $usedSeed] = $this->resolvePreviewLayout($themeId, $pageType, $status);
+        $versionLayout = null;
+        if ($versionId !== null && $versionId > 0) {
+            $versionLayout = $this->versionService->getVersionSnapshot($themeId, $pageType, $versionId);
+            [$layout, $resolvedPageType, $resolvedStatus, $usedSeed] = [
+                $versionLayout ?? [],
+                $pageType,
+                'version',
+                false,
+            ];
+        } else {
+            [$layout, $resolvedPageType, $resolvedStatus, $usedSeed] = $this->resolvePreviewLayout($themeId, $pageType, $status);
+        }
         $orderedSlotIds = $this->collectOrderedSlotIds($layout);
 
         if (empty($orderedSlotIds)) {
@@ -83,7 +99,7 @@ class ThemePreviewContentRenderer
             ];
         }
 
-        $slotHtml = $this->renderSlots($themeId, $resolvedPageType, $resolvedStatus, $orderedSlotIds);
+        $slotHtml = $this->renderSlots($themeId, $resolvedPageType, $resolvedStatus, $orderedSlotIds, $versionLayout);
         [$meta, $consumedSlotIds] = $this->buildMetaFragments($baseLayoutType, $slotHtml);
         $content = $this->buildContentHtml($baseLayoutType, $orderedSlotIds, $slotHtml, $consumedSlotIds);
 
@@ -105,6 +121,17 @@ class ThemePreviewContentRenderer
             ? ThemeLayout::STATUS_PUBLISHED
             : ThemeLayout::STATUS_DRAFT;
 
+        if ($requestedStatus === ThemeLayout::STATUS_DRAFT) {
+            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+            if ($this->hasWidgets($draftLayout)) {
+                return [$draftLayout, $pageType, ThemeLayout::STATUS_DRAFT, false];
+            }
+
+            if ($this->hasEmptyCurrentRestoreVersion($themeId, $pageType)) {
+                return [[], $pageType, ThemeLayout::STATUS_DRAFT, false];
+            }
+        }
+
         foreach ($this->buildLookupCandidates($pageType, $requestedStatus) as [$candidatePageType, $candidateStatus]) {
             $layout = $this->layoutService->getFullLayout($themeId, $candidatePageType, $candidateStatus);
             if ($this->hasWidgets($layout)) {
@@ -122,6 +149,16 @@ class ThemePreviewContentRenderer
         }
 
         return [[], $pageType, $requestedStatus, $usedSeed];
+    }
+
+    private function hasEmptyCurrentRestoreVersion(int $themeId, string $pageType): bool
+    {
+        $currentVersion = $this->versionService->getCurrentVersion($themeId, $pageType);
+        if (!$currentVersion?->isRestoreType()) {
+            return false;
+        }
+
+        return !$this->hasWidgets($currentVersion->getSnapshotData());
     }
 
     /**
@@ -216,7 +253,7 @@ class ThemePreviewContentRenderer
      * @param string[] $orderedSlotIds
      * @return array<string,string>
      */
-    private function renderSlots(int $themeId, string $pageType, string $status, array $orderedSlotIds): array
+    private function renderSlots(int $themeId, string $pageType, string $status, array $orderedSlotIds, ?array $layoutData = null): array
     {
         $html = '';
         foreach ($orderedSlotIds as $slotId) {
@@ -224,7 +261,9 @@ class ThemePreviewContentRenderer
             $html .= '<div data-preview-slot="' . $slotIdEscaped . '" data-wslot="' . $slotIdEscaped . '"></div>';
         }
 
-        $processedHtml = $this->slotRendererService->processSlots($html, $themeId, $pageType, $status);
+        $processedHtml = $layoutData !== null
+            ? $this->slotRendererService->processSlotsWithLayout($html, $layoutData, false, $themeId)
+            : $this->slotRendererService->processSlots($html, $themeId, $pageType, $status);
 
         return $this->extractSlotHtml($processedHtml, $orderedSlotIds);
     }

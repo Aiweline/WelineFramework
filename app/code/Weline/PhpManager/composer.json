@@ -1,0 +1,26 @@
+{
+  "name": "weline/module-php-manager",
+  "description": "WLS Panel PHP profile manager",
+  "minimum-stability": "stable",
+  "type": "weline-module",
+  "require": {
+    "php": "^8.1",
+    "weline/module-backend": "*",
+    "weline/module-server": "*"
+  },
+  "authors": [
+    {
+      "name": "Weline",
+      "email": "aiweline@qq.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Weline\\PhpManager\\": ""
+    },
+    "psr-0": {
+      "Weline\\PhpManager\\": ""
+    }
+  },
+  "license": "MIT"
+}

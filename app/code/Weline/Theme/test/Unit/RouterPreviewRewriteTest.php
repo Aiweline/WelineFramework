@@ -37,4 +37,23 @@ class RouterPreviewRewriteTest extends TestCore
         $this->assertSame(11, (int)($request->getParams()['frontend_theme_id'] ?? 0));
         $this->assertSame('homepage', (string)$request->getParam('page_type', ''));
     }
+
+    public function testDefaultThemePublicProductsRouteFallsBackToProductListLayout(): void
+    {
+        self::initRequest('/products');
+
+        /** @var Request $request */
+        $request = ObjectManager::getInstance(Request::class);
+        $_SERVER['REQUEST_URI'] = '/products';
+
+        $path = 'products';
+        $rule = [];
+
+        Router::rewriteDefaultThemePublicPage($path, $rule);
+
+        $this->assertSame('theme/frontend/policy', $path);
+        $this->assertSame('product_list', (string)$request->getParam('layout_type', ''));
+        $this->assertSame('default', (string)$request->getParam('layout_option', ''));
+        $this->assertSame('products', (string)$request->getParam('theme_public_route', ''));
+    }
 }

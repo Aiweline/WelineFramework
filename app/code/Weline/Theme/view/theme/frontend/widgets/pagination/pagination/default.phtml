@@ -11,6 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["category", "search", "cms_page"]}
+ * @widget.supports {["layout-category-pagination","layout-product-list-pagination"]}
  * 
  * @param style {default="default",type="select",label="样式",options={default:"默认",simple:"简洁",minimal:"极简"}}
  * @param show_first_last {default=true,type="bool",label="显示首尾按钮"}
@@ -45,24 +46,24 @@ if ($totalPages <= 1) return; // 只有一页时不显示
 ?>
 
 <nav class="widget-pagination style-<?= htmlspecialchars($style) ?>" id="<?= $widgetId ?>" aria-label="<?= __('分页导航') ?>">
-    <ul class="pagination-list">
+    <ul class="w-pagination-list">
         <?php if ($showFirstLast && $currentPage > 1): ?>
-            <li class="page-item">
-                <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="page-link page-first" title="<?= __('第一页') ?>">
+            <li class="w-page-item">
+                <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="w-page-link page-first" title="<?= __('第一页') ?>">
                     <i class="ri-skip-back-line"></i>
                 </a>
             </li>
         <?php endif; ?>
         
         <?php if ($showPrevNext): ?>
-            <li class="page-item <?= $currentPage <= 1 ? 'disabled' : '' ?>">
+            <li class="w-page-item <?= $currentPage <= 1 ? 'w-disabled' : '' ?>">
                 <?php if ($currentPage > 1): ?>
-                    <a href="<?= htmlspecialchars($baseUrl . ($currentPage - 1)) ?>" class="page-link page-prev">
+                    <a href="<?= htmlspecialchars($baseUrl . ($currentPage - 1)) ?>" class="w-page-link page-prev">
                         <i class="ri-arrow-left-s-line"></i>
                         <span><?= htmlspecialchars($prevText) ?></span>
                     </a>
                 <?php else: ?>
-                    <span class="page-link page-prev">
+                    <span class="w-page-link page-prev">
                         <i class="ri-arrow-left-s-line"></i>
                         <span><?= htmlspecialchars($prevText) ?></span>
                     </span>
@@ -71,42 +72,42 @@ if ($totalPages <= 1) return; // 只有一页时不显示
         <?php endif; ?>
         
         <?php if ($startPage > 1): ?>
-            <li class="page-item">
-                <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="page-link">1</a>
+            <li class="w-page-item">
+                <a href="<?= htmlspecialchars($baseUrl . '1') ?>" class="w-page-link">1</a>
             </li>
             <?php if ($startPage > 2): ?>
-                <li class="page-item ellipsis"><span class="page-link">...</span></li>
+                <li class="w-page-item w-ellipsis"><span class="w-page-link">...</span></li>
             <?php endif; ?>
         <?php endif; ?>
         
         <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-            <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+            <li class="w-page-item <?= $i === $currentPage ? 'w-active' : '' ?>">
                 <?php if ($i === $currentPage): ?>
-                    <span class="page-link" aria-current="page"><?= $i ?></span>
+                    <span class="w-page-link" aria-current="page"><?= $i ?></span>
                 <?php else: ?>
-                    <a href="<?= htmlspecialchars($baseUrl . $i) ?>" class="page-link"><?= $i ?></a>
+                    <a href="<?= htmlspecialchars($baseUrl . $i) ?>" class="w-page-link"><?= $i ?></a>
                 <?php endif; ?>
             </li>
         <?php endfor; ?>
         
         <?php if ($endPage < $totalPages): ?>
             <?php if ($endPage < $totalPages - 1): ?>
-                <li class="page-item ellipsis"><span class="page-link">...</span></li>
+                <li class="w-page-item w-ellipsis"><span class="w-page-link">...</span></li>
             <?php endif; ?>
-            <li class="page-item">
-                <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="page-link"><?= $totalPages ?></a>
+            <li class="w-page-item">
+                <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="w-page-link"><?= $totalPages ?></a>
             </li>
         <?php endif; ?>
         
         <?php if ($showPrevNext): ?>
-            <li class="page-item <?= $currentPage >= $totalPages ? 'disabled' : '' ?>">
+            <li class="w-page-item <?= $currentPage >= $totalPages ? 'w-disabled' : '' ?>">
                 <?php if ($currentPage < $totalPages): ?>
-                    <a href="<?= htmlspecialchars($baseUrl . ($currentPage + 1)) ?>" class="page-link page-next">
+                    <a href="<?= htmlspecialchars($baseUrl . ($currentPage + 1)) ?>" class="w-page-link page-next">
                         <span><?= htmlspecialchars($nextText) ?></span>
                         <i class="ri-arrow-right-s-line"></i>
                     </a>
                 <?php else: ?>
-                    <span class="page-link page-next">
+                    <span class="w-page-link page-next">
                         <span><?= htmlspecialchars($nextText) ?></span>
                         <i class="ri-arrow-right-s-line"></i>
                     </span>
@@ -115,8 +116,8 @@ if ($totalPages <= 1) return; // 只有一页时不显示
         <?php endif; ?>
         
         <?php if ($showFirstLast && $currentPage < $totalPages): ?>
-            <li class="page-item">
-                <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="page-link page-last" title="<?= __('最后一页') ?>">
+            <li class="w-page-item">
+                <a href="<?= htmlspecialchars($baseUrl . $totalPages) ?>" class="w-page-link page-last" title="<?= __('最后一页') ?>">
                     <i class="ri-skip-forward-line"></i>
                 </a>
             </li>
@@ -131,7 +132,7 @@ if ($totalPages <= 1) return; // 只有一页时不显示
     padding: 20px 0;
 }
 
-.widget-pagination .pagination-list {
+.widget-pagination .w-pagination-list {
     display: flex;
     align-items: center;
     gap: 5px;
@@ -140,7 +141,7 @@ if ($totalPages <= 1) return; // 只有一页时不显示
     padding: 0;
 }
 
-.widget-pagination .page-link {
+.widget-pagination .w-page-link {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -148,58 +149,58 @@ if ($totalPages <= 1) return; // 只有一页时不显示
     min-width: 40px;
     height: 40px;
     padding: 0 12px;
-    color: #666;
+    color: var(--weline-theme-text-secondary);
     text-decoration: none;
-    border: 1px solid #e0e0e0;
-    background: #fff;
-    transition: all 0.2s;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    background: var(--weline-theme-surface);
+    transition: all var(--weline-theme-transition-base);
 }
 
-.widget-pagination .page-link:hover {
-    border-color: var(--primary-color, #007bff);
-    color: var(--primary-color, #007bff);
+.widget-pagination .w-page-link:hover {
+    border-color: var(--weline-theme-primary);
+    color: var(--weline-theme-primary);
 }
 
-.widget-pagination .page-item.active .page-link {
-    background: var(--primary-color, #007bff);
-    border-color: var(--primary-color, #007bff);
-    color: #fff;
+.widget-pagination .w-page-item.w-active .w-page-link {
+    background: var(--weline-theme-primary);
+    border-color: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
 }
 
-.widget-pagination .page-item.disabled .page-link {
-    color: #ccc;
+.widget-pagination .w-page-item.w-disabled .w-page-link {
+    color: var(--weline-theme-text-muted);
     cursor: not-allowed;
 }
 
-.widget-pagination .page-item.disabled .page-link:hover {
-    border-color: #e0e0e0;
-    color: #ccc;
+.widget-pagination .w-page-item.w-disabled .w-page-link:hover {
+    border-color: var(--weline-theme-border-color);
+    color: var(--weline-theme-text-muted);
 }
 
-.widget-pagination .ellipsis .page-link {
+.widget-pagination .w-ellipsis .w-page-link {
     border: none;
     background: none;
     min-width: 30px;
 }
 
 /* 默认样式 */
-.widget-pagination.style-default .page-link {
+.widget-pagination.style-default .w-page-link {
     border-radius: 6px;
 }
 
 /* 简洁样式 */
-.widget-pagination.style-simple .page-link {
+.widget-pagination.style-simple .w-page-link {
     border: none;
     background: none;
 }
 
-.widget-pagination.style-simple .page-item.active .page-link {
-    background: var(--primary-color, #007bff);
+.widget-pagination.style-simple .w-page-item.w-active .w-page-link {
+    background: var(--weline-theme-primary);
     border-radius: 6px;
 }
 
 /* 圆角样式 */
-.widget-pagination.style-rounded .page-link {
+.widget-pagination.style-rounded .w-page-link {
     border-radius: 50%;
 }
 
@@ -214,7 +215,7 @@ if ($totalPages <= 1) return; // 只有一页时不显示
         display: none;
     }
     
-    .widget-pagination .page-link {
+    .widget-pagination .w-page-link {
         min-width: 36px;
         height: 36px;
         padding: 0 8px;

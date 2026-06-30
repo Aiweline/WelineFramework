@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Log\LogConfig;
 
 /**
@@ -66,10 +67,24 @@ class WlsRequest extends Request
      */
     public static function fromRaw(string $rawData, array $serverInfo = []): self
     {
-        $request = new self();
+        $request = self::createRequestInstance();
         $request->rawData = $rawData;
         $request->parseRawHttp($rawData, $serverInfo);
         return $request;
+    }
+
+    private static function createRequestInstance(): self
+    {
+        try {
+            $request = ObjectManager::getInstance(self::class, [], false);
+            if ($request instanceof self) {
+                return $request;
+            }
+        } catch (\Throwable) {
+            // Fall back to a raw request during early bootstrap or recovery paths.
+        }
+
+        return new self();
     }
 
     private static function normalizeHeaderName(string $name): string
@@ -78,12 +93,119 @@ class WlsRequest extends Request
 
         return \implode('-', \array_map(static fn(string $part): string => \ucfirst($part), \explode('-', $name)));
     }
+
+    public function getUrlPath(string $url = ''): string
+    {
+        return parent::getUrlPath($url);
+    }
+
+    public function replaceParsedUriForRouting(string $uri): static
+    {
+        $uri = trim($uri);
+        if ($uri === '') {
+            $uri = '/';
+        }
+        if (!\str_starts_with($uri, '/')) {
+            $uri = '/' . $uri;
+        }
+
+        $this->parsedUri = $uri;
+
+        try {
+            $parts = \parse_url($uri);
+            $parts = \is_array($parts) ? $parts : [];
+        } catch (\ValueError) {
+            $parts = [];
+        }
+
+        $queryString = (string)($parts['query'] ?? '');
+        $this->parsedQueryString = $queryString;
+        $this->parsedGetParams = [];
+        if ($queryString !== '') {
+            \parse_str($queryString, $this->parsedGetParams);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return array{host: string, server_name: string, port: int|null}|null
+     */
+    private static function parseHostAuthority(string $host): ?array
+    {
+        $host = \trim($host);
+        if ($host === ''
+            || \str_contains($host, '/')
+            || \str_contains($host, '\\')
+            || \preg_match('/[\r\n]/', $host)
+        ) {
+            return null;
+        }
+
+        if ($host[0] === '[') {
+            if (!\preg_match('/^\[([0-9A-Fa-f:.]+)\](?::([0-9]{1,5}))?$/', $host, $matches)) {
+                return null;
+            }
+            if (!\filter_var($matches[1], \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+                return null;
+            }
+            $port = isset($matches[2]) ? (int)$matches[2] : null;
+            if ($port !== null && !self::isValidTcpPort($port)) {
+                return null;
+            }
+
+            return [
+                'host' => '[' . $matches[1] . ']',
+                'server_name' => $matches[1],
+                'port' => $port,
+            ];
+        }
+
+        if (\str_contains($host, '[') || \str_contains($host, ']') || \substr_count($host, ':') > 1) {
+            return null;
+        }
+
+        $hostName = $host;
+        $port = null;
+        if (\str_contains($host, ':')) {
+            [$hostName, $portPart] = \explode(':', $host, 2);
+            if (!\ctype_digit($portPart)) {
+                return null;
+            }
+            $port = (int)$portPart;
+            if (!self::isValidTcpPort($port)) {
+                return null;
+            }
+        }
+
+        $hostName = \trim($hostName);
+        if ($hostName === ''
+            || !\preg_match('/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/', $hostName)
+        ) {
+            return null;
+        }
+
+        return [
+            'host' => $hostName,
+            'server_name' => $hostName,
+            'port' => $port,
+        ];
+    }
+
+    private static function isValidTcpPort(int $port): bool
+    {
+        return $port > 0 && $port <= 65535;
+    }
     
     /**
      * 解析原始 HTTP 数据
      */
     private function parseRawHttp(string $rawData, array $serverInfo): void
     {
+        $this->parameterBag = null;
+        $this->fileBag = null;
+        $this->setObjectData([]);
+
         // 分离头部和正文
         $parts = \explode("\r\n\r\n", $rawData, 2);
         $headerSection = $parts[0] ?? '';
@@ -124,7 +246,15 @@ class WlsRequest extends Request
         // parsedHttps 将在后面根据实际检测结果设置
         
         // 解析 URI
-        $uriParts = \parse_url($uri);
+        try {
+            $uriParts = \parse_url($uri);
+            $uriParts = \is_array($uriParts) ? $uriParts : [];
+        } catch (\ValueError $e) {
+            $uriParts = [];
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[WlsRequest] parse_url failed for malformed request URI: ' . $e->getMessage());
+            }
+        }
         $path = $uriParts['path'] ?? '/';
         $queryString = $uriParts['query'] ?? '';
         $this->parsedQueryString = $queryString;
@@ -220,7 +350,8 @@ class WlsRequest extends Request
         if ($originalHost === '') {
             throw new \InvalidArgumentException('Missing Host header in request.');
         }
-        if (\str_contains($originalHost, '/')) {
+        $hostAuthority = self::parseHostAuthority($originalHost);
+        if ($hostAuthority === null) {
             throw new \InvalidArgumentException('Invalid Host header value.');
         }
 
@@ -280,6 +411,17 @@ class WlsRequest extends Request
             'REDIRECT_STATUS' => '200',
             'FCGI_ROLE' => 'RESPONDER',
         ]);
+
+        foreach ($headers as $headerName => $headerValue) {
+            $normalizedHeader = \strtoupper(\str_replace('-', '_', (string)$headerName));
+            if (\in_array($normalizedHeader, ['CONTENT_TYPE', 'CONTENT_LENGTH'], true)) {
+                continue;
+            }
+            $serverKey = 'HTTP_' . $normalizedHeader;
+            if (!\array_key_exists($serverKey, $server)) {
+                $server[$serverKey] = $headerValue;
+            }
+        }
         
         // 保存 Host 信息（供 getBaseHost() 使用）
         
@@ -305,15 +447,18 @@ class WlsRequest extends Request
         }
         
         // 解析端口（优先使用 Weline-Original-Port）
-        $hostParts = \explode(':', $originalHost);
-        $hostName = $hostParts[0];
-        $hostPort = $hostParts[1] ?? null;
+        $hostName = $hostAuthority['host'];
+        $serverName = $hostAuthority['server_name'];
+        $hostPort = $hostAuthority['port'];
         
         // 端口优先级：Weline-Original-Port > Host 头中的端口 > 协议默认端口
-        if (!empty($originalPort)) {
+        if ($originalPort !== '') {
+            if (!\ctype_digit((string)$originalPort) || !self::isValidTcpPort((int)$originalPort)) {
+                throw new \InvalidArgumentException('Invalid forwarded port value.');
+            }
             $serverPort = (int)$originalPort;
         } elseif ($hostPort !== null) {
-            $serverPort = (int)$hostPort;
+            $serverPort = $hostPort;
         } else {
             $serverPort = $isHttps ? 443 : 80;
         }
@@ -333,7 +478,7 @@ class WlsRequest extends Request
         $server['HTTP_HOST'] = $normalizedHost;
         $this->parsedHost = $normalizedHost;
 
-        $server['SERVER_NAME'] = $hostName;
+        $server['SERVER_NAME'] = $serverName;
         $server['SERVER_PORT'] = (string)$serverPort;
         
         // 构建完整请求 URI（默认端口 80/443 不在 URL 中显示）
@@ -657,6 +802,22 @@ class WlsRequest extends Request
     {
         return $this->parsedPostParams;
     }
+
+    public function getFiles(): array
+    {
+        $files = $this->parsedBodyPayload['files'] ?? [];
+        return \is_array($files) ? $files : [];
+    }
+
+    public function getFile(string $key = '')
+    {
+        $files = $this->getFiles();
+        if ($key === '') {
+            return $files;
+        }
+
+        return $files[$key] ?? null;
+    }
     
     /**
      * 获取请求方法，不依赖 $_SERVER
@@ -751,13 +912,16 @@ class WlsRequest extends Request
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             $wHost = $parsed['host'] ?? 'localhost';
-            $wPath = $parsed['path'] ?? '';
-            if (isset($parsed['port'])) {
-                $currentPort = (string)$parsed['port'];
-                $isNonStandardPort = !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
+            $wPath = $this->sanitizeWebsiteUrlPathForBaseHost((string)($parsed['path'] ?? ''));
+
+            if ($websiteUrl !== '') {
+                if (isset($parsed['port'])) {
+                    $currentPort = (string)$parsed['port'];
+                    $isNonStandardPort = !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
+                }
+                $portSuffix = $isNonStandardPort ? ':' . $currentPort : '';
+                return $currentScheme . '://' . $wHost . $portSuffix . $wPath;
             }
-            $portSuffix = $isNonStandardPort ? ':' . $currentPort : '';
-            return $currentScheme . '://' . $wHost . $portSuffix . $wPath;
         }
 
         return $currentScheme . '://' . $hostName . ($isNonStandardPort ? ':' . $currentPort : '');

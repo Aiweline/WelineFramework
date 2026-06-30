@@ -49,7 +49,7 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
             </button>
 
             <!-- App Search-->
-            <form class="app-search d-none d-lg-block" onkeydown='appSearch(event)'>
+            <form class="app-search d-none d-lg-block" data-app-search-form="1">
                 <div class="position-relative">
                     <input type="text" class="form-control" placeholder="<?= __('搜索 ...') ?>">
                     <span class="ri-search-line"></span>
@@ -208,6 +208,47 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
     }
 </style>
 <script>
+    (function () {
+        'use strict';
+
+        document.addEventListener('keydown', function (event) {
+            var target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+
+            if (!target.closest('[data-app-search-form]')) {
+                return;
+            }
+
+            if (typeof window.appSearch === 'function') {
+                window.appSearch(event);
+            }
+        });
+    })();
+
+    (function () {
+        'use strict';
+
+        var sidebarToggle = document.getElementById('vertical-menu-btn');
+        if (!sidebarToggle || sidebarToggle.dataset.welineSidebarToggleBound === '1') {
+            return;
+        }
+
+        sidebarToggle.dataset.welineSidebarToggleBound = '1';
+        sidebarToggle.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            document.body.classList.toggle('sidebar-enable');
+            if (window.innerWidth >= 992) {
+                document.body.classList.toggle('vertical-collpsed');
+            } else {
+                document.body.classList.remove('vertical-collpsed');
+            }
+        }, true);
+    })();
+
     (function () {
         return;
 

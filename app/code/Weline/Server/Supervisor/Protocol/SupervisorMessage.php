@@ -40,9 +40,11 @@ final class SupervisorMessage
         string $slotId,
         int $pid,
         string $launchNonce,
-        string $msgId
+        string $msgId,
+        string $leaseId = '',
+        int $generation = 0
     ): string {
-        return self::encode([
+        $payload = [
             'type' => self::TYPE_HELLO,
             'msg_id' => $msgId,
             'instance' => $instance,
@@ -51,7 +53,15 @@ final class SupervisorMessage
             'slot_id' => $slotId,
             'pid' => $pid,
             'launch_nonce' => $launchNonce,
-        ]);
+        ];
+        if ($leaseId !== '') {
+            $payload['lease_id'] = $leaseId;
+        }
+        if ($generation > 0) {
+            $payload['generation'] = $generation;
+        }
+
+        return self::encode($payload);
     }
 
     public static function leaseAssign(SlotLease $lease, string $msgId = '', string $channel = ''): string

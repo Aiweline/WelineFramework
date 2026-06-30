@@ -16,6 +16,7 @@ $statusLabels = [
     'skipped'   => ['label' => __('已跳过'), 'class' => 'secondary'],
     'pending'   => ['label' => __('未尝试'), 'class' => 'warning'],
 ];
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
 ?>
 
 <style>
@@ -33,7 +34,7 @@ $statusLabels = [
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4><i class="bi bi-cpu"></i> <?= __('环境管理') ?></h4>
     <div>
-        <button class="btn btn-outline-warning btn-sm" onclick="resetAllStatuses()">
+        <button class="btn btn-outline-warning btn-sm" data-env-reset-all="1">
             <i class="bi bi-arrow-counterclockwise"></i> <?= __('重置所有记录') ?>
         </button>
     </div>
@@ -113,6 +114,10 @@ $statusLabels = [
             </thead>
             <tbody>
             <?php foreach ($recommended_exts as $ext): ?>
+                <?php
+                $extName = (string)($ext['name'] ?? '');
+                $guideId = 'guide-' . $extName;
+                ?>
                 <tr>
                     <td><strong><?= htmlspecialchars($ext['name']) ?></strong></td>
                     <td>
@@ -139,10 +144,15 @@ $statusLabels = [
                     </td>
                     <td>
                         <?php if (!$ext['loaded'] && $ext['matches']): ?>
-                            <button class="btn btn-sm btn-outline-primary" onclick="retryInstall('extension','<?= htmlspecialchars($ext['name']) ?>', this)">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    data-env-retry-install="1"
+                                    data-env-retry-type="extension"
+                                    data-env-retry-name="<?= htmlspecialchars($extName, ENT_QUOTES, 'UTF-8') ?>">
                                 <i class="bi bi-download"></i> <?= __('尝试安装') ?>
                             </button>
-                            <button class="btn btn-sm btn-outline-info" onclick="toggleGuide('guide-<?= htmlspecialchars($ext['name']) ?>')">
+                            <button class="btn btn-sm btn-outline-info"
+                                    data-env-guide-toggle="1"
+                                    data-env-guide-target="<?= htmlspecialchars($guideId, ENT_QUOTES, 'UTF-8') ?>">
                                 <i class="bi bi-book"></i> <?= __('安装教程') ?>
                             </button>
                         <?php else: ?>
@@ -156,8 +166,12 @@ $statusLabels = [
                         <h6><?= __('安装教程 - %{name}', ['name' => $ext['name']]) ?></h6>
                         <div class="d-flex gap-2 mb-2">
                             <?php foreach ($ext['guide'] as $os => $steps): ?>
+                                <?php
+                                $guideContentId = 'guide-' . $extName . '-' . \md5($os);
+                                ?>
                                 <button class="btn btn-sm btn-outline-dark guide-tab <?= ($os === 'Windows' && $platform === 'Windows') || ($os === 'Ubuntu/Debian' && $platform === 'Linux') || ($os === 'macOS (Homebrew)' && $platform === 'Darwin') ? 'active' : '' ?>"
-                                    onclick="showGuideTab(this, 'guide-<?= htmlspecialchars($ext['name']) ?>-<?= \md5($os) ?>')">
+                                        data-env-guide-tab="1"
+                                        data-env-guide-content="<?= htmlspecialchars($guideContentId, ENT_QUOTES, 'UTF-8') ?>">
                                     <?= htmlspecialchars($os) ?>
                                 </button>
                             <?php endforeach; ?>
@@ -268,39 +282,87 @@ $statusLabels = [
 </div>
 
 <script>
+const envManagerUrls = <?= json_encode([
+    'retryInstall' => $this->getBackendUrl('weline_framework/backend/env-manager/retry-install'),
+    'resetAll' => $this->getBackendUrl('weline_framework/backend/env-manager/reset-all'),
+], $jsonForScriptFlags) ?>;
+const envManagerMessages = <?= json_encode([
+    'installing' => (string)__('安装中...'),
+    'retryInstall' => (string)__('尝试安装'),
+    'requestFailed' => (string)__('请求失败'),
+    'resetConfirm' => (string)__('确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。'),
+    'confirmUnavailable' => (string)__('确认组件不可用，请刷新页面后重试'),
+    'operationFailed' => (string)__('操作失败'),
+], $jsonForScriptFlags) ?>;
+
+function envManagerToast(type, message) {
+    const text = String(message || envManagerMessages.operationFailed);
+    if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+        window.BackendToast[type](text);
+        return;
+    }
+
+    const logger = type === 'error' ? 'error' : 'log';
+    if (window.console && typeof window.console[logger] === 'function') {
+        window.console[logger](text);
+    }
+}
+
+function envManagerConfirm(message) {
+    if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+        return window.BackendConfirm.show(message);
+    }
+
+    envManagerToast('error', envManagerMessages.confirmUnavailable);
+    return Promise.resolve(false);
+}
+
+function setEnvButtonLabel(btn, iconClass, label) {
+    btn.textContent = '';
+    const icon = document.createElement('i');
+    icon.className = iconClass;
+    btn.appendChild(icon);
+    btn.appendChild(document.createTextNode(' ' + label));
+}
+
 function retryInstall(type, name, btn) {
     btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __('安装中...') ?>';
+    setEnvButtonLabel(btn, 'bi bi-hourglass-split', envManagerMessages.installing);
 
-    var retryUrl = '<?= $this->getBackendUrl('weline_framework/backend/env-manager/retry-install') ?>';
     var retryOpts = { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'}, body: 'type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name) };
-    window.Weline.Api.request(retryUrl, retryOpts)
+    window.Weline.Api.request(envManagerUrls.retryInstall, retryOpts)
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         if (data.code === 200) {
-            BackendToast ? BackendToast.success(data.msg) : alert(data.msg);
+            envManagerToast('success', data.msg);
         } else {
-            BackendToast ? BackendToast.warning(data.msg) : alert(data.msg);
+            envManagerToast('warning', data.msg);
         }
         setTimeout(() => location.reload(), 1500);
     })
     .catch(err => {
-        BackendToast ? BackendToast.error('<?= __('请求失败') ?>: ' + err.message) : alert(err.message);
+        envManagerToast('error', envManagerMessages.requestFailed + ': ' + err.message);
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-download"></i> <?= __('尝试安装') ?>';
+        setEnvButtonLabel(btn, 'bi bi-download', envManagerMessages.retryInstall);
     });
 }
 
 function resetAllStatuses() {
-    if (!confirm('<?= __('确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。') ?>')) return;
+    envManagerConfirm(envManagerMessages.resetConfirm).then(function(confirmed) {
+        if (!confirmed) {
+            return;
+        }
 
-    var resetUrl = '<?= $this->getBackendUrl('weline_framework/backend/env-manager/reset-all') ?>';
-    var resetOpts = { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} };
-    window.Weline.Api.request(resetUrl, resetOpts)
-    .then(function(res) {
-        var data = (res && res.data) !== undefined ? res.data : res;
-        BackendToast ? BackendToast.success(data.msg) : alert(data.msg);
-        setTimeout(() => location.reload(), 1000);
+        var resetOpts = { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} };
+        window.Weline.Api.request(envManagerUrls.resetAll, resetOpts)
+        .then(function(res) {
+            var data = (res && res.data) !== undefined ? res.data : res;
+            envManagerToast('success', data.msg);
+            setTimeout(() => location.reload(), 1000);
+        })
+        .catch(function(err) {
+            envManagerToast('error', envManagerMessages.requestFailed + ': ' + err.message);
+        });
     });
 }
 
@@ -317,4 +379,38 @@ function showGuideTab(btn, contentId) {
     const content = document.getElementById(contentId);
     if (content) content.style.display = '';
 }
+
+document.addEventListener('click', function(event) {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+        return;
+    }
+
+    const resetBtn = target.closest('[data-env-reset-all]');
+    if (resetBtn) {
+        event.preventDefault();
+        resetAllStatuses();
+        return;
+    }
+
+    const retryBtn = target.closest('[data-env-retry-install]');
+    if (retryBtn) {
+        event.preventDefault();
+        retryInstall(retryBtn.dataset.envRetryType || '', retryBtn.dataset.envRetryName || '', retryBtn);
+        return;
+    }
+
+    const guideToggle = target.closest('[data-env-guide-toggle]');
+    if (guideToggle) {
+        event.preventDefault();
+        toggleGuide(guideToggle.dataset.envGuideTarget || '');
+        return;
+    }
+
+    const guideTab = target.closest('[data-env-guide-tab]');
+    if (guideTab) {
+        event.preventDefault();
+        showGuideTab(guideTab, guideTab.dataset.envGuideContent || '');
+    }
+});
 </script>

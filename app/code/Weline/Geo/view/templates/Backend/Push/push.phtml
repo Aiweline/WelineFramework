@@ -1,0 +1,115 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $feeds
+ * @var array $platforms
+ */
+?>
+<div class="content-header">
+    <h1><?= __('一键推送') ?></h1>
+</div>
+
+<div class="content-body">
+    <form id="push-form" class="form-horizontal">
+        <div class="form-group">
+            <label class="control-label"><?= __('选择Feed') ?></label>
+            <select name="feed_id" class="form-control" required>
+                <option value=""><?= __('请选择Feed') ?></option>
+                <?php foreach ($feeds as $feed): ?>
+                    <option value="<?= $feed['id'] ?>"><?= htmlspecialchars($feed['feed_name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="control-label"><?= __('选择平台') ?></label>
+            <div class="checkbox-group">
+                <?php foreach ($platforms as $platform): ?>
+                    <label class="checkbox-inline">
+                        <input type="checkbox" name="platform_ids[]" value="<?= $platform['id'] ?>">
+                        <?= htmlspecialchars($platform['platform_name']) ?>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">
+                <i class="mdi mdi-send"></i> <?= __('开始推送') ?>
+            </button>
+        </div>
+    </form>
+
+    <div id="push-result" style="display: none; margin-top: 20px;"></div>
+</div>
+
+<!-- SweetAlert2 CSS -->
+<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<!-- SweetAlert2 JS -->
+<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+<script>
+function renderPushResult(resultDiv, type, message) {
+    if (!resultDiv) {
+        return;
+    }
+    while (resultDiv.firstChild) {
+        resultDiv.removeChild(resultDiv.firstChild);
+    }
+    var alert = document.createElement('div');
+    alert.className = 'alert alert-' + type;
+    alert.textContent = message == null ? '' : String(message);
+    resultDiv.appendChild(alert);
+}
+
+document.getElementById('push-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const platformIds = Array.from(document.querySelectorAll('input[name="platform_ids[]"]:checked'))
+        .map(input => input.value);
+    
+    if (!formData.get('feed_id') || platformIds.length === 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: '<?= __('提示') ?>',
+                text: '<?= __('请选择Feed和至少一个平台') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('请选择Feed和至少一个平台') ?>');
+        }
+        return;
+    }
+    
+    formData.set('platform_ids', JSON.stringify(platformIds));
+    
+    var geoPushUrl = '<?= $this->getUrl('geo/backend/push/execute') ?>';
+    var geoPushOpts = { method: 'POST', body: formData };
+    window.Weline.Api.request(geoPushUrl, geoPushOpts)
+    .then(function(res) {
+        var data = (res && res.data) !== undefined ? res.data : res;
+        var resultDiv = document.getElementById('push-result');
+        resultDiv.style.display = 'block';
+        
+        if (data.success) {
+            renderPushResult(resultDiv, 'success', data.message);
+        } else {
+            renderPushResult(resultDiv, 'danger', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: '<?= __('推送失败') ?>',
+                text: '<?= __('请重试') ?>',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        } else {
+            console.error('<?= __('推送失败') ?>');
+        }
+    });
+});
+</script>

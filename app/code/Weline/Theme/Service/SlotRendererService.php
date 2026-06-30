@@ -4,11 +4,20 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\View\Template;
+use Weline\Server\Service\MemoryStateFacade;
+use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Model\WelineTheme;
 use Weline\Widget\Service\WidgetRegistry;
+use Weline\Widget\Service\WidgetRuntimeTemplateRenderer;
 
 /**
  * 插槽渲染服务
@@ -39,12 +48,27 @@ class SlotRendererService
     // 缓存
     private array $widgetCache = [];
     private array $layoutCache = [];
+    private const PUBLISHED_LAYOUT_CACHE_TTL = 120.0;
+    private const WIDGET_OUTPUT_CACHE_TTL = 120.0;
+    private const CACHEABLE_WIDGET_OUTPUTS = [];
+    private static array $publishedLayoutDataCache = [];
+    private static array $widgetOutputCache = [];
+    private static ?MemoryStateFacade $runtimeCache = null;
+    private static bool $runtimeCacheResolved = false;
+    private static ?\WeakMap $fiberRenderYieldAt = null;
+    private const WLS_RENDER_YIELD_MIN_INTERVAL_US = 10000;
     
     // 孤儿部件（找不到对应slot的部件）
     private array $orphanWidgets = [];
 
     /** 当前渲染周期内已填充的 slot_id，同一 slot_id 只填充文档中第一处出现，避免容器部件内层同名插槽被重复填充导致泄露 */
     private array $filledSlotIdsThisRun = [];
+
+    /** 当前渲染周期使用的主题（用于部件模板覆盖解析，确保预览显示所选主题而非全局激活主题） */
+    private ?WelineTheme $renderTheme = null;
+
+    /** 已加载主题缓存：theme_id => WelineTheme|null */
+    private array $renderThemeCache = [];
 
     public function __construct(
         ThemeLayoutService $layoutService,
@@ -71,16 +95,64 @@ class SlotRendererService
      */
     public function processSlots(string $html, int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): string
     {
+        return $this->traceCall(
+            'slot_renderer::processSlots',
+            fn() => $this->doProcessSlots($html, $themeId, $pageType, $status)
+        );
+    }
+
+    public function processSlotsWithLayout(string $html, array $layoutData, bool $filterToHtmlSlots = false, int $themeId = 0): string
+    {
+        return $this->traceCall(
+            'slot_renderer::processSlotsWithLayout',
+            function () use ($html, $layoutData, $filterToHtmlSlots, $themeId): string {
+                if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
+                    return $html;
+                }
+
+                $slotWidgets = $this->organizeWidgetsBySlot($layoutData);
+                if ($filterToHtmlSlots) {
+                    $slotWidgets = $this->filterWidgetsForHtmlSlots($slotWidgets, $html);
+                }
+
+                if (empty($slotWidgets)) {
+                    return $html;
+                }
+
+                $this->filledSlotIdsThisRun = [];
+                return $this->withRenderTheme(
+                    $themeId,
+                    fn(): string => $this->processSlotsWithDom($html, $slotWidgets, $filterToHtmlSlots)
+                );
+            }
+        );
+    }
+
+    private function doProcessSlots(string $html, int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): string
+    {
         // 检查是否包含插槽标记（支持新旧两种方式）
         if (strpos($html, 'data-wslot') === false && strpos($html, 'widget-slot-area') === false) {
             return $html;
         }
 
         // 获取该主题和页面类型的布局配置
-        $layoutData = $this->getLayoutData($themeId, $pageType, $status);
+        $layoutData = $this->traceCall(
+            'slot_renderer::getLayoutData',
+            fn() => $this->getLayoutData($themeId, $pageType, $status)
+        );
 
         // 按插槽 ID 组织部件
-        $slotWidgets = $this->organizeWidgetsBySlot($layoutData);
+        $slotWidgets = $this->traceCall(
+            'slot_renderer::organizeWidgetsBySlot',
+            fn() => $this->organizeWidgetsBySlot($layoutData)
+        );
+
+        if ($status === ThemeLayout::STATUS_PUBLISHED) {
+            $slotWidgets = $this->traceCall(
+                'slot_renderer::filterWidgetsForHtmlSlots',
+                fn() => $this->filterWidgetsForHtmlSlots($slotWidgets, $html)
+            );
+        }
         
         // 调试日志（开发模式）
         if (defined('DEV') && DEV) {
@@ -101,16 +173,136 @@ class SlotRendererService
             }
         }
 
-        // 使用 DOM 解析处理插槽（更可靠）
+        if (empty($slotWidgets)) {
+            return $html;
+        }
+
+        // Use DOM only when there are widgets that can change slot output.
         $this->filledSlotIdsThisRun = [];
-        $html = $this->processSlotsWithDom($html, $slotWidgets);
+        $html = $this->traceCall(
+            'slot_renderer::processSlotsWithDom',
+            fn() => $this->withRenderTheme(
+                $themeId,
+                fn(): string => $this->processSlotsWithDom($html, $slotWidgets, $status === ThemeLayout::STATUS_PUBLISHED)
+            )
+        );
 
         return $html;
     }
 
     /**
+     * 在指定主题上下文中执行渲染回调。
+     *
+     * 部件模板的覆盖解析依赖 ThemeData 的「当前主题」，预览编辑器渲染的主题
+     * 通常不是全局激活主题。此方法在渲染期间临时切换到目标主题，渲染结束后
+     * 恢复，确保「看的是哪个主题，渲染的就是哪个主题」。
+     *
+     * @template T
+     * @param callable():T $callback
+     * @return T
+     */
+    private function withRenderTheme(int $themeId, callable $callback)
+    {
+        $theme = $this->resolveRenderTheme($themeId);
+        if (!$theme) {
+            return $callback();
+        }
+
+        $previousRenderTheme = $this->renderTheme;
+        $previousThemeData = ThemeData::getCurrentTheme();
+        $previousArea = ThemeData::getCurrentArea();
+        $shouldSwitchThemeData = (int)($previousThemeData?->getId() ?? 0) !== (int)$theme->getId();
+
+        $this->renderTheme = $theme;
+        if ($shouldSwitchThemeData) {
+            ThemeData::setCurrentTheme($theme);
+            ThemeData::setCurrentArea('frontend');
+        }
+
+        try {
+            return $callback();
+        } finally {
+            $this->renderTheme = $previousRenderTheme;
+            if ($shouldSwitchThemeData) {
+                ThemeData::setCurrentTheme($previousThemeData);
+                ThemeData::setCurrentArea($previousArea);
+            }
+        }
+    }
+
+    /**
+     * 按 ID 加载渲染主题（带缓存）。0 或无效 ID 返回 null（沿用默认上下文）。
+     */
+    private function resolveRenderTheme(int $themeId): ?WelineTheme
+    {
+        if ($themeId <= 0) {
+            return null;
+        }
+
+        if (array_key_exists($themeId, $this->renderThemeCache)) {
+            return $this->renderThemeCache[$themeId];
+        }
+
+        $theme = null;
+        try {
+            $model = clone ObjectManager::getInstance(WelineTheme::class);
+            $model->clearData()->clearQuery()->load($themeId);
+            if ($model->getId()) {
+                $theme = $model;
+            }
+        } catch (\Throwable) {
+            $theme = null;
+        }
+
+        $this->renderThemeCache[$themeId] = $theme;
+        return $theme;
+    }
+
+    /**
      * 处理草稿模式的插槽（后台预览用）
      */
+    private function filterWidgetsForHtmlSlots(array $slotWidgets, string $html): array
+    {
+        if ($slotWidgets === []) {
+            return [];
+        }
+
+        $slotIds = $this->extractSlotIdsFromHtml($html);
+        if ($slotIds === []) {
+            return [];
+        }
+
+        return \array_intersect_key($slotWidgets, $slotIds);
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function extractSlotIdsFromHtml(string $html): array
+    {
+        $slotIds = [];
+
+        if (\preg_match_all('/\bdata-wslot\s*=\s*(["\'])(.*?)\1/is', $html, $matches)) {
+            foreach ($matches[2] as $slotId) {
+                $slotId = \trim((string)$slotId);
+                if ($slotId !== '') {
+                    $slotIds[$slotId] = true;
+                }
+            }
+        }
+
+        if (\preg_match_all('/\bdata-slot-id\s*=\s*(["\'])(.*?)\1/is', $html, $matches)) {
+            foreach ($matches[2] as $slotId) {
+                $slotId = \trim((string)$slotId);
+                if ($slotId !== '') {
+                    $slotIds[$slotId] = true;
+                }
+            }
+        }
+
+        return $slotIds;
+    }
+
     public function processDraftSlots(string $html, int $themeId, string $pageType): string
     {
         return $this->processSlots($html, $themeId, $pageType, ThemeLayout::STATUS_DRAFT);
@@ -127,15 +319,54 @@ class SlotRendererService
     /**
      * 使用 DOM 解析处理插槽（支持嵌套：部件输出的 HTML 可包含子插槽，会被迭代填充）
      */
-    private function processSlotsWithDom(string $html, array $slotWidgets): string
+    private function processSlotsWithDom(string $html, array $slotWidgets, bool $allowNarrowFragment = false): string
+    {
+        $bodyParts = $this->splitHtmlBody($html);
+        if ($bodyParts !== null) {
+            $bodyParts['body'] = $this->processSlotFragmentWithDom($bodyParts['body'], $slotWidgets, $allowNarrowFragment);
+            return $bodyParts['before'] . $bodyParts['body'] . $bodyParts['after'];
+        }
+
+        return $this->processSlotFragmentWithDom($html, $slotWidgets, $allowNarrowFragment);
+    }
+
+    /**
+     * Keep document-level SEO/head markup out of the slot DOM pass.
+     */
+    private function splitHtmlBody(string $html): ?array
+    {
+        if (!preg_match('/^(.*?<body\b[^>]*>)(.*)(<\/body\s*>.*)$/is', $html, $matches)) {
+            return null;
+        }
+
+        return [
+            'before' => $matches[1],
+            'body' => $matches[2],
+            'after' => $matches[3],
+        ];
+    }
+
+    /**
+     * Process only the slot-bearing HTML fragment so DOMDocument cannot move
+     * invalid head children into body and break SEO output.
+     */
+    private function processSlotFragmentWithDom(string $html, array $slotWidgets, bool $allowNarrowFragment = false): string
     {
         // 避免 DOM 解析器的警告
+        if ($allowNarrowFragment) {
+            $narrowed = $this->narrowHtmlToSlotFragment($html, \array_keys($slotWidgets));
+            if ($narrowed !== null) {
+                $narrowed['fragment'] = $this->processSlotFragmentWithDom($narrowed['fragment'], $slotWidgets, false);
+                return $narrowed['before'] . $narrowed['fragment'] . $narrowed['after'];
+            }
+        }
+
         libxml_use_internal_errors(true);
 
         $doc = new \DOMDocument();
         // 添加 UTF-8 声明避免编码问题
-        $html = '<?xml encoding="UTF-8">' . $html;
-        $doc->loadHTML($html);
+        $wrappedHtml = '<?xml encoding="UTF-8"><div data-weline-slot-root="1">' . $html . '</div>';
+        $doc->loadHTML($wrappedHtml, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 
         // 收集模板中存在的所有 slot ID
         $existingSlotIds = [];
@@ -197,19 +428,114 @@ class SlotRendererService
         }
 
         // 获取处理后的 HTML
-        $result = $doc->saveHTML();
+        $result = '';
+        $root = $doc->documentElement;
+        if ($root instanceof \DOMElement && $root->getAttribute('data-weline-slot-root') === '1') {
+            foreach ($root->childNodes as $child) {
+                $result .= $doc->saveHTML($child);
+            }
+        } else {
+            $result = $doc->saveHTML();
+        }
 
         libxml_clear_errors();
 
         // 移除 XML 声明
-        $result = preg_replace('/<\?xml encoding="UTF-8"\?>/', '', $result);
+        $result = preg_replace('/<\?xml encoding="UTF-8"\?>/', '', (string)$result);
 
-        return $result;
+        return (string)$result;
     }
-    
+
+    /**
+     * @param list<string> $slotIds
+     * @return array{before: string, fragment: string, after: string}|null
+     */
+    private function narrowHtmlToSlotFragment(string $html, array $slotIds): ?array
+    {
+        $minStart = null;
+        $maxEnd = null;
+
+        foreach ($slotIds as $slotId) {
+            $slotId = (string)$slotId;
+            if ($slotId === '') {
+                continue;
+            }
+
+            $bounds = $this->findSlotElementBounds($html, $slotId);
+            if ($bounds === null) {
+                return null;
+            }
+
+            $minStart = $minStart === null ? $bounds[0] : \min($minStart, $bounds[0]);
+            $maxEnd = $maxEnd === null ? $bounds[1] : \max($maxEnd, $bounds[1]);
+        }
+
+        if ($minStart === null || $maxEnd === null || $maxEnd <= $minStart) {
+            return null;
+        }
+
+        $htmlLength = \strlen($html);
+        if (($maxEnd - $minStart) >= (int)($htmlLength * 0.9)) {
+            return null;
+        }
+
+        return [
+            'before' => \substr($html, 0, $minStart),
+            'fragment' => \substr($html, $minStart, $maxEnd - $minStart),
+            'after' => \substr($html, $maxEnd),
+        ];
+    }
+
+    /**
+     * @return array{0: int, 1: int}|null
+     */
+    private function findSlotElementBounds(string $html, string $slotId): ?array
+    {
+        $quotedSlotId = \preg_quote($slotId, '/');
+        $pattern = '/<([a-z][a-z0-9:-]*)(?=[^>]*\b(?:data-wslot|data-slot-id)\s*=\s*(["\'])' . $quotedSlotId . '\2)[^>]*>/i';
+        if (!\preg_match($pattern, $html, $matches, \PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+
+        $openTag = $matches[0][0];
+        $start = (int)$matches[0][1];
+        $tagName = (string)$matches[1][0];
+        $openEnd = $start + \strlen($openTag);
+        $end = $this->findElementEndByTag($html, $tagName, $openEnd);
+
+        return $end === null ? null : [$start, $end];
+    }
+
+    private function findElementEndByTag(string $html, string $tagName, int $offset): ?int
+    {
+        $tagName = \preg_quote($tagName, '/');
+        $pattern = '/<\/?' . $tagName . '\b[^>]*>/i';
+        $depth = 1;
+
+        while (\preg_match($pattern, $html, $matches, \PREG_OFFSET_CAPTURE, $offset)) {
+            $tag = $matches[0][0];
+            $position = (int)$matches[0][1];
+            $offset = $position + \strlen($tag);
+
+            if (\str_starts_with($tag, '</')) {
+                $depth--;
+                if ($depth === 0) {
+                    return $offset;
+                }
+                continue;
+            }
+
+            if (!\str_ends_with(\rtrim($tag), '/>')) {
+                $depth++;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * 检测孤儿部件（配置了但找不到对应slot的部件）
-     * 
+     *
      * 这些部件不会被删除，只是无法在当前布局中显示
      */
     private function detectOrphanWidgets(array $slotWidgets, array $existingSlotIds): void
@@ -288,7 +614,14 @@ class SlotRendererService
         }
 
         // 渲染该插槽的所有部件
-        $widgetsHtml = $this->renderSlotWidgets($slotWidgets[$slotId]);
+        $widgetsHtml = $this->traceCall(
+            'slot_renderer::renderSlotWidgets::' . substr($slotId, 0, 80),
+            fn() => $this->renderSlotWidgets($slotWidgets[$slotId]),
+            [
+                'slot_id' => $slotId,
+                'widgets' => \count($slotWidgets[$slotId]),
+            ]
+        );
         if (empty($widgetsHtml)) {
             return;
         }
@@ -378,17 +711,55 @@ class SlotRendererService
      */
     private function renderWidget(array $widget): string
     {
+        $widgetModule = (string)($widget['widget_module'] ?? '');
+        $widgetCode = (string)($widget['widget_code'] ?? '');
+        $widgetType = (string)($widget['widget_type'] ?? '');
+
+        return $this->traceCall(
+            'slot_renderer::renderWidget::' . substr($widgetModule . '::' . $widgetCode, 0, 120),
+            fn() => $this->doRenderWidget($widget),
+            [
+                'module' => $widgetModule,
+                'code' => $widgetCode,
+                'type' => $widgetType,
+                'slot_id' => (string)($widget['slot_id'] ?? ''),
+            ]
+        );
+    }
+
+    private function doRenderWidget(array $widget): string
+    {
         $widgetModule = $widget['widget_module'] ?? '';
         $widgetCode = $widget['widget_code'] ?? '';
         $widgetType = $widget['widget_type'] ?? '';
         $layoutId = $widget['layout_id'] ?? '';
         $config = $widget['config'] ?? [];
+        $widgetOutputCacheKey = $this->buildWidgetOutputCacheKey($widget, \is_array($config) ? $config : []);
+        if ($widgetOutputCacheKey !== null) {
+            $cachedWidget = self::$widgetOutputCache[$widgetOutputCacheKey] ?? null;
+            if (\is_array($cachedWidget)
+                && isset($cachedWidget['expires_at'], $cachedWidget['html'])
+                && (float)$cachedWidget['expires_at'] >= \microtime(true)
+                && \is_string($cachedWidget['html'])) {
+                return $cachedWidget['html'];
+            }
+            $runtimeCachedWidget = $this->runtimeCacheGet($widgetOutputCacheKey);
+            if (\is_string($runtimeCachedWidget)) {
+                self::$widgetOutputCache[$widgetOutputCacheKey] = [
+                    'expires_at' => \microtime(true) + $this->widgetOutputCacheTtl(),
+                    'html' => $runtimeCachedWidget,
+                ];
+                return $runtimeCachedWidget;
+            }
+        }
 
         // 检查缓存
-        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, null, 'frontend');
+        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, $this->renderTheme, 'frontend');
         if ($definition) {
             try {
-                $html = $this->componentRenderer->render($definition, is_array($config) ? $config : [], null, [
+                $renderConfig = is_array($config) ? $config : [];
+                $renderConfig['_widget_instance_key'] = $this->widgetInstanceKey($widget, $renderConfig);
+                $html = $this->componentRenderer->render($definition, $renderConfig, $this->renderTheme, [
                     'area' => 'frontend',
                     'preview_mode' => false,
                 ]);
@@ -409,7 +780,7 @@ class SlotRendererService
                     );
                 }
 
-                return $html;
+                return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
             } catch (\Throwable $throwable) {
                 if (defined('DEV') && DEV) {
                     return sprintf(
@@ -430,17 +801,54 @@ class SlotRendererService
             return '';
         }
 
-        $templatePath = $widgetMeta['template'] ?? '';
-        if (!$templatePath) {
-            return '';
-        }
-
         // 合并默认配置
         $defaultConfig = [];
         foreach ($widgetMeta['params'] ?? [] as $key => $param) {
             $defaultConfig[$key] = $param['default'] ?? '';
         }
-        $finalConfig = array_merge($defaultConfig, $config);
+        $finalConfig = array_merge($defaultConfig, is_array($config) ? $config : []);
+        $finalConfig['_widget_instance_key'] = $this->widgetInstanceKey($widget, $finalConfig);
+
+        $templateContent = (string)($widgetMeta['template_content'] ?? '');
+        if (trim($templateContent) !== '') {
+            try {
+                $renderer = ObjectManager::getInstance(WidgetRuntimeTemplateRenderer::class);
+                $html = $renderer->renderContent($templateContent, $finalConfig);
+                $html = is_string($html) ? $html : '';
+
+                if ($layoutId) {
+                    $wrapperAttrs = sprintf(
+                        'data-layout-id="%s" data-widget-code="%s" data-widget-module="%s" data-widget-type="%s"',
+                        htmlspecialchars((string)$layoutId),
+                        htmlspecialchars((string)$widgetCode),
+                        htmlspecialchars((string)$widgetModule),
+                        htmlspecialchars((string)$widgetType)
+                    );
+                    $widgetName = htmlspecialchars((string)($widgetMeta['name'] ?? $widgetCode));
+                    $html = sprintf(
+                        '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
+                        $wrapperAttrs,
+                        $widgetName,
+                        $html
+                    );
+                }
+
+                return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
+            } catch (\Throwable $throwable) {
+                if (defined('DEV') && DEV) {
+                    return sprintf(
+                        '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;">%s</div>',
+                        htmlspecialchars((string)$throwable->getMessage())
+                    );
+                }
+                return '';
+            }
+        }
+
+        $templatePath = $widgetMeta['template'] ?? '';
+        if (!$templatePath) {
+            return '';
+        }
 
         try {
             // 渲染部件模板 - 使用 fetch() 方法，它接受2个参数：fileName 和 data
@@ -466,7 +874,7 @@ class SlotRendererService
                 );
             }
 
-            return $html;
+            return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
         } catch (\Exception $e) {
             // 渲染失败，返回错误提示（仅开发模式）
             if (defined('DEV') && DEV) {
@@ -483,6 +891,65 @@ class SlotRendererService
     /**
      * 获取部件元数据
      */
+    private function buildWidgetOutputCacheKey(array $widget, array $config): ?string
+    {
+        $widgetModule = (string)($widget['widget_module'] ?? '');
+        $widgetCode = (string)($widget['widget_code'] ?? '');
+        $identity = $widgetModule . '::' . $widgetCode;
+        if (!isset(self::CACHEABLE_WIDGET_OUTPUTS[$identity])) {
+            return null;
+        }
+
+        try {
+            $context = [
+                'identity' => $identity,
+                'layout_id' => (string)($widget['layout_id'] ?? ''),
+                'slot_id' => (string)($widget['slot_id'] ?? ''),
+                'type' => (string)($widget['widget_type'] ?? ''),
+                'config' => $config,
+                'environment' => KeyBuilder::environmentContext([
+                    'scope' => 'theme-widget-output',
+                ]),
+                'base_url' => (string)$this->template->getRequest()->getBaseUrl(),
+                'path' => (string)$this->template->getRequest()->getPathInfo(),
+            ];
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return 'widget.output.' . \sha1(\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: $identity);
+    }
+
+    private function widgetInstanceKey(array $widget, array $config): string
+    {
+        return \sha1(\json_encode([
+            'module' => (string)($widget['widget_module'] ?? ''),
+            'code' => (string)($widget['widget_code'] ?? ''),
+            'type' => (string)($widget['widget_type'] ?? ''),
+            'layout_id' => (string)($widget['layout_id'] ?? ''),
+            'slot_id' => (string)($widget['slot_id'] ?? ''),
+            'config' => $config,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
+    }
+
+    private function rememberWidgetOutput(?string $cacheKey, string $html): string
+    {
+        if ($cacheKey === null) {
+            return $html;
+        }
+
+        if (\count(self::$widgetOutputCache) > 128) {
+            self::$widgetOutputCache = [];
+        }
+        self::$widgetOutputCache[$cacheKey] = [
+            'expires_at' => \microtime(true) + $this->widgetOutputCacheTtl(),
+            'html' => $html,
+        ];
+        $this->runtimeCacheSet($cacheKey, $html, $this->widgetOutputCacheTtl());
+
+        return $html;
+    }
+
     private function getWidgetMeta(string $module, string $code): ?array
     {
         $registry = $this->widgetRegistry->getRegistry();
@@ -517,25 +984,92 @@ class SlotRendererService
      * 3. 如果仍然没有数据，尝试生成默认布局种子
      * 4. 如果当前页面类型没有数据，尝试获取默认页面类型的数据
      */
+    /**
+     * @return array{layout_option:string,scope:string,target_type:string,target_id:int}
+     */
+    private function currentLayoutIdentity(): array
+    {
+        $request = null;
+        try {
+            $request = $this->template->getRequest();
+        } catch (\Throwable) {
+            $request = null;
+        }
+        $getParam = static function (string $key, mixed $default = null) use ($request): mixed {
+            if ($request && method_exists($request, 'getParam')) {
+                return $request->getParam($key, $default);
+            }
+            return $default;
+        };
+
+        $layoutOption = trim((string)$getParam('layout_option', 'default'));
+        $scope = trim((string)$getParam('scope', 'default'));
+        $targetType = trim((string)$getParam(
+            'theme_layout_source_target_type',
+            (string)$getParam(
+                'theme_layout_target_type',
+                (string)$getParam('target_type', 'global')
+            )
+        ));
+        $targetId = (int)$getParam(
+            'theme_layout_source_target_id',
+            (int)$getParam(
+                'theme_layout_target_id',
+                (int)$getParam('target_id', 0)
+            )
+        );
+
+        return [
+            'layout_option' => $layoutOption !== '' ? $layoutOption : 'default',
+            'scope' => $scope !== '' ? $scope : 'default',
+            'target_type' => $targetType !== '' ? $targetType : 'global',
+            'target_id' => max(0, $targetId),
+        ];
+    }
+
     private function getLayoutData(int $themeId, string $pageType, string $status = ThemeLayout::STATUS_PUBLISHED): array
     {
-        $cacheKey = "{$themeId}:{$pageType}:{$status}";
+        $identity = $this->currentLayoutIdentity();
+        $cacheKey = "{$themeId}:{$pageType}:{$status}:"
+            . $identity['layout_option'] . ':'
+            . $identity['scope'] . ':'
+            . $identity['target_type'] . ':'
+            . $identity['target_id'];
         $isDraft = ($status === ThemeLayout::STATUS_DRAFT);
 
         // 草稿不读缓存，保证编辑器/预览每次请求都拿到最新布局（删除、拖拽后立即生效）
         if (!$isDraft && isset($this->layoutCache[$cacheKey])) {
             return $this->layoutCache[$cacheKey];
         }
+        if (!$isDraft) {
+            $cached = self::$publishedLayoutDataCache[$cacheKey] ?? null;
+            if (\is_array($cached)
+                && isset($cached['expires_at'], $cached['data'])
+                && (float)$cached['expires_at'] >= \microtime(true)
+                && \is_array($cached['data'])) {
+                $this->layoutCache[$cacheKey] = $cached['data'];
+                return $cached['data'];
+            }
+            $runtimeCachedLayout = $this->runtimeCacheGet('layout.data.' . $cacheKey);
+            if (\is_array($runtimeCachedLayout)) {
+                $this->layoutCache[$cacheKey] = $runtimeCachedLayout;
+                self::$publishedLayoutDataCache[$cacheKey] = [
+                    'expires_at' => \microtime(true) + $this->publishedLayoutCacheTtl(),
+                    'data' => $runtimeCachedLayout,
+                ];
+                return $runtimeCachedLayout;
+            }
+        }
 
         // 1. 按指定状态获取数据
-        $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status);
+        $layout = $this->layoutService->getFullLayout($themeId, $pageType, $status, $identity);
         
         // 2. 检查是否有部件数据
         $hasWidgets = $this->hasWidgetsInLayout($layout);
         
         // 3. 如果没有数据且是已发布状态，尝试降级到草稿数据
         if (!$hasWidgets && $status === ThemeLayout::STATUS_PUBLISHED) {
-            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+            $draftLayout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
             if ($this->hasWidgetsInLayout($draftLayout)) {
                 // 使用草稿数据，并自动发布（后台静默发布）
                 $this->autoPublishDraft($themeId, $pageType, $draftLayout);
@@ -551,7 +1085,7 @@ class SlotRendererService
             $seeded = $this->seedDefaultLayoutIfNeeded($themeId, $pageType);
             if ($seeded) {
                 // 重新获取布局数据
-                $layout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
+                $layout = $this->layoutService->getFullLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identity);
                 if ($this->hasWidgetsInLayout($layout)) {
                     $hasWidgets = true;
                     // 如果是前端请求已发布状态，自动发布
@@ -577,9 +1111,17 @@ class SlotRendererService
             }
         }
 
+        $layout = ObjectManager::getInstance(ProductPageLayoutNormalizer::class)
+            ->normalizeLayoutForRender($pageType, $layout);
+
         // 仅已发布状态写入缓存；草稿不缓存
         if (!$isDraft) {
             $this->layoutCache[$cacheKey] = $layout;
+            self::$publishedLayoutDataCache[$cacheKey] = [
+                'expires_at' => \microtime(true) + $this->publishedLayoutCacheTtl(),
+                'data' => $layout,
+            ];
+            $this->runtimeCacheSet('layout.data.' . $cacheKey, $layout, $this->publishedLayoutCacheTtl());
         }
 
         return $layout;
@@ -625,41 +1167,13 @@ class SlotRendererService
     private function autoPublishDraft(int $themeId, string $pageType, array $draftLayout): void
     {
         try {
-            // 先获取一次已发布数据（避免循环内 N+1 查询）
-            $existingPublished = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_PUBLISHED);
-            
-            // 静默发布：将草稿数据复制到已发布状态
-            foreach ($draftLayout as $area => $areaData) {
-                foreach ($areaData['widgets'] ?? [] as $widget) {
-                    // 去重：按 widget_code + widget_module + slot_id 三重匹配
-                    $alreadyPublished = false;
-                    $widgetSlotId = $widget['slot_id'] ?? '';
-                    foreach ($existingPublished[$area]['widgets'] ?? [] as $existingWidget) {
-                        if ($existingWidget['widget_code'] === $widget['widget_code'] 
-                            && $existingWidget['widget_module'] === $widget['widget_module']
-                            && ($existingWidget['slot_id'] ?? '') === $widgetSlotId) {
-                            $alreadyPublished = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!$alreadyPublished) {
-                        $this->layoutService->saveWidget([
-                            'theme_id' => $themeId,
-                            'page_type' => $pageType,
-                            'area' => $area,
-                            'widget_code' => $widget['widget_code'],
-                            'widget_module' => $widget['widget_module'],
-                            'widget_type' => $widget['widget_type'] ?? '',
-                            'slot_id' => $widget['slot_id'] ?? null,
-                            'config' => $widget['config'] ?? [],
-                            'sort_order' => $widget['sort_order'] ?? 0,
-                            'is_active' => true,
-                            'status' => ThemeLayout::STATUS_PUBLISHED,
-                        ]);
-                    }
-                }
+            if (!$this->hasWidgetsInLayout($draftLayout)) {
+                return;
             }
+
+            // 与后台发布一致：先删后插全量替换，禁止向 published 追加行（否则会出现重复部件）
+            $this->layoutService->publishLayout($themeId, $pageType);
+            $this->clearCache();
         } catch (\Exception $e) {
             // 静默失败，不影响前端渲染
         }
@@ -721,6 +1235,160 @@ class SlotRendererService
         $this->widgetCache = [];
         $this->layoutCache = [];
         $this->orphanWidgets = [];
+        self::$publishedLayoutDataCache = [];
+        self::$widgetOutputCache = [];
+        $this->purgeRuntimeCacheNamespace();
+        self::$runtimeCache = null;
+        self::$runtimeCacheResolved = false;
+    }
+
+    /**
+     * 清理 WLS 跨请求共享的 theme_runtime 布局/部件输出缓存。
+     * 发布主题后必须调用，否则 Worker 仍可能渲染旧版 slot 布局。
+     */
+    public function purgeRuntimeCacheNamespace(): void
+    {
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
+            return;
+        }
+
+        try {
+            $cache = self::runtimeCache();
+            if ($cache !== null) {
+                $cache->clearNamespace('theme_runtime');
+                return;
+            }
+
+            $cache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'theme_runtime_slot',
+                'prefer_direct_connect' => true,
+                'pool_size' => 1,
+                'auto_start' => false,
+            ]));
+            $cache->clearNamespace('theme_runtime');
+        } catch (\Throwable) {
+            // 静默失败，不影响发布主流程
+        }
+    }
+
+    private function runtimeCacheGet(string $key): mixed
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return null;
+        }
+
+        try {
+            return $cache->get('theme_runtime', $key);
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+            return null;
+        }
+    }
+
+    private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        $cache = self::runtimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set('theme_runtime', $key, $value, \max(1, $ttl));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+            self::$runtimeCacheResolved = true;
+        }
+    }
+
+    private static function runtimeCache(): ?MemoryStateFacade
+    {
+        if (self::$runtimeCacheResolved) {
+            return self::$runtimeCache;
+        }
+        self::$runtimeCacheResolved = true;
+
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent() || !\class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            self::$runtimeCache = new MemoryStateFacade(self::cachePolicy()->memoryOptions([
+                'consumer_code' => 'theme_runtime_slot',
+                'prefer_direct_connect' => true,
+                'pool_size' => 1,
+                'auto_start' => false,
+            ]));
+        } catch (\Throwable) {
+            self::$runtimeCache = null;
+        }
+
+        return self::$runtimeCache;
+    }
+
+    private function publishedLayoutCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('theme.slot_layout_ttl', (int)self::PUBLISHED_LAYOUT_CACHE_TTL);
+    }
+
+    private function widgetOutputCacheTtl(): int
+    {
+        return self::cachePolicy()->ttl('theme.widget_output_ttl', (int)self::WIDGET_OUTPUT_CACHE_TTL);
+    }
+
+    private static function cachePolicy(): RuntimeCachePolicy
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class);
+    }
+
+    private function traceCall(string $name, callable $callback, array $meta = []): mixed
+    {
+        if (!RequestLifecycleTrace::isEnabled()) {
+            self::cooperativeRenderYield();
+            try {
+                return $callback();
+            } finally {
+                self::cooperativeRenderYield();
+            }
+        }
+
+        self::cooperativeRenderYield();
+        $start = microtime(true);
+        RequestLifecycleTrace::pushCurrentParent($name);
+        try {
+            return $callback();
+        } finally {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, 'theme', null, $meta);
+            self::cooperativeRenderYield();
+        }
+    }
+
+    private static function cooperativeRenderYield(): void
+    {
+        if (!Runtime::isPersistent() || !SchedulerSystem::isSchedulerActive()) {
+            return;
+        }
+
+        $fiber = \Fiber::getCurrent();
+        if (!$fiber instanceof \Fiber) {
+            return;
+        }
+
+        $now = \microtime(true);
+        self::$fiberRenderYieldAt ??= new \WeakMap();
+        $lastYieldAt = (float)(self::$fiberRenderYieldAt[$fiber] ?? 0.0);
+        if ($lastYieldAt <= 0.0) {
+            self::$fiberRenderYieldAt[$fiber] = $now;
+            return;
+        }
+        if ($lastYieldAt > 0.0 && (($now - $lastYieldAt) * 1000000) < self::WLS_RENDER_YIELD_MIN_INTERVAL_US) {
+            return;
+        }
+
+        self::$fiberRenderYieldAt[$fiber] = $now;
+        SchedulerSystem::yield();
     }
     
     /**
@@ -757,10 +1425,15 @@ class SlotRendererService
                     'id' => $slotId,
                     'name' => $element->getAttribute('data-wslot-name') ?: $slotId,
                     'accept' => array_filter(explode(',', $element->getAttribute('data-wslot-accept') ?: '')),
+                    'reject' => array_filter(explode(',', $element->getAttribute('data-wslot-reject') ?: '')),
                     'exclusive' => $element->getAttribute('data-wslot-exclusive') === 'true',
                     'append' => $element->getAttribute('data-wslot-append') === 'true',
                     'prepend' => $element->getAttribute('data-wslot-prepend') === 'true',
                     'multiple' => $element->getAttribute('data-wslot-multiple') === 'true',
+                    'position' => $element->getAttribute('data-wslot-position') ?: null,
+                    'max' => $element->getAttribute('data-wslot-max') ?: null,
+                    'min' => $element->getAttribute('data-wslot-min') ?: null,
+                    'required' => $element->getAttribute('data-wslot-required') === 'true',
                 ];
             }
         }
@@ -778,10 +1451,15 @@ class SlotRendererService
                     'id' => $slotId,
                     'name' => $element->getAttribute('data-slot-name') ?: $slotId,
                     'accept' => [],
+                    'reject' => [],
                     'exclusive' => false,
                     'append' => false,
                     'prepend' => false,
                     'multiple' => true,
+                    'position' => null,
+                    'max' => null,
+                    'min' => null,
+                    'required' => false,
                     'legacy' => true, // 标记为旧方式
                 ];
             }

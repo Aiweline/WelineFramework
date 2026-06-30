@@ -10,14 +10,18 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
 use Weline\Framework\App\State;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
 use Weline\I18n\Model\Locale\Dictionary;
 use Weline\Meta\Helper\MetaData;
 use Weline\Meta\Model\MetaConfig;
+use Weline\Meta\Service\ParamDefinitionNormalizer;
+use Weline\Server\Service\MemoryStateFacade;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewThemeScopeService;
 use Weline\Theme\Service\ThemeContextService;
@@ -53,12 +57,19 @@ final class ThemeDataRequestState
  */
 class ThemeData
 {
+    private const RUNTIME_CACHE_TTL = 300;
+    private const SHARED_CACHE_NAMESPACE = 'weline_site_runtime';
+
     private static ?ThemeDataRequestState $mainState = null;
 
     /** @var \WeakMap<\Fiber, ThemeDataRequestState>|null */
     private static ?\WeakMap $fiberStates = null;
     /** @var array<string, ThemeDataRequestState> */
     private static array $scopedStates = [];
+    /** @var array<string, array{expires_at: float, value: mixed}> */
+    private static array $runtimeCache = [];
+    private static ?MemoryStateFacade $sharedRuntimeCache = null;
+    private static bool $sharedRuntimeCacheResolved = false;
 
     private static function currentFiber(): ?\Fiber
     {
@@ -156,6 +167,128 @@ class ThemeData
         } catch (\Throwable) {
             return $scope;
         }
+    }
+
+    /**
+     * @return array{0: bool, 1: mixed}
+     */
+    private static function getRuntimeCache(string $key): array
+    {
+        $entry = self::$runtimeCache[$key] ?? null;
+        if (is_array($entry)) {
+            if (($entry['expires_at'] ?? 0.0) >= microtime(true)) {
+                return [true, $entry['value'] ?? null];
+            }
+            unset(self::$runtimeCache[$key]);
+        }
+
+        $cache = self::sharedRuntimeCache();
+        if ($cache === null) {
+            return [false, null];
+        }
+
+        try {
+            $value = $cache->get(self::SHARED_CACHE_NAMESPACE, 'theme.' . $key);
+            if ($value === null) {
+                return [false, null];
+            }
+            self::$runtimeCache[$key] = [
+                'expires_at' => microtime(true) + self::runtimeCacheTtl(),
+                'value' => $value,
+            ];
+            return [true, $value];
+        } catch (\Throwable) {
+            self::$sharedRuntimeCache = null;
+            self::$sharedRuntimeCacheResolved = true;
+            return [false, null];
+        }
+    }
+
+    private static function setRuntimeCache(string $key, mixed $value): void
+    {
+        self::$runtimeCache[$key] = [
+            'expires_at' => microtime(true) + self::runtimeCacheTtl(),
+            'value' => $value,
+        ];
+
+        $cache = self::sharedRuntimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->set(self::SHARED_CACHE_NAMESPACE, 'theme.' . $key, $value, self::runtimeCacheTtl());
+        } catch (\Throwable) {
+            self::$sharedRuntimeCache = null;
+            self::$sharedRuntimeCacheResolved = true;
+        }
+    }
+
+    private static function sharedRuntimeCache(): ?MemoryStateFacade
+    {
+        if (self::$sharedRuntimeCacheResolved) {
+            return self::$sharedRuntimeCache;
+        }
+        self::$sharedRuntimeCacheResolved = true;
+
+        if (!class_exists(Runtime::class, false) || !Runtime::isPersistent() || !class_exists(MemoryStateFacade::class)) {
+            return null;
+        }
+
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            self::$sharedRuntimeCache = new MemoryStateFacade($policy->memoryOptions([
+                'consumer_code' => self::SHARED_CACHE_NAMESPACE,
+                'prefer_direct_connect' => true,
+                'persistent' => true,
+                'lazy_connect' => true,
+            ]));
+        } catch (\Throwable) {
+            self::$sharedRuntimeCache = null;
+        }
+
+        return self::$sharedRuntimeCache;
+    }
+
+    private static function runtimeCacheTtl(): int
+    {
+        try {
+            /** @var RuntimeCachePolicy $policy */
+            $policy = ObjectManager::getInstance(RuntimeCachePolicy::class);
+            return $policy->ttl('theme.runtime_data_ttl', self::RUNTIME_CACHE_TTL);
+        } catch (\Throwable) {
+            return self::RUNTIME_CACHE_TTL;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $themeConfigs
+     * @return array<string, mixed>
+     */
+    private static function filterThemeConfigsByType(array $themeConfigs, string $type): array
+    {
+        $prefix = $type . '.';
+        $result = [];
+
+        foreach ($themeConfigs as $configKey => $configValue) {
+            $configKey = (string)$configKey;
+            if (!str_starts_with($configKey, $prefix)) {
+                continue;
+            }
+
+            if (is_string($configValue) && $configValue !== ''
+                && ($configValue[0] === '{' || $configValue[0] === '[')) {
+                $decoded = json_decode($configValue, true);
+                if ($decoded !== null && json_last_error() === JSON_ERROR_NONE) {
+                    $configValue = $decoded;
+                }
+            }
+
+            $result[substr($configKey, strlen($prefix))] = $configValue;
+        }
+
+        return $result;
     }
     
     /**
@@ -412,17 +545,29 @@ class ThemeData
             return [];
         }
 
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        $params = $normalizer->normalizeDefinitions($params);
+
         $definitions = [];
         foreach ($params as $name => $definition) {
             if (!is_array($definition)) {
                 $definition = ['default' => $definition];
             }
+            $uiType = $definition['ui_type'] ?? $definition['input'] ?? $definition['type'] ?? 'text';
+            $isTranslatable = !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']);
             $definitions[$name] = [
-                'name' => $definition['name'] ?? $name,
+                'name' => $definition['name'] ?? $definition['label'] ?? $name,
+                'label' => $definition['label'] ?? $definition['name'] ?? $name,
                 'description' => $definition['description'] ?? '',
                 'default' => $definition['default'] ?? null,
-                'translate' => !empty($definition['translate']) || !empty($definition['translatable']),
-                'input' => $definition['input'] ?? $definition['type'] ?? 'text',
+                'type' => $definition['type'] ?? 'string',
+                'ui_type' => $uiType,
+                'input' => $definition['input'] ?? $uiType,
+                'translate' => $isTranslatable,
+                'i18n' => $isTranslatable,
+                'translatable' => $isTranslatable,
+                'required' => !empty($definition['required']),
                 'options' => $definition['options'] ?? $definition['option'] ?? [],
                 'meta' => $definition,
             ];
@@ -480,14 +625,45 @@ class ThemeData
                 $value = $metaConfig->getConfig($themeId, $namespace, $configKey, $effectiveScope, $resolvedLocale);
             }
 
-            if ($value === null && is_scalar($defaultValue)) {
-                $value = (string)$defaultValue;
+            if ($value === null) {
+                $value = is_scalar($defaultValue) ? (string)$defaultValue : $defaultValue;
             }
 
-            $values[$paramName] = $value;
+            $values[$paramName] = self::normalizeParamValueForDefinition($value, $definition);
         }
 
         return $values;
+    }
+
+    public static function normalizeParamValueForDefinition(mixed $value, array $definition): mixed
+    {
+        $defaultValue = $definition['default'] ?? null;
+        $type = strtolower(trim((string)($definition['type'] ?? '')));
+        $expectsArray = $type === 'array' || is_array($defaultValue);
+
+        if (!$expectsArray || is_array($value)) {
+            return $value;
+        }
+
+        if ($value === null) {
+            return is_array($defaultValue) ? $defaultValue : [];
+        }
+
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        $trimmedValue = trim($value);
+        if ($trimmedValue === '') {
+            return is_array($defaultValue) ? $defaultValue : [];
+        }
+
+        $decodedValue = json_decode($trimmedValue, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decodedValue)) {
+            return $decodedValue;
+        }
+
+        return $value;
     }
 
     /**
@@ -518,6 +694,9 @@ class ThemeData
             }
 
             $configIdentify = "{$identify}.param.{$paramName}.value";
+            if (is_array($value)) {
+                $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
             self::set($configIdentify, (string)$value, $scope, $locale);
         }
     }
@@ -754,6 +933,14 @@ class ThemeData
             if ($state->performanceKey === $key) {
                 return;
             }
+
+            [$runtimeHit, $runtimeThemeConfigs] = self::getRuntimeCache('performance:' . $key);
+            if ($runtimeHit && is_array($runtimeThemeConfigs)) {
+                MetaData::performanceLoad($key, $namespace, $metaIdentify, $scope, $locale);
+                $state->performanceCache[$key] = $runtimeThemeConfigs;
+                $state->performanceKey = $key;
+                return;
+            }
             // 先调用MetaData的performanceLoad方法加载Meta记录
             MetaData::performanceLoad($key, $namespace, $metaIdentify, $scope, $locale);
             
@@ -785,8 +972,10 @@ class ThemeData
                     }
                     
                     $state->performanceCache[$key] = $themeConfigs;
+                    self::setRuntimeCache('performance:' . $key, $themeConfigs);
                 } catch (\Throwable $e) {
                     $state->performanceCache[$key] = [];
+                    self::setRuntimeCache('performance:' . $key, []);
                 }
             }
             
@@ -806,7 +995,24 @@ class ThemeData
     public static function clearCache(): void
     {
         MetaData::clearCache();
+        self::$runtimeCache = [];
+        self::clearSharedRuntimeCache();
         self::resetCurrentState();
+    }
+
+    private static function clearSharedRuntimeCache(): void
+    {
+        $cache = self::sharedRuntimeCache();
+        if ($cache === null) {
+            return;
+        }
+
+        try {
+            $cache->clearNamespace(self::SHARED_CACHE_NAMESPACE);
+        } catch (\Throwable) {
+            self::$sharedRuntimeCache = null;
+            self::$sharedRuntimeCacheResolved = true;
+        }
     }
 
     /**
@@ -814,7 +1020,7 @@ class ThemeData
      */
     public static function resetRequestState(): void
     {
-        self::clearCache();
+        self::resetCurrentState();
         self::state()->performanceLoading = false;
     }
     
@@ -926,6 +1132,12 @@ class ThemeData
         if (isset($state->performanceCache[$cacheKey])) {
             return $state->performanceCache[$cacheKey];
         }
+
+        [$runtimeHit, $runtimeValue] = self::getRuntimeCache($cacheKey);
+        if ($runtimeHit && is_array($runtimeValue)) {
+            $state->performanceCache[$cacheKey] = $runtimeValue;
+            return $runtimeValue;
+        }
         
         try {
             /** @var \Weline\Meta\Model\Meta $metaModel */
@@ -980,6 +1192,7 @@ class ThemeData
             }
             
             $state->performanceCache[$cacheKey] = $result;
+            self::setRuntimeCache($cacheKey, $result);
             return $result;
         } catch (\Exception $e) {
             return [];
@@ -1177,7 +1390,9 @@ class ThemeData
         
         // 从 setting 中提取参数
         if (isset($setting['param']) && is_array($setting['param'])) {
-            $meta['params'] = $setting['param'];
+            /** @var ParamDefinitionNormalizer $normalizer */
+            $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+            $meta['params'] = $normalizer->normalizeDefinitions($setting['param']);
         }
         
         // 如果 meta_data 和 setting 都没有参数，尝试从文件解析
@@ -1223,22 +1438,9 @@ class ThemeData
      */
     private static function formatParsedParams(array $parsedParams): array
     {
-        $params = [];
-        foreach ($parsedParams as $param) {
-            $key = $param['name'] ?? null;
-            if (!$key) {
-                continue;
-            }
-            $params[$key] = [
-                'name' => $param['name_label'] ?? $key,
-                'description' => $param['description'] ?? '',
-                'default' => $param['default'] ?? '',
-                'type' => $param['type'] ?? 'text',
-                'required' => (bool)($param['required'] ?? false),
-                'options' => $param['options'] ?? null,
-            ];
-        }
-        return $params;
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        return $normalizer->normalizeParsedParamList($parsedParams);
     }
     
     /**
@@ -1266,6 +1468,20 @@ class ThemeData
         $cacheKey = "config_list_{$area}_{$type}_{$effectiveScope}_{$themeId}";
         if (isset($state->performanceCache[$cacheKey])) {
             return $state->performanceCache[$cacheKey];
+        }
+
+        [$runtimeHit, $runtimeValue] = self::getRuntimeCache($cacheKey);
+        if ($runtimeHit && is_array($runtimeValue)) {
+            $state->performanceCache[$cacheKey] = $runtimeValue;
+            return $runtimeValue;
+        }
+
+        if ($state->performanceKey && isset($state->performanceCache[$state->performanceKey])
+            && is_array($state->performanceCache[$state->performanceKey])) {
+            $result = self::filterThemeConfigsByType($state->performanceCache[$state->performanceKey], $type);
+            $state->performanceCache[$cacheKey] = $result;
+            self::setRuntimeCache($cacheKey, $result);
+            return $result;
         }
         
         try {
@@ -1322,6 +1538,7 @@ class ThemeData
             }
             
             $state->performanceCache[$cacheKey] = $result;
+            self::setRuntimeCache($cacheKey, $result);
             return $result;
         } catch (\Exception $e) {
             return [];

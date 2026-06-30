@@ -28,8 +28,11 @@ use Weline\Framework\Http\Sse\SseContext;
  * - 错误处理和重试机制
  * - Token使用量统计
  */
-class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterface
+class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterface, ModelListingProviderInterface, ProviderConnectionTestInterface
 {
+    use ModelListingProviderTrait;
+    use ProviderConnectionTestTrait;
+
     /**
      * 最大重试次数
      */
@@ -96,18 +99,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
-        
-        // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
-        if (!SseContext::isSseEnabled()) {
-            if ($timeout > 0) {
-                $timeLimit = $timeout + 10;
-                @set_time_limit($timeLimit);
-            } else {
-                @set_time_limit(0);
-            }
-        }
+        $timeout = ProviderTimeoutPolicy::resolveRequestTimeout($params, $config);
+        $this->applyExecutionTimeLimit($timeout);
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
@@ -126,8 +119,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         // JSON 模式（业界标准）：强制模型只输出合法 JSON，降低解析失败率
-        if (!empty($params['response_format']) && is_array($params['response_format'])) {
-            $requestData['response_format'] = $params['response_format'];
+        $responseFormat = $this->resolveChatResponseFormat($model, $params, $config);
+        if ($responseFormat !== null) {
+            $requestData['response_format'] = $responseFormat;
         }
 
         // 优先使用base_url，如果没有则使用api_url，最后使用默认值
@@ -223,16 +217,23 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $requestData = $this->buildImageGenerationRequest($model, $prompt, $params, $config);
-        $timeout = isset($params['timeout']) ? (int)($params['timeout']) : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = ProviderTimeoutPolicy::resolveImageGenerationTimeout($params, $config);
+        $this->applyExecutionTimeLimit($timeout);
+        $requestUrl = $this->resolveImageGenerationUrl($config);
         $response = $this->callApiWithRetry(
-            $this->resolveImageGenerationUrl($config),
+            $requestUrl,
             $apiKey,
             $requestData,
             $proxyInfo,
             $timeout
         );
 
-        return $this->normalizeImageGenerationResponse($response, (string)$requestData['model'], $requestData);
+        return ImageGenerationResponseNormalizer::fromOpenAiImageResponse(
+            $response,
+            (string)$requestData['model'],
+            $requestData,
+            $requestUrl
+        );
     }
 
     /**
@@ -291,7 +292,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
+        $streamLowSpeedTime = ProviderTimeoutPolicy::resolveStreamLowSpeedTime($params, $timeout);
+        $this->applyExecutionTimeLimit($timeout);
 
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
@@ -308,8 +311,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         // JSON 模式（业界标准）：强制模型只输出合法 JSON
-        if (!empty($params['response_format']) && is_array($params['response_format'])) {
-            $requestData['response_format'] = $params['response_format'];
+        $responseFormat = $this->resolveChatResponseFormat($model, $params, $config);
+        if ($responseFormat !== null) {
+            $requestData['response_format'] = $responseFormat;
         }
 
         $apiUrl = $config['base_url'] ?? $config['api_url'] ?? 'https://api.openai.com/v1';
@@ -338,10 +342,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $finishReason = '';
         $modelName = '';
 
-        $ch = $this->initCurl($apiUrl, $apiKey, $requestData, $proxyInfo, $timeout);
+        $ch = $this->initCurl($apiUrl, $apiKey, $requestData, $proxyInfo, $timeout, $streamLowSpeedTime);
 
         $rawResponseBuffer = '';
         $hasValidChunk = false;
+        $sseLineBuffer = '';
         $startTime = microtime(true);
         $lastProgressNotify = $startTime;
         $progressInterval = 5; // 每 5 秒发送一次等待状态
@@ -376,11 +381,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             });
         }
 
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) use (
+        $consumeStreamChunk = function (string $data) use (
             &$fullContent, &$fullReasoning, &$toolCallsAccum, &$finishReason, &$modelName,
-            &$rawResponseBuffer, &$hasValidChunk, $startTime, $timeout,
+            &$rawResponseBuffer, &$hasValidChunk, &$sseLineBuffer, $startTime, $timeout,
             $onReasoning, $onContent, $onHeartbeat
-        ) {
+        ): void {
             if (strlen($rawResponseBuffer) < 4096) {
                 $rawResponseBuffer .= $data;
             }
@@ -390,7 +395,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 $onHeartbeat();
             }
 
-            $lines = explode("\n", $data);
+            $sseLineBuffer .= $data;
+            $lines = \preg_split('/\r\n|\n|\r/', $sseLineBuffer) ?: [];
+            $sseLineBuffer = (string)\array_pop($lines);
             foreach ($lines as $line) {
                 $line = trim($line);
                 if (empty($line) || !str_starts_with($line, 'data: ')) {
@@ -455,14 +462,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                     }
                 }
             }
+        };
 
-            return strlen($data);
-        });
-
-        curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
+        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk);
+        $httpCode = $curlResult['http_code'];
+        $error = $curlResult['error'];
 
         if ($error) {
             if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
@@ -562,18 +566,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
-        
-        // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
-        if (!SseContext::isSseEnabled()) {
-            if ($timeout > 0) {
-                $timeLimit = $timeout + 10;
-                @set_time_limit($timeLimit);
-            } else {
-                @set_time_limit(0);
-            }
-        }
+        $timeout = ProviderTimeoutPolicy::resolveStreamTimeout($params, $config);
+        $streamLowSpeedTime = ProviderTimeoutPolicy::resolveStreamLowSpeedTime($params, $timeout);
+        $this->applyExecutionTimeLimit($timeout);
         $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
@@ -586,6 +581,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         if (!empty($params['tools']) && is_array($params['tools'])) {
             $requestData['tools'] = $this->convertToolsToOpenAiFormat($params['tools']);
             $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
+        }
+
+        $responseFormat = $this->resolveChatResponseFormat($model, $params, $config);
+        if ($responseFormat !== null) {
+            $requestData['response_format'] = $responseFormat;
         }
 
         $totalTokens = [
@@ -628,7 +628,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             $reasoningCallback ? function($chunk) use ($reasoningCallback, &$fullReasoning) {
                 $fullReasoning .= $chunk;
                 $reasoningCallback($chunk);
-            } : null
+            } : null,
+            $streamLowSpeedTime
         );
 
         // 如果流式调用没有返回任何内容，抛出明确错误
@@ -714,69 +715,142 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
     }
 
     /**
-     * @param array<string,mixed> $response
-     * @param array<string,mixed> $requestData
-     * @return array<string,mixed>
-     */
-    private function normalizeImageGenerationResponse(array $response, string $modelCode, array $requestData): array
-    {
-        $images = [];
-        foreach (is_array($response['data'] ?? null) ? $response['data'] : [] as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-
-            $image = [];
-            foreach (['url', 'b64_json', 'revised_prompt'] as $key) {
-                if (isset($item[$key]) && is_scalar($item[$key]) && trim((string)$item[$key]) !== '') {
-                    $image[$key] = (string)$item[$key];
-                }
-            }
-
-            $mimeType = $this->normalizeImageMimeType(
-                (string)($item['mime_type'] ?? ''),
-                (string)($requestData['output_format'] ?? $requestData['response_format'] ?? '')
-            );
-            if ($mimeType !== '') {
-                $image['mime_type'] = $mimeType;
-            }
-
-            if ($image !== []) {
-                $images[] = $image;
-            }
-        }
-
-        return [
-            'images' => $images,
-            'usage' => is_array($response['usage'] ?? null) ? $response['usage'] : [],
-            'model' => (string)($response['model'] ?? $modelCode),
-            'finish_reason' => 'stop',
-            'raw' => $response,
-        ];
-    }
-
-    private function normalizeImageMimeType(string $mimeType, string $format): string
-    {
-        $mimeType = strtolower(trim($mimeType));
-        if ($mimeType !== '') {
-            return $mimeType;
-        }
-
-        $format = strtolower(trim($format));
-        return match ($format) {
-            'jpg', 'jpeg' => 'image/jpeg',
-            'webp' => 'image/webp',
-            default => 'image/png',
-        };
-    }
-
-    /**
      * 构建消息数组
      * 
      * @param string $prompt
      * @param array $params
      * @return array
      */
+    /**
+     * @param array<string,mixed> $params
+     * @param array<string,mixed> $config
+     * @return array<string,mixed>|null
+     */
+    private function resolveChatResponseFormat(AiModel $model, array $params, array $config): ?array
+    {
+        $responseFormat = $params['response_format'] ?? $config['response_format'] ?? null;
+        if (!\is_array($responseFormat) || $responseFormat === []) {
+            return null;
+        }
+
+        $type = \strtolower(\trim((string)($responseFormat['type'] ?? '')));
+        if ($type === '') {
+            return null;
+        }
+
+        if ($type === 'json_schema') {
+            return $this->supportsJsonSchemaResponseFormat($model, $config) ? $responseFormat : null;
+        }
+
+        if ($type === 'json_object') {
+            return $this->supportsJsonObjectResponseFormat($model, $config) ? $responseFormat : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function supportsJsonSchemaResponseFormat(AiModel $model, array $config): bool
+    {
+        if ($this->isDeepSeekChatModel($model, $config)) {
+            return false;
+        }
+
+        foreach ([
+            'response_format_json_schema',
+            'supports_response_format_json_schema',
+            'json_schema_response_format',
+            'structured_outputs',
+        ] as $key) {
+            if (\array_key_exists($key, $config)) {
+                $resolved = $this->resolveConfigBoolean($config[$key]);
+                if ($resolved !== null) {
+                    return $resolved;
+                }
+            }
+        }
+
+        foreach ($model->getCapabilities() as $key => $value) {
+            if (\is_string($key)) {
+                if ($value === false || $value === 0 || $value === '0' || $value === null || $value === '') {
+                    continue;
+                }
+                $capability = $key;
+            } else {
+                $capability = (string)$value;
+            }
+            if (\in_array(\strtolower(\trim($capability)), [
+                'structured_outputs',
+                'json_schema',
+                'json_schema_response_format',
+                'response_format_json_schema',
+            ], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function supportsJsonObjectResponseFormat(AiModel $model, array $config): bool
+    {
+        if ($this->isDeepSeekChatModel($model, $config)) {
+            return false;
+        }
+
+        foreach ([
+            'response_format_json_object',
+            'supports_response_format_json_object',
+            'json_object_response_format',
+        ] as $key) {
+            if (\array_key_exists($key, $config)) {
+                $resolved = $this->resolveConfigBoolean($config[$key]);
+                if ($resolved !== null) {
+                    return $resolved;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function isDeepSeekChatModel(AiModel $model, array $config): bool
+    {
+        $baseUrl = \strtolower((string)($config['base_url'] ?? $config['api_url'] ?? ''));
+        $modelCode = \strtolower((string)($config['model'] ?? $config['model_id'] ?? $model->getModelCode()));
+
+        return \str_contains($baseUrl, 'deepseek.com') || \str_contains($modelCode, 'deepseek');
+    }
+
+    private function resolveConfigBoolean(mixed $value): ?bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (bool)$value;
+        }
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+            if (\in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+                return true;
+            }
+            if (\in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+                return false;
+            }
+        }
+
+        return null;
+    }
+
     private function buildMessages(string $prompt, array $params): array
     {
         // 智能体模式：直接使用完整消息历史
@@ -879,6 +953,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
     {
         // SSE 模式下不做 PHP 层面的超时检测
         $isSseMode = SseContext::isSseEnabled();
+        $this->applyExecutionTimeLimit($timeout);
         
         $startTime = microtime(true);
         $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
@@ -900,7 +975,8 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             // 清除之前的错误
             error_clear_last();
             
-            $response = curl_exec($ch);
+            $curlResult = $this->executeJsonCurl($ch);
+            $response = (string)$curlResult['body'];
             
             // 检查 PHP 超时（SSE 模式下跳过）
             if (!$isSseMode) {
@@ -919,10 +995,10 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 }
             }
             
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
+            $httpCode = (int)$curlResult['http_code'];
+            $error = (string)$curlResult['error'];
 
-            if ($response === false) {
+            if ($error !== '') {
                 // 检查是否是超时错误
                 if (strpos($error, 'timeout') !== false || strpos($error, 'timed out') !== false) {
                     throw new Exception($this->getTimeoutErrorMessage($timeout));
@@ -934,16 +1010,29 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             
             if ($httpCode >= 500 && $retryCount < self::MAX_RETRIES) {
                 // 服务器错误，重试
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                $this->delayBeforeRetry($retryCount);
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
 
             if ($httpCode !== 200) {
+                if (!\is_array($result)) {
+                    throw new Exception('API returned invalid JSON with HTTP status: ' . $httpCode);
+                }
                 $errorMsg = $result['error']['message'] ?? "HTTP错误: {$httpCode}";
                 throw new Exception("API返回错误: {$errorMsg}");
             }
 
-            if (!isset($result['choices'][0]['message']['content'])) {
+            if (str_ends_with($url, '/images/generations')) {
+                if (!\is_array($result)) {
+                    throw new Exception('API image response format error');
+                }
+                if (!isset($result['data']) || !is_array($result['data'])) {
+                    throw new Exception('API image response format error');
+                }
+                return $result;
+            }
+
+            if (!\is_array($result) || !isset($result['choices'][0]['message']['content'])) {
                 throw new Exception("API响应格式错误");
             }
 
@@ -957,7 +1046,7 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
             }
             
             if ($retryCount < self::MAX_RETRIES) {
-                sleep(self::RETRY_DELAY * ($retryCount + 1));
+                $this->delayBeforeRetry($retryCount);
                 return $this->callApiWithRetry($url, $apiKey, $data, $proxyInfo, $timeout, $retryCount + 1);
             }
             throw new Exception("API调用失败（已重试{$retryCount}次，URL: {$url}）: " . $e->getMessage());
@@ -975,16 +1064,79 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
      * @param int $timeout
      * @throws Exception
      */
-    private function callStreamApi(string $url, string $apiKey, array $data, callable $callback, array $proxyInfo, int $timeout, ?callable $reasoningCallback = null): void
+    /**
+     * @return array{body:string,http_code:int,error:string}
+     */
+    private function executeJsonCurl(\CurlHandle $ch): array
+    {
+        $pump = \Weline\Framework\Php\FiberTaskRunner::currentPump();
+        if ($pump !== null) {
+            $handleId = $pump->register($ch);
+            $body = '';
+            $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
+
+            try {
+                while (($chunk = $pump->awaitChunk($handleId)) !== null) {
+                    if ($chunk !== '') {
+                        $body .= $chunk;
+                    }
+                }
+                $curlResult = $pump->finalize($handleId);
+                $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string)(curl_error($ch) ?: ($curlResult['error'] ?? ''));
+                curl_close($ch);
+
+                return [
+                    'body' => $body,
+                    'http_code' => $httpCode,
+                    'error' => !empty($curlResult['ok'])
+                        ? $error
+                        : ($error !== '' ? $error : (string)($curlResult['error'] ?? '')),
+                ];
+            } catch (\Throwable $throwable) {
+                $pump->abort($handleId);
+                curl_close($ch);
+                throw $throwable;
+            }
+        }
+
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = (string)curl_error($ch);
+        curl_close($ch);
+
+        return [
+            'body' => $response === false ? '' : (string)$response,
+            'http_code' => $httpCode,
+            'error' => $error,
+        ];
+    }
+
+    private function delayBeforeRetry(int $retryCount): void
+    {
+        \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(self::RETRY_DELAY * ($retryCount + 1) * 1000);
+    }
+
+    private function callStreamApi(
+        string $url,
+        string $apiKey,
+        array $data,
+        callable $callback,
+        array $proxyInfo,
+        int $timeout,
+        ?callable $reasoningCallback = null,
+        ?int $lowSpeedTime = null
+    ): void
     {
         // SSE 模式下不做 PHP 层面的超时检测，由 SseWriter 和 curl 自身控制
         $isSseMode = SseContext::isSseEnabled();
+        $this->applyExecutionTimeLimit($timeout);
         
         $startTime = microtime(true);
         $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
         $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
-        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
+        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, $lowSpeedTime);
         
         // 在执行前检查剩余时间，如果时间不足，提前抛出错误
         if ($timeLimit !== null && $timeLimit > 0) {
@@ -1004,12 +1156,13 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         $hasValidChunk = false;
         
         // 设置流式处理回调
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($curl, $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, &$rawResponseBuffer, &$hasValidChunk) {
+        $sseLineBuffer = '';
+        $consumeStreamChunk = function (string $data) use ($callback, $reasoningCallback, $startTime, $timeLimit, $timeout, &$rawResponseBuffer, &$hasValidChunk, &$sseLineBuffer): void {
             // 检查是否超时
             if ($timeLimit !== null) {
                 $elapsedTime = microtime(true) - $startTime;
                 if ($elapsedTime >= ($timeLimit - 2)) {
-                    return -1; // 返回 -1 会中断 curl_exec
+                    throw new Exception($this->getTimeoutErrorMessage($timeout));
                 }
             }
             
@@ -1018,7 +1171,9 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 $rawResponseBuffer .= $data;
             }
             
-            $lines = explode("\n", $data);
+            $sseLineBuffer .= $data;
+            $lines = \preg_split('/\r\n|\n|\r/', $sseLineBuffer) ?: [];
+            $sseLineBuffer = (string)\array_pop($lines);
             
             foreach ($lines as $line) {
                 $line = trim($line);
@@ -1049,13 +1204,12 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 }
             }
             
-            return strlen($data);
-        });
+        };
 
-        curl_exec($ch);
+        $curlResult = $this->executeStreamCurl($ch, $consumeStreamChunk);
         
         // 获取 HTTP 状态码
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = $curlResult['http_code'];
         
         // 检查 PHP 超时（SSE 模式下跳过，因为已设 set_time_limit(0)）
         if (!$isSseMode) {
@@ -1064,13 +1218,11 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
                 strpos($lastError['message'], 'Maximum execution time') !== false ||
                 strpos($lastError['message'], 'exceeded') !== false
             )) {
-                curl_close($ch);
                 throw new Exception($this->getTimeoutErrorMessage($timeout));
             }
         }
         
-        $error = curl_error($ch);
-        curl_close($ch);
+        $error = $curlResult['error'];
 
         if ($error) {
             // curl 超时错误始终需要检测（非 PHP 层面超时）
@@ -1143,37 +1295,104 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
     }
 
     /**
-     * 初始化CURL
-     * 
+     * @param callable(string):void $consumeChunk
+     * @return array{http_code:int,error:string}
+     */
+    private function executeStreamCurl(\CurlHandle $ch, callable $consumeChunk): array
+    {
+        $pump = \Weline\Framework\Php\FiberTaskRunner::currentPump();
+        if ($pump !== null) {
+            $handleId = $pump->register($ch);
+            $curlResult = ['ok' => false, 'errno' => 0, 'error' => ''];
+
+            try {
+                while (($chunk = $pump->awaitChunk($handleId)) !== null) {
+                    if ($chunk !== '') {
+                        $consumeChunk($chunk);
+                    }
+                }
+                $curlResult = $pump->finalize($handleId);
+                $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $error = (string)(curl_error($ch) ?: ($curlResult['error'] ?? ''));
+                curl_close($ch);
+
+                return [
+                    'http_code' => $httpCode,
+                    'error' => !empty($curlResult['ok'])
+                        ? $error
+                        : ($error !== '' ? $error : (string)($curlResult['error'] ?? '')),
+                ];
+            } catch (\Throwable $throwable) {
+                $pump->abort($handleId);
+                curl_close($ch);
+                throw $throwable;
+            }
+        }
+
+        try {
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, string $data) use ($consumeChunk): int {
+                $consumeChunk($data);
+
+                return strlen($data);
+            });
+            curl_exec($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = (string)curl_error($ch);
+            curl_close($ch);
+        } catch (\Throwable $throwable) {
+            curl_close($ch);
+            throw $throwable;
+        }
+
+        return [
+            'http_code' => $httpCode,
+            'error' => $error,
+        ];
+    }
+
+    /**
      * @param string $url
      * @param string $apiKey
      * @param array $data
      * @param array $proxyInfo
      * @return \CurlHandle|false
      */
-    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout): \CurlHandle|false
+    private function initCurl(
+        string $url,
+        string $apiKey,
+        array $data,
+        array $proxyInfo,
+        int $timeout,
+        ?int $lowSpeedTime = null
+    ): \CurlHandle|false
     {
+        $payload = $this->encodeJsonRequestPayload($data);
         $ch = curl_init($url);
         
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
+            'Accept: application/json',
+            'Content-Length: ' . strlen($payload),
             'Authorization: Bearer ' . $apiKey,
         ]);
         // 根据模型配置设置超时（秒）；0 表示不限制
         $timeout = max(0, (int)$timeout);
+        $lowSpeedTime = $lowSpeedTime === null
+            ? ProviderTimeoutPolicy::resolveLowSpeedTime($timeout)
+            : \max(0, $lowSpeedTime);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
         // 连接超时单独设置，防止长时间卡在连接阶段（不超过60秒）
         if ($timeout > 0) {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
         } else {
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
-            // 当 timeout=0 时设置低速保护：如果 120 秒内传输速率低于 1 字节/秒，则中止
-            // 防止 AI API 完全停止响应导致连接永久挂起
+        }
+        if ($lowSpeedTime > 0) {
             curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
+            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, $lowSpeedTime);
         }
         
         // SSL配置：在Windows本地开发环境中，可能需要跳过SSL验证
@@ -1200,6 +1419,27 @@ class OpenAiProvider implements ProviderInterface, ImageGenerationProviderInterf
         }
 
         return $ch;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function encodeJsonRequestPayload(array $data): string
+    {
+        $payload = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (!is_string($payload) || $payload === '') {
+            throw new Exception('AI API request payload JSON encode failed: ' . json_last_error_msg());
+        }
+
+        return $payload;
+    }
+
+    private function applyExecutionTimeLimit(int $timeout): void
+    {
+        $limit = ProviderTimeoutPolicy::resolveExecutionTimeLimit($timeout);
+        if ($limit !== null) {
+            @set_time_limit($limit);
+        }
     }
 
     /**

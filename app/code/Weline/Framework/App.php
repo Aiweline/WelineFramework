@@ -12,6 +12,7 @@ namespace Weline\Framework;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Helper;
+use Weline\Framework\App\State;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
@@ -29,6 +30,7 @@ use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
 use Weline\Framework\Router\Core as Router;
+use Weline\Framework\Router\FullPageCacheCoordinator;
 use Weline\Framework\Session\SessionFactory;
 
 class App
@@ -40,6 +42,11 @@ class App
     private static Env $_env;
 
     private Context $context;
+
+    /**
+     * @var array<string, array>
+     */
+    private static array $moduleConfigByRouteAndKey = [];
 
     /**
      * App 不再负责创建请求上下文。
@@ -109,7 +116,50 @@ class App
 
     public function dispatchRunBefore(): void
     {
-        $this->resolveEventManager()->dispatch('Weline_Framework::App::run_before');
+        if (!$this->shouldDispatchRunBefore()) {
+            return;
+        }
+
+        $eventManager = $this->resolveEventManager();
+        if ($eventManager->hasObservers('Weline_Framework::App::run_before')) {
+            $eventManager->dispatch('Weline_Framework::App::run_before');
+        }
+    }
+
+    private function shouldDispatchRunBefore(): bool
+    {
+        if (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER) {
+            return true;
+        }
+
+        if ((string)WelineEnv::server('WLS_INTERNAL_DYNAMIC_WARMUP', '') === '1') {
+            return false;
+        }
+
+        if (PROD) {
+            return true;
+        }
+
+        if (Env::system('maintenance')) {
+            return true;
+        }
+
+        $path = \parse_url($this->getCurrentRequestUri(), \PHP_URL_PATH);
+        $path = \is_string($path) ? $path : '/';
+        $lowerPath = \strtolower($path);
+
+        // DEV run_before only has built-in maintenance/static/FPC observers in this checkout.
+        // Dynamic storefront requests can skip it; static/media paths still need MediaManager.
+        if (\str_starts_with($lowerPath, '/static/')
+            || \str_starts_with($lowerPath, '/pub/static/')
+            || \str_starts_with($lowerPath, '/pub/media/')
+            || \str_starts_with($lowerPath, '/media/image/')
+            || \str_starts_with($lowerPath, '/media/file/')
+        ) {
+            return true;
+        }
+
+        return (bool)\preg_match('#^/[a-z0-9_]+/[a-z0-9_]+/view/(statics|theme)/#i', $path);
     }
 
     public function parseUrl(): ?array
@@ -122,38 +172,104 @@ class App
         return \is_array($parse) ? $parse : null;
     }
 
+    private function normalizeParsedUri(mixed $uri): string
+    {
+        if (\is_array($uri)) {
+            $path = $uri['path'] ?? $uri['uri'] ?? $uri['REQUEST_URI'] ?? $uri['data'] ?? '';
+            if (!\is_scalar($path)) {
+                $path = '';
+            }
+            $path = (string)$path;
+
+            $query = $uri['query'] ?? '';
+            if (\is_array($query)) {
+                $query = \http_build_query($query);
+            }
+            if (\is_scalar($query) && $query !== '') {
+                $query = (string)$query;
+                $path .= (\str_contains($path, '?') ? '&' : '?') . \ltrim($query, '?');
+            }
+
+            return $path;
+        }
+
+        return \is_scalar($uri) ? (string)$uri : '';
+    }
+
     public function applyParsedUrl(array $parse): void
     {
+        $applyUrlProfile = [];
+        $applyUrlLast = \microtime(true);
+        $markApplyUrlStep = static function (string $name, array $meta = []) use (&$applyUrlProfile, &$applyUrlLast): void {
+            $now = \microtime(true);
+            $step = [
+                'name' => $name,
+                'duration_ms' => \round(($now - $applyUrlLast) * 1000, 2),
+            ];
+            if ($meta !== []) {
+                $step['meta'] = $meta;
+            }
+            $applyUrlProfile[] = $step;
+            $applyUrlLast = $now;
+        };
+        $flushApplyUrlProfile = static function () use (&$applyUrlProfile): void {
+            if ($applyUrlProfile !== []) {
+                RequestContext::set('app.apply_url.profile', $applyUrlProfile);
+            }
+        };
+
         if (!isset($parse['server']) || !\is_array($parse['server'])) {
             $parse['server'] = [];
         }
+        $markApplyUrlStep('normalize_parse_server');
 
         $server = Context::current()->server();
         if (!\is_array($server)) {
             $server = [];
         }
+        $markApplyUrlStep('load_context_server', [
+            'parse_server_keys' => \count($parse['server']),
+            'context_server_keys' => \count($server),
+        ]);
+        $rawRequestUri = Url::decode_url($this->normalizeParsedUri(
+            $server['WELINE_ORIGIN_REQUEST_URI'] ?? $server['REQUEST_URI'] ?? $this->getCurrentRequestUri()
+        ));
+        if ($rawRequestUri === '') {
+            $rawRequestUri = '/';
+        }
+        if (!\str_starts_with($rawRequestUri, '/')) {
+            $rawRequestUri = '/' . $rawRequestUri;
+        }
+        $markApplyUrlStep('raw_request_uri');
 
         $area = (string)($parse['area'] ?? $parse['server']['WELINE_AREA'] ?? $server['WELINE_AREA'] ?? '');
         $isBackendArea = $area === 'backend' || $area === 'rest_backend';
         WelineEnv::set('route.is_backend', $isBackendArea, 'App applyParsedUrl');
         if (isset($parse['uri'])) {
-            $uri = Url::decode_url((string)$parse['uri']);
+            $uri = Url::decode_url($this->normalizeParsedUri($parse['uri']));
             // 必须始终把 parser 产出的 uri 写回 REQUEST_URI。
             // 否则 backend 场景会保留旧 URI（含 backend key 前缀），
             // 导致后续 w_env('request.uri') / Router 读取到错误路径并 404。
             $parse['server']['REQUEST_URI'] = $uri;
             $parse['server']['QUERY_STRING'] = Url::parse_url($uri, 'query');
         }
+        $markApplyUrlStep('normalize_request_uri', [
+            'area' => $area,
+            'is_backend_area' => $isBackendArea,
+        ]);
 
         if (!isset($parse['server']['REQUEST_URI']) || $parse['server']['REQUEST_URI'] === '') {
             $parse['server']['REQUEST_URI'] = isset($parse['uri'])
-                ? Url::decode_url((string)$parse['uri'])
+                ? Url::decode_url($this->normalizeParsedUri($parse['uri']))
                 : $this->getCurrentRequestUri();
         }
 
         foreach ($parse['server'] as $key => $value) {
             Context::current()->set('input.server.' . $key, $value);
         }
+        $markApplyUrlStep('server_context_set', [
+            'keys' => \count($parse['server']),
+        ]);
 
         if ($area !== '') {
             WelineEnv::set('area', $area, 'App applyParsedUrl');
@@ -175,10 +291,16 @@ class App
         Context::current()->set('input.server.WELINE_IS_BACKEND', $isBackend);
         WelineEnv::set('is_backend', $isBackend, 'App applyParsedUrl');
         WelineEnv::set('url_parsed', true, 'App applyParsedUrl');
+        $markApplyUrlStep('env_route_state', [
+            'area' => $welineArea,
+            'is_backend' => $isBackend,
+            'language' => (string)($parse['language'] ?? ''),
+            'currency' => (string)($parse['currency'] ?? ''),
+        ]);
 
         // 必须用 parser 已合并进 input.server 的 REQUEST_URI，不能读旧的 request.uri（WlsRuntime 预写会残留）。
         $serverMerged = Context::current()->server();
-        $currentUri = Url::decode_url((string)($serverMerged['REQUEST_URI'] ?? '/'));
+        $currentUri = Url::decode_url($this->normalizeParsedUri($serverMerged['REQUEST_URI'] ?? '/'));
         if ($currentUri === '') {
             $currentUri = '/';
         }
@@ -186,19 +308,77 @@ class App
             $currentUri = '/' . $currentUri;
         }
         WelineEnv::set('request.uri', $currentUri, 'App applyParsedUrl');
+        $markApplyUrlStep('current_uri');
 
         $scheme = (string)WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http'));
         $host = (string)WelineEnv::get('server.http_host', Context::current()->get('input.host', 'localhost'));
-        WelineEnv::set('origin_request_uri', $currentUri, 'App applyParsedUrl');
-        WelineEnv::set('full_request_uri', $scheme . '://' . $host . $currentUri, 'App applyParsedUrl');
+        $fullRequestUri = $scheme . '://' . $host . $rawRequestUri;
+        Context::current()->set('input.server.WELINE_ORIGIN_REQUEST_URI', $rawRequestUri);
+        Context::current()->set('input.server.WELINE_FULL_REQUEST_URI', $fullRequestUri);
+        WelineEnv::set('origin_request_uri', $rawRequestUri, 'App applyParsedUrl');
+        WelineEnv::set('full_request_uri', $fullRequestUri, 'App applyParsedUrl');
+        $markApplyUrlStep('full_request_uri', [
+            'host' => $host,
+            'scheme' => $scheme,
+        ]);
+
+        $shouldDispatchUrlParsedAfter = (PROD || Runtime::isPersistent()) && !WelineEnv::get('is_backend', false);
+        $markApplyUrlStep('dispatch_guard', [
+            'should_dispatch' => $shouldDispatchUrlParsedAfter,
+        ]);
+        if ($shouldDispatchUrlParsedAfter) {
+            if ($this->tryPersistentFpcFastPath()) {
+                $markApplyUrlStep('fpc_fast_path', ['hit' => true]);
+                $flushApplyUrlProfile();
+                return;
+            }
+            $markApplyUrlStep('fpc_fast_path', ['hit' => false]);
+            $this->resolveEventManager()->dispatch('Weline_Framework::App::url_parsed_after');
+            $markApplyUrlStep('url_parsed_after_dispatch');
+            if (Runtime::isPersistent() && RequestContext::get('wls.fpc.cached_response') instanceof Response) {
+                $markApplyUrlStep('url_parsed_after_cached_response', ['hit' => true]);
+                $flushApplyUrlProfile();
+                return;
+            }
+            $markApplyUrlStep('url_parsed_after_cached_response', ['hit' => false]);
+        }
 
         $this->syncCookieRouteStateFromServer();
+        $markApplyUrlStep('sync_cookie_route_state');
         self::syncCurrentContextFromGlobals();
+        $markApplyUrlStep('sync_current_context_from_globals');
         RequestContext::syncFromContext();
+        $markApplyUrlStep('request_context_sync');
         $this->invalidateCurrentRequestUriCache();
+        $markApplyUrlStep('invalidate_uri_cache');
+        $flushApplyUrlProfile();
+    }
 
-        if (PROD && !WelineEnv::get('is_backend', false)) {
-            $this->resolveEventManager()->dispatch('Weline_Framework::App::url_parsed_after');
+    private function tryPersistentFpcFastPath(): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return false;
+        }
+        if ((string)WelineEnv::get('request.method', 'GET') !== 'GET') {
+            return false;
+        }
+        if (!WelineEnv::get('url_parsed', false) || WelineEnv::get('is_backend', false)) {
+            return false;
+        }
+
+        try {
+            $coordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
+            if (!$coordinator->canServeCachedResponse('GET')) {
+                return false;
+            }
+            $response = $coordinator->getCachedResponse('GET', true);
+            if (!$response instanceof Response) {
+                return false;
+            }
+            RequestContext::set('wls.fpc.cached_response', $response);
+            return true;
+        } catch (\Throwable) {
+            return false;
         }
     }
 
@@ -211,11 +391,139 @@ class App
 
     public function startSessionIfNeeded(): void
     {
-        if (WelineEnv::get('is_static_file', false)) {
+        if (!$this->shouldEagerStartSessionForCurrentRequest()) {
+            return;
+        }
+
+        $requestUri = (string)WelineEnv::get('request.uri', '/');
+        $requestMethod = (string)WelineEnv::get('request.method', 'GET');
+        $protocol = (string)WelineEnv::server('HTTP_X_WELINE_PROTOCOL', '');
+        if (
+            $requestMethod === 'POST'
+            && $this->isFrontendQueryBinRequestUri($requestUri)
+            && $protocol === 'worker-query-bin-v1'
+        ) {
+            return;
+        }
+
+        if ($this->canDeferFrontendSessionStart($requestMethod)) {
             return;
         }
 
         SessionFactory::getInstance()->createSession()->start('');
+    }
+
+    private function isFrontendQueryBinRequestUri(string $requestUri): bool
+    {
+        $path = (string)(\parse_url($requestUri, \PHP_URL_PATH) ?: $requestUri);
+        $normalizedPath = '/' . \ltrim($path, '/');
+        return \strtolower($normalizedPath) === \strtolower(Env::getFrontendQueryBinPath());
+    }
+
+    private function canDeferFrontendSessionStart(string $requestMethod): bool
+    {
+        if (WelineEnv::get('is_backend', false)) {
+            return false;
+        }
+
+        $method = \strtoupper(\trim($requestMethod) ?: 'GET');
+        if (!\in_array($method, ['GET', 'HEAD'], true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function shouldEagerStartSessionForCurrentRequest(): bool
+    {
+        if (WelineEnv::get('is_static_file', false)) {
+            return false;
+        }
+
+        $path = $this->normalizeRequestPath($this->getCurrentRequestUri());
+        $sessionConfig = $this->getSessionConfigForRequestPath($path);
+        if (!\is_array($sessionConfig)) {
+            $sessionConfig = [];
+        }
+
+        if (($sessionConfig['eager_start'] ?? true) === false) {
+            return false;
+        }
+
+        $excludedPaths = $sessionConfig['eager_start_excluded_paths'] ?? [];
+        if (\is_string($excludedPaths)) {
+            $excludedPaths = \array_filter(\array_map('trim', \explode(',', $excludedPaths)));
+        }
+        if (!\is_array($excludedPaths) || $excludedPaths === []) {
+            return true;
+        }
+
+        foreach ($excludedPaths as $excludedPath) {
+            if (!\is_string($excludedPath) || $excludedPath === '') {
+                continue;
+            }
+
+            $excludedPath = $this->normalizeRequestPath($excludedPath);
+            if (\str_ends_with($excludedPath, '/*')) {
+                $prefix = \rtrim(\substr($excludedPath, 0, -2), '/');
+                if ($prefix === '' || $path === $prefix || \str_starts_with($path, $prefix . '/')) {
+                    return false;
+                }
+                continue;
+            }
+
+            if ($path === $excludedPath) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function getSessionConfigForRequestPath(string $path): array
+    {
+        $sessionConfig = Env::getInstance()->getConfig('session', []);
+        if (!\is_array($sessionConfig)) {
+            $sessionConfig = [];
+        }
+
+        $moduleSessionConfig = $this->getModuleSessionConfigForRequestPath($path);
+        if ($moduleSessionConfig !== []) {
+            $sessionConfig = \array_replace_recursive($sessionConfig, $moduleSessionConfig);
+        }
+
+        return $sessionConfig;
+    }
+
+    private function getModuleSessionConfigForRequestPath(string $path): array
+    {
+        return $this->getModuleConfigForRequestPath($path, 'session');
+    }
+
+    private function getModuleConfigForRequestPath(string $path, string $configKey): array
+    {
+        $route = \strtolower((string)(\explode('/', \trim($path, '/'))[0] ?? ''));
+        if ($route === '') {
+            return [];
+        }
+
+        $cacheKey = $configKey . "\0" . $route;
+        if (!\array_key_exists($cacheKey, self::$moduleConfigByRouteAndKey)) {
+            self::$moduleConfigByRouteAndKey[$cacheKey] = [];
+            foreach (Env::getInstance()->getActiveModules() as $moduleName => $module) {
+                $router = \strtolower(\trim((string)($module['router'] ?? ''), '/'));
+                $backendRouter = \strtolower(\trim((string)($module['backend_router'] ?? ''), '/'));
+                if ($route !== $router && $route !== $backendRouter) {
+                    continue;
+                }
+
+                $moduleConfig = Env::module_env((string)$moduleName, $configKey) ?? [];
+                self::$moduleConfigByRouteAndKey[$cacheKey] = \is_array($moduleConfig) ? $moduleConfig : [];
+                break;
+            }
+        }
+
+        return self::$moduleConfigByRouteAndKey[$cacheKey] ?? [];
     }
 
     public function runRouter(?Router $router = null): mixed
@@ -235,8 +543,13 @@ class App
 
     public function dispatchRunAfter(mixed $result): mixed
     {
+        $eventManager = $this->resolveEventManager();
+        if (!$eventManager->hasObservers('Weline_Framework::App::run_after')) {
+            return $result;
+        }
+
         $data = new DataObject(['result' => $result]);
-        $this->resolveEventManager()->dispatch('Weline_Framework::App::run_after', $data);
+        $eventManager->dispatch('Weline_Framework::App::run_after', $data);
         return $data->getData('result');
     }
 
@@ -254,9 +567,9 @@ class App
         return (string)$result;
     }
 
-    public function broadcastTelemetry(string $result, ?Request $request = null): string
+    public function broadcastTelemetry(string $result, ?Request $request = null, bool $forceResultMutation = false): string
     {
-        return TelemetryBroadcaster::broadcast($result, $request);
+        return TelemetryBroadcaster::broadcast($result, $request, $forceResultMutation);
     }
 
     /**
@@ -274,14 +587,16 @@ class App
         if (!isset(self::$_env)) {
             self::$_env = Env::getInstance();
         }
-        if ($key && empty($value)) {
-            return self::$_env->getConfig($key);
-        }
-        if ($key && $value) {
-            return self::$_env->setConfig($key, $value);
+
+        if ($key === '') {
+            return self::$_env;
         }
 
-        return self::$_env;
+        if (\func_num_args() === 1) {
+            return self::$_env->getConfig($key);
+        }
+
+        return self::$_env->setConfig($key, $value);
     }
 
     /**
@@ -417,11 +732,7 @@ class App
         // ############################# 环境配置 #####################
         // 先加载环境配置，以便判断是否为开发者模式
         // 环境
-        $config = [];
-        $env_filename = APP_PATH . 'etc/env.php';
-        if (is_file($env_filename)) {
-            $config = require $env_filename;
-        }
+        $config = (array) Env::getInstance()->getConfig();
         
         // 提前加载辅助函数，以便使用 w_array_get 点号语法访问配置
         require_once __DIR__ . '/Common/functions.php';
@@ -687,7 +998,7 @@ class App
                 continue;
             }
 
-            if ($currency === null && \strlen($segment) === 3 && \ctype_upper($segment)) {
+            if ($currency === null && State::isAllowedCurrencyCode($segment)) {
                 $currency = $segment;
                 continue;
             }
@@ -721,6 +1032,10 @@ class App
             return;
         }
 
+        if ($this->shouldSuppressResponseCookiesForCurrentRequest()) {
+            return;
+        }
+
         $defaultCookies = [
             'WELINE_USER_LANG',
             'WELINE_USER_CURRENCY',
@@ -750,9 +1065,56 @@ class App
         }
     }
 
+    private function shouldSuppressResponseCookiesForCurrentRequest(): bool
+    {
+        $path = $this->normalizeRequestPath($this->getCurrentRequestUri());
+        $cookieConfig = Env::getInstance()->getConfig('cookie', []);
+        if (!\is_array($cookieConfig)) {
+            $cookieConfig = [];
+        }
+
+        $moduleCookieConfig = $this->getModuleConfigForRequestPath($path, 'cookie');
+        if ($moduleCookieConfig !== []) {
+            $cookieConfig = \array_replace_recursive($cookieConfig, $moduleCookieConfig);
+        }
+
+        $suppressedPaths = $cookieConfig['suppress_response_paths'] ?? [];
+        if (\is_string($suppressedPaths)) {
+            $suppressedPaths = \array_filter(\array_map('trim', \explode(',', $suppressedPaths)));
+        }
+        if (!\is_array($suppressedPaths) || $suppressedPaths === []) {
+            return false;
+        }
+
+        foreach ($suppressedPaths as $suppressedPath) {
+            if (!\is_string($suppressedPath) || $suppressedPath === '') {
+                continue;
+            }
+
+            $suppressedPath = $this->normalizeRequestPath($suppressedPath);
+            if (\str_ends_with($suppressedPath, '/*')) {
+                $prefix = \rtrim(\substr($suppressedPath, 0, -2), '/');
+                if ($prefix === '' || $path === $prefix || \str_starts_with($path, $prefix . '/')) {
+                    return true;
+                }
+                continue;
+            }
+
+            if ($path === $suppressedPath) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function invalidateCurrentRequestUriCache(): void
     {
         $request = $this->resolveRequest();
+        if ($request !== null) {
+            $request->getServerBag()->initFromGlobals(true);
+            Request::clearStaticUrlPathCache();
+        }
         if ($request !== null && \method_exists($request, 'invalidateUriCache')) {
             $request->invalidateUriCache();
         }
@@ -778,6 +1140,20 @@ class App
     private function getCurrentRequestUri(): string
     {
         return (string)WelineEnv::get('request.uri', Context::current()->get('input.uri', '/'));
+    }
+
+    private function normalizeRequestPath(string $uri): string
+    {
+        $path = \parse_url($uri, \PHP_URL_PATH);
+        if (!\is_string($path) || $path === '') {
+            $path = $uri === '' ? '/' : $uri;
+        }
+
+        if (!\str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+
+        return \rtrim($path, '/') ?: '/';
     }
 
     private function getContextServerValue(string $key, mixed $default = null): mixed

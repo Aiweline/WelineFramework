@@ -14,7 +14,7 @@ namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
@@ -57,43 +57,16 @@ class CacheClear extends CommandAbstract
             return;
         }
 
-        // 发送清除缓存命令到 Master
-        try {
-            $host = '127.0.0.1';
-            $errno = 0;
-            $errstr = '';
-            $conn = @\stream_socket_client("tcp://{$host}:{$instance->controlPort}", $errno, $errstr, 5);
-
-            if (!$conn) {
-                $this->printer->error(__('连接控制端口失败') . ": {$errstr} (errno:{$errno})");
-                return;
-            }
-
-            // 发送清除缓存命令
-            $message = ControlMessage::command(ControlMessage::ACTION_ROUTING_CACHE_CLEAR);
-            $this->printer->note('发送消息: ' . trim($message));
-            \fwrite($conn, $message);
-
-            // 等待响应
-            $response = \fgets($conn);
-            \fclose($conn);
-
-            if ($response) {
-                $data = \json_decode(\trim($response), true);
-                if ($data && isset($data['success']) && $data['success']) {
-                    $this->printer->success(__('路由缓存已清除'));
-                    if (isset($data['message'])) {
-                        $this->printer->note($data['message']);
-                    }
-                } else {
-                    $this->printer->error(__('清除缓存失败') . ': ' . ($data['message'] ?? 'unknown'));
-                }
-            } else {
-                $this->printer->warning(__('未收到响应'));
-            }
-        } catch (\Exception $e) {
-            $this->printer->error(__('连接控制端口失败') . ': ' . $e->getMessage());
+        $this->printer->note(__('发送路由缓存清除命令'));
+        $result = (new IpcControlGateway())->routingCacheClear($instanceName);
+        if (!empty($result['success'])) {
+            $this->printer->success(__('路由缓存清除命令已被 Master 接收'));
+            $this->printer->note((string)($result['message'] ?? ''));
+            $this->printer->note(__('状态：%{1}', [(string)($result['status'] ?? 'accepted')]));
+            return;
         }
+
+        $this->printer->error(__('清除缓存失败') . ': ' . (string)($result['message'] ?? 'unknown'));
     }
 
     /**

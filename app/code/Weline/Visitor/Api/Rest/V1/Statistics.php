@@ -46,8 +46,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取时间范围参数（可选）
@@ -102,8 +102,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             // 获取事件名
@@ -203,8 +203,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $period = $this->request->getParam('period') ?? $this->request->getGet('period') ?? 'daily';
@@ -246,8 +246,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $interval = (int)($this->request->getParam('interval') ?? $this->request->getGet('interval') ?? 10);
@@ -286,8 +286,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $days = (int)($this->request->getParam('days') ?? $this->request->getGet('days') ?? 7);
@@ -322,8 +322,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $interval = (int)($this->request->getParam('interval') ?? $this->request->getGet('interval') ?? 10);
@@ -364,8 +364,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $limit = (int)($this->request->getParam('limit') ?? $this->request->getGet('limit') ?? 10);
@@ -434,8 +434,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $startDate = $this->request->getParam('startDate') ?? $this->request->getGet('startDate');
@@ -508,8 +508,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $startDate = $this->request->getParam('startDate') ?? $this->request->getGet('startDate');
@@ -569,8 +569,8 @@ class Statistics extends FrontendRestController
             $paramWebsiteId = $this->request->getParam('websiteId') ?? $this->request->getGet('websiteId');
             if ($paramWebsiteId !== null && $paramWebsiteId !== '') {
                 $websiteId = (int)$paramWebsiteId;
-            } elseif (isset($_SERVER['WELINE_WEBSITE_ID']) && $_SERVER['WELINE_WEBSITE_ID'] !== '') {
-                $websiteId = (int)$_SERVER['WELINE_WEBSITE_ID'];
+            } else {
+                $websiteId = (int)(\Weline\Framework\Env\WelineEnv::getWebsiteId() ?? 0);
             }
             
             $minutes = (int)($this->request->getParam('minutes') ?? $this->request->getGet('minutes') ?? 60);

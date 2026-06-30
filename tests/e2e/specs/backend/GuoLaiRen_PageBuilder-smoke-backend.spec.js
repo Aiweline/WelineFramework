@@ -1,49 +1,50 @@
 // @weline-e2e-runtime fallback
 // @weline-e2e-transport direct
 // @ts-check
-const { test, expect, gotoBackend, loginAsAdmin, buildModuleBackendRoute } = require('../../framework');
+const { test, expect, buildBackendUrl, buildModuleBackendRoute, loginAsAdmin } = require('../../framework');
 
-test.describe('GuoLaiRen_PageBuilder backend (smoke)', () => {
+test.describe('GuoLaiRen_PageBuilder backend smoke', () => {
   test.describe.configure({ retries: 0 });
 
   const PAGEBUILDER_MODULE = 'GuoLaiRen_PageBuilder';
   const DIRECT_WLS = { useProxy: false };
-
   const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found|404 Not Found/i;
 
   const cases = [
     {
-      name: 'AI 建站工作台入口（aiSiteAgent/index）',
+      name: 'AI site workspace hub',
       route: buildModuleBackendRoute(PAGEBUILDER_MODULE, 'aiSiteAgent', 'index'),
       keySelector: '#pb-ai-site-create',
-      fallbackText: '工作台',
+      fallbackText: 'AI',
     },
     {
-      name: '页面管理（page/index）',
+      name: 'page management',
       route: buildModuleBackendRoute(PAGEBUILDER_MODULE, 'page', 'index'),
-      keySelector: '.datatable-container, table, .page-title-box',
-      fallbackText: '页面',
+      keySelector: '.pagebuilder-page-card, .datatable-container, table, .page-title-box',
+      fallbackText: 'Page',
     },
     {
-      name: '模板管理（template/index）',
+      name: 'template management',
       route: buildModuleBackendRoute(PAGEBUILDER_MODULE, 'template', 'index'),
       keySelector: '#styleCardsContainer, .pagebuilder-list-header, .page-title-box',
-      fallbackText: '模板',
+      fallbackText: 'Template',
     },
   ];
 
   for (const c of cases) {
     test(`renders ${c.name} without PHP errors`, async ({ page }, testInfo) => {
-      // Try best-effort auth. If runtime is unstable, continue and decide by page state.
       await loginAsAdmin(page, { timeout: 90000, ...DIRECT_WLS }).catch(() => {});
-      await gotoBackend(page, c.route, {
+
+      const response = await page.goto(buildBackendUrl(c.route, DIRECT_WLS), {
+        waitUntil: 'commit',
         timeout: 90000,
-        settleMs: 1200,
-        ...DIRECT_WLS,
       });
+      expect(response && response.status(), c.route).toBeLessThan(500);
 
       const body = page.locator('body');
+      await body.waitFor({ state: 'attached', timeout: 30000 });
       await expect(body).toBeVisible({ timeout: 15000 });
+
       const loginFormVisible = await page
         .locator('form[action*="/admin/login/post"], input[name="username"]')
         .first()
@@ -52,17 +53,18 @@ test.describe('GuoLaiRen_PageBuilder backend (smoke)', () => {
       if (loginFormVisible) {
         testInfo.skip('backend login not available in current runtime');
       }
-      await page.waitForTimeout(600);
+
+      const keyLocator = page.locator(c.keySelector).first();
+      const keyVisible = await keyLocator.isVisible({ timeout: 30000 }).catch(() => false);
       const bodyText = ((await body.textContent()) || '').trim();
       expect(FATAL_PATTERN.test(bodyText)).toBeFalsy();
-      const keyLocator = page.locator(c.keySelector).first();
-      if ((await keyLocator.count()) > 0) {
+      if (keyVisible) {
         await expect(keyLocator).toBeVisible({ timeout: 15000 });
       } else {
         expect(bodyText).toContain(c.fallbackText);
       }
 
-      const fileSafeName = c.name.replace(/[^\w\u4e00-\u9fa5-]+/g, '_');
+      const fileSafeName = c.name.replace(/[^\w-]+/g, '_');
       const screenshotPath = testInfo.outputPath(`GuoLaiRen_PageBuilder-${fileSafeName}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: true });
       await testInfo.attach(`snapshot-${fileSafeName}`, {
@@ -72,4 +74,3 @@ test.describe('GuoLaiRen_PageBuilder backend (smoke)', () => {
     });
   }
 });
-

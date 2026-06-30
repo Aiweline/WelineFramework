@@ -1,0 +1,101 @@
+---
+name: 通用工程师-国际化与用户提示
+description: Shared engineering skill for i18n-compliant user text, translation files, and framework-safe user notification patterns.
+version: 1.1.3
+---
+
+# Role
+
+This shared skill owns user-facing copy, translation wiring, and friendly notification patterns across Weline backend, admin, frontend, templates, and business modules. It ensures visible text and user feedback remain translatable, consistent, and framework-compliant regardless of implementation layer.
+
+# When To Use
+
+- Use for labels, placeholders, buttons, messages, modal copy, toasts, and translation files.
+- Use for keywords such as i18n, translation, `__()`, `<lang>`, `@lang`, toast, confirm, prompt, and user feedback.
+- Use when any frontend, backend, admin, API-facing, or module change introduces or modifies visible text.
+
+# Source Material
+
+- `AI-ENTRY.md`
+- `CLAUDE.md`
+- `dev/ai/skills/i18n-internationalization/SKILL.md`
+- `dev/ai/skills/friendly-notifications/SKILL.md`
+- `dev/ai/skills/theme-development/SKILL.md`
+- `dev/ai/skills/frontend-components/SKILL.md`
+- `dev/ai/skills/module-development/SKILL.md`
+- `dev/ai/skills/service-development/SKILL.md`
+
+# Responsibilities
+
+- Move user-facing text into the correct i18n mechanism for PHP, templates, JavaScript, admin UI, and module output.
+- Use Simplified Chinese as the default source/key for all visible text, such as `__('加入购物车')`; English belongs in `en_US`, not in the default source string.
+- Use attribute-safe translation expressions in custom tags and templates.
+- Replace blocking browser dialogs with framework notification or confirmation components.
+- Keep visible error messages actionable and understandable.
+
+# Workflow
+
+1. Identify every new or changed user-facing string in the target backend, frontend, admin, template, JavaScript, or module path.
+2. Choose the right translation form for PHP, plain template markup, JavaScript, or custom-tag attributes.
+3. Confirm the translation boundary first: when the page is owned by one module, prefer that module's own template and CSV flow instead of inventing cross-module fallback.
+4. Update the owning `i18n` files when new text keys are introduced.
+5. Replace browser-native dialogs with framework-safe toasts or confirmation components.
+6. If template and CSV already look correct but the browser still shows old text, inspect module registration and phrase/template/taglib cache state before re-editing generated outputs.
+7. Review message wording for clarity, actionability, and consistency.
+8. Validate the UI path where the text or notification appears.
+9. Report any missing translation coverage or UX copy risks.
+
+# Weline Rules
+
+- **PHP controller flash messages** (success/warning/error): use **`MessageManager::warning(__('…'))` / `MessageManager::error(...)` / `MessageManager::success(...)`** (`Weline\Framework\Manager\MessageManager`). Do **not** use `$this->getMessageManager()->addWarning()` (or addError/addSuccess) unless a documented framework exception applies.
+- Do not hardcode user-facing text.
+- Use i18n for user-facing text.
+- The default source/key for `__()`, `<lang>`, hook contracts, templates, and JavaScript visible text must be Simplified Chinese; keep `zh_Hans_CN` as Chinese-to-Chinese and `en_US` as Chinese-to-English for the same source/key.
+- Use `@lang` forms in custom-tag attributes instead of embedded PHP.
+- Do not use JavaScript `alert`, `confirm`, or `prompt`.
+- Keep placeholders in `%{1}` or `%{name}` style where interpolation is required.
+- **`__()` 第二参数（与 `Weline\Framework\Phrase\Parser::parse` 一致）**：类型为 `array|string|int`。文案里**只有单个 `%{1}`（或框架会归一成 `%{}` 的占位）**时，第二参数可以传**字符串或数字**（例如 `__('库存不足：%{1}', $stock)`）。**多个占位**（如 `%{1}` 与 `%{2}`，或 `%{name}`）时，第二参数应传**关联数组或顺序数组**。不要把「第二参数必须数组」当成铁律；也不要把 **`Parse error: syntax error, unexpected token …`** 误判为翻译表坏了——这类报错多半是 **`__()` 调用本身括号/逗号/方括号写错**（多参却未用数组、多余的 `]`、少写 `)` 等），先按 PHP 语法检查再查 CSV。
+- Do not edit generated translation templates or packs directly; fix the source template / source CSV, then collect or reload through the standard flow.
+- When runtime output disagrees with source files, treat request/module registration plus `var/cache/phrase`, `var/cache/template`, and `var/cache/taglib` as first-class suspects.
+
+# Inputs Required
+
+- The route, service, template, component, admin page, or module output where text appears.
+- The language files or translation domain in use.
+- The desired feedback behavior for success, warning, confirmation, or failure.
+- Validation route or screen.
+
+# Expected Output
+
+- Updated templates, translations, or notification calls with framework-safe patterns.
+- Visible-text coverage that is ready for translation.
+- Validation evidence from the UI surface that shows the message or prompt behavior.
+
+# Validation
+
+- Confirm new or changed visible text is translated through the correct mechanism.
+- Confirm new or changed translation entries share the same Simplified Chinese source/key across `zh_Hans_CN` and `en_US`.
+- Confirm custom-tag attributes do not contain embedded PHP translation calls.
+- Confirm user prompts use framework toasts or confirmation UI instead of browser-native dialogs.
+- Confirm interpolation placeholders follow repository conventions.
+- Confirm the live page actually switched language in browser output, not only in edited CSV or template source.
+
+# Constraints
+
+- Do not leave literal user-facing strings in templates or scripts.
+- Do not embed PHP into custom-tag attributes for translation.
+- Do not use blocking browser dialogs.
+- Do not treat translation files as optional when visible text changed.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
+

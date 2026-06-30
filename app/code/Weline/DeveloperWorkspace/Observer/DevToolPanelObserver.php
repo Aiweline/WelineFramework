@@ -11,12 +11,15 @@ declare(strict_types=1);
 
 namespace Weline\DeveloperWorkspace\Observer;
 
+use Weline\CacheManager\Service\RuntimeCachePolicy;
+use Weline\DeveloperWorkspace\Service\DevToolPayloadStore;
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Hook\HookInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\View\Template;
@@ -26,21 +29,32 @@ use Weline\Framework\View\Template;
  */
 class DevToolPanelObserver implements ObserverInterface
 {
-    private const PERSISTENT_MAX_RESPONSE_BYTES = 262144;
+    private const DEFAULT_MAX_RESPONSE_BYTES = 1048576;
     private const MAX_TRACE_SPANS = 300;
     private const MAX_TRACE_META_FIELD_BYTES = 2048;
     /** 内联注入页面的 trace JSON 默认上限（字节），防止超大 JSON 撑爆 Worker 内存 */
     private const DEFAULT_MAX_TRACE_JSON_BYTES = 524288;
+    private const TRACE_TTL_SECONDS = 60;
+    private const PANEL_HTML_CACHE_TTL = 300.0;
+
+    /** @var array<string, array{expires_at: float, html: string}> */
+    private static array $panelHtmlCache = [];
 
     private Request $request;
+    private DevToolPayloadStore $payloadStore;
 
-    public function __construct(Request $request)
+    public function __construct(Request $request, ?DevToolPayloadStore $payloadStore = null)
     {
         $this->request = $request;
+        $this->payloadStore = $payloadStore ?? new DevToolPayloadStore();
     }
 
     public function execute(Event &$event): void
     {
+        if ($event->getName() === 'Weline_Framework::App::run_after' && Runtime::isPersistent()) {
+            return;
+        }
+
         $payload = $this->resolvePayload($event);
         if ($payload === null) {
             return;
@@ -66,6 +80,12 @@ class DevToolPanelObserver implements ObserverInterface
 
         $cookieValue = Cookie::get($devToolCookieName);
         $hasCookie = !empty($cookieValue) && $cookieValue === '1';
+        $explicitDevToolRequest = !empty($urlParam)
+            || (string)$this->request->getGet('debug_sidebar', '') === '1'
+            || (string)$this->request->getGet('ai_url_debug', '') === '1';
+        if ($explicitDevToolRequest) {
+            $hasCookie = true;
+        }
 
         if (!DEV && !$enableInProd && !$hasCookie) {
             return;
@@ -81,8 +101,8 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
-        $allowPersistentDevToolPanel = (bool)Env::get('wls.debug.dev_tool_panel', DEV);
-        if (Runtime::isPersistent() && !$allowPersistentDevToolPanel) {
+        $allowPersistentDevToolPanel = (bool)Env::get('wls.debug.dev_tool_panel', false);
+        if (Runtime::isPersistent() && !$allowPersistentDevToolPanel && !$explicitDevToolRequest) {
             return;
         }
 
@@ -96,6 +116,9 @@ class DevToolPanelObserver implements ObserverInterface
                 return;
             }
 
+            $requestId = RequestLifecycleTrace::ensureRequestId();
+            $this->setRequestIdHeader($requestId);
+
             if (!$this->isHtmlResponse($result)) {
                 return;
             }
@@ -104,7 +127,10 @@ class DevToolPanelObserver implements ObserverInterface
                 return;
             }
 
-            $panelAlreadyInjected = stripos($result, 'id="dev-tool-panel"') !== false;
+            $existingRequestIds = $this->extractRequestIdsFromResult($result);
+            $panelAlreadyInjected = stripos($result, 'id="dev-tool-panel"') !== false
+                || stripos($result, 'id="dev-tool-panel-loader"') !== false
+                || stripos($result, 'data-weline-dev-tool-panel-loader') !== false;
             if (!$panelAlreadyInjected) {
                 $panelTraceStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
                 if ($panelTraceStart > 0) {
@@ -112,16 +138,29 @@ class DevToolPanelObserver implements ObserverInterface
                 }
 
                 try {
-                    $panelHtml = $this->measureTraceStage(
-                        'dev_tool_panel::render_panel',
-                        fn() => $this->renderPanel()
-                    );
-
-                    if ($panelHtml !== '') {
-                        $result = $this->measureTraceStage(
-                            'dev_tool_panel::inject_html',
-                            fn() => $this->appendPanelHtml($result, $panelHtml)
+                    if ($this->shouldUseLazyPanel()) {
+                        $loaderHtml = $this->measureTraceStage(
+                            'dev_tool_panel::render_lazy_loader',
+                            fn() => $this->renderLazyPanelLoader($requestId)
                         );
+                        if ($loaderHtml !== '') {
+                            $result = $this->measureTraceStage(
+                                'dev_tool_panel::inject_lazy_loader',
+                                fn() => $this->appendPanelHtml($result, $loaderHtml)
+                            );
+                        }
+                    } else {
+                        $panelHtml = $this->measureTraceStage(
+                            'dev_tool_panel::render_panel',
+                            fn() => $this->renderPanel()
+                        );
+
+                        if ($panelHtml !== '') {
+                            $result = $this->measureTraceStage(
+                                'dev_tool_panel::inject_html',
+                                fn() => $this->appendPanelHtml($result, $panelHtml)
+                            );
+                        }
                     }
                 } finally {
                     if ($panelTraceStart > 0) {
@@ -135,10 +174,14 @@ class DevToolPanelObserver implements ObserverInterface
                 }
             }
 
-            $traceSpans = $this->resolveCurrentTraceSpans($payload);
-            if (!empty($traceSpans)) {
-                $payload['trace']['spans'] = $traceSpans;
-                $result = $this->injectTraceScript($result, $traceSpans);
+            $this->storeTracePayload($requestId);
+            foreach ($existingRequestIds as $existingRequestId) {
+                if ($existingRequestId !== $requestId) {
+                    $this->storeTracePayload($existingRequestId);
+                }
+            }
+            if (!$this->shouldUseLazyPanel() || stripos($result, 'data-weline-dev-tool-panel-loader') === false) {
+                $result = $this->injectRequestMetaScript($result, $requestId);
             }
 
             $payload['result'] = $result;
@@ -187,6 +230,116 @@ class DevToolPanelObserver implements ObserverInterface
         }
 
         $event->setData('result', (string)($payload['result'] ?? ''));
+    }
+
+    private function setRequestIdHeader(string $requestId): void
+    {
+        try {
+            $this->request->getResponse()->setHeader('X-Weline-Request-Id', $requestId);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function storeTracePayload(string $requestId): void
+    {
+        try {
+            $payload = RequestLifecycleTrace::exportCompactPayload();
+            if ((int)($payload['summary']['span_count'] ?? 0) <= 0) {
+                return;
+            }
+            $stored = $this->payloadStore->set('trace', 'trace:' . $requestId, $payload, $this->traceTtl());
+            if (!$stored) {
+                $this->logToConsole('debug', 'DevToolPanel trace store skipped: unable to persist payload', [
+                    'request_id' => $requestId,
+                    'span_count' => (int)($payload['summary']['span_count'] ?? 0),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $this->logToConsole('debug', 'DevToolPanel trace store skipped: ' . $e->getMessage());
+        }
+    }
+
+    private function injectRequestMetaScript(string $result, string $requestId): string
+    {
+        $config = [
+            'requestId' => $requestId,
+            'traceTtl' => $this->traceTtl(),
+            'apiBase' => $this->resolveApiBase(),
+        ];
+        $json = \json_encode($config, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        if (!\is_string($json)) {
+            $json = '{}';
+        }
+        $script = '<script>window.__WELINE_REQUEST_ID__='
+            . \json_encode($requestId, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)
+            . ';window.__WELINE_DEV_TOOL__=' . $json . ';</script>';
+
+        if (stripos($result, 'window.__WELINE_REQUEST_ID__=') !== false) {
+            $count = 0;
+            $updated = preg_replace(
+                '/<script>\s*window\.__WELINE_REQUEST_ID__=.*?<\/script>/is',
+                $script,
+                $result,
+                1,
+                $count
+            );
+            if ($count > 0 && is_string($updated)) {
+                return $updated;
+            }
+        }
+
+        $bodyClosePos = strripos($result, '</body>');
+        if ($bodyClosePos !== false) {
+            return substr($result, 0, $bodyClosePos) . $script . substr($result, $bodyClosePos);
+        }
+
+        return $result . $script;
+    }
+
+    private function resolveApiBase(): string
+    {
+        $restBackendPrefix = (string)($_SERVER['WELINE_REST_BACKEND_PREFIX'] ?? '');
+        if ($restBackendPrefix === '') {
+            $restBackendPrefix = (string)(Env::getAreaRoutePrefix('rest_backend') ?? '');
+        }
+        if ($restBackendPrefix === '') {
+            $envConfig = \is_file(BP . 'app' . DS . 'etc' . DS . 'env.php')
+                ? (include BP . 'app' . DS . 'etc' . DS . 'env.php')
+                : [];
+            if (\is_array($envConfig)) {
+                $restBackendPrefix = (string)($envConfig['router']['area_routes']['rest_backend']['prefix'] ?? '');
+            }
+        }
+
+        return ($restBackendPrefix !== '' ? trim($restBackendPrefix, '/') . '/' : '') . 'dev/tool/rest/v1';
+    }
+
+    private function traceTtl(): int
+    {
+        return ObjectManager::getInstance(RuntimeCachePolicy::class)->ttl('dev.trace_ttl', self::TRACE_TTL_SECONDS);
+    }
+
+    /**
+     * @return string[]
+     */
+    private function extractRequestIdsFromResult(string $result): array
+    {
+        $requestIds = [];
+        if (preg_match_all('/window\.__WELINE_REQUEST_ID__\s*=\s*["\']([^"\']+)["\']/', $result, $matches)) {
+            foreach ($matches[1] as $requestId) {
+                $requestIds[(string)$requestId] = true;
+            }
+        }
+
+        if (preg_match_all('/"requestId"\s*:\s*"([^"]+)"/', $result, $matches)) {
+            foreach ($matches[1] as $requestId) {
+                $requestIds[(string)$requestId] = true;
+            }
+        }
+
+        return array_values(array_filter(array_keys($requestIds), static function (string $requestId): bool {
+            return $requestId !== '' && preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $requestId) === 1;
+        }));
     }
 
     private function injectTraceScript(string $result, array $traceSpans): string
@@ -268,6 +421,24 @@ class DevToolPanelObserver implements ObserverInterface
         return $result . $panelHtml;
     }
 
+    private function shouldUseLazyPanel(): bool
+    {
+        $default = Runtime::isPersistent();
+        return (bool)Env::get('dev_tool.lazy_panel', $default);
+    }
+
+    private function renderLazyPanelLoader(string $requestId): string
+    {
+        $apiBase = \htmlspecialchars($this->resolveApiBase(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $requestId = \htmlspecialchars($requestId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $loaderSrc = '/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260519-swr-1';
+
+        return <<<HTML
+<script data-weline-dev-tool-panel-loader="1" data-api-base="{$apiBase}" data-request-id="{$requestId}" data-src="{$loaderSrc}">(function(d,w){if(w.__WELINE_DEV_TOOL_PANEL_BOOT__)return;w.__WELINE_DEV_TOOL_PANEL_BOOT__=1;var s=d.currentScript;function l(){if(d.getElementById('weline-dev-tool-loader-js'))return;var x=d.createElement('script');x.id='weline-dev-tool-loader-js';x.src=s.getAttribute('data-src');x.defer=true;x.setAttribute('data-api-base',s.getAttribute('data-api-base')||'');x.setAttribute('data-request-id',s.getAttribute('data-request-id')||'');(d.body||d.documentElement).appendChild(x)}function q(){if('requestIdleCallback'in w){w.requestIdleCallback(l,{timeout:1500})}else{w.setTimeout(l,800)}}if(d.readyState==='complete'){q()}else{w.addEventListener('load',q,{once:true})}})(document,window);
+</script>
+HTML;
+    }
+
     /**
      * @param array<string, mixed> $payload
      * @return array<int, array<string, mixed>>
@@ -342,7 +513,7 @@ class DevToolPanelObserver implements ObserverInterface
         return $filtered;
     }
 
-    private function renderPanel(): string
+    public function renderPanel(): string
     {
         try {
             $templatePath = dirname(__DIR__) . '/view/hooks/dev-tool-panel.phtml';
@@ -354,6 +525,30 @@ class DevToolPanelObserver implements ObserverInterface
             $isBackend = $this->request->isBackend();
             $devToolCookieName = Env::get('dev_tool.cookie_name', 'w_dev_tool');
             $hasCookie = !empty(Cookie::get($devToolCookieName)) && Cookie::get($devToolCookieName) === '1';
+            $cacheKey = sha1(json_encode([
+                'backend' => $isBackend,
+                'cookie' => $hasCookie,
+                'base_url' => (string)$this->request->getBaseUrl(),
+            ], JSON_UNESCAPED_SLASHES) ?: 'dev-tool-panel');
+            $cached = self::$panelHtmlCache[$cacheKey] ?? null;
+            if (is_array($cached)
+                && isset($cached['expires_at'], $cached['html'])
+                && (float)$cached['expires_at'] >= microtime(true)
+                && is_string($cached['html'])) {
+                return $cached['html'];
+            }
+            try {
+                $sharedCached = $this->payloadStore->get('panel', 'html:' . $cacheKey);
+                if (is_string($sharedCached)) {
+                    self::$panelHtmlCache[$cacheKey] = [
+                        'expires_at' => microtime(true) + self::PANEL_HTML_CACHE_TTL,
+                        'html' => $sharedCached,
+                    ];
+                    return $sharedCached;
+                }
+            } catch (\Throwable) {
+                // Panel cache is an optimization only.
+            }
 
             $extraTabsHtml = '';
             $extraSearchAreasHtml = '';
@@ -372,7 +567,23 @@ class DevToolPanelObserver implements ObserverInterface
             include $templatePath;
             $html = ob_get_clean();
 
-            return is_string($html) ? $html : '';
+            $html = is_string($html) ? $html : '';
+            if ($html !== '') {
+                if (count(self::$panelHtmlCache) > 16) {
+                    self::$panelHtmlCache = [];
+                }
+                self::$panelHtmlCache[$cacheKey] = [
+                    'expires_at' => microtime(true) + self::PANEL_HTML_CACHE_TTL,
+                    'html' => $html,
+                ];
+                try {
+                    $this->payloadStore->set('panel', 'html:' . $cacheKey, $html, (int)self::PANEL_HTML_CACHE_TTL);
+                } catch (\Throwable) {
+                    // Panel cache is an optimization only.
+                }
+            }
+
+            return $html;
         } catch (\Exception $e) {
             $this->logToConsole('error', 'DevToolPanel Render Error: ' . $e->getMessage());
             return '';
@@ -382,6 +593,10 @@ class DevToolPanelObserver implements ObserverInterface
     private function isHtmlResponse(string $output): bool
     {
         $trimmed = trim($output);
+        if ($trimmed === '') {
+            return false;
+        }
+
         if (($trimmed[0] ?? '') === '{' || ($trimmed[0] ?? '') === '[') {
             json_decode($trimmed);
             if (json_last_error() === JSON_ERROR_NONE) {
@@ -389,21 +604,19 @@ class DevToolPanelObserver implements ObserverInterface
             }
         }
 
-        if (strlen($trimmed) < 100 &&
-            stripos($trimmed, '<html') === false &&
-            stripos($trimmed, '<!doctype') === false &&
-            stripos($trimmed, '<body') === false) {
+        if (stripos($trimmed, '<?xml') === 0) {
             return false;
         }
 
         return stripos($output, '<html') !== false ||
             stripos($output, '<!doctype') !== false ||
-            stripos($output, '<body') !== false;
+            stripos($output, '<body') !== false ||
+            preg_match('/<(?:div|span|p|a|img|table|form|ul|ol|li|section|article|main|header|footer|nav|h[1-6]|script|style)\b/i', $output) === 1;
     }
 
     private function shouldSkipForResponseSize(string $result): bool
     {
-        $limit = (int)Env::get('dev_tool.max_response_bytes', self::PERSISTENT_MAX_RESPONSE_BYTES);
+        $limit = (int)Env::get('dev_tool.max_response_bytes', self::DEFAULT_MAX_RESPONSE_BYTES);
         if ($limit <= 0) {
             return false;
         }

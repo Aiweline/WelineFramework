@@ -34,6 +34,13 @@ $recommend_domain_sse_url = (string)($this->getData('recommend_domain_sse_url') 
 $check_domain_url = (string)($this->getData('check_domain_url') ?? '');
 $current_entry_url = (string)($this->getData('current_entry_url') ?? $this->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => $selected_provider]));
 $fake_mode = (bool)($this->getData('fake_mode') ?? false);
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_AMP
+    | JSON_HEX_APOS
+    | JSON_HEX_QUOT
+    | JSON_INVALID_UTF8_SUBSTITUTE;
 $quick_build_url = $current_entry_url . '#quick-build';
 $provider_lane_url = $current_entry_url . '#provider-lane';
 $quickBuildRegistrarOptions = [];
@@ -52,7 +59,7 @@ foreach ($accounts as $account) {
         'meta' => (string)($account['registrar_code'] ?? ''),
     ];
 }
-$quickBuildRegistrarOptionsJson = \json_encode($quickBuildRegistrarOptions, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+$quickBuildRegistrarOptionsJson = \json_encode($quickBuildRegistrarOptions, $jsonForScriptFlags | JSON_THROW_ON_ERROR);
 $quickBuildRegistrarAccountId = '';
 $quickBuildRegistrarDisplay = '';
 ?>
@@ -653,14 +660,14 @@ body[data-topbar="dark"] .site-workbench-page {
     var terminalBoundTarget = null;
     var terminalUnlocked = true;
     var nextStepTriggered = false;
-    var createSessionUrl = <?= json_encode($create_session_url, JSON_THROW_ON_ERROR) ?>;
-    var deleteSessionUrl = <?= json_encode($delete_session_url, JSON_THROW_ON_ERROR) ?>;
-    var recommendDomainUrl = <?= json_encode($recommend_domain_url, JSON_THROW_ON_ERROR) ?>;
-    var recommendDomainSseUrl = <?= json_encode($recommend_domain_sse_url, JSON_THROW_ON_ERROR) ?>;
-    var checkDomainUrl = <?= json_encode($check_domain_url, JSON_THROW_ON_ERROR) ?>;
+    var createSessionUrl = <?= json_encode($create_session_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var deleteSessionUrl = <?= json_encode($delete_session_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var recommendDomainUrl = <?= json_encode($recommend_domain_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var recommendDomainSseUrl = <?= json_encode($recommend_domain_sse_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var checkDomainUrl = <?= json_encode($check_domain_url, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
     var quickBuildRegistrarOptions = <?= $quickBuildRegistrarOptionsJson ?>;
-    var selectedProviderCode = <?= json_encode($selected_provider, JSON_THROW_ON_ERROR) ?>;
-    var startSseUrl = <?= json_encode((string)$this->getBackendUrl('websites/backend/site-builder-agent/trigger-sse'), JSON_THROW_ON_ERROR) ?>;
+    var selectedProviderCode = <?= json_encode($selected_provider, $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    var startSseUrl = <?= json_encode((string)$this->getBackendUrl('websites/backend/site-builder-agent/trigger-sse'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
     var fakeMode = <?= $fake_mode ? 'true' : 'false' ?>;
     var lastRecommendedDomain = '';
     var recommendDomainEventSource = null;
@@ -671,46 +678,47 @@ body[data-topbar="dark"] .site-workbench-page {
         available: null
     };
     var messages = {
-        aiDomainOptional: <?= json_encode((string)__('AI 可为你推荐。'), JSON_THROW_ON_ERROR) ?>,
-        aiRegistrarOptional: <?= json_encode((string)__('可选（用于快速开始）。如需实时可用性检测则必须选择。'), JSON_THROW_ON_ERROR) ?>,
-        manualDomainRequired: <?= json_encode((string)__('关闭 AI 后请手动确认。'), JSON_THROW_ON_ERROR) ?>,
-        manualRegistrarRequired: <?= json_encode((string)__('关闭 AI 后请先选择服务商账号。'), JSON_THROW_ON_ERROR) ?>,
-        aiModeTip: <?= json_encode((string)__('AI 会先推荐域名、服务商和页面方案，你只需确认结果。'), JSON_THROW_ON_ERROR) ?>,
-        manualModeTip: <?= json_encode((string)__('手动模式会保留同样的引导流程，但关键信息需要你自行填写。'), JSON_THROW_ON_ERROR) ?>,
-        createWorkspaceFailed: <?= json_encode((string)__('当前无法创建工作区。'), JSON_THROW_ON_ERROR) ?>,
-        networkError: <?= json_encode((string)__('网络请求失败，请重试。'), JSON_THROW_ON_ERROR) ?>,
-        terminalLoading: <?= json_encode((string)__('终端仍在加载中，请稍后重试。'), JSON_THROW_ON_ERROR) ?>,
-        domainRequired: <?= json_encode((string)__('请先输入目标域名。'), JSON_THROW_ON_ERROR) ?>,
-        registrarRequired: <?= json_encode((string)__('请先选择服务商账号。'), JSON_THROW_ON_ERROR) ?>,
-        briefRequired: <?= json_encode((string)__('请先描述建站目标，或先提供一个域名。'), JSON_THROW_ON_ERROR) ?>,
-        recommendNeedsRegistrar: <?= json_encode((string)__('AI 进行实时可用性检测前，请先选择服务商账号。'), JSON_THROW_ON_ERROR) ?>,
-        recommendLoading: <?= json_encode((string)__('AI 正在使用所选服务商检测实时可用性...'), JSON_THROW_ON_ERROR) ?>,
-        recommendDomainChanged: <?= json_encode((string)__('你已手动修改域名；如需最新检测结果，请重新推荐。'), JSON_THROW_ON_ERROR) ?>,
-        recommendRegistrarChanged: <?= json_encode((string)__('服务商已变更，请重新推荐以重新检测可用性。'), JSON_THROW_ON_ERROR) ?>,
-        recommendUnavailable: <?= json_encode((string)__('暂未找到可用域名，请尝试更换简报或偏好域名。'), JSON_THROW_ON_ERROR) ?>,
-        manualCheckNeedsRegistrar: <?= json_encode((string)__('请先选择服务商账号，再检测手填域名可用性。'), JSON_THROW_ON_ERROR) ?>,
-        manualCheckLoading: <?= json_encode((string)__('正在检测当前域名可用性...'), JSON_THROW_ON_ERROR) ?>,
-        manualCheckAvailable: <?= json_encode((string)__('域名 %{1} 当前可用，可继续建站。'), JSON_THROW_ON_ERROR) ?>,
-        manualCheckUnavailable: <?= json_encode((string)__('域名 %{1} 当前不可用，请更换后重试。'), JSON_THROW_ON_ERROR) ?>,
-        startCheckNeedsRegistrar: <?= json_encode((string)__('开始建站前需要选择服务商账号，以完成域名可用性检查。'), JSON_THROW_ON_ERROR) ?>,
-        startCheckFailed: <?= json_encode((string)__('开始建站前域名可用性检查未通过，请调整后重试。'), JSON_THROW_ON_ERROR) ?>,
-        recommendationUnavailable: <?= json_encode((string)__('不可用'), JSON_THROW_ON_ERROR) ?>,
-        recommendationAvailable: <?= json_encode((string)__('可用'), JSON_THROW_ON_ERROR) ?>,
-        simulatedDomainRecommended: <?= json_encode((string)__('模拟环境已开启，已推荐域名 %{1}'), JSON_THROW_ON_ERROR) ?>,
-        checkedCandidatesLabel: <?= json_encode((string)__('已检测'), JSON_THROW_ON_ERROR) ?>,
-        loadingLog: <?= json_encode((string)__('正在准备 AI 引导建站流程...'), JSON_THROW_ON_ERROR) ?>,
-        connecting: <?= json_encode((string)__('连接中...'), JSON_THROW_ON_ERROR) ?>,
-        connected: <?= json_encode((string)__('已连接'), JSON_THROW_ON_ERROR) ?>,
-        disconnected: <?= json_encode((string)__('已断开'), JSON_THROW_ON_ERROR) ?>,
-        connectionFailed: <?= json_encode((string)__('连接失败，请重试。'), JSON_THROW_ON_ERROR) ?>,
-        nextStepPreparing: <?= json_encode((string)__('AI 规划完成，正在进入虚拟主题编辑...'), JSON_THROW_ON_ERROR) ?>,
-        nextStepFailed: <?= json_encode((string)__('规划已完成，请手动点击“先保存成工作区”进入下一步。'), JSON_THROW_ON_ERROR) ?>,
-        workspaceFlowHint: <?= json_encode((string)__('将自动开始域名购买并展示进度（不阻塞后续虚拟主题流程）。'), JSON_THROW_ON_ERROR) ?>
+        aiDomainOptional: <?= json_encode((string)__('AI 可为你推荐。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        aiRegistrarOptional: <?= json_encode((string)__('可选（用于快速开始）。如需实时可用性检测则必须选择。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        manualDomainRequired: <?= json_encode((string)__('关闭 AI 后请手动确认。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        manualRegistrarRequired: <?= json_encode((string)__('关闭 AI 后请先选择服务商账号。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        aiModeTip: <?= json_encode((string)__('AI 会先推荐域名、服务商和页面方案，你只需确认结果。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        manualModeTip: <?= json_encode((string)__('手动模式会保留同样的引导流程，但关键信息需要你自行填写。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        createWorkspaceFailed: <?= json_encode((string)__('当前无法创建工作区。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        networkError: <?= json_encode((string)__('网络请求失败，请重试。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        terminalLoading: <?= json_encode((string)__('终端仍在加载中，请稍后重试。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        domainRequired: <?= json_encode((string)__('请先输入目标域名。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        registrarRequired: <?= json_encode((string)__('请先选择服务商账号。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        briefRequired: <?= json_encode((string)__('请先描述建站目标，或先提供一个域名。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendNeedsRegistrar: <?= json_encode((string)__('AI 进行实时可用性检测前，请先选择服务商账号。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendLoading: <?= json_encode((string)__('AI 正在使用所选服务商检测实时可用性...'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendDomainChanged: <?= json_encode((string)__('你已手动修改域名；如需最新检测结果，请重新推荐。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendRegistrarChanged: <?= json_encode((string)__('服务商已变更，请重新推荐以重新检测可用性。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendUnavailable: <?= json_encode((string)__('暂未找到可用域名，请尝试更换简报或偏好域名。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        manualCheckNeedsRegistrar: <?= json_encode((string)__('请先选择服务商账号，再检测手填域名可用性。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        manualCheckLoading: <?= json_encode((string)__('正在检测当前域名可用性...'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        manualCheckAvailable: <?= json_encode((string)__('域名 %{1} 当前可用，可继续建站。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        manualCheckUnavailable: <?= json_encode((string)__('域名 %{1} 当前不可用，请更换后重试。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        startCheckNeedsRegistrar: <?= json_encode((string)__('开始建站前需要选择服务商账号，以完成域名可用性检查。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        startCheckFailed: <?= json_encode((string)__('开始建站前域名可用性检查未通过，请调整后重试。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendationUnavailable: <?= json_encode((string)__('不可用'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        recommendationAvailable: <?= json_encode((string)__('可用'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        simulatedDomainRecommended: <?= json_encode((string)__('模拟环境已开启，已推荐域名 %{1}'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        checkedCandidatesLabel: <?= json_encode((string)__('已检测'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        loadingLog: <?= json_encode((string)__('正在准备 AI 引导建站流程...'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        connecting: <?= json_encode((string)__('连接中...'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        connected: <?= json_encode((string)__('已连接'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        disconnected: <?= json_encode((string)__('已断开'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        connectionFailed: <?= json_encode((string)__('连接失败，请重试。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        nextStepPreparing: <?= json_encode((string)__('AI 规划完成，正在进入虚拟主题编辑...'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        nextStepFailed: <?= json_encode((string)__('规划已完成，请手动点击“先保存成工作区”进入下一步。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>,
+        workspaceFlowHint: <?= json_encode((string)__('将自动开始域名购买并展示进度（不阻塞后续虚拟主题流程）。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>
     };
 
-    messages.deleteSessionConfirm = <?= json_encode((string)__('确定删除这条最近会话吗？'), JSON_THROW_ON_ERROR) ?>;
-    messages.deleteSessionSuccess = <?= json_encode((string)__('最近会话已删除'), JSON_THROW_ON_ERROR) ?>;
-    messages.deleteSessionFailed = <?= json_encode((string)__('删除最近会话失败'), JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionConfirm = <?= json_encode((string)__('确定删除这条最近会话吗？'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionSuccess = <?= json_encode((string)__('最近会话已删除'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionFailed = <?= json_encode((string)__('删除最近会话失败'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
+    messages.confirmUnavailable = <?= json_encode((string)__('确认组件不可用，请刷新页面后重试。'), $jsonForScriptFlags | JSON_THROW_ON_ERROR) ?>;
 
     function toast(type, message) {
         if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
@@ -720,6 +728,18 @@ body[data-topbar="dark"] .site-workbench-page {
         if (window.BackendToast && typeof window.BackendToast.warning === 'function') {
             window.BackendToast.warning(message);
         }
+    }
+
+    function confirmAction(message, onConfirm) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            window.BackendConfirm.show(message).then(function (confirmed) {
+                if (confirmed) {
+                    onConfirm();
+                }
+            });
+            return;
+        }
+        toast('error', messages.confirmUnavailable);
     }
 
     function escapeHtml(value) {
@@ -1514,27 +1534,26 @@ body[data-topbar="dark"] .site-workbench-page {
             toast('error', messages.deleteSessionFailed);
             return;
         }
-        if (!window.confirm(messages.deleteSessionConfirm)) {
-            return;
-        }
-        var fd = new FormData();
-        fd.append('public_id', publicId);
-        fetch(deleteSessionUrl, {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            body: fd,
-            credentials: 'same-origin'
-        }).then(function (response) {
-            return response.json();
-        }).then(function (data) {
-            if (data && data.success) {
-                removeRecentSessionCard(publicId);
-                toast('success', data.message || messages.deleteSessionSuccess);
-                return;
-            }
-            toast('error', (data && data.message) ? data.message : messages.deleteSessionFailed);
-        }).catch(function () {
-            toast('error', messages.networkError);
+        confirmAction(messages.deleteSessionConfirm, function () {
+            var fd = new FormData();
+            fd.append('public_id', publicId);
+            fetch(deleteSessionUrl, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: fd,
+                credentials: 'same-origin'
+            }).then(function (response) {
+                return response.json();
+            }).then(function (data) {
+                if (data && data.success) {
+                    removeRecentSessionCard(publicId);
+                    toast('success', data.message || messages.deleteSessionSuccess);
+                    return;
+                }
+                toast('error', (data && data.message) ? data.message : messages.deleteSessionFailed);
+            }).catch(function () {
+                toast('error', messages.networkError);
+            });
         });
     }
 

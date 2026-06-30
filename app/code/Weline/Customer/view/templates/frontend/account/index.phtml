@@ -1,105 +1,118 @@
-<?php
-$themeTemplate = null;
-try {
-    $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
-    $theme = $themeContext->resolveTheme('frontend');
-    if ($theme && $theme->getId()) {
-        $candidate = rtrim((string)$theme->getPath(), '\\/') . DIRECTORY_SEPARATOR
-            . 'Weline' . DIRECTORY_SEPARATOR . 'Customer' . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR
-            . 'templates' . DIRECTORY_SEPARATOR . 'frontend' . DIRECTORY_SEPARATOR . 'account' . DIRECTORY_SEPARATOR
-            . 'index.phtml';
-        if (is_file($candidate) && realpath($candidate) !== __FILE__) {
-            $themeTemplate = $candidate;
-        }
-    }
-} catch (\Throwable) {
-}
-
-if ($themeTemplate) {
-    include $themeTemplate;
-    return;
-}
-/**@var \Weline\Framework\View\Template $this */
+﻿<?php
+/** @var \Weline\Framework\View\Template $this */
 /**@var \Weline\Customer\Model\Customer $user */
-$avatar = $user->getAvatar();
-$username = $user->getUsername();
-$email = $user->getEmail();
-$avatarInitial = strtoupper(mb_substr($username, 0, 1));
+$user = $user ?? $this->getData('user');
+if (!$user instanceof \Weline\Customer\Model\Customer) {
+    try {
+        $sessionUser = \Weline\Framework\Session\SessionFactory::getInstance()->createFrontendSession()->getUser();
+        if ($sessionUser instanceof \Weline\Customer\Model\Customer) {
+            $user = $sessionUser;
+        }
+    } catch (\Throwable) {
+    }
+}
+$avatar = is_object($user) && method_exists($user, 'getAvatar') ? (string)($user->getAvatar() ?? '') : '';
+$username = is_object($user) && method_exists($user, 'getUsername') ? (string)($user->getUsername() ?? '') : '';
+$displayName = $username !== '' ? ucfirst($username) : '';
+$email = is_object($user) && method_exists($user, 'getEmail') ? (string)($user->getEmail() ?? '') : '';
+if ($username === '' && $email !== '') {
+    $username = $email;
+    $displayName = ucfirst($email);
+}
+$avatarInitial = $username !== '' ? strtoupper(mb_substr($username, 0, 1)) : '?';
+$userId = is_object($user) && method_exists($user, 'getId') ? $user->getId() : '';
+$loginIp = is_object($user) && method_exists($user, 'getLoginIp') ? (string)($user->getLoginIp() ?? '') : '';
+$sessionId = is_object($user) && method_exists($user, 'getSessionId') ? (string)($user->getSessionId() ?? '') : '';
+$accountSidebarContentUrlJs = $this->getFrontendUrl('customer/account/index/sidebar-content');
+$accountLogoutPath = parse_url($this->getFrontendUrl('customer/account/logout'), PHP_URL_PATH);
+if (!is_string($accountLogoutPath) || $accountLogoutPath === '') {
+    $accountLogoutPath = '/customer/account/logout';
+}
+$accountIndexAssetVersion = '20260527-account-mobile-wrap-1';
+$accountIndexConfigJson = json_encode([
+    'i18n' => [
+        'saving' => (string) __('保存中...'),
+        'changing' => (string) __('修改中...'),
+        'profileUpdateFailed' => (string) __('更新失败，请稍后重试'),
+        'securityUpdateFailed' => (string) __('修改失败，请稍后重试'),
+        'fillAllFields' => (string) __('请填写所有字段'),
+        'passwordTooShort' => (string) __('新密码长度不能少于 6 位'),
+        'passwordMismatch' => (string) __('两次输入的新密码不一致'),
+        'invalidServerResponse' => (string) __('服务器返回了无效响应，请稍后重试'),
+        'endpointNotFound' => (string) __('保存接口不存在，页面脚本或路由需要同步修复'),
+    ],
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+if (!is_string($accountIndexConfigJson) || $accountIndexConfigJson === '') {
+    $accountIndexConfigJson = '{}';
+}
 ?>
+<link rel="stylesheet" href="@static(Weline_Customer::css/account-index.css)?v=<?= $accountIndexAssetVersion ?>">
+<script id="weline-account-index-config" type="application/json"><?= $accountIndexConfigJson ?></script>
 <!-- 主内容区 -->
 <section class="account-index">
     <!-- 个人资料头部 -->
     <header class="account-index__header">
         <div class="account-index__avatar">
-            <?php if ($avatar): ?>
-                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="account-index__avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="account-index__avatar-fallback" id="avatarFallback"><?= $avatarInitial ?></div>
-            <?php else: ?>
-                <div class="account-index__avatar-fallback"><?= $avatarInitial ?></div>
-            <?php endif; ?>
+            <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="account-index__avatar-img"<?= $avatar ? '' : ' hidden' ?>>
+            <div class="account-index__avatar-fallback" id="avatarFallback"<?= $avatar ? ' hidden' : '' ?>><var>avatarInitial</var></div>
         </div>
         <div class="account-index__user-info">
-            <h1 class="account-index__username"><?= htmlspecialchars($username) ?></h1>
-            <?php if ($email): ?>
+            <h1 class="account-index__username"><var>username</var></h1>
+            <notempty name="email">
                 <p class="account-index__email">
-                    <i class="ri-mail-line"></i> <?= htmlspecialchars($email) ?>
+                    <i class="ri-mail-line"></i> <notempty name="email"><var>email</var></notempty>
                 </p>
-            <?php endif; ?>
+            </notempty>
             <p class="account-index__welcome"><lang>欢迎回来！您可以在这里管理您的账户信息</lang></p>
+        </div>
+        <div class="account-index__header-actions">
+            <a class="account-index__logout" href="<?= htmlspecialchars($accountLogoutPath, ENT_QUOTES, 'UTF-8') ?>" data-account-logout-confirm>
+                <i class="ri-logout-box-line" aria-hidden="true"></i>
+                <span><lang>退出登录</lang></span>
+            </a>
         </div>
     </header>
 
     <!-- 个人资料部分 -->
-    <div class="account-index__section" id="profile-section">
+    <div class="account-index__section" id="profile-section" data-account-section="profile">
         <div class="account-card">
             <header class="account-card__header">
-                <h2 class="account-card__title"><?= __('个人资料') ?></h2>
+                <h2 class="account-card__title"><lang>个人资料</lang></h2>
             </header>
             <div class="account-card__body">
-                <div class="account-card__alert account-card__alert--success d-none" id="profileSuccessMsg"></div>
-                <div class="account-card__alert account-card__alert--danger d-none" id="profileErrorMsg"></div>
-
+                <div class="account-card__alert account-card__alert--success" id="profileSuccessMsg"></div>
+                <div class="account-card__alert account-card__alert--danger" id="profileErrorMsg"></div>
                 <form id="profileForm" class="account-form">
-                    <div class="account-form__row">
-                        <div class="account-form__group">
-                            <label for="username" class="account-form__label"><?= __('用户名') ?></label>
-                            <input type="text" class="account-form__input" id="username"
-                                   value="<?= htmlspecialchars($user->getUsername()) ?>" disabled>
-                            <span class="account-form__hint"><?= __('用户名不可修改') ?></span>
+                    <div class="account-form__group account-form__group--wide">
+                        <label class="account-form__label"><lang>账户标识</lang></label>
+                        <div class="account-identity" id="accountIdentity">
+                            <span class="account-identity__badge">#<?= htmlspecialchars((string)$userId) ?></span>
+                            <strong class="account-identity__name"><?= htmlspecialchars($displayName) ?></strong>
                         </div>
-
-                        <div class="account-form__group">
-                            <label for="userId" class="account-form__label"><?= __('用户ID') ?></label>
-                            <input type="text" class="account-form__input" id="userId"
-                                   value="<?= $user->getId() ?>" disabled>
-                        </div>
+                        <span class="account-form__hint"><lang>用户名和用户 ID 为系统标识，不可修改</lang></span>
                     </div>
 
-                    <div class="account-form__group">
-                        <label for="avatar" class="account-form__label"><?= __('头像URL') ?></label>
+                    <div class="account-form__group account-form__group--wide">
+                        <label for="avatar" class="account-form__label"><lang>头像 URL</lang></label>
                         <div class="account-form__input-group">
                             <input type="url" class="account-form__input" id="avatar" name="avatar"
-                                   value="<?= htmlspecialchars($user->getAvatar() ?: '') ?>"
+                                   value="<?= htmlspecialchars($avatar) ?>"
                                    placeholder="https://example.com/avatar.jpg">
-                            <button type="button" class="account-form__btn account-form__btn--outline" id="previewAvatarBtn">
-                                <i class="ri-eye-line"></i> <?= __('预览') ?>
-                            </button>
                         </div>
-                        <span class="account-form__hint"><?= __('输入头像图片的完整URL地址') ?></span>
+                        <span class="account-form__hint"><lang>输入头像图片的完整 URL 地址，顶部头像会自动预览</lang></span>
                     </div>
 
                     <?php if ($email): ?>
-                    <div class="account-form__group">
-                        <label for="email" class="account-form__label"><?= __('邮箱') ?></label>
-                        <input type="email" class="account-form__input" id="email"
-                               value="<?= htmlspecialchars($email) ?>" disabled>
-                        <span class="account-form__hint"><?= __('邮箱不可修改') ?></span>
+                    <div class="account-form__group account-form__group--medium">
+                        <label for="email" class="account-form__label"><lang>邮箱</lang></label>
+                        <div class="account-form__display account-form__display--soft" id="email"><?= htmlspecialchars($email) ?></div>
+                        <span class="account-form__hint"><lang>邮箱不可修改</lang></span>
                     </div>
                     <?php endif; ?>
 
                     <div class="account-form__actions">
                         <button type="submit" class="account-form__btn account-form__btn--primary">
-                            <i class="ri-save-line"></i> <?= __('保存更改') ?>
+                            <i class="ri-save-line"></i> <lang>保存更改</lang>
                         </button>
                     </div>
                 </form>
@@ -108,42 +121,42 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     </div>
 
     <!-- 安全设置部分 -->
-    <div class="account-index__section d-none" id="security-section">
+    <div class="account-index__section d-none" id="security-section" data-account-section="security" hidden>
         <div class="account-card">
             <header class="account-card__header">
-                <h2 class="account-card__title"><?= __('修改密码') ?></h2>
+                <h2 class="account-card__title"><lang>修改密码</lang></h2>
             </header>
             <div class="account-card__body">
-                <div class="account-card__alert account-card__alert--success d-none" id="securitySuccessMsg"></div>
-                <div class="account-card__alert account-card__alert--danger d-none" id="securityErrorMsg"></div>
+                <div class="account-card__alert account-card__alert--success" id="securitySuccessMsg"></div>
+                <div class="account-card__alert account-card__alert--danger" id="securityErrorMsg"></div>
 
                 <form id="securityForm" class="account-form">
-                    <div class="account-form__group">
-                        <label for="old_password" class="account-form__label"><?= __('原密码') ?></label>
+                    <div class="account-form__group account-form__group--medium">
+                        <label for="old_password" class="account-form__label"><lang>原密码</lang></label>
                         <input type="password" class="account-form__input" id="old_password" name="old_password"
-                               placeholder="<?= __('请输入原密码') ?>" required>
-                        <span class="account-form__hint"><?= __('请输入当前密码以验证身份') ?></span>
+                                   placeholder="@lang{请输入原密码}" required>
+                        <span class="account-form__hint"><lang>请输入当前密码以验证身份</lang></span>
                     </div>
 
                     <div class="account-form__row">
-                        <div class="account-form__group">
-                            <label for="new_password" class="account-form__label"><?= __('新密码') ?></label>
+                        <div class="account-form__group account-form__group--medium">
+                            <label for="new_password" class="account-form__label"><lang>新密码</lang></label>
                             <input type="password" class="account-form__input" id="new_password" name="new_password"
-                                   placeholder="<?= __('至少6位字符') ?>" minlength="6">
-                            <span class="account-form__hint"><?= __('建议使用字母、数字和特殊字符组合') ?></span>
+                                   placeholder="@lang{至少 6 位字符}" minlength="6">
+                            <span class="account-form__hint"><lang>建议使用字母、数字和特殊字符组合</lang></span>
                         </div>
 
-                        <div class="account-form__group">
-                            <label for="confirm_password" class="account-form__label"><?= __('确认新密码') ?></label>
+                        <div class="account-form__group account-form__group--medium">
+                            <label for="confirm_password" class="account-form__label"><lang>确认新密码</lang></label>
                             <input type="password" class="account-form__input" id="confirm_password" name="confirm_password"
-                                   placeholder="<?= __('再次输入新密码') ?>" minlength="6">
-                            <span class="account-form__hint"><?= __('再次输入新密码以确认') ?></span>
+                                   placeholder="@lang{再次输入新密码}" minlength="6">
+                            <span class="account-form__hint"><lang>再次输入新密码以确认</lang></span>
                         </div>
                     </div>
 
                     <div class="account-form__actions">
                         <button type="submit" class="account-form__btn account-form__btn--primary">
-                            <i class="ri-lock-password-line"></i> <?= __('修改密码') ?>
+                            <i class="ri-lock-password-line"></i> <lang>修改密码</lang>
                         </button>
                     </div>
                 </form>
@@ -151,21 +164,36 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         </div>
     </div>
 
-    <!-- 登录信息部分 -->
-    <div class="account-index__section d-none" id="login-info-section">
+    <!-- 扩展分区：其他模块通过 account.sidebar.content 延迟注入 -->
+    <div data-account-sidebar-content-mount
+         data-account-sidebar-content-url="<?= htmlspecialchars((string)$accountSidebarContentUrlJs, ENT_QUOTES, 'UTF-8') ?>"></div>
+
+    <div class="account-index__section d-none" id="login-info-section" data-account-section="login-info" hidden>
         <div class="account-card">
             <header class="account-card__header">
-                <h2 class="account-card__title"><?= __('登录信息') ?></h2>
+                <h2 class="account-card__title"><lang>登录信息</lang></h2>
             </header>
             <div class="account-card__body">
                 <div class="account-info-grid">
                     <div class="account-info-item">
-                        <label class="account-info-item__label"><?= __('最后登录IP') ?></label>
-                        <div class="account-info-item__value"><?= $user->getLoginIp() ?: '<lang>未知</lang>' ?></div>
+                        <label class="account-info-item__label"><lang>最后登录 IP</lang></label>
+                        <div class="account-info-item__value">
+                            <?php if ($loginIp): ?>
+                                <?= htmlspecialchars($loginIp) ?>
+                            <?php else: ?>
+                                <lang>未知</lang>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="account-info-item">
-                        <label class="account-info-item__label">Session ID</label>
-                        <div class="account-info-item__value"><?= $user->getSessionId() ?: '<lang>未知</lang>' ?></div>
+                        <label class="account-info-item__label"><lang>会话 ID</lang></label>
+                        <div class="account-info-item__value">
+                            <?php if ($sessionId): ?>
+                                <?= htmlspecialchars($sessionId) ?>
+                            <?php else: ?>
+                                <lang>未知</lang>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -173,6 +201,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     </div>
 </section>
 
+<script src="@static(Weline_Customer::js/account-index.js)?v=<?= $accountIndexAssetVersion ?>" defer></script>
+<?php if (false): ?>
 <style>
 .account-index {
     --ai-border-radius: var(--border-radius-xl, 1rem);
@@ -184,10 +214,52 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     display: flex;
     align-items: center;
     gap: 1.5rem;
+    flex-wrap: wrap;
     padding: var(--ai-gutter);
     background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
     border-radius: var(--ai-border-radius);
     margin-bottom: var(--ai-gutter);
+}
+
+.account-index__header-actions {
+    margin-inline-start: auto;
+    flex-shrink: 0;
+}
+
+.account-index__logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: var(--color-text-dark);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: var(--ai-transition);
+}
+
+.account-index__logout:hover {
+    background: rgba(255, 255, 255, 0.35);
+    color: var(--color-text-dark);
+}
+
+.account-index__logout i {
+    font-size: 1.125rem;
+}
+
+@media (max-width: 480px) {
+    .account-index__header-actions {
+        width: 100%;
+        margin-inline-start: 0;
+    }
+
+    .account-index__logout {
+        justify-content: center;
+        width: 100%;
+    }
 }
 
 .account-index__avatar {
@@ -203,6 +275,11 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     border-radius: 50%;
     object-fit: cover;
     border: 3px solid var(--color-bg-primary);
+}
+
+.account-index__avatar-img[hidden],
+.account-index__avatar-fallback[hidden] {
+    display: none !important;
 }
 
 .account-index__avatar-fallback {
@@ -221,6 +298,7 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 .account-index__user-info {
     flex: 1;
     min-width: 0;
+    max-width: 100%;
 }
 
 .account-index__username {
@@ -228,6 +306,9 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     font-weight: 700;
     color: var(--color-text-dark);
     margin: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .account-index__email {
@@ -238,6 +319,9 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     font-size: 0.9375rem;
     color: var(--color-text-dark);
     opacity: 0.9;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .account-index__email i {
@@ -279,6 +363,12 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     padding: var(--ai-gutter);
 }
 
+.account-index [hidden],
+.account-index .d-none,
+.account-card__alert:empty {
+    display: none !important;
+}
+
 .account-card__alert {
     padding: 1rem;
     border-radius: var(--border-radius-lg, 0.75rem);
@@ -301,13 +391,15 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 .account-form {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 1.5rem;
+    width: min(100%, 860px);
 }
 
 .account-form__row {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.25rem;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+    gap: 1rem 1.25rem;
+    align-items: start;
 }
 
 @media (max-width: 640px) {
@@ -320,6 +412,20 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-width: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.account-form__group--medium {
+    width: min(100%, 31rem);
+}
+
+.account-form__group--wide {
+    width: min(100%, 46rem);
 }
 
 .account-form__label {
@@ -330,29 +436,89 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 
 .account-form__input {
     width: 100%;
+    min-height: 2.95rem;
     padding: 0.75rem 1rem;
     font-size: 0.9375rem;
     color: var(--color-text-primary);
-    background: var(--color-bg-primary);
-    border: 2px solid var(--color-border-default);
-    border-radius: var(--border-radius-lg, 0.75rem);
+    background: linear-gradient(180deg, #fbfdff 0%, #f4f7fb 100%);
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: var(--border-radius-xl, 0.95rem);
     transition: var(--ai-transition);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.account-form__input:hover {
+    border-color: rgba(148, 163, 184, 0.32);
 }
 
 .account-form__input:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(240, 193, 75, 0.15);
+    background: #fffdf8;
+    box-shadow: 0 0 0 3px rgba(240, 193, 75, 0.12);
 }
 
 .account-form__input:disabled {
-    background: var(--color-bg-secondary);
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.92) 0%, rgba(241, 245, 249, 0.88) 100%);
+    color: rgba(15, 23, 42, 0.88);
     cursor: not-allowed;
+}
+
+.account-form__display {
+    display: flex;
+    align-items: center;
+    min-height: 2.95rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    color: var(--color-text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.account-form__display--soft {
+    padding-inline: 0.1rem;
+    color: rgba(15, 23, 42, 0.88);
+    font-weight: 500;
+}
+
+.account-identity {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    min-height: 2.95rem;
+    padding: 0.2rem 0;
+}
+
+.account-identity__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 4rem;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(240, 193, 75, 0.14);
+    color: var(--color-primary-dark);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.account-identity__name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1.3;
 }
 
 .account-form__input-group {
     display: flex;
-    gap: 0.5rem;
+    align-items: stretch;
+    gap: 0.625rem;
+    width: 100%;
 }
 
 .account-form__input-group .account-form__input {
@@ -362,10 +528,12 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 .account-form__hint {
     font-size: 0.8125rem;
     color: var(--color-text-secondary);
+    line-height: 1.5;
 }
 
 .account-form__actions {
-    margin-top: 0.5rem;
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
 }
 
 .account-form__btn {
@@ -373,7 +541,8 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.35rem;
     font-size: 0.9375rem;
     font-weight: 600;
     border-radius: var(--border-radius-lg, 0.75rem);
@@ -395,14 +564,16 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 }
 
 .account-form__btn--outline {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.94);
     color: var(--color-text-primary);
     border-color: var(--color-border-default);
+    white-space: nowrap;
 }
 
 .account-form__btn--outline:hover {
     border-color: var(--color-primary);
     color: var(--color-primary-dark);
+    background: rgba(255, 248, 225, 0.9);
 }
 
 .account-info-grid {
@@ -450,49 +621,509 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     .account-card__body {
         padding: 1.25rem;
     }
+
+    .account-form {
+        width: 100%;
+    }
+
+    .account-form__group,
+    .account-form__group--small,
+    .account-form__group--medium,
+    .account-form__group--wide {
+        max-width: 100%;
+    }
+
+    .account-form__input-group {
+        flex-direction: column;
+    }
+
+    .account-form__btn--outline {
+        width: 100%;
+    }
 }
 </style>
 
 <script>
 (function() {
-    var navLinks = document.querySelectorAll('.account-sidebar__nav-link');
-    var sections = document.querySelectorAll('.account-index__section');
+    // Account AJAX copy is embedded as JSON to avoid escaping issues in scripts.
+    var i18nAccount = {
+        saving: <?= json_encode((string) __('保存中...'), JSON_UNESCAPED_UNICODE) ?>,
+        changing: <?= json_encode((string) __('修改中...'), JSON_UNESCAPED_UNICODE) ?>,
+        profileUpdateFailed: <?= json_encode((string) __('更新失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
+        securityUpdateFailed: <?= json_encode((string) __('修改失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
+        fillAllFields: <?= json_encode((string) __('请填写所有字段'), JSON_UNESCAPED_UNICODE) ?>,
+        passwordTooShort: <?= json_encode((string) __('新密码长度不能少于 6 位'), JSON_UNESCAPED_UNICODE) ?>,
+        passwordMismatch: <?= json_encode((string) __('两次输入的新密码不一致'), JSON_UNESCAPED_UNICODE) ?>,
+        invalidServerResponse: <?= json_encode((string) __('服务器返回了无效响应，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>,
+        endpointNotFound: <?= json_encode((string) __('保存接口不存在，页面脚本或路由需要同步修复'), JSON_UNESCAPED_UNICODE) ?>
+    };
 
-    navLinks.forEach(function(link) {
-        link.addEventListener('click', function(e) {
-            e.preventDefault();
+    var accountApiPromise = null;
 
-            navLinks.forEach(function(nav) {
-                nav.classList.remove('account-sidebar__nav-link--active');
-            });
-            this.classList.add('account-sidebar__nav-link--active');
-
-            sections.forEach(function(section) {
-                section.classList.add('d-none');
-            });
-
-            var targetId = this.getAttribute('href').substring(1);
-            var targetSection = document.getElementById(targetId + '-section');
-            if (targetSection) {
-                targetSection.classList.remove('d-none');
+    /** Decode HTML entities returned by occasional HTML error responses. */
+    function welineDecodeHtmlEntities(message) {
+        var s = String(message || '');
+        if (s.indexOf('&') === -1) {
+            return s;
+        }
+        var div = document.createElement('div');
+        var prev;
+        for (var i = 0; i < 5; i++) {
+            prev = s;
+            div.innerHTML = s;
+            s = div.textContent || div.innerText || '';
+            if (s === prev || s.indexOf('&') === -1) {
+                break;
             }
+        }
+        return s;
+    }
+
+    function parseJsonResponse(response) {
+        var contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (contentType.indexOf('application/json') === -1) {
+            return response.text().then(function(text) {
+                if (response.status === 404) {
+                    throw new Error(i18nAccount.endpointNotFound);
+                }
+
+                var normalized = welineDecodeHtmlEntities(text);
+                var trimmed = normalized.trim();
+
+                if (trimmed.indexOf('{') === 0 || trimmed.indexOf('[') === 0) {
+                    var parsed = null;
+                    try {
+                        parsed = JSON.parse(trimmed);
+                    } catch (jsonError) {}
+
+                    if (parsed && typeof parsed === 'object') {
+                        if (!response.ok) {
+                            throw new Error(welineDecodeHtmlEntities(parsed && parsed.message ? parsed.message : '') || i18nAccount.invalidServerResponse);
+                        }
+                        return parsed;
+                    }
+                }
+
+                if (normalized.indexOf('<') !== -1 || normalized.indexOf('>') !== -1) {
+                    throw new Error(i18nAccount.invalidServerResponse);
+                }
+
+                throw new Error(normalized || i18nAccount.invalidServerResponse);
+            });
+        }
+
+        return response.json().then(function(data) {
+            if (!response.ok) {
+                var message = welineDecodeHtmlEntities(data && data.message ? data.message : '');
+                throw new Error(message || i18nAccount.invalidServerResponse);
+            }
+
+            return data;
+        });
+    }
+
+    function getAccountApi() {
+        if (!accountApiPromise) {
+            if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
+                accountApiPromise = window.Weline.Api.resource('account');
+            } else if (window.Weline && typeof window.Weline.load === 'function') {
+                accountApiPromise = window.Weline.load('api').then(function() {
+                    if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api is unavailable.');
+                    }
+                    return window.Weline.Api.resource('account');
+                });
+            } else {
+                accountApiPromise = Promise.reject(new Error('Weline.Api is unavailable.'));
+            }
+        }
+        return accountApiPromise;
+    }
+
+    function formDataToObject(formData) {
+        var payload = {};
+        formData.forEach(function(value, key) {
+            payload[key] = value;
+        });
+        delete payload.form_key;
+        return payload;
+    }
+
+    var navLinks = document.querySelectorAll('[data-account-nav-link][data-section]');
+    var sidebarContentMount = document.querySelector('[data-account-sidebar-content-mount]');
+    var loadedSidebarSections = Object.create(null);
+    var sidebarContentLoading = Object.create(null);
+    var loadedSidebarScripts = Object.create(null);
+    var sidebarContentReady = true;
+
+    function isSafeSidebarAssetUrl(rawValue, extension) {
+        var value = String(rawValue || '').trim();
+        var compactValue = value.replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+        if (
+            compactValue.indexOf('javascript:') === 0 ||
+            compactValue.indexOf('vbscript:') === 0 ||
+            compactValue.indexOf('data:') === 0 ||
+            compactValue.indexOf('//') === 0
+        ) {
+            return false;
+        }
+
+        try {
+            var url = new URL(value, window.location.href);
+            return url.origin === window.location.origin && url.pathname.toLowerCase().indexOf(extension, url.pathname.length - extension.length) !== -1;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function loadTrustedSidebarScripts(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+
+        Array.prototype.slice.call(template.content.querySelectorAll('script[src]')).forEach(function(scriptNode) {
+            var src = scriptNode.getAttribute('src') || '';
+            if (!isSafeSidebarAssetUrl(src, '.js') || loadedSidebarScripts[src]) {
+                return;
+            }
+
+            loadedSidebarScripts[src] = true;
+            var script = document.createElement('script');
+            script.src = src;
+            script.defer = true;
+            document.head.appendChild(script);
+        });
+    }
+
+    function sanitizeSidebarHtml(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+
+        template.content.querySelectorAll('script, style, meta, iframe, frame, frameset, object, embed, base').forEach(function(node) {
+            node.remove();
+        });
+        template.content.querySelectorAll('link').forEach(function(node) {
+            var rel = String(node.getAttribute('rel') || '').toLowerCase();
+            var href = node.getAttribute('href') || '';
+            if (rel !== 'stylesheet' || !isSafeSidebarAssetUrl(href, '.css')) {
+                node.remove();
+            }
+        });
+
+        template.content.querySelectorAll('*').forEach(function(node) {
+            Array.prototype.slice.call(node.attributes).forEach(function(attribute) {
+                var name = String(attribute.name || '').toLowerCase();
+                var compactValue = String(attribute.value || '').trim().replace(/[\u0000-\u001F\u007F\s]+/g, '').toLowerCase();
+
+                if (name.indexOf('on') === 0 || name === 'srcdoc' || name === 'style') {
+                    node.removeAttribute(attribute.name);
+                    return;
+                }
+
+                if ((name === 'href' || name === 'src' || name === 'xlink:href' || name === 'action' || name === 'formaction' || name === 'poster') && (
+                    compactValue.indexOf('javascript:') === 0 ||
+                    compactValue.indexOf('vbscript:') === 0 ||
+                    (compactValue.indexOf('data:') === 0 && compactValue.indexOf('data:image/') !== 0)
+                )) {
+                    node.removeAttribute(attribute.name);
+                }
+            });
+        });
+
+        return template.innerHTML;
+    }
+
+    function buildSidebarContentUrl(sectionName) {
+        var baseUrl = sidebarContentMount ? (sidebarContentMount.getAttribute('data-account-sidebar-content-url') || '') : '';
+        if (!baseUrl || !sectionName) {
+            return '';
+        }
+
+        var separator = baseUrl.indexOf('?') >= 0 ? '&' : '?';
+        return baseUrl + separator + 'section=' + encodeURIComponent(sectionName);
+    }
+
+    function loadSidebarContent(sectionName) {
+        if (!sidebarContentMount || !sectionName) {
+            return Promise.resolve(sidebarContentReady);
+        }
+
+        if (loadedSidebarSections[sectionName]) {
+            return Promise.resolve(sidebarContentReady);
+        }
+
+        if (sidebarContentLoading[sectionName]) {
+            return sidebarContentLoading[sectionName];
+        }
+
+        var url = buildSidebarContentUrl(sectionName);
+        if (!url) {
+            loadedSidebarSections[sectionName] = true;
+            return Promise.resolve(false);
+        }
+
+        sidebarContentLoading[sectionName] = fetch(url, {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function(response) {
+            if (!response.ok) {
+                throw new Error('Account sections request failed: ' + response.status);
+            }
+            return response.json();
+        }).then(function(payload) {
+            if (!payload || payload.success === false) {
+                if (payload && payload.redirect) {
+                    window.location.href = payload.redirect;
+                }
+                return false;
+            }
+
+            if (payload.html) {
+                loadTrustedSidebarScripts(payload.html);
+                sidebarContentMount.insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html));
+            }
+            loadedSidebarSections[sectionName] = true;
+            window.dispatchEvent(new CustomEvent('weline:account-sidebar-content-loaded', {
+                detail: { section: sectionName, length: payload.length || 0 }
+            }));
+            return true;
+        }).catch(function(error) {
+            console.error(error);
+            return false;
+        }).finally(function() {
+            delete sidebarContentLoading[sectionName];
+        });
+
+        return sidebarContentLoading[sectionName];
+    }
+
+    function parseHash(inputHash) {
+        var rawHash = String(inputHash || '');
+        if (!rawHash) {
+            return { section: '', query: {} };
+        }
+
+        var trimmed = rawHash.replace(/^.*#/, '');
+        if (!trimmed) {
+            return { section: '', query: {} };
+        }
+
+        var section = trimmed;
+        var query = {};
+        var splitAt = trimmed.indexOf('?');
+
+        if (splitAt !== -1) {
+            section = trimmed.substring(0, splitAt);
+            var queryString = trimmed.substring(splitAt + 1);
+            if (queryString) {
+                try {
+                    var parsed = new URLSearchParams(queryString);
+                    parsed.forEach(function (value, key) {
+                        query[String(key)] = String(value);
+                    });
+                } catch (err) {}
+            }
+        }
+
+        return {
+            section: section,
+            query: query
+        };
+    }
+
+    function parseAccountHash() {
+        return parseHash(window.location.hash || '');
+    }
+
+    function getNavTarget(link) {
+        var targetId = link.getAttribute('data-section') || '';
+        var hashInfo = parseHash(link.getAttribute('href') || '');
+        if (hashInfo.section) {
+            targetId = hashInfo.section;
+        }
+
+        return {
+            section: targetId,
+            query: hashInfo.query
+        };
+    }
+
+    function hasNavSection(section) {
+        return Array.prototype.some.call(document.querySelectorAll('[data-account-nav-link][data-section]'), function (a) {
+            return a.getAttribute('data-section') === section;
+        });
+    }
+
+    function updateHash(section, query) {
+        var targetHash = '#' + section;
+        if (query && typeof query === 'object' && Object.keys(query).length > 0) {
+            var nextQuery = new URLSearchParams();
+            Object.keys(query).forEach(function (key) {
+                var value = query[key];
+                if (value === '' || value === null || value === undefined) {
+                    return;
+                }
+                nextQuery.set(key, String(value));
+            });
+
+            var nextQueryString = nextQuery.toString();
+            if (nextQueryString) {
+                targetHash += '?' + nextQueryString;
+            }
+        }
+
+        if (window.history && typeof window.history.replaceState === 'function') {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search + targetHash);
+        }
+    }
+
+    function setActiveNavLink(targetId) {
+        var activeParent = '';
+        navLinks.forEach(function(nav) {
+            if (nav.getAttribute('data-section') === targetId) {
+                activeParent = nav.getAttribute('data-account-nav-parent') || '';
+            }
+        });
+
+        navLinks.forEach(function(nav) {
+            var isActive = nav.getAttribute('data-section') === targetId;
+            var isActiveParent = activeParent && nav.getAttribute('data-section') === activeParent;
+            nav.classList.remove('is-active');
+            if (nav.classList.contains('account-sidebar__nav-link')) {
+                nav.classList.remove('account-sidebar__nav-link--active');
+            }
+            if (!isActive && !isActiveParent) {
+                return;
+            }
+            if (nav.classList.contains('account-sidebar__nav-link')) {
+                nav.classList.add('account-sidebar__nav-link--active');
+            } else if (!isActiveParent) {
+                nav.classList.add('is-active');
+            }
+        });
+    }
+
+    function showAccountSection(targetId) {
+        if (!targetId) {
+            return;
+        }
+        var sections = document.querySelectorAll('[data-account-section]');
+        var targetSection = document.querySelector('[data-account-section="' + targetId + '"]');
+        if (!targetSection) {
+            targetSection = document.getElementById(targetId + '-section');
+        }
+        if (!targetSection && sidebarContentMount && !loadedSidebarSections[targetId]) {
+            return loadSidebarContent(targetId).then(function() {
+                showAccountSection(targetId);
+            });
+        }
+        sections.forEach(function(section) {
+            section.classList.add('d-none');
+            section.hidden = true;
+        });
+        if (targetSection) {
+            targetSection.classList.remove('d-none');
+            targetSection.hidden = false;
+        }
+        if (targetId === 'orders') {
+            window.dispatchEvent(new CustomEvent('weshop:orders-viewed'));
+        }
+    }
+
+    function syncFromHash() {
+        var parsed = parseAccountHash();
+        var targetId = parsed.section || 'profile';
+        if (!hasNavSection(targetId)) {
+            targetId = 'profile';
+        }
+
+        setActiveNavLink(targetId);
+        showAccountSection(targetId);
+
+        if (typeof parsed.query.return_anchor === 'string' && parsed.query.return_anchor) {
+            var anchor = document.getElementById(parsed.query.return_anchor);
+            if (anchor && typeof anchor.scrollIntoView === 'function') {
+                anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    }
+
+        navLinks.forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                var navTarget = getNavTarget(link);
+                var targetId = navTarget.section;
+            if (!targetId) {
+                return;
+            }
+
+                setActiveNavLink(targetId);
+                showAccountSection(targetId);
+                try {
+                    updateHash(targetId, navTarget.query);
+                } catch (err) {}
+            });
+        });
+
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+
+    var avatarInput = document.getElementById('avatar');
+    var avatarTargets = [
+        {
+            image: document.getElementById('avatarPreview'),
+            fallback: document.getElementById('avatarFallback')
+        },
+        {
+            image: document.getElementById('sidebarAvatarPreview'),
+            fallback: document.getElementById('sidebarAvatarFallback')
+        }
+    ];
+
+    function syncAvatarPreview() {
+        if (!avatarInput) {
+            return;
+        }
+
+        var avatarUrl = avatarInput.value.trim();
+        if (!avatarUrl) {
+            avatarTargets.forEach(function(target) {
+                if (!target.image || !target.fallback) {
+                    return;
+                }
+                target.image.hidden = true;
+                target.fallback.hidden = false;
+                target.image.removeAttribute('src');
+            });
+            return;
+        }
+
+        avatarTargets.forEach(function(target) {
+            if (!target.image || !target.fallback) {
+                return;
+            }
+            target.image.hidden = false;
+            target.fallback.hidden = true;
+            target.image.src = avatarUrl;
+        });
+    }
+
+    avatarTargets.forEach(function(target) {
+        if (!target.image || !target.fallback) {
+            return;
+        }
+        target.image.addEventListener('error', function() {
+            target.image.hidden = true;
+            target.fallback.hidden = false;
         });
     });
 
-    var previewBtn = document.getElementById('previewAvatarBtn');
-    if (previewBtn) {
-        previewBtn.addEventListener('click', function() {
-            var avatarUrl = document.getElementById('avatar').value;
-            var avatarPreview = document.getElementById('avatarPreview');
-            var avatarFallback = document.getElementById('avatarFallback');
-            if (avatarUrl && avatarPreview) {
-                avatarPreview.src = avatarUrl;
-                avatarPreview.style.display = 'block';
-                if (avatarFallback) {
-                    avatarFallback.style.display = 'none';
-                }
-            }
-        });
+    if (avatarInput) {
+        avatarInput.addEventListener('input', syncAvatarPreview);
+        avatarInput.addEventListener('change', syncAvatarPreview);
+        syncAvatarPreview();
     }
 
     var profileForm = document.getElementById('profileForm');
@@ -502,31 +1133,34 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
             var btn = this.querySelector('button[type="submit"]');
             var originalText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="ri-loader-4-line"></i> <?= htmlspecialchars((string) __('保存中...'), ENT_QUOTES) ?>';
+            btn.innerHTML = '<i class="ri-loader-4-line"></i> ' + i18nAccount.saving;
 
             var successMsg = document.getElementById('profileSuccessMsg');
             var errorMsg = document.getElementById('profileErrorMsg');
-            successMsg.classList.add('d-none');
-            errorMsg.classList.add('d-none');
+            successMsg.textContent = '';
+            errorMsg.textContent = '';
 
             var formData = new FormData(this);
-            fetch('/customer/account/update', {
-                method: 'POST',
-                body: formData
+            getAccountApi()
+            .then(function(AccountApi) {
+                return AccountApi.updateProfile(formDataToObject(formData), {
+                    onError: function(_status, error) {
+                        errorMsg.textContent = welineDecodeHtmlEntities(error && error.message ? error.message : '') || i18nAccount.profileUpdateFailed;
+                    }
+                });
             })
-            .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
-                    successMsg.textContent = data.message;
-                    successMsg.classList.remove('d-none');
+                    errorMsg.textContent = '';
+                    successMsg.textContent = welineDecodeHtmlEntities(data.message);
                 } else {
-                    errorMsg.textContent = data.message || '<?= htmlspecialchars((string) __('更新失败，请稍后重试'), ENT_QUOTES) ?>';
-                    errorMsg.classList.remove('d-none');
+                    successMsg.textContent = '';
+                    errorMsg.textContent = welineDecodeHtmlEntities(data.message) || i18nAccount.profileUpdateFailed;
                 }
             })
-            .catch(function() {
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('更新失败，请稍后重试'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
+            .catch(function(error) {
+                successMsg.textContent = '';
+                errorMsg.textContent = welineDecodeHtmlEntities(error && error.message ? error.message : '') || i18nAccount.profileUpdateFailed;
             })
             .finally(function() {
                 btn.disabled = false;
@@ -540,60 +1174,59 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
         securityForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
+            var successMsg = document.getElementById('securitySuccessMsg');
+            var errorMsg = document.getElementById('securityErrorMsg');
+            successMsg.textContent = '';
+            errorMsg.textContent = '';
+
             var oldPassword = document.getElementById('old_password').value;
             var newPassword = document.getElementById('new_password').value;
             var confirmPassword = document.getElementById('confirm_password').value;
 
-            var errorMsg = document.getElementById('securityErrorMsg');
-            errorMsg.classList.add('d-none');
-
             if (!oldPassword || !newPassword || !confirmPassword) {
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('请填写所有字段'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
+                errorMsg.textContent = i18nAccount.fillAllFields;
                 return;
             }
 
             if (newPassword.length < 6) {
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('新密码长度不能少于6位'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
+                errorMsg.textContent = i18nAccount.passwordTooShort;
                 return;
             }
 
             if (newPassword !== confirmPassword) {
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('两次输入的新密码不一致'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
+                errorMsg.textContent = i18nAccount.passwordMismatch;
                 return;
             }
 
             var btn = this.querySelector('button[type="submit"]');
             var originalText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="ri-loader-4-line"></i> <?= htmlspecialchars((string) __('修改中...'), ENT_QUOTES) ?>';
-
-            var successMsg = document.getElementById('securitySuccessMsg');
-            successMsg.classList.add('d-none');
+            btn.innerHTML = '<i class="ri-loader-4-line"></i> ' + i18nAccount.changing;
 
             var formData = new FormData(this);
-            fetch('/customer/account/update', {
-                method: 'POST',
-                body: formData
+            getAccountApi()
+            .then(function(AccountApi) {
+                return AccountApi.updatePassword(formDataToObject(formData), {
+                    onError: function(_status, error) {
+                        errorMsg.textContent = welineDecodeHtmlEntities(error && error.message ? error.message : '') || i18nAccount.securityUpdateFailed;
+                    }
+                });
             })
-            .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
-                    successMsg.textContent = data.message;
-                    successMsg.classList.remove('d-none');
+                    errorMsg.textContent = '';
+                    successMsg.textContent = welineDecodeHtmlEntities(data.message);
                     document.getElementById('old_password').value = '';
                     document.getElementById('new_password').value = '';
                     document.getElementById('confirm_password').value = '';
                 } else {
-                    errorMsg.textContent = data.message || '<?= htmlspecialchars((string) __('修改失败，请稍后重试'), ENT_QUOTES) ?>';
-                    errorMsg.classList.remove('d-none');
+                    successMsg.textContent = '';
+                    errorMsg.textContent = welineDecodeHtmlEntities(data.message) || i18nAccount.securityUpdateFailed;
                 }
             })
-            .catch(function() {
-                errorMsg.textContent = '<?= htmlspecialchars((string) __('修改失败，请稍后重试'), ENT_QUOTES) ?>';
-                errorMsg.classList.remove('d-none');
+            .catch(function(error) {
+                successMsg.textContent = '';
+                errorMsg.textContent = welineDecodeHtmlEntities(error && error.message ? error.message : '') || i18nAccount.securityUpdateFailed;
             })
             .finally(function() {
                 btn.disabled = false;
@@ -603,3 +1236,4 @@ $avatarInitial = strtoupper(mb_substr($username, 0, 1));
     }
 })();
 </script>
+<?php endif; ?>

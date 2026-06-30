@@ -1,0 +1,108 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 20
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Geo\Model\Feed;
+use Weline\Geo\Model\WebsiteProtocolConfig;
+
+$website = (array)($this->getData('website') ?? []);
+$websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'website'));
+$accordionParentId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('accordion_parent_id') ?? 'websiteFormAccordion'));
+$sectionId = $hookId . '_geo_protocol';
+$llmsFieldId = $sectionId . '_llms_enabled';
+$feedEnabledFieldId = $sectionId . '_feed_enabled';
+$autoPushFieldId = $sectionId . '_auto_push';
+$feedIdFieldId = $sectionId . '_feed_id';
+$llmsIntroFieldId = $sectionId . '_llms_intro';
+
+$llmsEnabled = true;
+$feedEnabled = true;
+$autoPush = true;
+$feedId = 0;
+$llmsIntro = '';
+$feeds = [];
+
+try {
+    if ($websiteId > 0) {
+        /** @var WebsiteProtocolConfig $protocolConfig */
+        $protocolConfig = ObjectManager::getInstance(WebsiteProtocolConfig::class)->loadByWebsiteId($websiteId);
+        $llmsEnabled = $protocolConfig->isLlmsEnabled();
+        $feedEnabled = $protocolConfig->isFeedEnabled();
+        $autoPush = $protocolConfig->isAutoPushEnabled();
+        $feedId = $protocolConfig->getFeedId();
+        $llmsIntro = $protocolConfig->getLlmsIntro();
+    }
+
+    /** @var Feed $feedModel */
+    $feedModel = ObjectManager::getInstance(Feed::class);
+    $feeds = $feedModel->reset()
+        ->order(Feed::schema_fields_ID, 'ASC')
+        ->select()
+        ->fetchArray();
+} catch (\Throwable) {
+    $feeds = [];
+}
+?>
+<div class="accordion-item">
+    <div class="accordion-header" id="<?= htmlspecialchars($sectionId . '_heading', ENT_QUOTES, 'UTF-8') ?>">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>" aria-expanded="false" aria-controls="<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>">
+            <i class="mdi mdi-robot-outline"></i>
+            <span><lang>GEO 协议与 AI 搜索发现</lang></span>
+            <i class="mdi mdi-chevron-down ms-auto"></i>
+        </button>
+    </div>
+    <div id="<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>" class="accordion-collapse collapse" aria-labelledby="<?= htmlspecialchars($sectionId . '_heading', ENT_QUOTES, 'UTF-8') ?>" data-bs-parent="#<?= htmlspecialchars($accordionParentId, ENT_QUOTES, 'UTF-8') ?>">
+        <div class="accordion-body">
+            <div class="row">
+                <div class="col-4 mb-3">
+                    <label class="form-label"><lang>llms.txt / ai.txt</lang></label>
+                    <input type="hidden" name="extensions[geo][llms_enabled]" value="0">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($llmsFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[geo][llms_enabled]" value="1" <?= $llmsEnabled ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="geo_llms_enabled"><lang>启用 AI 搜索发现文件</lang></label>
+                    </div>
+                </div>
+                <div class="col-4 mb-3">
+                    <label class="form-label"><lang>GEO Feed</lang></label>
+                    <input type="hidden" name="extensions[geo][feed_enabled]" value="0">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($feedEnabledFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[geo][feed_enabled]" value="1" <?= $feedEnabled ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="geo_feed_enabled"><lang>启用 JSON Feed / RSS Feed</lang></label>
+                    </div>
+                </div>
+                <div class="col-4 mb-3">
+                    <label class="form-label"><lang>自动推送</lang></label>
+                    <input type="hidden" name="extensions[geo][auto_push]" value="0">
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="<?= htmlspecialchars($autoPushFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[geo][auto_push]" value="1" <?= $autoPush ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="geo_auto_push"><lang>内容更新后由 Weline_Geo 自动处理推送</lang></label>
+                    </div>
+                </div>
+                <div class="col-6 mb-3">
+                    <label for="geo_feed_id" class="form-label"><lang>站点 GEO Feed</lang></label>
+                    <select class="form-select" id="<?= htmlspecialchars($feedIdFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[geo][feed_id]">
+                        <option value="0"><lang>使用第一个启用 Feed</lang></option>
+                        <?php foreach ($feeds as $feed): ?>
+                            <?php
+                            $id = (int)($feed[Feed::schema_fields_ID] ?? 0);
+                            $name = (string)($feed[Feed::schema_fields_FEED_NAME] ?? ('Feed #' . $id));
+                            ?>
+                            <option value="<?= $id ?>" <?= $feedId === $id ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-6 mb-3">
+                    <label for="geo_llms_intro" class="form-label"><lang>llms.txt 站点说明</lang></label>
+                    <textarea class="form-control" id="<?= htmlspecialchars($llmsIntroFieldId, ENT_QUOTES, 'UTF-8') ?>" name="extensions[geo][llms_intro]" rows="4" placeholder="A concise site description for AI agents."><?= htmlspecialchars($llmsIntro, ENT_QUOTES, 'UTF-8') ?></textarea>
+                    <div class="form-text-hint"><lang>留空时由 Weline_Geo 使用站点名称和默认说明自动生成。</lang></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

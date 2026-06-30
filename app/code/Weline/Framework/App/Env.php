@@ -174,6 +174,15 @@ class Env extends DataObject
         'router' => [
             'area_routes' => [],
         ],
+        'queue' => [
+            'cron' => [
+                'max_concurrent' => 4,
+                'memory_limit' => '512M',
+            ],
+            'worker' => [
+                'memory_limit' => '512M',
+            ],
+        ],
         'security' => [
             'csrf' => [
                 'pc_controller_mode' => 'off',
@@ -197,6 +206,8 @@ class Env extends DataObject
             'event_debug' => false,
             'event_scan' => false,
             'phpunit_server' => null,
+            // 为 true 时 layout 包装失败也输出 X-Weline-* 响应头（不限 deploy=dev）
+            'theme_layout_wrap_response_headers' => false,
         ],
     ];
 
@@ -1344,6 +1355,21 @@ class Env extends DataObject
         $areaRoutes = self::getAreaRoutes();
         return $areaRoutes[$area]['prefix'] ?? null;
     }
+
+    /**
+     * 前台 Worker query-bin 路径（随 area_routes.rest_frontend.prefix 变化，如 /api123/framework/query-bin）。
+     */
+    public static function getFrontendQueryBinPath(): string
+    {
+        try {
+            $prefix = \trim((string)(self::getAreaRoutePrefix('rest_frontend') ?: 'api'), '/');
+        } catch (\Throwable) {
+            $prefix = 'api';
+        }
+        $prefix = \strtolower($prefix !== '' ? $prefix : 'api');
+
+        return '/' . $prefix . '/framework/query-bin';
+    }
     
     /**
      * 根据 URL 前缀判断对应的区域类型
@@ -1371,6 +1397,33 @@ class Env extends DataObject
     public static function isAreaRoutePrefix(string $prefix): bool
     {
         return self::getAreaByRoutePrefix($prefix) !== null;
+    }
+
+    /**
+     * 判断 URL 路径段是否为区域路由前缀（大小写不敏感）。
+     *
+     * 用于避免将 /api/CNY/... 中的 api 识别为 ISO 4217 货币码 API，导致价格显示为「109.00 API」。
+     */
+    public static function isAreaRoutePathSegment(string $segment): bool
+    {
+        $normalized = strtolower(trim($segment));
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach (self::getAreaRoutes() as $areaConfig) {
+            $prefix = strtolower(trim((string)($areaConfig['prefix'] ?? '')));
+            if ($prefix !== '' && $prefix === $normalized) {
+                return true;
+            }
+        }
+
+        // 前台 REST 常用语义前缀 api；即 area_routes 配置为 api123，裸 /api/ 也不应被当作货币码
+        if ($normalized === 'api' && self::getAreaRoutePrefix('rest_frontend') !== null) {
+            return true;
+        }
+
+        return false;
     }
     
     // ==================== 其他工具方法 ====================

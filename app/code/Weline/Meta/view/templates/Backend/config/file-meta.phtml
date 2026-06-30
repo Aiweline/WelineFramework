@@ -607,6 +607,16 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
     };
     let lastFilters = {};
 
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value == null ? '' : String(value);
+        return div.innerHTML;
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
     filtersForm.addEventListener('submit', function (e) {
         e.preventDefault();
         loadTree();
@@ -702,7 +712,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                treeContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + error.message + '</div>';
+                treeContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
@@ -774,7 +784,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                editorContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + error.message + '</div>';
+                editorContainer.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
@@ -788,32 +798,32 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         html += '<div class="flex-grow-1">';
         // Name 显示区域
         html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-        html += '<h5 class="mb-0">' + (meta.name || meta.meta_identify || 'meta') + '</h5>';
+        html += '<h5 class="mb-0">' + escapeHtml(meta.name || meta.meta_identify || 'meta') + '</h5>';
         if (meta.name_translatable) {
-            html += '<button type="button" class="btn btn-sm btn-outline-secondary meta-name-desc-translate-btn" data-meta-identify="' + (meta.meta_identify || '') + '" data-field="name" data-scope="' + (params.get('scope') || 'default') + '" title="<?= __('翻译名称') ?>"><i class="mdi mdi-translate"></i></button>';
+            html += '<button type="button" class="btn btn-sm btn-outline-secondary meta-name-desc-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-field="name" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译名称') ?>"><i class="mdi mdi-translate"></i></button>';
         }
         html += '</div>';
         // Description 显示区域
         if (meta.description) {
             html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-            html += '<div class="text-muted small">' + meta.description + '</div>';
+            html += '<div class="text-muted small">' + escapeHtml(meta.description) + '</div>';
             if (meta.description_translatable) {
-                html += '<button type="button" class="btn btn-sm btn-outline-secondary meta-name-desc-translate-btn" data-meta-identify="' + (meta.meta_identify || '') + '" data-field="description" data-scope="' + (params.get('scope') || 'default') + '" title="<?= __('翻译描述') ?>"><i class="mdi mdi-translate"></i></button>';
+                html += '<button type="button" class="btn btn-sm btn-outline-secondary meta-name-desc-translate-btn" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-field="description" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译描述') ?>"><i class="mdi mdi-translate"></i></button>';
             }
             html += '</div>';
         }
-        html += '<div class="text-muted small">' + (meta.file_path || meta.file_full_path || '') + '</div>';
+        html += '<div class="text-muted small">' + escapeHtml(meta.file_path || meta.file_full_path || '') + '</div>';
         html += '</div>';
-        html += '<span class="badge bg-light text-dark align-self-center" style="height: fit-content;">' + (meta.meta_type || 'meta') + '</span>';
+        html += '<span class="badge bg-light text-dark align-self-center" style="height: fit-content;">' + escapeHtml(meta.meta_type || 'meta') + '</span>';
         html += '</div>';
         html += '</div>';
 
-        html += '<form id="meta-file-form" data-meta-identify="' + (meta.meta_identify || '') + '" data-area="' + (meta.area || params.get('area') || '') + '">';
-        html += '<input type="hidden" name="meta_identify" value="' + (meta.meta_identify || '') + '">';
-        html += '<input type="hidden" name="scope" value="' + (params.get('scope') || 'default') + '">';
-        html += '<input type="hidden" name="area" value="' + (meta.area || params.get('area') || '') + '">';
-        html += '<input type="hidden" name="identity_id" value="' + (params.get('identity_id') || '') + '">';
-        html += '<input type="hidden" name="locale" value="' + (params.get('locale') || lastFilters.locale || '') + '">';
+        html += '<form id="meta-file-form" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-area="' + escapeAttr(meta.area || params.get('area') || '') + '">';
+        html += '<input type="hidden" name="meta_identify" value="' + escapeAttr(meta.meta_identify || '') + '">';
+        html += '<input type="hidden" name="scope" value="' + escapeAttr(params.get('scope') || 'default') + '">';
+        html += '<input type="hidden" name="area" value="' + escapeAttr(meta.area || params.get('area') || '') + '">';
+        html += '<input type="hidden" name="identity_id" value="' + escapeAttr(params.get('identity_id') || '') + '">';
+        html += '<input type="hidden" name="locale" value="' + escapeAttr(params.get('locale') || lastFilters.locale || '') + '">';
 
         if (!paramsList.length) {
             html += '<div class="alert alert-info mb-0"><?= __('该文件没有可配置的参数。') ?></div>';
@@ -823,24 +833,24 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 const value = item.value ?? '';
                 html += '<div class="list-group-item">';
                 html += '<div class="d-flex justify-content-between align-items-center mb-1">';
-                html += '<div><strong>' + (item.label || item.name) + '</strong> <code class="text-muted ms-1" style="font-size: 11px;">' + item.name + '</code> <button type="button" class="btn btn-sm btn-outline-secondary param-translate-btn ms-1" data-meta-identify="' + (meta.meta_identify || '') + '" data-param="' + item.name + '" data-scope="' + (params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>"><i class="mdi mdi-translate"></i></button></div>';
+                html += '<div><strong>' + escapeHtml(item.label || item.name) + '</strong> <code class="text-muted ms-1" style="font-size: 11px;">' + escapeHtml(item.name) + '</code> <button type="button" class="btn btn-sm btn-outline-secondary param-translate-btn ms-1" data-meta-identify="' + escapeAttr(meta.meta_identify || '') + '" data-param="' + escapeAttr(item.name) + '" data-scope="' + escapeAttr(params.get('scope') || 'default') + '" title="<?= __('翻译参数') ?>"><i class="mdi mdi-translate"></i></button></div>';
                 html += '</div>';
                 if (item.description) {
-                    html += '<div class="text-muted small mb-2">' + item.description + '</div>';
+                    html += '<div class="text-muted small mb-2">' + escapeHtml(item.description) + '</div>';
                 }
 
                 if ((item.input === 'textarea') || (typeof value === 'string' && value.length > 80)) {
-                    html += '<textarea class="form-control form-control-sm" rows="3" name="params[' + item.name + ']">' + (value || '') + '</textarea>';
+                    html += '<textarea class="form-control form-control-sm" rows="3" name="params[' + escapeAttr(item.name) + ']">' + escapeHtml(value || '') + '</textarea>';
                 } else if ((item.input === 'select' || item.options && Object.keys(item.options).length)) {
-                    html += '<select class="form-select form-select-sm" name="params[' + item.name + ']">';
+                    html += '<select class="form-select form-select-sm" name="params[' + escapeAttr(item.name) + ']">';
                     const options = item.options || {};
                     Object.keys(options).forEach(function (optValue) {
                         const selected = String(optValue) === String(value) ? 'selected' : '';
-                        html += '<option value="' + optValue + '" ' + selected + '>' + options[optValue] + '</option>';
+                        html += '<option value="' + escapeAttr(optValue) + '" ' + selected + '>' + escapeHtml(options[optValue]) + '</option>';
                     });
                     html += '</select>';
                 } else {
-                    html += '<input type="text" class="form-control form-control-sm" name="params[' + item.name + ']" value="' + (value || '') + '">';
+                    html += '<input type="text" class="form-control form-control-sm" name="params[' + escapeAttr(item.name) + ']" value="' + escapeAttr(value || '') + '">';
                 }
 
                 html += '</div>';
@@ -950,16 +960,16 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 
                 let html = '';
                 html += '<form id="metaParamTranslationForm">';
-                html += '<input type="hidden" name="meta_identify" value="' + (data.meta_identify || translationState.metaIdentify) + '">';
-                html += '<input type="hidden" name="param" value="' + (data.param || translationState.param) + '">';
-                html += '<input type="hidden" name="scope" value="' + (data.scope || translationState.scope) + '">';
+                html += '<input type="hidden" name="meta_identify" value="' + escapeAttr(data.meta_identify || translationState.metaIdentify) + '">';
+                html += '<input type="hidden" name="param" value="' + escapeAttr(data.param || translationState.param) + '">';
+                html += '<input type="hidden" name="scope" value="' + escapeAttr(data.scope || translationState.scope) + '">';
 
                 html += '<div class="mb-3">';
-                html += '<label class="form-label"><strong><?= __('默认值') ?> (' + (data.label || translationState.param) + ')</strong></label>';
-                html += '<div class="form-control-plaintext bg-light p-2 rounded">' + (data.default_value || '') + '</div>';
+                html += '<label class="form-label"><strong><?= __('默认值') ?> (' + escapeHtml(data.label || translationState.param) + ')</strong></label>';
+                html += '<div class="form-control-plaintext bg-light p-2 rounded">' + escapeHtml(data.default_value || '') + '</div>';
                 html += '<div class="form-text"><?= __('如果某语言没有翻译，将使用此默认值') ?></div>';
                 if (data.description) {
-                    html += '<div class="text-muted small mt-1">' + data.description + '</div>';
+                    html += '<div class="text-muted small mt-1">' + escapeHtml(data.description) + '</div>';
                 }
                 html += '</div>';
 
@@ -973,11 +983,11 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                         html += '<div class="list-group-item">';
                         html += '<div class="row align-items-center">';
                         html += '<div class="col-md-3">';
-                        html += '<label class="form-label mb-0"><strong>' + (trans.name || trans.code) + '</strong></label>';
-                        html += '<div class="text-muted small">' + trans.code + '</div>';
+                        html += '<label class="form-label mb-0"><strong>' + escapeHtml(trans.name || trans.code) + '</strong></label>';
+                        html += '<div class="text-muted small">' + escapeHtml(trans.code) + '</div>';
                         html += '</div>';
                         html += '<div class="col-md-9">';
-                        html += '<input type="text" class="form-control" name="translations[' + trans.code + ']" value="' + (trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
+                        html += '<input type="text" class="form-control" name="translations[' + escapeAttr(trans.code) + ']" value="' + escapeAttr(trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
                         html += '</div>';
                         html += '</div>';
                         html += '</div>';
@@ -991,7 +1001,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                translationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + error.message + '</div>';
+                translationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 
@@ -1110,13 +1120,13 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 
                 let html = '';
                 html += '<form id="metaNameDescriptionTranslationForm">';
-                html += '<input type="hidden" name="meta_identify" value="' + (data.meta_identify || '') + '">';
-                html += '<input type="hidden" name="field" value="' + (data.field || '') + '">';
-                html += '<input type="hidden" name="scope" value="' + (data.scope || 'default') + '">';
+                html += '<input type="hidden" name="meta_identify" value="' + escapeAttr(data.meta_identify || '') + '">';
+                html += '<input type="hidden" name="field" value="' + escapeAttr(data.field || '') + '">';
+                html += '<input type="hidden" name="scope" value="' + escapeAttr(data.scope || 'default') + '">';
 
                 html += '<div class="mb-3">';
                 html += '<label class="form-label"><strong><?= __('默认值') ?> (' + fieldLabel + ')</strong></label>';
-                html += '<div class="form-control-plaintext bg-light p-2 rounded">' + (data.default_value || '') + '</div>';
+                html += '<div class="form-control-plaintext bg-light p-2 rounded">' + escapeHtml(data.default_value || '') + '</div>';
                 html += '<div class="form-text"><?= __('如果某语言没有翻译，将使用此默认值') ?></div>';
                 html += '</div>';
 
@@ -1130,11 +1140,11 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                         html += '<div class="list-group-item">';
                         html += '<div class="row align-items-center">';
                         html += '<div class="col-md-3">';
-                        html += '<label class="form-label mb-0"><strong>' + (trans.name || trans.code) + '</strong></label>';
-                        html += '<div class="text-muted small">' + trans.code + '</div>';
+                        html += '<label class="form-label mb-0"><strong>' + escapeHtml(trans.name || trans.code) + '</strong></label>';
+                        html += '<div class="text-muted small">' + escapeHtml(trans.code) + '</div>';
                         html += '</div>';
                         html += '<div class="col-md-9">';
-                        html += '<input type="text" class="form-control" name="translations[' + trans.code + ']" value="' + (trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
+                        html += '<input type="text" class="form-control" name="translations[' + escapeAttr(trans.code) + ']" value="' + escapeAttr(trans.value || '') + '" placeholder="<?= __('留空则使用默认值') ?>">';
                         html += '</div>';
                         html += '</div>';
                         html += '</div>';
@@ -1148,7 +1158,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             })
             .catch(error => {
                 console.error(error);
-                metaNameDescTranslationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + error.message + '</div>';
+                metaNameDescTranslationModalBody.innerHTML = '<div class="alert alert-danger mb-0"><?= __('加载失败') ?>: ' + escapeHtml(error && error.message ? error.message : '') + '</div>';
             });
     }
 

@@ -2139,7 +2139,7 @@ class DataTable extends BackendRestController
             }
 
             // 创建上传目录
-            $fullUploadPath = rtrim($_SERVER['DOCUMENT_ROOT'], '/') . '/' . trim($uploadPath, '/');
+            $fullUploadPath = rtrim(\Weline\Framework\Env\WelineEnv::server('DOCUMENT_ROOT', ''), '/') . '/' . trim($uploadPath, '/');
             if (!is_dir($fullUploadPath)) {
                 if (!mkdir($fullUploadPath, 0755, true)) {
                     return [

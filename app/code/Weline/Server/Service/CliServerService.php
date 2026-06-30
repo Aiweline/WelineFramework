@@ -40,6 +40,12 @@ class CliServerService
         $port = $serverConfig['port'] ?? 9981;
         $pid = $serverConfig['pid'] ?? null;
         $startTime = $serverConfig['start_time'] ?? null;
+
+        $connection = @\fsockopen((string)$host, (int)$port, $errno, $errstr, 0.05);
+        if (!\is_resource($connection)) {
+            return null;
+        }
+        \fclose($connection);
         
         // 只通过 PID 检测 CLI 服务器是否运行
         // 不使用端口回退检测，因为端口可能被 Weline Server 占用，会导致误判

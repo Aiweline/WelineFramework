@@ -12,6 +12,46 @@
     "description": "DeepSeek AI API服务",
     "website": "https://www.deepseek.com",
     "documentation": "https://platform.deepseek.com/api-docs",
+    "account_setup_guide": {
+        "title": "DeepSeek API 接入指南",
+        "summary": "用于 DeepSeek 文本对话和推理模型。需要在 DeepSeek 开放平台创建 API Key，并确保账户有可用余额。",
+        "links": [
+            {
+                "label": "DeepSeek 开放平台",
+                "url": "https://platform.deepseek.com"
+            },
+            {
+                "label": "DeepSeek API Keys",
+                "url": "https://platform.deepseek.com/api_keys"
+            },
+            {
+                "label": "DeepSeek API 文档",
+                "url": "https://platform.deepseek.com/api-docs"
+            }
+        ],
+        "steps": [
+            "打开 DeepSeek 开放平台并登录账号。",
+            "进入 API Keys 页面创建 API Key，并复制完整密钥。",
+            "进入账户充值/用量页面，确认账户有可用余额。",
+            "回到 Weline 后台 AI > 供应商账户，供应商选择 DeepSeek。",
+            "账户名称建议填写 DeepSeek。",
+            "API密钥粘贴 DeepSeek 平台生成的 API Key。",
+            "API基础URL可留空；如需显式填写，使用 https://api.deepseek.com/v1。",
+            "保存后点击连接测试；测试通过后启用账户，并按需要设为默认账户。"
+        ],
+        "field_hints": {
+            "provider_code": "DeepSeek",
+            "account_name": "DeepSeek",
+            "api_key": "粘贴 DeepSeek API Keys 页面生成的 API Key",
+            "base_url": "留空使用默认值，或填写 https://api.deepseek.com/v1",
+            "balance": "可填实际充值余额，仅用于后台排序/展示；不了解可先填 1",
+            "currency": "USD"
+        },
+        "notes": [
+            "DeepSeek 当前配置用于文本模型，不用于 AI 建站文生图。",
+            "如果要做图片生成，请使用 Google Nano Banana 或 OpenAI 图片模型的 text2image 适配器。"
+        ]
+    },
     "supported_features": {
         "chat": true,
         "completion": true,

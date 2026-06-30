@@ -134,11 +134,27 @@ P99：%{1},P99：%{1}
 "清除 WLS 路由缓存...","清除 WLS 路由缓存..."
 实例不存在,实例不存在
 实例未运行,实例未运行
-连接控制端口失败,连接控制端口失败
-路由缓存已清除,路由缓存已清除
+发送路由缓存清除命令,发送路由缓存清除命令
+"路由缓存清除命令已被 Master 接收","路由缓存清除命令已被 Master 接收"
+状态：%{1},状态：%{1}
 清除缓存失败,清除缓存失败
-未收到响应,未收到响应
 "清除 WLS Dispatcher 路由缓存","清除 WLS Dispatcher 路由缓存"
+"清理未运行的 WLS 实例记录","清理未运行的 WLS 实例记录"
+未发现可安全清理的未运行实例记录。,未发现可安全清理的未运行实例记录。
+"默认 dry-run 未修改任何文件。","默认 dry-run 未修改任何文件。"
+"默认 dry-run：发现 %{1} 个可清理实例，但未删除。","默认 dry-run：发现 %{1} 个可清理实例，但未删除。"
+可清理实例：%{1},可清理实例：%{1}
+未发现需要清理的未运行实例记录。,未发现需要清理的未运行实例记录。
+"可使用 server:status 或 server:listing 查看当前实例状态。","可使用 server:status 或 server:listing 查看当前实例状态。"
+"已清理 %{1} 个未运行实例记录。","已清理 %{1} 个未运行实例记录。"
+已处理实例：%{1},已处理实例：%{1}
+"可使用 server:status 或 server:listing 查看清理后的实例状态。","可使用 server:status 或 server:listing 查看清理后的实例状态。"
+"清理已无运行进程但仍残留实例文件的 WLS 实例记录","清理已无运行进程但仍残留实例文件的 WLS 实例记录"
+"清理那些已经没有运行但仍占着实例文件的 WLS 实例记录","清理那些已经没有运行但仍占着实例文件的 WLS 实例记录"
+"执行清理；默认仅 dry-run 检查","执行清理；默认仅 dry-run 检查"
+预览未运行实例记录,预览未运行实例记录
+确认清理未运行实例记录,确认清理未运行实例记录
+清理后查看实例状态,清理后查看实例状态
 "Weline Server 性能优化指南","Weline Server 性能优化指南"
 "📋 您的 PHP 环境","📋 您的 PHP 环境"
 "PHP 版本","PHP 版本"
@@ -172,15 +188,36 @@ P99：%{1},P99：%{1}
 示例,示例
 说明,说明
 "与 server:start 使用同一套 HostsFileManager；仅 system.env 为 local/dev/test 时可用","与 server:start 使用同一套 HostsFileManager；仅 system.env 为 local/dev/test 时可用"
-"即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）","即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）"
-正在执行…,正在执行…
-"已结束所有 php.exe 进程","已结束所有 php.exe 进程"
-"未检测到运行中的 php.exe，或已全部结束","未检测到运行中的 php.exe，或已全部结束"
-"已结束所有 php 进程","已结束所有 php 进程"
-"未检测到运行中的 php 进程，或已全部结束","未检测到运行中的 php 进程，或已全部结束"
-"一键结束系统中所有 PHP 进程（Windows: taskkill /F /IM php.exe /T；Linux/Mac: pkill -9 php）","一键结束系统中所有 PHP 进程（Windows: taskkill /F /IM php.exe /T；Linux/Mac: pkill -9 php）"
-"一键结束系统中所有 PHP 进程","一键结束系统中所有 PHP 进程"
-"执行后端口会释放，可再运行 server:start","执行后端口会释放，可再运行 server:start"
+"未找到实例 [%{1}]","未找到实例 [%{1}]"
+"实例 %{1} control_port=%{2} master_pid=%{3}","实例 %{1} control_port=%{2} master_pid=%{3}"
+控制端口无效,控制端口无效
+连接失败：%{1},连接失败：%{1}
+"首包耗时 %{1}s owner_pid=%{2}","首包耗时 %{1}s owner_pid=%{2}"
+"IPC 连通性探测（status）","IPC 连通性探测（status）"
+"连接实例控制端口并发送 status，输出耗时与占用 PID","连接实例控制端口并发送 status，输出耗时与占用 PID"
+"实例名（默认 default）","实例名（默认 default）"
+探测默认实例,探测默认实例
+未收到回执,未收到回执
+"IPC stop_test 诊断","IPC stop_test 诊断"
+"发送 stop_test，输出 Orchestrator 诊断 JSON","发送 stop_test，输出 Orchestrator 诊断 JSON"
+诊断默认实例,诊断默认实例
+"拒绝执行全局 PHP 进程杀伤。","拒绝执行全局 PHP 进程杀伤。"
+"如确需杀死系统中所有 PHP 进程，请显式使用 --all-php --yes。","如确需杀死系统中所有 PHP 进程，请显式使用 --all-php --yes。"
+"未发现 WLS 实例记录；不会执行全局 php.exe/pkill。","未发现 WLS 实例记录；不会执行全局 php.exe/pkill。"
+"未找到可清理的 WLS 进程前缀。","未找到可清理的 WLS 进程前缀。"
+"将仅结束当前项目 WLS 归属的 PHP 进程，不会杀死系统中所有 PHP。","将仅结束当前项目 WLS 归属的 PHP 进程，不会杀死系统中所有 PHP。"
+"已发送 WLS 归属 PHP 进程清理请求。","已发送 WLS 归属 PHP 进程清理请求。"
+"即将结束系统中所有 PHP 进程（包含非 WLS 进程）。","即将结束系统中所有 PHP 进程（包含非 WLS 进程）。"
+"已执行全局 PHP 进程清理。","已执行全局 PHP 进程清理。"
+"未检测到运行中的 PHP 进程，或系统拒绝执行。","未检测到运行中的 PHP 进程，或系统拒绝执行。"
+"结束 WLS 归属 PHP 进程；全局 PHP 清理必须显式 --all-php --yes","结束 WLS 归属 PHP 进程；全局 PHP 清理必须显式 --all-php --yes"
+"默认只结束当前项目 WLS 归属 PHP 进程","默认只结束当前项目 WLS 归属 PHP 进程"
+"危险：杀死系统中所有 PHP 进程","危险：杀死系统中所有 PHP 进程"
+"与 --all-php 同用，确认全局杀伤","与 --all-php 同用，确认全局杀伤"
+安全默认,安全默认
+"不再执行 taskkill /IM php.exe 或 pkill -9 php，除非显式 --all-php --yes","不再执行 taskkill /IM php.exe 或 pkill -9 php，除非显式 --all-php --yes"
+"清理 WLS 归属进程","清理 WLS 归属进程"
+全局清理（危险）,全局清理（危险）
 "端口 %{1} 当前没有进程在监听","端口 %{1} 当前没有进程在监听"
 框架进程,框架进程
 异常占用,异常占用
@@ -191,8 +228,10 @@ P99：%{1},P99：%{1}
 "如果确定要杀死该进程，请使用 -f 参数:","如果确定要杀死该进程，请使用 -f 参数:"
 或手动执行:,或手动执行:
 "taskkill /F /PID %{1}","taskkill /F /PID %{1}"
+"拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。","拒绝杀死非 WLS 进程：-f 只能强制释放 WLS 归属进程。"
+"如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。","如确认要杀死非 WLS 进程，请显式追加 --allow-foreign。"
 "警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。","警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。"
-警告：即将杀死非框架进程！,警告：即将杀死非框架进程！
+"警告：即将杀死非 WLS 进程！","警告：即将杀死非 WLS 进程！"
 正在释放端口...,正在释放端口...
 "端口 %{1} 已成功释放","端口 %{1} 已成功释放"
 端口释放失败，请尝试：,端口释放失败，请尝试：
@@ -202,18 +241,18 @@ P99：%{1},P99：%{1}
 结束占用指定端口的进程,结束占用指定端口的进程
 "端口号（默认 443）","端口号（默认 443）"
 端口号,端口号
-强制模式：杀死非框架进程（危险！默认只杀框架进程）,强制模式：杀死非框架进程（危险！默认只杀框架进程）
+"强制模式：仅强制释放 WLS 归属进程","强制模式：仅强制释放 WLS 归属进程"
+"与 -f 同用时允许杀死非 WLS 进程（危险）","与 -f 同用时允许杀死非 WLS 进程（危险）"
 "结束占用 443 的框架进程","结束占用 443 的框架进程"
-强制杀死任何进程（危险）,强制杀死任何进程（危险）
+"强制杀死非 WLS 进程（危险）","强制杀死非 WLS 进程（危险）"
 "Weline Server","Weline Server"
-┌──────────────────────────────────────────────────────────────────────────────────────┐,┌──────────────────────────────────────────────────────────────────────────────────────┐
-├──────────────────────────────────────────────────────────────────────────────────────┤,├──────────────────────────────────────────────────────────────────────────────────────┤
-└──────────────────────────────────────────────────────────────────────────────────────┘,└──────────────────────────────────────────────────────────────────────────────────────┘
 运行中,运行中
 已停止,已停止
-"总计：%{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}","总计：%{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}"
-"[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器 (开发)","[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器 (开发)"
+服务器实例列表,服务器实例列表
+没有找到运行中的服务器实例,没有找到运行中的服务器实例
 没有找到任何服务器实例,没有找到任何服务器实例
+"总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}","总计: %{total}  |  Weline: ●%{wrun} ○%{wstop}  |  CLI: ●%{clirun}"
+"[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)","[WLS] = Weline Server (高性能)  |  [CLI] = PHP 内置服务器(开发)"
 ═══════════════════════════════════════════════════════════════════════════════,═══════════════════════════════════════════════════════════════════════════════
 服务器实例详细列表,服务器实例详细列表
 "PHP 内置服务器","PHP 内置服务器"
@@ -293,58 +332,6 @@ P99：%{1},P99：%{1}
 查看状态,查看状态
 手动启用维护模式,手动启用维护模式
 手动禁用维护模式,手动禁用维护模式
-"Weline Server 多进程模式","Weline Server 多进程模式"
-基础端口：%{1},基础端口：%{1}
-进程数量：%{1},进程数量：%{1}
-平台：%{1},平台：%{1}
-检查端口...,检查端口...
-"端口 %{1} 已被占用，尝试释放...","端口 %{1} 已被占用，尝试释放..."
-"无法释放端口 %{1}","无法释放端口 %{1}"
-端口检查通过,端口检查通过
-"启动 Worker 进程...","启动 Worker 进程..."
-"Worker #%{1} 启动成功（端口: %{2}）%{3}","Worker #%{1} 启动成功（端口: %{2}）%{3}"
-"Worker #%{1} 启动失败：%{2}","Worker #%{1} 启动失败：%{2}"
-验证进程状态...,验证进程状态...
-"Worker #%{1} (:%{2}) - 运行中","Worker #%{1} (:%{2}) - 运行中"
-"Worker #%{1} (:%{2}) - 未响应","Worker #%{1} (:%{2}) - 未响应"
-启动结果,启动结果
-"成功启动：%{1}/%{2} 个进程","成功启动：%{1}/%{2} 个进程"
-启动方式：%{1},启动方式：%{1}
-测试命令：,测试命令：
-压测命令：,压测命令：
-停止命令：,停止命令：
-进程控制函数状态：,进程控制函数状态：
-"⚠️ 性能优化建议","⚠️ 性能优化建议"
-当前使用备用方案（%{1}）启动进程，性能可能受限。,当前使用备用方案（%{1}）启动进程，性能可能受限。
-"建议在 php.ini 中启用以下函数以获得最佳性能：","建议在 php.ini 中启用以下函数以获得最佳性能："
-修改方法：,修改方法：
-"1. 找到 php.ini 文件：%{1}","1. 找到 php.ini 文件：%{1}"
-"2. 找到 disable_functions 配置项","2. 找到 disable_functions 配置项"
-"3. 移除以上函数名，保存并重启服务","3. 移除以上函数名，保存并重启服务"
-启用后，服务器性能将有质的飞跃！🚀,启用后，服务器性能将有质的飞跃！🚀
-"进程控制核心函数，支持双向通信和精确的 PID 管理","进程控制核心函数，支持双向通信和精确的 PID 管理"
-进程资源释放，防止僵尸进程,进程资源释放，防止僵尸进程
-实时获取进程状态，支持进程监控,实时获取进程状态，支持进程监控
-真正的进程分叉，共享内存，性能最优,真正的进程分叉，共享内存，性能最优
-创建守护进程，脱离终端控制,创建守护进程，脱离终端控制
-轻量级进程通信,轻量级进程通信
-进程管理辅助函数,进程管理辅助函数
-没有可用的进程创建函数,没有可用的进程创建函数
-"多进程模式启动 Weline Server","多进程模式启动 Weline Server"
-启动多个独立进程以提高并发性能,启动多个独立进程以提高并发性能
-监听地址（默认：127.0.0.1）,监听地址（默认：127.0.0.1）
-基础端口（默认：8080）,基础端口（默认：8080）
-进程数量（默认：4）,进程数量（默认：4）
-"启动 4 个进程","启动 4 个进程"
-"启动 8 个进程","启动 8 个进程"
-"停止 Weline Server 多进程","停止 Weline Server 多进程"
-"Worker #%{1} (PID: %{2}, 端口: %{3}) 已停止","Worker #%{1} (PID: %{2}, 端口: %{3}) 已停止"
-"Worker #%{1} (端口: %{2}) 已停止","Worker #%{1} (端口: %{2}) 已停止"
-"Worker #%{1} (端口: %{2}) 未运行","Worker #%{1} (端口: %{2}) 未运行"
-"已停止 %{1}/%{2} 个进程","已停止 %{1}/%{2} 个进程"
-"停止多进程 Weline Server","停止多进程 Weline Server"
-"停止多个 Worker 进程","停止多个 Worker 进程"
-"停止 4 个进程","停止 4 个进程"
 "实例 [%{1}] 自动匹配到 [%{2}]","实例 [%{1}] 自动匹配到 [%{2}]"
 "实例 [%{1}] 未检测到运行中的 WLS Worker","实例 [%{1}] 未检测到运行中的 WLS Worker"
 "可执行 server:listing -r 查看当前运行中的实例","可执行 server:listing -r 查看当前运行中的实例"
@@ -360,8 +347,7 @@ P99：%{1},P99：%{1}
 "✓ 热重载命令已发送","✓ 热重载命令已发送"
 "等待实例 [%{1}] 的 Orchestrator 完成滚动重启...","等待实例 [%{1}] 的 Orchestrator 完成滚动重启..."
 "控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果","控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果"
-"等待重载进度超时（%{1}s 无新消息），已停止前台等待，Orchestrator 仍可能在后台执行","等待重载进度超时（%{1}s 无新消息），已停止前台等待，Orchestrator 仍可能在后台执行"
-"可执行 server:status 查看当前重载状态，或稍后再次执行 server:reload -n","可执行 server:status 查看当前重载状态，或稍后再次执行 server:reload -n"
+"仍在等待 Master 回传 reload 进度（已等待 %{1}s，剩余 %{2}s）；不会主动断开控制连接。","仍在等待 Master 回传 reload 进度（已等待 %{1}s，剩余 %{2}s）；不会主动断开控制连接。"
 "可用 server:status 查看当前状态","可用 server:status 查看当前状态"
 "✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）","✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）"
 "✗ 滚动重启失败：Worker #%{1} - %{2}","✗ 滚动重启失败：Worker #%{1} - %{2}"
@@ -398,6 +384,8 @@ P99：%{1},P99：%{1}
 滚动重载（默认等待）,滚动重载（默认等待）
 不等待,不等待
 强制重载,强制重载
+"检测到端口/拓扑/Worker/SSL 等启动参数变更，restart -r 将自动切换为完整重启。","检测到端口/拓扑/Worker/SSL 等启动参数变更，restart -r 将自动切换为完整重启。"
+将先执行平滑停机，再使用新启动参数重新拉起实例。,将先执行平滑停机，再使用新启动参数重新拉起实例。
 "检测到服务器已运行，-f 强制模式：单批次重启 Worker（Master 保持运行）...","检测到服务器已运行，-f 强制模式：单批次重启 Worker（Master 保持运行）..."
 "检测到服务器已运行，执行滚动重启（Master 保持运行）...","检测到服务器已运行，执行滚动重启（Master 保持运行）..."
 服务器未运行，正在启动...,服务器未运行，正在启动...
@@ -418,7 +406,8 @@ P99：%{1},P99：%{1}
 重启并更改端口,重启并更改端口
 "请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁","请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁"
 "未检测到运行中的 WLS Dispatcher，无需执行解封","未检测到运行中的 WLS Dispatcher，无需执行解封"
-"命令已发送，若 Dispatcher 正在运行应已生效","命令已发送，若 Dispatcher 正在运行应已生效"
+解封命令已接收,解封命令已接收
+解封命令失败,解封命令失败
 "Memory Service disabled by configuration.","Memory Service disabled by configuration."
 "启动全局共享 Session/Memory 服务","启动全局共享 Session/Memory 服务"
 "启动或重启全局共享 Session/Memory 服务","启动或重启全局共享 Session/Memory 服务"
@@ -454,7 +443,6 @@ P99：%{1},P99：%{1}
 重载全部证书,重载全部证书
 重载单个域名,重载单个域名
 清除不完整证书并重置,清除不完整证书并重置
-策略模式启动失败,策略模式启动失败
 "Weline Server 不可用：%{1}","Weline Server 不可用：%{1}"
 "自动回退到 PHP 内置 CLI 服务器...","自动回退到 PHP 内置 CLI 服务器..."
 "无法启动：实例 [%{1}] 正在被另一个进程启动中","无法启动：实例 [%{1}] 正在被另一个进程启动中"
@@ -465,8 +453,12 @@ P99：%{1},P99：%{1}
 "正在强制终止另一个启动进程并清理实例 [%{1}] 的启动残留...","正在强制终止另一个启动进程并清理实例 [%{1}] 的启动残留..."
 "已强制接管启动锁，继续启动实例 [%{1}]","已强制接管启动锁，继续启动实例 [%{1}]"
 "强制清理后仍未获取启动锁，将按用户确认继续启动实例 [%{1}]。","强制清理后仍未获取启动锁，将按用户确认继续启动实例 [%{1}]。"
+"参数 --frontend/-frontend 已弃用：窗口可见请用 --win；阻塞前台 Master 请用 --foreground。","参数 --frontend/-frontend 已弃用：窗口可见请用 --win；阻塞前台 Master 请用 --foreground。"
 "使用已保存的实例配置：%{1} (%{2}:%{3})","使用已保存的实例配置：%{1} (%{2}:%{3})"
 "以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。","以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。"
+"HTTPS 未启用：%{1}","HTTPS 未启用：%{1}"
+"SSL 证书服务返回 HTTP 模式","SSL 证书服务返回 HTTP 模式"
+"本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。","本次将以 HTTP 运行；如需 HTTPS，请检查 wls.https 配置和证书管理中的域名 HTTPS 开关。"
 已生成新证书：%{1},已生成新证书：%{1}
 使用已有证书：%{1},使用已有证书：%{1}
 证书有效期至：%{1},证书有效期至：%{1}
@@ -486,10 +478,6 @@ P99：%{1},P99：%{1}
 检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...,检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...
 "所有 Worker 已空闲，开始切换...","所有 Worker 已空闲，开始切换..."
 等待超时，强制切换...,等待超时，强制切换...
-"启用直连模式：%{1} 个 Worker 直接监听端口 %{2}（SO_REUSEPORT）","启用直连模式：%{1} 个 Worker 直接监听端口 %{2}（SO_REUSEPORT）"
-"当前系统不支持 SO_REUSEPORT，无法启用直连模式，回退到 Dispatcher 模式","当前系统不支持 SO_REUSEPORT，无法启用直连模式，回退到 Dispatcher 模式"
-"禁用 Dispatcher，每个 Worker 使用独立端口（智能分配）","禁用 Dispatcher，每个 Worker 使用独立端口（智能分配）"
-"使用 Dispatcher 模式（TCP 透传）","使用 Dispatcher 模式（TCP 透传）"
 "Worker基础端口: %{1}","Worker基础端口: %{1}"
 "共享状态运行时: %{1}","共享状态运行时: %{1}"
 "共享状态运行时解析失败: %{1}","共享状态运行时解析失败: %{1}"
@@ -512,7 +500,17 @@ P99：%{1},P99：%{1}
 "Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}","Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}"
 "HTTP 重定向端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）","HTTP 重定向端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）"
 "HTTP 重定向端口 %{1} 被非框架进程占用","HTTP 重定向端口 %{1} 被非框架进程占用"
-"2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
+占用进程：%{1},占用进程：%{1}
+PID：%{1},PID：%{1}
+命令行：%{1},命令行：%{1}
+"是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:","是否强制结束该进程并释放 HTTP 重定向端口 %{1}？[y/N]:"
+"- Windows: taskkill /F /PID %{1}","- Windows: taskkill /F /PID %{1}"
+"- Linux/macOS: kill -9 %{1}","- Linux/macOS: kill -9 %{1}"
+"3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","3. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
+"正在强制结束占用端口 %{1} 的进程 (PID: %{2})...","正在强制结束占用端口 %{1} 的进程 (PID: %{2})..."
+"无法释放端口 %{1}","无法释放端口 %{1}"
+"提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试","提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker），或手动结束 PID %{1} 后重试"
+"端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动","端口 %{1} 已释放，HTTP 重定向 Worker 将正常启动"
 "提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。","提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。"
 "提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。","提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。"
 维护模式已关闭（端口检查未通过）。,维护模式已关闭（端口检查未通过）。
@@ -528,12 +526,11 @@ P99：%{1},P99：%{1}
 "正在强制停用占用端口 %{1} 的进程...","正在强制停用占用端口 %{1} 的进程..."
 "端口 %{1} 已释放，HTTP Redirect 将正常启动","端口 %{1} 已释放，HTTP Redirect 将正常启动"
 "无法释放端口 %{1}，HTTP Redirect 将不启用","无法释放端口 %{1}，HTTP Redirect 将不启用"
+"Master 进程启动中，将管理所有 Worker 和 Dispatcher...","Master 进程启动中，将管理所有 Worker 和 Dispatcher..."
 已清理残留维护态，恢复业务流量模式。,已清理残留维护态，恢复业务流量模式。
 维护模式已关闭。,维护模式已关闭。
-"Master 进程启动中，将管理所有 Worker 和 Dispatcher...","Master 进程启动中，将管理所有 Worker 和 Dispatcher..."
 "检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED","检测到 Windows 系统代理 %{1} 已启用，浏览器访问 %{2} 可能被代理截流并报 ERR_CONNECTION_CLOSED"
 "建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名","建议将 %{1} 加入系统代理绕过名单（ProxyOverride）后再访问本地 WLS 域名"
-"当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host。","当前Wls没有配置白名单默认host，前端公网可能无法访问，请配置 app/etc/env.php -> wls.servers.%{1}.host。"
 "启动已阻止：当前监听地址为 %{1}，且无法确定默认项目域名白名单。","启动已阻止：当前监听地址为 %{1}，且无法确定默认项目域名白名单。"
 "请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。","请配置 app/etc/env.php -> wls.servers.%{1}.host（推荐）或 wls.host（非 0.0.0.0）。"
 后台域名池域名不需要写入此处。,后台域名池域名不需要写入此处。
@@ -546,18 +543,20 @@ P99：%{1},P99：%{1}
 "服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）","服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）"
 所有服务已就绪，启动完成。,所有服务已就绪，启动完成。
 "Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。","Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。"
+启动失败原因：%{1},启动失败原因：%{1}
 本次启动未视为完成，请稍后执行以下命令检查状态：,本次启动未视为完成，请稍后执行以下命令检查状态：
-"后台 Master 进程已创建（PID: %{1}），控制面仍在初始化；已停止阻塞等待。","后台 Master 进程已创建（PID: %{1}），控制面仍在初始化；已停止阻塞等待。"
-稍后执行以下命令检查启动进度：,稍后执行以下命令检查启动进度：
-"后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。","后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。"
+"后台启动已发起，但未能在 %{1} 秒内确认 Master 控制面就绪。","后台启动已发起，但未能在 %{1} 秒内确认 Master 控制面就绪。"
 可能原因：,可能原因：
 "1. 框架加载耗时较长（首次启动或 opcache 未预热）","1. 框架加载耗时较长（首次启动或 opcache 未预热）"
 "2. 端口被占用导致启动失败","2. 端口被占用导致启动失败"
 "3. 权限不足（特权端口需要 root/sudo）","3. 权限不足（特权端口需要 root/sudo）"
 请执行以下命令检查状态：,请执行以下命令检查状态：
+"The instance may still be inside an Orchestrator bootstrap or full-restart cycle; avoid repeating server:start based only on this warning.","实例可能仍处于 Orchestrator 启动或整组重启周期中；不要仅凭该警告重复执行 server:start。"
+"Set wls.orchestrator.background_master_confirm_wait_sec to extend the Master control-plane confirmation window.","可设置 wls.orchestrator.background_master_confirm_wait_sec 延长 Master 控制面确认窗口。"
 日志目录：%{1},日志目录：%{1}
 启动准备,启动准备
 启动服务,启动服务
+"Master 已退出","Master 已退出"
 (未知),(未知)
 "(未找到，请 php --ini 查看)","(未找到，请 php --ini 查看)"
 ╔══════════════════════════════════════════════════════════════════════════════╗,╔══════════════════════════════════════════════════════════════════════════════╗
@@ -571,11 +570,9 @@ P99：%{1},P99：%{1}
 "按 Ctrl+C 停止服务","按 Ctrl+C 停止服务"
 服务器启动失败,服务器启动失败
 "1. 停止占用端口的进程","1. 停止占用端口的进程"
+"2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
 "实例 [%{1}] 已创建共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})","实例 [%{1}] 已创建共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})"
 "实例 [%{1}] 复用共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})","实例 [%{1}] 复用共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})"
-"%{1} 端口 %{2} 复用现有共享服务 ✓","%{1} 端口 %{2} 复用现有共享服务 ✓"
-"%{1} 端口 %{2} 已在启动前完成拉起 ✓","%{1} 端口 %{2} 已在启动前完成拉起 ✓"
-"%{1} 端口 %{2} 共享服务已就绪 ✓","%{1} 端口 %{2} 共享服务已就绪 ✓"
 "WLS 维护模式已同步：%{1}","WLS 维护模式已同步：%{1}"
 "WLS 维护模式同步未完全成功：%{1}","WLS 维护模式同步未完全成功：%{1}"
 "WLS 维护模式同步失败：%{1}","WLS 维护模式同步失败：%{1}"
@@ -589,7 +586,9 @@ P99：%{1},P99：%{1}
 env.wls.servers.%{1},env.wls.servers.%{1}
 env.wls,env.wls
 命令行参数,命令行参数
+环境变量,环境变量
 "参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。","参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。"
+"真实 Host 解析校验失败","真实 Host 解析校验失败"
 "SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动","SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动"
 "SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动","SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动"
 手动配置,手动配置
@@ -602,6 +601,11 @@ env.wls,env.wls
 未知,未知
 使用已有证书：%{1}（签发方：%{2}）,使用已有证书：%{1}（签发方：%{2}）
 "SSL 证书准备失败：%{1}（耗时 %{2}ms）— %{3}","SSL 证书准备失败：%{1}（耗时 %{2}ms）— %{3}"
+"启动已阻止：真实 Host %{1} 尚未解析到 A/AAAA 记录。请先把域名解析到当前服务器 IP 后再启动 WLS。","启动已阻止：真实 Host %{1} 尚未解析到 A/AAAA 记录。请先把域名解析到当前服务器 IP 后再启动 WLS。"
+"启动已阻止：无法确认当前服务器 IP，不能校验真实 Host %{1} 是否指向本机。请配置 app/etc/env.php -> wls.public_ip 后重试。","启动已阻止：无法确认当前服务器 IP，不能校验真实 Host %{1} 是否指向本机。请配置 app/etc/env.php -> wls.public_ip 后重试。"
+"启动已阻止：真实 Host %{1} 未解析到当前服务器 IP。当前解析：%{2}；本机 IP：%{3}。请先修正 DNS A/AAAA 后再启动 WLS。","启动已阻止：真实 Host %{1} 未解析到当前服务器 IP。当前解析：%{2}；本机 IP：%{3}。请先修正 DNS A/AAAA 后再启动 WLS。"
+使用已有证书,使用已有证书
+已有证书,已有证书
 "检测到冷启动阶段 ACME HTTP-01 校验失败：%{1}","检测到冷启动阶段 ACME HTTP-01 校验失败：%{1}"
 "已临时启用自签证书启动实例；待 Dispatcher/Worker 就绪后将自动重试正式证书申请。","已临时启用自签证书启动实例；待 Dispatcher/Worker 就绪后将自动重试正式证书申请。"
 "附加 Host 证书就绪：%{1}（签发方：%{2}）","附加 Host 证书就绪：%{1}（签发方：%{2}）"
@@ -622,12 +626,6 @@ env.wls,env.wls
 已启用,已启用
 未启用,未启用
 智能模式,智能模式
-"提示：端口 %{1} 为特权端口，Linux/Mac 下需 setcap 或 root 才能绑定。","提示：端口 %{1} 为特权端口，Linux/Mac 下需 setcap 或 root 才能绑定。"
-"• 推荐 setcap（当前用户即可运行，避免 root 文件权限问题）：","• 推荐 setcap（当前用户即可运行，避免 root 文件权限问题）："
-"sudo setcap cap_net_bind_service=+ep $(which php)","sudo setcap cap_net_bind_service=+ep $(which php)"
-"• 或 Nginx 反代：Nginx 监听 %{1}，proxy_pass 到本机高端口（如 9981）","• 或 Nginx 反代：Nginx 监听 %{1}，proxy_pass 到本机高端口（如 9981）"
-"提示：HTTP 标准端口 80 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 80，请 -c 1。","提示：HTTP 标准端口 80 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 80，请 -c 1。"
-"提示：HTTPS 标准端口 443 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 443，请 -c 1。","提示：HTTPS 标准端口 443 通常单进程监听；当前 Worker 数 %{1} 将占用端口 %{2}-%{3}。若只需 443，请 -c 1。"
 "检测到特权端口 %{1}，当前用户无法直接绑定。","检测到特权端口 %{1}，当前用户无法直接绑定。"
 "未找到 setcap 命令，跳过 setcap 方式。","未找到 setcap 命令，跳过 setcap 方式。"
 "PHP 已有 cap_net_bind_service 但绑定仍失败，可能需要重新设置。","PHP 已有 cap_net_bind_service 但绑定仍失败，可能需要重新设置。"
@@ -649,12 +647,6 @@ env.wls,env.wls
 "sudo 执行失败，退出码：%{1}","sudo 执行失败，退出码：%{1}"
 "%{1} 检测到 socket 权限问题：%{2}","%{1} 检测到 socket 权限问题：%{2}"
 "端口 %{1} 绑定需要更高权限（可能由防火墙或系统安全设置引起）。","端口 %{1} 绑定需要更高权限（可能由防火墙或系统安全设置引起）。"
-访问地址,访问地址
-前端,前端
-后端,后端
-"REST API 前端","REST API 前端"
-"REST API 后端","REST API 后端"
-"HTTP 重定向","HTTP 重定向"
 进程函数：%{1},进程函数：%{1}
 "服务器实例 [%{1}] 已在运行中（端口 %{2}）","服务器实例 [%{1}] 已在运行中（端口 %{2}）"
 如需重启该实例：,如需重启该实例：
@@ -676,6 +668,7 @@ env.wls,env.wls
 "已按前缀清理 %{1} 个逃逸 Master 进程","已按前缀清理 %{1} 个逃逸 Master 进程"
 "无法释放 %{1} 端口 %{2}","无法释放 %{1} 端口 %{2}"
 "检查 Worker 端口可用性...","检查 Worker 端口可用性..."
+端口检查通过,端口检查通过
 "端口 %{1} 已被占用","端口 %{1} 已被占用"
 "端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳...","端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），尝试端口级兜底清壳..."
 "端口 %{1} 被非框架进程占用，不予杀死","端口 %{1} 被非框架进程占用，不予杀死"
@@ -683,13 +676,6 @@ env.wls,env.wls
 "WLS 进程（实例 %{1}）","WLS 进程（实例 %{1}）"
 "PID %{1}","PID %{1}"
 未知进程,未知进程
-"├─ Worker #%{1} (%{2} 端口: %{3}) - 启动成功","├─ Worker #%{1} (%{2} 端口: %{3}) - 启动成功"
-"├─ Worker #%{1} (端口: %{2}) - 启动失败","├─ Worker #%{1} (端口: %{2}) - 启动失败"
-"启动 Dispatcher 进程...","启动 Dispatcher 进程..."
-"Dispatcher 脚本不存在: %{1}","Dispatcher 脚本不存在: %{1}"
-"├─ Worker #%{1} (%{2}:%{3}) - 运行中 ✓","├─ Worker #%{1} (%{2}:%{3}) - 运行中 ✓"
-"├─ Worker #%{1} (:%{2}) - 未响应 ✗","├─ Worker #%{1} (:%{2}) - 未响应 ✗"
-"启动结果：%{1}/%{2} 个进程运行中","启动结果：%{1}/%{2} 个进程运行中"
 "字节码缓存，提升 PHP 执行速度 50%+","字节码缓存，提升 PHP 执行速度 50%+"
 "原生 Socket 支持，提升网络性能","原生 Socket 支持，提升网络性能"
 "进程控制核心函数，支持精确的 PID 管理","进程控制核心函数，支持精确的 PID 管理"
@@ -708,6 +694,9 @@ env.wls,env.wls
 "从 disable_functions 中移除 proc_open","从 disable_functions 中移除 proc_open"
 函数被禁用：pcntl_fork,函数被禁用：pcntl_fork
 "从 disable_functions 中移除 pcntl_fork","从 disable_functions 中移除 pcntl_fork"
+"当前使用默认 Dispatcher 模式；Linux/Mac 可按压测结果评估 SO_REUSEPORT 直连模式","当前使用默认 Dispatcher 模式；Linux/Mac 可按压测结果评估 SO_REUSEPORT 直连模式"
+"可减少 Dispatcher 中转开销，但会改变流量分发与排障路径，建议仅在压测验证后启用","可减少 Dispatcher 中转开销，但会改变流量分发与排障路径，建议仅在压测验证后启用"
+"使用 --direct 或 wls.topology = direct 显式启用","使用 --direct 或 wls.topology = direct 显式启用"
 内存限制较低：%{1},内存限制较低：%{1}
 "在 php.ini 设置 memory_limit = 256M","在 php.ini 设置 memory_limit = 256M"
 "OPCache CLI 模式未启用","OPCache CLI 模式未启用"
@@ -748,8 +737,6 @@ env.wls,env.wls
 "启动 Weline 常驻内存 HTTP 服务器","启动 Weline 常驻内存 HTTP 服务器"
 "启动 Weline 高性能常驻内存服务器","启动 Weline 高性能常驻内存服务器"
 "使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）","使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）"
-"使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）","使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）"
-显示可用策略信息,显示可用策略信息
 "监听地址（默认：127.0.0.1，仅本机；需外网访问时用 --host 0.0.0.0；-h 保留给帮助）","监听地址（默认：127.0.0.1，仅本机；需外网访问时用 --host 0.0.0.0；-h 保留给帮助）"
 "基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）","基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）"
 "Worker 进程数（默认：auto 智能模式）","Worker 进程数（默认：auto 智能模式）"
@@ -763,18 +750,24 @@ env.wls,env.wls
 "SSL 私钥文件路径（启用 HTTPS）","SSL 私钥文件路径（启用 HTTPS）"
 "Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）","Worker 进程 PHP memory_limit（如 512M，数字按 MB 处理，-1 为不限）"
 "Dispatcher 进程 PHP memory_limit（默认跟随 Worker）","Dispatcher 进程 PHP memory_limit（默认跟随 Worker）"
+"运行策略：auto/performance/stability/compatibility（默认 auto）","运行策略：auto/performance/stability/compatibility（默认 auto）"
+"拓扑：auto/direct/dispatcher/independent（默认 auto）","拓扑：auto/direct/dispatcher/independent（默认 auto）"
+"事件循环：auto/event/select（默认 auto）","事件循环：auto/event/select（默认 auto）"
+"Supervisor：auto/true/false（默认 auto）","Supervisor：auto/true/false（默认 auto）"
 "直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）","直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）"
 "独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口","独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口"
-"强制 Dispatcher 模式（默认）","强制 Dispatcher 模式（默认）"
+"强制 Dispatcher 模式","强制 Dispatcher 模式"
 配置优先级,配置优先级
 "命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值","命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值"
 多实例支持,多实例支持
 "可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动","可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动"
 配置记忆,配置记忆
 "首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443","首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443"
-"worker_count 设为 ""auto"" 时：开发环境固定 4 个 Worker，生产环境根据 CPU 核心数自动计算","worker_count 设为 ""auto"" 时：开发环境固定 4 个 Worker，生产环境根据 CPU 核心数自动计算"
+"worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算","worker_count 设为 ""auto"" 时由运行时策略按 OS/CPU/内存自动计算"
 事件循环,事件循环
-"自动选择最优：Event 扩展 > stream_select","自动选择最优：Event 扩展 > stream_select"
+"auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因","auto 会优先使用可用的 Event 扩展，否则降级 stream_select 并提示原因"
+默认拓扑,默认拓扑
+"auto 默认 Dispatcher；Linux/Mac 支持 SO_REUSEPORT 时可用 --direct 显式启用直连模式","auto 默认 Dispatcher；Linux/Mac 支持 SO_REUSEPORT 时可用 --direct 显式启用直连模式"
 多进程,多进程
 "优先级：proc_open > pcntl_fork > exec","优先级：proc_open > pcntl_fork > exec"
 "HTTPS 支持","HTTPS 支持"
@@ -796,13 +789,13 @@ env.wls,env.wls
 启动命名实例（首次需指定端口）,启动命名实例（首次需指定端口）
 再次启动已配置实例（自动记忆）,再次启动已配置实例（自动记忆）
 同时运行多个实例,同时运行多个实例
+"启动 8 个进程","启动 8 个进程"
 CPU密集模式,CPU密集模式
 平滑重启,平滑重启
 强制重启（停机型更新）,强制重启（停机型更新）
 "启用 HTTPS","启用 HTTPS"
 "Windows 无 HTTPS 运行","Windows 无 HTTPS 运行"
 "设置 Worker 内存","设置 Worker 内存"
-策略模式（跨平台优化）,策略模式（跨平台优化）
 查看所有实例状态,查看所有实例状态
 停止指定实例,停止指定实例
 停止所有实例,停止所有实例
@@ -813,14 +806,6 @@ CPU密集模式,CPU密集模式
 "检查间隔：%{1} 秒","检查间隔：%{1} 秒"
 "按 Ctrl+C 停止监控...","按 Ctrl+C 停止监控..."
 创建文件监控子进程失败,创建文件监控子进程失败
-可用服务器启动策略:,可用服务器启动策略:
-标识,标识
-名称,名称
-支持,支持
-优先级,优先级
-架构,架构
-"使用策略: %{1}","使用策略: %{1}"
-"架构: %{1}","架构: %{1}"
 "Weline Server 启动完成！","Weline Server 启动完成！"
 "Weline Server 启动失败","Weline Server 启动失败"
 "每 3 秒刷新","每 3 秒刷新"
@@ -839,6 +824,7 @@ workers,workers
 服务：,服务：
 "使用 server:status <name> 查看详细状态","使用 server:status <name> 查看详细状态"
 "使用 server:stop <name> 停止实例","使用 server:stop <name> 停止实例"
+"如有残留 endpoint 文件，可执行 server:clean 清理未运行记录","如有残留 endpoint 文件，可执行 server:clean 清理未运行记录"
 "实例 [%{1}] 不存在","实例 [%{1}] 不存在"
 "实例 [%{1}] 状态","实例 [%{1}] 状态"
 实例名称：,实例名称：
@@ -853,22 +839,25 @@ unknown,unknown
 "状态：部分运行 (%{1}/%{2})","状态：部分运行 (%{1}/%{2})"
 "状态：全部停止 (%{1}/%{2})","状态：全部停止 (%{1}/%{2})"
 "测试请求：curl %{1}/","测试请求：curl %{1}/"
+启动失败详情：,启动失败详情：
 "● on (默认)","● on (默认)"
 "● on (env.php)","● on (env.php)"
 "○ off (env.php)","○ off (env.php)"
 端口：,端口：
-全局共享依赖：,全局共享依赖：
-"Session Server","Session Server"
-"Memory Service","Memory Service"
-disabled,disabled
-不可用,不可用
+"Master PID is running, but IPC status did not respond within 0.5s; the control plane may be busy or in an orchestrator full-restart cycle.","Master PID 已确认存活，但 IPC 状态在 0.5 秒内未响应；控制面可能正忙或处于 Orchestrator 整组重启周期。"
 "查看 Weline Server 运行状态","查看 Weline Server 运行状态"
 "查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
 实例名称（默认显示所有实例）,实例名称（默认显示所有实例）
 "Watch 模式：每 3 秒自动刷新，Ctrl+C 退出","Watch 模式：每 3 秒自动刷新，Ctrl+C 退出"
+"显示 WLS 运行时策略、降级原因和优化建议","显示 WLS 运行时策略、降级原因和优化建议"
+"与 --doctor 同用时输出 JSON","与 --doctor 同用时输出 JSON"
 查看所有实例,查看所有实例
 查看指定实例,查看指定实例
 "实时监控（watch 模式）","实时监控（watch 模式）"
+运行时诊断,运行时诊断
+清理未运行实例记录,清理未运行实例记录
+"`--all` 与 `-pre/--prefix` 不能同时使用。","`--all` 与 `-pre/--prefix` 不能同时使用。"
+请二选一：要么停止所有实例，要么只停止某个前缀。,请二选一：要么停止所有实例，要么只停止某个前缀。
 "另一个 server:stop 任务正在处理中，请稍后再试。","另一个 server:stop 任务正在处理中，请稍后再试。"
 若锁文件长期存在，请确认停止任务是否已结束后再重试。,若锁文件长期存在，请确认停止任务是否已结束后再重试。
 "检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…","检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…"
@@ -881,24 +870,42 @@ disabled,disabled
 "控制端口已接受 STOP，继续复核残留进程 ✓","控制端口已接受 STOP，继续复核残留进程 ✓"
 "Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup.","Instance [%{1}] still has residual WLS processes; keeping instance metadata for continued cleanup."
 "实例元数据已标记停止并保留 ✓","实例元数据已标记停止并保留 ✓"
+"实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留 WLS 进程，已保留实例文件以便继续清理。"
+"实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。","实例 Master PID 或控制端口归属校验未通过，跳过 IPC，改用本地清理。"
 "快速清场模式：跳过 IPC 排水，并发终止旧实例子进程...","快速清场模式：跳过 IPC 排水，并发终止旧实例子进程..."
+"实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。"
 "实例 [%{1}] 已停止（-f 强制模式） ✓","实例 [%{1}] 已停止（-f 强制模式） ✓"
 "实例 [%{1}] 已停止（快速清场） ✓","实例 [%{1}] 已停止（快速清场） ✓"
-"实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。","实例 [%{1}] 仍有残留进程，已保留实例文件以便继续清理。"
-"-f 强制模式：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...","-f 强制模式：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程..."
+"-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程...","-f --ipc：跳过排水，通过 IPC 发起停止，响应后并发清理当前实例进程..."
 "发送 STOP 命令给 Master (通过 IPC)...","发送 STOP 命令给 Master (通过 IPC)..."
 "所有子进程已完整退出 ✓","所有子进程已完整退出 ✓"
 "Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup.","Stop flow is still running in Master after the CLI wait ended; keeping instance metadata and skipping local cleanup."
 "IPC 超时，强制终止 Master 并清理该实例下所有进程...","IPC 超时，强制终止 Master 并清理该实例下所有进程..."
 "实例 [%{1}] 已停止 ✓","实例 [%{1}] 已停止 ✓"
+停止服务器实例,停止服务器实例
+"Master PID：","Master PID："
+(未运行),(未运行)
+控制端口：,控制端口：
+(未配置),(未配置)
+"SSL 状态：","SSL 状态："
+"已启用 (HTTPS)","已启用 (HTTPS)"
+"未启用 (HTTP)","未启用 (HTTP)"
+"HTTP 跳转：","HTTP 跳转："
 清理残留进程...,清理残留进程...
-"已处理 %{1} 个进程","已处理 %{1} 个进程"
-无残留进程,无残留进程
 "已清理 %{1} 个残留进程","已清理 %{1} 个残留进程"
 重试次数：%{1},重试次数：%{1}
+无残留进程,无残留进程
 "残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}","残留清理未完全完成，残留进程: %{1}, 残留端口: %{2}"
 "已清理 %{1} 个残留进程（复核结束）","已清理 %{1} 个残留进程（复核结束）"
+"已处理 %{1} 个进程","已处理 %{1} 个进程"
+"Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）...","Master 已退出，先快速终止实例内已知子进程（含 Session/Memory）..."
+"已发送终止信号 %{1} 个已知子进程","已发送终止信号 %{1} 个已知子进程"
+"Fast-local cleanup still has residual process ids: %{1}","Fast-local cleanup still has residual process ids: %{1}"
+"Fast-local cleanup terminated %{1} residual processes.","Fast-local cleanup terminated %{1} residual processes."
+"Fast-local cleanup found no residual processes.","Fast-local cleanup found no residual processes."
+"STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。","STOP 命令在 ACK 超时内未得到确认（未见 Stopping），转为本地清理。"
 "启动锁已释放 ✓","启动锁已释放 ✓"
+"Master STOP 追踪文件末条事件：%{1}","Master STOP 追踪文件末条事件：%{1}"
 没有正在运行的实例,没有正在运行的实例
 停止所有服务器实例,停止所有服务器实例
 "发现 %{1} 个 Weline Server 实例","发现 %{1} 个 Weline Server 实例"
@@ -907,16 +914,29 @@ disabled,disabled
 "所有 Weline Server 实例已停止","所有 Weline Server 实例已停止"
 "正在停止 PHP 内置服务器 (cli-server)...","正在停止 PHP 内置服务器 (cli-server)..."
 "PHP 内置服务器已停止","PHP 内置服务器已停止"
+实例前缀不能为空。,实例前缀不能为空。
+"没有找到前缀为 [%{1}] 的实例。","没有找到前缀为 [%{1}] 的实例。"
+"使用 server:listing 查看当前实例列表。","使用 server:listing 查看当前实例列表。"
+按前缀停止服务器实例,按前缀停止服务器实例
+实例前缀：%{1},实例前缀：%{1}
+"发现 %{1} 个匹配实例","发现 %{1} 个匹配实例"
+"进度 [%{1}/%{2}] 正在停止实例 [%{3}]...","进度 [%{1}/%{2}] 正在停止实例 [%{3}]..."
+"前缀 [%{1}] 匹配的实例已处理完成。","前缀 [%{1}] 匹配的实例已处理完成。"
 "停止 Weline Server 或 PHP 内置服务器实例","停止 Weline Server 或 PHP 内置服务器实例"
 "停止正在运行的 Weline Server 或 PHP 内置服务器实例","停止正在运行的 Weline Server 或 PHP 内置服务器实例"
 "实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）","实例名称（默认：default；cli/cli-server 表示 PHP 内置服务器）"
 "停止所有运行中的实例（含 Weline Server 与 CLI 服务器）","停止所有运行中的实例（含 Weline Server 与 CLI 服务器）"
-"强制停止（跳过 IPC 排水并立即终止进程）","强制停止（跳过 IPC 排水并立即终止进程）"
+"停止所有实例名以该前缀开头的 Weline Server 实例","停止所有实例名以该前缀开头的 Weline Server 实例"
+"强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc","强制停止：默认本地快速清场（不走 IPC）；若需仍通过 Master 发 STOP，请加 --ipc"
+"与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略","与 -f 联用：显式走 IPC 强制停机（短 ACK/硬超时）；不带 -f 时忽略"
 停止默认实例,停止默认实例
+按前缀停止实例,按前缀停止实例
 "停止 PHP 内置服务器","停止 PHP 内置服务器"
-强制停止,强制停止
+强制停止（本地快速清场）,强制停止（本地快速清场）
+"强制但走 IPC（短超时）","强制但走 IPC（短超时）"
 正在停止服务器...,正在停止服务器...
 "Weline Server 已停止！","Weline Server 已停止！"
+"server:stop only stops WLS-managed processes; independent bin/w commands such as setup:upgrade or cron:task:run must be handled separately.","server:stop 只停止 WLS 托管进程；setup:upgrade、cron:task:run 等独立 bin/w 命令需要单独处理。"
 "Weline Server 停止失败","Weline Server 停止失败"
 "请指定域名：--domain example.com","请指定域名：--domain example.com"
 "正在为 %{1} 申请 SSL 证书...","正在为 %{1} 申请 SSL 证书..."
@@ -1018,6 +1038,7 @@ HTTPS,HTTPS
 "Weline Server 管理","Weline Server 管理"
 "Session 管理","Session 管理"
 内存服务管理,内存服务管理
+实例名称不合法,实例名称不合法
 启动命令已提交,启动命令已提交
 停止命令已发送,停止命令已发送
 重启命令已发送,重启命令已发送
@@ -1025,9 +1046,9 @@ HTTPS,HTTPS
 维护模式已启用,维护模式已启用
 维护模式已禁用,维护模式已禁用
 "Session 列表加载完成","Session 列表加载完成"
-"缺少 Session ID 参数","缺少 Session ID 参数"
+"Session ID 参数不合法","Session ID 参数不合法"
 "Session 详情加载完成","Session 详情加载完成"
-"缺少 Session ID","缺少 Session ID"
+"Session ID 不合法","Session ID 不合法"
 "Session 已销毁","Session 已销毁"
 "Session 销毁失败，请确认服务可用后重试","Session 销毁失败，请确认服务可用后重试"
 "Session 数据已持久化","Session 数据已持久化"
@@ -1035,21 +1056,17 @@ HTTPS,HTTPS
 "Session 垃圾回收已执行","Session 垃圾回收已执行"
 "Session 垃圾回收执行失败","Session 垃圾回收执行失败"
 内存命名空间加载完成,内存命名空间加载完成
-缺少命名空间参数,缺少命名空间参数
+命名空间参数不合法,命名空间参数不合法
 命名空间详情加载完成,命名空间详情加载完成
 内存命名空间已清空,内存命名空间已清空
 "命名空间清理失败，请检查 Memory Service 状态","命名空间清理失败，请检查 Memory Service 状态"
-缺少命名空间或键名参数,缺少命名空间或键名参数
+命名空间或键名参数不合法,命名空间或键名参数不合法
 缓存键已删除,缓存键已删除
 缓存键删除失败,缓存键删除失败
 内存服务数据已持久化,内存服务数据已持久化
 内存服务持久化失败,内存服务持久化失败
 内存服务垃圾回收已执行,内存服务垃圾回收已执行
 "内存服务垃圾回收执行失败，请检查 Memory Service 连接状态","内存服务垃圾回收执行失败，请检查 Memory Service 连接状态"
-请先登录后台,请先登录后台
-仅开发模式可用，当前部署模式：%{1},仅开发模式可用，当前部署模式：%{1}
-"请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）","请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）"
-"已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效","已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效"
 服务器监控,服务器监控
 "请先输入压测目标 URL，例如 http://127.0.0.1:9981/_wls/health。","请先输入压测目标 URL，例如 http://127.0.0.1:9981/_wls/health。"
 压测完成,压测完成
@@ -1109,6 +1126,28 @@ HTTPS,HTTPS
 %{1}：证书记录不存在,%{1}：证书记录不存在
 %{1}：%{2},%{1}：%{2}
 续签失败,续签失败
+"WLS Panel","WLS 面板"
+"WLS Projects","WLS Projects"
+"WLS Gateway","WLS Gateway"
+"WLS Plugin","WLS Plugin"
+"WLS Plugin Marketplace","WLS 插件商城"
+"WLS Security","WLS 安全"
+"WLS Attack Logs","WLS Attack Logs"
+"WLS Security Rules","WLS Security Rules"
+"WLS Project Security Policy","WLS Project Security Policy"
+"WLS Security Policy Audit","WLS Security Policy Audit"
+"Managed project save failed.",托管项目保存失败。
+"Managed project delete failed.",托管项目删除失败。
+"Gateway route apply failed.",网关路由应用失败。
+"Gateway mode configuration save failed.",网关模式配置保存失败。
+"Security rules save failed.",安全规则保存失败。
+"Plugin Capability","Plugin Capability"
+"Managed project saved.",托管项目已保存。
+"Managed project removed.",托管项目已移除。
+"Gateway routes applied.",网关路由已应用。
+"Gateway mode configuration saved. Restart or reload the target WLS instance for listener changes to take effect.","网关模式配置已保存。监听变更需要重启或重载目标 WLS 实例后生效。"
+"Security rules saved.",安全规则已保存。
+"Panel plugin capabilities refreshed.",面板插件能力已刷新。
 "WLS Fiber concurrency probe is disabled.","WLS Fiber 并发探针未启用（需 DEV、ENV_TEST 或环境变量 WLS_FIBER_CONCURRENCY_PROBE=1）。"
 "WLS fiber probe: parallel clients are required; sequential PHP curl does not simulate users.","需要多路并行客户端；PHP 单进程里顺序 curl 无法模拟多用户同时访问。"
 "WLS fiber probe: set env WLS_FIBER_CONCURRENCY_PROBE=1 when DEV is off.","生产或 DEV 关闭时，可设置环境变量 WLS_FIBER_CONCURRENCY_PROBE=1 以启用探针。"
@@ -1232,6 +1271,17 @@ WLS错误扫描,WLS错误扫描
 "最大挂起 Fiber 数，0=不限制","最大挂起 Fiber 数，0=不限制"
 "通知各 Worker 立即释放闲置 Fiber","通知各 Worker 立即释放闲置 Fiber"
 "广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）","广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）"
+"读取 WLS 攻击统计","读取 WLS 攻击统计"
+统计天数,统计天数
+"Resolve a WLS Panel managed project for plugin context","Resolve a WLS Panel managed project for plugin context"
+"Managed project ID","Managed project ID"
+"Managed project domain","Managed project domain"
+"Read WLS performance summary for the development panel","Read WLS performance summary for the development panel"
+"Read recent WLS performance requests for the development panel","Read recent WLS performance requests for the development panel"
+"Read one WLS performance request detail","Read one WLS performance request detail"
+"Read SessionServer and MemoryServer timing snapshots","Read SessionServer and MemoryServer timing snapshots"
+"Clear short-lived WLS performance panel traces","Clear short-lived WLS performance panel traces"
+"为当前后台浏览器设置 WLS 健康检查放行 Cookie","为当前后台浏览器设置 WLS 健康检查放行 Cookie"
 域名不能为空,域名不能为空
 "PFX 文件内容无效（Base64 解码失败）","PFX 文件内容无效（Base64 解码失败）"
 "PFX/P12 解析失败，请确认文件与密码正确","PFX/P12 解析失败，请确认文件与密码正确"
@@ -1248,11 +1298,22 @@ WLS错误扫描,WLS错误扫描
 "The requested domain is not a valid local hostname","The requested domain is not a valid local hostname"
 "Only managed local wildcard domains are allowed for local wildcard certificate issuance","Only managed local wildcard domains are allowed for local wildcard certificate issuance"
 "Failed to ensure the managed local wildcard certificate","Failed to ensure the managed local wildcard certificate"
+请先登录后台,请先登录后台
+"Managed project context is empty.","Managed project context is empty."
+"Managed project was not found.","Managed project was not found."
+"Managed project context resolved.","Managed project context resolved."
+"Invalid request id","Invalid request id"
+"WLS request trace loaded","WLS request trace loaded"
+"WLS request trace was not found","WLS request trace was not found"
 本地域名证书不允许删除,本地域名证书不允许删除
+"缺少 Session ID","缺少 Session ID"
 "Session 销毁失败，请稍后重试","Session 销毁失败，请稍后重试"
 "Session 持久化失败","Session 持久化失败"
+缺少命名空间参数,缺少命名空间参数
 命名空间清理失败,命名空间清理失败
+缺少命名空间或键名参数,缺少命名空间或键名参数
 内存服务垃圾回收执行失败,内存服务垃圾回收执行失败
+"WLS performance panel is only available in development or authorized debug mode","WLS performance panel is only available in development or authorized debug mode"
 "Session query provider unsupported operation: %{1}","Session query provider unsupported operation: %{1}"
 "Session Query","Session Query"
 "Unified shared session facade query entry","Unified shared session facade query entry"
@@ -1282,6 +1343,11 @@ DDoS攻击,DDoS攻击
 "ReverseProxy 新建记录时 domain 不能为空","ReverseProxy 新建记录时 domain 不能为空"
 "域名格式无效: %{1}","域名格式无效: %{1}"
 "域名 %{1} 已被其他证书记录使用（cert_id=%{2}），不能重复保存。请通过证书管理合并或删除重复记录。","域名 %{1} 已被其他证书记录使用（cert_id=%{2}），不能重复保存。请通过证书管理合并或删除重复记录。"
+"Project name is required.",项目名称不能为空。
+"Project domain is invalid.",项目域名无效。
+"Gateway backend host is required.",网关后端主机不能为空。
+"Gateway backend port must be between 1 and 65535.","网关后端端口必须在 1 到 65535 之间。"
+"Project URL must start with http:// or https://.","项目 URL 必须以 http:// 或 https:// 开头。"
 "WLS 通知：%{1}","WLS 通知：%{1}"
 "高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成","高性能异步常驻内存服务器，支持 HTTP/WebSocket/TCP/UDP 协议，支持多实例管理、服务器监控、攻击日志、证书管理 Hook 集成"
 "当前 PHP 环境未启用 curl 扩展，无法执行压测。","当前 PHP 环境未启用 curl 扩展，无法执行压测。"
@@ -1316,11 +1382,17 @@ DDoS攻击,DDoS攻击
 等待控制命令响应超时（%{1}s）。,等待控制命令响应超时（%{1}s）。
 "启动命令已提交，但未返回有效 PID，请稍后刷新状态确认。","启动命令已提交，但未返回有效 PID，请稍后刷新状态确认。"
 "启动命令已提交，Master PID: %{1}","启动命令已提交，Master PID: %{1}"
+仅开发模式可用，当前部署模式：%{1},仅开发模式可用，当前部署模式：%{1}
+"请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）","请在 env.php 中配置 wls.health_cookie_secret（与 worker 校验一致）"
+"已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效","已设置健康检查放行 Cookie，本浏览器可访问 /_wls/health?detail=1，约 2 小时内有效"
 请求处理错误：%{1},请求处理错误：%{1}
 "Master 初始化开始 (Orchestrator 模式)","Master 初始化开始 (Orchestrator 模式)"
 "实例名称: %{1}","实例名称: %{1}"
 "运行模式: %{1}","运行模式: %{1}"
-"前台模式: %{1}","前台模式: %{1}"
+"守护进程: %{1}","守护进程: %{1}"
+是,是
+否,否
+"Windows 窗口模式: %{1}","Windows 窗口模式: %{1}"
 "Master 初始化完成","Master 初始化完成"
 "启动 Master 进程...","启动 Master 进程..."
 "已注册 Master PID","已注册 Master PID"
@@ -1340,7 +1412,7 @@ DDoS攻击,DDoS攻击
 "Master PID 索引已移除","Master PID 索引已移除"
 "检测到 Master 退出后仍有子进程存活，已保留实例记录供后续恢复控制","检测到 Master 退出后仍有子进程存活，已保留实例记录供后续恢复控制"
 实例记录已完成清理,实例记录已完成清理
-"共清理 %{1} 个孤儿实例记录，实例 JSON 已保留","共清理 %{1} 个孤儿实例记录，实例 JSON 已保留"
+"共清理 %{1} 个孤儿 endpoint 记录","共清理 %{1} 个孤儿 endpoint 记录"
 "孤儿实例清理过程出错: %{1}","孤儿实例清理过程出错: %{1}"
 "收到 SIGTERM 信号，开始统一停机流程...","收到 SIGTERM 信号，开始统一停机流程..."
 "收到 SIGINT 信号，开始统一停机流程...","收到 SIGINT 信号，开始统一停机流程..."
@@ -1358,6 +1430,7 @@ DDoS攻击,DDoS攻击
 启动锁已释放（回调）,启动锁已释放（回调）
 启动锁已释放,启动锁已释放
 "跳过 SSL 启动后申请：缺少域名配置。","跳过 SSL 启动后申请：缺少域名配置。"
+"跳过 SSL 启动后申请：%{1} 已有未过期证书。","跳过 SSL 启动后申请：%{1} 已有未过期证书。"
 "已触发 SSL 延迟重试：%{1}（pid=%{2}）","已触发 SSL 延迟重试：%{1}（pid=%{2}）"
 "已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）","已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）"
 未找到,未找到
@@ -1471,18 +1544,16 @@ DDoS攻击,DDoS攻击
 已可用,已可用
 "proc_open 函数已启用","proc_open 函数已启用"
 "找到 disable_functions 行，删除 proc_open","找到 disable_functions 行，删除 proc_open"
-"重载未正常结束：未收到完整回执（可能因 IPC 抢占中止、内部提前返回或控制连接异常）","重载未正常结束：未收到完整回执（可能因 IPC 抢占中止、内部提前返回或控制连接异常）"
-"已聚合 %{1} 个 Worker 的 Fiber 池统计","已聚合 %{1} 个 Worker 的 Fiber 池统计"
-"Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据","Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据"
-"维护 Worker #%{1} 启动失败","维护 Worker #%{1} 启动失败"
-"维护 Worker 未在 %{1}s 内全部 READY（IPC）","维护 Worker 未在 %{1}s 内全部 READY（IPC）"
-"维护模式已启用: Dispatcher 已切至维护池, 维护进程 %{1} 个","维护模式已启用: Dispatcher 已切至维护池, 维护进程 %{1} 个"
 "当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}","当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}"
 "[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书","[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书"
 "[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请","[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请"
 "子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书","子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书"
 "HTTPS 已在此域名禁用","HTTPS 已在此域名禁用"
-使用已有证书,使用已有证书
+"[SslCertificateService] Failed to persist reusable global local CA files to %{1}","[SslCertificateService] Failed to persist reusable global local CA files to %{1}"
+"[SslCertificateService] Local CA is now reusable across projects from %{1}","[SslCertificateService] Local CA is now reusable across projects from %{1}"
+"[SslCertificateService] Failed to restore project local CA files from global reusable CA","[SslCertificateService] Failed to restore project local CA files from global reusable CA"
+"[SslCertificateService] Reusing global Weline local CA for this project","[SslCertificateService] Reusing global Weline local CA for this project"
+"[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key","[SslCertificateService] 系统信任库已有 Weline Local Development CA，但没有可复用私钥，将生成新的本地 CA；如需跨项目复用，请配置 wls.ssl.local_ca_dir 或复制 rootCA.key"
 "Failed to generate local CA private key","Failed to generate local CA private key"
 "Failed to generate local CA CSR","Failed to generate local CA CSR"
 "Failed to sign local CA certificate","Failed to sign local CA certificate"
@@ -1643,27 +1714,154 @@ DDoS攻击,DDoS攻击
 "本地域名 %{1} 的证书受保护，跳过清除","本地域名 %{1} 的证书受保护，跳过清除"
 "域名 %{1} 删除 DB 记录失败：%{2}","域名 %{1} 删除 DB 记录失败：%{2}"
 "server:ssl:reload --clear 清理","server:ssl:reload --clear 清理"
-"Linux/Mac SO_REUSEPORT 直连模式","Linux/Mac SO_REUSEPORT 直连模式"
-"使用 %{1} 启动服务器","使用 %{1} 启动服务器"
-"启动 Worker 失败","启动 Worker 失败"
-"Worker 脚本不存在: %{1}","Worker 脚本不存在: %{1}"
-"Worker #%{1} (%{2} 端口: %{3}) - 启动成功 (PID: %{4})","Worker #%{1} (%{2} 端口: %{3}) - 启动成功 (PID: %{4})"
-"Worker #%{1} (端口: %{2}) - 启动失败","Worker #%{1} (端口: %{2}) - 启动失败"
-"HTTP 重定向 Worker (端口: %{1}) - 启动成功","HTTP 重定向 Worker (端口: %{1}) - 启动成功"
-"Master 进程启动成功 (PID: %{1})","Master 进程启动成功 (PID: %{1})"
-"停止实例: %{1}","停止实例: %{1}"
-"实例不存在: %{1}","实例不存在: %{1}"
-"Master 进程已停止","Master 进程已停止"
-"Worker 进程已停止 (%{1} 个)","Worker 进程已停止 (%{1} 个)"
-"HTTP 重定向 Worker 已停止","HTTP 重定向 Worker 已停止"
-"Worker 直接监听端口（SO_REUSEPORT），内核自动负载均衡，无需 Dispatcher 中间层","Worker 直接监听端口（SO_REUSEPORT），内核自动负载均衡，无需 Dispatcher 中间层"
-没有可用的服务器启动策略,没有可用的服务器启动策略
-无可用策略,无可用策略
-"Windows Dispatcher TCP 透传模式","Windows Dispatcher TCP 透传模式"
-"Dispatcher 启动失败","Dispatcher 启动失败"
-"Dispatcher (端口: %{1}) - 启动成功 (PID: %{2})","Dispatcher (端口: %{1}) - 启动成功 (PID: %{2})"
-"Dispatcher 进程已停止","Dispatcher 进程已停止"
-"Dispatcher 监听主端口做 TCP 透传，Worker 各自处理 SSL，多核并行","Dispatcher 监听主端口做 TCP 透传，Worker 各自处理 SSL，多核并行"
+"Current Project",当前项目
+Local,本地
+Path,路径
+Active,运行中
+Inactive,未启用
+Upstream,上游
+"Gateway mode configuration could not be saved.",网关模式配置无法保存。
+"Gateway traffic mode changes require a target WLS restart before the listener topology changes.","Gateway traffic mode changes require a target WLS restart before the listener topology changes."
+"Gateway mode configuration saved.",网关模式配置已保存。
+"Select a Gateway instance before applying routes.","应用路由前请选择一个 Gateway 实例。"
+"Runtime action skipped.",已跳过运行时动作。
+"Select a target WLS instance before applying runtime changes.","应用运行时变更前请选择目标 WLS 实例。"
+"WLS runtime reload requested.","已请求 WLS 运行时重载。"
+"Selected WLS instance %{1} was not found.","Selected WLS instance %{1} was not found."
+"WLS restart command was submitted but no valid PID was returned.","WLS 重启命令已提交，但未返回有效 PID。"
+"WLS restart command submitted for %{1}. Master PID: %{2}","已为 %{1} 提交 WLS 重启命令。Master PID：%{2}"
+"Direct listen","Direct listen"
+Passthrough,Passthrough
+Auto,Auto
+"Prefer SO_REUSEPORT direct worker listening when the runtime supports it. Falls back only after an explicit restart is corrected.","Prefer SO_REUSEPORT direct worker listening when the runtime supports it. Falls back only after an explicit restart is corrected."
+"Force Dispatcher/Gateway passthrough so one listener accepts traffic and routes to workers.","Force Dispatcher/Gateway passthrough so one listener accepts traffic and routes to workers."
+"Let WLS choose the stable topology for the current operating system and runtime profile.","Let WLS choose the stable topology for the current operating system and runtime profile."
+"Direct listen supported",支持直连监听
+"Direct listen unavailable",直连监听不可用
+"Direct listen capability unknown",直连监听能力未知
+"Gateway listen port must be between 1 and 65535.","网关监听端口必须在 1 到 65535 之间。"
+"Gateway listen host is invalid.",网关监听主机无效。
+"AppStore plugin query returned an invalid response.","AppStore 插件查询返回了无效响应。"
+Installed,已安装
+"Plugin required",需要插件
+"Open Capability",打开能力
+"Installed Plugin",已安装插件
+"Install Plugin",安装插件
+"Plugin Panel",插件面板
+"Panel plugin module list refresh failed: %{1}","Panel plugin module list refresh failed: %{1}"
+"Panel plugin registry refresh completed with warnings.",面板插件注册表刷新完成，但存在警告。
+"Panel plugin registry refresh failed: %{1}",面板插件注册表刷新失败：%{1}
+"Panel plugin route refresh failed: %{1}",面板插件路由刷新失败：%{1}
+"Local project",本地项目
+"Gateway enabled",网关已启用
+"Gateway disabled",网关已停用
+"%{1} / %{2} checks ready","%{1} / %{2} 项检查就绪"
+"Core Links",核心链接
+"%{1} / %{2}","%{1} / %{2}"
+"Admin, panel, path, and security scope are ready.",后台、面板、路径和安全范围已就绪。
+"Some core project context still needs setup.",部分核心项目上下文仍需设置。
+"Operation Slots",操作位
+"All WLS operation plugins are installed.","所有 WLS 操作插件均已安装。"
+"%{1} WLS operation plugins need installation.","还有 %{1} 个 WLS 操作插件需要安装。"
+"Security Scope",安全范围
+Ready,就绪
+Review,检查
+"Policy and attack-log links can be scoped safely.",策略和攻击日志链接可以安全限定范围。
+"Security links need project identity first.",安全链接需要先识别项目身份。
+"Gateway Mode",网关模式
+Enabled,已启用
+Off,关闭
+"Gateway route management is enabled.",网关路由管理已启用。
+"Gateway route management can be enabled from the panel.",可以在面板中启用网关路由管理。
+"Needs setup",需要设置
+"Needs review",需要检查
+"All managed projects are ready for panel operations.",所有托管项目已准备好由面板操作。
+"Some projects need core context before operations are safe.",部分项目需要补齐核心上下文后才能安全操作。
+"%{1} of %{2} projects are fully ready.","%{1} / %{2} 个项目完全就绪。"
+"All core links and WLS operation plugins are ready.","核心链接和 WLS 操作插件均已就绪。"
+"%{1} core checks need setup before this project is fully manageable.","该项目还有 %{1} 个核心检查需要设置后才能完全管理。"
+"Project context needs review before it is fully ready.",项目上下文需要检查后才能完全就绪。
+"Scoped editor",项目编辑器
+Marketplace,商城
+"Install plugin",安装插件
+"Current project",当前项目
+"Registered project",已登记项目
+"Gateway route",网关路由
+"Managed project",托管项目
+"PHP Config","PHP 配置"
+"Database Config",数据库配置
+Files,文件
+Deploy,部署
+"Configure PHP","配置 PHP"
+"Configure Database",配置数据库
+"Open Files",打开文件
+"Configure Deploy",配置发布
+"Open editor",打开编辑器
+"PHP profile not selected","未选择 PHP 档案"
+"Database profile not selected",未选择数据库档案
+"Project path ready",项目路径就绪
+"Project path missing",项目路径缺失
+"Project release context ready",项目发布上下文就绪
+"Project release context missing",项目发布上下文缺失
+"local context",本地上下文
+"Managed project does not exist.",托管项目不存在。
+"Managed project ID is invalid.","托管项目 ID 无效。"
+"Project Path",项目路径
+"Runtime profile editable",运行时档案可编辑
+"Click to configure profile",点击配置档案
+"Gateway rule is disabled for this project.",该项目的网关规则已停用。
+"Gateway rule saved.",网关规则已保存。
+"Security rules JSON cannot be empty.","安全规则 JSON 不能为空。"
+"Security rules JSON is invalid.","安全规则 JSON 格式无效。"
+"Security rules saved. WLS workers will reload rules from the update flag.","安全规则已保存。WLS Worker 会通过更新标记重载规则。"
+"Security rules JSON is invalid. Visual fields were not saved.","安全规则 JSON 格式无效，可视化字段未保存。"
+"Security rules JSON is invalid. Project policy was not saved.","Security rules JSON is invalid. Project policy was not saved."
+"Select one managed project before saving a project security policy.","Select one managed project before saving a project security policy."
+"Project security policy removed.","Project security policy removed."
+"Project security policy saved.","Project security policy saved."
+"No events",暂无事件
+"No attacks",暂无攻击
+"All managed projects",全部托管项目
+"Current project: %{1}",当前项目：%{1}
+"%{1} (%{2})",%{1}（%{2}）
+"Rate Limit",限流
+"Window Seconds",窗口秒数
+"Max Requests",最大请求数
+"Block Seconds",封禁秒数
+"Path Rate Limits",路径级限流
+Rules,规则
+"Path Scan",路径扫描
+"Unique Paths","Unique Paths"
+"SSL Handshake","SSL 握手"
+"Max Failures",最大失败次数
+"Fast Close Threshold",快速关闭阈值
+"Unknown Route Ban",未知路由封禁
+"Only In Spike Mode",仅流量突增时启用
+"Consecutive Count",连续次数
+"IP Whitelist","IP 白名单"
+"Whitelisted IPs","白名单 IP"
+"Protected Paths",受保护路径
+Paths,Paths
+"%{1} overrides / %{2} inherited","%{1} 项覆盖 / %{2} 项继承"
+"Project override",项目覆盖
+"Custom equals global",自定义与全局一致
+Inherited,继承
+Disabled,已停用
+"%{1} (%{2}/%{3}s)",%{1}（%{2}/%{3}秒）
+"%{1} entries: %{2}","%{1} entries: %{2}"
+"0 entries","0 entries"
+"Global rules",全局规则
+"Common rules saved",通用规则已保存
+"Project policy saved",项目策略已保存
+"Project policy removed",项目策略已移除
+"Rules JSON saved","规则 JSON 已保存"
+"Policy updated",策略已更新
+"Visual editor",可视化编辑器
+"Project policy editor",项目策略编辑器
+"Advanced JSON","高级 JSON"
+Configured,已配置
+"%{1} entries","%{1} 条"
+"WLS performance panel traces were cleared","WLS performance panel traces were cleared"
 定时器间隔必须大于0,定时器间隔必须大于0
 "定时器需要 pcntl 扩展或事件循环支持","定时器需要 pcntl 扩展或事件循环支持"
 放行健康检查（开发模式）,放行健康检查（开发模式）
@@ -1703,6 +1901,7 @@ DDoS攻击,DDoS攻击
 后端主机,后端主机
 后端端口,后端端口
 "后端使用 SSL","后端使用 SSL"
+优先级,优先级
 数字越大优先级越高,数字越大优先级越高
 描述,描述
 保存,保存
@@ -1720,8 +1919,9 @@ DDoS攻击,DDoS攻击
 后端端口为项目实际监听端口,后端端口为项目实际监听端口
 保存失败,保存失败
 请求失败,请求失败
-请先填写后端主机和端口,请先填写后端主机和端口
+操作失败,操作失败
 连接失败,连接失败
+请先填写后端主机和端口,请先填写后端主机和端口
 "配置 WLS Gateway 的域名路由规则","配置 WLS Gateway 的域名路由规则"
 总规则数,总规则数
 新建规则,新建规则
@@ -1734,10 +1934,10 @@ DDoS攻击,DDoS攻击
 测试,测试
 删除,删除
 "确定要应用配置到 Gateway 吗？","确定要应用配置到 Gateway 吗？"
-应用失败,应用失败
-操作失败,操作失败
 确定要删除此规则吗？,确定要删除此规则吗？
+应用失败,应用失败
 删除失败,删除失败
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
 正在加载服务器状态...,正在加载服务器状态...
 "Session 全部字段","Session 全部字段"
 关闭,关闭
@@ -1770,6 +1970,7 @@ DDoS攻击,DDoS攻击
 已最优,已最优
 查看安装指南,查看安装指南
 已连接,已连接
+不可用,不可用
 共享状态管理,共享状态管理
 "覆盖 Session 与 Memory Service 的状态、检索、清理能力","覆盖 Session 与 Memory Service 的状态、检索、清理能力"
 "Session 数","Session 数"
@@ -2020,6 +2221,340 @@ LiteSSL,LiteSSL
 确定要批量续签选中的,确定要批量续签选中的
 个证书吗？,个证书吗？
 正在批量续签，请稍候...,正在批量续签，请稍候...
+Incremental,增量
+"Global fallback","Global fallback"
+Global,全量
+"No route modules",无路由模块
+Failed,失败
+Unknown,未知
+"Production AppStore","生产 AppStore"
+"Local AppStore","本地 AppStore"
+"Configured AppStore","已配置 AppStore"
+"Unknown AppStore","未知 AppStore"
+"Plugin Marketplace",插件商城
+Security,安全
+"Attack Logs",攻击日志
+"Security Rules",安全规则
+"Project Security Policy","Project Security Policy"
+"Policy Audit","Policy Audit"
+Projects,项目
+Gateway,网关
+Dashboard,仪表盘
+Dark,暗色
+Light,亮色
+Overview,Overview
+"Project Policy","Project Policy"
+"Gateway Sites",网关站点
+"Direct listen first, proxy fallback",优先直连监听，代理兜底
+"%{1}/%{2} active","%{1}/%{2} 已启用"
+"WLS Runtime","WLS Runtime"
+"Workers, session, memory service",Worker、会话、内存服务
+"%{1} running, %{2} workers","%{1} 个运行中，%{2} 个 Worker"
+"Attack rules and protection logs",攻击规则与防护日志
+"%{1} blocked in 7d","7 天内拦截 %{1} 次"
+"SSL Certificates","SSL 证书"
+"Certificate and domain binding",证书与域名绑定
+"WLS Panel navigation","WLS 面板导航"
+"WLS Standalone Backend","WLS 独立后台"
+"%{1} secondary menu","%{1} secondary menu"
+"Plugin Capabilities",插件能力
+"Toggle %{1} menu","Toggle %{1} menu"
+"Plugin secondary menu","Plugin secondary menu"
+"Independent Server Panel",独立服务器面板
+"Toggle theme",切换主题
+"Project Admin",项目后台
+"Exit to Backend",返回框架后台
+"Panel operation result",面板操作结果
+"Panel operation warning",面板操作警告
+"AppStore endpoint","AppStore 端点"
+"Marketplace Endpoint",商城端点
+Source,来源
+"Plugin refresh summary",插件刷新摘要
+"Capability Reload",能力重载
+"Panel plugin refresh result",面板插件刷新结果
+"Routes refreshed",路由已刷新
+"Routes unchanged",路由未变化
+"Registry mode",注册表模式
+"Registry modules",注册表模块
+"Route modules",路由模块
+"WLS plugins","WLS 插件"
+"Panel menu entries",面板菜单入口
+"Marketplace controls","Marketplace controls"
+"WLS Plugin Source","WLS Plugin Source"
+"AppStore filtered by WLS module tags","AppStore filtered by WLS module tags"
+"Marketplace installation opens the AppStore with %{1} and backend surface filters. Installed modules are listed below after they declare WLS panel capability metadata.","Marketplace installation opens the AppStore with %{1} and backend surface filters. Installed modules are listed below after they declare WLS panel capability metadata."
+"Installed: %{1}","Installed: %{1}"
+"Open AppStore","Open AppStore"
+"AppStore Installed","AppStore Installed"
+"Refresh Panel Plugins",刷新面板插件
+"Panel Capabilities",面板能力
+"Installed Panel Plugins",已安装面板插件
+"%{1} installed","已安装 %{1} 个"
+"Installed plugin discovery failed: %{1}",已安装插件发现失败：%{1}
+"No installed WLS plugins yet.","暂未安装 WLS 插件。"
+"Install modules tagged module:wls to extend this standalone panel.","安装带有 module:wls 标签的模块即可扩展这个独立面板。"
+Plugin,Plugin
+Module,Module
+Tags,Tags
+"Panel Entry","Panel Entry"
+Action,Action
+"No tags","No tags"
+"Not declared","Not declared"
+"Open Panel",打开面板
+"No panel entry","No panel entry"
+"No plugin page selected.","No plugin page selected."
+"Choose a plugin capability from the sidebar, or refresh panel plugins after installing a WLS module.","Choose a plugin capability from the sidebar, or refresh panel plugins after installing a WLS module."
+"Security Overview","Security Overview"
+Protection,防护
+"Advanced Rules",高级规则
+"Security data warning",安全数据警告
+"Events In 7d","7 天事件"
+"Blocked In 7d","7 天拦截"
+"Critical In 7d","7 天严重事件"
+"Blocked IPs","封禁 IP"
+"Project security drilldown",项目安全钻取
+"Project Security Drilldown",项目安全钻取
+"Each managed project shows its 7-day attack posture before you drill into filtered logs.","每个托管项目会先展示 7 天攻击态势，再进入筛选日志钻取。"
+"7-day scope","7 天范围"
+"No project security scope found.",暂无项目安全范围。
+"Add managed projects or gateway domains to compare project-level attack posture.",添加托管项目或网关域名后，可对比项目级攻击态势。
+"No recent events",暂无最近事件
+Events,事件
+Blocked,已拦截
+Critical,Critical
+"Top Type",主要类型
+"Latest Event",最近事件
+"Latest IP","最近 IP"
+"View Logs",查看日志
+"Edit Policy","Edit Policy"
+"Project security policy","Project security policy"
+"Override selected protection rules for one managed domain while keeping common rules as fallback.","Override selected protection rules for one managed domain while keeping common rules as fallback."
+"Custom policy","Custom policy"
+"Select one project to edit its policy.","Select one project to edit its policy."
+"Use Edit Policy on a project card or choose a concrete project scope in the log filter.","Use Edit Policy on a project card or choose a concrete project scope in the log filter."
+Project,项目
+Domain,域名
+Updated,Updated
+"Not saved","Not saved"
+"Enable project override","Enable project override"
+"Policy inheritance map","Policy inheritance map"
+"Policy Inheritance Map",策略继承图
+"Compare common rules with the selected project policy before saving changes.",保存前对比通用规则和当前项目策略。
+"No inheritance details available.",暂无继承明细。
+"Select a project policy to compare common and project-level rule values.",请选择项目策略以对比通用规则和项目级规则值。
+"Global Value",全局值
+"Project Effective",项目生效值
+"Enable rule",启用规则
+"Specific path prefixes can override the global rate limit. Clear a path to remove that row; fill the blank row to add one.",指定路径前缀可以覆盖全局限流。清空路径可删除该行；填写空白行可新增一条。
+"Path Prefix",路径前缀
+"One entry per line",每行一条
+"Save Project Policy","Save Project Policy"
+"Remove Custom Policy","Remove Custom Policy"
+"Security policy audit","Security policy audit"
+"Security Policy Audit",安全策略审计
+"Recent policy changes are recorded without storing the full rule payload in the panel audit list.",最近的策略变更会记录在面板审计中，但不会保存完整规则内容。
+"Latest changes",最新变更
+"Audit Action",审计动作
+"All actions",全部动作
+"Audit Source",审计来源
+"All sources",全部来源
+"Audit Domain",审计域名
+"Use * for all domains","输入 * 查看全部域名"
+"Changed Section",变更规则段
+"Any section",任意规则段
+"Search Audit",搜索审计
+"Action, source, domain, or section",动作、来源、域名或规则段
+"Audit Limit",审计数量
+"Apply Audit Filters",应用审计筛选
+"Reset Audit",重置审计
+"No policy changes recorded yet.",暂无策略变更记录。
+"Saving common rules or a project policy will create an audit entry here.",保存通用规则或项目策略后会在这里生成审计记录。
+"Unknown time","Unknown time"
+Scope,Scope
+All,All
+"Project Label",项目标签
+Changes,变更
+"Changed rule sections",变更规则区块
+"Common Rule Editor",常用规则编辑器
+"Visual fields update common AttackDetector rule keys before the merged JSON is saved.","可视化字段会先更新常用 AttackDetector 规则键，再保存合并后的 JSON。"
+"Max Unique Paths",最大不同路径数
+"Protected Path List",受保护路径列表
+"No rule changes pending.",暂无待保存规则变更。
+"Rules JSON is invalid; preview is unavailable.","规则 JSON 无效，暂无法预览。"
+"%{1} pending changes","%{1} 项待保存变更"
+Before,变更前
+After,变更后
+"Rule Change Preview",规则变更预览
+"Preview shows what the visual fields will overwrite before the merged JSON is saved.","预览会显示保存合并 JSON 前，可视化字段将覆盖哪些规则。"
+"Changing a visual field will show the affected rule keys here.",修改可视化字段后，会在这里显示受影响的规则键。
+"Merged Rules JSON","合并后的规则 JSON"
+"Advanced JSON stays available; visual fields overwrite matching common keys on save.","高级 JSON 仍可编辑；保存时可视化字段会覆盖对应的常用键。"
+"Save Security Rules",保存安全规则
+"Security rule summary",安全规则摘要
+"Rule Summary",规则摘要
+"Quick visibility for the most important WLS protection switches.","快速查看 WLS 关键防护开关。"
+"Recent attack events",最近攻击事件
+"Last Events",最近事件
+"Recent Attack Logs",最近攻击日志
+"Open Full Log",打开完整日志
+"Project Scope",项目范围
+Instance,实例
+"All instances",全部实例
+Severity,严重级别
+"All severities",全部级别
+"Attack Type",攻击类型
+"All types",全部类型
+"Blocked Status",拦截状态
+"All events",全部事件
+"Blocked only",仅已拦截
+"Observed only",仅观察
+"Page Size",每页数量
+"Apply Filters",应用筛选
+Reset,重置
+"No attack events found.",暂无攻击事件。
+"WLS will list recent AttackDetector events here after traffic is inspected.","WLS 检查流量后，会在这里展示最近的 AttackDetector 事件。"
+Observed,已观察
+"Showing %{1} of %{2} attack logs","显示 %{1} / %{2} 条攻击日志"
+"Attack log pagination",攻击日志分页
+Previous,上一页
+"Page %{1} of %{2}","第 %{1} / %{2} 页"
+Next,下一页
+"Panel summary",面板摘要
+"Managed Projects",托管项目
+"Gateway Rules",网关规则
+"WLS Plugins","WLS 插件"
+"Security Events",安全事件
+"Dashboard data warnings",面板数据警告
+"Some dashboard data could not be loaded.",部分面板数据暂时无法加载。
+"Panel Plugins",面板插件
+"Operations Capability Center",运维能力中心
+"%{1} required","缺少 %{1} 个"
+"Open WLS Marketplace","打开 WLS 插件商城"
+"Operation capability discovery warning: %{1}",运维能力发现警告：%{1}
+"No operation capabilities are defined.",尚未定义运维能力。
+"WLS will show PHP, database, file manager, and deploy plugin slots here.","WLS 会在这里显示 PHP、数据库、文件管理和部署插件槽位。"
+Capability,Capability
+"Required Signal","Required Signal"
+Status,状态
+"No WLS panel page declared yet.","No WLS panel page declared yet."
+"Opens inside WLS panel shell.","Opens inside WLS panel shell."
+"AppStore opens with WLS tags prefilled.","AppStore opens with WLS tags prefilled."
+"Plugin Menu",插件菜单
+"WLS Panel Plugin Entries","WLS 面板插件入口"
+"Manage Plugins",管理插件
+"Plugin contribution discovery warning: %{1}",插件贡献发现警告：%{1}
+"No plugin panel entries yet.",暂无插件面板入口。
+"Installed WLS plugins can declare wls_panel.menu entries in module meta to extend this standalone panel.","已安装的 WLS 插件可以在模块 meta 中声明 wls_panel.menu 入口来扩展这个独立面板。"
+"Plugin Entry","Plugin Entry"
+"Secondary Menu","Secondary Menu"
+"This installed plugin declared a WLS panel menu entry.","这个已安装插件声明了一个 WLS 面板菜单入口。"
+"Contributed by %{1}","由 %{1} 贡献"
+"No secondary menu declared","No secondary menu declared"
+"Plugin Page","Plugin Page"
+"+%{1} more","+%{1} more"
+Open,Open
+"Uses WLS sidebar menu and native shell.","Uses WLS sidebar menu and native shell."
+"No panel entry declared",未声明面板入口
+Operations,操作
+"Gateway, Security, Runtime",网关、安全、运行时
+"Gateway Settings",网关设置
+"Advanced Gateway",高级网关
+"Gateway instance discovery failed: %{1}","Gateway 实例发现失败：%{1}"
+"Multiple Gateway instances are running. Select one before applying routes.","当前有多个 Gateway 实例运行中，应用路由前请选择一个目标。"
+"Gateway environment variables are overriding the saved panel configuration for this runtime.",当前运行时的网关环境变量正在覆盖面板保存的配置。
+"Active Routes",活跃路由
+"Gateway Enabled",启用网关
+"Gateway Running",运行中网关
+"Traffic Mode","Traffic Mode"
+"Gateway Mode Configuration",网关模式配置
+"Saved to wls.gateway in env config. Listener changes need a WLS restart or reload to spawn the Gateway process.","保存到 env 配置的 wls.gateway。监听变更需要重启或重载 WLS 才会拉起 Gateway 进程。"
+"Effective: Enabled",当前生效：已启用
+"Effective: Disabled",当前生效：已停用
+"Enable Gateway mode",启用网关模式
+"Gateway Listen",网关监听
+"Apply Target",应用目标
+"Auto select Gateway","自动选择 Gateway"
+"Runtime Action",运行时动作
+"Reload workers after saving","保存后重载 Worker"
+"Restart target WLS instance after saving","保存后重启目标 WLS 实例"
+"Apply routes only",仅应用路由
+"Apply routes after saving",保存后应用路由
+"Worker reload refreshes runtime workers. Listener, Gateway role, or traffic mode changes need a target instance restart.","Worker reload refreshes runtime workers. Listener, Gateway role, or traffic mode changes need a target instance restart."
+"Effective Listen",当前生效监听
+"Saved Listen",已保存监听
+"Effective Mode","Effective Mode"
+"Saved Mode","Saved Mode"
+"Direct Listen Capability",直连监听能力
+"Runtime OS",运行时系统
+"Save Gateway Mode",保存网关模式
+"Gateway Target",网关目标
+"Apply Routes Now",立即应用路由
+"No WLS instances discovered.","未发现 WLS 实例。"
+"Start a WLS instance with Gateway enabled to apply routes from this panel.","启动启用 Gateway 的 WLS 实例后，可在此面板应用路由。"
+"No matching WLS instances.","No matching WLS instances."
+"Showing %{1}-%{2} of %{3} instances","Showing %{1}-%{2} of %{3} instances"
+"Gateway instance list tools","Gateway instance list tools"
+"Search WLS instances","Search WLS instances"
+"Search name, listen, topology, status","Search name, listen, topology, status"
+"Rows per page","Rows per page"
+State,State
+"Main Listen",主监听
+Topology,Topology
+Actions,Actions
+Running,运行中
+Stopped,已停止
+SO_REUSEPORT,SO_REUSEPORT
+"%{1}/%{2} ready","%{1}/%{2} 就绪"
+"Unnamed WLS","Unnamed WLS"
+"Selected target","Selected target"
+"WLS runtime","WLS runtime"
+"Not configured","Not configured"
+Unavailable,不可用
+Proxy/runtime,Proxy/runtime
+Details,Details
+"Gateway listen not configured","未配置 Gateway 监听"
+"Control Port",控制端口
+Master,Master
+"Gateway Processes","Gateway 进程"
+"Project Switching",项目切换
+"Managed WLS Projects","托管 WLS 项目"
+"New Project",新建项目
+"Edit Managed Project",编辑托管项目
+"Add Managed Project",添加托管项目
+"Clear Editing",清除编辑
+"Project Name",项目名称
+"Project Admin URL","项目后台 URL"
+"Child WLS Panel URL","子 WLS 面板 URL"
+"PHP Profile","PHP 档案"
+"Database Profile",数据库档案
+"Backend Host",后端主机
+"Backend Port",后端端口
+"Backend SSL","后端 SSL"
+Description,描述
+"Save Project",保存项目
+"Project Operations",项目运维
+"Project Config Center",项目配置中心
+"%{1} projects","%{1} 个项目"
+"%{1} plugin slots ready","%{1} 个插件槽位就绪"
+"%{1} ready projects","%{1} 个项目就绪"
+"%{1} / %{2} operation slots ready","%{1} / %{2} 个操作位就绪"
+Readiness,Readiness
+Context,Context
+"Quick Links","Quick Links"
+"No readiness data","No readiness data"
+"Safe Context",安全上下文
+"Path ready",路径就绪
+"Path missing",路径缺失
+Admin,Admin
+Panel,Panel
+Policy,Policy
+"WLS instance list tools","WLS instance list tools"
+"Search name, domain, path, status","Search name, domain, path, status"
+Managed,Managed
+Database,数据库
+PHP,PHP
+Edit,编辑
+Remove,移除
 无效的监听地址：%{1},无效的监听地址：%{1}
 "Windows 模式：单进程运行","Windows 模式：单进程运行"
 "Weline Server 只能在 CLI 模式下运行","Weline Server 只能在 CLI 模式下运行"

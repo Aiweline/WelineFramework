@@ -1,0 +1,184 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$config = \is_array($config ?? null) ? $config : [];
+$defaults = \is_array($defaults ?? null) ? $defaults : [];
+
+$value = static function (array $data, string $path, mixed $fallback = ''): mixed {
+    $cursor = $data;
+    foreach (\explode('.', $path) as $segment) {
+        if (!\is_array($cursor) || !\array_key_exists($segment, $cursor)) {
+            return $fallback;
+        }
+        $cursor = $cursor[$segment];
+    }
+
+    return $cursor;
+};
+
+$field = function (string $path, string $label, string $unit, string $help, string $step = '1') use ($config, $defaults, $value): void {
+    $name = 'config[' . \str_replace('.', '][', $path) . ']';
+    $id = 'cache-policy-' . \str_replace(['.', '_'], '-', $path);
+    $current = $value($config, $path, $value($defaults, $path, ''));
+    $default = $value($defaults, $path, '');
+    ?>
+    <div class="cache-policy-field">
+        <label for="<?= htmlspecialchars($id) ?>"><?= __($label) ?></label>
+        <div class="cache-policy-input-row">
+            <input id="<?= htmlspecialchars($id) ?>" type="number" min="0" step="<?= htmlspecialchars($step) ?>"
+                   name="<?= htmlspecialchars($name) ?>" value="<?= htmlspecialchars((string)$current) ?>">
+            <span><?= __($unit) ?></span>
+        </div>
+        <p><?= __($help) ?> <?= __('默认值：%{1}', $default) ?></p>
+    </div>
+    <?php
+};
+
+$saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
+?>
+
+<style>
+    .cache-policy-page { display: flex; flex-direction: column; gap: 18px; }
+    .cache-policy-hero { background: linear-gradient(135deg, #0f172a, #164e63); color: #fff; border-radius: 18px; padding: 24px; box-shadow: 0 18px 45px rgba(15, 23, 42, .18); }
+    .cache-policy-hero h2 { color: #fff; margin: 0 0 8px; font-size: 26px; font-weight: 800; }
+    .cache-policy-hero p { margin: 0; max-width: 860px; color: rgba(255, 255, 255, .82); line-height: 1.7; }
+    .cache-policy-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px; box-shadow: 0 10px 32px rgba(15, 23, 42, .06); }
+    .cache-policy-card h3 { margin: 0 0 6px; font-size: 18px; font-weight: 750; color: #111827; }
+    .cache-policy-card > p { margin: 0 0 18px; color: #64748b; }
+    .cache-policy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .cache-policy-field { border: 1px solid #edf2f7; border-radius: 14px; padding: 14px; background: #f8fafc; }
+    .cache-policy-field label { display: block; color: #0f172a; font-weight: 700; margin-bottom: 10px; }
+    .cache-policy-input-row { display: flex; align-items: center; gap: 10px; }
+    .cache-policy-input-row input { width: 150px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 9px 10px; font-size: 14px; background: #fff; }
+    .cache-policy-input-row span { color: #475569; font-weight: 650; }
+    .cache-policy-field p { margin: 10px 0 0; color: #64748b; font-size: 12px; line-height: 1.5; }
+    .cache-policy-actions { display: flex; align-items: center; gap: 12px; position: sticky; bottom: 14px; background: rgba(255, 255, 255, .92); backdrop-filter: blur(10px); border: 1px solid #e5e7eb; border-radius: 14px; padding: 12px; }
+    .cache-policy-actions button { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 750; background: #0f766e; color: #fff; cursor: pointer; }
+    .cache-policy-actions button:disabled { cursor: wait; opacity: .65; }
+    .cache-policy-message { color: #0f766e; font-weight: 650; }
+    .cache-policy-message.is-error { color: #b91c1c; }
+</style>
+
+<div class="cache-policy-page">
+    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+        <h4 class="mb-sm-0"><?= __('缓存策略') ?></h4>
+        <div class="page-title-right">
+            <ol class="breadcrumb m-0">
+                <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin/system/cache') ?>"><?= __('缓存管理') ?></a></li>
+                <li class="breadcrumb-item active"><?= __('缓存策略') ?></li>
+            </ol>
+        </div>
+    </div>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <section class="cache-policy-hero">
+        <h2><?= __('运行时缓存策略') ?></h2>
+        <p><?= __('这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。') ?></p>
+    </section>
+
+    <form id="cache-policy-form" method="post" action="<?= htmlspecialchars($saveUrl) ?>">
+        <section class="cache-policy-card">
+            <h3><?= __('页面片段缓存') ?></h3>
+            <p><?= __('控制首页、分类页、商品页主内容旁路缓存时间。') ?></p>
+            <div class="cache-policy-grid">
+                <?php $field('page.home_view_ttl', '首页内容缓存', '秒', '首页商品、分类和 Banner 片段缓存。'); ?>
+                <?php $field('page.category_view_ttl', '分类页内容缓存', '秒', '分类页商品、筛选和分页片段缓存。'); ?>
+                <?php $field('page.product_view_ttl', '商品页内容缓存', '秒', '商品详情主内容缓存。'); ?>
+            </div>
+        </section>
+
+        <section class="cache-policy-card">
+            <h3><?= __('搜索与筛选缓存') ?></h3>
+            <p><?= __('控制目录浏览和筛选聚合结果的旁路缓存。') ?></p>
+            <div class="cache-policy-grid">
+                <?php $field('search.browse_result_ttl', '浏览结果缓存', '秒', '分类浏览、筛选 facet 和分页结果缓存。'); ?>
+            </div>
+        </section>
+
+        <section class="cache-policy-card">
+            <h3><?= __('主题渲染缓存') ?></h3>
+            <p><?= __('控制 header/footer/head、插槽布局和可缓存组件输出。') ?></p>
+            <div class="cache-policy-grid">
+                <?php $field('theme.partial_output_ttl', 'Partial 输出缓存', '秒', 'head、header、footer、breadcrumb 输出缓存。'); ?>
+                <?php $field('theme.hook_output_ttl', 'Hook 输出缓存', '秒', '可缓存 Hook 文件 HTML 输出缓存。'); ?>
+                <?php $field('theme.hook_aggregate_ttl', 'Hook 聚合缓存', '秒', 'header、语言货币切换、body-end 等 Hook 聚合输出缓存。'); ?>
+                <?php $field('theme.slot_layout_ttl', '布局数据缓存', '秒', '已发布主题布局数据缓存。'); ?>
+                <?php $field('theme.widget_output_ttl', '组件输出缓存', '秒', '可缓存组件 HTML 输出缓存。'); ?>
+            </div>
+        </section>
+
+        <section class="cache-policy-card">
+            <h3><?= __('开发工具缓存') ?></h3>
+            <p><?= __('控制 Dev Panel 旁路数据保留时间。') ?></p>
+            <div class="cache-policy-grid">
+                <?php $field('dev.trace_ttl', '请求链路缓存', '秒', '请求链路旁路 payload 保留时间。'); ?>
+                <?php $field('dev.routes_ttl', '路由数据缓存', '秒', 'Dev Panel 路由分组数据缓存。'); ?>
+                <?php $field('dev.docs_ttl', '文档数据缓存', '秒', 'Dev Panel 文档模块、搜索和详情缓存。'); ?>
+            </div>
+        </section>
+
+        <section class="cache-policy-card">
+            <h3><?= __('站点数据缓存') ?></h3>
+            <p><?= __('控制店铺、货币、语言和分类树等全站通用数据的内存缓存时间。') ?></p>
+            <div class="cache-policy-grid">
+                <?php $field('site.currency_ttl', '货币数据缓存', '秒', '货币定义和汇率缓存。'); ?>
+                <?php $field('site.i18n_locale_ttl', '语言区域缓存', '秒', '语言和区域公共数据缓存。'); ?>
+                <?php $field('site.store_ttl', '店铺数据缓存', '秒', '当前网站店铺匹配结果缓存。'); ?>
+                <?php $field('site.category_tree_ttl', '分类树缓存', '秒', '前台分类树、搜索分类和导航分类缓存。'); ?>
+            </div>
+        </section>
+
+        <section class="cache-policy-card">
+            <h3><?= __('共享 Memory 超时') ?></h3>
+            <p><?= __('控制热路径直连 Memory Service 的等待上限。数值过大可能拖慢业务响应，数值过小会更容易回退到本地或文件缓存。') ?></p>
+            <div class="cache-policy-grid">
+                <?php $field('memory.connect_timeout', '连接超时', '秒', '建立 Memory Service 连接的最大等待时间。', '0.001'); ?>
+                <?php $field('memory.timeout', '读写超时', '秒', '单次 Memory 读写最大等待时间。', '0.001'); ?>
+                <?php $field('memory.acquire_timeout', '获取连接超时', '秒', '从连接池获取连接的最大等待时间。', '0.001'); ?>
+            </div>
+        </section>
+
+        <div class="cache-policy-actions">
+            <button type="submit" id="cache-policy-submit"><?= __('保存策略并清理缓存') ?></button>
+            <span id="cache-policy-message" class="cache-policy-message"></span>
+        </div>
+    </form>
+</div>
+
+<script>
+    (function () {
+        var form = document.getElementById('cache-policy-form');
+        var button = document.getElementById('cache-policy-submit');
+        var message = document.getElementById('cache-policy-message');
+        if (!form || !button || !message) {
+            return;
+        }
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            button.disabled = true;
+            message.className = 'cache-policy-message';
+            message.textContent = '<?= __('正在保存...') ?>';
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                credentials: 'same-origin',
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
+            }).then(function (response) {
+                return response.json();
+            }).then(function (payload) {
+                if (!payload || Number(payload.code) !== 200) {
+                    throw new Error(payload && payload.msg ? payload.msg : '<?= __('保存失败') ?>');
+                }
+                message.textContent = payload.msg || '<?= __('保存成功') ?>';
+            }).catch(function (error) {
+                message.className = 'cache-policy-message is-error';
+                message.textContent = error && error.message ? error.message : '<?= __('保存失败') ?>';
+            }).finally(function () {
+                button.disabled = false;
+            });
+        });
+    })();
+</script>

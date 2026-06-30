@@ -16,8 +16,8 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Service\SitemapRegistryService;
 use Weline\Seo\Service\WebSitemapData;
 use Weline\Seo\Service\SitemapAdapterRegistry;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Model\SitemapUrl;
-use Weline\Websites\Model\Website;
 
 /**
  * Sitemap E2E 验证命令
@@ -30,7 +30,7 @@ class Verify implements CommandInterface
     private WebSitemapData $webSitemapData;
     private SitemapAdapterRegistry $adapterRegistry;
     private SitemapUrl $sitemapUrlModel;
-    private Website $websiteModel;
+    private SeoWebsiteDirectory $websiteDirectory;
     
     private array $errors = [];
     private array $warnings = [];
@@ -42,13 +42,13 @@ class Verify implements CommandInterface
         WebSitemapData $webSitemapData,
         SitemapAdapterRegistry $adapterRegistry,
         SitemapUrl $sitemapUrlModel,
-        Website $websiteModel
+        SeoWebsiteDirectory $websiteDirectory
     ) {
         $this->registryService = $registryService;
         $this->webSitemapData = $webSitemapData;
         $this->adapterRegistry = $adapterRegistry;
         $this->sitemapUrlModel = $sitemapUrlModel;
-        $this->websiteModel = $websiteModel;
+        $this->websiteDirectory = $websiteDirectory;
     }
 
     public function execute(array $args = [], array $options = []): string
@@ -119,11 +119,11 @@ class Verify implements CommandInterface
     {
         $this->printTest('检查数据库 URL 同步');
         
-        $websites = $this->websiteModel->reset()->select()->fetch()->getItems();
+        $websites = $this->websiteDirectory->listWebsites();
         
         foreach ($websites as $website) {
-            $websiteId = (int)$website->getId();
-            $websiteCode = $website->getData('code') ?: 'website_' . $websiteId;
+            $websiteId = (int)($website['website_id'] ?? 0);
+            $websiteCode = (string)($website['code'] ?? ('website_' . $websiteId));
             
             $count = $this->sitemapUrlModel->getActiveUrlCount($websiteId);
             

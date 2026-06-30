@@ -23,6 +23,12 @@ $title = $this->getData('title') ?? __('分享到');
 $platforms = $this->getData('platforms') ?? ['facebook', 'twitter', 'linkedin', 'whatsapp', 'email'];
 $style = $this->getData('style') ?? 'icon';
 $layout = $this->getData('layout') ?? 'horizontal';
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE
+    | JSON_UNESCAPED_SLASHES
+    | JSON_HEX_TAG
+    | JSON_HEX_APOS
+    | JSON_HEX_AMP
+    | JSON_HEX_QUOT;
 
 // 平台配置
 $platformConfig = [
@@ -69,6 +75,7 @@ $widgetId = 'social-share-' . uniqid();
             </button>
         <?php endforeach; ?>
     </div>
+    <span class="share-status" role="status" aria-live="polite"></span>
 </div>
 
 <style>
@@ -151,6 +158,11 @@ $widgetId = 'social-share-' . uniqid();
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
+.widget-social-share .share-status {
+    font-size: 13px;
+    color: #666;
+}
+
 .widget-social-share.style-text .share-btn:hover {
     background: var(--btn-color);
     color: #fff;
@@ -159,11 +171,28 @@ $widgetId = 'social-share-' . uniqid();
 
 <script>
 (function() {
-    const widget = document.getElementById('<?= $widgetId ?>');
+    const widget = document.getElementById(<?= json_encode($widgetId, $jsonForScriptFlags) ?>);
     if (!widget) return;
+
+    const shareMessages = {
+        wechatQr: <?= json_encode((string)__('请使用微信扫描二维码分享'), $jsonForScriptFlags) ?>
+    };
     
     const pageUrl = encodeURIComponent(window.location.href);
     const pageTitle = encodeURIComponent(document.title);
+
+    function showShareNotice(message, type) {
+        if (window.Weline && window.Weline.Toast && typeof window.Weline.Toast.show === 'function') {
+            window.Weline.Toast.show({ message: message, type: type || 'info' });
+            return;
+        }
+        const status = widget.querySelector('.share-status');
+        if (status) {
+            status.textContent = message;
+            return;
+        }
+        console.info(message);
+    }
     
     widget.querySelectorAll('.share-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -184,7 +213,7 @@ $widgetId = 'social-share-' . uniqid();
             
             if (action === 'qrcode') {
                 // 显示微信二维码弹窗
-                alert('<?= __('请使用微信扫描二维码分享') ?>');
+                showShareNotice(shareMessages.wechatQr, 'info');
                 return;
             }
             

@@ -97,6 +97,9 @@ class Maintenance implements ObserverInterface
             http_response_code(503);
             header('Content-Type: application/json; charset=utf-8');
             header('Retry-After: ' . $retryAfter);
+            header('Cache-Control: no-store, no-cache, must-revalidate');
+            header('Pragma: no-cache');
+            header('Expires: 0');
             echo json_encode($payload, JSON_UNESCAPED_UNICODE);
             exit;
         }

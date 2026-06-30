@@ -13,7 +13,7 @@ $hookName = $this->getData('hook_name') ?? '';
             <h2><?= htmlspecialchars($hook['display_name'] ?? $hookName) ?></h2>
             <div class="hook-code">
                 <code id="hook-code-value"><?= htmlspecialchars($hookName) ?></code>
-                <button type="button" class="btn-copy" onclick="copyHookName()" title="复制 Hook 名">
+                <button type="button" class="btn-copy" data-hook-copy="1" title="复制 Hook 名">
                     <i class="mdi mdi-content-copy"></i>
                 </button>
             </div>
@@ -545,6 +545,13 @@ code {
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
+document.addEventListener('click', function(event) {
+    const trigger = event.target.closest('[data-hook-copy]');
+    if (!trigger) return;
+    event.preventDefault();
+    copyHookName();
+});
+
 function copyHookName() {
     const hookCode = document.getElementById('hook-code-value');
     if (!hookCode) return;

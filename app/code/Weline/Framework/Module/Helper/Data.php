@@ -20,6 +20,7 @@ use Weline\Framework\System\File\Io\File;
 use Weline\Framework\Helper\AbstractHelper;
 use Weline\Framework\Http\RequestInterface;
 use Weline\Framework\Module\Handle;
+use Weline\Framework\Module\Service\ModuleScanService;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Framework\Register\Register;
 use Weline\Framework\Register\Router\Data\DataInterface;
@@ -30,6 +31,7 @@ class Data extends AbstractHelper
     private array $parent_class_arr = [];
     private File $file;
     private Scan $scan;
+    private ModuleScanService $moduleScanService;
     
     /** @var array 收集的控制器属性事件数据，用于批量发送 */
     private array $collected_controller_attributes_events = [];
@@ -39,11 +41,15 @@ class Data extends AbstractHelper
 
     public function __construct(
         File $file,
-        Scan $scan
+        Scan $scan,
+        $moduleScanService = null
     )
     {
         $this->file = $file;
         $this->scan = $scan;
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService($scan);
     }
 
     public function getClassNamespace(\Weline\Framework\System\File\Data\File $controllerFile)
@@ -83,10 +89,15 @@ class Data extends AbstractHelper
         if (!$this->isDisabled($modules, $name)) {
             $module = $modules[$name];
             # API 路由注册
-            $api_dir = $path . Handle::api_DIR . DS;
-            if (is_dir($api_dir)) {
-                $api_classs = [];
-                $this->scan->globFile($api_dir . '*', $api_classs, '.php', $path, $module['namespace_path'] . '\\', true, true, $module['base_path']);
+            $api_classs = $this->moduleScanService->globPhpClassesInDirectory(
+                $path,
+                Handle::api_DIR,
+                $module['namespace_path'],
+                true,
+                true,
+                $module['base_path']
+            );
+            if ($api_classs) {
                 foreach ($api_classs as $api_class) {
                     // 查找控制器文件
                     $classRelativePath = str_replace('\\', DS, str_replace($module['namespace_path'] . '\\', '', $api_class)) . '.php';
@@ -204,6 +215,7 @@ class Data extends AbstractHelper
                                 'module_name' => $name,
                                 'params' => $params
                             ];
+                            $this->collectFrontendQueryBinRouteAlias($name, $params);
 
                             // 原始路由与 baseRouter 路由不一致时，注册原始路由
                             $origin_route = str_replace('-', '', $route);
@@ -325,11 +337,15 @@ class Data extends AbstractHelper
             }
 
             # PC 路由注册
-            $pc_dir = $path . Handle::pc_DIR . DS;
-
-            if (is_dir($pc_dir)) {
-                $pc_classs = [];
-                $this->scan->globFile($pc_dir . '*', $pc_classs, '.php', $path, $module['namespace_path'] . '\\', true, true, $module['base_path']);
+            $pc_classs = $this->moduleScanService->globPhpClassesInDirectory(
+                $path,
+                Handle::pc_DIR,
+                $module['namespace_path'],
+                true,
+                true,
+                $module['base_path']
+            );
+            if ($pc_classs) {
                 foreach ($pc_classs as $pc_class) {
                     // 查找控制器文件
                     $classRelativePath = str_replace('\\', DS, str_replace($module['namespace_path'] . '\\', '', $pc_class)) . '.php';
@@ -801,5 +817,37 @@ class Data extends AbstractHelper
         $text = '<?php return ' . var_export($routers, true) . ';';
         $this->file->write($text);
         $this->file->close();
+    }
+
+    /**
+     * The browser calls /api/framework/query-bin, while Router::Api() matches
+     * generated frontend REST rules after the outer /api segment is removed.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function collectFrontendQueryBinRouteAlias(string $moduleName, array $params): void
+    {
+        $route = (string)($params['router'] ?? '');
+        if (!str_starts_with($route, 'api/framework/query-bin')) {
+            return;
+        }
+
+        $class = (string)($params['class'] ?? '');
+        if (
+            $class === ''
+            || !is_a($class, \Weline\Framework\Controller\Api\QueryBin::class, true)
+        ) {
+            return;
+        }
+
+        $aliasParams = $params;
+        $aliasParams['base_router'] = 'framework';
+        $aliasParams['router'] = preg_replace('#^api/#', '', $route) ?: $route;
+
+        $this->collected_route_registrations[] = [
+            'type' => RegisterDataInterface::ROUTER,
+            'module_name' => $moduleName,
+            'params' => $aliasParams,
+        ];
     }
 }

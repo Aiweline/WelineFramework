@@ -32,7 +32,7 @@ class RequestFilter extends DataObject
             'int', 'integer'   => (int)$data,
             'float'            => (float)$data,
             'double'           => (float)$data,
-            'string'           => (string)$data,
+            'string'           => self::filterString($data),
             'array'            => self::filterArray($data),
             'bool', 'boolean'  => (bool)$data,
             'json'             => json_decode($data, true),
@@ -50,6 +50,31 @@ class RequestFilter extends DataObject
             'nl2br'            => nl2br($data),
             default            => $data,
         };
+    }
+
+    /**
+     * 字符串过滤器：标量按常规转换；数组/对象用 JSON，避免 (string)数组 触发告警。
+     */
+    private static function filterString(mixed $data): string
+    {
+        if (\is_string($data)) {
+            return $data;
+        }
+        if ($data === null) {
+            return '';
+        }
+        if (\is_bool($data)) {
+            return $data ? '1' : '';
+        }
+        if (\is_int($data) || \is_float($data)) {
+            return (string)$data;
+        }
+        if (\is_array($data) || \is_object($data)) {
+            $json = \json_encode($data, JSON_UNESCAPED_UNICODE);
+            return \is_string($json) ? $json : '';
+        }
+
+        return '';
     }
 
     private static function filterSerialized(mixed $data): mixed

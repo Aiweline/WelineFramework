@@ -12,6 +12,8 @@ declare(strict_types=1);
 namespace Weline\Framework\Extends;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\Registry\Service\RegistryModulePresence;
 
 /**
  * 扩展注册表管理
@@ -75,13 +77,21 @@ class ExtendsRegistry
     public function refresh(): bool
     {
         // 扫描所有扩展
+        RegistryProgress::log('Extends scan: all modules started');
         $scannedData = $this->scanner->scanAllExtends();
+        RegistryProgress::count('Extends scan', count($scannedData), 'modules with extends data');
 
         // 进行完备性检查
+        RegistryProgress::log('Extends completeness check started');
         $completenessReport = $this->completenessChecker->checkAll($scannedData);
+        RegistryProgress::count('Extends completeness check', count($completenessReport), 'module reports');
 
         // 组织数据结构
+        RegistryProgress::log('Extends organize registry data');
         $registry = $this->organizeRegistryData($scannedData, $completenessReport);
+        RegistryProgress::count('Extends registry', count($registry), 'modules organized');
+        unset($scannedData, $completenessReport);
+        RegistryProgress::log('Extends raw scan data released');
 
         // 保存注册表
         return $this->saveRegistry($registry);
@@ -97,25 +107,35 @@ class ExtendsRegistry
     public function refreshForModules(array $moduleNames): bool
     {
         // 1. 加载现有注册表
+        RegistryProgress::log('Extends incremental: loading current registry');
         $registry = $this->getRegistry(true);
 
         // 清理已卸载/禁用模块残留，避免对无效模块继续做 extends 完备性/继承关系处理
         $this->purgeInactiveModulesFromRegistry($registry);
         
         // 2. 清除目标模块的旧数据
+        RegistryProgress::log('Extends incremental: clearing modules ' . implode(', ', $moduleNames));
         $this->clearModuleExtends($registry, $moduleNames);
         
         // 3. 扫描目标模块的新数据
+        RegistryProgress::log('Extends incremental: scanning target modules');
         $scannedData = $this->scanner->scanModules($moduleNames);
+        RegistryProgress::count('Extends incremental scan', count($scannedData), 'modules with extends data');
         
         // 4. 进行完备性检查（仅对扫描的数据）
+        RegistryProgress::log('Extends incremental: completeness check');
         $completenessReport = $this->completenessChecker->checkAll($scannedData);
         
         // 5. 组织新数据
+        RegistryProgress::log('Extends incremental: organizing new data');
         $newRegistry = $this->organizeRegistryData($scannedData, $completenessReport);
+        unset($scannedData, $completenessReport);
+        RegistryProgress::log('Extends incremental raw scan data released');
         
         // 6. 合并到现有注册表
+        RegistryProgress::log('Extends incremental: merging into current registry');
         $this->mergeExtendsRegistry($registry, $newRegistry);
+        unset($newRegistry);
         
         // 7. 保存注册表
         return $this->saveRegistry($registry);
@@ -129,7 +149,7 @@ class ExtendsRegistry
         $env = Env::getInstance();
 
         foreach (array_keys($registry) as $moduleName) {
-            if (!$env->getModuleStatus((string)$moduleName)) {
+            if (!RegistryModulePresence::isActivePresent((string)$moduleName, $env)) {
                 unset($registry[$moduleName]);
             }
         }
@@ -140,7 +160,7 @@ class ExtendsRegistry
             }
 
             foreach (array_keys($targetData['extended_by']) as $sourceModule) {
-                if (!$env->getModuleStatus((string)$sourceModule)) {
+                if (!RegistryModulePresence::isActivePresent((string)$sourceModule, $env)) {
                     unset($targetData['extended_by'][$sourceModule]);
                 }
             }
@@ -495,6 +515,7 @@ class ExtendsRegistry
      */
     public function saveRegistry(array $registry): bool
     {
+        RegistryProgress::log('Extends save registry: generated/extends.php');
         $content = "<?php return " . w_var_export($registry, true) . ";\n";
 
         // 确保目录存在
@@ -512,10 +533,12 @@ class ExtendsRegistry
             
             // 清除 ExtendsData 的静态缓存，确保其他使用 ExtendsData 的代码能立即看到新生成的文件
             ExtendsData::clearCache();
+            RegistryProgress::log('Extends save registry finished');
             
             return true;
         }
 
+        RegistryProgress::log('Extends save registry failed');
         return false;
     }
 
@@ -525,6 +548,12 @@ class ExtendsRegistry
      * @param string $moduleName 模块名
      * @return bool
      */
+    public function clearMemoryCache(): void
+    {
+        $this->cachedRegistry = null;
+        $this->cachedFileMtime = null;
+    }
+
     public function hasExtends(string $moduleName): bool
     {
         $registry = $this->getRegistry();

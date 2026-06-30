@@ -48,4 +48,17 @@ final class ServerInstanceManagerIpcControlTest extends TestCase
 
         \fclose($server);
     }
+
+    public function testInstanceIpcControllableReturnsFalseWithoutPersistedEndpointInfo(): void
+    {
+        $manager = new class extends ServerInstanceManager {
+            public function getPersistedInstanceInfo(string $name): ?\Weline\Server\Service\Contract\ServerInstanceInfo
+            {
+                unset($name);
+                return null;
+            }
+        };
+
+        self::assertFalse($manager->isInstanceIpcControllable('missing-endpoint'));
+    }
 }

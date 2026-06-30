@@ -9,6 +9,9 @@
  */
 namespace Weline\Theme\Helper;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Meta\Service\ParamDefinitionNormalizer;
+
 class ComponentMetaParser
 {
     /**
@@ -127,20 +130,15 @@ class ComponentMetaParser
         }
         
         // 提取参数定义 @param name {type=string, default=..., name=..., description=...}
-        if (preg_match_all('/@param\s+(\w+)\s*\{([^}]+)\}/', $content, $matches, PREG_SET_ORDER)) {
-            foreach ($matches as $match) {
-                $paramName = trim($match[1]);
-                $attributesStr = trim($match[2]);
-                $attributes = self::parseAttributes($attributesStr, $filePath, "@param.{$paramName}");
-                
-                $meta['params'][] = [
-                    'name' => $paramName,
-                    'type' => $attributes['type'] ?? 'mixed',
-                    'default' => $attributes['default'] ?? null,
-                    'name_label' => $attributes['name'] ?? $paramName,
-                    'description' => $attributes['description'] ?? '',
-                    'required' => isset($attributes['required']) && $attributes['required'] !== false
-                ];
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        $paramDefinitions = $normalizer->extractParamAnnotations($content);
+        if (!empty($paramDefinitions)) {
+            foreach ($paramDefinitions as $paramName => $definition) {
+                $definition['param_name'] = $paramName;
+                $definition['name_label'] = $definition['label'] ?? $definition['name'] ?? $paramName;
+                $definition['name'] = $paramName;
+                $meta['params'][] = $definition;
             }
         }
         

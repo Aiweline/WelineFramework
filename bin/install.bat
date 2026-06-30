@@ -17,10 +17,12 @@ set "PATH_ONLY="
 set "DO_PHP=0"
 set "DO_PGSQL=0"
 set "DO_MYSQL=0"
-set "BRANCH=master"
+set "BRANCH=main"
+set "ENV_FILE_ARG="
 
 REM Parse args (avoid for %%a in () when %* is empty - causes ") was unexpected" in cmd)
 set "FORCE_INSTALL="
+set "AUTO_YES="
 if "%~1"=="" (
   set "DO_PHP=1"
   set "DO_PGSQL=1"
@@ -29,6 +31,8 @@ if "%~1"=="" (
     if "%%a"=="--path-only" set "PATH_ONLY=1"
     if "%%a"=="-f" set "FORCE_INSTALL=1"
     if "%%a"=="--force" set "FORCE_INSTALL=1"
+    if "%%a"=="-y" set "AUTO_YES=1"
+    if "%%a"=="--yes" set "AUTO_YES=1"
     if "%%a"=="php"   set "DO_PHP=1"
     if "%%a"=="pgsql" set "DO_PGSQL=1"
     if "%%a"=="mysql" set "DO_MYSQL=1"
@@ -39,11 +43,28 @@ REM Parse -b <branch> for code install when run.php is missing
 set "PREV="
 for %%a in (%*) do (
   if "!PREV!"=="-b" set "BRANCH=%%a"
+  if "!PREV!"=="--env-file" set "ENV_FILE_ARG=%%a"
   set "PREV=%%a"
 )
+for %%a in (%*) do (
+  set "ARG_VALUE=%%a"
+  if "!ARG_VALUE:~0,11!"=="--env-file=" set "ENV_FILE_ARG=!ARG_VALUE:~11!"
+)
 
-REM Read weline.env (optional)
-if exist "%ROOT%\weline.env" for /f "usebackq eol=# tokens=1* delims==" %%a in ("%ROOT%\weline.env") do set "%%a=%%b"
+REM Read env file (optional)
+set "ENV_READ_FILE=%ROOT%\weline.env"
+if defined ENV_FILE_ARG (
+  if exist "%ENV_FILE_ARG%" (
+    set "ENV_READ_FILE=%ENV_FILE_ARG%"
+  ) else (
+    set "ENV_READ_FILE=%ROOT%\%ENV_FILE_ARG%"
+  )
+  if not exist "!ENV_READ_FILE!" (
+    set "CECHO_MSG=ERROR: env file not found: !ENV_READ_FILE!" & call :cecho Red ""
+    exit /b 1
+  )
+)
+if exist "%ENV_READ_FILE%" for /f "usebackq eol=# tokens=1* delims==" %%a in ("%ENV_READ_FILE%") do set "%%a=%%b"
 
 REM Versions (weline.env or default)
 if not defined INSTALL_PGSQL_VERSION set "INSTALL_PGSQL_VERSION=16"
@@ -182,9 +203,34 @@ if defined MYSQL_OK (
 )
 :skip_mysql
 
-REM 安装后：将 php、pgsql、项目 bin（w 命令）写入用户 PATH（与 Linux/Mac 一致，所有系统都处理好）
+call :cecho Cyan "========== Composer =========="
+set "COMPOSER_PHAR=%SERVER%\composer.phar"
+set "COMPOSER_OK="
+if exist "%COMPOSER_PHAR%" (
+  for %%F in ("%COMPOSER_PHAR%") do set "COMPOSER_SIZE=%%~zF"
+  if defined COMPOSER_SIZE if !COMPOSER_SIZE! GEQ 500000 set "COMPOSER_OK=1"
+)
+if defined COMPOSER_OK (
+  set "CECHO_MSG=composer.phar already present at %COMPOSER_PHAR%." & call :cecho Green ""
+  if exist "%PHP_EXE%" (
+    for /f "usebackq tokens=*" %%v in (`"%PHP_EXE%" "%COMPOSER_PHAR%" --no-ansi --version 2^>nul`) do (
+      set "CECHO_MSG=%%v" & call :cecho Gray ""
+      goto :composer_ver_done
+    )
+  )
+) else (
+  if exist "%COMPOSER_PHAR%" (
+    set "CECHO_MSG=composer.phar at %COMPOSER_PHAR% is invalid or too small; run.php will replace it." & call :cecho Yellow ""
+  ) else (
+    set "CECHO_MSG=composer.phar not at %COMPOSER_PHAR%; run.php will download it." & call :cecho Yellow ""
+  )
+)
+:composer_ver_done
+
+REM 安装后：将 php、pgsql、composer（extend/server）、项目 bin（w 命令）写入用户 PATH（与 Linux/Mac 一致）
 if exist "%PHP_DIR%\php.exe" call :add_path "%PHP_DIR%"
 if exist "%SERVER%\pgsql\bin\psql.exe" call :add_path "%SERVER%\pgsql\bin"
+if exist "%SERVER%" call :add_path "%SERVER%"
 call :add_path "%ROOT%\bin"
 
 REM 若 setup\server_installer\run.php 不存在，说明代码未安装：按 -b 指定分支拉取，未指定则 master
@@ -200,13 +246,20 @@ if not exist "%ROOT%\setup\server_installer\run.php" (
       exit /b 1
     )
   )
-  set "CECHO_MSG=run.php not found. Installing framework code from gitee (branch: %BRANCH%)..." & call :cecho Yellow ""
-  set "REPO_URL=https://gitee.com/aiweline/WelineFramework.git"
+  set "CECHO_MSG=run.php not found. Installing framework code from GitHub (branch: %BRANCH%)..." & call :cecho Yellow ""
+  if defined WELINE_REPO_URL (
+    set "REPO_URL=%WELINE_REPO_URL%"
+  ) else (
+    set "REPO_URL=https://github.com/Aiweline/PageBuilder.git"
+  )
+  set "CLONE_URL=%REPO_URL%"
+  if defined WELINE_GITHUB_TOKEN call :build_clone_url "%REPO_URL%"
+  if not defined WELINE_GITHUB_TOKEN if defined GITHUB_TOKEN call :build_clone_url "%REPO_URL%"
   if exist "%ROOT%\.git" (
     git -C "%ROOT%" fetch origin 2>nul
     git -C "%ROOT%" checkout %BRANCH% 2>nul || git -C "%ROOT%" pull origin %BRANCH% 2>nul
   ) else (
-    git clone -b %BRANCH% %REPO_URL% "%ROOT%\temp_clone_weline" 2>nul
+    git clone -b %BRANCH% %CLONE_URL% "%ROOT%\temp_clone_weline" 2>nul
     if not exist "%ROOT%\temp_clone_weline\setup\server_installer\run.php" (
       set "CECHO_MSG=Clone failed or branch invalid. Manual: git clone -b %BRANCH% %REPO_URL% ." & call :cecho Red ""
       exit /b 1
@@ -236,10 +289,37 @@ goto :do_run_installer
 set "CECHO_MSG=ERROR: PHP not found. Install to %PHP_DIR% or add php to PATH." & call :cecho Red ""
 exit /b 1
 :do_run_installer
+if exist "%PHP_DIR%\php.exe" if exist "%ROOT%\setup\server_installer\bootstrap_php_ini.php" (
+  call :cecho Gray "Pre-configuring php.ini (opcache file_cache for Windows ASLR)..."
+  if exist "%PHP_DIR%\php.installer.ini" (
+    "%PHP_EXE%" -c "%PHP_DIR%\php.installer.ini" -d opcache.enable=0 -d opcache.enable_cli=0 "%ROOT%\setup\server_installer\bootstrap_php_ini.php"
+  ) else (
+    "%PHP_EXE%" -d opcache.enable=0 -d opcache.enable_cli=0 "%ROOT%\setup\server_installer\bootstrap_php_ini.php"
+  )
+  if errorlevel 1 (
+    set "CECHO_MSG=WARNING: bootstrap_php_ini failed; run.php may hit Opcache ASLR fatal on Windows." & call :cecho Yellow ""
+  )
+)
 set "RUN_ARGS="
 if defined FORCE_INSTALL set "RUN_ARGS=-f"
-call :cecho Gray "Running: php setup\server_installer\run.php %RUN_ARGS%"
-"!USE_PHP!" "%ROOT%\setup\server_installer\run.php" %RUN_ARGS%
+if defined AUTO_YES set "RUN_ARGS=%RUN_ARGS% -y"
+if exist "%PHP_DIR%\php.installer.ini" (
+  if defined ENV_FILE_ARG (
+    call :cecho Gray "Running: %PHP_EXE% -c %PHP_DIR%\php.installer.ini setup\server_installer\run.php %RUN_ARGS% --env-file %ENV_FILE_ARG%"
+    "%PHP_EXE%" -c "%PHP_DIR%\php.installer.ini" "%ROOT%\setup\server_installer\run.php" %RUN_ARGS% --env-file "%ENV_FILE_ARG%"
+  ) else (
+    call :cecho Gray "Running: %PHP_EXE% -c %PHP_DIR%\php.installer.ini setup\server_installer\run.php %RUN_ARGS%"
+    "%PHP_EXE%" -c "%PHP_DIR%\php.installer.ini" "%ROOT%\setup\server_installer\run.php" %RUN_ARGS%
+  )
+) else (
+  if defined ENV_FILE_ARG (
+    call :cecho Gray "Running: %PHP_EXE% setup\server_installer\run.php %RUN_ARGS% --env-file %ENV_FILE_ARG%"
+    "%PHP_EXE%" "%ROOT%\setup\server_installer\run.php" %RUN_ARGS% --env-file "%ENV_FILE_ARG%"
+  ) else (
+    call :cecho Gray "Running: %PHP_EXE% setup\server_installer\run.php %RUN_ARGS%"
+    "%PHP_EXE%" "%ROOT%\setup\server_installer\run.php" %RUN_ARGS%
+  )
+)
 if errorlevel 1 exit /b 1
 echo.
 cd /d "%ROOT%"
@@ -336,4 +416,20 @@ REM 1) Persist: append to User PATH (no duplicate entries)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$dir=$env:ADD_PATH_VALUE.TrimEnd('\'); $p=[Environment]::GetEnvironmentVariable('Path','User'); if ($p -eq $null) { $p='' }; $entries=($p -split ';' | ForEach-Object { $_.Trim().TrimEnd('\') } | Where-Object { $_ }); $exists=($entries | Where-Object { $_ -eq $dir }); if (-not $exists) { $new=if ($p) { $p.TrimEnd(';')+';'+$dir } else { $dir }; [Environment]::SetEnvironmentVariable('Path', $new, 'User'); Write-Host 'User PATH saved.' -ForegroundColor DarkGray }"
 REM 2) Current session: prepend so PATH works without reopening terminal
 set "PATH=%PATH%;%ADD_PATH_VALUE%"
+exit /b 0
+
+:build_clone_url
+set "BUILD_REPO_URL=%~1"
+set "TOKEN_VALUE=%WELINE_GITHUB_TOKEN%"
+if not defined TOKEN_VALUE set "TOKEN_VALUE=%GITHUB_TOKEN%"
+if not defined TOKEN_VALUE (
+  set "CLONE_URL=%BUILD_REPO_URL%"
+  exit /b 0
+)
+echo %BUILD_REPO_URL% | findstr /B /C:"https://github.com/" >nul
+if errorlevel 1 (
+  set "CLONE_URL=%BUILD_REPO_URL%"
+  exit /b 0
+)
+set "CLONE_URL=%BUILD_REPO_URL:https://=https://x-access-token:%TOKEN_VALUE%@%"
 exit /b 0

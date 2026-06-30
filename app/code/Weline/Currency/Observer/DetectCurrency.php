@@ -40,7 +40,7 @@ class DetectCurrency implements ObserverInterface
         }
         
         // 缓存未命中，查询数据库
-        if ($currency === false) {
+        if ($currency === false || $currency === null) {
             /** @var Currency $currencyModel */
             $currencyModel = ObjectManager::getInstance(Currency::class);
             $currency = $currencyModel->clear()

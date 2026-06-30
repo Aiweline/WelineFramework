@@ -251,6 +251,14 @@ readonly class ThemeLayoutVersionService
         // 2. 标记当前版本为已发布
         $version->setIsPublished(true)->save();
 
+        // 2.1 发布前将目标版本快照写入 draft，确保 published 与版本记录一致
+        // （否则可能出现版本表 is_published=1，但 theme_layout published 仍是旧快照）
+        $snapshotData = $version->getSnapshotData();
+        if ($this->layoutHasWidgets($snapshotData)) {
+            $this->clearDraft($themeId, $pageType);
+            $this->restoreSnapshotToDraft($themeId, $pageType, $snapshotData);
+        }
+
         // 3. 使用现有的发布逻辑（draft -> published）
         $result = $this->layoutService->publishLayout($themeId, $pageType);
         
@@ -320,6 +328,35 @@ readonly class ThemeLayoutVersionService
         }
 
         return $versions;
+    }
+
+    public function getVersion(int $themeId, string $pageType, int $versionId): ?ThemeLayoutVersion
+    {
+        if ($themeId <= 0 || $pageType === '' || $versionId <= 0) {
+            return null;
+        }
+
+        $version = $this->versionModel->reset()->load($versionId);
+        if (!$version->getVersionId()) {
+            return null;
+        }
+
+        if ((int)$version->getThemeId() !== $themeId || (string)$version->getPageType() !== $pageType) {
+            return null;
+        }
+
+        return $version;
+    }
+
+    public function getVersionSnapshot(int $themeId, string $pageType, int $versionId): ?array
+    {
+        $version = $this->getVersion($themeId, $pageType, $versionId);
+        if (!$version) {
+            return null;
+        }
+
+        $snapshot = $version->getSnapshotData();
+        return is_array($snapshot) ? $snapshot : [];
     }
 
     /**
@@ -544,6 +581,20 @@ readonly class ThemeLayoutVersionService
         } catch (\Exception $e) {
             // 静默失败
         }
+    }
+
+    /**
+     * @param array<string, mixed> $layoutData
+     */
+    private function layoutHasWidgets(array $layoutData): bool
+    {
+        foreach ($layoutData as $areaData) {
+            if (!empty($areaData['widgets'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

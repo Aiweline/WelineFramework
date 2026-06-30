@@ -13,6 +13,7 @@ namespace Weline\Backend\Service;
 
 use Weline\Acl\Model\Acl;
 use Weline\Backend\Config\MenuXmlReader;
+use Weline\Backend\Model\Menu;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -121,6 +122,7 @@ class MenuCollector
         $this->validateMenuParentChain($file_menus, $seen_db_sources);
 
         $this->executeBatch($diff, $file_menus);
+        $this->syncLegacyMenuTable($file_menus);
 
         return [$modules_xml_menus, [], $modules_info, count($file_menus), $diff];
     }
@@ -188,6 +190,12 @@ class MenuCollector
                 $menu['module'] = $module;
                 $menu['parent_source'] = $this->normalizeParentSource((string)($menu['parent'] ?? ''));
                 $menu['route'] = trim($menu['action'] ?? '', '/');
+                $menu['access_mode'] = Acl::normalizeAccessMode(
+                    (string)($menu['access_mode'] ?? $menu['accessMode'] ?? ''),
+                    'GET'
+                );
+                $menu['scope_group'] = (string)($menu['scope_group'] ?? $menu['scopeGroup'] ?? '');
+                $menu['api_exposable'] = $this->normalizeMenuBoolean($menu['api_exposable'] ?? $menu['apiExposable'] ?? false);
                 unset($menu['parent'], $menu['action']);
 
                 $menu = $this->replaceModuleAction($menu, $modules_info);
@@ -208,6 +216,11 @@ class MenuCollector
     private function normalizeParentSource(string $parentSource): string
     {
         return self::LEGACY_PARENT_SOURCE_MAP[$parentSource] ?? $parentSource;
+    }
+
+    private function normalizeMenuBoolean(mixed $value): int
+    {
+        return (int)filter_var($value, FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
@@ -231,14 +244,13 @@ class MenuCollector
             $this->acl->where(Acl::schema_fields_MODULE, $modulesFilter, 'in');
         }
 
-        $this->acl->select();
-        $query = $this->acl->getQuery();
+        $dbMenus = $this->acl->select()->fetchArray();
 
         $seen_db_sources = [];
         $to_update = [];
         $removed = []; // [source_id => module]，用于后续展开子节点并区分 to_delete / to_disable
 
-        foreach ($query->fetchIterator('', 1) as $row) {
+        foreach ($dbMenus as $row) {
             $sourceId = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
             if ($sourceId === '') {
                 continue;
@@ -322,6 +334,9 @@ class MenuCollector
             'parent_source' => Acl::schema_fields_PARENT_SOURCE,
             'is_enable' => Acl::schema_fields_IS_ENABLE,
             'module' => Acl::schema_fields_MODULE,
+            'access_mode' => Acl::schema_fields_ACCESS_MODE,
+            'scope_group' => Acl::schema_fields_SCOPE_GROUP,
+            'api_exposable' => Acl::schema_fields_API_EXPOSABLE,
         ];
         
         foreach ($fields as $fileKey => $dbKey) {
@@ -392,6 +407,9 @@ class MenuCollector
             Acl::schema_fields_IS_BACKEND => (int)($file_data['is_backend'] ?? 1),
             Acl::schema_fields_TYPE => Acl::type_MENUS,
             Acl::schema_fields_ACL_ORIGIN => Acl::acl_origin_menu_xml,
+            Acl::schema_fields_ACCESS_MODE => $file_data['access_mode'] ?? Acl::ACCESS_MODE_READ,
+            Acl::schema_fields_SCOPE_GROUP => $file_data['scope_group'] ?? '',
+            Acl::schema_fields_API_EXPOSABLE => (int)($file_data['api_exposable'] ?? 0),
             Acl::schema_fields_DOCUMENT => ($file_data['is_system'] ?? 0) ? __('系统菜单') : __('用户菜单'),
         ];
 
@@ -420,6 +438,9 @@ class MenuCollector
             Acl::schema_fields_REWRITE => '',
             Acl::schema_fields_TYPE => Acl::type_MENUS,
             Acl::schema_fields_ACL_ORIGIN => Acl::acl_origin_menu_xml,
+            Acl::schema_fields_ACCESS_MODE => $file_data['access_mode'] ?? Acl::ACCESS_MODE_READ,
+            Acl::schema_fields_SCOPE_GROUP => $file_data['scope_group'] ?? '',
+            Acl::schema_fields_API_EXPOSABLE => (int)($file_data['api_exposable'] ?? 0),
             Acl::schema_fields_DOCUMENT => ($file_data['is_system'] ?? 0) ? __('系统菜单') : __('用户菜单'),
             Acl::schema_fields_IS_ENABLE => (int)($file_data['is_enable'] ?? 1),
             Acl::schema_fields_IS_BACKEND => (int)($file_data['is_backend'] ?? 1),
@@ -457,6 +478,104 @@ class MenuCollector
     }
 
     /**
+     * Keep the legacy m_menu table aligned for older admin helpers that still read it.
+     *
+     * @param array<string, array> $fileMenus
+     */
+    private function syncLegacyMenuTable(array $fileMenus): void
+    {
+        $fileSources = array_keys($fileMenus);
+
+        if (empty($fileSources)) {
+            /** @var Menu $menuModel */
+            $menuModel = ObjectManager::getInstance(Menu::class, [], false);
+            $menuModel->reset()->delete()->fetch();
+            return;
+        }
+
+        /** @var Menu $menuModel */
+        $menuModel = ObjectManager::getInstance(Menu::class, [], false);
+        $menuModel->reset()
+            ->where(Menu::schema_fields_SOURCE, $fileSources, 'not in')
+            ->delete()
+            ->fetch();
+
+        $sourceMeta = [];
+        foreach ($this->topologicalSortAdd($fileSources, $fileMenus) as $source) {
+            $menu = $fileMenus[$source] ?? [];
+            if (empty($menu)) {
+                continue;
+            }
+
+            $parentSource = (string)($menu['parent_source'] ?? '');
+            $parentMeta = $sourceMeta[$parentSource] ?? null;
+            $pid = $parentMeta['id'] ?? 0;
+            $level = $parentMeta ? ((int)$parentMeta['level'] + 1) : 1;
+
+            $row = [
+                Menu::schema_fields_NAME => (string)($menu['name'] ?? $source),
+                Menu::schema_fields_TITLE => (string)($menu['title'] ?? $menu['name'] ?? $source),
+                Menu::schema_fields_SOURCE => $source,
+                Menu::schema_fields_PID => $pid,
+                Menu::schema_fields_LEVEL => $level,
+                Menu::schema_fields_PATH => '',
+                Menu::schema_fields_PARENT_SOURCE => $parentSource,
+                Menu::schema_fields_ACTION => (string)($menu['route'] ?? ''),
+                Menu::schema_fields_MODULE => (string)($menu['module'] ?? ''),
+                Menu::schema_fields_ICON => (string)($menu['icon'] ?? ''),
+                Menu::schema_fields_ORDER => (int)($menu['order'] ?? 0),
+                Menu::schema_fields_IS_SYSTEM => (int)($menu['is_system'] ?? 1),
+                Menu::schema_fields_IS_ENABLE => (int)($menu['is_enable'] ?? 1),
+                Menu::schema_fields_IS_BACKEND => (int)($menu['is_backend'] ?? 1),
+            ];
+
+            /** @var Menu $lookup */
+            $lookup = ObjectManager::getInstance(Menu::class, [], false);
+            $lookup->reset()->clearData();
+            $saved = $lookup->where(Menu::schema_fields_SOURCE, $source)->find()->fetch();
+            if ($saved->getData(Menu::schema_fields_ID)) {
+                /** @var Menu $updater */
+                $updater = ObjectManager::getInstance(Menu::class, [], false);
+                $updater->reset()->clearData();
+                $updater->where(Menu::schema_fields_SOURCE, $source)
+                    ->update($row)
+                    ->fetch();
+            } else {
+                /** @var Menu $creator */
+                $creator = ObjectManager::getInstance(Menu::class, [], false);
+                $creator->reset()->clearData();
+                $creator->setData($row)->save();
+
+                /** @var Menu $createdLookup */
+                $createdLookup = ObjectManager::getInstance(Menu::class, [], false);
+                $createdLookup->reset()->clearData();
+                $saved = $createdLookup->where(Menu::schema_fields_SOURCE, $source)->find()->fetch();
+            }
+            $id = (int)$saved->getData(Menu::schema_fields_ID);
+            $path = $parentMeta && $parentMeta['path'] !== ''
+                ? $parentMeta['path'] . '/' . $id
+                : (string)$id;
+
+            /** @var Menu $pathUpdater */
+            $pathUpdater = ObjectManager::getInstance(Menu::class, [], false);
+            $pathUpdater->reset()->clearData();
+            $pathUpdater->where(Menu::schema_fields_SOURCE, $source)
+                ->update([
+                    Menu::schema_fields_PID => $pid,
+                    Menu::schema_fields_LEVEL => $level,
+                    Menu::schema_fields_PATH => $path,
+                ])
+                ->fetch();
+
+            $sourceMeta[$source] = [
+                'id' => $id,
+                'level' => $level,
+                'path' => $path,
+            ];
+        }
+    }
+
+    /**
      * 获取禁用的模块列表
      */
     private function getDisabledModules(): array
@@ -488,13 +607,13 @@ class MenuCollector
 
         $field = Acl::schema_fields_ACL_ORIGIN;
         $this->acl->reset();
-        $this->acl->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
+        $childrenRows = $this->acl->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
             ->where($field, Acl::acl_origin_user, '!=')
-            ->select();
+            ->select()
+            ->fetchArray();
 
-        $query = $this->acl->getQuery();
-        foreach ($query->fetchIterator('', 1) as $child) {
+        foreach ($childrenRows as $child) {
             $s = $child[Acl::schema_fields_SOURCE_ID] ?? '';
             if ($s !== '' && !in_array($s, $sources, true)) {
                 $sources[] = $s;

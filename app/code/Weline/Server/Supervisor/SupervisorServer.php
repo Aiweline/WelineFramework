@@ -144,6 +144,10 @@ final class SupervisorServer
         $read = [$this->serverSocket];
         $write = [];
         foreach ($this->sessions as $session) {
+            if (!\is_resource($session->socket)) {
+                $this->closeSession($session->id);
+                continue;
+            }
             $read[] = $session->socket;
             if ($session->hasPendingWrites()) {
                 $write[] = $session->socket;
@@ -224,8 +228,21 @@ final class SupervisorServer
 
     private function handleReadable(SupervisorSession $session): int
     {
+        if (!\is_resource($session->socket)) {
+            $this->closeSession($session->id);
+            return 1;
+        }
+
         $data = @\fread($session->socket, 65536);
-        if ($data === false || ($data === '' && @\feof($session->socket))) {
+        if ($data === false) {
+            if (!@\feof($session->socket)) {
+                return $this->flushBufferedMessages($session);
+            }
+            $this->closeSession($session->id);
+            return 1;
+        }
+
+        if ($data === '' && @\feof($session->socket)) {
             $this->closeSession($session->id);
             return 1;
         }
@@ -237,6 +254,15 @@ final class SupervisorServer
         $session->readBuffer .= $data;
         $session->lastActivityAt = \microtime(true);
         $this->sessions[$session->id] = $session;
+
+        return $this->flushBufferedMessages($session);
+    }
+
+    private function flushBufferedMessages(SupervisorSession $session): int
+    {
+        if (!isset($this->sessions[$session->id])) {
+            return 0;
+        }
 
         $messages = 0;
         while (($newlinePos = \strpos($session->readBuffer, "\n")) !== false) {
@@ -267,8 +293,21 @@ final class SupervisorServer
             return false;
         }
 
-        $written = @\fwrite($session->socket, $session->writeBuffer);
+        if (!\is_resource($session->socket)) {
+            $this->closeSession($session->id);
+            return false;
+        }
+
+        try {
+            $written = @\fwrite($session->socket, $session->writeBuffer);
+        } catch (\Throwable) {
+            $this->closeSession($session->id);
+            return false;
+        }
         if ($written === false) {
+            if (!@\feof($session->socket)) {
+                return false;
+            }
             $this->closeSession($session->id);
             return false;
         }
@@ -292,27 +331,28 @@ final class SupervisorServer
             return $session;
         }
 
+        $isHello = $type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_HELLO;
+        $isReady = $type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_READY;
+
+        $slotId = $isHello ? (string)($decoded['slot_id'] ?? $session->slotId) : $session->slotId;
         $workerId = $session->workerId;
-        $slotId = (string)($decoded['slot_id'] ?? $session->slotId);
-        if ($workerId <= 0 && \preg_match('/#(\d+)$/', $slotId, $matches) === 1) {
+        if ($isHello && $workerId <= 0 && \preg_match('/#(\d+)$/', $slotId, $matches) === 1) {
             $workerId = (int)$matches[1];
         }
 
         $port = $session->port;
-        $listen = \is_array($decoded['listen'] ?? null) ? $decoded['listen'] : [];
-        if (isset($listen['port'])) {
-            $port = (int)$listen['port'];
-        } elseif (isset($decoded['port'])) {
-            $port = (int)$decoded['port'];
+        if ($isReady) {
+            $listen = \is_array($decoded['listen'] ?? null) ? $decoded['listen'] : [];
+            if (isset($listen['port'])) {
+                $port = (int)$listen['port'];
+            } elseif (isset($decoded['port'])) {
+                $port = (int)$decoded['port'];
+            }
         }
 
         $leaseId = $session->leaseId;
         $generation = $session->generation;
-        if ($type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_LEASE_ASSIGN
-            || $type === \Weline\Server\Supervisor\Protocol\SupervisorMessage::TYPE_READY_ACK) {
-            $leaseId = (string)($decoded['lease_id'] ?? $leaseId);
-            $generation = (int)($decoded['generation'] ?? $generation);
-        } elseif (isset($decoded['lease_id']) || isset($decoded['generation'])) {
+        if ($isHello || $isReady) {
             $leaseId = (string)($decoded['lease_id'] ?? $leaseId);
             $generation = (int)($decoded['generation'] ?? $generation);
         }
@@ -324,14 +364,14 @@ final class SupervisorServer
             readBuffer: $session->readBuffer,
             writeBuffer: $session->writeBuffer,
             lastActivityAt: $session->lastActivityAt,
-            instance: (string)($decoded['instance'] ?? $session->instance),
-            channel: (string)($decoded['channel'] ?? $session->channel),
-            role: (string)($decoded['role'] ?? $session->role),
+            instance: $isHello ? (string)($decoded['instance'] ?? $session->instance) : $session->instance,
+            channel: $isHello ? (string)($decoded['channel'] ?? $session->channel) : $session->channel,
+            role: $isHello ? (string)($decoded['role'] ?? $session->role) : $session->role,
             slotId: $slotId,
             workerId: $workerId,
-            pid: (int)($decoded['pid'] ?? $session->pid),
+            pid: $isHello ? (int)($decoded['pid'] ?? $session->pid) : $session->pid,
             port: $port,
-            launchNonce: (string)($decoded['launch_nonce'] ?? $session->launchNonce),
+            launchNonce: $isHello ? (string)($decoded['launch_nonce'] ?? $session->launchNonce) : $session->launchNonce,
             leaseId: $leaseId,
             generation: $generation,
         );

@@ -13,9 +13,22 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
-                <button type="button" class="btn btn-primary" onclick="window.saveParams()"><?= __('保存') ?></button>
+                <button type="button" class="btn btn-primary" data-params-save><?= __('保存') ?></button>
             </div>
         </div>
     </div>
 </div>
+<script>
+(function () {
+    document.addEventListener('click', function (event) {
+        const saveButton = event.target.closest('[data-params-save]');
+        if (!saveButton) {
+            return;
+        }
 
+        if (typeof window.saveParams === 'function') {
+            window.saveParams();
+        }
+    });
+})();
+</script>

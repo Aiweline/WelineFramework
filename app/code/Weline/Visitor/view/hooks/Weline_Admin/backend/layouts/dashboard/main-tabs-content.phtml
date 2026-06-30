@@ -1,12 +1,9 @@
 <?php
 /**
- * 后台首页标签页内容 Hook 实现
+ * Pixel analytics content is intentionally not rendered inside the dashboard.
  *
- * Hook 名称：Weline_Admin::backend::layouts::dashboard::main-tabs-content
- *
- * 功能：
- * - 在 Admin 后台首页标签页内容区域注册像素统计标签页内容面板
- * - 包含像素统计顶部数据和主要概览数据
+ * The standalone pixel dashboard keeps filtering, export and site drill-down
+ * flows in one place instead of duplicating them on the admin home page.
  *
  * @hook-priority 150
  * @hook-sort-order 0
@@ -14,31 +11,3 @@
  */
 
 /** @var \Weline\Framework\View\Template $this */
-?>
-<!-- 像素统计 Tab 内容 -->
-<div class='tab-pane fade' id='dashboard-pixel-statistics' role='tabpanel' aria-labelledby='dashboard-pixel-statistics-tab'>
-    <?php
-    // 包含像素统计顶部数据
-    try {
-        $topStatsFile = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Visitor' . DS . 'view' . DS . 'hooks' . DS . 'Weline_Admin' . DS . 'backend' . DS . 'layouts' . DS . 'dashboard' . DS . 'top-statistics.phtml';
-        if (file_exists($topStatsFile)) {
-            include $topStatsFile;
-        }
-    } catch (\Throwable $e) {
-        // 忽略错误
-    }
-    ?>
-
-    <?php
-    // 包含像素统计概览数据
-    try {
-        $mainOverviewFile = BP . DS . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Visitor' . DS . 'view' . DS . 'hooks' . DS . 'Weline_Admin' . DS . 'backend' . DS . 'layouts' . DS . 'dashboard' . DS . 'main-overview.phtml';
-        if (file_exists($mainOverviewFile)) {
-            include $mainOverviewFile;
-        }
-    } catch (\Throwable $e) {
-        // 忽略错误
-    }
-    ?>
-</div>
-<!-- 像素统计 Tab 内容结束 -->

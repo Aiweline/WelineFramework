@@ -6,16 +6,22 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 // 使用 w_env() 获取语言和货币，替代直接访问 $_SERVER
 $currentLang = \w_env('user.lang', 'zh_Hans_CN');
 $currentCurrency = \w_env('user.currency', 'CNY');
+$backendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('admin'));
+$restFrontendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('rest_frontend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api'));
+$restBackendRoutePrefix = (string)(\Weline\Framework\App\Env::getAreaRoutePrefix('rest_backend') ?: \Weline\Framework\App\Env::getInstance()->getConfig('api_admin'));
+$headTitle = (string)($this->getData('title') ?? '');
+$headDescription = (string)($this->getData('description') ?? '');
+$jsonEncodeFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 ?>
 <base href="@backend-url('/')">
 <meta charset="UTF-8">
-<title><?php echo $this->getData('title'); ?></title>
+<title><?= htmlspecialchars($headTitle, ENT_QUOTES, 'UTF-8') ?></title>
 <!--元数据-->
-<meta content="<?php echo $this->getData('description'); ?>" name="description"/>
+<meta content="<?= htmlspecialchars($headDescription, ENT_QUOTES, 'UTF-8') ?>" name="description"/>
 <meta charset='UTF-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1.0, shrink-to-fit=no'>
-<meta content="<?php echo $this->getData('title'); ?>" name='author'/>
-<meta content="<?php echo $this->getData('description'); ?>" name='description'/>
+<meta content="<?= htmlspecialchars($headTitle, ENT_QUOTES, 'UTF-8') ?>" name='author'/>
+<meta content="<?= htmlspecialchars($headDescription, ENT_QUOTES, 'UTF-8') ?>" name='description'/>
 <link rel="Shortcut Icon" href="@static(Weline_Backend::img/favicon.png)">
 <link rel="Bookmark" href="@static(Weline_Backend::img/favicon.png)">
 <!--加载requirejs-->
@@ -56,6 +62,7 @@ endif;
 <theme:css>Weline_Theme::theme/backend/variables/_borders.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/variables/_shadows.css</theme:css>
 <theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/assets/css/theme.css</theme:css>
 <?php
 // 始终加载暗色模式CSS（通过属性选择器 [data-layout-mode="dark"] 等控制生效）
 // 这样用户可以动态切换主题模式，无需重新加载页面
@@ -96,16 +103,18 @@ if ($previewContextService->shouldUseStoredContext()) {
 // 注入主题配置（必须在 theme.js 加载前）
 $isDev = defined('DEV') && DEV;
 $baseUrl = $this->request->getBaseUrl();
+$baseHost = rtrim($this->request->getBaseHost(), '/');
 
-// 根据环境设置模块配置URL和基础URL（weline-api.js 位于 Weline_Frontend 模块）
+// 根据环境设置模块配置URL和基础URL（weline-api.js 位于 Weline_Backend 模块）
 if ($isDev) {
     $modulesConfigUrl = '/Weline/Backend/view/statics/base/weline.modules.js';
-    $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
+    $modulesBaseUrl = '/Weline/Backend/view/statics/js/weline-api';
 } else {
     $modulesConfigUrl = '/static/Weline/Backend/base/weline.modules.js';
-    $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
+    $modulesBaseUrl = '/static/Weline/Backend/js/weline-api';
 }
 
+$__dv = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $themeConfigPayload = [
     'env' => [
         'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
@@ -113,11 +122,24 @@ $themeConfigPayload = [
         'PROD' => !DEV,
     ],
     'baseUrl' => $baseUrl,
+    'area' => $backendRoutePrefix,
     'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => $modulesBaseUrl,
+    'deployVersion' => ($__dv && is_array($__dv)) ? ($__dv['deploy_version'] ?? 'dev') : 'dev',
+    'workerBuildId' => ($__dv && is_array($__dv)) ? ($__dv['worker_build_id'] ?? 'dev') : 'dev',
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'debug' => DEV,
+    'url' => [
+        'origin' => $baseHost,
+        'apiHost' => rtrim($this->request->getUrlBuilder()->getBackendApiUrl('/', [], false), '/'),
+        'frontendApiHost' => rtrim($this->request->getUrlBuilder()->getFrontendApiUrl('', [], false), '/'),
+        'adminArea' => $backendRoutePrefix,
+        'apiArea' => $restFrontendRoutePrefix,
+        'apiAdminArea' => $restBackendRoutePrefix,
+        'defaultCurrency' => $currentCurrency,
+        'defaultLocale' => $currentLang,
+    ],
     'i18n' => [
         'confirm' => __('确定'),
         'cancel' => __('取消'),
@@ -129,10 +151,8 @@ $themeConfigPayload = [
 ];
 ?>
 <script data-no-extract="true">
-window.__WelineThemeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+window.__WelineThemeConfig = <?= json_encode($themeConfigPayload, $jsonEncodeFlags) ?>;
 </script>
-<!-- Weline.Api 同步回退（确保 request 立即可用） -->
-<script src="<?= $isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js' : '/static/Weline/Frontend/js/weline-api-fallback.js' ?>"></script>
 <!-- 主题核心 JS（Weline 对象、模块加载器、API 代理等） -->
 <theme:js>Weline_Theme::theme/backend/assets/js/theme.js</theme:js>
 <!-- 后台全局组件（BackendToast、BackendConfirm 等） -->
@@ -165,3 +185,4 @@ if($this->getHeader()){
     echo $this->getHeader()->getHtml();
 }
 ?>
+<css>Weline_Admin::css/modern-admin-polish.css</css>

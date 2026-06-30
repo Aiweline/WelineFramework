@@ -27,6 +27,9 @@ use Weline\Taglib\TaglibInterface;
  */
 class ThemeTemplate implements TaglibInterface
 {
+    /** @var array<string, array{mtime:int, size:int, content:string}> */
+    private static array $templateSourceCache = [];
+
     /**
      * @inheritDoc
      */
@@ -100,7 +103,7 @@ class ThemeTemplate implements TaglibInterface
                         // fetchTagSource() 已支持 Module::path 语法；保留模块前缀，
                         // 否则 dir_type_theme 会再次补 theme/ 前缀，导致 theme/theme/...。
                         $filePath = self::parseMetaTags($filePath);
-                        return file_get_contents($template->fetchTagSource(DataInterface::dir_type_THEME, $filePath));
+                        return self::readThemeTemplateSource($template, $filePath);
                     }
                 } catch (\Exception $e) {
                     // 如果获取配置失败，继续使用默认路径
@@ -116,7 +119,7 @@ class ThemeTemplate implements TaglibInterface
             // 先解析 defaultPath 中的 @meta{} 标签，确保 @meta{} 标签先执行
             if (!empty($defaultPath)) {
                 $defaultPath = self::parseMetaTags($defaultPath);
-                return file_get_contents($template->fetchTagSource(DataInterface::dir_type_THEME, $defaultPath));
+                return self::readThemeTemplateSource($template, $defaultPath);
             }
             
             // 如果没有 layout 属性，使用原有逻辑
@@ -127,7 +130,7 @@ class ThemeTemplate implements TaglibInterface
             
             // 先解析 fallbackPath 中的 @meta{} 标签
             $fallbackPath = self::parseMetaTags($fallbackPath);
-            return file_get_contents($template->fetchTagSource(DataInterface::dir_type_THEME, $fallbackPath));
+            return self::readThemeTemplateSource($template, $fallbackPath);
         };
     }
 
@@ -270,6 +273,47 @@ class ThemeTemplate implements TaglibInterface
         }
 
         return $path;
+    }
+
+    private static function readThemeTemplateSource(Template $template, string $filePath): string|false
+    {
+        $sourceFile = $template->fetchTagSource(DataInterface::dir_type_THEME, $filePath);
+        if (!self::shouldCacheTemplateSource() || !is_file($sourceFile)) {
+            return file_get_contents($sourceFile);
+        }
+
+        $sourceFile = str_replace(['/', '\\'], DS, $sourceFile);
+        $sourceSize = (int) filesize($sourceFile);
+        $sourceMtime = (int) (@filemtime($sourceFile) ?: 0);
+        $cached = self::$templateSourceCache[$sourceFile] ?? null;
+        if (
+            is_array($cached)
+            && ($cached['mtime'] ?? -1) === $sourceMtime
+            && ($cached['size'] ?? -1) === $sourceSize
+            && array_key_exists('content', $cached)
+        ) {
+            return $cached['content'];
+        }
+
+        $content = file_get_contents($sourceFile);
+        if (is_string($content)) {
+            self::$templateSourceCache[$sourceFile] = [
+                'mtime' => $sourceMtime,
+                'size' => $sourceSize,
+                'content' => $content,
+            ];
+        }
+
+        return $content;
+    }
+
+    private static function shouldCacheTemplateSource(): bool
+    {
+        if (\defined('DEV') && DEV) {
+            return false;
+        }
+
+        return \Weline\Framework\Runtime\Runtime::isPersistent();
     }
 }
 

@@ -1,196 +1,104 @@
-# Weline_Payment 支付管理模块
+# Weline_Payment
 
-## 模块概述
-
-Weline_Payment 是支付管理核心模块，提供统一的支付接口标准，支持第三方支付供应商通过模块扩展机制接入，前端统一展示到结账界面。
-
-## 主要功能
-
-1. **支付方式管理**: 管理所有支付方式，包括启用/禁用、配置等
-2. **支付交易管理**: 记录和管理所有支付交易
-3. **支付提供商扩展**: 支持第三方支付供应商通过扩展机制接入
-4. **国际化支持**: 完整的中英文翻译支持
-5. **Hook系统集成**: 在结账界面提供多个Hook点，支持功能扩展
+`Weline_Payment` 是统一支付抽象层。业务模块通过 Payable 接入可支付对象，支付模块通过 Provider 接入支付能力，核心层负责配置、可用性判断、支付请求、退款请求、回调校验和结果归一化。
 
 ## 核心接口
 
-### PaymentProviderInterface
+### ProviderInterface
 
-所有支付提供商必须实现 `Weline\Payment\Interface\PaymentProviderInterface` 接口。
+所有新支付方式必须实现 `Weline\Payment\Interface\ProviderInterface`。
 
-主要方法：
-- `getCode()`: 获取支付方式代码
-- `getName()`: 获取支付方式名称
-- `createPayment()`: 创建支付订单
-- `handleCallback()`: 处理支付回调
-- `queryPaymentStatus()`: 查询支付状态
-- `refund()`: 处理退款
-- `verifySignature()`: 验证签名
-- `getConfigFields()`: 获取配置表单字段
-- `getSupportedDiscountActions()`: 获取支持的优惠方式代码列表（新增）
-- `supportsDiscountAction()`: 检查是否支持特定优惠方式（新增）
+必实现能力包括：
 
-## 扩展机制
+- `getCode()` / `getProviderCode()`：支付方式 code 与 Provider code。
+- `getProviderApiVersion()` / `getWebhookSchemaVersion()`：接口与回调版本。
+- `getCapabilities()`：货币、国家、退款、授权、捕获、void、动态表单等能力声明。
+- `getDisplayMetadata()`：后台和 checkout 展示元数据。
+- `getConfigSchema()`：运行时配置校验或 Provider 元数据；后台配置 UI 由 `Weline_SystemConfig` 的 config phtml 提供。
+- `checkAvailability()`：按 Payable、scope、货币、国家、金额和配置判断是否可用。
+- `createPayment()` / `resumePayment()` / `authorize()` / `capture()` / `void()`：支付生命周期动作。
+- `refund()` / `query()`：退款与查询。
+- `verifyCallback()` / `parseCallback()`：回调验签和事件解析。
+- `testConnection()`：后台配置测试。
+- `normalizeError()`：Provider 错误归一化。
 
-其他支付供应商可以通过以下方式开发支付模块：
+Provider 不接收全局运行期配置状态。有效配置由 `Weline_Payment` 在请求 DTO 的 `context.runtime_config` 中下发。
 
-1. 在模块中创建 `extends/module/Weline_Payment/PaymentProvider/` 目录
-2. 创建实现 `PaymentProviderInterface` 接口的类
-3. 系统会自动扫描并注册支付提供商
+### PayableResolverInterface
 
-详细文档请参考：[扩展开发指南](extends.md)
+业务模块通过 `Weline\Payment\Interface\PayableResolverInterface` 接入可支付对象。订单、应用商城、A2A、托管单或其他业务对象都应提供自己的 PayableResolver；简单场景可以使用默认 PayableResolver。
 
-## Hook系统
+### 配置模板
 
-模块在结账界面提供以下 Hook 文档，统一位于 `doc/hook/frontend/checkout/`：
+支付方式配置表单由 `Weline_SystemConfig` 的配置模板扩展点提供，不由 `Weline_Payment` 另行定义配置模板扩展路径。
 
-- `payment-methods-before.md` - 支付方式选择区域之前
-- `payment-methods-after.md` - 支付方式选择区域之后
-- `payment-form-before.md` - 支付表单之前
-- `payment-form-after.md` - 支付表单之后
-- `payment-result.md` - 支付结果展示
+Provider 模块把配置模板放在自己的 SystemConfig 扩展路径下：
 
-## 使用示例
-
-### 获取可用支付方式
-
-```php
-use Weline\Payment\Service\PaymentMethodManager;
-use Weline\Framework\Manager\ObjectManager;
-
-$methodManager = ObjectManager::getInstance(PaymentMethodManager::class);
-$methods = $methodManager->getActiveMethods();
+```text
+extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml
 ```
 
-### 创建支付订单
+`{area}` 按配置使用场景命名，例如 `backend`；`{code}` 建议与支付方式 code 或 provider code 保持一致，便于后台配置、运行时配置快照和支付方式绑定排查。
 
-```php
-use Weline\Payment\Service\PaymentService;
-use Weline\Framework\Manager\ObjectManager;
+## 扩展路径
 
-$paymentService = ObjectManager::getInstance(PaymentService::class);
-$transaction = $paymentService->createPayment('alipay', [
-    'order_id' => 'ORDER123',
-    'amount' => 100.00,
-    'currency' => 'CNY',
-    'subject' => '订单支付',
-    'description' => '订单号: ORDER123',
-]);
+完整第三方支付模块开发流程见 [provider-development.md](provider-development.md)。
+
+支付方式扩展路径：
+
+```text
+extends/module/Weline_Payment/PaymentProvider/
 ```
 
-### 处理支付回调
+Payable 扩展路径：
 
-```php
-$transaction = $paymentService->handleCallback('alipay', $callbackData);
+```text
+extends/module/Weline_Payment/PayableResolver/
 ```
 
-## 数据库表
+Provider 模块的最小交付物是：
 
-### weline_payment_method (支付方式表)
-- method_id: 主键
-- code: 支付方式代码（唯一）
-- name: 支付方式名称
-- provider_module: 支付提供商模块名
-- provider_class: 支付提供商类名
-- is_active: 是否启用
-- sort_order: 排序
-- config: 配置信息（JSON）
+- Provider 接口实现类：放在 `extends/module/Weline_Payment/PaymentProvider/`。
+- checkout phtml：由该 Provider 模块负责前台特殊展示或输入字段。
+- config phtml：放在 `extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml`。
 
-### weline_payment_transaction (支付交易表)
-- transaction_id: 主键
-- order_id: 订单ID
-- method_code: 支付方式代码
-- transaction_no: 交易号（唯一）
-- amount: 支付金额
-- currency: 货币代码
-- status: 支付状态
-- request_data: 请求数据（JSON）
-- response_data: 响应数据（JSON）
-- callback_data: 回调数据（JSON）
+特殊授权页、回调辅助页、Provider SDK 封装或外部 API 差异由 Provider 模块自己的 controller 或 adapter 承担，最终支付状态仍回写 `Weline_Payment`。
 
-## 依赖模块
+## Fake Provider
 
-- Weline_Framework (核心框架)
-- Weline_Backend (后台管理)
-- Weline_Frontend (前端支持)
-- Weline_I18n (国际化支持)
-- Weline_Hook (Hook系统)
-- Weline_Theme (主题系统)
+模块内置 `fake_card` Provider：
 
-## 优惠方式支持
-
-支付模块支持与营销模块的优惠方式集成，每个支付方式可以声明支持哪些优惠方式。
-
-### 支持的优惠方式类型
-
-支付方式可以支持以下优惠方式（由营销模块定义和扩展）：
-- `discount_fixed_amount` - 固定金额折扣
-- `discount_percentage` - 百分比折扣
-- `free_shipping` - 免运费
-- `buy_x_get_y` - 买X送Y
-- `gift_product` - 赠品
-- 以及其他通过营销模块扩展的优惠方式
-
-### 配置支持的优惠方式
-
-在后台"支付管理 > 支付方式管理"中，编辑支付方式时可以：
-1. 查看所有可用的优惠方式列表
-2. 选择该支付方式支持的优惠方式
-3. 如果未选择任何项，默认支持所有优惠方式（向后兼容）
-
-### 在代码中声明支持
-
-支付提供商可以实现 `getSupportedDiscountActions()` 方法来声明支持的优惠方式：
-
-```php
-class AlipayProvider implements PaymentProviderInterface
-{
-    public function getSupportedDiscountActions(): ?array
-    {
-        // 返回支持的优惠方式代码数组
-        return ['discount_fixed_amount', 'discount_percentage', 'free_shipping'];
-        
-        // 返回空数组表示支持所有
-        // return [];
-        
-        // 返回null表示不支持任何优惠方式
-        // return null;
-    }
-    
-    public function supportsDiscountAction(string $actionCode): bool
-    {
-        $supported = $this->getSupportedDiscountActions();
-        if ($supported === null) {
-            return false;
-        }
-        if (empty($supported)) {
-            return true; // 支持所有
-        }
-        return in_array($actionCode, $supported, true);
-    }
-}
+```text
+app/code/Weline/Payment/extends/module/Weline_Payment/PaymentProvider/FakeProvider.php
 ```
 
-### 检查支付方式支持
+它实现完整 `ProviderInterface`，用于本地 fake 模式、接口契约验证和浏览器冒烟，不用于真实收款。
 
-```php
-use Weline\Payment\Service\DiscountActionSupportService;
-use Weline\Framework\Manager\ObjectManager;
+## Checkout Fake 页面
 
-$supportService = ObjectManager::getInstance(DiscountActionSupportService::class);
+浏览器 fake 页面：
 
-// 检查是否支持
-$isSupported = $supportService->checkSupport('alipay', 'discount_fixed_amount');
-
-// 获取所有支持的优惠方式
-$supported = $supportService->getSupportedActions('alipay');
-
-// 获取所有可用的优惠方式
-$allActions = $supportService->getAllDiscountActions();
+```text
+/payment/frontend/checkout/fake
 ```
 
-## 版本历史
+该页面渲染 checkout 支付选择模板，展示可用 fake 支付方式和不可用资产支付示例，用于验证支付方式选择、更多不可用项、禁用原因、支付条款勾选，以及通过 `ProviderInterface` 生成的成功、失败、取消和退款可见结果。
 
-- 1.0.0: 初始版本，支持基础支付功能
-- 1.1.0: 新增优惠方式支持功能，与营销模块集成
+## 折扣能力
 
+支付方式参与活动折扣必须由后台配置或 Provider capabilities 显式声明。未声明时不默认支持折扣。
+
+常见 capability key：
+
+```php
+[
+    'supported_discount_actions' => ['discount_fixed_amount', 'discount_percentage'],
+]
+```
+
+## 验证建议
+
+- `php -l app/code/Weline/Payment/**/*.php`
+- Provider scanner 应能发现 `fake_card`。
+- 后台配置测试应调用 Provider `testConnection()`。
+- checkout fake 页面应能在浏览器中打开并完成支付方式选择、条款勾选、fake 支付成功/失败/取消/退款状态切换。

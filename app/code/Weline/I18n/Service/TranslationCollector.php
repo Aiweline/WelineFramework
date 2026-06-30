@@ -98,9 +98,44 @@ class TranslationCollector
      * 需要排除的目录名（这些目录不包含需要翻译的源码）
      */
     private const EXCLUDED_DIRS = [
-        'node_modules', 'vendor', 'dist', 'build', '.git', '.svn',
-        'cache', 'generated', 'var', 'pub', 'test', 'tests',
-        'bower_components', '.idea', '.vscode', '.cursor',
+        'node_modules' => true,
+        'vendor' => true,
+        'dist' => true,
+        'build' => true,
+        '.git' => true,
+        '.svn' => true,
+        'cache' => true,
+        'generated' => true,
+        'var' => true,
+        'pub' => true,
+        'doc' => true,
+        'docs' => true,
+        'test' => true,
+        'tests' => true,
+        'coverage' => true,
+        'tmp' => true,
+        'temp' => true,
+        'log' => true,
+        'logs' => true,
+        'wasm' => true,
+        'lib' => true,
+        'libs' => true,
+        'third-party' => true,
+        'third_party' => true,
+        'thirdparty' => true,
+        'browser-extension' => true,
+        'browser-extension-backup' => true,
+        'weline-browser-mcp' => true,
+        'bower_components' => true,
+        '.idea' => true,
+        '.vscode' => true,
+        '.cursor' => true,
+    ];
+
+    private const SCAN_FILE_EXTENSIONS = [
+        'php' => true,
+        'phtml' => true,
+        'js' => true,
     ];
 
     private const FIBER_CHECKPOINT_INTERVAL = 8;
@@ -110,6 +145,41 @@ class TranslationCollector
      * 正常的翻译源文件不会超过这个大小，大文件通常是打包产物
      */
     private const MAX_FILE_SIZE = 524288;
+
+    private const CODE_PATTERNS = [
+        '/\$[a-zA-Z_][a-zA-Z0-9_]*/',
+        '/->[a-zA-Z_][a-zA-Z0-9_]*\s*\(/',
+        '/::[a-zA-Z_][a-zA-Z0-9_]*/',
+        '/\[.*?\$.*?\]/',
+        '/\(.*?\$.*?\)/',
+        '/function\s*\(/',
+        '/return\s+/',
+        '/if\s*\(/',
+        '/else\s*\{/',
+        '/foreach\s*\(/',
+        '/while\s*\(/',
+        '/for\s*\(/',
+        '/class\s+/',
+        '/namespace\s+/',
+        '/use\s+/',
+        '/extends\s+/',
+        '/implements\s+/',
+        '/getMessageManager\(\)/',
+        '/getData\(/',
+        '/addWarning\(/',
+        '/fields_[A-Z_]+/',
+        '/php\s+bin/',
+        '/translate:model/',
+        '/i18n:collect/',
+        '/\$this->/',
+        '/\]\)/',
+        '/\)\)/',
+        '/\'\s*,\s*\[/',
+        '/\'\s*\)/',
+        '/\$this->countries/',
+        '/\$this->localeNames/',
+        '/Name::fields/',
+    ];
 
     /**
      * 从指定目录提取翻译字符串（Generator 版本）
@@ -127,16 +197,18 @@ class TranslationCollector
         try {
             $dirIterator = new \RecursiveDirectoryIterator($directory, \RecursiveDirectoryIterator::SKIP_DOTS);
             $filterIterator = new \RecursiveCallbackFilterIterator($dirIterator, function ($current, $key, $iterator) {
-                if ($current->isDir() && in_array($current->getFilename(), self::EXCLUDED_DIRS, true)) {
+                if ($current->isDir() && isset(self::EXCLUDED_DIRS[strtolower($current->getFilename())])) {
                     return false;
                 }
                 return true;
             });
             $iterator = new \RecursiveIteratorIterator($filterIterator);
             $processedFiles = 0;
+            $directoryPrefixLength = strlen(rtrim($directory, '/\\'));
             
             foreach ($iterator as $file) {
-                if (!$file->isFile() || !in_array($file->getExtension(), ['php', 'phtml', 'js'])) {
+                $ext = strtolower($file->getExtension());
+                if (!$file->isFile() || !isset(self::SCAN_FILE_EXTENSIONS[$ext])) {
                     continue;
                 }
                 // 跳过超大文件（打包产物、minified JS 等）
@@ -145,12 +217,18 @@ class TranslationCollector
                     continue;
                 }
                 
-                $content = file_get_contents($file->getPathname());
+                $pathname = $file->getPathname();
+                $content = file_get_contents($pathname);
                 if ($content === false) {
                     continue;
                 }
-                $relativePath = str_replace($directory, '', $file->getPathname());
-                $ext = $file->getExtension();
+                $processedFiles++;
+                if (!$this->hasTranslationMarkers($content)) {
+                    unset($content);
+                    $this->yieldFiberCheckpoint($processedFiles);
+                    continue;
+                }
+                $relativePath = substr($pathname, $directoryPrefixLength) ?: $pathname;
                 
                 // 1. 匹配 <lang>...</lang> 标签
                 if (preg_match_all('/<lang>(.*?)<\/lang>/s', $content, $matches)) {
@@ -230,12 +308,18 @@ class TranslationCollector
                 // Generator 自然释放：$content 在下次循环迭代时被覆盖
                 // 显式 unset 确保大文件立即释放
                 unset($content);
-                $processedFiles++;
                 $this->yieldFiberCheckpoint($processedFiles);
             }
         } catch (\Exception $e) {
             // 静默处理错误，避免中断收集过程
         }
+    }
+
+    private function hasTranslationMarkers(string $content): bool
+    {
+        return str_contains($content, '__')
+            || str_contains($content, '@lang')
+            || str_contains($content, '<lang');
     }
     
     /**
@@ -252,42 +336,7 @@ class TranslationCollector
         }
         
         // 过滤包含代码特征的内容
-        $codePatterns = [
-            '/\$[a-zA-Z_][a-zA-Z0-9_]*/',           // 变量：$var
-            '/->[a-zA-Z_][a-zA-Z0-9_]*\s*\(/',      // 方法调用：->method(
-            '/::[a-zA-Z_][a-zA-Z0-9_]*/',           // 静态调用：::CONSTANT
-            '/\[.*?\$.*?\]/',                       // 数组访问包含变量：[]
-            '/\(.*?\$.*?\)/',                       // 包含变量的括号
-            '/function\s*\(/',                      // function(
-            '/return\s+/',                          // return
-            '/if\s*\(/',                            // if(
-            '/else\s*\{/',                          // else {
-            '/foreach\s*\(/',                       // foreach(
-            '/while\s*\(/',                         // while(
-            '/for\s*\(/',                           // for(
-            '/class\s+/',                           // class
-            '/namespace\s+/',                       // namespace
-            '/use\s+/',                             // use
-            '/extends\s+/',                         // extends
-            '/implements\s+/',                      // implements
-            '/getMessageManager\(\)/',              // getMessageManager()
-            '/getData\(/',                          // getData(
-            '/addWarning\(/',                       // addWarning(
-            '/fields_[A-Z_]+/',                     // fields_CONSTANT
-            '/php\s+bin/',                          // php bin
-            '/translate:model/',                    // translate:model
-            '/i18n:collect/',                       // i18n:collect
-            '/\$this->/',                           // $this->
-            '/\]\)/',                               // ]) 代码结束标记
-            '/\)\)/',                               // )) 嵌套括号结束
-            '/\'\s*,\s*\[/',                        // ', [' 数组参数开始
-            '/\'\s*\)/',                            // ') 字符串后跟括号
-            '/\$this->countries/',                  // $this->countries
-            '/\$this->localeNames/',                // $this->localeNames
-            '/Name::fields/',                       // Name::fields
-        ];
-        
-        foreach ($codePatterns as $pattern) {
+        foreach (self::CODE_PATTERNS as $pattern) {
             if (preg_match($pattern, $str)) {
                 return false;
             }

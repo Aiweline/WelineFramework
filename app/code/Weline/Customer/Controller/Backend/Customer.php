@@ -255,7 +255,7 @@ class Customer extends BackendController
 
         /** @var FrontendUserToken $tokenModel */
         $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
-        $tokenModel->builder()
+        $tokenModel->reset()
             ->where(FrontendUserToken::schema_fields_user_id, $userId)
             ->delete();
 
@@ -294,7 +294,7 @@ class Customer extends BackendController
 
         /** @var FrontendUserToken $tokenModel */
         $tokenModel = ObjectManager::getInstance(FrontendUserToken::class, [], false);
-        $tokenModel->builder()
+        $tokenModel->reset()
             ->where(FrontendUserToken::schema_fields_user_id, $userId)
             ->delete();
 

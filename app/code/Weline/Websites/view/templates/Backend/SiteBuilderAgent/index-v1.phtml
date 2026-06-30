@@ -172,14 +172,84 @@ $fakeMode = (bool)($this->getData('fake_mode') ?? false);
     }
     function confirmPlan(){if(!st.draftId){toast('warning','请先生成方案。');return;}post(cfg.confirm,{draft_public_id:st.draftId}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'方案确认失败');return;}setStatus('sbv1-main-status','方案已确认','ok');close('sbv1-plan-modal');open('sbv1-domain-modal');}).catch(function(){toast('error','网络错误，请稍后重试。');});}
     function renderRec(list){var box=$('sbv1-rec-list');if(!box)return;box.innerHTML='';(list||[]).forEach(function(domain){var btn=document.createElement('button');btn.type='button';btn.className='sbv1-item';btn.setAttribute('data-rec',String(domain));btn.textContent=String(domain);btn.onclick=function(){st.recDomain=String(domain);document.querySelectorAll('[data-rec]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-rec')||'')===st.recDomain);});};box.appendChild(btn);});}
-    function recommendDomain(){if(!st.draftId){toast('warning','请先确认方案。');return;}closeSse('recSse');renderRec([]);setStatus('sbv1-rec-status','推荐中','info');var params=new URLSearchParams();params.set('description',desc());params.set('account_id',account());if(cfg.fake){params.set('fake_mode','1');}var url=cfg.recSse+(cfg.recSse.indexOf('?')>=0?'&':'?')+params.toString();var s=new EventSource(url);st.recSse=s;s.addEventListener('batch',function(ev){var p=parse(ev);if(Array.isArray(p.candidate_domains)){renderRec(p.candidate_domains);}setStatus('sbv1-rec-status',p.message||'推荐中','info');});s.addEventListener('success',function(ev){var p=parse(ev);if(Array.isArray(p.candidate_domains)){renderRec(p.candidate_domains);}if(p.domain){st.recDomain=String(p.domain);document.querySelectorAll('[data-rec]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-rec')||'')===st.recDomain);});}setStatus('sbv1-rec-status',p.message||'推荐完成','ok');});s.addEventListener('done',function(){closeSse('recSse');});s.addEventListener('error',function(){setStatus('sbv1-rec-status','连接重试中','info');});}
+    function recommendDomain(){if(!st.draftId){toast('warning','请先确认方案。');return;}closeSse('recSse');renderRec([]);setStatus('sbv1-rec-status','推荐中','info');var params=new URLSearchParams();params.set('description',desc());params.set('account_id',account());if(cfg.fake){params.set('fake_mode','1');}var url=cfg.recSse+(cfg.recSse.indexOf('?')>=0?'&':'?')+params.toString();var s=new EventSource(url);st.recSse=s;s.addEventListener('batch',function(ev){var p=parse(ev);if(Array.isArray(p.candidate_domains)){renderRec(p.candidate_domains);}setStatus('sbv1-rec-status',p.message||'推荐中','info');});s.addEventListener('success',function(ev){var p=parse(ev);if(Array.isArray(p.candidate_domains)){renderRec(p.candidate_domains);}if(p.domain){st.recDomain=String(p.domain);document.querySelectorAll('[data-rec]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-rec')||'')===st.recDomain);});}setStatus('sbv1-rec-status',p.message||'推荐完成','ok');});s.addEventListener('done',function(){closeSse('recSse');});s.addEventListener('error',function(ev){var p=parse(ev);if(p&&p.message){setStatus('sbv1-rec-status',p.message,'err');toast('error',p.message);closeSse('recSse');return;}setStatus('sbv1-rec-status','连接重试中','info');});}
     function selectDomain(domain,source){return post(cfg.selectDomain,{draft_public_id:st.draftId,domain:domain,domain_source:source,account_id:account()}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'域名保存失败');return false;}st.selectedDomain=String(domain);st.selectedSource=String(source);$('sbv1-domain-summary').textContent='已选择域名：'+st.selectedDomain+'（'+st.selectedSource+'）';return true;});}
     function checkManual(){var domain=String(($('sbv1-manual-domain')||{}).value||'').trim().toLowerCase();if(!domain){toast('warning','请先输入域名。');return;}setStatus('sbv1-manual-status','校验中','info');post(cfg.check,{domain:domain,account_id:account()}).then(function(d){if(!d||!d.success||!d.available){setStatus('sbv1-manual-status',d&&d.message?d.message:'域名不可用','err');return;}setStatus('sbv1-manual-status',d.message||'域名可用','ok');}).catch(function(){setStatus('sbv1-manual-status','网络错误，请稍后重试。','err');});}
     function loadPool(){if(!st.draftId){toast('warning','请先确认方案。');return;}setStatus('sbv1-pool-status','加载中','info');setDisabled('sbv1-use-pool-domain',true);st.poolId=0;st.poolDomain='';get(cfg.pool+'?draft_public_id='+encodeURIComponent(st.draftId)).then(function(d){var box=$('sbv1-pool-list');if(!box)return;box.innerHTML='';if(!d||!d.success){setStatus('sbv1-pool-status',d&&d.message?d.message:'加载失败','err');return;}var items=Array.isArray(d.items)?d.items:[];if(!items.length){var empty=document.createElement('div');empty.className='text-muted small';empty.textContent='域名池暂无可用域名，请切换到“手动填写”或“AI 推荐”。';box.appendChild(empty);setStatus('sbv1-pool-status','暂无可用域名','warn');return;}items.forEach(function(item){var btn=document.createElement('button');btn.type='button';btn.className='sbv1-item';btn.setAttribute('data-pool-id',String(item.pool_id||'0'));btn.textContent=String(item.domain||'');btn.onclick=function(){st.poolId=parseInt(String(item.pool_id||'0'),10)||0;st.poolDomain=String(item.domain||'');setDisabled('sbv1-use-pool-domain',st.poolId<=0);document.querySelectorAll('[data-pool-id]').forEach(function(n){n.classList.toggle('pick',String(n.getAttribute('data-pool-id')||'')===String(st.poolId));});};box.appendChild(btn);});setStatus('sbv1-pool-status','已加载 '+String(items.length)+' 个域名','ok');}).catch(function(){setStatus('sbv1-pool-status','网络错误，请稍后重试。','err');});}
     function reservePool(){if(!st.poolId){toast('warning','请先从本地域名池选择域名。');return;}post(cfg.reservePool,{draft_public_id:st.draftId,pool_id:st.poolId,account_id:account()}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'本地域名池预占用失败');return;}st.selectedDomain=String(d.domain||st.poolDomain);st.selectedSource='local_pool';$('sbv1-domain-summary').textContent='已选择域名：'+st.selectedDomain+'（本地域名池）';setStatus('sbv1-pool-status',d.message||'已预占用','ok');}).catch(function(){toast('error','网络错误，请稍后重试。');});}
     function createSession(){if(!st.draftId){toast('warning','请先确认方案。');return;}if(!st.selectedDomain){toast('warning','请先选择域名。');return;}post(cfg.createSession,{draft_public_id:st.draftId}).then(function(d){if(!d||!d.success){toast('error',d&&d.message?d.message:'创建会话失败');return;}window.location.href=String(d.workspace_url||'');}).catch(function(){toast('error','网络错误，请稍后重试。');});}
-    $('sbv1-generate').onclick=function(){runPlan('generate');};
-    $('sbv1-revise').onclick=function(){runPlan('revise');};
+    function runPlanStrict(action){
+        var url=action==='revise'?cfg.revise:cfg.gen;
+        var msg=action==='revise'?String(($('sbv1-revise-msg')||{}).value||'').trim():desc();
+        if(action!=='revise'&&!msg){
+            toast('warning','\u8bf7\u5148\u8f93\u5165\u4e00\u53e5\u8bdd\u9700\u6c42\u3002');
+            return;
+        }
+        open('sbv1-plan-modal');
+        setStatus('sbv1-main-status',action==='revise'?'\u6b63\u5728\u4fee\u8ba2\u65b9\u6848':'\u6b63\u5728\u751f\u6210\u65b9\u6848','info');
+        setStatus('sbv1-plan-stream-status','\u672a\u8fde\u63a5','');
+        $('sbv1-plan-content').textContent='\u7b49\u5f85\u751f\u6210\u65b9\u6848...';
+        post(url,{provider_code:'pagebuilder',draft_public_id:st.draftId,description:desc(),message:msg,reference_urls:refs()}).then(function(d){
+            if(!d||!d.success){
+                var initMsg=d&&d.message?d.message:'\u65b9\u6848\u521d\u59cb\u5316\u5931\u8d25';
+                setStatus('sbv1-main-status',initMsg,'err');
+                toast('error',initMsg);
+                return;
+            }
+            st.draftId=String(d.draft_public_id||st.draftId||'');
+            if(d.draft&&d.draft.payload&&d.draft.payload.current_plan){renderPlan(d.draft.payload.current_plan);}
+            $('sbv1-plan-log').innerHTML='';
+            closeSse('planSse');
+            setStatus('sbv1-plan-stream-status','\u8fde\u63a5\u4e2d','info');
+            var streamUrl=new URL(String(d.stream_url||''),window.location.href);
+            if(streamUrl.origin!==window.location.origin){
+                streamUrl=new URL(streamUrl.pathname+streamUrl.search,window.location.origin);
+            }
+            var s=new EventSource(streamUrl.toString());
+            st.planSse=s;
+            s.addEventListener('start',function(ev){
+                var p=parse(ev);
+                addLog(p.message||'\u5df2\u5f00\u59cb');
+                setStatus('sbv1-plan-stream-status','\u751f\u6210\u4e2d','info');
+            });
+            s.addEventListener('status',function(ev){var p=parse(ev);addLog(p.message||'');});
+            s.addEventListener('chunk',function(ev){var p=parse(ev);addLog(p.chunk||p.message||'');});
+            s.addEventListener('warning',function(ev){var p=parse(ev);addLog(p.message||'');});
+            s.addEventListener('plan_completed',function(ev){
+                var p=parse(ev);
+                if(p.plan){renderPlan(p.plan);}
+            });
+            s.addEventListener('done',function(ev){
+                var p=parse(ev);
+                if(p.plan){renderPlan(p.plan);}
+                if(p.success===false){
+                    if(p.message){addLog(p.message);}
+                    setStatus('sbv1-plan-stream-status','\u5931\u8d25','err');
+                    setStatus('sbv1-main-status','\u65b9\u6848\u751f\u6210\u5931\u8d25','err');
+                }else{
+                    setStatus('sbv1-plan-stream-status','\u5df2\u5b8c\u6210','ok');
+                    setStatus('sbv1-main-status','\u65b9\u6848\u5df2\u751f\u6210','ok');
+                }
+                closeSse('planSse');
+            });
+            s.addEventListener('error',function(ev){
+                var p=parse(ev);
+                if(p.message){
+                    addLog(p.message);
+                    setStatus('sbv1-plan-stream-status','\u5931\u8d25','err');
+                    setStatus('sbv1-main-status','\u65b9\u6848\u751f\u6210\u5931\u8d25','err');
+                    closeSse('planSse');
+                    return;
+                }
+                setStatus('sbv1-plan-stream-status','\u8fde\u63a5\u91cd\u8bd5\u4e2d','info');
+            });
+        }).catch(function(){
+            setStatus('sbv1-main-status','\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002','err');
+            toast('error','\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002');
+        });
+    }
+    $('sbv1-generate').onclick=function(){runPlanStrict('generate');};
+    $('sbv1-revise').onclick=function(){runPlanStrict('revise');};
     $('sbv1-confirm-plan').onclick=confirmPlan;
     $('sbv1-recommend-domain').onclick=recommendDomain;
     $('sbv1-use-rec-domain').onclick=function(){if(!st.recDomain){toast('warning','请先选择推荐域名。');return;}selectDomain(st.recDomain,'recommended');};

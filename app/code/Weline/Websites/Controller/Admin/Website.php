@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Controller\Admin;
 
+use Weline\Backend\Config\KeysInterface;
 use Weline\Currency\Model\Currency;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Locals;
+use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
@@ -19,6 +22,9 @@ use Weline\Websites\Model\DomainPool;
 #[Acl('Weline_Websites::website', '网站管理', 'mdi mdi-web', '网站管理', 'Weline_Websites::website_service')]
 class Website extends BackendController
 {
+    private const FRONTEND_START_PAGE_CONFIG_KEY = 'frontend_start_page_path';
+    private const FRONTEND_START_PAGE_CONFIG_MODULE = 'Weline_Websites';
+
     private \Weline\Websites\Model\Website $website;
 
     public function __construct(\Weline\Websites\Model\Website $website)
@@ -35,15 +41,11 @@ class Website extends BackendController
         }
         
         // 搜索功能
-        $search = $this->request->getGet('search', '');
-        if ($search) {
-            $searchPattern = '%' . $search . '%';
-            $this->website->where('name', $searchPattern, 'LIKE')
-                ->where('code', $searchPattern, 'LIKE', 'OR')
-                ->where('url', $searchPattern, 'LIKE', 'OR');
-        }
+        $search = trim((string)$this->request->getGet('search', ''));
+        $websiteModel = $this->createWebsiteListingModel();
+        $this->applyWebsiteSearch($websiteModel, $search);
         
-        $websites = $this->website->order()->pagination()->select()->fetch();
+        $websites = $websiteModel->order()->pagination()->select()->fetch();
         $items = $websites->getItems();
         
         // 获取每个网站的关联货币、语言、域名
@@ -74,23 +76,25 @@ class Website extends BackendController
     /**
      * AJAX 搜索接口
      */
-    private function searchAjax()
+    private function searchAjax(): string
     {
-        header('Content-Type: application/json; charset=utf-8');
-        
         try {
             // 搜索功能
-            $search = $this->request->getGet('search', '');
-            $websiteModel = clone $this->website;
-            
-            if ($search) {
-                $searchPattern = '%' . $search . '%';
-                $websiteModel->where('name', $searchPattern, 'LIKE')
-                    ->where('code', $searchPattern, 'LIKE', 'OR')
-                    ->where('url', $searchPattern, 'LIKE', 'OR');
+            $search = trim((string)$this->request->getGet('search', ''));
+            $pageSize = (int)$this->request->getGet('pageSize', 10);
+            if ($pageSize < 1) {
+                $pageSize = 10;
             }
-            
-            $websites = $websiteModel->order()->pagination()->select()->fetch();
+            $pageSize = min($pageSize, 1000);
+
+            $websiteModel = $this->createWebsiteListingModel();
+            $this->applyWebsiteSearch($websiteModel, $search);
+
+            $websites = $websiteModel->order()->pagination(1, $pageSize, [
+                'page' => 1,
+                'pageSize' => $pageSize,
+                'search' => $search,
+            ])->select()->fetch();
             $items = $websites->getItems();
             
             // 获取每个网站的关联货币、语言、域名
@@ -116,20 +120,43 @@ class Website extends BackendController
             $this->assign('websites', $items);
             $this->assign('pagination', $websites->getPagination());
             $this->assign('search', $search);
-            $tableHtml = $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml');
-            
-            echo json_encode([
+            $tableHtml = $this->template('Weline_Websites::templates/Admin/Website/table.phtml');
+
+            $payload = [
                 'success' => true,
                 'html' => $tableHtml,
                 'count' => count($items)
-            ], JSON_UNESCAPED_UNICODE);
-        } catch (\Exception $e) {
-            echo json_encode([
+            ];
+        } catch (\Throwable $e) {
+            $payload = [
                 'success' => false,
                 'message' => $e->getMessage()
-            ], JSON_UNESCAPED_UNICODE);
+            ];
         }
-        exit;
+
+        return $this->fetchJson($payload);
+    }
+
+    private function createWebsiteListingModel(): \Weline\Websites\Model\Website
+    {
+        /** @var \Weline\Websites\Model\Website $websiteModel */
+        $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class, [], false);
+        $websiteModel->clearQuery();
+        return $websiteModel;
+    }
+
+    private function applyWebsiteSearch(\Weline\Websites\Model\Website $websiteModel, string $search): void
+    {
+        if ($search === '') {
+            return;
+        }
+
+        $searchPattern = '%' . $search . '%';
+        $websiteModel->where([
+            [\Weline\Websites\Model\Website::schema_fields_NAME, 'LIKE', $searchPattern, 'OR'],
+            [\Weline\Websites\Model\Website::schema_fields_CODE, 'LIKE', $searchPattern, 'OR'],
+            [\Weline\Websites\Model\Website::schema_fields_URL, 'LIKE', $searchPattern],
+        ]);
     }
 
     #[Acl('Weline_Websites::website_add', '添加网站', 'mdi mdi-plus', '网站管理')]
@@ -140,6 +167,7 @@ class Website extends BackendController
         
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
+            $postData = $data;
             try {
                 $poolIds = $data['pool_ids'] ?? '';
                 $subPath = $this->normalizeSubPath((string)($data['sub_path'] ?? ''));
@@ -184,11 +212,13 @@ class Website extends BackendController
                 if (empty($data['default_language']) && !empty($languageCodes)) {
                     $data['default_language'] = $languageCodes[0];
                 }
+                $startPagePath = $this->normalizeStartPagePath((string)($data['start_page_path'] ?? ''));
                 
                 if (isset($data['website_id'])) {
                     unset($data['website_id']);
                 }
-                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path']);
+                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path'], $data['start_page_path']);
+                $this->stripExtensionPostData($data);
                 $this->website->clearData()->setData($data)->save();
                 $websiteId = $this->website->getId();
                 
@@ -203,21 +233,11 @@ class Website extends BackendController
                 
                 $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
                 $websiteLanguage->setWebsiteLanguages((int)$websiteId, $languageCodes);
+                $this->saveStartPagePathConfig($this->website->getCode(), $startPagePath);
+
+                $this->dispatchWebsiteSaveAfter((int)$websiteId, 'add', $this->website->getData(), $postData, $addressList);
                 
-                $seoAccountId = (int)($data['seo_account_id'] ?? 0);
-                if ($seoAccountId > 0) {
-                    try {
-                        $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-                        $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', [
-                            'website_id' => (int)$websiteId,
-                            'account_id' => $seoAccountId,
-                            'is_auto_submit' => true,
-                        ]);
-                    } catch (\Exception $e) {
-                    }
-                }
-                
-                $this->redirect('/component/offcanvas/success', [
+                $this->redirect('component/backend/offcanvas/getSuccess', [
                     'msg' => __('网站添加成功'),
                     'url' => '*/admin/website',
                     'reload' => '1',
@@ -229,7 +249,7 @@ class Website extends BackendController
                 if (DEV) {
                     $errorMsg .= "\n\n[File] " . $e->getFile() . ':' . $e->getLine();
                 }
-                $this->redirect('/component/offcanvas/error', [
+                $this->redirect('component/backend/offcanvas/getError', [
                     'msg' => __('网站添加失败: %{1}', [$errorMsg]),
                     'url' => '/',
                     'reload' => '0',
@@ -245,6 +265,8 @@ class Website extends BackendController
         $this->assign('selected_pool_ids', []);
         $this->assign('domain_options', $this->getDomainOptions());
         $this->assign('sub_path', '');
+        $this->assign('start_page_route_options', $this->getStartPageRouteOptions());
+        $this->assign('selected_start_page_path', '');
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -268,7 +290,7 @@ class Website extends BackendController
         $websiteId = $this->request->getParam('id');
         
         if (empty($websiteId)) {
-            $this->redirect('/component/offcanvas/error', [
+            $this->redirect('component/backend/offcanvas/getError', [
                 'msg' => __('网站ID不能为空'),
                 'reload' => '0',
                 'time' => '3',
@@ -283,7 +305,7 @@ class Website extends BackendController
         
         // 检查网站是否存在
         if (!$this->website->getWebsiteId()) {
-            $this->redirect('/component/offcanvas/error', [
+            $this->redirect('component/backend/offcanvas/getError', [
                 'msg' => __('网站不存在'),
                 'reload' => '0',
                 'time' => '3',
@@ -293,6 +315,7 @@ class Website extends BackendController
 
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
+            $postData = $data;
             
             // 从 POST 数据中获取 website_id，如果没有则从 URL 参数中获取 id，最后使用已加载的 websiteId
             $postWebsiteId = $data['website_id'] ?? null;
@@ -305,7 +328,7 @@ class Website extends BackendController
             
             // 如果还是没有，说明是新增，不是编辑
             if (empty($postWebsiteId)) {
-                $this->redirect('/component/offcanvas/error', [
+                $this->redirect('component/backend/offcanvas/getError', [
                     'msg' => __('网站ID不能为空'),
                     'reload' => '0',
                     'time' => '3',
@@ -352,9 +375,11 @@ class Website extends BackendController
                 if (empty($data['default_language']) && !empty($languageCodes)) {
                     $data['default_language'] = $languageCodes[0];
                 }
+                $startPagePath = $this->normalizeStartPagePath((string)($data['start_page_path'] ?? ''));
                 
                 $data['website_id'] = $postWebsiteId;
-                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path']);
+                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path'], $data['start_page_path']);
+                $this->stripExtensionPostData($data);
                 $this->website->addData($data)->save();
                 
                 $this->saveWebsiteDomains($postWebsiteId, $addressList);
@@ -373,27 +398,17 @@ class Website extends BackendController
                     MessageManager::warning(__('保存关联语言失败: %{1}', [$e->getMessage()]));
                 }
                 
-                $seoAccountId = (int)($data['seo_account_id'] ?? 0);
-                if ($seoAccountId > 0) {
-                    try {
-                        $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-                        $eventsManager->dispatch('Weline_Seo::domain::website_account_bind', [
-                            'website_id' => $postWebsiteId,
-                            'account_id' => $seoAccountId,
-                            'is_auto_submit' => true,
-                        ]);
-                    } catch (\Exception $e) {
-                    }
-                }
+                $this->saveStartPagePathConfig($this->website->getCode(), $startPagePath);
+                $this->dispatchWebsiteSaveAfter($postWebsiteId, 'edit', $this->website->getData(), $postData, $addressList);
                 
-                $this->redirect('/component/offcanvas/success', [
+                $this->redirect('component/backend/offcanvas/getSuccess', [
                     'msg' => __('网站更新成功'),
                     'url' => '*/admin/website',
                     'reload' => '1',
                     'time' => '3',
                 ]);
             } catch (\Exception $e) {
-                $this->redirect('/component/offcanvas/error', [
+                $this->redirect('component/backend/offcanvas/getError', [
                     'msg' => $e->getMessage(),
                     'reload' => '0',
                     'time' => '5',
@@ -421,7 +436,8 @@ class Website extends BackendController
             $selectedLanguages = [];
         }
         
-        $this->assign('website', $this->website->getData());
+        $websiteData = $this->website->getData();
+        $this->assign('website', $websiteData);
         $this->assign('selected_currencies', $selectedCurrencies);
         $this->assign('selected_languages', $selectedLanguages);
         $selectedPoolIds = [];
@@ -440,6 +456,8 @@ class Website extends BackendController
         $this->assign('selected_pool_ids', $selectedPoolIds);
         $this->assign('domain_options', $this->getDomainOptions());
         $this->assign('sub_path', $this->getPrimarySubPathForWebsite($websiteId));
+        $this->assign('start_page_route_options', $this->getStartPageRouteOptions());
+        $this->assign('selected_start_page_path', $this->getStartPagePathForWebsiteCode((string)($websiteData['code'] ?? '')));
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -463,6 +481,7 @@ class Website extends BackendController
     public function quickSave()
     {
         try {
+            $postData = $this->request->getPost();
             $name = trim((string) $this->request->getPost('name', ''));
             $code = trim((string) $this->request->getPost('code', ''));
             $addressLines = trim((string) $this->request->getPost('address_lines', ''));
@@ -470,6 +489,7 @@ class Website extends BackendController
             $url = trim((string) $this->request->getPost('url', ''));
             $defaultTimezone = (string) $this->request->getPost('default_timezone', 'Asia/Shanghai');
             $scope = trim((string) $this->request->getPost('scope', ''));
+            $startPagePath = $this->normalizeStartPagePath((string)$this->request->getPost('start_page_path', ''));
             
             if (empty($name)) {
                 return $this->fetchJson(['success' => false, 'message' => __('站点名称不能为空')]);
@@ -539,6 +559,8 @@ class Website extends BackendController
                 throw new \Exception(__('网站保存失败，未能获取网站ID'));
             }
             $this->saveWebsiteDomains($websiteId, $addressList);
+            $this->saveStartPagePathConfig($newWebsite->getCode(), $startPagePath);
+            $this->dispatchWebsiteSaveAfter($websiteId, 'quick_save', $newWebsite->getData(), $postData, $addressList);
             
             return $this->fetchJson([
                 'success' => true,
@@ -549,6 +571,7 @@ class Website extends BackendController
                     'code' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_CODE),
                     'url' => $primaryUrl,
                     'scope' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_SCOPE) ?? '',
+                    'start_page_path' => $startPagePath,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -608,6 +631,204 @@ class Website extends BackendController
      * 
      * @return array
      */
+    private function stripExtensionPostData(array &$data): void
+    {
+        unset(
+            $data['extensions']
+        );
+    }
+
+    private function normalizeStartPagePath(string $path): string
+    {
+        $path = trim($path, '/ ');
+        if ($path === '') {
+            return '';
+        }
+
+        foreach ($this->getStartPageRouteOptions() as $option) {
+            if (($option['value'] ?? '') === $path) {
+                return $path;
+            }
+        }
+
+        throw new \Exception(__('首页入口路由无效'));
+    }
+
+    private function saveStartPagePathConfig(string $websiteCode, string $path): void
+    {
+        $websiteCode = trim($websiteCode);
+        if ($websiteCode === '') {
+            return;
+        }
+
+        /** @var SystemConfig $systemConfig */
+        $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+        if ($path === '') {
+            $systemConfig->deleteScopedConfig(
+                key: self::FRONTEND_START_PAGE_CONFIG_KEY,
+                module: self::FRONTEND_START_PAGE_CONFIG_MODULE,
+                area: SystemConfig::area_FRONTEND,
+                scope: $websiteCode,
+                locale: SystemConfig::LOCALE_DEFAULT,
+                options: ['operation' => 'website_frontend_start_page_inherit']
+            );
+            $systemConfig->deleteScopedConfig(
+                key: KeysInterface::key_start_page_path,
+                module: KeysInterface::start_module,
+                area: SystemConfig::area_BACKEND,
+                scope: $websiteCode,
+                locale: SystemConfig::LOCALE_DEFAULT,
+                options: ['operation' => 'website_start_page_inherit']
+            );
+            return;
+        }
+
+        $systemConfig->setScopedConfig(
+            key: self::FRONTEND_START_PAGE_CONFIG_KEY,
+            value: $path,
+            module: self::FRONTEND_START_PAGE_CONFIG_MODULE,
+            area: SystemConfig::area_FRONTEND,
+            scope: $websiteCode,
+            locale: SystemConfig::LOCALE_DEFAULT,
+            options: ['operation' => 'website_frontend_start_page_save']
+        );
+        $systemConfig->setScopedConfig(
+            key: KeysInterface::key_start_page_path,
+            value: $path,
+            module: KeysInterface::start_module,
+            area: SystemConfig::area_BACKEND,
+            scope: $websiteCode,
+            locale: SystemConfig::LOCALE_DEFAULT,
+            options: ['operation' => 'website_start_page_save']
+        );
+    }
+
+    private function getStartPagePathForWebsiteCode(string $websiteCode): string
+    {
+        $websiteCode = trim($websiteCode);
+        if ($websiteCode === '') {
+            return '';
+        }
+
+        /** @var SystemConfig $systemConfig */
+        $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+        $value = $systemConfig->getConfig(
+            key: self::FRONTEND_START_PAGE_CONFIG_KEY,
+            module: self::FRONTEND_START_PAGE_CONFIG_MODULE,
+            area: SystemConfig::area_FRONTEND,
+            default: '',
+            scope: $websiteCode,
+            locale: SystemConfig::LOCALE_DEFAULT
+        );
+        if (is_scalar($value) && trim((string)$value) !== '') {
+            return trim((string)$value, '/ ');
+        }
+
+        $value = $systemConfig->getConfig(
+            key: KeysInterface::key_start_page_path,
+            module: KeysInterface::start_module,
+            area: SystemConfig::area_BACKEND,
+            default: '',
+            scope: $websiteCode,
+            locale: SystemConfig::LOCALE_DEFAULT
+        );
+
+        return is_scalar($value) ? trim((string)$value, '/ ') : '';
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string, module: string, controller: string, method: string}>
+     */
+    private function getStartPageRouteOptions(): array
+    {
+        try {
+            $routers = is_file(Env::path_FRONTEND_PC_ROUTER_FILE)
+                ? (array)include Env::path_FRONTEND_PC_ROUTER_FILE
+                : [];
+        } catch (\Throwable) {
+            $routers = [];
+        }
+
+        $options = [];
+        $seen = [];
+        foreach ($routers as $path => $router) {
+            if (!is_array($router)) {
+                continue;
+            }
+
+            $startPagePath = $this->extractStartPagePath((string)$path);
+            if ($startPagePath === '' || isset($seen[$startPagePath])) {
+                continue;
+            }
+
+            $module = (string)($router['module'] ?? '');
+            $class = is_array($router['class'] ?? null) ? $router['class'] : [];
+            $controller = (string)($class['controller_name'] ?? '');
+            $method = (string)($class['method'] ?? '');
+            $options[] = [
+                'value' => $startPagePath,
+                'label' => trim(($module !== '' ? $module . ' / ' : '') . $startPagePath),
+                'module' => $module,
+                'controller' => $controller,
+                'method' => $method,
+            ];
+            $seen[$startPagePath] = true;
+        }
+
+        usort($options, static function (array $left, array $right): int {
+            return [$left['module'] ?? '', $left['value'] ?? ''] <=> [$right['module'] ?? '', $right['value'] ?? ''];
+        });
+
+        return $options;
+    }
+
+    private function extractStartPagePath(string $path): string
+    {
+        if (str_contains($path, '::')) {
+            if (!str_ends_with($path, '::GET')) {
+                return '';
+            }
+            $path = str_replace('::GET', '', $path);
+        }
+
+        return trim($path, '/ ');
+    }
+
+    /**
+     * @param array<string, mixed> $websiteData
+     * @param array<string, mixed> $postData
+     * @param array<int, array<string, string>> $addressList
+     */
+    private function dispatchWebsiteSaveAfter(
+        int $websiteId,
+        string $action,
+        array $websiteData,
+        array $postData,
+        array $addressList = []
+    ): void {
+        if ($websiteId <= 0) {
+            return;
+        }
+
+        try {
+            $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $eventsManager->dispatch('Weline_Websites::website_save_after', [
+                'website_id' => $websiteId,
+                'website' => $websiteData,
+                'post_data' => $postData,
+                'address_list' => $addressList,
+                'action' => $action,
+            ]);
+        } catch (\Throwable $e) {
+            w_log_error(sprintf(
+                '[Weline_Websites] website_save_after dispatch failed: website_id=%d, action=%s, error=%s',
+                $websiteId,
+                $action,
+                $e->getMessage()
+            ));
+        }
+    }
+
     private function getAllCurrencies(): array
     {
         try {

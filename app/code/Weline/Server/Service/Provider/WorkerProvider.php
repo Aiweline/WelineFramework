@@ -67,7 +67,7 @@ class WorkerProvider extends AbstractServiceProvider
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';
 
         $script = $context->sslEnabled
-            ? $scriptDir . DS . 'worker_ssl.php'
+            ? $this->resolveSslWorkerScript($scriptDir, $context)
             : $scriptDir . DS . 'worker.php';
 
         $port = $this->getPort($instanceId, $context);
@@ -95,9 +95,10 @@ class WorkerProvider extends AbstractServiceProvider
         $arguments[] = '--control-port=' . $context->controlPort;
         $arguments[] = '--master-pid=' . $context->masterPid;
         $arguments[] = '--memory-limit=' . $context->getWorkerMemoryLimit();
+        $arguments[] = '--worker-count=' . $this->getInstanceCount($context);
 
-        if ($context->frontend) {
-            $arguments[] = '--frontend';
+        if ($context->windowMode) {
+            $arguments[] = '--win';
         }
 
         if ($mode === 'linux-direct') {
@@ -113,10 +114,9 @@ class WorkerProvider extends AbstractServiceProvider
         }
         $arguments[] = '--wls-loop-driver=' . $loopDriver;
 
-        // Dispatcher 模式（TCP 透传）下启用延迟 SSL
-        // Worker 先 tcp:// 接入，accept 后根据首包判断协议并手动启用 SSL
-        // 解决 ssl:// 非阻塞模式下 stream_socket_accept 无法完成 TLS 握手的问题。
-        if ($context->sslEnabled && $mode !== 'linux-direct') {
+        // 延迟 SSL 统一用 tcp:// 接入，accept 后按首包做 HTTP->HTTPS 跳转或 SNI 证书选择。
+        // 这同时覆盖 Dispatcher 透传和 linux-direct SO_REUSEPORT 模式。
+        if ($context->sslEnabled) {
             $arguments[] = '--defer-ssl';
         }
 
@@ -216,5 +216,27 @@ class WorkerProvider extends AbstractServiceProvider
             '--memory-port=' . $memoryPort,
             '--memory-token-file-name=' . $memoryTokenFileName,
         ];
+    }
+
+    private function resolveSslWorkerScript(string $scriptDir, ServiceContext $context): string
+    {
+        $engine = \strtolower(\trim((string)$context->getConfig('wls.ssl.engine', 'stream')));
+        if ($engine === '') {
+            $engine = 'stream';
+        }
+        if ($engine === 'event_buffer' && PHP_OS_FAMILY === 'Windows') {
+            throw new \InvalidArgumentException(
+                'wls.ssl.engine=event_buffer is not supported on native Windows: '
+                . 'PHP event SSL bufferevent server exits during TLS accept. Use stream or external TLS termination.'
+            );
+        }
+
+        return match ($engine) {
+            'stream' => $scriptDir . DS . 'worker_ssl.php',
+            'event_buffer' => $scriptDir . DS . 'worker_ssl_event.php',
+            default => throw new \InvalidArgumentException(
+                'Unsupported WLS SSL engine "' . $engine . '"; expected stream or event_buffer'
+            ),
+        };
     }
 }

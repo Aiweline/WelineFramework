@@ -182,9 +182,9 @@ class Slot implements TaglibInterface
         
         return "<{$wrapper}{$htmlAttrs}>{$content}</{$wrapper}>";
     }
-    
+
     /**
-     * 构建 HTML 属性字符串
+     * Build HTML attributes.
      */
     private static function buildHtmlAttributes(array $attrs): string
     {

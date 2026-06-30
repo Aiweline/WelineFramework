@@ -1,0 +1,1 @@
+Use `Weline_Order::frontend::account::index::orders` to inject storefront order UI into the customer account index host. The standard section shell is provided by `Weline_Order`, while concrete storefront implementations such as `WeShop_Order` should render their order list, status summary, and return-entry content through this hook.

@@ -146,6 +146,7 @@ class Value extends \Weline\Framework\Database\Model
             throw new Exception(__('属性不存在！'));
         }
         $this->attribute = $attribute;
+        $this->origin_table_name = '';
         $this->setData(self::schema_fields_attribute_id, $attribute->getId());
         $this->getTable();
         return $this;
@@ -205,11 +206,12 @@ class Value extends \Weline\Framework\Database\Model
             return parent::getTable('eav_attribute_type_value');
         }
         // 如果已经计算过表名，直接返回
-        if (!empty($this->origin_table_name)) {
-            return $this->origin_table_name;
+        $entityCode = trim((string) $this->attribute->current_getEntity()->getEntityCode());
+        $typeCode = trim((string) $this->attribute->getTypeModel()->getCode());
+        if ($entityCode === '' || $typeCode === '') {
+            return parent::getTable('eav_attribute_type_value');
         }
-        $table = 'eav_' . $this->attribute->current_getEntity()->getEntityCode() . '_' . $this->attribute->getTypeModel()->getCode();
-        $this->origin_table_name = parent::getTable($table);
+        $this->origin_table_name = parent::getTable('eav_' . $entityCode . '_' . $typeCode);
 
         return $this->origin_table_name;
     }

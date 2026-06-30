@@ -88,7 +88,7 @@ class Domain extends BackendController
 
             // 搜索过滤
             if (!empty($search)) {
-                $query->where(DomainModel::schema_fields_DOMAIN_NAME, 'like', "%{$search}%");
+                $query->where(DomainModel::schema_fields_DOMAIN_NAME, "%{$search}%", 'LIKE');
             }
 
             // 适配器过滤

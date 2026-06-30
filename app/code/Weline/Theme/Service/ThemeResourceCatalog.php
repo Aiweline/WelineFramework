@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Meta\Service\ParamDefinitionNormalizer;
 use Weline\Theme\Dto\ThemeSlotDefinition;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Model\WelineTheme;
@@ -81,6 +83,12 @@ class ThemeResourceCatalog
                 'file' => $resource['relative_path'],
                 'path' => $resource['file_path'],
                 'logical_key' => $resource['logical_key'],
+                'layout_info' => $resource['layout_info'] ?? [],
+                'layout_info_path' => $resource['layout_info_path'] ?? '',
+                'layout_info_error' => $resource['layout_info_error'] ?? '',
+                'layer_type' => $resource['layer_type'] ?? '',
+                'layer_key' => $resource['layer_key'] ?? '',
+                'module_name' => $resource['module_name'] ?? '',
             ];
         }
 
@@ -92,6 +100,15 @@ class ThemeResourceCatalog
         }
 
         return $layouts;
+    }
+
+    public function getLayoutResource(string $area, ?WelineTheme $theme, string $layoutType, string $option = 'default'): ?array
+    {
+        $layoutType = $this->normalizeLogicalSegment($layoutType);
+        $option = $this->normalizeLogicalSegment($option);
+        $logicalKey = 'layouts/' . $layoutType . '/' . ($option === '' ? 'default' : $option);
+
+        return $this->getResources('layouts', $area, $theme)[$logicalKey] ?? null;
     }
 
     public function getPartials(string $area = 'frontend', ?WelineTheme $theme = null): array
@@ -237,6 +254,9 @@ class ThemeResourceCatalog
             'theme_path' => (string)($directory['theme_path'] ?? ''),
             'layer_key' => (string)($directory['layer_key'] ?? ''),
             'layer_type' => (string)($directory['layer_type'] ?? ''),
+            'module_name' => (string)($directory['module_name'] ?? ''),
+            'module_path' => (string)($directory['module_path'] ?? ''),
+            'module_base_path' => (string)($directory['module_base_path'] ?? ''),
             'structure' => (string)($directory['structure'] ?? ''),
             'meta' => $meta,
             'params' => $this->formatParams($parsed['params'] ?? []),
@@ -260,6 +280,10 @@ class ThemeResourceCatalog
         $resource['layout_type'] = $layoutType;
         $resource['option'] = $option;
         $resource['logical_key'] = "layouts/{$layoutType}/{$option}";
+        $layoutInfo = $this->loadAdjacentLayoutInfo((string)$resource['file_path']);
+        $resource['layout_info'] = $layoutInfo['data'];
+        $resource['layout_info_path'] = $layoutInfo['path'];
+        $resource['layout_info_error'] = $layoutInfo['error'];
         return $resource;
     }
 
@@ -328,6 +352,47 @@ class ThemeResourceCatalog
         return [$type, $option === '' ? 'default' : $option];
     }
 
+    private function loadAdjacentLayoutInfo(string $filePath): array
+    {
+        $result = [
+            'data' => [],
+            'path' => '',
+            'error' => '',
+        ];
+
+        if (!str_ends_with(strtolower($filePath), '.phtml')) {
+            return $result;
+        }
+
+        $jsonPath = substr($filePath, 0, -6) . '.layout.json';
+        if (!is_file($jsonPath)) {
+            return $result;
+        }
+
+        $result['path'] = $jsonPath;
+        $raw = file_get_contents($jsonPath);
+        if (!is_string($raw) || trim($raw) === '') {
+            return $result;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            $result['error'] = json_last_error_msg();
+            return $result;
+        }
+
+        $result['data'] = $decoded;
+        return $result;
+    }
+
+    private function normalizeLogicalSegment(string $value): string
+    {
+        $value = str_replace('\\', '/', trim($value));
+        $segments = array_values(array_filter(explode('/', trim($value, '/')), static fn(string $segment): bool => $segment !== ''));
+
+        return implode('/', $segments);
+    }
+
     private function extractWidgetMeta(string $content, string $fallbackCode): array
     {
         $data = [
@@ -337,6 +402,7 @@ class ThemeResourceCatalog
             'type' => '',
             'area' => '',
             'position' => [],
+            'supports' => [],
             'slot' => null,
             'exclusive' => false,
             'compatible' => false,
@@ -355,6 +421,7 @@ class ThemeResourceCatalog
             'icon' => '/@widget\.icon\s+([^\r\n]+)/i',
             'page_layouts' => '/@widget\.page_layouts\s+([^\r\n]+)/i',
             'position' => '/@widget\.position\s+([^\r\n]+)/i',
+            'supports' => '/@widget\.supports\s+([^\r\n]+)/i',
         ];
 
         foreach ($patterns as $key => $pattern) {
@@ -378,6 +445,7 @@ class ThemeResourceCatalog
         }
 
         $data['position'] = $this->parseWidgetListValue($data['position']);
+        $data['supports'] = $this->parseWidgetListValue($data['supports']);
         $data['page_layouts'] = $this->parseWidgetListValue($data['page_layouts']) ?: ['*'];
 
         return $data;
@@ -410,23 +478,9 @@ class ThemeResourceCatalog
 
     private function formatParams(array $params): array
     {
-        $formatted = [];
-        foreach ($params as $param) {
-            if (!is_array($param) || empty($param['name'])) {
-                continue;
-            }
-            $formatted[$param['name']] = [
-                'name' => $param['name_label'] ?? $param['name'],
-                'label' => $param['name_label'] ?? $param['name'],
-                'description' => $param['description'] ?? '',
-                'default' => $param['default'] ?? null,
-                'type' => $param['type'] ?? 'text',
-                'required' => (bool)($param['required'] ?? false),
-                'options' => $param['options'] ?? [],
-            ];
-        }
-
-        return $formatted;
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        return $normalizer->normalizeParsedParamList($params);
     }
 
     private function extractSlots(string $content, string $area, string $filePath): array
@@ -448,7 +502,13 @@ class ThemeResourceCatalog
                     $this->toBool((string)($attributes['multiple'] ?? 'true'), true),
                     $this->toBool((string)($attributes['append'] ?? 'false')),
                     $this->toBool((string)($attributes['prepend'] ?? 'false')),
-                    ['position' => $attributes['position'] ?? null],
+                    [
+                        'position' => $attributes['position'] ?? null,
+                        'reject' => $this->splitCsv((string)($attributes['reject'] ?? '')),
+                        'max' => $this->normalizeOptionalInt($attributes['max'] ?? null),
+                        'min' => $this->normalizeOptionalInt($attributes['min'] ?? null),
+                        'required' => $this->toBool((string)($attributes['required'] ?? 'false')),
+                    ],
                     $filePath,
                 );
             }
@@ -470,7 +530,13 @@ class ThemeResourceCatalog
                     $this->toBool((string)($attributes['data-wslot-multiple'] ?? 'true'), true),
                     $this->toBool((string)($attributes['data-wslot-append'] ?? 'false')),
                     $this->toBool((string)($attributes['data-wslot-prepend'] ?? 'false')),
-                    ['position' => $attributes['data-wslot-position'] ?? null],
+                    [
+                        'position' => $attributes['data-wslot-position'] ?? null,
+                        'reject' => $this->splitCsv((string)($attributes['data-wslot-reject'] ?? '')),
+                        'max' => $this->normalizeOptionalInt($attributes['data-wslot-max'] ?? null),
+                        'min' => $this->normalizeOptionalInt($attributes['data-wslot-min'] ?? null),
+                        'required' => $this->toBool((string)($attributes['data-wslot-required'] ?? 'false')),
+                    ],
                     $filePath,
                 );
             }
@@ -489,6 +555,15 @@ class ThemeResourceCatalog
         }
 
         return $attributes;
+    }
+
+    private function normalizeOptionalInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_numeric($value) ? (int)$value : null;
     }
 
     private function splitCsv(string|array $value): array
