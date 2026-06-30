@@ -4210,12 +4210,36 @@ class WlsRuntime implements RuntimeInterface
 
         try {
             $body = $response->getBody();
-            if ($body === '' || $response->getHeader('Content-Encoding') !== null) {
+            if ($body === '') {
                 return;
             }
+
+            $contentEncodingHeader = $response->getHeader('Content-Encoding');
+            $contentEncoding = \strtolower(\trim(\is_array($contentEncodingHeader)
+                ? (string)($contentEncodingHeader[0] ?? '')
+                : (string)($contentEncodingHeader ?? '')
+            ));
+            $isGzip = $contentEncoding === 'gzip';
+            if ($isGzip) {
+                $decoded = \gzdecode($body);
+                if (!\is_string($decoded)) {
+                    return;
+                }
+                $body = $decoded;
+            } elseif ($contentEncoding !== '') {
+                return;
+            }
+
             $preparedBody = TelemetryBroadcaster::broadcast($body, $request, true);
             if ($preparedBody === $body) {
                 return;
+            }
+            if ($isGzip) {
+                $encoded = \gzencode($preparedBody, 6);
+                if (!\is_string($encoded)) {
+                    return;
+                }
+                $preparedBody = $encoded;
             }
             $response->setBody($preparedBody);
             if ($response->getHeader('Content-Length') !== null) {

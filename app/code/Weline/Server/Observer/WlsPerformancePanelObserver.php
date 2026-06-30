@@ -15,7 +15,7 @@ use Weline\Server\Service\WlsPerformanceTraceStore;
 class WlsPerformancePanelObserver implements ObserverInterface
 {
     private const DEFAULT_MAX_RESPONSE_BYTES = 1048576;
-    private const ASSET_VERSION = '20260630-wls-performance-panel-zh-1';
+    private const ASSET_VERSION = '20260630-wls-performance-panel-json-2';
 
     public function __construct(
         private readonly Request $request,
@@ -168,20 +168,11 @@ class WlsPerformancePanelObserver implements ObserverInterface
         }
         $cssUrl = $this->jsonString('/Weline/Server/view/statics/wls-performance-panel/panel.css?v=' . self::ASSET_VERSION);
         $jsUrl = $this->jsonString('/Weline/Server/view/statics/wls-performance-panel/panel.js?v=' . self::ASSET_VERSION);
-        $isDev = \defined('DEV') && DEV;
-        $apiScriptUrl = $this->jsonString($isDev
-            ? '/Weline/Frontend/view/statics/js/weline-api.js?v=' . self::ASSET_VERSION
-            : '/static/Weline/Frontend/js/weline-api.js'
-        );
-        $apiWorkerUrl = $this->jsonString($isDev
-            ? '/Weline/Frontend/view/statics/js/weline-api-worker.js?v=' . self::ASSET_VERSION
-            : '/static/Weline/Frontend/js/weline-api-worker.js'
-        );
-        $apiEndpoint = $this->jsonString(Env::getFrontendQueryBinPath());
+        $endpointUrl = $this->jsonString('/server/test/wls-performance-panel');
 
         return <<<HTML
 <script data-no-extract="true" data-load-order="last" data-weline-wls-performance-bootstrap="true">
-(function(d,w){"use strict";if(w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__)return;w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__=true;var command="wls";var buffer="";var cssUrl={$cssUrl};var jsUrl={$jsUrl};var requestId={$requestIdJson};var cssLoaded=false;var jsPromise=null;w.__WELINE_WLS_PANEL_CONFIG__=Object.assign({},w.__WELINE_WLS_PANEL_CONFIG__||{},{requestId:requestId,command:command,apiScriptUrl:{$apiScriptUrl},api:{workerUrl:{$apiWorkerUrl},endpoint:{$apiEndpoint},queryBinUrl:{$apiEndpoint},area:"frontend"}});function ignoredTarget(t){if(!t)return false;var tag=(t.tagName||"").toLowerCase();return tag==="input"||tag==="textarea"||tag==="select"||t.isContentEditable===true}function head(n){(d.head||d.documentElement).appendChild(n)}function loadCss(){if(cssLoaded||d.querySelector('link[data-weline-wls-panel="css"]')){cssLoaded=true;return Promise.resolve()}return new Promise(function(resolve,reject){var link=d.createElement("link");link.rel="stylesheet";link.href=cssUrl;link.setAttribute("data-weline-wls-panel","css");link.onload=function(){cssLoaded=true;resolve()};link.onerror=function(){reject(new Error("WLS 面板样式加载失败"))};head(link)})}function loadJs(){if(w.__WELINE_WLS_PANEL__){return Promise.resolve(w.__WELINE_WLS_PANEL__)}if(jsPromise)return jsPromise;jsPromise=new Promise(function(resolve,reject){var script=d.createElement("script");script.src=jsUrl;script.defer=true;script.setAttribute("data-weline-wls-panel","js");script.onload=function(){w.__WELINE_WLS_PANEL__?resolve(w.__WELINE_WLS_PANEL__):reject(new Error("WLS 面板 API 不存在"))};script.onerror=function(){reject(new Error("WLS 面板脚本加载失败"))};head(script)});return jsPromise}function openPanel(){loadCss().then(loadJs).then(function(panel){if(panel&&typeof panel.open==="function")panel.open({requestId:requestId})}).catch(function(error){if(w.console&&console.warn)console.warn("[wls-panel]",error)})}w.wlsPanel=openPanel;d.addEventListener("keydown",function(event){if(event.ctrlKey||event.metaKey||event.altKey||event.isComposing||ignoredTarget(event.target))return;if(!event.key||event.key.length!==1)return;buffer=(buffer+event.key.toLowerCase()).slice(-command.length);if(buffer!==command)return;buffer="";openPanel()},true)})(document,window);
+(function(d,w){"use strict";if(w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__)return;w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__=true;var command="wls";var buffer="";var cssUrl={$cssUrl};var jsUrl={$jsUrl};var endpointUrl={$endpointUrl};var requestId={$requestIdJson};var cssLoaded=false;var jsPromise=null;w.__WELINE_WLS_PANEL_CONFIG__=Object.assign({},w.__WELINE_WLS_PANEL_CONFIG__||{},{requestId:requestId,command:command,endpointUrl:endpointUrl});function ignoredTarget(t){if(!t)return false;var tag=(t.tagName||"").toLowerCase();return tag==="input"||tag==="textarea"||tag==="select"||t.isContentEditable===true}function head(n){(d.head||d.documentElement).appendChild(n)}function loadCss(){if(cssLoaded||d.querySelector('link[data-weline-wls-panel="css"]')){cssLoaded=true;return Promise.resolve()}return new Promise(function(resolve,reject){var link=d.createElement("link");link.rel="stylesheet";link.href=cssUrl;link.setAttribute("data-weline-wls-panel","css");link.onload=function(){cssLoaded=true;resolve()};link.onerror=function(){reject(new Error("WLS 面板样式加载失败"))};head(link)})}function loadJs(){if(w.__WELINE_WLS_PANEL__){return Promise.resolve(w.__WELINE_WLS_PANEL__)}if(jsPromise)return jsPromise;jsPromise=new Promise(function(resolve,reject){var script=d.createElement("script");script.src=jsUrl;script.defer=true;script.setAttribute("data-weline-wls-panel","js");script.onload=function(){w.__WELINE_WLS_PANEL__?resolve(w.__WELINE_WLS_PANEL__):reject(new Error("WLS 面板 API 不存在"))};script.onerror=function(){reject(new Error("WLS 面板脚本加载失败"))};head(script)});return jsPromise}function openPanel(){loadCss().then(loadJs).then(function(panel){if(panel&&typeof panel.open==="function")panel.open({requestId:requestId})}).catch(function(error){if(w.console&&console.warn)console.warn("[wls-panel]",error)})}function markEvent(event){try{Object.defineProperty(event,"__wlsPanelSeen",{value:true})}catch(error){event.__wlsPanelSeen=true}}function onKeydown(event){if(event.__wlsPanelSeen)return;markEvent(event);if(event.ctrlKey||event.metaKey||event.altKey||event.isComposing||ignoredTarget(event.target))return;if(!event.key||event.key.length!==1)return;buffer=(buffer+event.key.toLowerCase()).slice(-command.length);if(buffer!==command)return;buffer="";openPanel()}w.wlsPanel=openPanel;w.addEventListener("keydown",onKeydown,true);d.addEventListener("keydown",onKeydown,true)})(document,window);
 </script>
 HTML;
     }
