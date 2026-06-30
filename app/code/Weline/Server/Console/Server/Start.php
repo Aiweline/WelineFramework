@@ -3299,6 +3299,9 @@ class Start extends CommandAbstract
         $this->ensureHostsFileConfigured($config['host'] ?? '127.0.0.1');
         $this->traceStartupPhase($instanceName, 'hosts:after');
 
+        // 开发环境：确保 *.weline.test 泛域名证书存在，避免 hosts 中其他子域 TLS 主机名不匹配
+        $this->ensureManagedLocalWildcardCertificate();
+
         // 生成多域名证书映射文件（用于 SNI 支持）
         if (empty($config['no_ssl'])) {
             $this->traceStartupPhase($instanceName, 'certificate-map:before');
@@ -4408,6 +4411,41 @@ class Start extends CommandAbstract
             }
         } else {
             $this->printer->warning(__('配置 hosts 文件失败: %{1}', [$result['message'] ?? '未知错误']));
+        }
+    }
+
+    /**
+     * 开发环境自动准备 *.weline.test 泛域名证书，并确保本地 CA 被系统信任。
+     */
+    protected function ensureManagedLocalWildcardCertificate(): void
+    {
+        if (!LocalDomainPolicy::isDevelopmentMode()) {
+            return;
+        }
+
+        /** @var SslCertificateService $sslService */
+        $sslService = ObjectManager::getInstance(SslCertificateService::class);
+        $wildcard = LocalDomainPolicy::currentWildcardDomain();
+
+        if (!$sslService->hasValidLocalCertificate($wildcard)) {
+            $this->printer->note(__('正在为本地泛域名 %{1} 准备 SSL 证书...', [$wildcard]));
+        }
+
+        $email = Env::get('admin_email', 'admin@localhost');
+        $result = $sslService->ensureCertificate($wildcard, $this->resolveAcmeWebrootForStartup('default', []), $email);
+        if (($result['success'] ?? false) === true) {
+            if ($result['is_new'] ?? false) {
+                $this->printer->note(__('本地泛域名证书已就绪：%{1}', [$wildcard]));
+            }
+        } elseif (!empty($result['message'])) {
+            $this->printer->warning(__('本地泛域名证书准备失败：%{1}', [(string) $result['message']]));
+        }
+
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $trust = $sslService->ensureLocalDevelopmentCaTrusted();
+            if (($trust['trusted'] ?? false) !== true && !empty($trust['message'])) {
+                $this->printer->warning((string) $trust['message']);
+            }
         }
     }
 
