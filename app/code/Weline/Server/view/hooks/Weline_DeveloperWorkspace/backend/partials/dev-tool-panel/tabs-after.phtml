@@ -14,6 +14,17 @@ if (!Runtime::isWls()) {
     return;
 }
 ?>
-<button class="dev-tool-tab" data-tab="wls" onclick="DevToolPanel.switchMainTab(this, 'wls')">
+<button class="dev-tool-tab" data-tab="wls" data-dev-tool-tab-action="switch-main-tab">
     <i class="fa fa-server"></i> WLS
 </button>
+<script>
+(function() {
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-dev-tool-tab-action="switch-main-tab"][data-tab="wls"]');
+        if (!trigger) return;
+        if (window.DevToolPanel && typeof window.DevToolPanel.switchMainTab === 'function') {
+            window.DevToolPanel.switchMainTab(trigger, 'wls');
+        }
+    });
+})();
+</script>

@@ -1,80 +1,286 @@
-﻿账户绑定,账户绑定
-无效的请求方法,无效的请求方法
-请输入邮箱和密码,请输入邮箱和密码
-绑定失败：,绑定失败：
-解绑失败：,解绑失败：
-下载历史,下载历史
-缺少记录ID,缺少记录ID
-记录不存在,记录不存在
-记录已删除,记录已删除
-删除失败：,删除失败：
-历史记录已清空,历史记录已清空
-清空失败：,清空失败：
-应用商城,应用商城
-请先绑定官网账户,请先绑定官网账户
-获取授权令牌失败,获取授权令牌失败
-获取模块列表失败：,获取模块列表失败：
-缺少许可证密钥,缺少许可证密钥
-缺少模块ID,缺少模块ID
-模块安装成功,模块安装成功
-模块安装失败：,模块安装失败：
-安装失败：,安装失败：
-我的模块,我的模块
-模块不存在,模块不存在
-缺少模块标识,缺少模块标识
-卸载失败：,卸载失败：
-模块已卸载,模块已卸载
-检查更新失败：,检查更新失败：
-许可证管理,许可证管理
-获取授权令牌失败，请重新绑定账户,获取授权令牌失败，请重新绑定账户
-许可证激活成功,许可证激活成功
-激活失败,激活失败
-激活失败：,激活失败：
-验证失败：,验证失败：
-续订失败：,续订失败：
-应用下载完成,应用下载完成
-当应用市场模块下载完成后触发，用于安装前检查和下载日志处理。,当应用市场模块下载完成后触发，用于安装前检查和下载日志处理。
-子站应用商城，支持绑定官网账户、浏览下载模块、自动安装已购模块,子站应用商城，支持绑定官网账户、浏览下载模块、自动安装已购模块
-账户验证失败,账户验证失败
-账户绑定已更新,账户绑定已更新
-账户绑定成功,账户绑定成功
-账户绑定失败：,账户绑定失败：
-"OAuth 授权失败","OAuth 授权失败"
-获取用户信息失败,获取用户信息失败
-"OAuth 绑定失败：","OAuth 绑定失败："
-未找到已绑定的账户,未找到已绑定的账户
-账户已解绑,账户已解绑
-令牌无效，请重新绑定账户,令牌无效，请重新绑定账户
-令牌刷新失败,令牌刷新失败
-令牌已刷新,令牌已刷新
-令牌刷新失败：,令牌刷新失败：
-未绑定账户,未绑定账户
-账户令牌无效，请重新绑定,账户令牌无效，请重新绑定
-获取许可证列表失败：,获取许可证列表失败：
-令牌为空,令牌为空
-令牌格式无效,令牌格式无效
-令牌数据损坏,令牌数据损坏
-令牌解密失败,令牌解密失败
-下载失败,下载失败
-下载响应数据不完整,下载响应数据不完整
-文件校验失败,文件校验失败
-模块下载失败：,模块下载失败：
-模块文件不存在,模块文件不存在
-模块依赖不满足：,模块依赖不满足：
-"模块结构无效：找不到 register.php","模块结构无效：找不到 register.php"
-"模块结构无效：无法解析 register.php","模块结构无效：无法解析 register.php"
-模块结构无效：缺少模块名,模块结构无效：缺少模块名
-"模块名格式无效，必须是 Vendor_Module 格式","模块名格式无效，必须是 Vendor_Module 格式"
-"下载文件失败，HTTP 状态码：","下载文件失败，HTTP 状态码："
-可安装模块,可安装模块
-否,否
-是,是
-当前已绑定官网账户：,当前已绑定官网账户：
-未知邮箱,未知邮箱
-当前未绑定官网账户，请先完成绑定。,当前未绑定官网账户，请先完成绑定。
-下载历史数据已加载，可继续扩展为列表展示。,下载历史数据已加载，可继续扩展为列表展示。
-官网账户已绑定，可开始浏览并安装模块。,官网账户已绑定，可开始浏览并安装模块。
-尚未绑定官网账户，请先前往“账户绑定”完成绑定。,尚未绑定官网账户，请先前往“账户绑定”完成绑定。
-已安装模块数据已就绪，可继续扩展为表格展示。,已安装模块数据已就绪，可继续扩展为表格展示。
-请先绑定官网账户后再管理许可证。,请先绑定官网账户后再管理许可证。
-已加载许可证列表，可通过接口执行激活、校验和续订。,已加载许可证列表，可通过接口执行激活、校验和续订。
+﻿标签注册表同步失败,标签注册表同步失败
+标签注册表已同步,标签注册表已同步
+账户绑定,"Account Binding"
+缺少授权码,缺少授权码
+授权绑定失败：,授权绑定失败：
+无效的请求方法,"Invalid request method"
+请输入邮箱和密码,"Please enter email and password"
+绑定失败：,"Binding failed:"
+解绑失败：,"Unbinding failed:"
+下载历史,"Download history"
+缺少记录ID,"Missing record ID"
+记录不存在,"Record does not exist"
+记录已删除,"Record deleted"
+删除失败：,"Delete failed:"
+历史记录已清空,"History has been cleared"
+清空失败：,"Clear failed:"
+应用商城,"App Store"
+"缺少许可证或模块 ID","缺少许可证或模块 ID"
+模块已下载到临时目录,模块已下载到临时目录
+模块下载失败：,"Module download failed:"
+请先绑定官网账户,"Please bind the official site account first"
+获取授权令牌失败,"Failed to get authorization token"
+获取模块列表失败：,"Failed to fetch module list:"
+"缺少模块 ID","缺少模块 ID"
+安装授权,安装授权
+缺少许可证密钥,"Missing license key"
+该应用已安装旧版本，请进入我的模块执行更新。,"An older version of this app is installed. Open My modules to update it."
+该应用已安装，无需重复安装。,"This app is already installed. No repeated installation is needed."
+请勾选并授权应用所需权限后再安装。,请勾选并授权应用所需权限后再安装。
+模块已下载安装，功能页面已生成,模块已下载安装，功能页面已生成
+模块安装失败：,"Module installation failed:"
+安装失败：,"Installation failed:"
+授权令牌无效，请重新授权官网账户,授权令牌无效，请重新授权官网账户
+获取模块列表失败,获取模块列表失败
+当前账户还没有该应用的许可证，请先在官网获取或购买。,当前账户还没有该应用的许可证，请先在官网获取或购买。
+未找到可安装的应用或应用尚未发布。,未找到可安装的应用或应用尚未发布。
+我的模块,"My modules"
+模块不存在,"Module does not exist"
+缺少模块标识,"Missing module identifier"
+"App 商城不执行卸载。请使用系统模块卸载流程，系统会自动执行卸载数据备份。","App 商城不执行卸载。请使用系统模块卸载流程，系统会自动执行卸载数据备份。"
+获取系统卸载提示失败：,获取系统卸载提示失败：
+已重新检查平台更新。,"Platform updates have been checked again."
+"缺少平台应用 ID","缺少平台应用 ID"
+获取授权令牌失败，请重新绑定官网账户,"Failed to get the authorization token. Bind the official account again."
+评价提交失败,评价提交失败
+评价已提交，官网评分已更新。,评价已提交，官网评分已更新。
+评价提交失败：,评价提交失败：
+"缺少安装记录 ID","Missing install record ID"
+卸载失败：,"Uninstall failed:"
+当前模块已是最新版本,"The current module is already up to date"
+更新失败：,"Update failed:"
+从商城应用说明文件恢复的安装记录,"Recovered install record from the marketplace app readme."
+请先绑定官网账户后检查更新,"Bind the official account before checking updates."
+检查更新失败,"Failed to check for updates"
+检查更新失败：,"Failed to check for updates:"
+许可证管理,"License Management"
+获取授权令牌失败，请重新绑定账户,"Failed to get authorization token. Please rebind the account."
+许可证激活成功,"License activated successfully"
+激活失败,"Activation failed"
+激活失败：,"Activation failed:"
+验证失败：,"Validation failed:"
+续订失败：,"Renewal failed:"
+应用下载完成,"Application download completed"
+当应用市场模块下载完成后触发，用于安装前检查和下载日志处理。,"Triggered after App Store module downloads complete, for pre-install checks and download log handling."
+"AppStore query provider unsupported operation: %{1}","AppStore query provider unsupported operation: %{1}"
+"AppStore Queries","AppStore Queries"
+"Provides installed module marketplace metadata for other modules.","Provides installed module marketplace metadata for other modules."
+"List installed modules with marketplace meta tags and surfaces.","List installed modules with marketplace meta tags and surfaces."
+"Typed tag filter, for example module:wls","Typed tag filter, for example module:wls"
+"Surface filter, for example backend or surface:backend","Surface filter, for example backend or surface:backend"
+"Optional module name filter","Optional module name filter"
+"Locale used for localized marketplace meta","Locale used for localized marketplace meta"
+子站应用商城，支持绑定官网账户、浏览下载模块、自动安装已购模块,"Subsite App Store supports binding the official site account, browsing downloadable modules, and automatically installing purchased modules."
+账户验证失败,"Account verification failed"
+账户绑定已更新,"Account binding updated"
+账户绑定成功,"Account binding succeeded"
+账户绑定失败：,"Account binding failed:"
+"OAuth 授权失败","OAuth authorization failed"
+获取用户信息失败,"Failed to get user information"
+"OAuth 绑定失败：","OAuth binding failed:"
+未找到已绑定的账户,"No bound account found"
+账户已解绑,"Account unbound"
+令牌无效，请重新绑定账户,"Token is invalid. Please rebind the account."
+令牌刷新失败,"Token refresh failed"
+令牌已刷新,"Token refreshed"
+令牌刷新失败：,"Token refresh failed:"
+未绑定账户,"No account bound"
+账户令牌无效，请重新绑定,"Account token is invalid. Please rebind."
+获取许可证列表失败：,"Failed to fetch license list:"
+令牌为空,"Token is empty"
+令牌格式无效,"Token format is invalid"
+令牌数据损坏,"Token data is corrupted"
+令牌解密失败,"Token decryption failed"
+"缺少平台模块 ID，无法刷新 Meta","缺少平台模块 ID，无法刷新 Meta"
+"请先绑定官网账户后刷新 Meta","请先绑定官网账户后刷新 Meta"
+"平台未返回有效 Meta","平台未返回有效 Meta"
+"Meta 已从平台刷新","Meta 已从平台刷新"
+请先绑定官网账户后同步标签注册表,请先绑定官网账户后同步标签注册表
+平台未返回有效标签注册表,平台未返回有效标签注册表
+下载响应数据不完整,"Download response data is incomplete"
+文件校验失败,"File verification failed"
+下载失败,"Download failed"
+模块文件不存在,"Module file does not exist"
+模块依赖不满足：,"Module dependencies are not satisfied:"
+"模块结构无效：找不到 register.php","Invalid module structure: register.php not found"
+"模块结构无效：无法解析 register.php","Invalid module structure: failed to parse register.php"
+模块结构无效：缺少模块名,"Invalid module structure: missing module name"
+"模块名格式无效，必须是 Vendor_Module 格式","Invalid module name format. Expected Vendor_Module."
+"Invalid app store package manifest.","Invalid app store package manifest."
+"模块 Marketplace Meta 校验失败：","模块 Marketplace Meta 校验失败："
+"Invalid app store package path:","Invalid app store package path:"
+"Invalid bundled source path:","Invalid bundled source path:"
+"App code path does not exist.","App code path does not exist."
+"Invalid bundled target path:","Invalid bundled target path:"
+"模块 register.php 不存在","模块 register.php 不存在"
+无法创建模块安装脚本,无法创建模块安装脚本
+无法写入商城应用说明文件：,无法写入商城应用说明文件：
+"无法写入 AppStore 安装记录：","无法写入 AppStore 安装记录："
+"下载文件失败，HTTP 状态码：","Failed to download file. HTTP status code:"
+"Module download failed:","Module download failed:"
+"failed to save failure log:","failed to save failure log:"
+缺少模块名称,"Missing module name"
+模块名称不合法,"Invalid module name"
+"App 商城模块不能在这里卸载","The App Store module cannot be uninstalled here"
+系统卸载失败：,"System uninstall failed:"
+已通过系统卸载流程卸载模块，数据和文件备份由系统卸载流程自动完成。,"The module was uninstalled through the system flow. Data and file backups were handled automatically."
+已省略前面的系统输出，仅显示最后一段。,"Earlier system output was omitted; only the final section is shown."
+缺少许可证，无法下载更新包,"Missing license. The update package cannot be downloaded."
+"缺少平台模块 ID，无法下载更新包","Missing platform module ID. The update package cannot be downloaded."
+平台未返回最新版本号,"The platform did not return the latest version."
+"模块已更新到 %{1}","Module updated to %{1}"
+可安装模块,"Installable Modules"
+否,No
+是,Yes
+去官网授权,去官网授权
+当前终端已绑定官方账户,当前终端已绑定官方账户
+邮箱：,邮箱：
+未知邮箱,"Unknown email"
+名称：,名称：
+未设置,未设置
+店铺域名：,"Store domain:"
+当前终端尚未绑定官方账户。请点击“去官网授权”，在官网注册或登录后自动回到当前终端。,当前终端尚未绑定官方账户。请点击“去官网授权”，在官网注册或登录后自动回到当前终端。
+授权配置,授权配置
+官网地址,官网地址
+回调地址,回调地址
+"每次从官方 App 商店下载都会记录当时下载的模块版本、文件哈希和许可证，便于追踪安装来源。","Every official App Store download records the module version, file hash, and license used at that moment."
+"最近 50 条","Latest 50"
+时间,Time
+模块,模块
+下载版本,"Downloaded version"
+状态,Status
+文件,File
+许可证,许可证
+来源,Source
+完成：,Completed:
+哈希：,Hash:
+"官方 App 商店","Official App Store"
+"暂无下载历史。完成一次 App 商店下载后，这里会显示实际下载版本。","No download history yet. After an App Store download, the exact downloaded version appears here."
+安装授权未完成,安装授权未完成
+应用安装授权,应用安装授权
+待安装应用,待安装应用
+版本,版本
+当前终端,当前终端
+返回应用商城,"Back to App Store"
+"Back To WLS Panel","Back To WLS Panel"
+该应用已安装,"This app is already installed"
+当前终端已安装该应用，不需要重复执行安装授权。,"This terminal already has this app installed. Repeating installation authorization is not needed."
+本地版本：,"Local version:"
+检测到商城存在新版本，请进入我的模块走更新流程。,"A newer marketplace version is available. Use the update flow in My modules."
+去更新,Update
+该应用请求访问以下资源,该应用请求访问以下资源
+勾选全部必需权限后，终端才会下载安装到本系统。,勾选全部必需权限后，终端才会下载安装到本系统。
+该应用未声明额外资源权限，将只执行模块包下载、校验和安装。,该应用未声明额外资源权限，将只执行模块包下载、校验和安装。
+确认授权并安装,确认授权并安装
+授权记录与安装记录会保留在当前终端，用于后续更新、卸载和审计。,授权记录与安装记录会保留在当前终端，用于后续更新、卸载和审计。
+授权并安装,授权并安装
+生产商城,"Production App Store"
+本地商城,"Local App Store"
+已配置,Configured
+未知,Unknown
+账户授权,账户授权
+应用商城端点,"App Store endpoint"
+"本地开发应使用 https://app.weline.test:9523，部署后测试应自动使用 https://app.aiweline.com。","Local development should use https://app.weline.test:9523; deployed tests should automatically use https://app.aiweline.com."
+来源：,Source:
+文件：,文件：
+目录：,目录：
+商城说明：,商城说明：
+安装记录：,安装记录：
+功能页面：,功能页面：
+尚未绑定官方账户。请先到账户授权页面完成官网授权。,尚未绑定官方账户。请先到账户授权页面完成官网授权。
+官方账户已绑定：,官方账户已绑定：
+未知账户,未知账户
+搜索应用、开发者或能力,"Search apps, developers, or capabilities"
+输入关键词后直接在结果里安装,"Type keywords and install directly from the results"
+价格,价格
+全部价格,"All prices"
+免费,免费
+付费,付费
+标签,标签
+Surface,Surface
+搜索,Search
+免费应用授权后安装,免费应用授权后安装
+付费应用购买并授权后安装,付费应用购买并授权后安装
+同一官网账号可多端登录,"One official account can sign in on multiple terminals"
+可更新,"Update available"
+已安装,Installed
+版本：,版本：
+本地：,Local:
+下载：,下载：
+大小：,大小：
+下载,下载
+购买,Buy
+购买后刷新,"Refresh after purchase"
+免费授权尚未下发，请刷新列表后再安装。,"The free license has not been issued yet. Refresh the list and install again."
+没有找到匹配的应用。,"No matching apps found."
+官网暂未发布可下载模块。,官网暂未发布可下载模块。
+正在卸载,Uninstalling
+"这里管理从官方 App 商店安装的模块；卸载直接走系统模块卸载流程，数据和文件备份由系统自动完成。","Manage modules installed from the official App Store here. Uninstall runs through the system module removal flow, so data and file backups are handled automatically."
+检查更新,"Check updates"
+正在卸载模块，请不要关闭页面。,"Uninstalling the module. Do not close this page."
+系统正在执行数据备份、文件备份和模块卸载，完成后页面会刷新。,"The system is backing up data and files, then uninstalling the module. The page will refresh when it finishes."
+旧版本备份：,"Old version backup:"
+更新记录：,"Update record:"
+模块：,模块：
+卸载记录：,"Uninstall record:"
+系统卸载输出,"System uninstall output"
+最近一次卸载已完成,"Latest uninstall completed"
+卸载时间：,"Uninstalled at:"
+卸载结果记录：,"Uninstall result record:"
+更新检查不可用,"Update check unavailable"
+全部标签,全部标签
+"全部 Surface","全部 Surface"
+筛选,筛选
+清除筛选,清除筛选
+当前版本,"Current version"
+平台最新版本,"Latest platform version"
+更新状态,"Update status"
+系统状态,系统状态
+操作,Actions
+说明：,说明：
+未获取,"Not fetched"
+已是最新,"Up to date"
+待检查,"Pending check"
+官方商城,官方商城
+已启用,已启用
+已注册未启用,已注册未启用
+系统中已不存在,系统中已不存在
+安装：,Installed:
+更新：,Updated:
+更新,Update
+卸载,Uninstall
+卸载前系统会自动执行数据与文件备份。,"The system automatically backs up data and files before uninstalling."
+评分,评分
+评价,评价
+安装使用后的反馈,安装使用后的反馈
+提交评价,提交评价
+"暂无 App 商城安装记录。","暂无 App 商城安装记录。"
+"当前列表只展示通过官方 App 商店安装的应用；系统内置模块不会出现在这里。","This list only shows apps installed from the official App Store. Built-in system modules do not appear here."
+有效,Valid
+未激活,"Not activated"
+待激活,"Pending activation"
+已过期,Expired
+已撤销,Revoked
+统一查看官网账户下发到当前后台的模块许可证。,"View module licenses issued by the official account to this backend."
+请先绑定官网账户后再管理许可证。,"Bind the official site account before managing licenses."
+许可证总数,"Total licenses"
+有效许可证,"Valid licenses"
+需处理许可证,"Licenses needing attention"
+"许可证 Key","License Key"
+模块/标题,"Module / Title"
+绑定域名/店铺域名,"Bound domain / Store domain"
+过期时间,"Expiration time"
+最近校验时间,"Last validation time"
+未返回,"Not returned"
+未命名模块,"Unnamed module"
+激活：,Activated:
+未绑定,"Not bound"
+长期有效或未返回,"Lifetime or not returned"
+未校验,"Not validated"
+校验,Validate
+激活,Activate
+续订,Renew
+"缺少许可证 Key，无法操作","Missing license key. Actions are unavailable."
+暂无许可证,"No licenses"
+当前官网账户还没有返回可管理的许可证。安装免费应用或购买付费应用后刷新本页。,"The current official account has not returned manageable licenses. Install a free app or buy a paid app, then refresh this page."
+去应用商城,"Go to App Store"

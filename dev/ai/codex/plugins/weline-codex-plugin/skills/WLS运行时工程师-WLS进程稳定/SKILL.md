@@ -1,0 +1,97 @@
+---
+name: WLS运行时工程师-WLS进程稳定
+description: WLS runtime engineer skill for worker lifecycle, reload versus restart decisions, process cleanup, and runtime stability.
+version: 1.1.2
+---
+
+# Role
+
+This skill owns WLS process lifecycle, worker stability, reload and restart behavior, and runtime-safe process control. It protects long-running runtime behavior and avoids changes that would destabilize workers or orchestration.
+
+# When To Use
+
+- Use for WLS lifecycle issues, workers, dispatcher behavior, process cleanup, reload versus restart, and runtime process orchestration.
+- Use for keywords such as WLS, worker, dispatcher, process, `server:start`, `server:reload`, `server:restart`, and lifecycle.
+- Use when the bug or change is runtime-sensitive and affects long-lived execution.
+
+# Source Material
+
+- `AI-ENTRY.md`
+- `CLAUDE.md`
+- `dev/ai/skills/weline-framework-runtime/SKILL.md`
+- `dev/ai/skills/runtime-and-process/SKILL.md`
+- `dev/ai/skills/windows-command-quoting/SKILL.md`
+- `dev/ai/skills/code-generation-standards/SKILL.md`
+
+# Responsibilities
+
+- Diagnose runtime issues through lifecycle-aware reasoning instead of one-off process killing.
+- Choose reload or restart correctly based on the affected runtime surface.
+- Keep process cleanup explicit and safe.
+- Preserve worker responsiveness and avoid blocking behavior in runtime-sensitive code.
+
+# Workflow
+
+1. Read `AI-ENTRY.md`, runtime docs, and the relevant WLS skill material before touching process code.
+2. Identify whether the problem is business-code reloadable, startup-parameter sensitive, or orchestration-specific.
+3. Trace the affected lifecycle path through worker, dispatcher, orchestrator, or master behavior.
+4. Before using hot reload or restart as evidence, confirm a matching WLS instance is actually running; otherwise switch to non-runtime bootstrap/collect checks and report the runtime gap honestly.
+5. Implement the smallest stable runtime change in the owning process path.
+6. Validate with a dedicated WLS test instance on port `9502+` using a unique name.
+7. Stop the dedicated WLS test instance after validation.
+8. Report lifecycle impact, validation steps, and cleanup confirmation.
+
+# Weline Rules
+
+- Do not use default WLS port `9501` for AI testing.
+- Always start a dedicated WLS test instance on port `9502+`.
+- Always use a unique AI test instance name.
+- Always stop the AI test instance after testing.
+- Do not reuse test instance names.
+- Do not leave test instances running.
+- Do not use `sleep`, `die`, or `exit` inside WLS runtime-sensitive code.
+- Do not introduce or rely on global variables or process-wide mutable global state in framework/runtime code; `$_SERVER` is only allowed in Fiber/WLS request context assembly, and all other code must use `WelineEnv`, `w_env*`, request objects, or explicit `Context`; context assembly must hand off explicit Context, request, session, or service objects before WLS workers handle requests.
+- Do not treat `setup:upgrade --hot`, `server:reload`, or similar commands as proof if no target WLS instance was alive to receive them.
+- For hot-path performance work, keep cache boundaries away from request-, user-, session-, cart-, auth-, permission-, language-, currency-, and current-query-dependent state unless those dimensions are explicitly represented in the cache key.
+- If Browser-visible performance is the target, re-measure on the dedicated runtime after reload/restart and confirm that the optimization did not break account/sidebar/language or other user-scoped behavior.
+
+# Inputs Required
+
+- The runtime symptom, logs, and affected lifecycle stage.
+- The owning process or runtime component.
+- Whether the change affects reloadable code, startup parameters, or shared services.
+- The validation instance name and port plan.
+
+# Expected Output
+
+- A runtime-safe change to the owning WLS process path.
+- Evidence from a dedicated WLS test instance.
+- Confirmation that the test instance was stopped after validation.
+
+# Validation
+
+- Start a unique dedicated test instance on port `9502+`.
+- Use reload for normal code-path validation and restart only when lifecycle conditions require it.
+- Confirm worker behavior, cleanup, and stability after the change.
+- Stop the dedicated test instance and verify no stray instance is left running.
+- If runtime validation could not happen because the instance was absent, record the exact missing instance state and the fallback bootstrap/CLI evidence used instead.
+
+# Constraints
+
+- Do not validate on port `9501`.
+- Do not kill ports or processes blindly when lifecycle-aware cleanup is required.
+- Do not introduce blocking calls into runtime-sensitive worker code.
+- Do not leave runtime test instances behind after the session.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
+

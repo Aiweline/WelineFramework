@@ -1,0 +1,534 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$siteName = (string)($this->getData('login_site_name') ?: 'Weline');
+$logo = (string)($this->getData('login_logo_dark') ?: $this->getData('login_logo_light'));
+if ($logo === '' || str_contains($logo, '/media/image/backend/logo/logo.png')) {
+    $logo = (string)(
+        $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-weline-default.svg')
+        ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png')
+        ?: $this->fetchTagSourceFile('statics', 'Weline_Backend::img/logo.png')
+    );
+}
+$postUrl = (string)$this->getData('post_url');
+$returnUrl = (string)$this->getData('return_url');
+$bgUrl = (string)$this->getData('login_bg_url');
+$needCode = (bool)$this->getData('need_backend_verification_code');
+$codeUrl = (string)$this->getData('backend_verification_code_url');
+$session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+$locked = (bool)$session->getData('backend_disable_login');
+$remember = (bool)$session->getData('remember_expire_time');
+$year = date('Y');
+$iconsCss = (string)$this->fetchTagSourceFile('statics', 'Weline_Admin::assets/css/icons.min.css');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <base href="@backend-url('/')">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="<?= htmlspecialchars((string)__('后台登录'), ENT_QUOTES, 'UTF-8') ?>">
+    <title><?= htmlspecialchars((string)__('登录 %{name} 管理面板', ['name' => $siteName]), ENT_QUOTES, 'UTF-8') ?></title>
+    <link rel="Shortcut Icon" href="@static(Weline_Backend::img/favicon.png)">
+    <?php if ($iconsCss !== ''): ?>
+        <link rel="stylesheet" href="<?= htmlspecialchars($iconsCss, ENT_QUOTES, 'UTF-8') ?>">
+    <?php endif; ?>
+    <style>
+        :root {
+            --login-bg: #eef3fb;
+            --login-panel: #ffffff;
+            --login-ink: #0f172a;
+            --login-muted: #64748b;
+            --login-line: #e2e8f0;
+            --login-primary: #2563eb;
+            --login-primary-dark: #1d4ed8;
+            --login-accent: #0f766e;
+            --login-shadow: 0 28px 80px rgba(15, 23, 42, 0.12);
+            --login-radius: 22px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            color: var(--login-ink);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 8% 12%, rgba(37, 99, 235, 0.16) 0, transparent 28%),
+                radial-gradient(circle at 92% 8%, rgba(20, 184, 166, 0.14) 0, transparent 22%),
+                radial-gradient(circle at 70% 88%, rgba(99, 102, 241, 0.1) 0, transparent 30%),
+                linear-gradient(160deg, #f8fbff 0%, var(--login-bg) 48%, #edf5f3 100%);
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: <?= $bgUrl !== '' ? '0.35' : '0' ?>;
+            background: <?= $bgUrl !== '' ? "url('" . htmlspecialchars($bgUrl, ENT_QUOTES, 'UTF-8') . "') center/cover no-repeat" : 'none' ?>;
+        }
+        .login-page {
+            position: relative;
+            z-index: 1;
+            width: min(100%, 1040px);
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(340px, 400px);
+            gap: 0;
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            border-radius: calc(var(--login-radius) + 4px);
+            overflow: hidden;
+            background: var(--login-panel);
+            box-shadow: var(--login-shadow);
+        }
+        .login-aside {
+            padding: clamp(32px, 5vw, 56px);
+            background: linear-gradient(155deg, #0f1f3d 0%, #1a4f86 52%, #0f7a83 100%);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 28px;
+        }
+        .login-aside-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: fit-content;
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+        .login-aside-badge::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.14);
+        }
+        .login-aside h1 {
+            margin: 0;
+            max-width: 18ch;
+            font-size: clamp(28px, 3.4vw, 42px);
+            line-height: 1.08;
+            letter-spacing: -0.03em;
+        }
+        .login-aside p {
+            margin: 14px 0 0;
+            max-width: 36ch;
+            color: rgba(226, 240, 255, 0.86);
+            font-size: 15px;
+            line-height: 1.75;
+        }
+        .login-aside-points {
+            display: grid;
+            gap: 10px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .login-aside-points li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(8, 15, 29, 0.18);
+            font-size: 13px;
+            line-height: 1.55;
+            color: rgba(241, 245, 249, 0.92);
+        }
+        .login-aside-points i {
+            margin-top: 2px;
+            font-size: 16px;
+            opacity: 0.95;
+        }
+        .login-main {
+            padding: clamp(28px, 4vw, 44px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 360px;
+            margin: 0 auto;
+        }
+        .login-brand {
+            display: grid;
+            justify-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .login-logo-frame {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 76px;
+            height: 76px;
+            padding: 14px;
+            border-radius: 18px;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: linear-gradient(145deg, rgba(37, 99, 235, 0.1), rgba(15, 118, 110, 0.06));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        }
+        .login-logo-frame img {
+            width: 100%;
+            max-height: 44px;
+            object-fit: contain;
+        }
+        .login-brand h2 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+        .login-brand span {
+            color: var(--login-muted);
+            font-size: 14px;
+            line-height: 1.55;
+        }
+        .login-messages {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .login-messages .wflash {
+            position: relative;
+            margin: 0;
+            padding: 12px 14px 12px 44px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            background: #fff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            text-align: left;
+        }
+        .login-messages .wflash::before {
+            content: "";
+            position: absolute;
+            left: 14px;
+            top: 14px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: 12px 12px;
+        }
+        .login-messages .wflash__title,
+        .login-messages .wflash__body {
+            display: block;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .login-messages .wflash__title {
+            margin: 0 0 2px;
+            font-weight: 750;
+        }
+        .login-messages .wflash__body {
+            margin: 0;
+            font-weight: 500;
+        }
+        .login-messages .wflash__close {
+            position: absolute;
+            right: 8px;
+            top: 8px;
+            width: 24px;
+            height: 24px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            cursor: pointer;
+            opacity: 0.55;
+        }
+        .login-messages .wflash--warning {
+            border-color: rgba(245, 158, 11, 0.28);
+            background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+            color: #b45309;
+        }
+        .login-messages .wflash--warning::before {
+            background-color: rgba(245, 158, 11, 0.2);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23d97706' d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 14.75a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 12 16.75Zm1-4.5a1 1 0 0 1-2 0V7.5a1 1 0 0 1 2 0Z'/%3E%3C/svg%3E");
+        }
+        .login-messages .wflash--warning .wflash__title { color: #92400e; }
+        .login-messages .wflash--warning .wflash__body { color: #78350f; }
+        .login-messages .wflash--danger {
+            border-color: rgba(239, 68, 68, 0.28);
+            background: linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%);
+            color: #dc2626;
+        }
+        .login-messages .wflash--danger::before {
+            background-color: rgba(239, 68, 68, 0.18);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23dc2626' d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 14.75a1.25 1.25 0 1 1 1.25-1.25A1.25 1.25 0 0 1 12 16.75Zm1-4.5a1 1 0 0 1-2 0V7.5a1 1 0 0 1 2 0Z'/%3E%3C/svg%3E");
+        }
+        .login-messages .wflash--danger .wflash__title { color: #991b1b; }
+        .login-messages .wflash--danger .wflash__body { color: #7f1d1d; }
+        .login-messages .wflash--success {
+            border-color: rgba(16, 185, 129, 0.28);
+            background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+            color: #047857;
+        }
+        .login-messages .wflash--success::before {
+            background-color: rgba(16, 185, 129, 0.18);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23047857' d='M9.55 16.2 5.8 12.45l1.4-1.4 2.35 2.35 6.25-6.25 1.4 1.4z'/%3E%3C/svg%3E");
+        }
+        .login-form {
+            display: grid;
+            gap: 14px;
+        }
+        .login-field {
+            display: grid;
+            gap: 7px;
+        }
+        .login-field label {
+            color: #334155;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+        .login-input-wrap {
+            position: relative;
+        }
+        .login-input-wrap i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            font-size: 17px;
+            pointer-events: none;
+        }
+        .login-input {
+            width: 100%;
+            min-height: 48px;
+            padding: 0 14px 0 42px;
+            border: 1px solid var(--login-line);
+            border-radius: 14px;
+            background: #fff;
+            color: var(--login-ink);
+            font-size: 15px;
+            outline: none;
+            transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+        }
+        .login-input--plain {
+            padding-left: 14px;
+        }
+        .login-input:focus {
+            border-color: var(--login-primary);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+            transform: translateY(-1px);
+        }
+        .login-input-wrap:focus-within i {
+            color: var(--login-primary);
+        }
+        .login-code {
+            display: grid;
+            grid-template-columns: 132px 1fr;
+            gap: 12px;
+            align-items: end;
+        }
+        .login-code img {
+            width: 100%;
+            height: 48px;
+            border: 1px solid var(--login-line);
+            border-radius: 14px;
+            background: #fff;
+            object-fit: contain;
+            cursor: pointer;
+        }
+        .login-options {
+            display: grid;
+            gap: 6px;
+            color: var(--login-muted);
+            font-size: 13px;
+        }
+        .login-options label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            color: var(--login-ink);
+            font-weight: 600;
+        }
+        .login-options input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--login-primary);
+        }
+        .login-options small {
+            color: var(--login-muted);
+            line-height: 1.5;
+        }
+        .login-button {
+            min-height: 50px;
+            border: 0;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--login-primary) 0%, #3b82f6 55%, var(--login-accent) 100%);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            box-shadow: 0 16px 34px rgba(37, 99, 235, 0.28);
+            transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease;
+        }
+        .login-button:hover:not(.disable):not(.is-loading) {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px rgba(37, 99, 235, 0.34);
+        }
+        .login-button.is-loading,
+        .login-button.disable {
+            cursor: not-allowed;
+            opacity: .68;
+            transform: none;
+            box-shadow: none;
+        }
+        .login-button .loading-text { display: none; }
+        .login-button.is-loading .normal-text { display: none; }
+        .login-button.is-loading .loading-text { display: inline; }
+        .login-foot {
+            margin-top: 22px;
+            color: var(--login-muted);
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .login-foot a {
+            color: var(--login-primary);
+            text-decoration: none;
+            font-weight: 650;
+        }
+        .login-foot a:hover { text-decoration: underline; }
+        @media (max-width: 900px) {
+            .login-page {
+                grid-template-columns: 1fr;
+                max-width: 440px;
+            }
+            .login-aside { display: none; }
+            .login-main { padding: 28px 22px 32px; }
+        }
+        @media (max-width: 460px) {
+            .login-code { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<main class="login-page">
+    <aside class="login-aside" aria-hidden="true">
+        <div>
+            <span class="login-aside-badge"><?= htmlspecialchars((string)__('安全后台入口'), ENT_QUOTES, 'UTF-8') ?></span>
+            <h1><?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?></h1>
+            <p><?= htmlspecialchars((string)__('内容、配置、权限和发布动作都在统一后台完成。请仅在可信设备和网络环境中登录。'), ENT_QUOTES, 'UTF-8') ?></p>
+        </div>
+        <ul class="login-aside-points">
+            <li><i class="ri-shield-keyhole-line"></i><span><?= htmlspecialchars((string)__('连续异常登录会自动提高验证强度。'), ENT_QUOTES, 'UTF-8') ?></span></li>
+            <li><i class="ri-settings-4-line"></i><span><?= htmlspecialchars((string)__('配置、权限与模块维护在同一工作台闭环处理。'), ENT_QUOTES, 'UTF-8') ?></span></li>
+            <li><i class="ri-fingerprint-line"></i><span><?= htmlspecialchars((string)__('仅在可信环境保存登录状态。'), ENT_QUOTES, 'UTF-8') ?></span></li>
+        </ul>
+    </aside>
+    <section class="login-main">
+        <div class="login-card">
+            <div class="login-brand">
+                <?php if ($logo !== ''): ?>
+                    <div class="login-logo-frame">
+                        <img src="<?= htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                <?php endif; ?>
+                <h2><?= htmlspecialchars((string)__('管理员登录'), ENT_QUOTES, 'UTF-8') ?></h2>
+                <span><?= htmlspecialchars((string)__('访问后台前需要验证身份'), ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+            <?php if ((string)$this->getData('no_access_message') !== '' || (string)$this->getData('login_flash_message') !== ''): ?>
+                <div class="login-messages">
+                    <?php if ((string)$this->getData('no_access_message') !== ''): ?>
+                        <?= $this->getData('no_access_message') ?>
+                    <?php endif; ?>
+                    <?php if ((string)$this->getData('login_flash_message') !== ''): ?>
+                        <?= $this->getData('login_flash_message') ?>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
+            <form class="login-form" action="<?= htmlspecialchars($postUrl, ENT_QUOTES, 'UTF-8') ?>" method="post" data-login-form>
+                <?= $this->getFormKey($postUrl) ?>
+                <?php if ($returnUrl !== ''): ?>
+                    <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') ?>">
+                <?php endif; ?>
+                <div class="login-field">
+                    <label for="username"><?= htmlspecialchars((string)__('管理员'), ENT_QUOTES, 'UTF-8') ?></label>
+                    <div class="login-input-wrap">
+                        <i class="ri-user-3-line" aria-hidden="true"></i>
+                        <input class="login-input" id="username" name="username" type="text" autocomplete="username" placeholder="<?= htmlspecialchars((string)__('请输入管理员账号'), ENT_QUOTES, 'UTF-8') ?>" required>
+                    </div>
+                </div>
+                <div class="login-field">
+                    <label for="userpassword"><?= htmlspecialchars((string)__('密码'), ENT_QUOTES, 'UTF-8') ?></label>
+                    <div class="login-input-wrap">
+                        <i class="ri-lock-2-line" aria-hidden="true"></i>
+                        <input class="login-input" id="userpassword" name="password" type="password" autocomplete="current-password" placeholder="<?= htmlspecialchars((string)__('请输入密码'), ENT_QUOTES, 'UTF-8') ?>" required>
+                    </div>
+                </div>
+                <?php if ($needCode): ?>
+                    <div class="login-code">
+                        <img id="verification-code-img"
+                             src="<?= htmlspecialchars($codeUrl, ENT_QUOTES, 'UTF-8') ?>?t=<?= time() ?>"
+                             data-base-src="<?= htmlspecialchars($codeUrl, ENT_QUOTES, 'UTF-8') ?>"
+                             alt="<?= htmlspecialchars((string)__('验证码'), ENT_QUOTES, 'UTF-8') ?>"
+                             title="<?= htmlspecialchars((string)__('点击刷新验证码'), ENT_QUOTES, 'UTF-8') ?>"
+                             data-verification-code-refresh="1">
+                        <div class="login-field">
+                            <label for="login-code"><?= htmlspecialchars((string)__('验证码'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <input class="login-input login-input--plain" id="login-code" name="code" type="text" autocomplete="one-time-code" placeholder="<?= htmlspecialchars((string)__('请输入验证码'), ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                    </div>
+                <?php endif; ?>
+                <div class="login-options">
+                    <label for="customControlInline">
+                        <input type="checkbox" name="remember" id="customControlInline"<?= $remember ? ' checked' : '' ?>>
+                        <span><?= htmlspecialchars((string)__('记住我'), ENT_QUOTES, 'UTF-8') ?></span>
+                    </label>
+                    <small><?= htmlspecialchars((string)__('仅在你确认可信的设备和网络环境中保存登录状态。'), ENT_QUOTES, 'UTF-8') ?></small>
+                </div>
+                <button class="login-button<?= $locked ? ' disable' : '' ?>" type="submit" data-login-submit>
+                    <span class="normal-text"><?= htmlspecialchars((string)__('登录'), ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="loading-text"><?= htmlspecialchars((string)__('登录中…'), ENT_QUOTES, 'UTF-8') ?></span>
+                </button>
+            </form>
+            <p class="login-foot">&copy; <?= $year ?> Weline · <a href="https://www.aiweline.com/">aiweline.com</a></p>
+        </div>
+    </section>
+</main>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.querySelector('[data-login-form]');
+    if (!form) {
+        return;
+    }
+
+    document.querySelectorAll('[data-verification-code-refresh]').forEach(function (img) {
+        img.addEventListener('click', function () {
+            img.src = (img.dataset.baseSrc || img.src.split('?')[0]) + '?t=' + Date.now();
+        });
+    });
+
+    form.addEventListener('submit', function (event) {
+        var button = form.querySelector('[data-login-submit]');
+        if (!button || button.classList.contains('disable')) {
+            event.preventDefault();
+            return;
+        }
+        button.classList.add('is-loading');
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+    });
+});
+</script>
+</body>
+</html>

@@ -13,6 +13,7 @@ namespace Weline\Seo\Adapter;
 
 use Weline\Seo\Interface\SitemapPlatformAdapterInterface;
 use Weline\Seo\Model\SitemapUrl;
+use Weline\Seo\Service\Sitemap\SitemapXmlExtensionRenderer;
 
 /**
  * Sitemap 平台适配器抽象基类
@@ -215,11 +216,12 @@ abstract class AbstractSitemapPlatformAdapter implements SitemapPlatformAdapterI
      */
     protected function buildSitemapXml(array $urls, string $baseUrl): string
     {
+        $extensionRenderer = new SitemapXmlExtensionRenderer();
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-        $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+        $xml .= $extensionRenderer->urlsetOpenTag($urls) . "\n";
 
         foreach ($urls as $url) {
-            $xml .= $this->buildUrlEntry($url, $baseUrl);
+            $xml .= $this->buildUrlEntry($url, $baseUrl, $extensionRenderer);
         }
 
         $xml .= '</urlset>';
@@ -230,7 +232,7 @@ abstract class AbstractSitemapPlatformAdapter implements SitemapPlatformAdapterI
     /**
      * 构建单个 URL 条目
      */
-    protected function buildUrlEntry(array $url, string $baseUrl): string
+    protected function buildUrlEntry(array $url, string $baseUrl, ?SitemapXmlExtensionRenderer $extensionRenderer = null): string
     {
         $loc = $url[SitemapUrl::schema_fields_URL] ?? ''; // 使用 fields_URL 而不是 fields_LOC
         if (empty($loc)) {
@@ -255,6 +257,7 @@ abstract class AbstractSitemapPlatformAdapter implements SitemapPlatformAdapterI
 
         $priority = $url[SitemapUrl::schema_fields_PRIORITY] ?? '0.5';
         $xml .= "    <priority>{$priority}</priority>\n";
+        $xml .= ($extensionRenderer ?? new SitemapXmlExtensionRenderer())->renderUrlExtensions($url);
 
         $xml .= "  </url>\n";
         

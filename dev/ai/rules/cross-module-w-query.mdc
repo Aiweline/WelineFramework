@@ -1,0 +1,27 @@
+# 跨模块协作：禁止直接调类，强制 w_query（全局）
+
+与 `dev/ai/global-constraints.md` 第 4.1 节一致。
+
+## 禁止（跨模块）
+
+- `use`、注入、`ObjectManager::getInstance`、`new` 引用其他模块 Service/Model/Helper/Controller 等内部实现类
+- 为读数据创建 Event；为写操作滥用 `w_query`
+
+## 强制
+
+- 跨模块**读数据**使用 `w_query(provider, operation, params)`（PHP）或 `Weline.Api.resource()/graph()/stream()`（浏览器）
+- 跨模块调用前必须先查帮助：`php bin/w query:help <provider|模块名>` 或 `w_query('模块名')`
+
+## 白名单
+
+- 同 `Vendor_Module` 模块内互调
+- 框架装配层（Registry、Extends、DI）
+- 对方已发布的 Interface/契约类型
+- PHP 标准库与第三方 SDK
+
+## 浏览器
+
+- `window.w_query(provider)` 仅展示 `frontend=true` 的 operations
+- 完整契约用 PHP/CLI `query:help`
+
+详见：`dev/ai/global-constraints.md` 第 4.1 节。

@@ -21,8 +21,8 @@ class SharedStateServiceManager
 
     /**
      * 解析 ensure() 的前台标志，与日志及 Windows 下共享侧车拉起方式一致。
-     * - `server:start --frontend` 经 ensureRuntime 显式传入；
-     * - Worker 带 `--frontend` 时由 worker.php / worker_ssl.php 定义常量 WLS_FRONTEND_MODE。
+     * - `server:start --win`（或已弃用的 `--frontend`）经 ensureRuntime 显式传入；
+     * - Worker 带 `--win`/`--frontend` 时由 worker.php / worker_ssl.php 定义常量 WLS_FRONTEND_MODE。
      *
      * @param array<string, mixed> $config 可含 shared_service_frontend 强制覆盖
      */
@@ -50,11 +50,6 @@ class SharedStateServiceManager
         bool $frontend = false,
         bool $forceRestart = false
     ): array {
-        // Session / Memory 并发启动：
-        // 1. 先快速探测两个服务是否已存在且健康
-        // 2. 对于需要启动的服务，使用 Fiber 并发执行锁内操作
-        // 3. 等待阶段真正并发探活，不再串行等待
-
         $sessionDefinition = $this->buildRoleDefinition(
             ControlMessage::ROLE_SESSION_SERVER,
             $requesterInstanceName,
@@ -84,112 +79,20 @@ class SharedStateServiceManager
             return $this->buildRuntimeFromQuickProbe($sessionProbe, $memoryProbe, $requesterInstanceName);
         }
 
-        // 需要启动的服务使用 Fiber 并发执行（关键优化：让两个服务的锁操作同时进行）
-        $fiberSession = null;
-        $fiberMemory = null;
-
-        if ($sessionNeedsStartup) {
-            $fiberSession = new \Fiber(function () use ($sessionDefinition, $requesterInstanceName, $frontend, $forceRestart): array {
-                return $this->withRoleLock((string) $sessionDefinition['role'], function () use (
-                    $sessionDefinition,
-                    $requesterInstanceName,
-                    $frontend,
-                    $forceRestart
-                ): array {
-                    return $this->prepareSharedServiceUnderLock(
-                        $sessionDefinition,
-                        $requesterInstanceName,
-                        $frontend,
-                        $forceRestart
-                    );
-                });
-            });
-        }
-
-        if ($memoryNeedsStartup && $memoryDefinition !== null) {
-            $fiberMemory = new \Fiber(function () use ($memoryDefinition, $requesterInstanceName, $frontend, $forceRestart): array {
-                return $this->withRoleLock((string) $memoryDefinition['role'], function () use (
-                    $memoryDefinition,
-                    $requesterInstanceName,
-                    $frontend,
-                    $forceRestart
-                ): array {
-                    return $this->prepareSharedServiceUnderLock(
-                        $memoryDefinition,
-                        $requesterInstanceName,
-                        $frontend,
-                        $forceRestart
-                    );
-                });
-            });
-        }
-
-        // 启动所有 Fiber 并拿回其最终 return value。
-        //
-        // 正确的 \Fiber API：
-        //   - start()       返回的是 Fiber 内 `Fiber::suspend()` 的挂起值；若 fiber 一路 return
-        //                   未 suspend，则返回 null 且 `isTerminated()=true`。
-        //   - getReturn()   仅在 `isTerminated()=true` 后可用，才是真正的 return value。
-        //   - resume()      把控制权再交回 fiber，从上一次 suspend 处继续。
-        //
-        // 早前此处写成 `$fiberSession->get()`（方法根本不存在，intelephense 长期报错；
-        // 冷门分支触发时就是 fatal "Call to undefined method Fiber::get()"）。
-        // 现修正为：start 后若仍未 terminated，resume 直到跑完，再从 getReturn() 取结果。
-        if ($sessionNeedsStartup && $fiberSession !== null) {
-            $fiberSession->start();
-            while (!$fiberSession->isTerminated()) {
-                $fiberSession->resume();
-            }
-            $sessionPrepare = $fiberSession->getReturn();
-        } else {
-            $sessionPrepare = $sessionProbe;
-        }
-
-        if ($memoryNeedsStartup && $fiberMemory !== null) {
-            $fiberMemory->start();
-            while (!$fiberMemory->isTerminated()) {
-                $fiberMemory->resume();
-            }
-            $memoryPrepare = $fiberMemory->getReturn();
-        } else {
-            $memoryPrepare = $memoryProbe;
-        }
-
-        // 收集所有需要等待就绪的服务
-        $pendingDefinitions = [];
-        if (($sessionPrepare['status'] ?? '') === 'pending') {
-            $pendingDefinitions[] = $sessionPrepare['definition'];
-        }
-        if ($memoryPrepare !== null && ($memoryPrepare['status'] ?? '') === 'pending') {
-            $pendingDefinitions[] = $memoryPrepare['definition'];
-        }
-
-        // 并发等待所有 pending 服务就绪（关键优化：真正并发探活）
-        $batchReady = [];
-        if ($pendingDefinitions !== []) {
-            $roleLabels = [];
-            foreach ($pendingDefinitions as $def) {
-                $roleLabels[] = (string) ($def['role'] ?? '?');
-            }
-            WlsLogger::info_(
-                '[SharedStateServiceManager] 并发等待共享服务就绪 (角色: ' . \implode(', ', $roleLabels) . ')'
-            );
-            WlsLogger::flush_(true);
-            $batchReady = $this->waitUntilSharedServicesReadyBatch($pendingDefinitions);
-        }
+        $sessionPrepare = $sessionNeedsStartup
+            ? $this->prepareSharedService($sessionDefinition, $requesterInstanceName, $frontend, $forceRestart)
+            : $sessionProbe;
 
         // 组装结果
         $runtime = [
-            'session' => ($sessionPrepare['status'] ?? '') === 'ready'
-                ? $sessionPrepare['runtime']
-                : ($batchReady[(string) $sessionDefinition['role']] ?? []),
+            'session' => $this->runtimeFromPreparedSharedService($sessionPrepare, $sessionDefinition),
         ];
 
         if ($memoryDefinition !== null) {
-            $memoryRole = ControlMessage::ROLE_MEMORY_SERVER;
-            $runtime['memory'] = ($memoryPrepare !== null && ($memoryPrepare['status'] ?? '') === 'ready')
-                ? $memoryPrepare['runtime']
-                : ($batchReady[$memoryRole] ?? []);
+            $memoryPrepare = $memoryNeedsStartup
+                ? $this->prepareSharedService($memoryDefinition, $requesterInstanceName, $frontend, $forceRestart)
+                : $memoryProbe;
+            $runtime['memory'] = $this->runtimeFromPreparedSharedService($memoryPrepare, $memoryDefinition);
         } else {
             $runtime['memory'] = $this->buildRoleDefinition(
                 ControlMessage::ROLE_MEMORY_SERVER,
@@ -203,13 +106,13 @@ class SharedStateServiceManager
             ];
         }
 
-        $runtime['session'] = $this->finalizeEnsuredRuntime(
+        $runtime['session'] = $this->finalizeSharedRuntime(
             ControlMessage::ROLE_SESSION_SERVER,
             $runtime['session'],
             $requesterInstanceName
         );
         if ($memoryDefinition !== null) {
-            $runtime['memory'] = $this->finalizeEnsuredRuntime(
+            $runtime['memory'] = $this->finalizeSharedRuntime(
                 ControlMessage::ROLE_MEMORY_SERVER,
                 $runtime['memory'],
                 $requesterInstanceName
@@ -253,13 +156,13 @@ class SharedStateServiceManager
             $runtime['memory'] = ['enabled' => false, 'healthy' => false, 'shared_service' => false];
         }
 
-        $runtime['session'] = $this->finalizeEnsuredRuntime(
+        $runtime['session'] = $this->finalizeSharedRuntime(
             ControlMessage::ROLE_SESSION_SERVER,
             $runtime['session'],
             $requesterInstanceName
         );
         if ($memoryProbe !== null) {
-            $runtime['memory'] = $this->finalizeEnsuredRuntime(
+            $runtime['memory'] = $this->finalizeSharedRuntime(
                 ControlMessage::ROLE_MEMORY_SERVER,
                 $runtime['memory'],
                 $requesterInstanceName
@@ -284,9 +187,7 @@ class SharedStateServiceManager
     ): array {
         $definition = $this->buildRoleDefinition($role, $requesterInstanceName, $config, $envConfig);
 
-        $prepare = $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend, $forceRestart): array {
-            return $this->prepareSharedServiceUnderLock($definition, $requesterInstanceName, $frontend, $forceRestart);
-        });
+        $prepare = $this->prepareSharedService($definition, $requesterInstanceName, $frontend, $forceRestart);
 
         if (($prepare['status'] ?? '') === 'ready') {
             return $this->finalizeEnsuredRuntime(
@@ -304,7 +205,26 @@ class SharedStateServiceManager
     }
 
     /**
-     * 在角色锁内完成探测 / 强制停止 / 拉起子进程；就绪轮询在锁外执行（便于 Session 与 Memory 并行启动）。
+     * @param array<string, mixed> $prepare
+     * @param array<string, mixed> $definition
+     * @return array<string, mixed>
+     */
+    private function runtimeFromPreparedSharedService(array $prepare, array $definition): array
+    {
+        if (($prepare['status'] ?? '') === 'ready') {
+            return \is_array($prepare['runtime'] ?? null) ? $prepare['runtime'] : [];
+        }
+
+        $pendingDefinition = \is_array($prepare['definition'] ?? null) ? $prepare['definition'] : $definition;
+        $role = (string) ($pendingDefinition['role'] ?? $definition['role'] ?? '');
+        $ready = $this->waitUntilSharedServicesReadyBatch([$pendingDefinition]);
+
+        return \is_array($ready[$role] ?? null) ? $ready[$role] : [];
+    }
+
+    /**
+     * 完成探测 / 强制停止 / 拉起共享服务进程。
+     * 健康协议复用和 OS 端口绑定是唯一启动并发保护。
      *
      * @param array<string, mixed> $definition
      * @return array{
@@ -315,7 +235,7 @@ class SharedStateServiceManager
      *   definition: array<string, mixed>
      * }
      */
-    private function prepareSharedServiceUnderLock(
+    private function prepareSharedService(
         array $definition,
         string $requesterInstanceName,
         bool $frontend,
@@ -334,7 +254,7 @@ class SharedStateServiceManager
                     $definition,
                     \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []
                 );
-                // 注意：不再在锁内等待，给其他服务并发启动的机会
+                // Do not wait here; readiness is verified after the process is launched.
             } else {
                 $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
                 $runtime['reuse_existing'] = true;
@@ -363,7 +283,7 @@ class SharedStateServiceManager
 
         if ((bool) ($probe['reusable_but_unhealthy'] ?? false)) {
             $this->forceStopReusedService($definition, \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []);
-            // 注意：不再在锁内等待，给其他服务并发启动的机会
+            // Do not wait here; readiness is verified after the process is launched.
         }
         WlsLogger::info_(
             '[SharedStateServiceManager] 启动共享服务 (角色: ' . (string) $definition['role']
@@ -499,20 +419,17 @@ class SharedStateServiceManager
     ): array {
         $definition = $this->buildRoleDefinition($role, $requesterInstanceName, $config, $envConfig);
 
-        $prepare = $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend): array {
-            $this->forceStopReusedService($definition, []);
-            // 注意：不再在锁内等待，给其他服务并发启动的机会
-            WlsLogger::info_(
-                "[SharedStateServiceManager] 启动共享服务 (角色: " . (string) $definition['role']
-                . ", 请求者实例名称: $requesterInstanceName, 前台模式: " . ($frontend ? '是' : '否') . ')'
-            );
-            $pid = $this->launchSharedServiceProcess($definition, $requesterInstanceName, $frontend);
-            if ($pid <= 0) {
-                throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
-            }
+        $this->forceStopReusedService($definition, []);
+        WlsLogger::info_(
+            "[SharedStateServiceManager] 启动共享服务 (角色: " . (string) $definition['role']
+            . ", 请求者实例名称: $requesterInstanceName, 前台模式: " . ($frontend ? '是' : '否') . ')'
+        );
+        $pid = $this->launchSharedServiceProcess($definition, $requesterInstanceName, $frontend);
+        if ($pid <= 0) {
+            throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
+        }
 
-            return ['status' => 'pending', 'definition' => $definition];
-        });
+        $prepare = ['status' => 'pending', 'definition' => $definition];
 
         return $this->finalizeEnsuredRuntime(
             (string) $definition['role'],
@@ -550,17 +467,20 @@ class SharedStateServiceManager
         }
 
         $role = $this->normalizeRoleName($role);
-        $runtime = $this->readRuntimeFile($role);
+        $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $this->readRuntimeFile($role));
         $definition = $this->buildStatusProbeDefinition($role, $config, $envConfig, $runtime);
         $healthy = $this->probeRunningSharedService($definition, (string) $definition['token_file_name']);
+        $pid = $healthy
+            ? $this->resolveLivePortOwnerPid($definition)
+            : (int) ($runtime['pid'] ?? 0);
         $runtime = \array_merge(
+            $runtime,
             $this->buildRuntimeMetadata(
                 $definition,
-                (int) ($runtime['pid'] ?? 0),
+                $pid,
                 \is_string($runtime['started_at'] ?? null) ? (string) $runtime['started_at'] : null,
                 $healthy ? \date('c') : (\is_string($runtime['healthy_at'] ?? null) ? (string) $runtime['healthy_at'] : null)
-            ),
-            $runtime
+            )
         );
 
         return [
@@ -587,13 +507,11 @@ class SharedStateServiceManager
     {
         $definition = $this->buildRoleDefinition($role, 'system', $config, $envConfig);
 
-        return $this->withRoleLock((string) $definition['role'], function () use ($definition): bool {
-            $stopped = $this->forceStopReusedService($definition, []);
-            $this->removeRuntimeFile((string) $definition['role']);
-            $this->createRegistry()->removeRecord((string) $definition['role']);
+        $stopped = $this->forceStopReusedService($definition, []);
+        $this->removeRuntimeFile((string) $definition['role']);
+        $this->createRegistry()->removeRecord((string) $definition['role']);
 
-            return $stopped;
-        });
+        return $stopped;
     }
 
     /**
@@ -657,13 +575,19 @@ class SharedStateServiceManager
 
         $targetRoles = $this->normalizeSharedConsumerRoles($roles);
         foreach ($targetRoles as $role) {
-            $results[$role] = (bool) $this->tryWithRoleLock($role, function () use ($role, $instanceName): bool {
+            try {
                 $registry = $this->createRegistry();
                 $registry->touchConsumer($role, $instanceName);
                 $this->syncRuntimeRegistryMetadata($role, $registry);
 
-                return true;
-            }, false);
+                $results[$role] = true;
+            } catch (\Throwable $throwable) {
+                WlsLogger::warning_(
+                    "[SharedStateServiceManager] 共享服务 {$role} consumer token 续租异常: "
+                    . $throwable->getMessage()
+                );
+                $results[$role] = false;
+            }
         }
 
         return $results;
@@ -770,9 +694,7 @@ class SharedStateServiceManager
     {
         $role = $this->normalizeRoleName($role);
 
-        return $this->withRoleLock($role, function () use ($role, $options): bool {
-            return $this->shutdownIfUnusedUnderLock($role, $options);
-        });
+        return $this->shutdownIfUnusedNow($role, $options);
     }
 
     /**
@@ -818,9 +740,13 @@ class SharedStateServiceManager
         $healthy = $this->probeRunningSharedService($definition, $configuredTokenFileName);
 
         if ($healthy) {
+            $runtimePid = 0;
+            if ((int) ($runtimeFile['port'] ?? 0) === (int) $definition['port']) {
+                $runtimePid = (int) ($runtimeFile['pid'] ?? 0);
+            }
             $runtime = $this->buildRuntimeMetadata(
                 $definition,
-                (int) ($runtimeFile['pid'] ?? 0),
+                $runtimePid,
                 \is_string($runtimeFile['started_at'] ?? null) ? (string) $runtimeFile['started_at'] : null,
                 \date('c')
             );
@@ -878,15 +804,6 @@ class SharedStateServiceManager
             'reusable_but_unhealthy' => true,
             'message' => 'Shared service process exists but failed health probe.',
         ];
-    }
-
-    /**
-     * @param array<string, mixed> $definition
-     * @return array<string, mixed>
-     */
-    protected function waitUntilServiceReady(array $definition): array
-    {
-        return $this->waitUntilSharedServicesReadyBatch([$definition])[(string) $definition['role']];
     }
 
     /**
@@ -1017,7 +934,7 @@ class SharedStateServiceManager
                 $argv[] = '--name=' . $processName;
             }
             if ($frontend) {
-                $argv[] = '--frontend';
+                $argv[] = '--win';
             }
             $pid = Processer::createWindowsDetachedPhpArgv(
                 $argv,
@@ -1032,7 +949,7 @@ class SharedStateServiceManager
 
         // enableLog=true：失败原因写入 Processer 进程日志。
         if ($frontend) {
-            $cmdLineForRegistry .= ' --frontend';
+            $cmdLineForRegistry .= ' --win';
         }
         return Processer::create($cmdLineForRegistry, block: false, foreground: $frontend, enableLog: true);
     }
@@ -1217,10 +1134,10 @@ class SharedStateServiceManager
 
         if ($role === ControlMessage::ROLE_MEMORY_SERVER) {
             $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
-            // 仅 env/wls 中显式端口视为「用户钉死」；勿用 $config['memory_server_port']（Master/实例 JSON 总会带该键，会禁用启动阶段端口可用性扫描）
+            // 仅 env/wls 中显式端口视为「用户钉死」；勿用 Master 注入的 runtime 端口禁用启动阶段可用性扫描。
             $memoryPortExplicit = \array_key_exists('port', $memoryConfig);
             // 仅 env/wls 中显式 token_file_name 视为「用户钉死」；
-            // 勿用 $config['memory_server_token_file_name']（实例 JSON / 运行时配置会残留旧端口 token，不能继续钉死）。
+            // 勿用 runtime token 作为用户钉死配置，避免继续固定旧端口 token。
             $memoryTokenExplicit = \array_key_exists('token_file_name', $memoryConfig);
 
             // 默认端口 19971 + 项目偏移量，确保多项目不冲突
@@ -1274,7 +1191,7 @@ class SharedStateServiceManager
             || \array_key_exists('port', $wlsSession)
             || \array_key_exists('server_port', $sessionConfig);
         // 仅 env/wls 中显式 token_file_name 视为「用户钉死」；
-        // 勿用 $config['session_server_token_file_name']（实例 JSON / 运行时配置会残留旧端口 token，不能继续钉死）。
+        // 勿用 runtime token 作为用户钉死配置，避免继续固定旧端口 token。
         $sessionTokenExplicit = \array_key_exists('token_file_name', $wlsServer)
             || \array_key_exists('token_file_name', $wlsSession);
 
@@ -1326,83 +1243,6 @@ class SharedStateServiceManager
             'ensure_timeout_sec' => $ensureTimeoutSec,
             'ensure_poll_interval_ms' => $ensurePollIntervalMs,
         ];
-    }
-
-    /**
-     * @param callable(): mixed $callback
-     */
-    protected function withRoleLock(string $role, callable $callback): mixed
-    {
-        $lockPath = $this->getRuntimeFilePath($role) . '.ensure.lock';
-        $dir = \dirname($lockPath);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-
-        $handle = @\fopen($lockPath, 'c+');
-        if ($handle === false) {
-            throw new \RuntimeException('Unable to open shared-state lock file.');
-        }
-
-        try {
-            // 使用非阻塞锁 + 超时重试，避免多项目启动时无限等待
-            $lockTimeout = 60.0; // 60 秒超时
-            $deadline = \microtime(true) + $lockTimeout;
-            $locked = false;
-
-            while (\microtime(true) < $deadline) {
-                if (\flock($handle, LOCK_EX | LOCK_NB)) {
-                    $locked = true;
-                    break;
-                }
-                // 等待 20ms 后重试（优化：加快锁竞争响应）
-                SchedulerSystem::usleep(20_000);
-            }
-
-            if (!$locked) {
-                throw new \RuntimeException(
-                    "Unable to acquire shared-state lock for {$role} within {$lockTimeout}s. " .
-                    "Another project may be starting the shared service. Please wait and retry."
-                );
-            }
-
-            return $callback();
-        } finally {
-            \flock($handle, LOCK_UN);
-            @\fclose($handle);
-        }
-    }
-
-    /**
-     * @param callable(): mixed $callback
-     */
-    protected function tryWithRoleLock(string $role, callable $callback, mixed $fallback = null): mixed
-    {
-        $lockPath = $this->getRuntimeFilePath($role) . '.ensure.lock';
-        $dir = \dirname($lockPath);
-        if (!\is_dir($dir)) {
-            @\mkdir($dir, 0755, true);
-        }
-
-        $handle = @\fopen($lockPath, 'c+');
-        if ($handle === false) {
-            return $fallback;
-        }
-
-        $locked = false;
-        try {
-            if (!\flock($handle, LOCK_EX | LOCK_NB)) {
-                return $fallback;
-            }
-            $locked = true;
-
-            return $callback();
-        } finally {
-            if ($locked) {
-                \flock($handle, LOCK_UN);
-            }
-            @\fclose($handle);
-        }
     }
 
     /**
@@ -1502,20 +1342,37 @@ class SharedStateServiceManager
     {
         $role = $this->normalizeRoleName($role);
 
-        return $this->withRoleLock($role, function () use ($role, $runtime, $requesterInstanceName): array {
-            $registry = $this->createRegistry();
-            if ($this->shouldTrackConsumer($requesterInstanceName)) {
-                $registry->touchConsumer($role, $requesterInstanceName);
-            }
+        $registry = $this->createRegistry();
+        if ($this->shouldTrackConsumer($requesterInstanceName)) {
+            $registry->touchConsumer($role, $requesterInstanceName);
+        }
 
-            $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $runtime, $registry);
-            if ($runtime !== []) {
-                $this->ensureSharedProcessLogVisible($runtime, $requesterInstanceName);
-                $this->writeRuntimeFile($role, $runtime);
-            }
+        $this->publishRuntimeRecord($role, $runtime, $registry);
+        $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $runtime, $registry);
+        if ($runtime !== []) {
+            $this->ensureSharedProcessLogVisible($runtime, $requesterInstanceName);
+            $this->writeRuntimeFile($role, $runtime);
+        }
 
-            return $runtime;
-        });
+        return $runtime;
+    }
+
+    /**
+     * Shared sidecar runtime only merges metadata here; startup never waits on
+     * per-role file locks.
+     *
+     * @param array<string, mixed> $runtime
+     * @return array<string, mixed>
+     */
+    protected function finalizeSharedRuntime(string $role, array $runtime, string $requesterInstanceName): array
+    {
+        $role = $this->normalizeRoleName($role);
+        if (!((bool) ($runtime['created_now'] ?? false))) {
+            $runtime['reuse_existing'] = true;
+        }
+        $runtime['shared_service'] = true;
+
+        return $this->finalizeEnsuredRuntime($role, $runtime, $requesterInstanceName);
     }
 
     /**
@@ -1531,11 +1388,116 @@ class SharedStateServiceManager
         $record = $registry->getRecord($role);
         $consumers = $registry->getConsumers($role);
 
+        foreach ([
+            'role',
+            'host',
+            'port',
+            'token_file_name',
+            'pid',
+            'started_at',
+            'healthy_at',
+            'process_name',
+            'instance_name',
+            'service_instance_name',
+            'shared_service',
+        ] as $key) {
+            if (!\array_key_exists($key, $record)) {
+                continue;
+            }
+            $current = $runtime[$key] ?? null;
+            $missing = $current === null || $current === '' || ($key === 'pid' && (int) $current <= 0);
+            if ($missing) {
+                $runtime[$key] = $record[$key];
+            }
+        }
+
         $runtime['registered'] = $record !== [];
         $runtime['consumer_count'] = \count($consumers);
         $runtime['shutdown_due_at'] = $record['shutdown_due_at'] ?? null;
 
         return $runtime;
+    }
+
+    /**
+     * @param array<string, mixed> $definition
+     */
+    private function resolveLivePortOwnerPid(array $definition): int
+    {
+        $port = (int) ($definition['port'] ?? 0);
+        if ($port <= 0) {
+            return 0;
+        }
+
+        Processer::clearPortCache($port);
+        $pid = Processer::getProcessIdByPort($port);
+        if ($pid > 0) {
+            return $pid;
+        }
+
+        $occupant = Processer::inspectPortOccupantWithHistory($port);
+        $pid = (int) ($occupant['pid'] ?? 0);
+        return $pid > 0 ? $pid : 0;
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     */
+    private function publishRuntimeRecord(
+        string $role,
+        array $runtime,
+        SharedStateServiceRegistry $registry
+    ): void {
+        $role = $this->normalizeRoleName($role);
+        $pid = (int) ($runtime['pid'] ?? 0);
+        $port = (int) ($runtime['port'] ?? 0);
+        if ($pid <= 0 || $port <= 0) {
+            return;
+        }
+
+        $recordFields = [];
+        foreach ([
+            'role',
+            'host',
+            'port',
+            'pid',
+            'token_file_name',
+            'started_at',
+            'healthy_at',
+            'process_name',
+            'instance_name',
+            'service_instance_name',
+            'shared_service',
+        ] as $key) {
+            if (!\array_key_exists($key, $runtime)) {
+                continue;
+            }
+            $value = $runtime[$key];
+            if (($key === 'pid' || $key === 'port') && (int) $value <= 0) {
+                continue;
+            }
+            if (\is_string($value) && \trim($value) === '') {
+                continue;
+            }
+            $recordFields[$key] = $value;
+        }
+
+        if ($recordFields === []) {
+            return;
+        }
+        $recordFields['role'] = $role;
+        $recordFields['shared_service'] = true;
+
+        $registry->updateRecord(
+            $role,
+            static function (array $record) use ($recordFields): array {
+                $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
+                $record = \array_merge($record, $recordFields);
+                $record['consumers'] = $consumers;
+                unset($record['shutdown_due_at'], $record['shutdown_requested_at']);
+
+                return $record;
+            }
+        );
     }
 
     /**
@@ -1598,7 +1560,7 @@ class SharedStateServiceManager
     /**
      * @param array<string, mixed> $options
      */
-    protected function shutdownIfUnusedUnderLock(
+    protected function shutdownIfUnusedNow(
         string $role,
         array $options = [],
         ?SharedStateServiceRegistry $registry = null
@@ -1721,14 +1683,14 @@ class SharedStateServiceManager
             return $preferredPort;
         }
 
+        if ($this->isPortCandidateReusable($role, $preferredPort, $tokenFileName)) {
+            return $preferredPort;
+        }
+
         $runtime = $this->readRuntimeFile($role);
         $runtimePort = (int) ($runtime['port'] ?? 0);
         if ($runtimePort > 0 && $this->isPortCandidateReusable($role, $runtimePort, $tokenFileName)) {
             return $runtimePort;
-        }
-
-        if ($this->isPortCandidateReusable($role, $preferredPort, $tokenFileName)) {
-            return $preferredPort;
         }
 
         $start = \max(1025, $preferredPort + 1);
@@ -1764,6 +1726,10 @@ class SharedStateServiceManager
             return false;
         }
 
+        if ($this->probeSharedPortWithToken($port, $tokenFileName)) {
+            return true;
+        }
+
         if (!$this->probePortInUse($port)) {
             return true;
         }
@@ -1777,6 +1743,11 @@ class SharedStateServiceManager
         );
 
         return (bool) ($inspection['reusable'] ?? false) && $this->isInspectionOwnedByCurrentProject($inspection);
+    }
+
+    protected function probeSharedPortWithToken(int $port, string $tokenFileName): bool
+    {
+        return SharedStateProtocolProbe::pingWithTokenBasename('127.0.0.1', $port, $tokenFileName);
     }
 
     /**
@@ -1839,7 +1810,7 @@ class SharedStateServiceManager
         }
 
         // 非 env 显式配置时，统一按最终端口重建规范 token 名，
-        // 避免实例 JSON 残留旧端口 token（例如 port=26422 却继续携带 session_server.26425.token）。
+        // 避免 runtime 配置残留旧端口 token（例如 port=26422 却继续携带 session_server.26425.token）。
         $tokenFileName = $defaultTokenFileName;
         $defaultPort = $this->defaultPortForRole($role);
         if ($port <= 0 || $port === $defaultPort) {

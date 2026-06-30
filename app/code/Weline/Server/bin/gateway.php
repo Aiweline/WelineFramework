@@ -15,6 +15,14 @@ $listenPort = (int) ($argv[2] ?? 443);
 $controlPort = (int) ($argv[3] ?? 0);
 $masterPid = (int) ($argv[4] ?? 0);
 $instanceName = $argv[5] ?? 'default';
+$runtimeArgs = [];
+foreach (\array_slice($argv, 6) as $arg) {
+    if (!\is_string($arg) || !\str_starts_with($arg, '--')) {
+        continue;
+    }
+    [$key, $value] = \array_pad(\explode('=', \substr($arg, 2), 2), 2, '');
+    $runtimeArgs[$key] = \trim($value, "\"'");
+}
 
 // 设置进程标题
 if (function_exists('cli_set_process_title')) {
@@ -34,11 +42,19 @@ use Weline\Server\Model\ReverseProxy;
 // 创建 Gateway 实例
 $gateway = new WlsGateway();
 $gateway->setListenAddress($listenHost, $listenPort);
+$gateway->setInstanceName((string)$instanceName);
 
 // 如果提供了 IPC 参数，启用动态路由
 if ($controlPort > 0 && $masterPid > 0) {
     try {
         $gateway->setIpcConfig($controlPort, $masterPid);
+        $gateway->setIpcIdentity(
+            (int)($runtimeArgs['epoch'] ?? 0),
+            (string)($runtimeArgs['launch-id'] ?? ''),
+            (string)($runtimeArgs['slot-id'] ?? ''),
+            (string)($runtimeArgs['lease-id'] ?? ''),
+            (int)($runtimeArgs['slot-generation'] ?? 0)
+        );
         $gateway->enableDynamicRouting();
     } catch (\Throwable $e) {
         echo "警告: 无法启用动态路由: {$e->getMessage()}\n";
@@ -75,5 +91,5 @@ try {
     $gateway->start();
 } catch (\Throwable $e) {
     echo "Gateway 启动失败: {$e->getMessage()}\n";
-    exit(1);
+    throw $e;
 }

@@ -81,20 +81,20 @@ class Migration extends Model implements ModelInterface
      */
     public function getInstalledMigrationFiles(string $moduleName): array
     {
-        $items = $this->reset()
+        $rows = $this->reset()
             ->where(self::schema_fields_MODULE, $moduleName)
             ->where(self::schema_fields_STATUS, self::STATUS_INSTALLED)
+            ->where(self::schema_fields_FILE, '%.php', 'LIKE')
             ->select(self::schema_fields_FILE)
-            ->fetch()
-            ->getItems();
+            ->fetchArray();
         $files = [];
-        foreach ($items as $row) {
-            $data = is_array($row) ? $row : $row->getData();
-            if (isset($data[self::schema_fields_FILE])) {
-                $files[] = $data[self::schema_fields_FILE];
+        foreach ($rows as $row) {
+            if (isset($row[self::schema_fields_FILE])) {
+                $files[] = (string)$row[self::schema_fields_FILE];
             }
         }
-        return $files;
+        $this->clearData();
+        return array_values(array_unique($files));
     }
 
     /**

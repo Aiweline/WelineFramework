@@ -77,7 +77,6 @@ Observed top-level vendors under `app/code`:
 
 - `Agent`
 - `Aiweline`
-- `GuoLaiRen`
 - `Weline`
 - `WelineTools`
 - `WeShop`
@@ -99,6 +98,10 @@ Common module shape:
 
 Before working inside a module, check its `README.md` or `doc/README.md` if
 present.
+
+`app/code/GuoLaiRen` has moved to the release target repository
+`E:\公司\远程\src\weline`; this source repository no longer supports
+GuoLaiRen vendor modules.
 
 ## Core Areas
 
@@ -136,14 +139,10 @@ Queue:
 
 PageBuilder:
 
-- `app/code/GuoLaiRen/PageBuilder`
-- `app/code/GuoLaiRen/PageBuilder/Controller/Backend/AiSiteAgent.php`
-- `app/code/GuoLaiRen/PageBuilder/Service/AiSiteExecutionBlueprintService.php`
-- `app/code/GuoLaiRen/PageBuilder/Service/AiSiteVirtualThemePlanService.php`
-- `app/code/GuoLaiRen/PageBuilder/Service/AiSiteTaskPlanSseService.php`
-- `app/code/GuoLaiRen/PageBuilder/Queue`
-- `app/code/GuoLaiRen/PageBuilder/test`
-- `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent`
+- `app/code/GuoLaiRen/PageBuilder` has moved to `E:\公司\远程\src\weline`.
+- This source repository no longer supports PageBuilder development, validation,
+  deployment, or skill maintenance. Switch to the target repository for
+  PageBuilder module work and use the target repository's PageBuilder skills.
 
 WeShop ecommerce:
 
@@ -177,17 +176,11 @@ WeShop ecommerce:
 - For orphan/default-instance bugs, verify live runtime state before deleting
   metadata or killing by broad process-name prefix.
 
-## PageBuilder Rules
+## PageBuilder Ownership
 
-- Queue-driven execution is preferred.
-- SSE should stream progress/log state; it should not become a second execution
-  engine.
-- Stage one and stage two AI outputs should be final user-facing website
-  implementation plans.
-- Guard against prompt-like outputs, generic advice, markdown-only artifacts, or
-  missing structured payloads.
-- For large-context OpenAI errors, inspect `Weline\Ai\Service\AiService`
-  conversation-history attachment and request payload growth.
+PageBuilder rules, module docs, AI site generation plans, queue notes, and
+prompt/skill constraints are maintained in `E:\公司\远程\src\weline`. Do not use
+this source repository's historical PageBuilder notes as current guidance.
 
 ## Verification Patterns
 

@@ -1,0 +1,106 @@
+---
+name: 前端主题工程师-主题模板开发
+description: Frontend theme engineer skill for theme structure, source-template editing, layout-safe styling, and Weline view-layer conventions.
+version: 1.1.1
+---
+
+# Role
+
+This skill owns theme-level template work, source-template editing, layout-aware styling, and view-layer conventions in WelineFramework. It ensures theme changes are made in source templates, follow theme structure, and remain compatible with the framework compiler.
+
+# When To Use
+
+- Use for theme directories, template overrides, layout files, source-template fixes, and theme CSS or JS organization.
+- Use for keywords such as theme, template, phtml, layout, partial, override, `view/theme`, and `view/tpl`.
+- Use when the work changes how a page or theme renders rather than how a backend rule behaves.
+- For browser-visible UI, layout, responsive, empty/loading/error states, usability, or visual polish work, automatically load `dev/ai/skills/ui-ux-pro-max/SKILL.md` and use it for design-system guidance before implementation, even when the user does not mention UI/UX or the skill by name.
+
+# Source Material
+
+- `AI-ENTRY.md`
+- `CLAUDE.md`
+- `dev/ai/skills/theme-development/SKILL.md`
+- `dev/ai/skills/template-source-editing/SKILL.md`
+- `dev/ai/skills/code-generation-standards/SKILL.md`
+
+# Responsibilities
+
+- Edit source templates instead of compiled template outputs.
+- Keep frontend and backend theme areas separated.
+- Organize layout, partial, widget, and asset changes in the expected theme structure.
+- Keep styles and scripts scoped, reusable, and consistent with theme tokens.
+- Keep frontend request interactions routed through Theme `theme.js` and the built-in `weline-api` worker chain.
+
+# Default Theme CSS Contract
+
+- Shared default-theme classes MUST use the `w-` prefix. This prefix means the class is owned by the Weline default theme CSS contract, similar to utility-first systems that expose framework-owned classes through a predictable namespace.
+- Canonical default components are `w-btn`, `w-card`, `w-panel`, `w-widget`, `w-stat-card`, `w-total-card`, `w-metric-card`, `w-form-control`, `w-form-select`, `w-table`, `w-badge`, `w-alert`, `w-pagination`, `w-dropdown`, `w-modal`, `w-loading`, and `w-toolbar`, with modifier classes such as `w-btn-primary`, `w-btn-outline`, `w-badge-success`, `w-alert-danger`, `w-table-striped`, `w-modal-lg`, and size classes such as `w-btn-sm` / `w-btn-lg`.
+- Canonical default utilities are `w-text-*`, `w-bg-*`, `w-border*`, `w-rounded*`, `w-shadow*`, and `w-focus-ring`. Use these when the intent is theme-level styling rather than module-owned BEM styling.
+- Do not introduce new unprefixed global component classes for theme-owned defaults. Existing unprefixed classes such as `.btn`, `.card`, `.form-control`, `.table`, `.modal`, `.dropdown-menu`, and `.loading-component` may remain only as compatibility aliases or JS hooks for older templates and Bootstrap-style backend pages; new source templates must include the `w-*` class whenever they rely on default theme styling.
+- Theme CSS MUST define tokens before component rules. Frontend uses `--weline-theme-*`; backend uses `--backend-theme-*`. Component variables such as `--weline-component-*` / `--backend-component-*` must reference those theme tokens instead of becoming a second independent system.
+- Required token categories: brand/status color roles (`primary`, `on-primary`, `secondary`, `success`, `warning`, `danger`, `info`), subtle backgrounds, subtle borders, text roles, surface roles, border width/style/color, radius scale, shadow scale, focus ring, control heights, and transition timings.
+- Component rules must consume tokens for border width, border style, border color, radius, text color, surfaces, shadows, focus rings, and state colors. Avoid hardcoded `1px`, hex colors, radius values, or shadow values inside reusable components unless the value is first exposed as a theme token.
+- When adding markup in source templates, prefer `w-*` classes for default-theme primitives and use module-specific BEM classes only for business-specific structure or bespoke visuals.
+
+# Workflow
+
+1. Read `AI-ENTRY.md`, then theme-related docs, then inspect the owning source template path.
+2. If the symptom appears in `view/tpl`, trace it back to the real source template before editing.
+3. For browser-visible UI work, always run or equivalently execute the `ui-ux-pro-max` design-system search and translate its output into Weline-safe visual constraints.
+4. Implement the minimal source-template or theme-asset change in the owning theme area.
+5. Keep layout-specific CSS or JS with the owning template instead of moving everything into global theme assets.
+6. Use static template tags where possible and keep PHP in templates to the minimum necessary.
+7. Validate through the rendered page or the closest route-level check.
+8. Record affected template paths and any required theme documentation updates.
+
+# Weline Rules
+
+- Prefer diagrams and module docs before reading source code.
+- Do not edit compiled `view/tpl` outputs directly.
+- Do not add `declare(strict_types=1)` inside `.phtml`.
+- Do not hardcode user-facing text.
+- Use i18n for user-facing text.
+- Do not use JavaScript `alert`, `confirm`, or `prompt`.
+- Do not add direct frontend requests with `fetch`, `XMLHttpRequest`, `$.ajax`, axios, or equivalent helpers in theme templates or module scripts; declare/register JS behavior and call the built-in `weline-api` through `theme.js` so requests run through the worker path.
+- For station-internal business APIs, use `Weline.Api.resource('provider')`, `Weline.Api.graph()`, or `Weline.Api.stream()`; do not handwrite `/api/framework/query-bin` or REST business URLs in templates.
+
+# Inputs Required
+
+- The rendered page, theme, and source template path.
+- Whether the task affects frontend or backend theme area.
+- Expected visual or structural outcome.
+- Validation route or page path.
+
+# Expected Output
+
+- A source-template or theme-level change in the correct directory.
+- Scoped asset updates that match theme structure.
+- Validation evidence from the real rendered surface.
+
+# Validation
+
+- Confirm the edit was applied to source templates, not `view/tpl` output.
+- Confirm the page renders correctly on the intended route.
+- Confirm styles and scripts stay scoped to the relevant theme surface.
+- Confirm interactive requests use the Theme `theme.js` / `weline-api` worker route instead of direct browser-side HTTP calls.
+- Confirm user-facing text remains externalized for translation.
+
+# Constraints
+
+- Do not maintain compiled template outputs by hand.
+- Do not mix frontend and backend theme concerns in one asset path.
+- Do not place layout-specific styling into unrelated global assets without need.
+- Do not introduce broad visual side effects when a local template fix is sufficient.
+
+# Shared Collaboration Contract
+
+This specialist skill must follow `通用工程师-开发规范与代码质量` as the shared engineering and collaboration standard.
+
+Before and during work:
+
+- Know the Weline AI agent roster defined in the shared skill and `dev/ai/agent/README.md`.
+- Keep work inside this specialist's ownership boundary.
+- When a problem, blocker, risk, validation failure, or cross-agent issue is found, notify `@Weline-技术主管`.
+- Do not silently expand scope to fix another agent's area.
+- Include collaboration status in the final report.
+

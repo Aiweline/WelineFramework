@@ -259,6 +259,8 @@
 "GoDaddy API Key 不能为空","GoDaddy API Key 不能为空"
 "GoDaddy API Secret 不能为空","GoDaddy API Secret 不能为空"
 服务器返回空响应,服务器返回空响应
+"域名 %{1} 已存在于域名池中","域名 %{1} 已存在于域名池中"
+"REST 添加：%{1}","REST 添加：%{1}"
 （试运行模式，不会实际删除）,（试运行模式，不会实际删除）
 未发现非法域名记录,未发现非法域名记录
 "发现 %{1} 条非法域名记录：","发现 %{1} 条非法域名记录："
@@ -479,8 +481,8 @@
 默认网站不允许删除,默认网站不允许删除
 网站删除成功,网站删除成功
 "网站删除失败: %{1}","网站删除失败: %{1}"
+首页入口路由无效,首页入口路由无效
 当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新,当前语言没有对应语言包翻译，请前往i18n模块对%{1}语言的地区语言进行更新
-"域名 %{1} 已存在于域名池中","域名 %{1} 已存在于域名池中"
 "API 添加：%{1}","API 添加：%{1}"
 子域名添加成功,子域名添加成功
 添加失败：%{1},添加失败：%{1}
@@ -700,6 +702,7 @@ Cookie政策,Cookie政策
 "Invalid plan stream parameters","Invalid plan stream parameters"
 "Plan generation started","Plan generation started"
 "Loaded current draft plan","Loaded current draft plan"
+"Plan generation failed","Plan generation failed"
 "Plan generation finished","Plan generation finished"
 "Invalid plan confirmation request","Invalid plan confirmation request"
 "Please generate a plan before confirming it","Please generate a plan before confirming it"
@@ -1032,6 +1035,8 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "在域名管理页面的标签页导航区域动态追加标签页按钮。其他模块（如 Server 模块的证书管理）可通过此 Hook 注入新的 Tab 按钮。","在域名管理页面的标签页导航区域动态追加标签页按钮。其他模块（如 Server 模块的证书管理）可通过此 Hook 注入新的 Tab 按钮。"
 域名管理标签页内容,域名管理标签页内容
 "在域名管理页面的标签页内容区域动态追加标签页内容面板。与 tabs Hook 配合使用，注入对应的 Tab 内容。","在域名管理页面的标签页内容区域动态追加标签页内容面板。与 tabs Hook 配合使用，注入对应的 Tab 内容。"
+网站编辑表单扩展区,网站编辑表单扩展区
+"在网站编辑表单核心配置之后追加模块配置区。SEO/GEO 等模块应通过此 Hook 注入字段，Website 模块不直接依赖业务模块。","在网站编辑表单核心配置之后追加模块配置区。SEO/GEO 等模块应通过此 Hook 注入字段，Website 模块不直接依赖业务模块。"
 正常,正常
 处理中,处理中
 已过期,已过期
@@ -1222,9 +1227,8 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "Reserved local domain: %{domain}","Reserved local domain: %{domain}"
 "Starting plan generation","Starting plan generation"
 "Plan generation completed","Plan generation completed"
-"AI plan generation failed, fallback will be used: %{message}","AI plan generation failed, fallback will be used: %{message}"
-"No external references were provided; the plan is based on the written requirement.","No external references were provided; the plan is based on the written requirement."
-"The provided references should guide the visual tone, palette, and conversion direction: %{refs}","The provided references should guide the visual tone, palette, and conversion direction: %{refs}"
+"AI service is not available for plan generation","AI service is not available for plan generation"
+"AI plan generation failed: %{message}","AI plan generation failed: %{message}"
 已接入,已接入
 查看此流程,查看此流程
 "已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。","已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。"
@@ -1642,8 +1646,6 @@ id属性不能为空,id属性不能为空
 关联货币,关联货币
 按住Ctrl或Cmd键可多选,按住Ctrl或Cmd键可多选
 关联语言,关联语言
-"SEO 账户","SEO 账户"
-绑定后将自动提交sitemap到该SEO账户的搜索引擎,绑定后将自动提交sitemap到该SEO账户的搜索引擎
 取消,取消
 Other,Other
 "DNS 服务商","DNS 服务商"
@@ -2033,10 +2035,10 @@ Windows,Windows
 "业务范围 (Scope)","业务范围 (Scope)"
 如：page_builder、catalog,如：page_builder、catalog
 用于标识站点的业务来源，留空表示通用站点。由系统自动设置。,用于标识站点的业务来源，留空表示通用站点。由系统自动设置。
+首页入口路由,首页入口路由
+继承全局首页配置,继承全局首页配置
+选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。
 "已选择 %{1} 个域名","已选择 %{1} 个域名"
-未绑定,未绑定
-SEO账户管理请前往：,SEO账户管理请前往：
-"SEO管理 > 账户管理","SEO管理 > 账户管理"
 网站管理,网站管理
 使用说明,使用说明
 网站,网站
@@ -2161,6 +2163,7 @@ SEO账户管理请前往：,SEO账户管理请前往：
 将自动开始域名购买并展示进度（不阻塞后续虚拟主题流程）。,将自动开始域名购买并展示进度（不阻塞后续虚拟主题流程）。
 确定删除这条最近会话吗？,确定删除这条最近会话吗？
 删除最近会话失败,删除最近会话失败
+确认组件不可用，请刷新页面后重试。,确认组件不可用，请刷新页面后重试。
 返回工作台入口,返回工作台入口
 返回入口,返回入口
 "状态 JSON","状态 JSON"
@@ -2292,10 +2295,10 @@ Provider,Provider
 虚拟主题自动生成完成,虚拟主题自动生成完成
 虚拟主题自动生成失败,虚拟主题自动生成失败
 "AI 正在处理，请等待完成后再操作。","AI 正在处理，请等待完成后再操作。"
+请至少选择一个页面类型,请至少选择一个页面类型
 本地域名无需购买，已跳过购买流程。,本地域名无需购买，已跳过购买流程。
 检测到本地域名，已自动跳过购买环节。,检测到本地域名，已自动跳过购买环节。
 事件流已断开，请刷新页面重试。,事件流已断开，请刷新页面重试。
-请至少选择一个页面类型,请至少选择一个页面类型
 "页面 %{page_type} 生成完成","页面 %{page_type} 生成完成"
 生成过程中发生错误,生成过程中发生错误
 "AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。","AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。"

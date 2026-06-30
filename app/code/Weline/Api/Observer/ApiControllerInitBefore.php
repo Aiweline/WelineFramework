@@ -13,6 +13,7 @@ namespace Weline\Api\Observer;
 
 use Weline\Api\Model\ApiUser;
 use Weline\Api\Service\ApiSecurityService;
+use Weline\Api\Service\ApiAppTokenService;
 use Weline\Api\Service\IpWhitelistService;
 use Weline\Api\Service\TokenService;
 use Weline\Api\Service\UserAgentRestrictionService;
@@ -43,6 +44,7 @@ class ApiControllerInitBefore implements ObserverInterface
     private IpWhitelistService $ipWhitelistService;
     private UserAgentRestrictionService $userAgentRestrictionService;
     private TokenService $tokenService;
+    private ?ApiAppTokenService $apiAppTokenService;
     private PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher;
 
     public function __construct(
@@ -51,7 +53,8 @@ class ApiControllerInitBefore implements ObserverInterface
         IpWhitelistService $ipWhitelistService,
         UserAgentRestrictionService $userAgentRestrictionService,
         TokenService $tokenService,
-        PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher
+        PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher,
+        ?ApiAppTokenService $apiAppTokenService = null
     ) {
         $this->request = $request;
         $this->apiSecurityService = $apiSecurityService;
@@ -59,6 +62,7 @@ class ApiControllerInitBefore implements ObserverInterface
         $this->userAgentRestrictionService = $userAgentRestrictionService;
         $this->tokenService = $tokenService;
         $this->publicApiAuthRouteMatcher = $publicApiAuthRouteMatcher;
+        $this->apiAppTokenService = $apiAppTokenService;
     }
 
     /**
@@ -260,6 +264,10 @@ class ApiControllerInitBefore implements ObserverInterface
             /** @var ApiUser $apiUser */
             $apiUser = $this->tokenService->validateAccessToken($token);
             if (!$apiUser) {
+                if ($this->bindApiAppActor($token, $event)) {
+                    return;
+                }
+
                 if ($this->bindWeShopActorForBackendApi($token, $event)) {
                     return;
                 }
@@ -384,7 +392,15 @@ class ApiControllerInitBefore implements ObserverInterface
             /** @var ApiUser $apiUser */
             $apiUser = $this->tokenService->validateAccessToken($token);
             if (!$apiUser) {
+                if ($this->bindApiAppActor($token, $event)) {
+                    return;
+                }
+
                 if ($this->bindWeShopActorForFrontendApi($token, $event)) {
+                    return;
+                }
+
+                if (!$requireAuthentication) {
                     return;
                 }
 
@@ -505,6 +521,39 @@ class ApiControllerInitBefore implements ObserverInterface
 
         $this->returnError(403, __('This token cannot access backend APIs.'));
         return false;
+    }
+
+    private function bindApiAppActor(string $token, Event &$event): bool
+    {
+        if ($token === '') {
+            return false;
+        }
+
+        try {
+            $context = $this->getApiAppTokenService()->resolveAccessToken($token);
+        } catch (\Throwable $e) {
+            w_log_warning('API app token resolution skipped: ' . $e->getMessage(), [], 'api');
+            return false;
+        }
+        if (!$context) {
+            return false;
+        }
+
+        $actor = $context->getActor();
+        $this->request->setData('api_app_actor', $actor);
+        $this->request->setData('api_app_access_sources', $context->getAccessSources());
+        $event->setData('user', $actor);
+        $event->setData('role', null);
+        $event->setData('access_sources', $context->getAccessSources());
+        return true;
+    }
+
+    private function getApiAppTokenService(): ApiAppTokenService
+    {
+        if ($this->apiAppTokenService === null) {
+            $this->apiAppTokenService = ObjectManager::getInstance(ApiAppTokenService::class);
+        }
+        return $this->apiAppTokenService;
     }
 
     private function bindWeShopActorForFrontendApi(string $token, Event &$event): bool

@@ -46,6 +46,81 @@ if (!\function_exists('wlsNormalizeMemoryLimit')) {
     }
 }
 
+if (!\function_exists('wlsMemoryLimitToBytes')) {
+    function wlsMemoryLimitToBytes(mixed $value): int
+    {
+        $limit = \strtoupper(\trim((string) $value));
+        if ($limit === '' || $limit === '-1' || $limit === '0') {
+            return 0;
+        }
+
+        $unit = \substr($limit, -1);
+        $number = (float) $limit;
+        if ($number <= 0) {
+            return 0;
+        }
+
+        return match ($unit) {
+            'G' => (int) \round($number * 1024 * 1024 * 1024),
+            'M' => (int) \round($number * 1024 * 1024),
+            'K' => (int) \round($number * 1024),
+            default => (int) \round($number),
+        };
+    }
+}
+
+if (!\function_exists('wlsClearFrameworkCachePools')) {
+    /**
+     * @return array<string, bool>
+     */
+    function wlsClearFrameworkCachePools(): array
+    {
+        $results = [];
+        $pools = [
+            'router',
+            'fpc',
+            'hook',
+            'view',
+            'phrase',
+            'i18n',
+            'config',
+            'module_router',
+            'theme',
+            'url_rewrite',
+            'website',
+            'controller',
+            'taglib',
+            'system_config',
+        ];
+
+        try {
+            if (\class_exists(\Weline\Framework\Cache\Adapter\WlsMemoryAdapter::class)) {
+                \Weline\Framework\Cache\Adapter\WlsMemoryAdapter::clearAllMemory();
+            }
+
+            if (!\class_exists(\Weline\Framework\Manager\ObjectManager::class)
+                || !\class_exists(\Weline\Framework\Cache\CacheManager::class)) {
+                return $results;
+            }
+
+            $cacheManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
+            foreach ($pools as $pool) {
+                if (\method_exists($cacheManager, 'hasPool') && !$cacheManager->hasPool($pool)) {
+                    continue;
+                }
+
+                $results[$pool] = (bool)$cacheManager->pool($pool)->clear();
+            }
+        } catch (\Throwable $throwable) {
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[WLS] cache pool clear failed: ' . $throwable->getMessage(), [], 'wls_cache_clear');
+            }
+        }
+
+        return $results;
+    }
+}
+
 $wlsMemoryLimit = '256M';
 @\ini_set('memory_limit', $wlsMemoryLimit);
 
@@ -62,11 +137,12 @@ $useReusePort = false;  // 是否使用 SO_REUSEPORT（Linux 直连模式）
 $wlsLoopDriver = 'auto';
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
+$workerCount = 1;
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
-    } elseif ($arg === '--frontend' || $arg === '-frontend') {
+    } elseif ($arg === '--frontend' || $arg === '-frontend' || $arg === '--win' || $arg === '-win') {
         $isFrontend = true;
     } elseif ($arg === '--reuseport' || $arg === '-reuseport') {
         $useReusePort = true;
@@ -84,6 +160,8 @@ foreach ($argv as $arg) {
         $wlsLoopDriver = (string)\substr($arg, 18);
     } elseif (\str_starts_with($arg, '--memory-limit=')) {
         $wlsMemoryLimit = wlsNormalizeMemoryLimit(\substr($arg, 15));
+    } elseif (\str_starts_with($arg, '--worker-count=')) {
+        $workerCount = \max(1, (int)\substr($arg, 15));
     }
 }
 @\ini_set('memory_limit', $wlsMemoryLimit);
@@ -97,19 +175,23 @@ if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
 
-// 统一自动加载必须早于 resolveControlPort：
-// 该 helper 位于框架命名空间，且内部依赖 BP 常量读取实例文件。
+// Autoload before resolving the Master bootstrap endpoint.
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
-// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
-// 优先使用 --control-port= 参数，否则从实例文件自动发现
-// resolveControlPort 会轮询等待 Master 写入实例信息（最多 30 秒）
+// IPC control port. Prefer the explicit Master-provided argument; the endpoint
+// file is only a bootstrap pointer when the argument is absent.
 if (!isset($controlPort)) {
     $controlPort = 0;
 }
-$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort, 30);
+$supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
+$supervisorEnabled = $supervisorEnabledRaw !== false
+    && $supervisorEnabledRaw !== ''
+    && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
+if ($controlPort <= 0 && !$supervisorEnabled) {
+    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort, 30);
+}
 // Master PID（用于孤儿检测）
 if (!isset($masterPid) || $masterPid <= 0) {
     $masterPid = 0;
@@ -121,6 +203,21 @@ if (!isset($isMaintenanceWorker)) {
 if ($isMaintenanceWorker && !\defined('WLS_MAINTENANCE_WORKER')) {
     \define('WLS_MAINTENANCE_WORKER', true);
 }
+$_SERVER['WLS_PROCESS_ROLE'] = $isMaintenanceWorker ? 'maintenance' : 'worker';
+$_ENV['WLS_PROCESS_ROLE'] = $_SERVER['WLS_PROCESS_ROLE'];
+@\putenv('WLS_PROCESS_ROLE=' . $_SERVER['WLS_PROCESS_ROLE']);
+$_SERVER['WLS_INSTANCE'] = $instanceName;
+$_ENV['WLS_INSTANCE'] = $instanceName;
+@\putenv('WLS_INSTANCE=' . $instanceName);
+$_SERVER['WLS_WORKER_ID'] = (string)$workerId;
+$_ENV['WLS_WORKER_ID'] = (string)$workerId;
+@\putenv('WLS_WORKER_ID=' . (string)$workerId);
+$_SERVER['WLS_WORKER_COUNT'] = (string)$workerCount;
+$_ENV['WLS_WORKER_COUNT'] = (string)$workerCount;
+@\putenv('WLS_WORKER_COUNT=' . (string)$workerCount);
+$_SERVER['WLS_PORT'] = (string)$port;
+$_ENV['WLS_PORT'] = (string)$port;
+@\putenv('WLS_PORT=' . (string)$port);
 
 // 定义前端模式常量（供 WlsRuntime 使用）
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
@@ -136,6 +233,18 @@ if (!\defined('WLS_DEV_MODE')) {
 unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
 
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
+
+if (!\function_exists('wlsResetLongRunningExecutionLimit')) {
+    function wlsResetLongRunningExecutionLimit(): void
+    {
+        if (\function_exists('ini_set') && (string)@\ini_get('max_execution_time') !== '0') {
+            @\ini_set('max_execution_time', '0');
+        }
+        if (\function_exists('set_time_limit')) {
+            @\set_time_limit(0);
+        }
+    }
+}
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;
@@ -228,6 +337,54 @@ if ($processName) {
 }
 
 // 初始化路由提示服务（用于 TCP 透传模式下的智能路由）
+$kernel = null;
+$ipcClient = null;
+$ipcReceivedShutdown = false;
+$ipcDraining = false;
+$drainStartTime = 0;
+$maxDrainTime = 10;
+$waitingForAck = false;
+$readySentTime = 0.0;
+$ackRetryCount = 0;
+$maxAckRetries = 0;
+$ackTimeout = 10.0;
+$ipcSelfTag = null;
+$shouldExit = false;
+$orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
+$ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
+$supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
+$supervisorEnabled = $supervisorEnabledRaw !== false
+    && $supervisorEnabledRaw !== ''
+    && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
+$earlyIpcHandler = null;
+
+if ($controlPort > 0 || $supervisorEnabled) {
+    $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
+    $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
+        $ipcRole,
+        \getmypid(),
+        $port,
+        $workerId,
+        $orchestratorEpoch,
+        $orchestratorLaunchId
+    );
+    $earlyIpcHandler = new \Weline\Server\IPC\ChildControl\Handler\DelegatingControlHandler();
+    $kernel = new \Weline\Server\IPC\ChildControl\SubprocessControlKernel(
+        $identity,
+        $earlyIpcHandler,
+        $ipcSelfTag,
+        (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE),
+        $instanceName
+    );
+    $ipcClient = $kernel->getClient();
+    if ($kernel->connectAndRegister($controlPort, false)) {
+        $ipcClient = $kernel->getClient();
+        WlsLogger::info_("[IPC] Registered with Master before worker bootstrap; READY deferred until socket/runtime is ready");
+    } else {
+        WlsLogger::warning_("[IPC] Early register failed (control port: {$controlPort}); will retry after worker bootstrap");
+    }
+}
+
 \Weline\Server\Service\RouteHintService::init($port, true, 3600);
 
 // 初始化框架运行时
@@ -257,7 +414,7 @@ try {
     // SharedState 的 session/memory 信息在首次请求时通过 ConnectionPool 自动获取
     // 不再在这里同步等待 SharedStateServiceManager::ensureRuntime()
 
-    // 从 env.php 读取共享服务地址，用于预热连接池
+    // 从 env.php 读取共享服务地址，连接池在请求 Fiber 内按需建立
     $projectOffset = \Weline\Server\Service\MasterProcess::getProjectPortOffset();
     $wls = $_wlsEnvConfig['wls'] ?? [];
 
@@ -292,49 +449,23 @@ try {
         $memoryTokenFileName = 'memory_server.token';
     }
 
-    $resolvedSessionPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
-        $instanceName,
-        'session_port',
-        0
-    );
-    if ($resolvedSessionPort > 0) {
-        $sessionPort = $resolvedSessionPort;
-        WlsLogger::info_("[Session] Detected session service port from instance json {$sessionHost}:{$sessionPort}");
-    } else {
-        WlsLogger::warning_("[Session] Session service port not found in instance json; temporarily using runtime/env fallback {$sessionHost}:{$sessionPort}");
-    }
-
-    $resolvedMemoryPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
-        $instanceName,
-        'memory_port',
-        0
-    );
-    if ($resolvedMemoryPort > 0) {
-        $memoryPort = $resolvedMemoryPort;
-        WlsLogger::info_("[Memory] Detected memory service port from instance json {$memoryHost}:{$memoryPort}");
-    } else {
-        WlsLogger::warning_("[Memory] Memory service port not found in instance json; temporarily using runtime/env fallback {$memoryHost}:{$memoryPort}");
-    }
-
-    WlsLogger::info_("[Session] Session service address preconfigured {$sessionHost}:{$sessionPort}");
-    WlsLogger::info_("[Memory] Memory service address preconfigured {$memoryHost}:{$memoryPort}");
-    // Worker 仍保持 Session/Memory 预热长连接；消费者令牌由 Master 管理，连接池只负责 TCP 复用。
+    WlsLogger::info_("[Session] Session service address configured {$sessionHost}:{$sessionPort}");
+    WlsLogger::info_("[Memory] Memory service address configured {$memoryHost}:{$memoryPort}");
+    // 启动期禁止同步预热连接，避免阻塞 IPC READY；消费者令牌由 Master 管理。
     try {
-        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, [
-            'token_file_name' => $sessionTokenFileName,
-            'min_idle' => 1,
-            'connect_timeout' => 0.2,
-            'timeout' => 0.5,
-            'log_pool_lifecycle' => false,
+        \Weline\Server\Service\SharedRuntimeConnectionWarmup::primeWorkerPools($workerId, $instanceName, [
+            'session' => [
+                'host' => $sessionHost,
+                'port' => $sessionPort,
+                'token_file_name' => $sessionTokenFileName,
+            ],
+            'memory' => [
+                'host' => $memoryHost,
+                'port' => $memoryPort,
+                'token_file_name' => $memoryTokenFileName,
+            ],
         ]);
-        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($memoryHost, $memoryPort, [
-            'token_file_name' => $memoryTokenFileName,
-            'min_idle' => 1,
-            'connect_timeout' => 0.2,
-            'timeout' => 0.5,
-            'log_pool_lifecycle' => false,
-        ]);
-        WlsLogger::info_('[ConnectionPool] Session/Memory 预热长连接完成（min_idle=1，consumer token 由 Master 管理）');
+        WlsLogger::info_('[ConnectionPool] Session/Memory pools primed without blocking; async prewarm runs after IPC loop starts');
     } catch (\Throwable $e) {
         WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时自动重试: ' . $e->getMessage());
     }
@@ -374,6 +505,7 @@ $asyncBizAdapters = new \Weline\Server\Runtime\Async\AsyncBizAdapters();
 
 // 活跃 Fiber 列表：connId => Fiber
 $activeFibers = [];
+$fiberTickBudgetMs = (float)(\Weline\Framework\App\Env::get('wls.worker.fiber_tick_budget_ms', 8) ?: 8);
 \Weline\Framework\Runtime\WlsConcurrency::setOtherSuspendedFiberCountProvider(
     static function () use (&$activeFibers): int {
         return \count($activeFibers);
@@ -393,10 +525,7 @@ if (!\function_exists('getSystemFreeMemory')) {
     function getSystemFreeMemory(): int
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $output = @\shell_exec('wmic OS get FreePhysicalMemory /value 2>nul');
-            if ($output && \preg_match('/FreePhysicalMemory=(\d+)/', $output, $matches)) {
-                return (int)$matches[1] * 1024;
-            }
+            return 0;
         } else {
             if (\is_readable('/proc/meminfo')) {
                 $meminfo = @\file_get_contents('/proc/meminfo');
@@ -439,10 +568,7 @@ if (!\function_exists('getSystemTotalMemory')) {
     function getSystemTotalMemory(): int
     {
         if (PHP_OS_FAMILY === 'Windows') {
-            $output = @\shell_exec('wmic ComputerSystem get TotalPhysicalMemory /value 2>nul');
-            if ($output && \preg_match('/TotalPhysicalMemory=(\d+)/', $output, $matches)) {
-                return (int)$matches[1];
-            }
+            return 4 * 1024 * 1024 * 1024;
         } else {
             if (\is_readable('/proc/meminfo')) {
                 $meminfo = @\file_get_contents('/proc/meminfo');
@@ -693,8 +819,8 @@ if ($isMaintenanceWorker) {
 }
 
 // ========== IPC 控制通道：连接 Master 并注册 + 上报就绪 ==========
-$kernel = null;
-$ipcClient = null;
+$kernel = $kernel ?? null;
+$ipcClient = $ipcClient ?? null;
 $ipcReceivedShutdown = false;
 $ipcDraining = false; // 是否正在排水
 $drainStartTime = 0;   // 排水开始时间戳
@@ -719,25 +845,48 @@ if ($isMaintenanceWorker) {
 }
 
 // 获取控制端口
-$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
-$instanceInfoGateway = new \Weline\Server\IPC\ChildControl\InstanceInfoGateway($instanceName);
+if ($controlPort <= 0 && !$supervisorEnabled) {
+    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
+}
+
 $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
 $supervisorEnabledRaw = \getenv('WLS_SUPERVISOR_ENABLED');
 $supervisorEnabled = $supervisorEnabledRaw !== false
     && $supervisorEnabledRaw !== ''
     && \in_array(\strtolower((string) $supervisorEnabledRaw), ['1', 'true', 'yes', 'on'], true);
-$waitingForAck = false;
-$readySentTime = 0.0;
-$ackRetryCount = 0;
-$maxAckRetries = 0;
-$ackTimeout = 10.0;
+$waitingForAck = $waitingForAck ?? false;
+$readySentTime = $readySentTime ?? 0.0;
+$ackRetryCount = $ackRetryCount ?? 0;
+$maxAckRetries = $maxAckRetries ?? 0;
+$ackTimeout = $ackTimeout ?? 10.0;
 
-$ipcClient = null;
-$ipcSelfTag = null;
-$ipcDraining = false;
-$ipcReceivedShutdown = false;
-$drainStartTime = 0;
-$shouldExit = false;
+$ipcClient = $ipcClient ?? null;
+$ipcSelfTag = $ipcSelfTag ?? null;
+$ipcDraining = $ipcDraining ?? false;
+$ipcReceivedShutdown = $ipcReceivedShutdown ?? false;
+$drainStartTime = $drainStartTime ?? 0;
+$shouldExit = $shouldExit ?? false;
+$readyGateWorkerBootstrapWarmupCompleted = false;
+$runReadyGateWorkerBootstrapWarmup = static function () use (
+    &$readyGateWorkerBootstrapWarmupCompleted,
+    &$runtime,
+    &$runtimeError,
+    $isMaintenanceWorker,
+    $workerId
+): void {
+    if ($readyGateWorkerBootstrapWarmupCompleted
+        || $isMaintenanceWorker
+        || $runtimeError !== null
+        || !$runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+    ) {
+        return;
+    }
+
+    WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup start worker={$workerId}");
+    $runtime->runReadyGateWorkerBootstrapWarmup();
+    $readyGateWorkerBootstrapWarmupCompleted = true;
+    WlsLogger::info_("[WorkerWarmup] ready-gate bootstrap warmup done worker={$workerId}");
+};
 
 if ($controlPort > 0 || $supervisorEnabled) {
     $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
@@ -750,7 +899,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$waitingForAck, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $isMaintenanceWorker): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$waitingForAck, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $isMaintenanceWorker): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR 等）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -822,6 +971,10 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \time();
+                    $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
+                    if ($dt > 0) {
+                        $maxDrainTime = \max(1, \min(7200, $dt));
+                    }
                     // 关键修复：reload 时不立即关闭 socket，继续接受新连接并快速响应
                     // 这样可以避免连接在内核队列中自旋等待，直到新 Worker 启动
                     // socket 会在排水完成或超时后才关闭
@@ -833,7 +986,39 @@ if ($controlPort > 0 || $supervisorEnabled) {
                         \opcache_reset();
                     }
                     \clearstatcache(true);
+                    \function_exists('wlsClearFrameworkCachePools') && wlsClearFrameworkCachePools();
                     \Weline\Framework\Manager\ObjectManager::clearInstances();
+                    if (\class_exists(\Weline\Framework\Phrase\Parser::class)) {
+                        \Weline\Framework\Phrase\Parser::clearWorkerCaches();
+                    }
+                    if (\class_exists(\Weline\I18n\Parser::class)) {
+                        \Weline\I18n\Parser::clearWorkerCaches();
+                    }
+                    if (\class_exists(\Weline\ModuleRouter\Observer\ProcessUrlBefore::class)) {
+                        \Weline\ModuleRouter\Observer\ProcessUrlBefore::clearCache();
+                    }
+                    if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class)) {
+                        \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
+                    }
+                    if (\class_exists(\Weline\Framework\View\Template::class)) {
+                        \Weline\Framework\View\Template::clearStaticHookCaches();
+                    }
+                    if (\class_exists(\Weline\Theme\Block\Partials::class)) {
+                        \Weline\Theme\Block\Partials::clearMetaCache();
+                    }
+                    if (\class_exists(\Weline\Theme\Service\SlotRendererService::class)) {
+                        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\SlotRendererService::class)
+                            ->clearCache();
+                    }
+                    if (\class_exists(\Weline\Theme\Observer\ControllerFetchFileBefore::class)) {
+                        \Weline\Theme\Observer\ControllerFetchFileBefore::clearRuntimeCache();
+                    }
+                    if (\class_exists(\Weline\Theme\Helper\ThemeData::class)) {
+                        \Weline\Theme\Helper\ThemeData::clearCache();
+                    }
+                    if (\class_exists(\Weline\Framework\Router\FullPageCacheCoordinator::class)) {
+                        \Weline\Framework\Router\FullPageCacheCoordinator::clearProcessCache();
+                    }
                     if (\function_exists('handleStaticFile')) {
                         handleStaticFile('__CLEAR_CACHE__', '');
                     }
@@ -868,6 +1053,10 @@ if ($controlPort > 0 || $supervisorEnabled) {
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \time();
+                    $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
+                    if ($dt > 0) {
+                        $maxDrainTime = \max(1, \min(7200, $dt));
+                    }
                     // 关闭监听 socket（不再接受新连接）
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
@@ -921,6 +1110,13 @@ if ($controlPort > 0 || $supervisorEnabled) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN:
                     $ipcReceivedShutdown = true;
                     $shouldExit = true;
+                    $ipcDraining = true;
+                    $maxDrainTime = 1;
+                    $drainStartTime = \time() - $maxDrainTime;
+                    if ($socket && \is_resource($socket)) {
+                        @\fclose($socket);
+                        $socket = null;
+                    }
                     WlsLogger::info_("收到 shutdown 命令，准备退出");
                     break;
             }
@@ -929,15 +1125,24 @@ if ($controlPort > 0 || $supervisorEnabled) {
             $ipcClient?->tryReconnect();
         }
     );
-    $kernel = new \Weline\Server\IPC\ChildControl\SubprocessControlKernel(
-        $identity,
-        $handler,
-        $ipcSelfTag,
-        (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE),
-        $instanceName
-    );
+    if ($earlyIpcHandler instanceof \Weline\Server\IPC\ChildControl\Handler\DelegatingControlHandler) {
+        $earlyIpcHandler->setDelegate($handler);
+    }
+    if (!$kernel instanceof \Weline\Server\IPC\ChildControl\SubprocessControlKernel) {
+        $kernel = new \Weline\Server\IPC\ChildControl\SubprocessControlKernel(
+            $identity,
+            $handler,
+            $ipcSelfTag,
+            (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE),
+            $instanceName
+        );
+    }
     $ipcClient = $kernel->getClient();
-    if ($kernel->connectAndRegister($controlPort)) {
+    $runReadyGateWorkerBootstrapWarmup();
+    $readyReported = $kernel->isConnected()
+        ? $kernel->sendReady()
+        : $kernel->connectAndRegister($controlPort);
+    if ($readyReported) {
         $ipcClient = $kernel->getClient();
         $ipcTransportLabel = $supervisorEnabled && $controlPort <= 0 ? 'Supervisor channel' : "控制端口: {$controlPort}";
         WlsLogger::info_("IPC 控制通道已连接 ({$ipcTransportLabel})");
@@ -1021,10 +1226,16 @@ if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRE
 }
 
 // 内存监控配置（防止内存泄漏导致 OOM）
-$maxMemoryBytes = 256 * 1024 * 1024; // 256MB 内存上限
-$memoryCheckInterval = 10; // 每 10 秒检查一次内存
+$maxMemoryBytes = wlsMemoryLimitToBytes($wlsMemoryLimit);
+if ($maxMemoryBytes <= 0) {
+    $maxMemoryBytes = 256 * 1024 * 1024;
+}
+$memoryCheckInterval = 5;
 $lastMemoryCheck = \time();
-$memoryWarningThreshold = 0.8; // 80% 时告警
+$memoryWarningThreshold = 0.80;
+$memoryDrainThreshold = 0.88;
+$requestGcInterval = 50;
+$lastRequestGcCount = 0;
 
 // 最大请求数限制（可选的内存保护措施）
 $maxRequests = 10000; // 处理 10000 个请求后优雅重启（0=禁用）
@@ -1077,14 +1288,84 @@ $sessionReadyTimeout = 30.0;   // Session 连接超时（秒）
 $gracefulShutdownTimeout = 30; // 热重载时等待活跃请求的最大时间（秒）
 $stopShutdownTimeout = 3;      // server:stop 时等待连接的最大时间（秒）
 
-$gracefulExit = function (string $reason = '', bool $waitForRequests = true) use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, &$activeRequests, $processName, $gracefulShutdownTimeout, $stopShutdownTimeout, &$ipcClient, $workerId, $port, $isMaintenanceWorker) {
+$plannedExitReason = '';
+$exitReasonSent = false;
+$buildWorkerRuntimeSnapshot = static function (string $event = 'runtime') use (
+    &$connections,
+    &$activeRequests,
+    &$requestCount,
+    &$longLivedConnections,
+    &$activeFibers,
+    &$writableConnections,
+    &$pendingClose,
+    &$plannedExitReason,
+    &$shouldExit,
+    &$ipcDraining,
+    $workerId,
+    $port,
+    $startTime,
+    $wlsMemoryLimit,
+    &$maxMemoryBytes
+): array {
+    $memoryUsed = \memory_get_usage(false);
+    $memoryAllocated = \memory_get_usage(true);
+    $memoryPercent = $maxMemoryBytes > 0 ? \round($memoryUsed / $maxMemoryBytes, 4) : 0.0;
+
+    return [
+        'event' => $event,
+        'worker_id' => $workerId,
+        'port' => $port,
+        'pid' => \getmypid(),
+        'connections' => \count($connections),
+        'active_requests' => $activeRequests,
+        'requests' => $requestCount,
+        'long_lived_connections' => \count($longLivedConnections),
+        'active_fibers' => \count($activeFibers),
+        'writable_connections' => \count($writableConnections),
+        'pending_close' => \count($pendingClose),
+        'memory_used' => $memoryUsed,
+        'memory_allocated' => $memoryAllocated,
+        'memory_peak' => \memory_get_peak_usage(true),
+        'memory_peak_used' => \memory_get_peak_usage(false),
+        'memory_percent' => $memoryPercent,
+        'max_memory_bytes' => $maxMemoryBytes,
+        'memory_limit' => $wlsMemoryLimit,
+        'uptime' => \max(0, \time() - $startTime),
+        'planned_exit_reason' => $plannedExitReason,
+        'should_exit' => $shouldExit ? 1 : 0,
+        'ipc_draining' => $ipcDraining ? 1 : 0,
+        'ts' => \microtime(true),
+    ];
+};
+$sendExitReasonToMaster = static function (string $reason, int $code = 0, array $context = []) use (&$ipcClient, &$exitReasonSent, $buildWorkerRuntimeSnapshot): void {
+    $reason = \trim($reason);
+    if ($exitReasonSent || $reason === '' || !$ipcClient || !$ipcClient->isConnected()) {
+        return;
+    }
+
+    try {
+        $ipcClient->send(\Weline\Server\IPC\ControlMessage::exitReason(
+            \substr($reason, 0, 512),
+            $code,
+            \array_merge($buildWorkerRuntimeSnapshot('exit_reason'), $context)
+        ));
+        $ipcClient->flushPendingWrites(0.2);
+        $exitReasonSent = true;
+    } catch (\Throwable) {
+        // Best-effort observability only; exit must not be blocked by IPC state.
+    }
+};
+
+$gracefulExit = function (string $reason = '', bool $waitForRequests = true) use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, &$activeRequests, $processName, $gracefulShutdownTimeout, $stopShutdownTimeout, &$ipcClient, $workerId, $port, $isMaintenanceWorker, &$plannedExitReason, $sendExitReasonToMaster) {
     // 刷新日志缓冲区
     WlsLogger::flush_(true);
     
     // 记录退出原因
-    if ($reason) {
-        w_log_info("[WLS Worker] 退出原因: {$reason}");
-        WlsLogger::info_("优雅关闭: {$reason}");
+    $effectiveExitReason = $plannedExitReason !== '' ? $plannedExitReason : $reason;
+    if ($effectiveExitReason) {
+        $sendExitReasonToMaster($effectiveExitReason);
+        w_log_info("[WLS Worker] 退出原因: {$effectiveExitReason}");
+        WlsLogger::info_("优雅关闭: {$effectiveExitReason}");
     }
     
     // 停止接受新连接（关闭监听 socket；仅对有效 stream 调用 fclose，避免已关闭 resource 导致 TypeError）
@@ -1162,13 +1443,12 @@ $gracefulExit = function (string $reason = '', bool $waitForRequests = true) use
     if ($ipcClient && $ipcClient->isConnected()) {
         $exitRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
         $ipcClient->send(\Weline\Server\IPC\ControlMessage::exited($exitRole, \getmypid(), $port, $workerId));
+        $ipcClient->flushPendingWrites(0.2);
         WlsLogger::info_("已发送 exited 消息给 Master");
     }
     
-    // 使用进程管理器清理 PID 文件
-    if ($processName) {
-        \Weline\Framework\System\Process\Processer::destroy('--name=' . $processName);
-    }
+    // Master owns process-record cleanup; child exit must not block on shared
+    // PID/name/port index locks.
     
     WlsLogger::info_("Worker 已退出");
     exit(0);
@@ -1205,10 +1485,15 @@ $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足�
 
 // 进入事件循环后向 Master 上报一次（IPC 重连后会再次上报）
 $workerLoopStartedSent = false;
+$sharedRuntimeConnectionWarmupStarted = false;
+$sharedRuntimeConnectionWarmupNotBefore = \microtime(true);
+$deferredWorkerBootstrapWarmupStarted = false;
+$deferredWorkerBootstrapWarmupNotBefore = \microtime(true);
 
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
+    wlsResetLongRunningExecutionLimit();
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
     }
@@ -1247,7 +1532,7 @@ while (true) {
     }
     if ($now - $lastGcTime >= 60) {
         $lastGcTime = $now;
-        $gcResult = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+        $gcResult = wlsCompactWorkerMemoryCaches('timer', $maxMemoryBytes, 0.70, 32 * 1024 * 1024);
         if ($gcResult['cycles'] > 0 || $gcResult['trimmed_bytes'] > 0) {
             WlsLogger::debug_("[GC] cycles={$gcResult['cycles']}, trimmed={$gcResult['trimmed_bytes']} bytes");
         }
@@ -1269,14 +1554,8 @@ while (true) {
     if (isset($ipcReconnectDueTime) && \microtime(true) >= $ipcReconnectDueTime && $ipcReconnectAttempts < $ipcReconnectMaxAttempts) {
         $ipcReconnectAttempts++;
         
-        // 🔑 每次重连都读取最新的 instance 信息，以获得 Master 可能更新的 control_port
-        $latestControlPort = $instanceInfoGateway->getLatestControlPort($controlPort);
-        if ($latestControlPort !== $controlPort) {
-            WlsLogger::warning_("[IPC] 检测到 control_port 已更新: {$controlPort} → {$latestControlPort}");
-            $controlPort = $latestControlPort;
-        }
-        
         WlsLogger::warning_("[IPC] 第 {$ipcReconnectAttempts}/{$ipcReconnectMaxAttempts} 次尝试与 Master 重新连接 (端口: {$controlPort})");
+        $runReadyGateWorkerBootstrapWarmup();
         if ($kernel->connectAndRegister($controlPort)) {
             $ipcClient = $kernel->getClient();
             unset($ipcReconnectDueTime, $ipcReconnectAttempts, $ipcReconnectMaxAttempts);
@@ -1304,7 +1583,93 @@ while (true) {
         $workerLoopStartedSent = true;
     }
 
-    // ========== ACK 等待超时检测（启动确认协议） ==========
+    if (!$sharedRuntimeConnectionWarmupStarted
+        && !$isMaintenanceWorker
+        && isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)
+        && $workerLoopStartedSent
+        && !$ipcReceivedShutdown
+        && \microtime(true) >= $sharedRuntimeConnectionWarmupNotBefore
+    ) {
+        $sharedRuntimeConnectionWarmupStarted = true;
+        $fiberScheduler->registerFiber();
+        $sharedRuntimeConnectionWarmupFiber = new \Fiber(static function () use (
+            $workerId,
+            $instanceName,
+            $sessionHost,
+            $sessionPort,
+            $sessionTokenFileName,
+            $memoryHost,
+            $memoryPort,
+            $memoryTokenFileName,
+            $fiberScheduler
+        ): void {
+            try {
+                WlsLogger::info_("[ConnectionPoolWarmup] async shared-state prewarm start worker={$workerId}");
+                $stats = \Weline\Server\Service\SharedRuntimeConnectionWarmup::warmWorkerPools($workerId, $instanceName, [
+                    'session' => [
+                        'host' => $sessionHost,
+                        'port' => $sessionPort,
+                        'token_file_name' => $sessionTokenFileName,
+                    ],
+                    'memory' => [
+                        'host' => $memoryHost,
+                        'port' => $memoryPort,
+                        'token_file_name' => $memoryTokenFileName,
+                    ],
+                ]);
+                WlsLogger::info_('[ConnectionPoolWarmup] async shared-state prewarm done worker=' . $workerId . ' stats=' . \json_encode($stats, JSON_UNESCAPED_SLASHES));
+            } catch (\Throwable $e) {
+                WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm failed worker={$workerId}: " . $e->getMessage());
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $sharedRuntimeConnectionWarmupFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm start failed worker={$workerId}: " . $e->getMessage());
+        }
+    }
+
+    // ========== Deferred worker bootstrap warmup ==========
+    if (!$deferredWorkerBootstrapWarmupStarted
+        && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && $workerLoopStartedSent
+        && !$ipcReceivedShutdown
+        && \microtime(true) >= $deferredWorkerBootstrapWarmupNotBefore
+    ) {
+        $deferredWorkerBootstrapWarmupStarted = true;
+        $warmupIpcClient = $ipcClient;
+        $fiberScheduler->registerFiber();
+        $deferredWarmupFiber = new \Fiber(static function () use ($runtime, $workerId, $fiberScheduler, $warmupIpcClient): void {
+            $warmupLog = static function (string $message, string $level = 'INFO') use ($workerId, $warmupIpcClient): void {
+                if ($warmupIpcClient !== null && $warmupIpcClient->isConnected()) {
+                    $warmupIpcClient->sendLogLine("[WorkerWarmup] Worker{$workerId} {$message}" . PHP_EOL, $level, "Worker#{$workerId}");
+                }
+            };
+            try {
+                $warmupLog('warmup_started');
+                WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup start worker={$workerId}");
+                $runtime->runDeferredWorkerBootstrapWarmup();
+                WlsLogger::info_("[WorkerWarmup] deferred bootstrap warmup done worker={$workerId}");
+                $warmupLog('warmup_success');
+            } catch (\Throwable $e) {
+                WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup failed worker={$workerId}: " . $e->getMessage());
+                $warmupLog('warmup_failed', 'WARNING');
+            } finally {
+                $fiberScheduler->unregisterFiber();
+            }
+        });
+        try {
+            $deferredWarmupFiber->start();
+        } catch (\Throwable $e) {
+            $fiberScheduler->unregisterFiber();
+            WlsLogger::warning_("[WorkerWarmup] deferred bootstrap warmup start failed worker={$workerId}: " . $e->getMessage());
+        }
+    }
+
+    // ========== ACK wait timeout check ==========
     if ($waitingForAck && $ipcClient && $ipcClient->isConnected()) {
         $ackElapsed = \microtime(true) - $readySentTime;
         if ($ackElapsed >= $ackTimeout) {
@@ -1323,6 +1688,29 @@ while (true) {
     // 检查是否需要优雅退出（排水模式）
     if ($shouldExit) {
         if ($ipcDraining) {
+            if (!empty($longLivedConnections)) {
+                foreach (\array_keys($longLivedConnections) as $cid) {
+                    if (isset($connections[$cid]) && \is_resource($connections[$cid])) {
+                        @\fclose($connections[$cid]);
+                    }
+                    if (isset($activeFibers[$cid])) {
+                        $fiberScheduler->cancelTimersForFiber($activeFibers[$cid]['fiber']);
+                        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$cid]['fiber']);
+                        $fiberScheduler->unregisterFiber();
+                    }
+                    unset(
+                        $connections[$cid],
+                        $requestBuffers[$cid],
+                        $connectionLastActivity[$cid],
+                        $requestLogged[$cid],
+                        $writeBuffers[$cid],
+                        $writableConnections[$cid],
+                        $pendingClose[$cid],
+                        $longLivedConnections[$cid],
+                        $activeFibers[$cid]
+                    );
+                }
+            }
             // ========== 排水模式：快速清理连接，加速退出 ==========
             $drainElapsed = $drainStartTime > 0 ? (\time() - $drainStartTime) : 0;
 
@@ -1346,8 +1734,15 @@ while (true) {
 
             // 2. 所有连接已清空 → 排水完成（帝王令：若已收 shutdown，做完排水仍以 shutdown 名义退出）
             if (empty($connections)) {
+                if ($plannedExitReason === '') {
+                    $plannedExitReason = $ipcReceivedShutdown
+                        ? "shutdown_command:worker={$workerId}"
+                        : "drain_or_reload:worker={$workerId}";
+                }
+                $sendExitReasonToMaster($plannedExitReason);
                 if ($ipcClient && $ipcClient->isConnected()) {
-                    $ipcClient->sendDrainingComplete($workerId, $port);
+                    $ipcClient->sendDrainingComplete($workerId, $port, '', $plannedExitReason);
+                    $ipcClient->flushPendingWrites(0.2);
                 }
                 WlsLogger::info_("排水完成（{$drainElapsed}秒），Worker 退出");
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载');
@@ -1370,8 +1765,15 @@ while (true) {
                 $longLivedConnections = [];
                 $activeFibers = [];
                 
+                if ($plannedExitReason === '') {
+                    $plannedExitReason = $ipcReceivedShutdown
+                        ? "shutdown_command_timeout:worker={$workerId},remaining={$remaining}"
+                        : "drain_or_reload_timeout:worker={$workerId},remaining={$remaining}";
+                }
+                $sendExitReasonToMaster($plannedExitReason);
                 if ($ipcClient && $ipcClient->isConnected()) {
-                    $ipcClient->sendDrainingComplete($workerId, $port);
+                    $ipcClient->sendDrainingComplete($workerId, $port, '', $plannedExitReason);
+                    $ipcClient->flushPendingWrites(0.2);
                 }
                 $gracefulExit($ipcReceivedShutdown ? 'shutdown命令' : '热重载（超时强制退出）');
             }
@@ -1403,6 +1805,7 @@ while (true) {
                 }
                 if (isset($activeFibers[$connId])) {
                     $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                    \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
                     $fiberScheduler->unregisterFiber();
                     unset($activeFibers[$connId]);
                 }
@@ -1414,21 +1817,70 @@ while (true) {
     if ($now - $lastMemoryCheck >= $memoryCheckInterval) {
         $lastMemoryCheck = $now;
         $currentMemory = \memory_get_usage(true);
-        $memoryPercent = $currentMemory / $maxMemoryBytes;
-        
-        // 超过内存上限，触发优雅重启
-        if ($currentMemory >= $maxMemoryBytes) {
-            $memoryMB = \round($currentMemory / 1024 / 1024, 2);
-            WlsLogger::warning_("内存使用超限 ({$memoryMB}MB >= " . ($maxMemoryBytes / 1024 / 1024) . "MB)，触发优雅重启");
-            $shouldExit = true;
-        }
-        // 达到告警阈值，输出警告日志
-        elseif ($memoryPercent >= $memoryWarningThreshold) {
-            $memoryMB = \round($currentMemory / 1024 / 1024, 2);
-            WlsLogger::warning_("内存使用率较高: {$memoryMB}MB (" . \round($memoryPercent * 100) . "%)");
+        $currentMemoryUsed = \memory_get_usage(false);
+        $memoryPercent = $maxMemoryBytes > 0 ? $currentMemoryUsed / $maxMemoryBytes : 0.0;
+
+        if ($memoryPercent >= $memoryDrainThreshold) {
+            $beforeMb = \round($currentMemoryUsed / 1024 / 1024, 1);
+            $beforeAllocatedMb = \round($currentMemory / 1024 / 1024, 1);
+            $compaction = wlsCompactWorkerMemoryCaches('drain_threshold', $maxMemoryBytes, 0.0, 0, true);
+            $currentMemory = \memory_get_usage(true);
+            $currentMemoryUsed = \memory_get_usage(false);
+            $memoryPercent = $maxMemoryBytes > 0 ? $currentMemoryUsed / $maxMemoryBytes : 0.0;
+            $afterMb = \round($currentMemoryUsed / 1024 / 1024, 1);
+            $afterAllocatedMb = \round($currentMemory / 1024 / 1024, 1);
+
+            if ($memoryPercent >= $memoryDrainThreshold) {
+                WlsLogger::warning_(
+                    "Worker memory pressure {$afterMb}MB used ({$afterAllocatedMb}MB allocated) after compact "
+                    . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB), start drain to avoid OOM reset"
+                );
+                $plannedExitReason = 'memory_pressure_drain'
+                    . ":worker={$workerId}"
+                    . ",memory={$afterMb}MB"
+                    . ",before={$beforeMb}MB"
+                    . ",allocated={$afterAllocatedMb}MB"
+                    . ",before_allocated={$beforeAllocatedMb}MB"
+                    . ",limit={$wlsMemoryLimit}"
+                    . ',threshold=' . \round($memoryDrainThreshold * 100, 1) . '%'
+                    . ",requests={$requestCount}";
+                $sendExitReasonToMaster($plannedExitReason);
+                $shouldExit = true;
+                $ipcDraining = true;
+                $drainStartTime = \time();
+                $maxDrainTime = \min($maxDrainTime, 10);
+                if ($socket && \is_resource($socket)) {
+                    @\fclose($socket);
+                    $socket = null;
+                }
+            } elseif ($memoryPercent >= $memoryWarningThreshold) {
+                WlsLogger::warning_(
+                    "Worker memory high {$afterMb}MB used ({$afterAllocatedMb}MB allocated) after compact "
+                    . "(before={$beforeMb}MB used, before_allocated={$beforeAllocatedMb}MB, cycles="
+                    . (int)($compaction['cycles'] ?? 0) . ")"
+                );
+            }
+        } elseif ($memoryPercent >= $memoryWarningThreshold) {
+            WlsLogger::warning_(
+                "Worker memory high: " . \round($currentMemoryUsed / 1024 / 1024, 1)
+                . 'MB used (' . \round($currentMemory / 1024 / 1024, 1) . 'MB allocated)'
+            );
         }
         
         // 定期记录 Worker 状态到数据库
+        if ($ipcClient && $ipcClient->isConnected()) {
+            try {
+                $ipcClient->send(\Weline\Server\IPC\ControlMessage::statusReport(
+                    \count($connections),
+                    $currentMemory,
+                    $requestCount,
+                    $buildWorkerRuntimeSnapshot('periodic_status')
+                ), false);
+            } catch (\Throwable) {
+                // Runtime diagnostics are best-effort and must not affect traffic.
+            }
+        }
+
         try {
             \Weline\Server\Service\StatusLogService::logWorkerStatus([
                 'instance' => $instanceName,
@@ -1451,6 +1903,8 @@ while (true) {
     // 最大请求数限制：处理超过指定请求数后优雅重启（可选的内存保护）
     if ($maxRequests > 0 && $requestCount >= $maxRequests && empty($connections)) {
         WlsLogger::info_("已处理 {$requestCount} 个请求，达到上限 {$maxRequests}，触发优雅重启");
+        $plannedExitReason = "max_requests_recycle:worker={$workerId},requests={$requestCount},limit={$maxRequests}";
+        $sendExitReasonToMaster($plannedExitReason);
         $shouldExit = true;
     }
     
@@ -1458,6 +1912,7 @@ while (true) {
     // 重要：长连接（SSE/WebSocket）不应该参与读事件检测，因为客户端不会发送数据
     // 如果把 SSE 连接放在读数组中，stream_select 会一直等到超时（最长100ms），造成延迟累积
     $readSockets = [];
+    $readableClientCount = 0;
     if ($socket && \is_resource($socket)) {
         $readSockets[] = $socket;
     }
@@ -1465,6 +1920,7 @@ while (true) {
     foreach ($connections as $connId => $conn) {
         if (!isset($longLivedConnections[$connId])) {
             $readSockets[] = $conn;
+            $readableClientCount++;
         }
     }
 
@@ -1487,7 +1943,8 @@ while (true) {
     $except = [];
 
     // EventLoop + CoroutineRuntime：统一等待语义（select/event 后端可切换）
-    $changed = $coroutineRuntime->wait($read, $write, $except, 100000);
+    $loopWaitUsec = ($readableClientCount > 0 || $write !== []) ? 1000 : 100000;
+    $changed = $coroutineRuntime->wait($read, $write, $except, $loopWaitUsec);
     // #endregion
 
     // 调度器 tick：处理到期定时器，resume 前恢复该 Fiber 的请求级上下文
@@ -1495,13 +1952,14 @@ while (true) {
         function (\Fiber $fiber) use (&$activeFibers): void {
             \Weline\Server\Runtime\WorkerFiberContextTracker::restore($activeFibers, $fiber);
         },
-        null,
+        $fiberTickBudgetMs > 0.0 ? $fiberTickBudgetMs : null,
         function (\Fiber $fiber) use (&$activeFibers): void {
             $activeFibers = \Weline\Server\Runtime\WorkerFiberContextTracker::capture(
                 $activeFibers,
                 $fiber,
                 static fn () => \Weline\Framework\Runtime\WlsFiberContext::capture()
             );
+            wlsResetLongRunningExecutionLimit();
         }
     );
     
@@ -1627,7 +2085,35 @@ while (true) {
         }
         unset($requestLogged[$connId]); // 清理标记（如果不存在也不会报错）
         $activeRequests++;
-        
+
+        if ($requestGcInterval > 0 && $requestCount - $lastRequestGcCount >= $requestGcInterval) {
+            $lastRequestGcCount = $requestCount;
+            $compaction = wlsCompactWorkerMemoryCaches('request_interval', $maxMemoryBytes, 0.55, 16 * 1024 * 1024);
+            $currentMemory = \memory_get_usage(true);
+            $memoryPeak = \memory_get_peak_usage(true);
+            $runtimeCompactions = (array)($compaction['runtime_cache_compactions'] ?? []);
+            $staticCacheCompaction = (array)($compaction['static_file_cache'] ?? []);
+            if (
+                ($compaction['cycles'] ?? 0) > 0
+                || ($compaction['trimmed_bytes'] ?? 0) > 0
+                || (int)($runtimeCompactions['cleared_process_caches'] ?? 0) > 0
+                || ($staticCacheCompaction['cleared'] ?? false)
+                || $currentMemory > 150 * 1024 * 1024
+            ) {
+                WlsLogger::debug_(
+                    '[GC] request_compact worker=http requests=' . $requestCount
+                    . ' cycles=' . (int)($compaction['cycles'] ?? 0)
+                    . ' trimmed=' . (int)($compaction['trimmed_bytes'] ?? 0)
+                    . ' memory=' . \round($currentMemory / 1024 / 1024, 1) . 'MB'
+                    . ' peak=' . \round($memoryPeak / 1024 / 1024, 1) . 'MB'
+                    . ' static=' . (($staticCacheCompaction['cleared'] ?? false) ? 'cleared' : 'kept')
+                    . ':' . (int)($staticCacheCompaction['count'] ?? 0)
+                    . ':' . (int)($staticCacheCompaction['size'] ?? 0)
+                    . ' runtime=' . (\json_encode($runtimeCompactions, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}')
+                );
+            }
+        }
+
         // 解析请求 URI（用于日志，如果前端模式已输出则跳过）
         if (!$isFrontend) {
             $uri = '/';
@@ -1759,6 +2245,8 @@ function wlsFinalizeTerminatedFiberResponseStep(
     try {
         $response = $fiber->getReturn() ?? '';
     } catch (\Throwable) {
+    } finally {
+        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($fiber);
     }
 
     $handleDuration = \round((\microtime(true) - $handleStartTime) * 1000, 2);
@@ -1917,6 +2405,7 @@ function wlsReleaseIdleFibersStep(
 
     foreach ($toRelease as $afConnId => $afData) {
         $fiberScheduler->cancelTimersForFiber($afData['fiber']);
+        \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($afData['fiber']);
         if (isset($afData['conn']) && \is_resource($afData['conn'])) {
             @\fclose($afData['conn']);
         }
@@ -2079,6 +2568,11 @@ function wlsHttpFlushQueuedWrites(
                 }
                 if (\Weline\Server\Service\WorkerResponseMemoryGuard::shouldCompactAfterDrain($initialBufferLen)) {
                     \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+                }
+                if (\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
+                    \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
+                        (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8)
+                    );
                 }
                 break;
             }
@@ -2255,6 +2749,29 @@ function wlsHttpReadStep(
     array &$writableConnections,
     array &$pendingClose
 ): array {
+    if (!\is_resource($conn) || !isset($connections[$connId]) || $connections[$connId] !== $conn) {
+        unset(
+            $connections[$connId],
+            $requestBuffers[$connId],
+            $connectionLastActivity[$connId],
+            $requestLogged[$connId],
+            $writeBuffers[$connId],
+            $writableConnections[$connId],
+            $pendingClose[$connId]
+        );
+        if (isset($longLivedConnections[$connId])) {
+            unset($longLivedConnections[$connId]);
+        }
+        if (isset($activeFibers[$connId])) {
+            $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
+            $fiberScheduler->unregisterFiber();
+            unset($activeFibers[$connId]);
+        }
+        $activeRequests = \max(0, $activeRequests - 1);
+        return ['closed' => true, 'request_ready' => false];
+    }
+
     if (\Weline\Server\Service\ConnectionReadWriteGuard::shouldDeferRead(
         $writeBuffers,
         $pendingClose,
@@ -2282,6 +2799,7 @@ function wlsHttpReadStep(
         }
         if (isset($activeFibers[$connId])) {
             $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+            \Weline\Framework\Manager\ObjectManager::clearRequestScopeForFiber($activeFibers[$connId]['fiber']);
             $fiberScheduler->unregisterFiber();
             unset($activeFibers[$connId]);
             WlsLogger::info_("客户端断开，Fiber 已清理 (connId: {$connId}, 剩余活跃 Fiber: " . \count($activeFibers) . ")");
@@ -2366,6 +2884,22 @@ function wlsHttpReadStep(
  * @param mixed $ipcClient
  * @param array<string, mixed> $fiberResults
  */
+/**
+ * @param array<int, array<string, mixed>> $activeFibers
+ */
+function wlsCountActiveFibersForAdmission(array $activeFibers): int
+{
+    $count = 0;
+    foreach ($activeFibers as $fiberState) {
+        if (($fiberState['is_sse_protocol'] ?? false) === true) {
+            continue;
+        }
+        $count++;
+    }
+
+    return $count;
+}
+
 function wlsDispatchRequestFiberStep(
     mixed $conn,
     int $connId,
@@ -2405,7 +2939,14 @@ function wlsDispatchRequestFiberStep(
     array &$writableConnections,
     array &$pendingClose
 ): void {
-    if ($fiberMaxActive > 0 && \count($activeFibers) >= $fiberMaxActive) {
+    $longLivedDetection = $longLivedProtocolResolver->detect($rawRequest);
+    $isLongLived = ($longLivedDetection['is_long_lived'] ?? false) === true;
+    $requestProtocol = (string) ($longLivedDetection['protocol'] ?? 'http');
+    $isSseProtocolRequest = ($requestProtocol === 'sse');
+    $applyLongLivedLimit = !$isSseProtocolRequest;
+
+    $activeAdmissionFibers = wlsCountActiveFibersForAdmission($activeFibers);
+    if (!$isSseProtocolRequest && $fiberMaxActive > 0 && $activeAdmissionFibers >= $fiberMaxActive) {
         $activeRequests--;
         $body = 'Service Unavailable';
         $resp = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
@@ -2425,11 +2966,6 @@ function wlsDispatchRequestFiberStep(
     }
 
     // 长连分层：见 SseMatcher / ProtocolResolver；protocol===sse 时与 worker_ssl 一样走写队列 + SseContext 回调。
-    $longLivedDetection = $longLivedProtocolResolver->detect($rawRequest);
-    $isLongLived = ($longLivedDetection['is_long_lived'] ?? false) === true;
-    $requestProtocol = (string) ($longLivedDetection['protocol'] ?? 'http');
-    $isSseProtocolRequest = ($requestProtocol === 'sse');
-    $applyLongLivedLimit = !$isSseProtocolRequest;
     if ($isLongLived) {
         $layer = (string)($longLivedDetection['layer'] ?? 'unknown');
         $protocol = (string)($longLivedDetection['protocol'] ?? 'long-lived');
@@ -2500,6 +3036,7 @@ function wlsDispatchRequestFiberStep(
     ) {
         wlsFiberRequestContextEnter($fiberConn, $fiberConnId);
         try {
+            \Weline\Framework\Runtime\SchedulerSystem::yield();
             if ($isSseProtocolRequest) {
                 \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
                     static function (string $data) use (
@@ -2574,6 +3111,7 @@ function wlsDispatchRequestFiberStep(
             throw $e;
         } finally {
             wlsFiberRequestContextLeave();
+            wlsResetLongRunningExecutionLimit();
         }
     });
 
@@ -2757,17 +3295,408 @@ function isHealthAllowCookieValid(string $cookieValue, array $env): bool
  */
 function injectWlsProcessTimeHeader(string $response, float $durationMs): string
 {
+    if ($durationMs < 500 && !\Weline\Server\Log\LogConfig::isVerboseWlsLog()) {
+        return $response;
+    }
+
     $pos = \strpos($response, "\r\n\r\n");
     if ($pos === false) {
         return $response;
     }
     $ms = \round($durationMs, 2);
-    // 注意：不要在最后一行末尾额外附加 \r\n。
-    // $pos 位置对应原响应的 \r\n\r\n 分隔符起点，分隔符自身会提供最后一行结束符与空行。
-    $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"";
-    // 在 header/body 分隔符（\r\n\r\n）之前插入新增 header，
-    // 避免插入点落在分隔符内部造成多余 CRLF 从而污染 body。
-    return \substr_replace($response, $headers, $pos, 0);
+    // Insert inside the original header/body separator so the previous header keeps its CRLF.
+    $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"\r\n";
+    return \substr_replace($response, $headers, $pos + 2, 0);
+}
+
+function wlsCompressFormattedHttpResponse(string $response, string $acceptEncoding): string
+{
+    if ($response === ''
+        || \stripos($acceptEncoding, 'gzip') === false
+        || !\function_exists('gzencode')) {
+        return $response;
+    }
+
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    if ($headerEnd === false) {
+        return $response;
+    }
+
+    $headersPart = \substr($response, 0, $headerEnd);
+    $bodyPart = \substr($response, $headerEnd + 4);
+    if ($bodyPart === '' || \strlen($bodyPart) < 1024) {
+        return $response;
+    }
+
+    if (\preg_match('/^HTTP\/\d(?:\.\d)?\s+(204|205|304)\b/i', $headersPart)
+        || \preg_match('/^Content-Encoding:/mi', $headersPart)) {
+        return $response;
+    }
+
+    $contentType = '';
+    if (\preg_match('/^Content-Type:\s*([^\r\n]+)/mi', $headersPart, $typeMatch)) {
+        $contentType = \strtolower(\trim((string)$typeMatch[1]));
+    }
+    if ($contentType !== ''
+        && !\str_starts_with($contentType, 'text/')
+        && !\str_contains($contentType, 'application/json')
+        && !\str_contains($contentType, 'application/javascript')
+        && !\str_contains($contentType, 'application/xml')
+        && !\str_contains($contentType, 'application/xhtml+xml')
+        && !\str_contains($contentType, 'image/svg+xml')) {
+        return $response;
+    }
+
+    $compressed = \gzencode($bodyPart, 6);
+    if ($compressed === false) {
+        return $response;
+    }
+
+    $headersPart .= "\r\nContent-Encoding: gzip";
+    $headersPart = wlsSetFormattedHeader($headersPart, 'Content-Length', (string)\strlen($compressed));
+    $headersPart = wlsAddFormattedVaryAcceptEncoding($headersPart);
+
+    return $headersPart . "\r\n\r\n" . $compressed;
+}
+
+function wlsSetFormattedHeader(string $headersPart, string $name, string $value): string
+{
+    $replacement = $name . ': ' . $value;
+    $lines = \preg_split('/\r\n|\n|\r/', $headersPart);
+    if ($lines === false) {
+        return \rtrim($headersPart, "\r\n") . "\r\n" . $replacement;
+    }
+
+    $prefix = \strtolower($name) . ':';
+    $kept = [];
+    foreach ($lines as $line) {
+        if (\str_starts_with(\strtolower(\ltrim($line)), $prefix)) {
+            continue;
+        }
+        $kept[] = $line;
+    }
+
+    return \rtrim(\implode("\r\n", $kept), "\r\n") . "\r\n" . $replacement;
+}
+
+function wlsSetFormattedHttpResponseHeader(string $response, string $name, string $value): string
+{
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    if ($headerEnd === false) {
+        return $response;
+    }
+
+    $headersPart = \substr($response, 0, $headerEnd);
+    $bodyPart = \substr($response, $headerEnd + 4);
+
+    return wlsSetFormattedHeader($headersPart, $name, $value) . "\r\n\r\n" . $bodyPart;
+}
+
+function wlsDecorateFormattedStaticResponseForPerformancePanel(
+    string $response,
+    string $rawRequest,
+    float $elapsedMs,
+    int $workerId,
+    int $port,
+    array $cacheInfo = []
+): string {
+    if (!wlsPerformancePanelAllowed($rawRequest)) {
+        return $response;
+    }
+
+    $cacheStatus = \strtolower((string)($cacheInfo['status'] ?? 'miss'));
+    $source = match ($cacheStatus) {
+        'hit' => 'static_memory',
+        'missing' => 'static_missing',
+        default => 'static_file',
+    };
+    $requestId = wlsPerformancePanelRequestId($rawRequest);
+    $response = wlsSetFormattedHttpResponseHeader($response, 'X-Weline-Request-Id', $requestId);
+    wlsRecordFormattedFpcFastResponseForPerformancePanel(
+        $rawRequest,
+        $requestId,
+        $elapsedMs,
+        $workerId,
+        $port,
+        $source,
+        wlsFormattedHttpStatusCode($response)
+    );
+
+    return $response;
+}
+
+function wlsDecorateFrameworkResponseForPerformancePanel(
+    \Weline\Framework\Http\Response $response,
+    string $rawRequest
+): void {
+    if (!wlsPerformancePanelAllowed($rawRequest)) {
+        return;
+    }
+
+    [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
+    if ($method === 'HEAD'
+        || wlsPerformancePanelIsAjaxOrApiRequest($rawRequest, $target)
+        || \in_array($response->getStatusCode(), [204, 205, 304], true)
+    ) {
+        return;
+    }
+
+    $body = $response->getBody();
+    if ($body === ''
+        || \stripos($body, 'data-weline-wls-performance-bootstrap') !== false
+        || !wlsPerformancePanelBodyLooksInjectable($body)
+    ) {
+        return;
+    }
+
+    $contentTypeHeader = $response->getHeader('Content-Type');
+    $contentType = \strtolower(\is_array($contentTypeHeader)
+        ? (string)($contentTypeHeader[0] ?? '')
+        : (string)($contentTypeHeader ?? '')
+    );
+    if ($contentType !== '' && !\str_contains($contentType, 'text/html')) {
+        return;
+    }
+    if ($response->getHeader('Content-Encoding') !== null) {
+        return;
+    }
+
+    $limit = (int)\Weline\Framework\App\Env::get('wls.performance_panel.max_response_bytes', 1048576);
+    if ($limit > 0 && \strlen($body) > $limit) {
+        return;
+    }
+
+    $requestIdHeader = $response->getHeader('X-Weline-Request-Id');
+    $requestId = \is_array($requestIdHeader)
+        ? (string)($requestIdHeader[0] ?? '')
+        : (string)($requestIdHeader ?? '');
+    if (!\preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $requestId)) {
+        $requestId = wlsPerformancePanelRequestId($rawRequest);
+        $response->setHeader('X-Weline-Request-Id', $requestId);
+    }
+
+    $bootstrap = wlsRenderPerformancePanelBootstrap($requestId);
+    $bodyClosePos = \strripos($body, '</body>');
+    $body = $bodyClosePos === false
+        ? $body . $bootstrap
+        : \substr($body, 0, $bodyClosePos) . $bootstrap . \substr($body, $bodyClosePos);
+    $response->setBody($body);
+    if ($response->getHeader('Content-Length') !== null) {
+        $response->setHeader('Content-Length', (string)\strlen($body));
+    }
+}
+
+function wlsFormattedHttpStatusCode(string $response): int
+{
+    if (\preg_match('/^HTTP\/\d(?:\.\d)?\s+(\d{3})\b/', $response, $matches) === 1) {
+        return (int)$matches[1];
+    }
+
+    return 200;
+}
+
+function wlsPerformancePanelAllowed(string $rawRequest = ''): bool
+{
+    if ((\defined('DEV') && DEV) || (\defined('DEBUG') && DEBUG)) {
+        return true;
+    }
+    if ((bool)\Weline\Framework\App\Env::get('wls.debug.performance_panel', false)) {
+        return true;
+    }
+    if (!(bool)\Weline\Framework\App\Env::get('wls.performance_panel.enable_in_prod', false)) {
+        return false;
+    }
+
+    $cookieName = (string)\Weline\Framework\App\Env::get('wls.performance_panel.cookie_name', 'w_wls_perf');
+    if ($cookieName === '') {
+        return false;
+    }
+    $cookieHeader = (string)(getHeaderValue($rawRequest, 'Cookie') ?? '');
+
+    return getCookieValue($cookieHeader, $cookieName) === '1';
+}
+
+function wlsPerformancePanelRequestId(string $rawRequest): string
+{
+    foreach (['X-Weline-Request-Id', 'X-Request-Id'] as $header) {
+        $value = getHeaderValue($rawRequest, $header);
+        if (\is_string($value) && \preg_match('/^[a-zA-Z0-9_.:-]{8,128}$/', $value)) {
+            return $value;
+        }
+    }
+
+    try {
+        return \bin2hex(\random_bytes(8)) . '-' . \dechex((int)(\microtime(true) * 1000000));
+    } catch (\Throwable) {
+        return \str_replace('.', '', \uniqid('wls', true));
+    }
+}
+
+function wlsRecordFormattedFpcFastResponseForPerformancePanel(
+    string $rawRequest,
+    string $requestId,
+    float $elapsedMs,
+    int $workerId,
+    int $port,
+    string $source = 'worker_fastpath',
+    int $status = 200
+): void {
+    try {
+        if (!\class_exists(\Weline\Server\Service\WlsPerformanceTraceStore::class)) {
+            return;
+        }
+        [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
+        $host = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
+        $path = '/';
+        $parsedPath = \parse_url($target, PHP_URL_PATH);
+        if (\is_string($parsedPath) && $parsedPath !== '') {
+            $path = $parsedPath;
+        }
+        $query = \parse_url($target, PHP_URL_QUERY);
+        if (\is_string($query) && $query !== '') {
+            $path .= '?' . $query;
+        }
+        \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Server\Service\WlsPerformanceTraceStore::class)
+            ->record([], [
+                'request_id' => $requestId,
+                'method' => $method,
+                'uri' => $path,
+                'host' => $host,
+                'status' => $status,
+                'total_ms' => \round($elapsedMs, 2),
+                'pre_telemetry_total_ms' => \round($elapsedMs, 2),
+                'fpc_hit' => $source === 'static_memory',
+                'fpc_source' => $source,
+                'worker_id' => (string)$workerId,
+                'worker_port' => (string)$port,
+                'pid' => \getmypid() ?: 0,
+            ]);
+    } catch (\Throwable) {
+    }
+}
+
+function wlsCanInjectPerformancePanelIntoFormattedResponse(string $rawRequest, string $response): bool
+{
+    [$method, $target] = wlsPerformancePanelRequestLine($rawRequest);
+    if ($method === 'HEAD') {
+        return false;
+    }
+    if (wlsPerformancePanelIsAjaxOrApiRequest($rawRequest, $target)) {
+        return false;
+    }
+
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    if ($headerEnd === false) {
+        return false;
+    }
+    $headersPart = \substr($response, 0, $headerEnd);
+    $bodyPart = \substr($response, $headerEnd + 4);
+    if ($bodyPart === ''
+        || \preg_match('/^HTTP\/\d(?:\.\d)?\s+(204|205|304)\b/i', $headersPart)
+        || \preg_match('/^Content-Encoding:/mi', $headersPart)) {
+        return false;
+    }
+    $limit = (int)\Weline\Framework\App\Env::get('wls.performance_panel.max_response_bytes', 1048576);
+    if ($limit > 0 && \strlen($bodyPart) > $limit) {
+        return false;
+    }
+    $contentType = '';
+    if (\preg_match('/^Content-Type:\s*([^\r\n]+)/mi', $headersPart, $typeMatch)) {
+        $contentType = \strtolower(\trim((string)$typeMatch[1]));
+    }
+    if ($contentType !== '' && !\str_contains($contentType, 'text/html')) {
+        return false;
+    }
+
+    return wlsPerformancePanelBodyLooksInjectable($bodyPart);
+}
+
+function wlsPerformancePanelIsAjaxOrApiRequest(string $rawRequest, string $target): bool
+{
+    $requestedWith = \strtolower(\trim((string)(getHeaderValue($rawRequest, 'X-Requested-With') ?? '')));
+    if ($requestedWith === 'xmlhttprequest') {
+        return true;
+    }
+    $fetchDest = \strtolower(\trim((string)(getHeaderValue($rawRequest, 'Sec-Fetch-Dest') ?? '')));
+    if ($fetchDest === 'iframe') {
+        return true;
+    }
+    $accept = \strtolower((string)(getHeaderValue($rawRequest, 'Accept') ?? ''));
+    if ($accept !== '' && !\str_contains($accept, 'text/html') && !\str_contains($accept, '*/*')) {
+        return true;
+    }
+    $path = \parse_url($target, PHP_URL_PATH);
+    $path = \is_string($path) ? '/' . \ltrim($path, '/') : '/';
+    $restPrefixes = [
+        (string)\Weline\Framework\App\Env::get('router.area_routes.rest_frontend.prefix', 'api'),
+        (string)\Weline\Framework\App\Env::get('router.area_routes.rest_backend.prefix', ''),
+    ];
+    foreach ($restPrefixes as $prefix) {
+        $prefix = '/' . \trim($prefix, '/');
+        if ($prefix !== '/' && ($path === $prefix || \str_starts_with($path, $prefix . '/'))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function wlsPerformancePanelBodyLooksInjectable(string $body): bool
+{
+    return \stripos($body, '<html') !== false
+        || \stripos($body, '<!doctype') !== false
+        || \stripos($body, '<body') !== false
+        || \preg_match('/<(?:main|section|article|div|span|p|a|form|table|ul|ol|script|style)\b/i', $body) === 1;
+}
+
+function wlsPerformancePanelRequestLine(string $rawRequest): array
+{
+    if (\preg_match('/^([A-Z]+)\s+(\S+)\s+HTTP\/\d(?:\.\d)?/i', $rawRequest, $matches)) {
+        return [\strtoupper((string)$matches[1]), (string)$matches[2]];
+    }
+
+    return ['GET', '/'];
+}
+
+function wlsRenderPerformancePanelBootstrap(string $requestId): string
+{
+    $assetVersion = '20260630-wls-performance-panel-zh-1';
+    $requestIdJson = wlsJsonString($requestId);
+    $cssUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.css?v=' . $assetVersion);
+    $jsUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.js?v=' . $assetVersion);
+    $apiScriptUrl = wlsJsonString('/Weline/Frontend/view/statics/js/weline-api.js?v=' . $assetVersion);
+    $apiWorkerUrl = wlsJsonString('/Weline/Frontend/view/statics/js/weline-api-worker.js?v=' . $assetVersion);
+    $apiEndpoint = wlsJsonString(\Weline\Framework\App\Env::getFrontendQueryBinPath());
+
+    return <<<HTML
+<script data-no-extract="true" data-load-order="last" data-weline-wls-performance-bootstrap="true">
+(function(d,w){"use strict";if(w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__)return;w.__WELINE_WLS_PERFORMANCE_BOOTSTRAPPED__=true;var command="wls";var buffer="";var cssUrl={$cssUrl};var jsUrl={$jsUrl};var requestId={$requestIdJson};var cssLoaded=false;var jsPromise=null;w.__WELINE_WLS_PANEL_CONFIG__=Object.assign({},w.__WELINE_WLS_PANEL_CONFIG__||{},{requestId:requestId,command:command,apiScriptUrl:{$apiScriptUrl},api:{workerUrl:{$apiWorkerUrl},endpoint:{$apiEndpoint},queryBinUrl:{$apiEndpoint},area:"frontend"}});function ignoredTarget(t){if(!t)return false;var tag=(t.tagName||"").toLowerCase();return tag==="input"||tag==="textarea"||tag==="select"||t.isContentEditable===true}function head(n){(d.head||d.documentElement).appendChild(n)}function loadCss(){if(cssLoaded||d.querySelector('link[data-weline-wls-panel="css"]')){cssLoaded=true;return Promise.resolve()}return new Promise(function(resolve,reject){var link=d.createElement("link");link.rel="stylesheet";link.href=cssUrl;link.setAttribute("data-weline-wls-panel","css");link.onload=function(){cssLoaded=true;resolve()};link.onerror=function(){reject(new Error("WLS 面板样式加载失败"))};head(link)})}function loadJs(){if(w.__WELINE_WLS_PANEL__){return Promise.resolve(w.__WELINE_WLS_PANEL__)}if(jsPromise)return jsPromise;jsPromise=new Promise(function(resolve,reject){var script=d.createElement("script");script.src=jsUrl;script.defer=true;script.setAttribute("data-weline-wls-panel","js");script.onload=function(){w.__WELINE_WLS_PANEL__?resolve(w.__WELINE_WLS_PANEL__):reject(new Error("WLS 面板 API 不存在"))};script.onerror=function(){reject(new Error("WLS 面板脚本加载失败"))};head(script)});return jsPromise}function openPanel(){loadCss().then(loadJs).then(function(panel){if(panel&&typeof panel.open==="function")panel.open({requestId:requestId})}).catch(function(error){if(w.console&&console.warn)console.warn("[wls-panel]",error)})}w.wlsPanel=openPanel;d.addEventListener("keydown",function(event){if(event.ctrlKey||event.metaKey||event.altKey||event.isComposing||ignoredTarget(event.target))return;if(!event.key||event.key.length!==1)return;buffer=(buffer+event.key.toLowerCase()).slice(-command.length);if(buffer!==command)return;buffer="";openPanel()},true)})(document,window);
+</script>
+HTML;
+}
+
+function wlsJsonString(string $value): string
+{
+    $encoded = \json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+    return \is_string($encoded) ? $encoded : '""';
+}
+
+function wlsAddFormattedVaryAcceptEncoding(string $headersPart): string
+{
+    if (!\preg_match('/^Vary:\s*([^\r\n]*)$/mi', $headersPart, $match)) {
+        return \rtrim($headersPart, "\r\n") . "\r\nVary: Accept-Encoding";
+    }
+
+    $varyValue = (string)($match[1] ?? '');
+    foreach (\array_map('trim', \explode(',', $varyValue)) as $part) {
+        if (\strcasecmp($part, 'Accept-Encoding') === 0) {
+            return $headersPart;
+        }
+    }
+
+    $newValue = \trim($varyValue) === '' ? 'Accept-Encoding' : $varyValue . ', Accept-Encoding';
+    return (string)\preg_replace('/^Vary:\s*[^\r\n]*$/mi', 'Vary: ' . $newValue, $headersPart, 1);
 }
 
 /**
@@ -2828,6 +3757,17 @@ function wlsFiberRequestContextLeave(): void
     }
 }
 
+function wlsDrainPostResponseTasks(): void
+{
+    if (!\class_exists(\Weline\Framework\Runtime\PostResponseTaskQueue::class)) {
+        return;
+    }
+
+    \Weline\Framework\Runtime\PostResponseTaskQueue::drain(
+        (float)(\Weline\Framework\App\Env::get('wls.post_response_task_budget_ms', 8) ?: 8)
+    );
+}
+
 /**
  * 发送 HTTP 响应并清理连接状态
  *
@@ -2885,8 +3825,8 @@ function sendResponseAndCleanup(
         if ($headerEndErr !== false) {
             $headersPartErr = \substr($response, 0, $headerEndErr);
             $bodyPartErr = \substr($response, $headerEndErr + 4);
-            if (\preg_match('/^Connection:\s*.+$/mi', $headersPartErr)) {
-                $headersPartErr = (string)\preg_replace('/^Connection:\s*.+$/mi', 'Connection: close', $headersPartErr);
+            if (\preg_match('/^Connection:\s*[^\r\n]*/mi', $headersPartErr)) {
+                $headersPartErr = (string)\preg_replace('/^Connection:\s*[^\r\n]*/mi', 'Connection: close', $headersPartErr);
             } else {
                 $headersPartErr .= "\r\nConnection: close";
             }
@@ -2941,6 +3881,7 @@ function sendResponseAndCleanup(
         $response = \Weline\Server\Service\WorkerResponseMemoryGuard::forceConnectionCloseHeader($response);
     }
 
+    $responseFullyWritten = false;
     if (!$isSseMode) {
         $responseLen = \strlen($response);
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
@@ -2992,6 +3933,7 @@ function sendResponseAndCleanup(
         if ($totalWritten >= $responseLen) {
             WlsLogger::debug_("Worker 已写完响应 connId={$connId} written={$totalWritten}");
             $responseBytes = $totalWritten;
+            $responseFullyWritten = true;
             goto http_finalize_skip_write;
         }
 
@@ -3040,9 +3982,15 @@ function sendResponseAndCleanup(
         ));
     }
 
-    WlsLogger::flush_(true);
+    WlsLogger::tick_();
 
     $responseRequestsClose = \Weline\Server\Service\WorkerResponseMemoryGuard::responseRequestsConnectionClose($response);
+    unset($response, $rawRequest);
+
+    if (!$isSseMode && $responseFullyWritten) {
+        wlsDrainPostResponseTasks();
+    }
+
     $shouldClose = $isSseMode || !$keepAlive || $ipcDraining || $forceCloseAfterResponse || $responseRequestsClose;
     if ($shouldClose) {
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
@@ -3229,6 +4177,9 @@ function handleRequest(
         // 完整信息可通过 /_wls/health?detail=1 获取；fibers=1 时附带每个 Fiber 的闲忙与协议
         $wantsDetail = \strpos($rawRequest, 'detail=1') !== false || \strpos($rawRequest, 'detail=true') !== false;
         $wantsFibers = \strpos($rawRequest, 'fibers=1') !== false || \strpos($rawRequest, 'fibers=true') !== false;
+        $wantsMemory = \strpos($rawRequest, 'memory=1') !== false || \strpos($rawRequest, 'memory=true') !== false;
+        $wantsStaticMemory = \strpos($rawRequest, 'static=1') !== false || \strpos($rawRequest, 'static=true') !== false;
+        $wantsObjectMemory = \strpos($rawRequest, 'objects=1') !== false || \strpos($rawRequest, 'objects=true') !== false;
         
         if ($wantsDetail) {
             // 详细模式：返回完整信息
@@ -3241,7 +4192,9 @@ function handleRequest(
                 'active_requests' => $activeRequests - 1,
                 'total_requests' => $requestCount,
                 'memory_usage' => \memory_get_usage(true),
+                'memory_usage_used' => \memory_get_usage(false),
                 'memory_peak' => \memory_get_peak_usage(true),
+                'memory_peak_used' => \memory_get_peak_usage(false),
                 'uptime' => \time() - $startTime,
                 'php_version' => PHP_VERSION,
                 'timestamp' => \time(),
@@ -3249,6 +4202,9 @@ function handleRequest(
             ];
             if ($wantsFibers) {
                 $health['fibers'] = \Weline\Server\Runtime\WorkerFiberSnapshot::getSnapshot();
+            }
+            if ($wantsMemory) {
+                $health['memory_diagnostics'] = wlsWorkerMemoryHealthDiagnostics($wantsStaticMemory, $wantsObjectMemory);
             }
             $body = \json_encode($health, JSON_UNESCAPED_UNICODE);
             $len = \strlen($body);
@@ -3312,12 +4268,23 @@ function handleRequest(
     // ========== ACME HTTP-01 校验结束 ==========
 
     // ========== 静态文件处理（WLS 模式特有） ==========
+    $staticFileStart = \microtime(true);
     $staticResponse = handleStaticFile($uri, $rawRequest);
     if ($staticResponse !== null) {
         $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache();
         $cacheStatus = $cacheInfo['status'] ?? 'miss';
         $cacheUri = $cacheInfo['uri'] ?? $uri;
         WlsLogger::info_(__('静态文件缓存: %{1} %{2}', [\strtoupper($cacheStatus), $cacheUri]));
+        if (\function_exists('wlsDecorateFormattedStaticResponseForPerformancePanel')) {
+            $staticResponse = wlsDecorateFormattedStaticResponseForPerformancePanel(
+                $staticResponse,
+                $rawRequest,
+                (\microtime(true) - $staticFileStart) * 1000,
+                $workerId,
+                $port,
+                \is_array($cacheInfo) ? $cacheInfo : []
+            );
+        }
         return $staticResponse;
     }
     // ========== 静态文件处理结束 ==========
@@ -3441,6 +4408,10 @@ function handleRequest(
                 }
             }
             // HEAD 请求只返回头，不返回 body
+            $acceptEncoding = $request->getHeader('Accept-Encoding');
+            if ($acceptEncoding && \is_string($acceptEncoding)) {
+                $result = wlsCompressFormattedHttpResponse($result, $acceptEncoding);
+            }
             if (\strtoupper($method) === 'HEAD') {
                 $headerEnd = \strpos($result, "\r\n\r\n");
                 if ($headerEnd !== false) {
@@ -3451,7 +4422,7 @@ function handleRequest(
         }
         
         // WLS 模式下控制器通过 return 返回 body，header() 无效；需对 body trim 并可从 JSON 的 code 解析出状态码
-        $result = \is_string($result) ? \trim($result) : (string) $result;
+        $result = \is_string($result) ? $result : (string) $result;
         $pendingResponseStatus = $runtime->consumePendingResponseStatus();
         $statusCode = (new \Weline\Server\Service\ResponseStatusResolver())->resolve(
             $result,
@@ -3499,13 +4470,17 @@ function handleRequest(
         $response->setHeader('X-WLS-Uptime', (string) (\time() - $startTime));
         
         // 添加性能数据到响应头（便于在浏览器开发者工具中查看）
-        $isDev = \defined('DEV') && DEV;
-        if ($handleDuration >= 500 || $isDev) {
+        if ($handleDuration >= 500 || \Weline\Server\Log\LogConfig::isVerboseWlsLog()) {
             $response->setHeader('X-WLS-Performance-Total', (string) \round($handleDuration, 2));
             $response->setHeader('X-WLS-Performance-Warning', $handleDuration >= 1000 ? 'SLOW' : 'OK');
         }
         
         // 临时禁用 gzip 压缩以排除压缩问题
+        $responseLocation = (string)($response->getHeader('Location') ?? '');
+        if ($responseLocation !== '') {
+            $response->setHeader('Location', appendBackendLoginReturnUrl($responseLocation, $request, $method, $rawRequest));
+        }
+
         $responseBody = (string)$response->getBody();
         $responseContentType = \strtolower((string)($response->getHeader('Content-Type') ?? ''));
         $responseLocation = (string)($response->getHeader('Location') ?? '');
@@ -3514,21 +4489,47 @@ function handleRequest(
             || $responseLocation !== ''
             || \str_contains($responseContentType, 'text/event-stream');
         if ($responseBody === '' && !$isExpectedEmptyResponse) {
+            $responseRequestId = (string)($response->getHeader('X-Weline-Request-Id') ?? '');
+            $responseContentLength = (string)($response->getHeader('Content-Length') ?? '');
+            $requestAccept = $request->getHeader('Accept');
+            $requestAccept = \is_array($requestAccept) ? \implode(',', $requestAccept) : (string)$requestAccept;
+            $router = \method_exists($request, 'getRouter') ? (array)$request->getRouter() : [];
+            $lang = '';
+            $langLocal = '';
+            $currency = '';
+            try {
+                $lang = (string)\Weline\Framework\App\State::getLang();
+                $langLocal = (string)\Weline\Framework\App\State::getLangLocal();
+                $currency = (string)\Weline\Framework\App\State::getCurrency();
+            } catch (\Throwable) {
+            }
             WlsLogger::error_(
                 '[UnexpectedEmptyResponse] method=' . $method
                 . ' uri=' . ($request->getUri() ?: ($request->getServer('REQUEST_URI') ?? ''))
                 . ' status=' . $statusCode
+                . ' request_id=' . ($responseRequestId !== '' ? $responseRequestId : '(empty)')
+                . ' body_len=' . \strlen($responseBody)
+                . ' content_length=' . ($responseContentLength !== '' ? $responseContentLength : '(empty)')
                 . ' content_type=' . ($responseContentType !== '' ? $responseContentType : '(empty)')
                 . ' location=' . ($responseLocation !== '' ? $responseLocation : '(none)')
+                . ' lang=' . ($lang !== '' ? $lang : '(empty)')
+                . ' lang_local=' . ($langLocal !== '' ? $langLocal : '(empty)')
+                . ' currency=' . ($currency !== '' ? $currency : '(empty)')
+                . ' router_module=' . (string)($router['module'] ?? '')
+                . ' router_controller=' . (string)($router['controller'] ?? '')
+                . ' router_action=' . (string)($router['action'] ?? '')
+                . ' accept=' . ($requestAccept !== '' ? $requestAccept : '(empty)')
                 . ' worker_id=' . $workerId
                 . ' worker_port=' . $port
             );
         }
 
-        // $acceptEncoding = $request->getHeader('Accept-Encoding');
-        // if ($acceptEncoding && \is_string($acceptEncoding)) {
-        //     $response->compress($acceptEncoding);
-        // }
+        wlsDecorateFrameworkResponseForPerformancePanel($response, $rawRequest);
+
+        $acceptEncoding = $request->getHeader('Accept-Encoding');
+        if ($acceptEncoding && \is_string($acceptEncoding)) {
+            $response->compress($acceptEncoding);
+        }
         
         $httpResponse = $response->toHttpString($request->isKeepAlive());
         
@@ -3586,6 +4587,8 @@ function handleRequest(
         $response = \Weline\Framework\Http\Response::fromContent($errorBody, $statusCode, 'application/json; charset=utf-8');
         
         return $response->toHttpString(false);
+    } finally {
+        wlsResetLongRunningExecutionLimit();
     }
 }
 
@@ -3604,9 +4607,319 @@ function handleRequest(
  * @param string $rawRequest 原始请求（用于获取 If-Modified-Since 等头部）
  * @return string|null 如果是静态文件则返回 HTTP 响应字符串，否则返回 null
  */
+function appendBackendLoginReturnUrl(string $redirectUrl, \Weline\Framework\Http\Request $request, string $method, string $rawRequest): string
+{
+    $method = \strtoupper($method);
+    if ($method !== 'GET' && $method !== 'HEAD') {
+        return $redirectUrl;
+    }
+
+    $redirectPath = (string)(\parse_url($redirectUrl, PHP_URL_PATH) ?: '');
+    $normalizedRedirectPath = \strtolower($redirectPath);
+    if ($normalizedRedirectPath === ''
+        || !\str_ends_with($normalizedRedirectPath, '/admin/login')
+    ) {
+        return $redirectUrl;
+    }
+
+    $uri = extractUriFromRawRequest($rawRequest);
+    if ($uri === '') {
+        $uri = (string)($request->getServer('WELINE_ORIGIN_REQUEST_URI') ?: $request->getServer('REQUEST_URI'));
+    }
+    $queryString = (string)$request->getServer('QUERY_STRING');
+    if ($queryString !== '' && !\str_contains($uri, '?')) {
+        $uri .= '?' . $queryString;
+    }
+    if ($uri === '') {
+        return $redirectUrl;
+    }
+
+    $currentPath = \strtolower((string)(\parse_url($uri, PHP_URL_PATH) ?: ''));
+    if ($currentPath === ''
+        || \str_ends_with($currentPath, '/admin/login')
+        || \str_ends_with($currentPath, '/admin/login/post')
+        || \str_ends_with($currentPath, '/admin/login/logout')
+    ) {
+        return $redirectUrl;
+    }
+
+    $backendPrefix = \substr($redirectPath, 0, -\strlen('/admin/login'));
+    $uriPath = (string)(\parse_url($uri, PHP_URL_PATH) ?: '');
+    if ($backendPrefix !== '' && $uriPath !== '' && !\str_starts_with($uriPath, $backendPrefix . '/')) {
+        $uri = $backendPrefix . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
+    }
+    $uri = normalizeBackendReturnUri($uri);
+
+    $scheme = $request->isSecure() ? 'https' : 'http';
+    $host = (string)($request->getServer('HTTP_HOST') ?: $request->getServer('SERVER_NAME') ?: 'localhost');
+    $returnUrl = $scheme . '://' . $host . (\str_starts_with($uri, '/') ? $uri : '/' . $uri);
+    $query = [
+        'no_access_reason' => 'not_logged_in',
+        'return_url' => $returnUrl,
+    ];
+
+    $redirectUrl = removeBackendLoginReturnParams($redirectUrl);
+    return $redirectUrl . (\str_contains($redirectUrl, '?') ? '&' : '?') . \http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+}
+
+function normalizeBackendReturnUri(string $uri): string
+{
+    $path = (string)(\parse_url($uri, PHP_URL_PATH) ?: '');
+    if ($path === '') {
+        return $uri;
+    }
+
+    $segments = \explode('/', \trim($path, '/'));
+    $firstSegment = (string)($segments[0] ?? '');
+    if (!isset($segments[1], $segments[2], $segments[3])
+        || $firstSegment === ''
+        || !isBackendReturnCurrencySegment($segments[1])
+        || !isBackendReturnLocaleSegment($segments[2])
+        || $segments[3] !== $firstSegment
+    ) {
+        return $uri;
+    }
+
+    \array_splice($segments, 3, 1);
+    $normalized = '/' . \implode('/', $segments);
+    $query = (string)(\parse_url($uri, PHP_URL_QUERY) ?: '');
+    $fragment = (string)(\parse_url($uri, PHP_URL_FRAGMENT) ?: '');
+    return $normalized . ($query !== '' ? '?' . $query : '') . ($fragment !== '' ? '#' . $fragment : '');
+}
+
+function isBackendReturnCurrencySegment(string $segment): bool
+{
+    return \Weline\Framework\App\State::isAllowedCurrencyCode($segment);
+}
+
+function isBackendReturnLocaleSegment(string $segment): bool
+{
+    return (bool)\preg_match('/^[a-z]{2}(?:[_-][A-Za-z0-9]{2,8}){1,3}$/', $segment);
+}
+
+function removeBackendLoginReturnParams(string $url): string
+{
+    $parts = \parse_url($url);
+    if (!\is_array($parts) || empty($parts['query'])) {
+        return $url;
+    }
+
+    \parse_str((string)$parts['query'], $params);
+    unset($params['no_access_reason'], $params['return_url']);
+    $query = \http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+    $base = ($parts['scheme'] ?? 'http') . '://' . ($parts['host'] ?? 'localhost');
+    if (isset($parts['port'])) {
+        $base .= ':' . $parts['port'];
+    }
+    $base .= $parts['path'] ?? '';
+    return $query === '' ? $base : $base . '?' . $query;
+}
+
+function extractUriFromRawRequest(string $rawRequest): string
+{
+    $requestLine = \strtok($rawRequest, "\r\n");
+    if (!\is_string($requestLine) || $requestLine === '') {
+        return '';
+    }
+
+    $parts = \explode(' ', $requestLine, 3);
+    if (\count($parts) < 2) {
+        return '';
+    }
+
+    return (string)$parts[1];
+}
+
+function wlsGetStaticFileCacheStatus(): array
+{
+    if (!\function_exists('handleStaticFile')) {
+        return [];
+    }
+
+    $rawStatus = handleStaticFile('__CACHE_STATUS__', '');
+    if (!\is_string($rawStatus) || $rawStatus === '') {
+        return [];
+    }
+
+    $decoded = \json_decode($rawStatus, true);
+    return \is_array($decoded) ? $decoded : [];
+}
+
+function wlsCompactWorkerMemoryCaches(
+    string $reason,
+    int $maxMemoryBytes = 0,
+    float $staticClearPressure = 0.55,
+    int $staticClearMinBytes = 16777216,
+    bool $forceStaticClear = false
+): array {
+    $beforeMemory = \memory_get_usage(true);
+    $pressure = $maxMemoryBytes > 0 ? $beforeMemory / $maxMemoryBytes : 0.0;
+    $status = wlsGetStaticFileCacheStatus();
+    $staticSize = (int)($status['size'] ?? 0);
+    $staticCount = (int)($status['count'] ?? 0);
+    $staticClear = [
+        'cleared' => false,
+        'reason' => $reason,
+        'count' => $staticCount,
+        'size' => $staticSize,
+        'pressure' => $pressure,
+    ];
+
+    if (
+        \function_exists('handleStaticFile')
+        && ($forceStaticClear || $staticSize >= $staticClearMinBytes || $pressure >= $staticClearPressure)
+        && ($staticSize > 0 || $staticCount > 0 || $forceStaticClear)
+    ) {
+        $rawClear = handleStaticFile('__CLEAR_CACHE__', '');
+        if (\is_string($rawClear) && \preg_match('/^cleared:(\d+):(\d+)$/', $rawClear, $matches) === 1) {
+            $staticClear['count'] = (int)$matches[1];
+            $staticClear['size'] = (int)$matches[2];
+        }
+        $staticClear['cleared'] = true;
+    }
+
+    $compaction = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+    $compaction['static_file_cache'] = $staticClear;
+    $compaction['memory_before_bytes'] = $beforeMemory;
+    $compaction['memory_after_bytes'] = \memory_get_usage(true);
+
+    return $compaction;
+}
+
+function wlsWorkerMemoryHealthDiagnostics(bool $includeStaticProperties = false, bool $includeObjectProperties = false): array
+{
+    $diagnostics = [
+        'memory_usage_allocated' => \memory_get_usage(true),
+        'memory_usage_used' => \memory_get_usage(false),
+        'memory_peak_allocated' => \memory_get_peak_usage(true),
+        'memory_peak_used' => \memory_get_peak_usage(false),
+        'static_file_cache' => wlsGetStaticFileCacheStatus(),
+        'gc_status' => \function_exists('gc_status') ? \gc_status() : [],
+        'object_manager' => [],
+        'state_manager' => [],
+    ];
+
+    if (\class_exists(\Weline\Framework\Manager\ObjectManager::class, false)) {
+        try {
+            $diagnostics['object_manager'] = \Weline\Framework\Manager\ObjectManager::getRuntimeMemoryDiagnostics(12, $includeObjectProperties);
+        } catch (\Throwable $throwable) {
+            $diagnostics['object_manager_error'] = $throwable->getMessage();
+        }
+    }
+
+    if (\class_exists(\Weline\Framework\Runtime\StateManager::class, false)) {
+        try {
+            $diagnostics['state_manager'] = \Weline\Framework\Runtime\StateManager::getStats();
+        } catch (\Throwable $throwable) {
+            $diagnostics['state_manager_error'] = $throwable->getMessage();
+        }
+    }
+
+    if ($includeStaticProperties) {
+        $diagnostics['static_properties'] = wlsWorkerStaticPropertyDiagnostics();
+    }
+
+    return $diagnostics;
+}
+
+function wlsWorkerStaticPropertyDiagnostics(int $limit = 25, int $thresholdBytes = 8192): array
+{
+    $limit = \max(1, \min(100, $limit));
+    $thresholdBytes = \max(0, $thresholdBytes);
+    $items = [];
+    $classesScanned = 0;
+    $propertiesScanned = 0;
+
+    foreach (\get_declared_classes() as $className) {
+        if (!\str_starts_with($className, 'Weline\\') && !\str_starts_with($className, 'GuoLaiRen\\')) {
+            continue;
+        }
+
+        try {
+            $reflection = new \ReflectionClass($className);
+            $properties = $reflection->getStaticProperties();
+        } catch (\Throwable) {
+            continue;
+        }
+
+        $classesScanned++;
+        foreach ($properties as $propertyName => $value) {
+            $propertiesScanned++;
+            $approxBytes = wlsApproxMemoryValueSize($value);
+            if ($approxBytes < $thresholdBytes) {
+                continue;
+            }
+            $items[] = [
+                'property' => $className . '::$' . (string)$propertyName,
+                'type' => \get_debug_type($value),
+                'count' => \is_countable($value) ? \count($value) : null,
+                'approx_bytes' => $approxBytes,
+            ];
+        }
+    }
+
+    \usort(
+        $items,
+        static fn(array $a, array $b): int => ((int)$b['approx_bytes']) <=> ((int)$a['approx_bytes'])
+    );
+
+    return [
+        'classes_scanned' => $classesScanned,
+        'properties_scanned' => $propertiesScanned,
+        'threshold_bytes' => $thresholdBytes,
+        'top' => \array_slice($items, 0, $limit),
+    ];
+}
+
+function wlsApproxMemoryValueSize(mixed $value, int $depth = 0, int &$visited = 0): int
+{
+    if ($visited > 50000) {
+        return 0;
+    }
+    $visited++;
+
+    if (\is_string($value)) {
+        return \strlen($value);
+    }
+    if (\is_int($value) || \is_float($value) || \is_bool($value) || $value === null) {
+        return 16;
+    }
+    if (\is_object($value)) {
+        return 128;
+    }
+    if (\is_resource($value)) {
+        return 32;
+    }
+    if (!\is_array($value)) {
+        return 0;
+    }
+    if ($depth >= 5) {
+        return \count($value) * 32;
+    }
+
+    $size = 16;
+    foreach ($value as $key => $item) {
+        $size += \is_string($key) ? \strlen($key) : 16;
+        $size += wlsApproxMemoryValueSize($item, $depth + 1, $visited);
+        if ($visited > 50000) {
+            break;
+        }
+    }
+
+    return $size;
+}
+
 function handleStaticFile(string $uri, string $rawRequest): ?string
 {
     \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache(null);
+    $requestTarget = $uri;
+    $requestLine = \explode("\r\n", $rawRequest, 2)[0] ?? '';
+    if (\is_string($requestLine) && $requestLine !== '') {
+        $requestLineParts = \explode(' ', $requestLine, 3);
+        if (isset($requestLineParts[1]) && \trim((string)$requestLineParts[1]) !== '') {
+            $requestTarget = (string)$requestLineParts[1];
+        }
+    }
 
     // ========== 静态文件内存缓存（冷热淘汰策略） ==========
     static $staticFileCache = [];
@@ -3663,7 +4976,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     // 静态文件扩展名列表
     static $staticExtensions = [
         'css', 'js', 'map',
-        'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'ico', 'bmp',
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'ico', 'bmp',
         'woff', 'woff2', 'eot', 'ttf', 'otf',
         'mp4', 'mp3', 'webm', 'ogg', 'm3u8',
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
@@ -3686,6 +4999,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'png' => 'image/png',
         'gif' => 'image/gif',
         'webp' => 'image/webp',
+        'avif' => 'image/avif',
         'svg' => 'image/svg+xml',
         'ico' => 'image/x-icon',
         'bmp' => 'image/bmp',
@@ -3734,7 +5048,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
             }
         }
     };
-    $isCurrencySegment = static fn(string $segment): bool => \preg_match('/^[A-Z]{3}$/', $segment) === 1;
+    $isCurrencySegment = static fn(string $segment): bool => \Weline\Framework\App\State::isAllowedCurrencyCode($segment);
     $isLocaleSegment = static fn(string $segment): bool => \preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(?:_[A-Z]{2})?$/', $segment) === 1;
 
     $addCandidateUri($normalizedUri);
@@ -3763,7 +5077,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $candidateUris = \array_values(\array_unique($candidateUris));
 
     foreach ($candidateUris as $candidateUri) {
-        if (\Weline\Server\Service\StaticRequestBypassDecider::shouldDeferToFramework($candidateUri)) {
+        if (\Weline\Server\Service\StaticRequestBypassDecider::shouldDeferToFramework($candidateUri, $requestTarget)) {
             return null;
         }
     }
@@ -3788,6 +5102,25 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     
     // 文件不存在，交给框架处理（可能是动态生成的资源）
     if ($filename === null) {
+        foreach ($candidateUris as $candidateUri) {
+            if (\Weline\Server\Service\StaticRequestBypassDecider::shouldReturnFastMissingStatic($candidateUri)) {
+                \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache([
+                    'status' => 'missing',
+                    'uri' => $uriPath,
+                    'candidate' => $candidateUri,
+                ]);
+                $body = 'Static file not found';
+                $bodyLength = \strlen($body);
+                return "HTTP/1.1 404 Not Found\r\n" .
+                    "Content-Type: text/plain; charset=utf-8\r\n" .
+                    "Content-Length: {$bodyLength}\r\n" .
+                    "Cache-Control: no-store\r\n" .
+                    "Connection: close\r\n" .
+                    "X-WLS-Static-Missing: fastpath\r\n" .
+                    "\r\n" .
+                    $body;
+            }
+        }
         return null;
     }
     

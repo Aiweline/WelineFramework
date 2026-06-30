@@ -17,6 +17,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Adapter\FileAdapter;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Manager\FactoryObjectInterface;
+use Weline\Framework\Runtime\RequestScope;
 
 class ObjectManager implements ManagerInterface
 {
@@ -132,6 +133,65 @@ class ObjectManager implements ManagerInterface
         return self::$classExistsCache[$class];
     }
 
+    private static function getReflectionTypeNames(?\ReflectionType $type): array
+    {
+        if ($type === null) {
+            return [];
+        }
+
+        if ($type instanceof \ReflectionNamedType) {
+            return [$type->getName()];
+        }
+
+        if ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType) {
+            $names = [];
+            foreach ($type->getTypes() as $childType) {
+                foreach (self::getReflectionTypeNames($childType) as $name) {
+                    $names[] = $name;
+                }
+            }
+            return $names;
+        }
+
+        return [];
+    }
+
+    private static function getFirstNamedReflectionType(?\ReflectionType $type): ?string
+    {
+        foreach (self::getReflectionTypeNames($type) as $name) {
+            if ($name !== 'null') {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private static function getClassReflectionTypeName(?\ReflectionType $type): ?string
+    {
+        foreach (self::getReflectionTypeNames($type) as $name) {
+            if ($name === 'null') {
+                continue;
+            }
+            if (self::cachedClassExists($name) || interface_exists($name, true)) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private static function reflectionTypeIncludesName(?\ReflectionType $type, string $expectedName): bool
+    {
+        foreach (self::getReflectionTypeNames($type) as $name) {
+            if ($name === $expectedName) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static function currentRequestFiber(): ?\Fiber
     {
         if (!class_exists(\Weline\Framework\Runtime\Runtime::class)) {
@@ -154,14 +214,7 @@ class ObjectManager implements ManagerInterface
                 : (self::$instances[$class] ?? null);
         }
 
-        $storage = $origin ? self::$fiberOriginInstances : self::$fiberInstances;
-        if ($storage === null || !isset($storage[$fiber])) {
-            return null;
-        }
-
-        $instances = $storage[$fiber];
-
-        return $instances[$class] ?? null;
+        return self::getFiberScope($origin, $fiber)?->get($class);
     }
 
     private static function setScopedInstance(string $class, object $object, bool $origin = false): void
@@ -176,18 +229,7 @@ class ObjectManager implements ManagerInterface
             return;
         }
 
-        if ($origin) {
-            self::$fiberOriginInstances ??= new \WeakMap();
-            $instances = self::$fiberOriginInstances[$fiber] ?? [];
-            $instances[$class] = $object;
-            self::$fiberOriginInstances[$fiber] = $instances;
-            return;
-        }
-
-        self::$fiberInstances ??= new \WeakMap();
-        $instances = self::$fiberInstances[$fiber] ?? [];
-        $instances[$class] = $object;
-        self::$fiberInstances[$fiber] = $instances;
+        self::getFiberScope($origin, $fiber, true)->set($class, $object);
     }
 
     private static function getScopedInstances(bool $origin = false): array
@@ -197,12 +239,7 @@ class ObjectManager implements ManagerInterface
             return $origin ? self::$origin_instances : self::$instances;
         }
 
-        $storage = $origin ? self::$fiberOriginInstances : self::$fiberInstances;
-        if ($storage === null || !isset($storage[$fiber])) {
-            return [];
-        }
-
-        return $storage[$fiber];
+        return self::getFiberScope($origin, $fiber)?->all() ?? [];
     }
 
     private static function setScopedInstances(array $instances, bool $origin = false): void
@@ -217,14 +254,87 @@ class ObjectManager implements ManagerInterface
             return;
         }
 
-        if ($origin) {
-            self::$fiberOriginInstances ??= new \WeakMap();
-            self::$fiberOriginInstances[$fiber] = $instances;
+        if ($instances === []) {
+            self::unsetFiberScope($origin, $fiber);
             return;
         }
 
-        self::$fiberInstances ??= new \WeakMap();
-        self::$fiberInstances[$fiber] = $instances;
+        self::getFiberScope($origin, $fiber, true)->replace($instances);
+    }
+
+    private static function removeScopedInstance(string $class, bool $origin = false): void
+    {
+        $fiber = self::currentRequestFiber();
+        if ($fiber === null) {
+            if ($origin) {
+                unset(self::$origin_instances[$class]);
+            } else {
+                unset(self::$instances[$class]);
+            }
+            return;
+        }
+
+        $scope = self::getFiberScope($origin, $fiber);
+        if ($scope === null) {
+            return;
+        }
+
+        $scope->remove($class);
+        if ($scope->isEmpty()) {
+            self::unsetFiberScope($origin, $fiber);
+        }
+    }
+
+    private static function getFiberScope(bool $origin, \Fiber $fiber, bool $create = false): ?RequestScope
+    {
+        if ($origin) {
+            if (self::$fiberOriginInstances === null) {
+                if (!$create) {
+                    return null;
+                }
+                self::$fiberOriginInstances = new \WeakMap();
+            }
+            $storage = self::$fiberOriginInstances;
+        } else {
+            if (self::$fiberInstances === null) {
+                if (!$create) {
+                    return null;
+                }
+                self::$fiberInstances = new \WeakMap();
+            }
+            $storage = self::$fiberInstances;
+        }
+
+        if (!isset($storage[$fiber])) {
+            if (!$create) {
+                return null;
+            }
+            $storage[$fiber] = new RequestScope();
+        }
+
+        $scope = $storage[$fiber];
+        if ($scope instanceof RequestScope) {
+            return $scope;
+        }
+
+        $scope = new RequestScope(is_array($scope) ? $scope : []);
+        $storage[$fiber] = $scope;
+
+        return $scope;
+    }
+
+    private static function unsetFiberScope(bool $origin, \Fiber $fiber): void
+    {
+        if ($origin) {
+            if (self::$fiberOriginInstances !== null && isset(self::$fiberOriginInstances[$fiber])) {
+                unset(self::$fiberOriginInstances[$fiber]);
+            }
+            return;
+        }
+
+        if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
+            unset(self::$fiberInstances[$fiber]);
+        }
     }
 
     /**
@@ -486,7 +596,9 @@ class ObjectManager implements ManagerInterface
             if (self::$compiledFactories !== null && isset(self::$compiledFactories[$new_class])) {
                 $new_object = (self::$compiledFactories[$new_class])();
                 $new_object = self::initClassInstance($class, $new_object);
-                self::setScopedInstance($class, $new_object);
+                if ($shared) {
+                    self::setScopedInstance($class, $new_object);
+                }
                 if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {
                     self::getCache()->set($class, $new_object);
                 }
@@ -545,7 +657,9 @@ class ObjectManager implements ManagerInterface
         $new_object = self::initClassInstance($class, $new_object);
         
         // 存储到共享实例缓存
-        self::setScopedInstance($class, $new_object);
+        if ($shared) {
+            self::setScopedInstance($class, $new_object);
+        }
         
         // 缓存到文件（如果需要）
         if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {
@@ -806,6 +920,48 @@ class ObjectManager implements ManagerInterface
         }
     }
 
+    public static function clearCurrentRequestScope(): void
+    {
+        $fiber = self::currentRequestFiber();
+        if ($fiber === null) {
+            self::$instances = [];
+            self::$origin_instances = [];
+            return;
+        }
+
+        self::unsetFiberScope(false, $fiber);
+        self::unsetFiberScope(true, $fiber);
+    }
+
+    public static function clearRequestScopeForFiber(\Fiber $fiber): void
+    {
+        self::unsetFiberScope(false, $fiber);
+        self::unsetFiberScope(true, $fiber);
+    }
+
+    /**
+     * Clear only the current WLS request Fiber's ObjectManager buckets.
+     *
+     * This is intentionally narrower than clearInstances(): it releases
+     * request-local shared instances after a Fiber finishes without touching
+     * process-level instances or rebuildable metadata caches.
+     */
+    public static function clearCurrentFiberInstances(bool $includeOrigin = true): void
+    {
+        $fiber = self::currentRequestFiber();
+        if ($fiber === null) {
+            return;
+        }
+
+        if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
+            unset(self::$fiberInstances[$fiber]);
+        }
+
+        if ($includeOrigin && self::$fiberOriginInstances !== null && isset(self::$fiberOriginInstances[$fiber])) {
+            unset(self::$fiberOriginInstances[$fiber]);
+        }
+    }
+
     /**
      * 在长生命周期 Worker 内存压力升高时，释放可重建的进程内缓存。
      *
@@ -873,6 +1029,290 @@ class ObjectManager implements ManagerInterface
     }
 
     /**
+     * Lightweight WLS memory diagnostics for local health probes.
+     *
+     * This intentionally reports counts and class-name samples only. It must not
+     * expose object data, request payloads, headers, or credentials.
+     *
+     * @return array<string, mixed>
+     */
+    public static function getRuntimeMemoryDiagnostics(int $sampleLimit = 12, bool $includeObjectProperties = false): array
+    {
+        $sampleLimit = \max(0, \min(50, $sampleLimit));
+        $fiberBuckets = self::summarizeFiberBuckets(self::$fiberInstances, $sampleLimit);
+        $fiberOriginBuckets = self::summarizeFiberBuckets(self::$fiberOriginInstances, $sampleLimit);
+
+        $diagnostics = [
+            'main_instances' => self::summarizeInstanceBucket(self::$instances, $sampleLimit),
+            'origin_instances' => self::summarizeInstanceBucket(self::$origin_instances, $sampleLimit),
+            'fiber_instances' => $fiberBuckets,
+            'fiber_origin_instances' => $fiberOriginBuckets,
+            'metadata_entries' => [
+                'reflections' => \count(self::$reflections),
+                'method_params' => \count(self::$methodParamsMetadata),
+                'static_class' => \count(self::$staticClassCache),
+                'class_exists' => \count(self::$classExistsCache),
+                'constructors' => \count(self::$constructorCache),
+                'interfaces' => \count(self::$interfaceCache),
+                'parsed_classes' => \count(self::$parsedClasses),
+                'init_methods' => \count(self::$initMethodCache),
+                'create_methods' => \count(self::$createMethodCache),
+                'generated_plugin_registry' => self::$generatedPluginRegistry === null ? 0 : 1,
+                'interceptor_generation' => \count(self::$interceptorGenerationInProgress),
+            ],
+            'memory_store_instances' => self::countMemoryStoreInstances(),
+        ];
+
+        if ($includeObjectProperties) {
+            $diagnostics['object_property_top'] = self::summarizeObjectProperties($sampleLimit);
+        }
+
+        return $diagnostics;
+    }
+
+    /**
+     * @param array<string, object> $instances
+     * @return array{count:int, sample:list<string>}
+     */
+    private static function summarizeInstanceBucket(array $instances, int $sampleLimit): array
+    {
+        $sample = [];
+        if ($sampleLimit > 0) {
+            foreach (\array_keys($instances) as $className) {
+                $sample[] = (string)$className;
+                if (\count($sample) >= $sampleLimit) {
+                    break;
+                }
+            }
+        }
+
+        return [
+            'count' => \count($instances),
+            'sample' => $sample,
+        ];
+    }
+
+    /**
+     * @param \WeakMap<\Fiber, RequestScope|array<string, object>>|null $storage
+     * @return array{bucket_count:int, instance_count:int, buckets:list<array{fiber_id:int, count:int, sample:list<string>}>}
+     */
+    private static function summarizeFiberBuckets(?\WeakMap $storage, int $sampleLimit): array
+    {
+        $bucketCount = 0;
+        $instanceCount = 0;
+        $buckets = [];
+        if ($storage === null) {
+            return [
+                'bucket_count' => 0,
+                'instance_count' => 0,
+                'buckets' => [],
+            ];
+        }
+
+        foreach ($storage as $fiber => $instances) {
+            $bucketCount++;
+            $instances = $instances instanceof RequestScope
+                ? $instances->all()
+                : (\is_array($instances) ? $instances : []);
+            $instanceCount += \count($instances);
+            if (\count($buckets) < $sampleLimit) {
+                $summary = self::summarizeInstanceBucket($instances, $sampleLimit);
+                $buckets[] = [
+                    'fiber_id' => \spl_object_id($fiber),
+                    'count' => $summary['count'],
+                    'sample' => $summary['sample'],
+                ];
+            }
+        }
+
+        return [
+            'bucket_count' => $bucketCount,
+            'instance_count' => $instanceCount,
+            'buckets' => $buckets,
+        ];
+    }
+
+    private static function countMemoryStoreInstances(): int
+    {
+        $seenObjects = [];
+        $count = 0;
+        foreach (self::getAllScopedInstanceBuckets() as $bucket) {
+            foreach ($bucket as $instance) {
+                if (!$instance instanceof MemoryStoreInterface) {
+                    continue;
+                }
+                $objectId = \spl_object_id($instance);
+                if (isset($seenObjects[$objectId])) {
+                    continue;
+                }
+                $seenObjects[$objectId] = true;
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @return array{objects_scanned:int, threshold_bytes:int, top:list<array<string, mixed>>}
+     */
+    private static function summarizeObjectProperties(int $limit = 25, int $thresholdBytes = 8192): array
+    {
+        $limit = \max(1, \min(100, $limit));
+        $thresholdBytes = \max(0, $thresholdBytes);
+        $seenObjects = [];
+        $items = [];
+        $objectsScanned = 0;
+
+        foreach (self::getAllScopedInstanceBuckets() as $bucket) {
+            foreach ($bucket as $ownerClass => $instance) {
+                $objectId = \spl_object_id($instance);
+                if (isset($seenObjects[$objectId])) {
+                    continue;
+                }
+                $seenObjects[$objectId] = true;
+                $objectsScanned++;
+
+                try {
+                    $reflection = new \ReflectionObject($instance);
+                    $properties = $reflection->getProperties();
+                } catch (\Throwable) {
+                    continue;
+                }
+
+                foreach ($properties as $property) {
+                    if (!self::isDiagnosticPropertyReadable($property)) {
+                        continue;
+                    }
+                    try {
+                        $property->setAccessible(true);
+                        $value = $property->getValue($instance);
+                    } catch (\Throwable) {
+                        continue;
+                    }
+
+                    $visitedValues = 0;
+                    $nestedSeenObjects = [$objectId => true];
+                    $approxBytes = self::estimateDiagnosticValueSize($value, 0, $nestedSeenObjects, $visitedValues);
+                    if ($approxBytes < $thresholdBytes) {
+                        continue;
+                    }
+
+                    $items[] = [
+                        'owner' => \is_string($ownerClass) ? $ownerClass : $instance::class,
+                        'property' => $property->getName(),
+                        'type' => \get_debug_type($value),
+                        'count' => \is_countable($value) ? \count($value) : null,
+                        'approx_bytes' => $approxBytes,
+                    ];
+                }
+            }
+        }
+
+        \usort(
+            $items,
+            static fn(array $a, array $b): int => ((int)$b['approx_bytes']) <=> ((int)$a['approx_bytes'])
+        );
+
+        return [
+            'objects_scanned' => $objectsScanned,
+            'threshold_bytes' => $thresholdBytes,
+            'top' => \array_slice($items, 0, $limit),
+        ];
+    }
+
+    private static function isDiagnosticPropertyReadable(\ReflectionProperty $property): bool
+    {
+        if ($property->isStatic()) {
+            return false;
+        }
+
+        if (\method_exists($property, 'isDeprecated') && $property->isDeprecated()) {
+            return false;
+        }
+
+        return !$property->getDeclaringClass()->isInternal();
+    }
+
+    /**
+     * @param array<int, bool> $seenObjects
+     */
+    private static function estimateDiagnosticValueSize(
+        mixed $value,
+        int $depth,
+        array &$seenObjects,
+        int &$visitedValues
+    ): int {
+        if ($visitedValues > 50000) {
+            return 0;
+        }
+        $visitedValues++;
+
+        if (\is_string($value)) {
+            return \strlen($value);
+        }
+        if (\is_int($value) || \is_float($value) || \is_bool($value) || $value === null) {
+            return 16;
+        }
+        if (\is_resource($value)) {
+            return 32;
+        }
+        if (\is_array($value)) {
+            if ($depth >= 5) {
+                return \count($value) * 32;
+            }
+            $size = 16;
+            foreach ($value as $key => $item) {
+                $size += \is_string($key) ? \strlen($key) : 16;
+                $size += self::estimateDiagnosticValueSize($item, $depth + 1, $seenObjects, $visitedValues);
+                if ($visitedValues > 50000) {
+                    break;
+                }
+            }
+            return $size;
+        }
+        if (!\is_object($value)) {
+            return 0;
+        }
+
+        $objectId = \spl_object_id($value);
+        if (isset($seenObjects[$objectId])) {
+            return 64;
+        }
+        $seenObjects[$objectId] = true;
+        if ($depth >= 3) {
+            return 128;
+        }
+
+        $size = 128;
+        try {
+            $reflection = new \ReflectionObject($value);
+            if ($reflection->isInternal()) {
+                return $size;
+            }
+
+            foreach ($reflection->getProperties() as $property) {
+                if (!self::isDiagnosticPropertyReadable($property)) {
+                    continue;
+                }
+                $property->setAccessible(true);
+                $size += self::estimateDiagnosticValueSize(
+                    $property->getValue($value),
+                    $depth + 1,
+                    $seenObjects,
+                    $visitedValues
+                );
+                if ($visitedValues > 50000) {
+                    break;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return $size;
+    }
+
+    /**
      * @return list<array<string, object>>
      */
     private static function getAllScopedInstanceBuckets(): array
@@ -887,7 +1327,10 @@ class ObjectManager implements ManagerInterface
         }
 
         if (self::$fiberInstances !== null) {
-            foreach (self::$fiberInstances as $instances) {
+            foreach (self::$fiberInstances as $scope) {
+                $instances = $scope instanceof RequestScope
+                    ? $scope->all()
+                    : (is_array($scope) ? $scope : []);
                 if ($instances !== []) {
                     $buckets[] = $instances;
                 }
@@ -895,7 +1338,10 @@ class ObjectManager implements ManagerInterface
         }
 
         if (self::$fiberOriginInstances !== null) {
-            foreach (self::$fiberOriginInstances as $instances) {
+            foreach (self::$fiberOriginInstances as $scope) {
+                $instances = $scope instanceof RequestScope
+                    ? $scope->all()
+                    : (is_array($scope) ? $scope : []);
                 if ($instances !== []) {
                     $buckets[] = $instances;
                 }
@@ -916,20 +1362,16 @@ class ObjectManager implements ManagerInterface
     public static function removeInstance(string $className): void
     {
         // 移除实例缓存
-        $instances = self::getScopedInstances();
-        unset($instances[$className]);
+        self::removeScopedInstance($className);
         
         // 也尝试移除解析后的类名对应的实例
         if (isset(self::$parsedClasses[$className])) {
             $resolvedClass = self::$parsedClasses[$className];
-            unset($instances[$resolvedClass]);
+            self::removeScopedInstance($resolvedClass);
         }
-        self::setScopedInstances($instances);
         
         // 移除原始实例
-        $originInstances = self::getScopedInstances(true);
-        unset($originInstances[$className]);
-        self::setScopedInstances($originInstances, true);
+        self::removeScopedInstance($className, true);
     }
 
     /**
@@ -978,6 +1420,10 @@ class ObjectManager implements ManagerInterface
 
     private static function loadGeneratedPluginRegistry(): void
     {
+        if (self::canTrustGeneratedPluginRegistryForRuntime()) {
+            return;
+        }
+
         $file = BP . 'generated' . DIRECTORY_SEPARATOR . 'plugins.php';
         $mtime = \is_file($file) ? (int)\filemtime($file) : 0;
 
@@ -1001,6 +1447,13 @@ class ObjectManager implements ManagerInterface
         if (\is_array($registry)) {
             self::$generatedPluginRegistry = $registry;
         }
+    }
+
+    private static function canTrustGeneratedPluginRegistryForRuntime(): bool
+    {
+        return self::$generatedPluginRegistryMtime !== null
+            && \class_exists(\Weline\Framework\Runtime\Runtime::class, false)
+            && \Weline\Framework\Runtime\Runtime::isPersistent();
     }
 
     private static function classHasRegisteredPlugins(string $class): bool
@@ -1242,7 +1695,7 @@ class ObjectManager implements ManagerInterface
             if ($data_param !== null && $parameters !== []) {
                 $last_param = end($parameters);
                 $lastType = $last_param?->getType();
-                if ($lastType && $lastType->getName() === 'array') {
+                if (self::reflectionTypeIncludesName($lastType, 'array')) {
                     $final_params[count($parameters) - 1] = $data_param;
                 }
             }
@@ -1311,6 +1764,52 @@ class ObjectManager implements ManagerInterface
      * 
      * 兼容性：如果文件不存在，回退到运行时反射（FPM/WLS 均兼容）
      */
+    /**
+     * Explicitly loads process-global generated runtime metadata for WLS preload.
+     *
+     * @return array<string, int>
+     */
+    public static function preloadRuntimeMetadata(): array
+    {
+        self::loadPrecompiledMetadata();
+        self::loadCompiledFactories();
+        self::loadGeneratedPluginRegistry();
+
+        $safeClasses = [];
+        $safeClassFile = BP . 'generated' . DIRECTORY_SEPARATOR . 'reflection_safe_classes.php';
+        if (\is_file($safeClassFile)) {
+            $loaded = include $safeClassFile;
+            if (\is_array($loaded)) {
+                $safeClasses = $loaded;
+            }
+        }
+
+        return [
+            'reflection_metadata' => \is_array(self::$precompiledMetadata) ? \count(self::$precompiledMetadata) : 0,
+            'compiled_factories' => \is_array(self::$compiledFactories) ? \count(self::$compiledFactories) : 0,
+            'plugin_classes' => \is_array(self::$generatedPluginRegistry['class_to_plugins'] ?? null)
+                ? \count(self::$generatedPluginRegistry['class_to_plugins'])
+                : 0,
+            'reflection_safe_classes' => self::countNestedScalarValues($safeClasses),
+        ];
+    }
+
+    private static function countNestedScalarValues(array $rows): int
+    {
+        $count = 0;
+        foreach ($rows as $row) {
+            if (\is_array($row)) {
+                $count += self::countNestedScalarValues($row);
+                continue;
+            }
+            if (\is_scalar($row)) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
     private static function loadPrecompiledMetadata(): void
     {
         if (self::$precompiledLoaded) {
@@ -1342,7 +1841,9 @@ class ObjectManager implements ManagerInterface
     protected static function getMethodParams($instance_or_class, string $methodsName = '__construct'): array
     {
         // 获取类名
-        $className = is_object($instance_or_class) ? $instance_or_class::class : $instance_or_class;
+        $className = $instance_or_class instanceof ReflectionClass
+            ? $instance_or_class->getName()
+            : (is_object($instance_or_class) ? $instance_or_class::class : $instance_or_class);
         $cacheKey = $className . '::' . $methodsName;
         
         // 检查元数据缓存
@@ -1383,7 +1884,9 @@ class ObjectManager implements ManagerInterface
     private static function parseMethodParamsMetadata($instance_or_class, string $methodsName): array
     {
         // 获取类名
-        $className = is_object($instance_or_class) ? $instance_or_class::class : $instance_or_class;
+        $className = $instance_or_class instanceof ReflectionClass
+            ? $instance_or_class->getName()
+            : (is_object($instance_or_class) ? $instance_or_class::class : $instance_or_class);
         
         // 先检查是否是接口（接口不能解析方法参数）
         if (interface_exists($className, true)) {
@@ -1445,15 +1948,15 @@ class ObjectManager implements ManagerInterface
                     if ($param->getType()) {
                         $type = $param->getType();
                         $paramMeta['type'] = $type;
-                        $typeName = $type->getName();
+                        $typeName = self::getClassReflectionTypeName($type) ?? self::getFirstNamedReflectionType($type);
                         
                         // PHP 8 性能优化：处理 Union Types 和可空类型
                         if ($type instanceof \ReflectionUnionType) {
                             // Union Types: 查找类类型（排除null）
                             $types = $type->getTypes();
                             foreach ($types as $unionType) {
-                                $unionTypeName = $unionType->getName();
-                                if ($unionTypeName !== 'null' && self::cachedClassExists($unionTypeName)) {
+                                $unionTypeName = self::getClassReflectionTypeName($unionType) ?? self::getFirstNamedReflectionType($unionType);
+                                if (is_string($unionTypeName) && $unionTypeName !== 'null' && self::cachedClassExists($unionTypeName)) {
                                     $typeName = $unionTypeName;
                                     $paramMeta['isClass'] = true;
                                     break;
@@ -1677,7 +2180,7 @@ class ObjectManager implements ManagerInterface
     ): mixed {
         $param_name = $param->getName();
         $param_type = $param->getType();
-        $param_type_name = $param_type ? $param_type->getName() : null;
+        $param_type_name = self::getClassReflectionTypeName($param_type) ?? self::getFirstNamedReflectionType($param_type);
         
         // 优先级1：用户提供的参数（按名称）
         if (isset($userParams[$param_name])) {

@@ -97,6 +97,19 @@ if (!function_exists('weline_is_static_file_path')) {
         if ($path === '') {
             return false;
         }
+        $rootProtocolFiles = [
+            'robots.txt',
+            'robots.xml',
+            'sitemap.xml',
+            'llms.txt',
+            'llms-full.txt',
+            'ai.txt',
+            'geo-feed.json',
+            'geo-feed.xml',
+        ];
+        if (!\str_contains($path, '/') && \in_array(\strtolower($path), $rootProtocolFiles, true)) {
+            return false;
+        }
         $arr = \explode('/', $path);
         $last = \end($arr);
         return \str_contains($last, '.')
@@ -249,35 +262,31 @@ if (!function_exists('w_query')) {
      * 对应前端 JS 的 window.w_query()，用于模块间数据查询。
      * 内部调用 FrameworkQueryService::execute()，由 QueryProviderRegistry 中已注册的查询器处理。
      *
-     * @param string $provider  提供者标识（如 crud、widget、websites、saas）或 framework（introspect）
-     * @param string $operation 操作名
-     * @param array  $params    操作参数
-     * @param string $area      frontend|backend，默认 backend
-     * @return mixed 查询结果
+     * @param string|null $provider  提供者标识、模块名（WeShop_Product）或 framework；为空时列出全部 provider
+     * @param string|null $operation 操作名；为空时返回 provider/模块帮助
+     * @param array       $params    操作参数
+     * @param string      $area      frontend|backend，默认 backend
+     * @return mixed 查询结果或帮助 descriptor
      * @throws \InvalidArgumentException 参数错误
      * @throws \RuntimeException 查询被拒绝或执行失败
      *
      * @example
+     * // 帮助：列出全部 provider
+     * $all = w_query();
+     *
+     * // 帮助：查看 widget provider 的全部 operations
+     * $help = w_query('widget');
+     *
+     * // 帮助：按模块名查看
+     * $help = w_query('WeShop_Product');
+     *
      * // 查询 Widget 列表
      * $widgets = w_query('widget', 'getAvailableList', ['page_type' => 'homepage']);
      *
-     * // 查询域名列表
-     * $domains = w_query('websites', 'getDomainList', ['account_id' => 123]);
-     *
-     * // 使用 CRUD 通用查询
-     * $products = w_query('crud', 'list', [
-     *     'model' => 'WeShop\\Product\\Model\\Product',
-     *     'page' => 1,
-     *     'page_size' => 20,
-     * ]);
-     *
-     * // 查询所有已注册的 provider
+     * // 高级 introspect
      * $providers = w_query('framework', 'introspect', ['what' => 'providers']);
-     *
-     * // 查询某 provider 的所有 operation
-     * $ops = w_query('framework', 'introspect', ['what' => 'operations', 'provider' => 'widget']);
      */
-    function w_query(string $provider, string $operation, array $params = [], string $area = 'backend'): mixed
+    function w_query(?string $provider = null, ?string $operation = null, array $params = [], string $area = 'backend'): mixed
     {
         /** @var FrameworkQueryService $queryService */
         $queryService = ObjectManager::getInstance(FrameworkQueryService::class);
@@ -379,6 +388,14 @@ if (!function_exists('framework_view_process_block')) {
             }
         }
         $params['vars'] = $vars;
+        $traceEnabled = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled();
+        $traceName = 'view::block::' . substr($block_class, 0, 180);
+        $traceStart = 0.0;
+        $cacheStatus = 'none';
+        if ($traceEnabled) {
+            $traceStart = microtime(true);
+            \Weline\Framework\Runtime\RequestLifecycleTrace::pushCurrentParent($traceName);
+        }
         if (isset($params['cache']) && $cache_time = intval($params['cache'])) {
             /**@var CacheInterface $cache */
             $cache = ObjectManager::getInstance(ViewCache::class)->create();
@@ -386,16 +403,26 @@ if (!function_exists('framework_view_process_block')) {
             $request = ObjectManager::getInstance(Request::class);
             $cache_key = $block_class . '_' . json_encode(array_merge($request->getParams(), $params));
             $result = $cache->get($cache_key) ?: '';
+            $cacheStatus = $result === '' ? 'miss' : 'hit';
             // form_key 不能做缓存，否则 key 不对（每个 session 不同）
             $hasFormKey = str_contains($result, 'name="form_key"');
             if (empty($result) || $hasFormKey) {
+                $cacheStatus = $hasFormKey ? 'dynamic' : 'miss';
                 $result = ObjectManager::make($block_class, ['data' => $params])->render();
                 if (!str_contains($result, 'name="form_key"')) {
                     $cache->set($cache_key, $result, $cache_time);
+                    $cacheStatus = 'store';
                 }
             }
         } else {
             $result = ObjectManager::make($block_class, ['data' => $params])->render();
+        }
+        if ($traceEnabled) {
+            \Weline\Framework\Runtime\RequestLifecycleTrace::popCurrentParent();
+            \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan($traceName, (microtime(true) - $traceStart) * 1000, 'view', null, [
+                'class' => $block_class,
+                'cache' => $cacheStatus,
+            ]);
         }
         return $result;
     }

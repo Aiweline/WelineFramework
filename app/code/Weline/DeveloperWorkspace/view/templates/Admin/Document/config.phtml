@@ -1,0 +1,610 @@
+<?php
+$config = $this->getData('config') ?? [];
+$locales = $this->getData('locales') ?? [];
+$overview = $this->getData('overview') ?? [];
+$textModels = $this->getData('textModels') ?? [];
+$configuredLocales = $config['locales'] ?? [];
+$adapter = $overview['adapter'] ?? [];
+$validation = $overview['validation'] ?? [];
+$usage = $overview['usage'] ?? [];
+$counts = $overview['counts'] ?? [];
+$selectedModel = (string)($adapter['model_code'] ?? '');
+$sourceLocale = (string)($config['source_locale'] ?? 'zh_Hans_CN');
+$currentLocale = (string)\w_env('user.lang', 'zh_Hans_CN');
+$isEnglishPage = str_starts_with(str_replace('-', '_', $currentLocale), 'en_');
+$labels = [
+    '文档管理配置' => 'Document Management Config',
+    '配置文档多语言读取、AI 翻译适配器、任务限流和用量概览' => 'Configure multilingual document reading, AI translation adapters, task limits, and usage overview',
+    '返回文档管理' => 'Back to Document Manager',
+    '适配器' => 'Adapter',
+    '已注册' => 'Registered',
+    '未注册' => 'Not registered',
+    '已启用' => 'Enabled',
+    '未启用' => 'Disabled',
+    '配置状态' => 'Config Status',
+    '可执行' => 'Ready',
+    '阻塞' => 'Blocked',
+    'Token 用量' => 'Token Usage',
+    '成本概览' => 'Cost Overview',
+    '估算' => 'Estimated',
+    '基础配置' => 'Basic Configuration',
+    '启用文档 AI 翻译调度' => 'Enable Document AI Translation Scheduling',
+    '总开关。关闭后不会自动入队或执行 AI 翻译，已存在译文仍可按读取逻辑展示。' => 'Master switch. When disabled, no AI translation tasks are enqueued or executed automatically; existing translations can still be displayed by the read logic.',
+    '源语言固定为中文源文档' => 'Source language is fixed to Chinese source documents',
+    '文档导入事实源固定为 zh_Hans_CN，不提供界面配置；翻译结果只写数据库，不回写模块 doc 文件。' => 'The document import source of truth is fixed to zh_Hans_CN and is not configurable in the UI; translation results are stored only in the database and are not written back to module doc files.',
+    '默认导入文档按中文源文档处理，源语言本身不调用 AI 翻译。' => 'Imported documents are treated as Chinese source documents by default. The source language itself is not translated by AI.',
+    '支持语言与 AI 翻译' => 'Supported Languages and AI Translation',
+    '支持语言决定前台/后台语言选择器可选项；AI 自动补齐决定该语言缺失或过期时是否进入异步翻译队列。' => 'Supported languages determine frontend/backend language selector options. AI auto-fill determines whether missing or stale translations enter the async translation queue.',
+    'AI 自动补齐' => 'AI Auto-fill',
+    '开启后，缺失译文或源文档更新导致过期时会进入翻译队列；不会同步阻塞当前页面访问。' => 'When enabled, missing translations or translations made stale by source updates enter the translation queue. Page access is not blocked synchronously.',
+    '源语言不翻译' => 'Source language is not translated',
+    '缺失/过期异步翻译' => 'Missing or stale translations are processed asynchronously',
+    '翻译范围' => 'Translation Scope',
+    '控制哪些类型会被自动入队翻译。普通文档、API 文档、目录树互相独立；全不勾选时即使语言开启也不会产生翻译任务。' => 'Controls which content types are automatically enqueued for translation. Regular documents, API documents, and catalog trees are independent. If none are selected, no translation tasks are created even when languages are enabled.',
+    '普通文档' => 'Regular Documents',
+    '开发文档列表和详情页中的普通模块文档。' => 'Regular module documents in the developer documentation list and detail pages.',
+    'API 文档' => 'API Documents',
+    'API 文档页的接口标题、摘要、参数说明、响应说明等由导入器生成的文档内容。' => 'Importer-generated API documentation content such as endpoint titles, summaries, parameter descriptions, and response descriptions.',
+    '目录树' => 'Catalog Tree',
+    '左侧目录节点名称和描述。关闭后目录仍显示源语言或已有译文，不会自动补齐新译文。' => 'Names and descriptions of left-side catalog nodes. When disabled, the catalog still shows source text or existing translations, but new translations are not auto-filled.',
+    'AI 适配器与限流' => 'AI Adapter and Limits',
+    'Text-to-text 模型' => 'Text-to-text Model',
+    '文档翻译适配器使用的文本模型。模型上下文大小会影响单篇大文档如何自动拆分成多次 AI 请求。' => 'Text model used by the document translation adapter. The model context size affects how a large document is split into multiple AI requests.',
+    '请选择模型' => 'Select a model',
+    '模型绑定写入 ai_scenario_adapter，不重复存业务配置。' => 'Model binding is stored in ai_scenario_adapter and is not duplicated in business config.',
+    '批量大小' => 'Batch Size',
+    '每次定时任务或手动执行最多处理的翻译任务数量。它不是文档总数，也不是单篇大文档的 AI 分段大小；大文档分段由适配器按模型上下文自动处理。' => 'Maximum number of translation tasks processed by each scheduled or manual run. It is not the total number of documents and not the AI segment size for one large document; large-document splitting is handled automatically by the adapter based on model context.',
+    '最大重试' => 'Max Retries',
+    '单个翻译任务遇到网络、限流等可重试错误时允许自动重试的最大次数。格式错误、配置缺失等不可重试错误不会无限重试。' => 'Maximum automatic retries for one translation task after retryable errors such as network failures or rate limits. Non-retryable errors such as invalid response format or missing configuration are not retried indefinitely.',
+    '单文档 token 上限' => 'Per-document Token Limit',
+    '单篇源文档允许进入 AI 翻译链路的安全上限。超过模型单次上下文时会自动拆分请求；超过这里的业务上限才会被阻止。' => 'Safety limit for one source document entering the AI translation pipeline. If it exceeds the model single-request context, requests are split automatically; only documents exceeding this business limit are blocked.',
+    '目标语言译文缺失、待翻译、失败或过期时的读取策略。回退源文档会显示中文源内容；空内容会让前台显示为空或由页面自行处理。' => 'Read policy when the target-language translation is missing, pending, failed, or stale. Fallback to source shows Chinese source content; empty content leaves the frontend empty or lets the page handle it.',
+    '回退源文档' => 'Fallback to source document',
+    '空内容' => 'Empty content',
+    '每日 token 上限' => 'Daily Token Limit',
+    '当天文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。' => 'Stops executing document translation tasks when today token usage reaches this value. Use 0 for unlimited.',
+    '每月 token 上限' => 'Monthly Token Limit',
+    '当月文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。' => 'Stops executing document translation tasks when this month token usage reaches this value. Use 0 for unlimited.',
+    '前后台显示翻译状态' => 'Show Translation Status',
+    '开启后，非源语言页面会显示 missing、pending、translated、stale、failed 等状态，方便调试；源语言页面不显示 translated 状态。' => 'When enabled, non-source-language pages show statuses such as missing, pending, translated, stale, and failed for debugging. Source-language pages do not show translated status.',
+    '保存配置' => 'Save Config',
+    '正在保存...' => 'Saving...',
+    '扫描适配器' => 'Scan Adapter',
+    '测试适配器' => 'Test Adapter',
+    '立即入队并执行' => 'Enqueue and Run Now',
+    '重试失败' => 'Retry Failed',
+    '任务状态' => 'Task Status',
+    '暂无任务' => 'No tasks',
+    '操作结果 / 最近错误' => 'Operation Result / Recent Errors',
+];
+$tr = static function (string $text) use ($isEnglishPage, $labels): string {
+    return $isEnglishPage ? ($labels[$text] ?? (string)__($text)) : (string)__($text);
+};
+$help = static function (string $text) use ($tr): string {
+    return '<span class="doc-config-help" title="' . htmlspecialchars($tr($text), ENT_QUOTES, 'UTF-8') . '">?</span>';
+};
+?>
+
+<template>Weline_Component::message.phtml</template>
+
+<style>
+    .doc-config-help {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        margin-left: 6px;
+        border-radius: 50%;
+        border: 1px solid #9aa6b2;
+        color: #607086;
+        background: #f8fafc;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: help;
+        vertical-align: middle;
+    }
+</style>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h4 class="card-title mb-1">
+                            <i class="mdi mdi-translate me-2"></i><?=htmlspecialchars($tr('文档管理配置'))?>
+                        </h4>
+                        <p class="text-muted mb-0"><?=htmlspecialchars($tr('配置文档多语言读取、AI 翻译适配器、任务限流和用量概览'))?></p>
+                    </div>
+                    <a href="@admin-url('dev/tool/admin/document')" class="btn btn-light">
+                        <i class="mdi mdi-arrow-left me-1"></i><?=htmlspecialchars($tr('返回文档管理'))?>
+                    </a>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small"><?=htmlspecialchars($tr('适配器'))?></div>
+                            <div class="fw-bold"><?=htmlspecialchars((string)($adapter['code'] ?? 'developer_document_translation'))?></div>
+                            <div class="mt-2">
+                                <span class="badge <?=!empty($adapter['exists']) ? 'bg-success' : 'bg-danger'?>">
+                                    <?=htmlspecialchars(!empty($adapter['exists']) ? $tr('已注册') : $tr('未注册'))?>
+                                </span>
+                                <span class="badge <?=!empty($adapter['active']) ? 'bg-success' : 'bg-secondary'?>">
+                                    <?=htmlspecialchars(!empty($adapter['active']) ? $tr('已启用') : $tr('未启用'))?>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small"><?=htmlspecialchars($tr('配置状态'))?></div>
+                            <div class="fw-bold <?=!empty($validation['ok']) ? 'text-success' : 'text-warning'?>">
+                                <?=htmlspecialchars(!empty($validation['ok']) ? $tr('可执行') : $tr('阻塞'))?>
+                            </div>
+                            <div class="small text-muted mt-2"><?=htmlspecialchars((string)($validation['message'] ?? ''))?></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small"><?=htmlspecialchars($tr('Token 用量'))?></div>
+                            <div class="fw-bold"><?=number_format((int)($usage['total_tokens'] ?? 0))?></div>
+                            <div class="small text-muted mt-2">
+                                <?=__('Prompt')?> <?=number_format((int)($usage['prompt_tokens'] ?? 0))?> /
+                                <?=__('Completion')?> <?=number_format((int)($usage['completion_tokens'] ?? 0))?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-3 h-100">
+                            <div class="text-muted small"><?=htmlspecialchars($tr('成本概览'))?></div>
+                            <div class="fw-bold"><?=number_format((float)($usage['actual_cost'] ?? 0), 6)?></div>
+                            <div class="small text-muted mt-2"><?=htmlspecialchars($tr('估算'))?> <?=number_format((float)($usage['estimated_cost'] ?? 0), 6)?></div>
+                        </div>
+                    </div>
+                </div>
+
+                <form id="documentTranslationConfigForm">
+                    <input type="hidden" name="form_key" value="<?=htmlspecialchars($this->getFormKeyValue())?>">
+                    <div class="row g-4">
+                        <div class="col-lg-7">
+                            <div class="card border">
+                                <div class="card-header bg-light">
+                                    <strong><?=htmlspecialchars($tr('基础配置'))?></strong>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="enabled" name="enabled" value="1" <?=!empty($config['enabled']) ? 'checked' : ''?>>
+                                        <label class="form-check-label" for="enabled">
+                                            <?=htmlspecialchars($tr('启用文档 AI 翻译调度'))?>
+                                            <?=$help(__('总开关。关闭后不会自动入队或执行 AI 翻译，已存在译文仍可按读取逻辑展示。'))?>
+                                        </label>
+                                    </div>
+
+                                    <div class="alert alert-light border mb-3">
+                                        <strong><?=htmlspecialchars($tr('源语言固定为中文源文档'))?></strong>
+                                        <code class="ms-2"><?=htmlspecialchars($sourceLocale)?></code>
+                                        <?=$help(__('文档导入事实源固定为 zh_Hans_CN，不提供界面配置；翻译结果只写数据库，不回写模块 doc 文件。'))?>
+                                        <div class="small text-muted mt-1"><?=htmlspecialchars($tr('默认导入文档按中文源文档处理，源语言本身不调用 AI 翻译。'))?></div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <?=htmlspecialchars($tr('支持语言与 AI 翻译'))?>
+                                            <?=$help(__('支持语言决定前台/后台语言选择器可选项；AI 自动补齐决定该语言缺失或过期时是否进入异步翻译队列。'))?>
+                                        </label>
+                                        <div class="border rounded p-3">
+                                            <?php foreach ($locales as $locale): ?>
+                                                <?php
+                                                $code = (string)($locale['code'] ?? '');
+                                                $localeConfig = $configuredLocales[$code] ?? [];
+                                                ?>
+                                                <div class="row align-items-center py-2 border-bottom">
+                                                    <div class="col-md-5">
+                                                        <label class="form-check">
+                                                            <input class="form-check-input" type="checkbox" name="target_locales[]" value="<?=htmlspecialchars($code)?>" <?=!empty($localeConfig['enabled']) || $code === $sourceLocale ? 'checked' : ''?>>
+                                                            <span class="form-check-label"><?=htmlspecialchars((string)($locale['name'] ?? $code))?> <code><?=htmlspecialchars($code)?></code></span>
+                                                        </label>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-check form-switch mb-0">
+                                                            <input class="form-check-input" type="checkbox" name="ai_enabled[<?=htmlspecialchars($code)?>]" value="1" <?=!empty($localeConfig['ai_enabled']) ? 'checked' : ''?> <?=$code === $sourceLocale ? 'disabled' : ''?>>
+                                                <span class="form-check-label">
+                                                    <?=htmlspecialchars($tr('AI 自动补齐'))?>
+                                                    <?=$code === $sourceLocale ? '' : $help(__('开启后，缺失译文或源文档更新导致过期时会进入翻译队列；不会同步阻塞当前页面访问。'))?>
+                                                </span>
+                                                        </label>
+                                                    </div>
+                                                    <div class="col-md-3 text-muted small">
+                                                        <?=htmlspecialchars($code === $sourceLocale ? $tr('源语言不翻译') : $tr('缺失/过期异步翻译'))?>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <?=htmlspecialchars($tr('翻译范围'))?>
+                                            <?=$help(__('控制哪些类型会被自动入队翻译。普通文档、API 文档、目录树互相独立；全不勾选时即使语言开启也不会产生翻译任务。'))?>
+                                        </label>
+                                        <div class="d-flex gap-4 flex-wrap">
+                                            <label class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="scope_documents" value="1" <?=!empty($config['scopes']['documents']) ? 'checked' : ''?>>
+                                                <span class="form-check-label">
+                                                    <?=htmlspecialchars($tr('普通文档'))?>
+                                                    <?=$help(__('开发文档列表和详情页中的普通模块文档。'))?>
+                                                </span>
+                                            </label>
+                                            <label class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="scope_api_documents" value="1" <?=!empty($config['scopes']['api_documents']) ? 'checked' : ''?>>
+                                                <span class="form-check-label">
+                                                    <?=htmlspecialchars($tr('API 文档'))?>
+                                                    <?=$help(__('API 文档页的接口标题、摘要、参数说明、响应说明等由导入器生成的文档内容。'))?>
+                                                </span>
+                                            </label>
+                                            <label class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="scope_catalogs" value="1" <?=!empty($config['scopes']['catalogs']) ? 'checked' : ''?>>
+                                                <span class="form-check-label">
+                                                    <?=htmlspecialchars($tr('目录树'))?>
+                                                    <?=$help(__('左侧目录节点名称和描述。关闭后目录仍显示源语言或已有译文，不会自动补齐新译文。'))?>
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-5">
+                            <div class="card border">
+                                <div class="card-header bg-light">
+                                    <strong><?=htmlspecialchars($tr('AI 适配器与限流'))?></strong>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <?=htmlspecialchars($tr('Text-to-text 模型'))?>
+                                            <?=$help(__('文档翻译适配器使用的文本模型。模型上下文大小会影响单篇大文档如何自动拆分成多次 AI 请求。'))?>
+                                        </label>
+                                        <select name="model_code" class="form-select">
+                                            <option value=""><?=htmlspecialchars($tr('请选择模型'))?></option>
+                                            <?php foreach ($textModels as $model): ?>
+                                                <?php $modelCode = (string)($model['model_code'] ?? ''); ?>
+                                                <option value="<?=htmlspecialchars($modelCode)?>" <?=$modelCode === $selectedModel ? 'selected' : ''?>>
+                                                    <?=htmlspecialchars((string)($model['name'] ?? $modelCode))?> (<?=htmlspecialchars($modelCode)?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <div class="form-text"><?=htmlspecialchars($tr('模型绑定写入 ai_scenario_adapter，不重复存业务配置。'))?></div>
+                                    </div>
+
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label">
+                                                <?=htmlspecialchars($tr('批量大小'))?>
+                                                <?=$help(__('每次定时任务或手动执行最多处理的翻译任务数量。它不是文档总数，也不是单篇大文档的 AI 分段大小；大文档分段由适配器按模型上下文自动处理。'))?>
+                                            </label>
+                                            <input type="number" name="batch_size" class="form-control" min="1" max="200" value="<?=htmlspecialchars((string)($config['batch_size'] ?? 10))?>">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">
+                                                <?=htmlspecialchars($tr('最大重试'))?>
+                                                <?=$help(__('单个翻译任务遇到网络、限流等可重试错误时允许自动重试的最大次数。格式错误、配置缺失等不可重试错误不会无限重试。'))?>
+                                            </label>
+                                            <input type="number" name="max_retries" class="form-control" min="0" max="20" value="<?=htmlspecialchars((string)($config['max_retries'] ?? 3))?>">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">
+                                                <?=htmlspecialchars($tr('单文档 token 上限'))?>
+                                                <?=$help(__('单篇源文档允许进入 AI 翻译链路的安全上限。超过模型单次上下文时会自动拆分请求；超过这里的业务上限才会被阻止。'))?>
+                                            </label>
+                                            <input type="number" name="max_document_tokens" class="form-control" min="1000" value="<?=htmlspecialchars((string)($config['max_document_tokens'] ?? 12000))?>">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">
+                                                <?=htmlspecialchars($tr('Fallback'))?>
+                                                <?=$help(__('目标语言译文缺失、待翻译、失败或过期时的读取策略。回退源文档会显示中文源内容；空内容会让前台显示为空或由页面自行处理。'))?>
+                                            </label>
+                                            <select name="fallback_policy" class="form-select">
+                                                <option value="source" <?=($config['fallback_policy'] ?? 'source') === 'source' ? 'selected' : ''?>><?=htmlspecialchars($tr('回退源文档'))?></option>
+                                                <option value="empty" <?=($config['fallback_policy'] ?? '') === 'empty' ? 'selected' : ''?>><?=htmlspecialchars($tr('空内容'))?></option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">
+                                                <?=htmlspecialchars($tr('每日 token 上限'))?>
+                                                <?=$help(__('当天文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。'))?>
+                                            </label>
+                                            <input type="number" name="daily_token_limit" class="form-control" min="0" value="<?=htmlspecialchars((string)($config['daily_token_limit'] ?? 0))?>">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">
+                                                <?=htmlspecialchars($tr('每月 token 上限'))?>
+                                                <?=$help(__('当月文档翻译任务累计 token 达到该值后停止继续执行。填 0 表示不限制。'))?>
+                                            </label>
+                                            <input type="number" name="monthly_token_limit" class="form-control" min="0" value="<?=htmlspecialchars((string)($config['monthly_token_limit'] ?? 0))?>">
+                                        </div>
+                                    </div>
+
+                                    <label class="form-check form-switch mt-3">
+                                        <input class="form-check-input" type="checkbox" name="show_translation_status" value="1" <?=!empty($config['show_translation_status']) ? 'checked' : ''?>>
+                                        <span class="form-check-label">
+                                            <?=htmlspecialchars($tr('前后台显示翻译状态'))?>
+                                            <?=$help(__('开启后，非源语言页面会显示 missing、pending、translated、stale、failed 等状态，方便调试；源语言页面不显示 translated 状态。'))?>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="documentTranslationConfigNotice" class="alert d-none mt-3 mb-0" role="alert" aria-live="polite"></div>
+
+                    <div class="mt-3 d-flex gap-2 flex-wrap">
+                        <button type="submit" id="documentTranslationConfigSaveBtn" class="btn btn-primary">
+                            <i class="mdi mdi-content-save me-1"></i>
+                            <span class="doc-save-label"><?=htmlspecialchars($tr('保存配置'))?></span>
+                            <span class="doc-save-loading d-none"><?=htmlspecialchars($tr('正在保存...'))?></span>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary doc-translation-action" data-action="translation-scan"><?=htmlspecialchars($tr('扫描适配器'))?></button>
+                        <button type="button" class="btn btn-outline-info doc-translation-action" data-action="translation-test"><?=htmlspecialchars($tr('测试适配器'))?></button>
+                        <button type="button" class="btn btn-outline-success doc-translation-action" data-action="translation-run"><?=htmlspecialchars($tr('立即入队并执行'))?></button>
+                        <button type="button" class="btn btn-outline-warning doc-translation-action" data-action="translation-retry"><?=htmlspecialchars($tr('重试失败'))?></button>
+                    </div>
+                </form>
+
+                <div class="row g-3 mt-4">
+                    <div class="col-lg-5">
+                        <div class="card border h-100">
+                            <div class="card-header bg-light"><strong><?=htmlspecialchars($tr('任务状态'))?></strong></div>
+                            <div class="card-body">
+                                <?php if (empty($counts)): ?>
+                                    <div class="text-muted"><?=htmlspecialchars($tr('暂无任务'))?></div>
+                                <?php else: ?>
+                                    <?php foreach ($counts as $status => $count): ?>
+                                        <span class="badge bg-secondary me-2 mb-2"><?=htmlspecialchars((string)$status)?>: <?=number_format((int)$count)?></span>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="card border h-100">
+                            <div class="card-header bg-light"><strong><?=htmlspecialchars($tr('操作结果 / 最近错误'))?></strong></div>
+                            <div class="card-body">
+                                <pre id="documentTranslationActionResult" class="bg-light border rounded p-3 mb-0" style="min-height: 120px; white-space: pre-wrap;"><?=htmlspecialchars(json_encode($overview['recent_failures'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT))?></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var pageIsEnglish = <?= $isEnglishPage ? 'true' : 'false' ?>;
+    var pageTextReplacements = {
+        '文档管理配置': 'Document Management Config',
+        '开发文档': 'Developer Docs',
+        '开发工作台': 'Developer Workspace',
+        '开发者': 'Developer'
+    };
+
+    function replacePageTextForEnglish() {
+        if (!pageIsEnglish || !document.body || !document.createTreeWalker) {
+            return;
+        }
+        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        var node;
+        while ((node = walker.nextNode())) {
+            var value = node.nodeValue;
+            var trimmed = value.trim();
+            if (trimmed && pageTextReplacements[trimmed]) {
+                node.nodeValue = value.replace(trimmed, pageTextReplacements[trimmed]);
+            }
+        }
+        document.title = document.title.replace('文档管理配置', 'Document Management Config');
+    }
+
+    replacePageTextForEnglish();
+
+    function getDocumentAdminBasePath() {
+        var path = window.location.pathname.replace(/\/+$/, '');
+        var marker = '/dev/tool/admin/document';
+        var markerIndex = path.indexOf(marker);
+        if (markerIndex >= 0) {
+            return path.slice(0, markerIndex + marker.length);
+        }
+        return path.replace(/\/config$/, '');
+    }
+
+    function buildActionUrl(action) {
+        return getDocumentAdminBasePath() + '/' + action;
+    }
+
+    var saveUrl = buildActionUrl('post-config');
+    var csrfToken = '<?=htmlspecialchars($this->getFormKeyValue())?>';
+    var resultBox = document.getElementById('documentTranslationActionResult');
+    var noticeBox = document.getElementById('documentTranslationConfigNotice');
+    var saveButton = document.getElementById('documentTranslationConfigSaveBtn');
+    var form = document.getElementById('documentTranslationConfigForm');
+
+    function writeResult(payload) {
+        if (!resultBox) {
+            return;
+        }
+        resultBox.textContent = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+    }
+
+    function showNotice(type, message) {
+        if (!noticeBox) {
+            return;
+        }
+        noticeBox.className = 'alert alert-' + type + ' mt-3 mb-0';
+        noticeBox.textContent = message;
+        if (typeof noticeBox.scrollIntoView === 'function') {
+            noticeBox.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+        }
+    }
+
+    function extractMessage(payload, fallback) {
+        if (!payload || typeof payload !== 'object') {
+            return fallback;
+        }
+        return payload.msg || payload.message || (payload.data && payload.data.message) || fallback;
+    }
+
+    function isSuccess(payload) {
+        return !!payload && (payload.code === 200 || payload.success === true || payload.status === 'success');
+    }
+
+    function serializeForm(formElement) {
+        var payload = {};
+        new FormData(formElement).forEach(function(value, key) {
+            var arrayMatch = key.match(/^(.+)\[\]$/);
+            var objectMatch = key.match(/^([^\[]+)\[([^\]]+)\]$/);
+            if (arrayMatch) {
+                payload[arrayMatch[1]] = payload[arrayMatch[1]] || [];
+                payload[arrayMatch[1]].push(value);
+                return;
+            }
+            if (objectMatch) {
+                payload[objectMatch[1]] = payload[objectMatch[1]] || {};
+                payload[objectMatch[1]][objectMatch[2]] = value;
+                return;
+            }
+            payload[key] = value;
+        });
+        return payload;
+    }
+
+    function attachRequestMeta(error, response, fallbackUrl) {
+        error.status = response ? response.status : null;
+        error.requestUrl = response && response.url ? response.url : fallbackUrl;
+        return error;
+    }
+
+    function fetchJson(url, options) {
+        options = options || {};
+        options.headers = Object.assign({
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }, options.headers || {});
+        options.credentials = 'same-origin';
+
+        return fetch(url, options).then(function(response) {
+            return response.text().then(function(text) {
+                var payload = null;
+                try {
+                    payload = text ? JSON.parse(text) : {};
+                } catch (error) {
+                    throw new Error('服务端没有返回 JSON，HTTP ' + response.status + '：' + text.slice(0, 200));
+                }
+                if (!response.ok) {
+                    throw new Error(extractMessage(payload, '请求失败，HTTP ' + response.status));
+                }
+                return payload;
+            });
+        }).catch(function(error) {
+            if (!error.requestUrl) {
+                error.requestUrl = url;
+            }
+            throw error;
+        });
+    }
+
+    function setSaveLoading(loading) {
+        if (!saveButton) {
+            return;
+        }
+        saveButton.disabled = loading;
+        saveButton.querySelector('.doc-save-label').classList.toggle('d-none', loading);
+        saveButton.querySelector('.doc-save-loading').classList.toggle('d-none', !loading);
+    }
+
+    function finishSave(type, message, payload) {
+        try {
+            writeResult(payload);
+            showNotice(type, message);
+        } finally {
+            setSaveLoading(false);
+        }
+    }
+
+    function finishAction(button, type, message, payload) {
+        try {
+            writeResult(payload);
+            showNotice(type, message);
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    function refreshConfigPageSoon() {
+        window.setTimeout(function() {
+            window.location.reload();
+        }, 900);
+    }
+
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        setSaveLoading(true);
+        showNotice('info', '正在保存配置...');
+        fetchJson(saveUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken},
+            body: JSON.stringify(serializeForm(event.target))
+        }).then(function(payload) {
+            if (isSuccess(payload)) {
+                finishSave('success', extractMessage(payload, '配置已保存'), payload);
+                refreshConfigPageSoon();
+            } else {
+                finishSave('danger', extractMessage(payload, '配置保存失败'), payload);
+            }
+        }).catch(function(error) {
+            var message = error.message || String(error);
+            if (error.requestUrl) {
+                message += ': ' + error.requestUrl;
+            }
+            finishSave('danger', message, {error: message, url: error.requestUrl || null});
+        });
+    });
+
+    document.querySelectorAll('.doc-translation-action').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var action = button.getAttribute('data-action');
+            button.disabled = true;
+            showNotice('info', '正在执行操作...');
+            fetchJson(buildActionUrl(action), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken},
+                body: JSON.stringify({form_key: csrfToken})
+            })
+                .then(function(payload) {
+                    var success = isSuccess(payload);
+                    finishAction(
+                        button,
+                        success ? 'success' : 'danger',
+                        extractMessage(payload, '操作已完成'),
+                        payload
+                    );
+                    if (success && action !== 'translation-test') {
+                        refreshConfigPageSoon();
+                    }
+                })
+                .catch(function(error) {
+                    var message = error.message || String(error);
+                    if (error.requestUrl) {
+                        message += ': ' + error.requestUrl;
+                    }
+                    finishAction(button, 'danger', message, {error: message, url: error.requestUrl || null});
+                });
+        });
+    });
+})();
+</script>

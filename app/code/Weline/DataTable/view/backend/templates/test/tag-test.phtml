@@ -26,7 +26,7 @@
         </div>
         <div class="dt-tag-summary" data-testid="datatable-tag-summary">
             <span class="dt-tag-summary-pill"><?= (int) ($report['summary']['passed_checks'] ?? 0) ?> / <?= (int) ($report['summary']['total_checks'] ?? 0) ?> <?= __('checks passing') ?></span>
-            <button type="button" class="btn btn-primary" data-testid="datatable-tag-refresh" onclick="reloadTagVerification()"><?= __('Reload Verification') ?></button>
+            <button type="button" class="btn btn-primary" data-testid="datatable-tag-refresh" data-datatable-test-action="reload-tag-verification"><?= __('Reload Verification') ?></button>
         </div>
     </section>
 
@@ -62,6 +62,16 @@
             window.location.reload();
         }
     }
+
+    document.addEventListener('click', function (event) {
+        const trigger = event.target.closest('[data-datatable-test-action="reload-tag-verification"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        reloadTagVerification();
+    });
 
     (function () {
         const host = document.getElementById('datatable-tag-sections');

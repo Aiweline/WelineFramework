@@ -19,7 +19,7 @@ $instanceName = $argv[4] ?? 'default';
 
 // 解析命令行参数
 $processName = '';
-$controlPort = 0;  // 初始化为 0，会在下方从实例文件发现
+$controlPort = 0;  // 0 means use Master endpoint bootstrap if no argument is passed.
 $masterPid = 0;
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
@@ -51,15 +51,16 @@ require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
 \Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
-// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
-// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
+// IPC control port. Prefer the explicit Master-provided argument; the endpoint
+// file is only a bootstrap pointer when the argument is absent.
 if ($controlPort <= 0) {
     $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 30);
 }
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
-// 解析 --frontend 参数
-$isFrontend = \in_array('--frontend', $argv, true) || \in_array('-frontend', $argv, true);
+// 解析窗口可见参数（与 --win 等价，--frontend 已弃用但仍兼容）
+$isFrontend = \in_array('--frontend', $argv, true) || \in_array('-frontend', $argv, true)
+    || \in_array('--win', $argv, true) || \in_array('-win', $argv, true);
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;
@@ -240,7 +241,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
             }
         }
     } else {
-        
+        WlsLogger::warning_("[IPC] 初次连接 Master 失败 (端口: {$controlPort})，主循环内将继续重试并上报 READY");
     }
 }
 // ========== IPC 控制通道结束 ==========
@@ -270,10 +271,8 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, $pro
     }
     @\fclose($socket);
     
-    // 使用进程管理器清理 PID 文件
-    if ($processName) {
-        \Weline\Framework\System\Process\Processer::destroy('--name=' . $processName);
-    }
+    // Master owns process-record cleanup; child exit must not block on shared
+    // PID/name/port index locks.
     
     exit(0);
 };
@@ -312,9 +311,11 @@ while (true) {
         $gracefulExit('孤儿检测：Master 已死亡');
     }
     
-    // IPC 重连
+    // IPC 重连 / 初次连接补偿（避免进程已 listen 但从未 sendReady）
     if ($kernel && !$kernel->isConnected() && !$ipcReceivedShutdown) {
-        $kernel->reconnect();
+        if (!$kernel->reconnect() && $controlPort > 0) {
+            $kernel->connectAndRegister($controlPort);
+        }
     }
 
     // 构建 stream_select 读数组

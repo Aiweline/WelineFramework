@@ -44,7 +44,7 @@ class ModuleInstalledObserver implements ObserverInterface
         try {
             /** @var AppStoreInstalledModule $installedModule */
             $installedModule = ObjectManager::getInstance(AppStoreInstalledModule::class);
-            $installedModule->load($moduleName, AppStoreInstalledModule::schema_fields_module_name);
+            $installedModule->load(AppStoreInstalledModule::schema_fields_module_name, $moduleName);
 
             // 更新模块信息
             $installedModule->setModuleName($moduleName);
@@ -76,8 +76,10 @@ class ModuleInstalledObserver implements ObserverInterface
         } catch (\Exception $e) {
             // 记录错误日志
             \Weline\Framework\App\Env::log_error(
-                'AppStore update installed module failed: ' . $e->getMessage(),
-                ['module_name' => $moduleName, 'data' => $data]
+                'appstore/module_installed.log',
+                'AppStore update installed module failed: ' . $e->getMessage()
+                . '; module_name=' . $moduleName
+                . '; data=' . \json_encode($data, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_PARTIAL_OUTPUT_ON_ERROR)
             );
         }
     }

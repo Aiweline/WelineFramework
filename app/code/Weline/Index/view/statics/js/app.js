@@ -123,13 +123,27 @@ new Swiper('.swiper-container', {
 
 
 // Contact Form
+function renderFormMessage(targetId, type, message) {
+  var target = document.getElementById(targetId);
+  if (!target) {
+    return;
+  }
+
+  target.textContent = "";
+
+  var messageNode = document.createElement("div");
+  messageNode.className = "alert alert-" + type;
+  messageNode.textContent = String(message || "");
+  target.appendChild(messageNode);
+}
+
 function validateForm() {
   var name = document.forms["myForm"]["name"].value;
   var email = document.forms["myForm"]["email"].value;
   var subject = document.forms["myForm"]["subject"].value;
   var comments = document.forms["myForm"]["comments"].value;
   document.getElementById("error-msg").style.opacity = 0;
-  document.getElementById('error-msg').innerHTML = "";
+  document.getElementById('error-msg').textContent = "";
   if (name == "" || name == null) {
       document.getElementById('error-msg').innerHTML = "<div class='alert alert-warning'>*请输入称呼*</div>";
       fadeIn();
@@ -151,20 +165,37 @@ function validateForm() {
       return false;
   }
 
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function () {
-      if (this.readyState == 4 && this.status == 200) {
-          document.getElementById("simple-msg").innerHTML = this.responseText;
-          document.forms["myForm"]["name"].value = "";
-          document.forms["myForm"]["email"].value = "";
-          document.forms["myForm"]["subject"].value = "";
-          document.forms["myForm"]["comments"].value = "";
-      }
-  };
-  // xhttp.open("POST", "php/contact.php", true);
-  xhttp.open("POST", window.url('*/contact'), true);
-  xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-  xhttp.send("name=" + name + "&email=" + email + "&subject=" + subject + "&comments=" + comments);
+  if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+      renderFormMessage('error-msg', 'danger', "Contact service is unavailable.");
+      fadeIn();
+      return false;
+  }
+
+  Promise.resolve(window.Weline.Api.resource('contact'))
+      .then(function (ContactApi) {
+          return ContactApi.submit({
+              name: name,
+              email: email,
+              subject: subject,
+              comments: comments
+          }, { silent: true });
+      })
+      .then(function (data) {
+          if (data && data.success) {
+              document.getElementById("simple-msg").textContent = data.message || "Message sent.";
+              document.forms["myForm"]["name"].value = "";
+              document.forms["myForm"]["email"].value = "";
+              document.forms["myForm"]["subject"].value = "";
+              document.forms["myForm"]["comments"].value = "";
+              return;
+          }
+          renderFormMessage('error-msg', 'danger', (data && data.message) || "Message send failed.");
+          fadeIn();
+      })
+      .catch(function (error) {
+          renderFormMessage('error-msg', 'danger', error && error.message ? error.message : "Message send failed.");
+          fadeIn();
+      });
   return false;
 }
 

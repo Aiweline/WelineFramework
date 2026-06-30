@@ -44,26 +44,19 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     /**
      * @inheritDoc
      *
-     * 切换用户时：无 session 则生成新的，有 session 则切换到该用户的 session。
-     * 若用户已有 session_id，需先 destroy 当前 session 再 start 目标 session，
-     * 否则 Session::start() 在已启动时会直接返回，无法完成切换。
+     * 使用当前请求的 Session：先 regenerate 再写入登录态，避免旧 sess_id 切换导致 WLS/Redis 下不一致；
+     * 且须在 regenerate 之后 set，否则 Session::regenerate() 会清空 dirty，登录键无法可靠落盘。
      */
     public function login(AuthenticableInterface $user): void
     {
-        $sessionId = $user->getAuthSessionId();
-
-        if ($sessionId !== '') {
-            // 用户已有 session：先 destroy 当前 session，再加载该用户的 session
-            $this->session->destroy();
-            $this->session->start($sessionId);
-        }
-        // 用户无 session：保持当前 session（或由 strategy 创建新 session），后续 regenerate 会生成新 ID
+        $this->session->start();
+        $this->session->regenerate(true);
 
         $this->session->set($this->areaConfig->getLoginKey(), $user->getAuthUsername());
         $this->session->set($this->areaConfig->getLoginIdKey(), $user->getAuthIdentifier());
         $this->session->set($this->areaConfig->getUserModelKey(), $user::getAuthModelClass());
 
-        $this->session->regenerate(true);
+        $this->session->save();
 
         $this->cachedUser = $user;
     }
@@ -85,6 +78,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function isLoggedIn(): bool
     {
+        if (!$this->canReadExistingSession()) {
+            return false;
+        }
+
         $loginKey = $this->session->get($this->areaConfig->getLoginKey());
         $loginIdKey = $this->session->get($this->areaConfig->getLoginIdKey());
         
@@ -146,6 +143,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function getUserId(): int|string|null
     {
+        if (!$this->canReadExistingSession()) {
+            return null;
+        }
+
         $id = $this->session->get($this->areaConfig->getLoginIdKey());
         
         if ($id === null || $id === '') {
@@ -160,6 +161,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function getUsername(): ?string
     {
+        if (!$this->canReadExistingSession()) {
+            return null;
+        }
+
         $username = $this->session->get($this->areaConfig->getLoginKey());
         
         if ($username === null || $username === '') {
@@ -182,6 +187,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function get(string $key): mixed
     {
+        if (!$this->canReadExistingSession()) {
+            return null;
+        }
+
         return $this->session->get($key);
     }
 
@@ -302,10 +311,35 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
      */
     public function getData(string $name = ''): mixed
     {
+        if (!$this->canReadExistingSession()) {
+            return $name === '' ? [] : null;
+        }
+
         if ($name === '') {
             return $this->session->all();
         }
         return $this->session->get($name);
+    }
+
+    private function canReadExistingSession(): bool
+    {
+        if ($this->session->isStarted()) {
+            return true;
+        }
+
+        $cookieHeader = '';
+        if (\class_exists(\Weline\Framework\Env\WelineEnv::class, false)) {
+            $cookieHeader = (string)(
+                \Weline\Framework\Env\WelineEnv::server('HTTP_COOKIE', '')
+                ?: \Weline\Framework\Env\WelineEnv::get('server.http_cookie', '')
+            );
+        }
+        if ($cookieHeader !== '' && \stripos($cookieHeader, 'WELINE_SESSID=') !== false) {
+            return true;
+        }
+
+        return isset($_COOKIE['WELINE_SESSID'])
+            && \trim((string)$_COOKIE['WELINE_SESSID']) !== '';
     }
 
     /**

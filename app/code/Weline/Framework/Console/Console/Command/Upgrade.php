@@ -235,14 +235,21 @@ class Upgrade extends CommandAbstract
                 if ($fileReal && isset($processedFiles[$fileReal])) {
                     continue;
                 }
+                if ($this->shouldSkipCommandScanFile($filePath)) {
+                    if ($fileReal) {
+                        $processedFiles[$fileReal] = true;
+                    }
+                    continue;
+                }
                 // 直接按文件加载一次，避免命名空间不一致导致的重复加载
+                $candidateClasses = class_exists($class, false) ? [$class] : [];
                 $before = get_declared_classes();
                 if ($fileReal && is_file($fileReal)) {
                     include_once $fileReal;
                     $processedFiles[$fileReal] = true;
                 }
                 $after = get_declared_classes();
-                $newClasses = array_diff($after, $before);
+                $newClasses = array_unique(array_merge($candidateClasses, array_diff($after, $before)));
                 // 逐个检查新声明的类
                 foreach ($newClasses as $declaredClass) {
                     if (isset($processedClasses[$declaredClass])) {
@@ -532,14 +539,21 @@ class Upgrade extends CommandAbstract
                 if ($fileReal && isset($processedFiles[$fileReal])) {
                     continue;
                 }
+                if ($this->shouldSkipCommandScanFile($filePath)) {
+                    if ($fileReal) {
+                        $processedFiles[$fileReal] = true;
+                    }
+                    continue;
+                }
                 
+                $candidateClasses = class_exists($class, false) ? [$class] : [];
                 $before = get_declared_classes();
                 if ($fileReal && is_file($fileReal)) {
                     include_once $fileReal;
                     $processedFiles[$fileReal] = true;
                 }
                 $after = get_declared_classes();
-                $newClasses = array_diff($after, $before);
+                $newClasses = array_unique(array_merge($candidateClasses, array_diff($after, $before)));
                 
                 foreach ($newClasses as $declaredClass) {
                     if (isset($processedClasses[$declaredClass])) {
@@ -899,5 +913,25 @@ class Upgrade extends CommandAbstract
             // 反射失败，假设不是静态类
             return false;
         }
+    }
+
+    /**
+     * Skip test harness files before include so runtime command refresh does not require dev PHPUnit classes.
+     */
+    private function shouldSkipCommandScanFile(string $filePath): bool
+    {
+        if (!is_file($filePath)) {
+            return false;
+        }
+
+        $source = @file_get_contents($filePath);
+        if (!is_string($source)) {
+            return false;
+        }
+
+        return str_contains($source, 'PHPUnit\\Framework\\TestCase')
+            || str_contains($source, 'Weline\\Framework\\UnitTest\\TestCore')
+            || str_contains($source, 'app/bootstrap_phpunit.php')
+            || preg_match('/extends\s+\\\\?TestCore\b/', $source) === 1;
     }
 }

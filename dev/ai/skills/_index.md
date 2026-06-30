@@ -1,70 +1,79 @@
-# Skills Index (Single Source of Truth)
+# Weline AI Skill Index
 
-本文件是 `dev/ai/skills` 的**唯一技能路由索引**。  
-历史上分散在多处的路由表已合并到这里，后续只维护这一份。
+本文件只负责技能路由。不要一次性读取全部 `skills/*/SKILL.md`；默认保留 1 到 3 个最相关技能进入上下文。
 
-## 使用规则
+## 必读顺序
 
-1. 先按任务关键词匹配技能。
-2. 只读取命中的 `SKILL.md`，不要批量读取全部技能。
-3. 同时命中多个场景时，只保留最相关的 1~3 个技能。
-4. 若命中技能正文继续引用其他技能或 reference，再按需读取。
+1. `AI-ENTRY.md`
+2. `dev/ai/global-constraints.md`
+3. 本索引
+4. 命中的技能正文
+5. 相关模块文档和源码
 
-## 全局入口技能
+## 组合触发
 
-| 技能 | 说明 |
+- 任意工程任务：遵守 `通用工程师-开发规范与代码质量`。
+- 浏览器可见 UI、页面、组件、布局、样式、响应式、状态、可用性或审美：加载命中的 `前端主题工程师-*` + `ui-ux-pro-max`。
+- 前端请求、QueryProvider、流式订阅、worker 链路：加载 `前端主题工程师-前端API交互`。
+- 验证策略、质量门禁或验收：加载 `QA测试主管-*`；默认禁止新增或更新单元测试、测试用例、E2E spec、回归用例、fixtures 和测试数据。
+- `单元测试工程师-*` 只在用户明确要求写/补/改/运行单元测试或测试数据时加载；`E2E自动化工程师-端到端流程测试` 只在用户明确要求 E2E 用例或 E2E 执行时加载。
+- 轻量路由、HTTP、Browser 冒烟仍可按验证需要加载 `E2E自动化工程师-路由与UI冒烟验证`，但不得创建或更新 E2E/Playwright 用例文件。
+- WLS、Worker、reload/restart、Session Server、SSE：加载 `WLS运行时工程师-*`。
+- ACL、后台安全、会话、数据保护：加载 `安全权限工程师-*`。
+- README、API、架构、索引、规则沉淀、复盘：加载 `文档知识库工程师-*`。
+- CI、发布、部署、环境兼容、Windows 命令安全：加载 `CI发布工程师-*`。涉及已配置 SAAS 部署目标时，默认使用发布目标仓库 `E:\公司\远程\src\weline` 的本机 OpenSSH 与 Windows 凭据中的部署 key；无本机 SSH 凭据时停止并报告阻塞；禁止内联私钥、禁止 Codex 内置浏览器部署、禁止 OS 层抢占用户鼠标或窗口焦点。
+- **Weline_Deploy 站点部署 / Webhook / `deploy:release` / `deploy:webhook:setup`**：加载 `CI发布工程师-部署发布系统`（`.codex/skills/deploy-release-system/SKILL.md` 为英文摘要）。公网随机路径 `~wh~` + ModuleRouter `Controller/Router.php`；密码 `deploy:webhook:setup` 生成，`--force` / `--rotate-path` 轮换。
+- **自定义公网 URL、随机路径、路由别名、ModuleRouter、`Controller/Router.php`、`RouterInterface`**：加载 `框架核心工程师-路由事件与扩展`（含模块 Router 与静态控制器路由分工）。
+- 代码图谱、调用链、影响分析、重构、索引维护：加载 `.claude/skills/gitnexus/*/SKILL.md` 中命中的 GitNexus 技能。
+
+## 角色路由
+
+| 场景 | 技能 |
 |---|---|
-| weline-framework-core | 框架核心开发，Guardrails 硬约束，开发工作流 |
-| weline-framework-runtime | WLS 运行时、进程、Session Server、状态管理 |
-| weline-framework-skill-router | 混合任务路由，根据关键词跳转对应技能 |
+| 需求拆分、调度、进度、一级验收 | `技术主管-任务拆分与调度`；`技术主管-一级验收与进度追踪` |
+| 框架底层、DI、扩展机制 | `框架核心工程师-框架核心开发` |
+| ORM、模型、字段、索引 | `框架核心工程师-ORM与数据模型` |
+| 路由、事件、Hook、扩展点 | `框架核心工程师-路由事件与扩展`（**模块 `Controller/Router.php`** = ModuleRouter 自定义 URL 匹配） |
+| 命令、代码生成、生成链路 | `框架核心工程师-命令与代码生成` |
+| 业务模块功能 | `业务模块工程师-模块开发`；`业务模块工程师-服务层与业务逻辑` |
+| 配置、缓存、后台权限 | `业务模块工程师-配置缓存与后台权限` |
+| 第三方支付方式、支付 Provider、支付配置模板、checkout 支付模板 | `.codex/skills/payment-provider-development/SKILL.md` |
+| 主题模板、Taglib、Widget | `前端主题工程师-主题模板开发` |
+| GuoLaiRen 供应商模块 | `app/code/GuoLaiRen` 已整体迁移到 `E:\公司\远程\src\weline`；源仓库不再支持该 vendor，切换到目标仓库处理 |
+| 组件、页面、视觉状态 | `前端主题工程师-组件与页面构建`；`ui-ux-pro-max` |
+| 前端 API / worker 请求链 | `前端主题工程师-前端API交互` |
+| 开发规范、边界、验证证据 | `通用工程师-开发规范与代码质量` |
+| i18n、用户提示、可见文案 | `通用工程师-国际化与用户提示` |
+| WLS 进程稳定 | `WLS运行时工程师-WLS进程稳定` |
+| Session / SSE 运行时 | `WLS运行时工程师-Session与SSE运行时` |
+| ACL 与后台安全 | `安全权限工程师-ACL与后台安全` |
+| 会话配置与数据保护 | `安全权限工程师-会话配置与数据保护` |
+| 验证策略、质量门禁 | `QA测试主管-测试策略治理`；`QA测试主管-质量门禁验收` |
+| 单元测试、测试数据、回归 | 仅用户明确要求时加载 `单元测试工程师-单元测试覆盖`；`单元测试工程师-测试数据与回归` |
+| E2E、路由、UI 冒烟 | 用户明确要求 E2E 时加载 `E2E自动化工程师-端到端流程测试`；轻量路由/UI 冒烟加载 `E2E自动化工程师-路由与UI冒烟验证` |
+| CI、发布、部署、环境兼容 | `CI发布工程师-CI与发布门禁`；`CI发布工程师-环境兼容与命令安全` |
+| Weline_Deploy、Webhook、`deploy:release`、生产 WLS 部署 | `CI发布工程师-部署发布系统` |
+| **口令「分仓」**：DEV→weline 分仓、git tag 递增、双端推送、Packagist 刷新；**「分仓+模块名」只处理该模块** | **仅**加载 `dev/ai/skills/CI发布工程师-分仓发布/SKILL.md`；脚本在 `dev/tools/fencang/`；Codex 另见 `.codex/skills/fencang-release/SKILL.md`；无口令不得触发 |
+| **口令「分项」**：当前核心仓提交并推送当前核心分支后，让 `E:\WelineFramework\Framework-Official` 内的 7 个子项目以及 `E:\公司\远程\src\weline` 运行 `php bin/w core:update -b <branch>` 同步核心代码；用户只说「分项」默认 `dev`，说「分项 <分支>」则处理该分支；站点 WLS 运行中则 reload | **仅**加载 `dev/ai/skills/CI发布工程师-分项更新/SKILL.md`；脚本在 `dev/tools/fenxiang/fenxiang-update.ps1`；Codex 另见 `.codex/skills/fenxiang-update/SKILL.md`；无口令不得触发 |
+| 文档、知识库、规则沉淀 | `文档知识库工程师-文档规范与变更记录`；`文档知识库工程师-技能索引与知识库`；`文档知识库工程师-会话复盘与规则沉淀` |
 
-## 常驻
+## GitNexus 路由
 
-| 场景/关键词 | 技能 | 路径 |
-|---|---|---|
-| 计划、拆任务、pre-plan、plan.md、task.md、审计、都做完了 | planning | `dev/ai/skills/planning/SKILL.md` |
-| dev/ai/codex、ACTIVE.md、任务状态、任务进度、任务工作目录、resume、result.md | codex-task-workspace | `dev/ai/skills/codex-task-workspace/SKILL.md` |
+GitNexus 技能保留在 `.claude/skills/gitnexus/`，这里只做引用，不复制正文。
 
-## 开发场景映射
+| 场景 | 技能文件 |
+|---|---|
+| 理解架构、执行流、调用链 | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| 修改前影响分析、blast radius | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| 调试错误、追踪失败路径 | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| rename、extract、move、refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| GitNexus 工具、资源、schema | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| analyze、status、clean、wiki、list | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
-| 场景/关键词 | 技能 | 路径 |
-|---|---|---|
-| PHPUnit、http:req、`php bin/w e2e:run`（UI/E2E/冒烟）、QA、Browser MCP、Playwright、路由验证 | testing | `dev/ai/skills/testing/SKILL.md` |
-| 事件、dispatch、event.xml、Hook、Extends、extends.php | extension-points | `dev/ai/skills/extension-points/SKILL.md` |
-| Sticker、Weline_Sticker、w:sticker、贴纸、非侵入改模板、sticker:collect、sticker:refresh | weline-sticker | `dev/ai/skills/weline-sticker/SKILL.md` |
-| WLS、Worker、server:start、reload、restart、static、State、Processer | runtime-and-process | `dev/ai/skills/runtime-and-process/SKILL.md` |
-| Session、登录态、认证、SessionFactory、AreaConfig | session-development | `dev/ai/skills/session-development/SKILL.md` |
-| 主题、前端、phtml、CSS、JS、模板、静态标签、暗色适配 | theme-development | `dev/ai/skills/theme-development/SKILL.md` |
-| tpl、view/tpl、编译模板、模板被覆盖、源模板定位、com_ 前缀模板 | template-source-editing | `dev/ai/skills/template-source-editing/SKILL.md` |
-| Block、Taglib、Widget、DataTable、`<w:d-table>` | frontend-components | `dev/ai/skills/frontend-components/SKILL.md` |
-| 翻译、i18n、`__()`、`<lang>`、`@lang`、i18n csv | i18n-internationalization | `dev/ai/skills/i18n-internationalization/SKILL.md` |
-| alert、confirm、prompt、toast、确认弹窗、用户提示 | friendly-notifications | `dev/ai/skills/friendly-notifications/SKILL.md` |
-| Model、ORM、`#[Col]`、`#[Table]`、pagination、SQL、列表分页 | database-model-standards | `dev/ai/skills/database-model-standards/SKILL.md` |
-| QueryProvider、w_query、模块间查询、查询型接口 | unified-query-provider | `dev/ai/skills/unified-query-provider/SKILL.md` |
-| menu.xml、ACL、`#[Acl]`、权限、菜单显示 | acl-permission-system | `dev/ai/skills/acl-permission-system/SKILL.md` |
-| env.php、SystemConfig、配置项、PHP 扩展、requirements | config-and-env | `dev/ai/skills/config-and-env/SKILL.md` |
-| 模块开发、register.php、Backend Controller、setup:upgrade、event.xml | module-development | `dev/ai/skills/module-development/SKILL.md` |
-| Service、业务逻辑层、Api 接口、Controller 与 Model 之间 | service-development | `dev/ai/skills/service-development/SKILL.md` |
-| 缓存、CacheFactory、CacheInterface、cache:clear | cache-usage | `dev/ai/skills/cache-usage/SKILL.md` |
-| 调试日志、Debug::env、agent_log、caller key、过滤日志 | debug-logging | `dev/ai/skills/debug-logging/SKILL.md` |
-| 文档、开发文档、使用文档、变更记录 | documentation-standards | `dev/ai/skills/documentation-standards/SKILL.md` |
-| 创建命令、CommandAbstract、command:upgrade、Console | create-framework-command | `dev/ai/skills/create-framework-command/SKILL.md` |
-| PHP 8.4、Property Hooks、null 安全、array_find、mb_trim | php84-performance | `dev/ai/skills/php84-performance/SKILL.md` |
-| 代码生成、strict_types、ObjectManager、生成代码风格 | code-generation-standards | `dev/ai/skills/code-generation-standards/SKILL.md` |
-| Windows 引号、PowerShell、exec、proc_open、命令转义 | windows-command-quoting | `dev/ai/skills/windows-command-quoting/SKILL.md` |
-| 路由、URL、getUrl、getBackendUrl、404、405、语言币种 | weline-routing | `dev/ai/skills/weline-routing/SKILL.md` |
-| SSE、EventSource、text/event-stream、流式输出、terminal.start | sse-streaming | `dev/ai/skills/sse-streaming/SKILL.md` |
-| PageBuilder、style、layout、`@fields`、head-common、footer-common、data-glr | pagebuilder-style-templates | `dev/ai/skills/pagebuilder-style-templates/SKILL.md` |
-| visitor、pixel、`<pixel>`、`weline-pixel::`、UV、PV | visitor-pixel | `dev/ai/skills/visitor-pixel/SKILL.md` |
-| 网站转模板、克隆设计、HTML 转组件、外部站点转 PageBuilder | website-to-template | `dev/ai/skills/website-to-template/SKILL.md` |
+强制规则仍以根目录 `AGENTS.md` 的 GitNexus 区块为准：改函数、类、方法前先做 upstream impact；提交前做 detect_changes。用户明确要求提交时，commit 后须连续 `git push origin HEAD` 与 `git push github HEAD`（见 `global-constraints.md` 第 13 节）。
 
-## 补充资料
+## 智能体入口
 
-| 场景/关键词 | 资料 | 路径 |
-|---|---|---|
-| 社区模块、社区插件、社区模块开发汇总 | community-module | `dev/ai/skills/community-module/SKILLS-CONSOLIDATED.md` |
-
-## 迁移说明
-
-- 旧文件 `skills/skill-trigger-reminders/references/development-skill-map.md` 已改为跳转入口。
-- 旧的 Codex 专用路由文档已归档到 `dev/ai/archive/codex-skills/`。
+- 智能体名录：`dev/ai/agent/README.md`
+- 团队流程：`dev/ai/skills/TEAM_WORKFLOW.md`
+- 全局规则：`dev/ai/global-constraints.md`

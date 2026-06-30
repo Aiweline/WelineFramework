@@ -28,28 +28,28 @@ class RouterRunBefore implements ObserverInterface
 
     private function handleStaticPaths(): void
     {
-        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        $request_uri = \Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '');
         # 移除查询字符串
         $path_original = parse_url($request_uri, PHP_URL_PATH);
-        $path = $path_original !== false ? strtolower($path_original) : '';
+        $requestPath = \is_string($path_original) ? $path_original : '';
+        $decodedPath = $this->decodeStaticRequestPath($requestPath);
+        if ($decodedPath === null) {
+            return;
+        }
+        $path = \strtolower($decodedPath);
         # 匹配静态资源/static/
         if (str_starts_with($path, '/static/')) {
-            $file_path = BP .'/pub' . $path;
-            if(IS_WIN){
-                $file_path = str_replace('/','\\',$file_path);
-                $file_path = str_replace('\\\\','\\',$file_path);
-            }else{
-                $file_path = str_replace('//','/',$file_path);
-            }
-            if (is_file($file_path)) {
+            $staticPath = $decodedPath;
+            $file_path = $this->resolveExistingFileInRoot(BP . '/pub/static', \substr($staticPath, \strlen('/static/')));
+            if ($file_path !== null && is_file($file_path)) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
                 // 传递包含pub目录的完整路径
-                $full_path = '/pub' . $path;
+                $full_path = '/pub' . $staticPath;
                 $core->StaticFile($full_path, true);
             }
 
-            $publishedThemePath = $this->publishThemeOverrideStaticPath((string)($path_original !== false ? $path_original : $path));
+            $publishedThemePath = $this->publishThemeOverrideStaticPath($staticPath);
             if ($publishedThemePath !== null) {
                 /** @var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
@@ -60,23 +60,19 @@ class RouterRunBefore implements ObserverInterface
         # 匹配模块静态资源（开发环境下直接从模块目录加载）
         # 路径格式: /Weline/ModuleName/view/statics/... 或 /Vendor/ModuleName/view/statics/...
         # 注意：使用 path_original 保留大小写（Linux 区分），Framework 模块实际为 View/statics
-        if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/statics/(.+)$#', $path_original !== false ? $path_original : $path, $matches)) {
+        if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/statics/(.+)$#', $decodedPath, $matches)) {
             $vendor = $matches[1];
             $module = $matches[2];
             $file = $matches[3];
 
             $base = BP . '/app/code/' . $vendor . '/' . $module;
-            $candidates = [
-                $base . '/view/statics/' . $file,
-                $base . '/View/statics/' . $file,  // Framework 模块
+            $candidateRoots = [
+                $base . '/view/statics',
+                $base . '/View/statics',  // Framework 模块
             ];
-            if (IS_WIN) {
-                $candidates = array_map(static fn ($p) => str_replace(['/', '\\\\'], ['\\', '\\'], $p), $candidates);
-            } else {
-                $candidates = array_map(static fn ($p) => str_replace('//', '/', $p), $candidates);
-            }
-            foreach ($candidates as $module_file_path) {
-                if (is_file($module_file_path)) {
+            foreach ($candidateRoots as $candidateRoot) {
+                $module_file_path = $this->resolveExistingFileInRoot($candidateRoot, $file);
+                if ($module_file_path !== null && is_file($module_file_path)) {
                     /**@var Core $core */
                     $core = ObjectManager::getInstance(Core::class);
                     $static_url = '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
@@ -87,8 +83,8 @@ class RouterRunBefore implements ObserverInterface
         }
         # 匹配主题资源（开发环境下直接从模块 view/theme 目录加载，如 theme:css）
         # 路径格式: /Vendor/ModuleName/view/theme/...
-        if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/theme/(.+)$#', $path_original !== false ? $path_original : $path, $matches)) {
-            $requestThemePath = (string)($path_original !== false ? $path_original : $path);
+        if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/theme/(.+)$#', $decodedPath, $matches)) {
+            $requestThemePath = $decodedPath;
             $publishedThemePath = $this->publishThemeOverrideStaticPath($requestThemePath);
             if ($publishedThemePath !== null) {
                 /**@var Core $core */
@@ -100,14 +96,9 @@ class RouterRunBefore implements ObserverInterface
             $suffix = '/view/theme/' . $file;
             $prefix_len = strlen($requestThemePath) - strlen($suffix);
             $vendor_module = $prefix_len > 0 ? substr($requestThemePath, 1, $prefix_len - 1) : '';
-            $theme_file_path = BP . '/app/code/' . str_replace('/', DIRECTORY_SEPARATOR, $vendor_module) . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'theme' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $file);
-            if (IS_WIN) {
-                $theme_file_path = str_replace('/', '\\', $theme_file_path);
-                $theme_file_path = str_replace('\\\\', '\\', $theme_file_path);
-            } else {
-                $theme_file_path = str_replace('//', '/', $theme_file_path);
-            }
-            if (is_file($theme_file_path)) {
+            $themeRoot = BP . '/app/code/' . str_replace('/', DIRECTORY_SEPARATOR, $vendor_module) . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'theme';
+            $theme_file_path = $this->resolveExistingFileInRoot($themeRoot, $file);
+            if ($theme_file_path !== null && is_file($theme_file_path)) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
                 // 主题资源路径本身是 /Vendor/Module/view/theme/...，应走 APP_CODE_PATH 解析链路
@@ -117,30 +108,64 @@ class RouterRunBefore implements ObserverInterface
         }
         # 匹配媒介资源
         if (str_starts_with($path, '/pub/media/')) {
-            $file_path = BP.urldecode($path);
-            if(IS_WIN){
-                $file_path = str_replace('/','\\',$file_path);
-                $file_path = str_replace('\\\\','\\',$file_path);
-            }else{
-                $file_path = str_replace('//','/',$file_path);
-            }
-            if (is_file($file_path)) {
+            $file_path = $this->resolveExistingFileInRoot(BP . '/pub/media', \substr($decodedPath, \strlen('/pub/media/')));
+            if ($file_path !== null && is_file($file_path)) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile( $path, true);
+                $core->StaticFile($decodedPath, true);
             }
         }
         // 跳过解析 
         // 图片
         if (str_starts_with($path, '/media/image/')) {
-            $_SERVER['WELINE_PARSER_URL'] = false;
-            $_SERVER['WELINE_IS_MEDIA'] = true;
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_PARSER_URL', false, 'MediaManager router before');
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_IS_MEDIA', true, 'MediaManager router before');
         }
         // 文件
         if (str_starts_with($path, '/media/file/')) {
-            $_SERVER['WELINE_PARSER_URL'] = false;
-            $_SERVER['WELINE_IS_MEDIA'] = true;
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_PARSER_URL', false, 'MediaManager router before');
+            \Weline\Framework\Env\WelineEnv::setServer('WELINE_IS_MEDIA', true, 'MediaManager router before');
         }
+    }
+
+    private function decodeStaticRequestPath(string $path): ?string
+    {
+        $decoded = \rawurldecode($path);
+        if ($decoded === '' || $decoded[0] !== '/') {
+            return null;
+        }
+        if (\str_contains($decoded, '..') || \str_contains($decoded, '\\') || \preg_match('/[\x00-\x1F\x7F]/', $decoded)) {
+            return null;
+        }
+        return $decoded;
+    }
+
+    private function resolveExistingFileInRoot(string $root, string $relativePath): ?string
+    {
+        $rootReal = \realpath($root);
+        if ($rootReal === false) {
+            return null;
+        }
+
+        $candidate = \rtrim($rootReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . \str_replace('/', DIRECTORY_SEPARATOR, \ltrim($relativePath, '/'));
+        $real = \realpath($candidate);
+        if ($real === false || !\is_file($real)) {
+            return null;
+        }
+
+        return $this->isPathInsideRoot($real, $rootReal) ? $real : null;
+    }
+
+    private function isPathInsideRoot(string $path, string $root): bool
+    {
+        $path = \rtrim(\str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
+        $root = \rtrim(\str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $root), DIRECTORY_SEPARATOR);
+        if (IS_WIN) {
+            $path = \strtolower($path);
+            $root = \strtolower($root);
+        }
+
+        return $path === $root || \str_starts_with($path, $root . DIRECTORY_SEPARATOR);
     }
 
     private function publishThemeOverrideStaticPath(string $requestPath): ?string

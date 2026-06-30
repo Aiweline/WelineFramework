@@ -12,6 +12,7 @@
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {search}
+ * @widget.supports {["layout-header-search","layout-global-header-search"]}
  * @widget.exclusive {true}
  * 
  * @param placeholder {default="搜索商品...",type="string",label="占位符文字"}
@@ -204,12 +205,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             debounceTimer = setTimeout(function() {
-                // 这里应该调用实际的搜索API
-                // fetch('/api/search/suggestions?q=' + encodeURIComponent(query))
-                //     .then(response => response.json())
-                //     .then(data => {
-                //         // 渲染建议
-                //     });
+                // 站内前端搜索建议必须走 Weline.Api.resource('search') 的 worker 通道。
+                // const SearchApi = await Weline.Api.resource('search');
+                // const data = await SearchApi.suggestions({ q: query });
                 
                 // 示例数据
                 const mockSuggestions = [

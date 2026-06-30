@@ -357,7 +357,7 @@ class MemoryCacheExpressionParser
                 $pattern = (string)$compareValue;
                 // 如果没有分隔符，添加
                 if (!preg_match('/^[\/\#\~]/', $pattern)) {
-                    $pattern = '/' . $pattern . '/';
+                    $pattern = '~' . str_replace('~', '\~', $pattern) . '~';
                 }
                 return (bool)preg_match($pattern, $fieldValue);
                 

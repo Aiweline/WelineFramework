@@ -25,7 +25,7 @@ $currentSearch = $currentSearch ?? '';
             </h4>
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>AI 中心</lang></a></li>
+                    <li class='breadcrumb-item'><span><lang>AI 中心</lang></span></li>
                     <li class='breadcrumb-item active'><lang>AI模型</lang></li>
                 </ol>
             </div>
@@ -83,16 +83,16 @@ $currentSearch = $currentSearch ?? '';
                     <lang>已选择</lang> <strong id="selectedCount">0</strong> <lang>个模型</lang>
                 </span>
                 <div class="btn-group">
-                    <button type="button" class="btn btn-sm btn-info" onclick="bulkTestConnection()">
+                    <button type="button" class="btn btn-sm btn-info" data-model-action="bulk-test">
                         <i class="mdi mdi-wifi me-1"></i><lang>批量测试</lang>
                     </button>
-                    <button type="button" class="btn btn-sm btn-success" onclick="bulkActivate()">
+                    <button type="button" class="btn btn-sm btn-success" data-model-action="bulk-activate">
                         <i class="mdi mdi-check-circle me-1"></i><lang>批量激活</lang>
                     </button>
-                    <button type="button" class="btn btn-sm btn-warning" onclick="bulkDeactivate()">
+                    <button type="button" class="btn btn-sm btn-warning" data-model-action="bulk-deactivate">
                         <i class="mdi mdi-cancel me-1"></i><lang>批量禁用</lang>
                     </button>
-                    <button type="button" class="btn btn-sm btn-danger" onclick="bulkDelete()">
+                    <button type="button" class="btn btn-sm btn-danger" data-model-action="bulk-delete">
                         <i class="mdi mdi-delete me-1"></i><lang>批量删除</lang>
                     </button>
                 </div>
@@ -137,7 +137,7 @@ $currentSearch = $currentSearch ?? '';
                 </h5>
             </div>
             <div class="card-body">
-                <form id="filterForm" class="row g-3" onsubmit="applyFilters(); return false;">
+                <form id="filterForm" class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label"><lang>供应商</lang></label>
                         <select class="form-select" id="vendorFilter" name="vendor">
@@ -167,7 +167,7 @@ $currentSearch = $currentSearch ?? '';
                             <button type="submit" class="btn btn-primary">
                                 <i class="mdi mdi-magnify"></i> <lang>筛选</lang>
                             </button>
-                            <button type="button" class="btn btn-secondary" onclick="resetFilters()">
+                            <button type="button" class="btn btn-secondary" data-model-action="reset-filters">
                                 <i class="mdi mdi-refresh"></i> <lang>重置</lang>
                             </button>
                         </div>
@@ -202,7 +202,7 @@ $currentSearch = $currentSearch ?? '';
                             <thead>
                                 <tr>
                                     <th width="50">
-                                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                                        <input type="checkbox" id="selectAll" data-model-change="select-all">
                                     </th>
                                     <th width="60"><lang>ID</lang></th>
                                     <th><lang>模型名称</lang></th>
@@ -220,7 +220,7 @@ $currentSearch = $currentSearch ?? '';
                                 <?php foreach ($models as $model): ?>
                                     <tr data-model-id="<?= $model['id'] ?? '' ?>">
                                         <td>
-                                            <input type="checkbox" class="model-checkbox" value="<?= $model['id'] ?? '' ?>" onchange="updateBulkActions()">
+                                            <input type="checkbox" class="model-checkbox" value="<?= htmlspecialchars((string)($model['id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                         </td>
                                         <td><?= $model['id'] ?? '' ?></td>
                                         <td>
@@ -228,6 +228,15 @@ $currentSearch = $currentSearch ?? '';
                                         </td>
                                         <td>
                                             <span class="badge bg-info"><?= $model['vendor'] ?? '' ?></span>
+                                            <?php if (!empty($model['provider_account_name']) || !empty($model['provider_account_id'])): ?>
+                                                <div class="small text-muted mt-1">
+                                                    <?php $accountName = (string)($model['provider_account_name'] ?: __('未命名账户')); ?>
+                                                    <?= htmlspecialchars($accountName, ENT_QUOTES) ?>
+                                                    <?php if (!empty($model['provider_account_id'])): ?>
+                                                        #<?= (int)$model['provider_account_id'] ?>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endif; ?>
                                             <?php if (!empty($model['is_custom_model'])): ?>
                                                 <span class="badge bg-warning text-dark ms-1" title="<?= __('自定义模型') ?>">
                                                     <lang>自定义</lang>
@@ -375,7 +384,8 @@ $currentSearch = $currentSearch ?? '';
                                                 <!-- 连通测试按钮 -->
                                                 <button type="button" 
                                                         class="btn btn-outline-success" 
-                                                        onclick="testModelConnection('<?= $model['model_code'] ?? '' ?>')" 
+                                                        data-model-action="test-provider"
+                                                        data-model-code="<?= htmlspecialchars((string)($model['model_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                                         title="<?= __('连通测试') ?>">
                                                     <i class="mdi mdi-wifi"></i>
                                                 </button>
@@ -383,7 +393,8 @@ $currentSearch = $currentSearch ?? '';
                                                 <?php if (!empty($model['has_api_key'])): ?>
                                                 <button type="button" 
                                                         class="btn btn-outline-warning" 
-                                                        onclick="testSelfConfigConnection('<?= $model['model_code'] ?? '' ?>')" 
+                                                        data-model-action="test-self"
+                                                        data-model-code="<?= htmlspecialchars((string)($model['model_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                                         title="<?= __('自配置连通测试') ?>">
                                                     <i class="mdi mdi-cog"></i>
                                                 </button>
@@ -402,19 +413,14 @@ $currentSearch = $currentSearch ?? '';
                                                 $isActive = !empty($model['is_active']);
                                                 $titleText = $isActive ? '停用' : ($canActivate ? '激活' : ('无法激活: ' . $disableReason));
                                                 ?>
-                                                <?php
-                                                $onclick = $isActive
-                                                    ? "toggleStatusByCode('" . ($model['model_code'] ?? '') . "')"
-                                                    : ($canActivate
-                                                        ? "toggleStatusByCode('" . ($model['model_code'] ?? '') . "')"
-                                                        : 'showActivateBlocked(this)');
-                                                ?>
                                                 <button type="button"
                                                         class="btn btn-outline-<?= $isActive ? 'warning' : ($canActivate ? 'success' : 'secondary') ?>"
                                                         title="<?= htmlspecialchars($titleText, ENT_QUOTES) ?>"
                                                         data-reason="<?= htmlspecialchars($disableReason, ENT_QUOTES) ?>"
+                                                        data-model-action="<?= ($isActive || $canActivate) ? 'toggle-status' : 'show-activate-blocked' ?>"
+                                                        data-model-code="<?= htmlspecialchars((string)($model['model_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                                         <?= (!$canActivate && !$isActive) ? 'disabled' : '' ?>
-                                                        onclick="<?= $onclick ?>">
+                                                        >
                                                     <i class="mdi mdi-<?= $isActive ? 'pause' : 'play' ?>"></i>
                                                 </button>
                                                 <block class='Weline\Component\Block\OffCanvas'
@@ -441,7 +447,10 @@ $currentSearch = $currentSearch ?? '';
                                                 <?php $canDelete = !empty($model['is_copied']) || !empty($model['is_custom_model']); ?>
                                                 <?php if ($canDelete): ?>
                                                 <button type="button" class="btn btn-outline-danger"
-                                                        onclick="deleteModel(<?= $model['id'] ?? 0 ?>, '<?= $model['model_code'] ?? '' ?>', true)"
+                                                        data-model-action="delete"
+                                                        data-model-id="<?= (int)($model['id'] ?? 0) ?>"
+                                                        data-model-code="<?= htmlspecialchars((string)($model['model_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-can-delete="1"
                                                         title="<?= __('删除') ?>">
                                                     <i class="mdi mdi-delete"></i>
                                                 </button>
@@ -477,15 +486,15 @@ $currentSearch = $currentSearch ?? '';
                                 $nextPage = min($totalPages, $page + 1);
                                 ?>
                                 <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
-                                    <a class="page-link" href="javascript:void(0)" onclick="goPage(<?= $prevPage ?>)"><lang>上一页</lang></a>
+                                    <a class="page-link" href="#" data-model-action="page" data-page="<?= $prevPage ?>"><lang>上一页</lang></a>
                                 </li>
                                 <?php for ($p = max(1, $page - 2); $p <= min($totalPages, $page + 2); $p++): ?>
                                     <li class="page-item <?= $p === $page ? 'active' : '' ?>">
-                                        <a class="page-link" href="javascript:void(0)" onclick="goPage(<?= $p ?>)"><?= $p ?></a>
+                                        <a class="page-link" href="#" data-model-action="page" data-page="<?= $p ?>"><?= $p ?></a>
                                     </li>
                                 <?php endfor; ?>
                                 <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-                                    <a class="page-link" href="javascript:void(0)" onclick="goPage(<?= $nextPage ?>)"><lang>下一页</lang></a>
+                                    <a class="page-link" href="#" data-model-action="page" data-page="<?= $nextPage ?>"><lang>下一页</lang></a>
                                 </li>
                             </ul>
                         </nav>
@@ -773,7 +782,7 @@ $currentSearch = $currentSearch ?? '';
             '<div class="modal-content">' +
             '<div class="modal-body text-center py-4">' +
             '<div class="spinner-border text-primary mb-3" role="status">' +
-            '<span class="visually-hidden">Loading...</span>' +
+            '<span class="visually-hidden"><?= __('加载中...') ?></span>' +
             '</div>' +
             '<h5 id="progressText">正在测试...</h5>' +
             '<p class="text-muted mb-0" id="progressDetail">请稍候，正在测试模型连接</p>' +
@@ -967,7 +976,7 @@ $currentSearch = $currentSearch ?? '';
     };
 
     // 测试模型连通性
-    window.testModelConnection = function(modelCode) {
+    window.testModelConnection = function(modelCode, trigger) {
         if (!modelCode) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -982,10 +991,12 @@ $currentSearch = $currentSearch ?? '';
             return;
         }
         
-        var btn = event.target.closest('button');
-        var originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
-        btn.disabled = true;
+        var btn = trigger || (window.event && window.event.target ? window.event.target.closest('button') : null);
+        var originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+            btn.disabled = true;
+        }
         
         var testModal = createTestModal();
         document.body.appendChild(testModal);
@@ -997,8 +1008,10 @@ $currentSearch = $currentSearch ?? '';
         })
         .then(function(response) {
             var data = response.data;
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
+            if (btn) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
             document.body.removeChild(testModal);
             
             if (data && data.data && data.data.results) {
@@ -1007,9 +1020,9 @@ $currentSearch = $currentSearch ?? '';
                 var p = r.provider_account || {};
                 var sStatus = s.tested ? (s.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
                 var pStatus = p.tested ? (p.success ? '<span class="badge bg-success">成功</span>' : '<span class="badge bg-danger">失败</span>') : '<span class="badge bg-secondary">未测</span>';
-                var html = '自配置结果：' + sStatus + '\n' + 
+                var html = '自配置结果：' + sStatus + '\n' +
                     (s.tested ? '消息：' + (s.message || '') + '\n耗时：' + (s.duration || 0) + 'ms\n响应：' + ((s.response || '').toString().slice(0,500)) + '\n\n' : '\n') +
-                    '供应商账户结果：' + pStatus + '\n' + 
+                    '供应商账户结果：' + pStatus + '\n' +
                     (p.tested ? '消息：' + (p.message || '') + '\n耗时：' + (p.duration || 0) + 'ms\n账户：' + (p.account_name || '') + '\n响应：' + ((p.response || '').toString().slice(0,500)) : '');
                 var __ok = !!data.success;
                 var __retryName = null;
@@ -1017,9 +1030,13 @@ $currentSearch = $currentSearch ?? '';
                     __retryName = '__retry_test_' + Date.now();
                     window[__retryName] = function() { testModelConnection(modelCode); };
                 }
-                showResultModal(__ok ? 'success' : 'error', '连通测试结果', html, __ok, __retryName);
+                var images = [];
+                if (Array.isArray(s.images)) images = images.concat(s.images);
+                if (Array.isArray(p.images)) images = images.concat(p.images);
+                showResultModal(__ok ? 'success' : 'error', '连通测试结果', html, __ok, __retryName, null, images);
             } else if (data.success) {
-                showResultModal('success', '连通测试成功', data.message || '', true);
+                var images2 = Array.isArray(data.images) ? data.images : [];
+                showResultModal('success', '连通测试成功', data.message || '', true, null, null, images2);
             } else {
                 var fnName = '__retry_test_' + Date.now();
                 window[fnName] = function() { testModelConnection(modelCode); };
@@ -1027,11 +1044,13 @@ $currentSearch = $currentSearch ?? '';
             }
         })
         .catch(error => {
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
+            if (btn) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
             document.body.removeChild(testModal);
             
-            console.error('Error:', error);
+            console.error('<?= __('错误：') ?>', error);
             var fnName = '__retry_test_' + Date.now();
             window[fnName] = function() { testModelConnection(modelCode); };
             showResultModal('error', '连通测试失败', '<?= __('测试失败: 网络错误') ?>', false, fnName);
@@ -1039,7 +1058,7 @@ $currentSearch = $currentSearch ?? '';
     };
 
     // 测试自配置连通性
-    window.testSelfConfigConnection = function(modelCode) {
+    window.testSelfConfigConnection = function(modelCode, trigger) {
         if (!modelCode) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -1054,10 +1073,12 @@ $currentSearch = $currentSearch ?? '';
             return;
         }
         
-        var btn = event.target.closest('button');
-        var originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
-        btn.disabled = true;
+        var btn = trigger || (window.event && window.event.target ? window.event.target.closest('button') : null);
+        var originalHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+            btn.disabled = true;
+        }
         
         var testModal = createTestModal();
         document.body.appendChild(testModal);
@@ -1069,15 +1090,18 @@ $currentSearch = $currentSearch ?? '';
         })
         .then(function(response) {
             var data = response.data;
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
+            if (btn) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
             document.body.removeChild(testModal);
             
             if (data.success) {
-                var message = data.data ? 
-                    data.message + '\n\n响应时间: ' + data.data.duration + 'ms\n响应内容: ' + data.data.response : 
+                var message = data.data ?
+                    data.message + '\n\n响应时间: ' + data.data.duration + 'ms\n响应内容: ' + data.data.response :
                     data.message;
-                showResultModal('success', '自配置连通测试成功', message, true);
+                var imagesSelf = (data.data && Array.isArray(data.data.images)) ? data.data.images : (Array.isArray(data.images) ? data.images : []);
+                showResultModal('success', '自配置连通测试成功', message, true, null, null, imagesSelf);
             } else {
                 var fnName = '__retry_self_' + Date.now();
                 window[fnName] = function() { testSelfConfigConnection(modelCode); };
@@ -1085,11 +1109,13 @@ $currentSearch = $currentSearch ?? '';
             }
         })
         .catch(error => {
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
+            if (btn) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
             document.body.removeChild(testModal);
             
-            console.error('Error:', error);
+            console.error('<?= __('错误：') ?>', error);
             var fnName = '__retry_self_' + Date.now();
             window[fnName] = function() { testSelfConfigConnection(modelCode); };
             showResultModal('error', '自配置连通测试失败', '<?= __('测试失败: 网络错误') ?>', false, fnName);
@@ -1106,7 +1132,7 @@ $currentSearch = $currentSearch ?? '';
             '<div class="modal-content">' +
             '<div class="modal-body text-center">' +
             '<div class="spinner-border text-primary mb-3" role="status">' +
-            '<span class="visually-hidden">Loading...</span>' +
+            '<span class="visually-hidden"><?= __('加载中...') ?></span>' +
             '</div>' +
             '<h5>正在测试连通性...</h5>' +
             '<p class="text-muted">请稍候，正在连接AI服务</p>' +
@@ -1114,8 +1140,40 @@ $currentSearch = $currentSearch ?? '';
         return modal;
     }
 
+    function escapeHtmlForResult(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderTestImagesBlock(images) {
+        if (!Array.isArray(images) || images.length === 0) {
+            return '';
+        }
+        var items = images.map(function(image) {
+            var src = (image && image.url)
+                ? image.url
+                : (image && image.b64_json ? ('data:' + ((image.mime_type) || 'image/png') + ';base64,' + image.b64_json) : '');
+            if (!src) return '';
+            var safeSrc = escapeHtmlForResult(src);
+            var revised = image && image.revised_prompt ? '<div class="small text-muted mt-1">' + escapeHtmlForResult(image.revised_prompt) + '</div>' : '';
+            return '<div class="col-12 col-md-6 mb-2">'
+                + '<a href="' + safeSrc + '" target="_blank" rel="noopener">'
+                + '<img src="' + safeSrc + '" class="img-fluid rounded border" style="max-height: 280px; width: 100%; object-fit: contain; background: #fff;" alt="<?= __('测试图片') ?>">'
+                + '</a>' + revised + '</div>';
+        }).join('');
+        if (!items) return '';
+        return '<div class="row g-2 mt-3">'
+            + '<div class="col-12 fw-bold mb-1"><i class="mdi mdi-image-multiple me-1"></i><?= __('返回的测试图片') ?></div>'
+            + items
+            + '</div>';
+    }
+
     // 显示结果弹窗
-    function showResultModal(type, title, message, refreshOnClose, retryFnName, retryLabel) {
+    function showResultModal(type, title, message, refreshOnClose, retryFnName, retryLabel, images) {
         retryLabel = retryLabel || '<?= __('重试') ?>';
         var modal = document.createElement('div');
         modal.className = 'modal fade show';
@@ -1126,20 +1184,23 @@ $currentSearch = $currentSearch ?? '';
         }
         var uid = 'retryBtn_' + Date.now();
         var retryButtonHtml = retryFnName ? '<button type="button" class="btn btn-outline-primary" id="' + uid + '">' + retryLabel + '</button>' : '';
-        modal.innerHTML = '<div class="modal-dialog modal-dialog-centered">' +
+        var imagesHtml = renderTestImagesBlock(images);
+        var dialogClass = imagesHtml !== '' ? 'modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable' : 'modal-dialog modal-dialog-centered';
+        modal.innerHTML = '<div class="' + dialogClass + '">' +
             '<div class="modal-content">' +
             '<div class="modal-header">' +
             '<h5 class="modal-title">' +
             '<i class="mdi mdi-' + (type === 'success' ? 'check-circle text-success' : 'alert-circle text-danger') + '"></i> ' + title +
             '</h5>' +
-            '<button type="button" class="btn-close" onclick="closeResultModal(this)"></button>' +
+            '<button type="button" class="btn-close" data-model-action="close-result-modal"></button>' +
             '</div>' +
             '<div class="modal-body">' +
             '<pre style="white-space: pre-wrap; font-size: 14px;">' + message + '</pre>' +
+            imagesHtml +
             '</div>' +
             '<div class="modal-footer">' +
             retryButtonHtml +
-            '<button type="button" class="btn btn-primary" onclick="closeResultModal(this)">确定</button>' +
+            '<button type="button" class="btn btn-primary" data-model-action="close-result-modal"><?= __('确定') ?></button>' +
             '</div></div></div>';
         document.body.appendChild(modal);
         if (retryFnName && typeof window[retryFnName] === 'function') {
@@ -1189,5 +1250,80 @@ $currentSearch = $currentSearch ?? '';
             }
         }
     };
+    function readModelInt(trigger, name, fallback) {
+        var value = parseInt(trigger.getAttribute(name) || '', 10);
+        return Number.isNaN(value) ? fallback : value;
+    }
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-model-action]');
+        if (!trigger) {
+            return;
+        }
+        event.preventDefault();
+
+        var action = trigger.getAttribute('data-model-action') || '';
+        var modelCode = trigger.getAttribute('data-model-code') || '';
+        var modelId = readModelInt(trigger, 'data-model-id', 0);
+        var page = readModelInt(trigger, 'data-page', 1);
+
+        switch (action) {
+            case 'bulk-test':
+                window.bulkTestConnection();
+                break;
+            case 'bulk-activate':
+                window.bulkActivate();
+                break;
+            case 'bulk-deactivate':
+                window.bulkDeactivate();
+                break;
+            case 'bulk-delete':
+                window.bulkDelete();
+                break;
+            case 'reset-filters':
+                window.resetFilters();
+                break;
+            case 'test-provider':
+                window.testModelConnection(modelCode, trigger);
+                break;
+            case 'test-self':
+                window.testSelfConfigConnection(modelCode, trigger);
+                break;
+            case 'toggle-status':
+                window.toggleStatusByCode(modelCode);
+                break;
+            case 'show-activate-blocked':
+                window.showActivateBlocked(trigger);
+                break;
+            case 'delete':
+                window.deleteModel(modelId, modelCode, trigger.getAttribute('data-can-delete') === '1');
+                break;
+            case 'page':
+                window.goPage(page);
+                break;
+            case 'close-result-modal':
+                window.closeResultModal(trigger);
+                break;
+        }
+    });
+
+    document.addEventListener('change', function(event) {
+        var trigger = event.target.closest('[data-model-change]');
+        if (trigger && (trigger.getAttribute('data-model-change') || '') === 'select-all') {
+            window.toggleSelectAll();
+            return;
+        }
+        if (event.target && event.target.classList && event.target.classList.contains('model-checkbox')) {
+            window.updateBulkActions();
+        }
+    });
+
+    var filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            window.applyFilters();
+        });
+    }
 })();
 </script>

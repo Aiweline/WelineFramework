@@ -47,7 +47,7 @@
             </h4>
             <div class='page-title-right'>
                 <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>系统</lang></a></li>
+                    <li class='breadcrumb-item'><span><lang>系统</lang></span></li>
                     <li class='breadcrumb-item'><a href="@backend-url('currency/backend/currency/index')"><lang>货币管理</lang></a></li>
                     <li class='breadcrumb-item active'><lang>配置</lang></li>
                 </ol>
@@ -70,8 +70,34 @@
                 <p class='card-title-desc'><lang>配置货币汇率自动导入的相关设置</lang></p>
                 
                 <form class='needs-validation' novalidate action="@backend-url('currency/backend/config/index')" method="post">
+                    <div class='mb-4'>
+                        <label class='form-label'><lang>汇率模式</lang></label>
+                        <div class='d-flex flex-column gap-2'>
+                            <label class='form-check border rounded p-3 mb-0'>
+                                <input class='form-check-input me-2' type='radio' name='rate_mode' value='manual' <?= ($rate_mode ?? 'manual') === 'manual' ? 'checked' : '' ?>>
+                                <span class='form-check-label'>
+                                    <strong><lang>手动汇率</lang></strong><br>
+                                    <small class='text-muted'><lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang></small>
+                                </span>
+                            </label>
+                            <label class='form-check border rounded p-3 mb-0'>
+                                <input class='form-check-input me-2' type='radio' name='rate_mode' value='auto' <?= ($rate_mode ?? 'manual') === 'auto' ? 'checked' : '' ?>>
+                                <span class='form-check-label'>
+                                    <strong><lang>自动汇率</lang></strong><br>
+                                    <small class='text-muted'><lang>自动模式下，系统会以 CNY 为基准，通过 API / Cron / 手动导入更新汇率。</lang></small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class='alert alert-info mb-3' data-rate-mode-section='manual'>
+                        <lang>手动模式下，请在货币列表中维护各币种相对于 CNY 的汇率。</lang>
+                    </div>
+
+                    <div data-rate-mode-section='auto'>
                     <!-- 自动导入开关 -->
-                    <div class='mb-3'>
+                    </div>
+                    <div class='mb-3' data-rate-mode-section='auto'>
                         <label class='form-label'><lang>启用自动导入</lang></label>
                         <div class='form-check form-switch'>
                             <input class='form-check-input' type='checkbox' name='import_enabled' id='import_enabled' 
@@ -83,7 +109,7 @@
                     </div>
 
                     <!-- 导入渠道 -->
-                    <div class='mb-3'>
+                    <div class='mb-3' data-rate-mode-section='auto'>
                         <label class='form-label'><lang>导入渠道</lang></label>
                         <select class='form-select' name='import_provider' id='import_provider' required>
                             <option value='exchangerate-api' <?= ($import_provider ?? 'exchangerate-api') === 'exchangerate-api' ? 'selected' : '' ?>>
@@ -94,19 +120,19 @@
                     </div>
 
                     <!-- API密钥 -->
-                    <div class='mb-3'>
+                    <div class='mb-3' data-rate-mode-section='auto'>
                         <label class='form-label'><lang>API密钥</lang> <span class='text-muted'>(可选)</span></label>
                         <input type='text' class='form-control' name='import_api_key' id='import_api_key' 
                                value='<?= htmlspecialchars($import_api_key ?? '') ?>' 
                                placeholder='<?= __('免费版不需要API密钥') ?>'>
                         <div class='form-text'><lang>如果使用付费API，请填写API密钥</lang></div>
-                        <button type='button' class='btn btn-sm btn-outline-primary mt-2' onclick='WelineCurrencyConfig.testApi(event)'>
+                        <button type='button' class='btn btn-sm btn-outline-primary mt-2' data-currency-config-action='test-api'>
                             <lang>测试连接</lang>
                         </button>
                     </div>
 
                     <!-- Cron执行时间 -->
-                    <div class='mb-3'>
+                    <div class='mb-3' data-rate-mode-section='auto'>
                         <label class='form-label'><lang>Cron执行时间</lang></label>
                         
                         <!-- 可视化配置器 -->
@@ -115,7 +141,7 @@
                                 <!-- 执行频率 -->
                                 <div class='mb-3'>
                                     <label class='form-label'><lang>执行频率</lang></label>
-                                    <select class='form-select' id='cron_frequency' onchange='WelineCurrencyConfig.updateCronExpression()'>
+                                    <select class='form-select' id='cron_frequency'>
                                         <option value='daily'><?= __('每天') ?></option>
                                         <option value='weekly'><?= __('每周') ?></option>
                                         <option value='monthly'><?= __('每月') ?></option>
@@ -130,7 +156,7 @@
                                     <div class='row g-2'>
                                         <div class='col-6'>
                                             <label class='form-label small'><lang>小时</lang></label>
-                                            <select class='form-select' id='cron_hour' onchange='WelineCurrencyConfig.updateCronExpression()'>
+                                            <select class='form-select' id='cron_hour'>
                                                 <?php for ($h = 0; $h < 24; $h++): ?>
                                                     <option value='<?= $h ?>'><?= str_pad($h, 2, '0', STR_PAD_LEFT) ?>:00</option>
                                                 <?php endfor; ?>
@@ -138,7 +164,7 @@
                                         </div>
                                         <div class='col-6'>
                                             <label class='form-label small'><lang>分钟</lang></label>
-                                            <select class='form-select' id='cron_minute' onchange='WelineCurrencyConfig.updateCronExpression()'>
+                                            <select class='form-select' id='cron_minute'>
                                                 <?php for ($m = 0; $m < 60; $m += 5): ?>
                                                     <option value='<?= $m ?>'><?= str_pad($m, 2, '0', STR_PAD_LEFT) ?></option>
                                                 <?php endfor; ?>
@@ -150,7 +176,7 @@
                                 <!-- 星期选择（每周） -->
                                 <div id='weekday_selector' class='mb-3' style='display:none;'>
                                     <label class='form-label'><lang>星期</lang></label>
-                                    <select class='form-select' id='cron_weekday' onchange='WelineCurrencyConfig.updateCronExpression()'>
+                                    <select class='form-select' id='cron_weekday'>
                                         <option value='0'><?= __('星期日') ?></option>
                                         <option value='1'><?= __('星期一') ?></option>
                                         <option value='2'><?= __('星期二') ?></option>
@@ -164,7 +190,7 @@
                                 <!-- 日期选择（每月） -->
                                 <div id='day_selector' class='mb-3' style='display:none;'>
                                     <label class='form-label'><lang>日期</lang></label>
-                                    <select class='form-select' id='cron_day' onchange='WelineCurrencyConfig.updateCronExpression()'>
+                                    <select class='form-select' id='cron_day'>
                                         <?php for ($d = 1; $d <= 31; $d++): ?>
                                             <option value='<?= $d ?>'><?= __('第 %{1} 天', $d) ?></option>
                                         <?php endfor; ?>
@@ -174,8 +200,8 @@
                                 <!-- 自定义输入 -->
                                 <div id='custom_selector' class='mb-3' style='display:none;'>
                                     <label class='form-label'><lang>Cron表达式</lang></label>
-                                    <input type='text' class='form-control' id='cron_custom' 
-                                           placeholder='0 2 * * *' onchange='WelineCurrencyConfig.updateCronExpression()'>
+                                    <input type='text' class='form-control' id='cron_custom'
+                                           placeholder='0 2 * * *'>
                                     <div class='form-text'>
                                         <small class='text-muted'>
                                             <lang>格式：分钟 小时 日 月 星期</lang><br>
@@ -200,6 +226,7 @@
                         <input type='hidden' name='import_cron_time' id='import_cron_time' 
                                value='<?= htmlspecialchars($import_cron_time ?? '0 2 * * *') ?>' required>
                     </div>
+                    </div>
 
                     <!-- 基准货币 -->
                     <div class='mb-3'>
@@ -214,7 +241,7 @@
                         <!-- 货币选择下拉框 -->
                         <select class='form-select' name='base_currency' id='base_currency' required 
                                 data-original-value='<?= htmlspecialchars($base_currency ?? 'CNY') ?>'
-                                onchange='WelineCurrencyConfig.checkBaseCurrencyChange(this)'>
+                                >
                             <?php if (!empty($available_currencies)): ?>
                                 <?php foreach ($available_currencies as $currency): ?>
                                     <option value='<?= htmlspecialchars($currency['code']) ?>' 
@@ -244,7 +271,7 @@
                                 <button type='button' class='btn btn-sm btn-warning' id='confirm_base_currency_change'>
                                     <i class='mdi mdi-check me-1'></i><lang>我已了解，确认切换</lang>
                                 </button>
-                                <button type='button' class='btn btn-sm btn-secondary' onclick='WelineCurrencyConfig.resetBaseCurrency()'>
+                                <button type='button' class='btn btn-sm btn-secondary' data-currency-config-action='reset-base'>
                                     <i class='mdi mdi-close me-1'></i><lang>取消，恢复原值</lang>
                                 </button>
                             </div>
@@ -290,7 +317,7 @@
                         <button type='submit' class='btn btn-primary'>
                             <lang>保存配置</lang>
                         </button>
-                        <button type='button' class='btn btn-success ms-2' onclick='WelineCurrencyConfig.manualImport(event)'>
+                        <button type='button' class='btn btn-success ms-2' data-rate-mode-section='auto' data-currency-config-action='manual-import'>
                             <lang>手动导入</lang>
                         </button>
                     </div>
@@ -431,6 +458,13 @@
             }
             
             // 监听表单提交
+            self.updateRateModeSections();
+            document.querySelectorAll('input[name="rate_mode"]').forEach(function(input) {
+                input.addEventListener('change', function() {
+                    self.updateRateModeSections();
+                });
+            });
+
             var form = document.querySelector('form.needs-validation');
             var baseCurrencySelect = document.getElementById('base_currency');
             
@@ -506,12 +540,58 @@
                 
                 self.updateCronExpression();
             });
+
+            ['cron_hour', 'cron_minute', 'cron_weekday', 'cron_day', 'cron_custom'].forEach(function(id) {
+                var control = document.getElementById(id);
+                if (control) {
+                    control.addEventListener('change', function() {
+                        self.updateCronExpression();
+                    });
+                }
+            });
+
+            if (baseCurrencySelect) {
+                baseCurrencySelect.addEventListener('change', function() {
+                    self.checkBaseCurrencyChange(this);
+                });
+            }
+
+            document.addEventListener('click', function(event) {
+                var trigger = event.target.closest('[data-currency-config-action]');
+                if (!trigger) {
+                    return;
+                }
+
+                event.preventDefault();
+                var action = trigger.getAttribute('data-currency-config-action');
+                if (action === 'test-api') {
+                    self.testApi({ target: trigger });
+                    return;
+                }
+                if (action === 'reset-base') {
+                    self.resetBaseCurrency();
+                    return;
+                }
+                if (action === 'manual-import') {
+                    self.manualImport({ target: trigger });
+                }
+            });
             
             // 解析现有 Cron 表达式
             var currentCron = document.getElementById('import_cron_time').value;
             this.parseCronExpression(currentCron);
         },
         
+        updateRateModeSections: function() {
+            var selectedMode = document.querySelector('input[name="rate_mode"]:checked');
+            var mode = selectedMode ? selectedMode.value : 'manual';
+
+            document.querySelectorAll('[data-rate-mode-section]').forEach(function(section) {
+                var sectionMode = section.getAttribute('data-rate-mode-section');
+                section.style.display = sectionMode === mode ? '' : 'none';
+            });
+        },
+
         parseCronExpression: function(cronExpr) {
             if (!cronExpr) cronExpr = '0 2 * * *';
             

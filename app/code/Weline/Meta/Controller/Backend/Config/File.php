@@ -10,6 +10,7 @@ use Weline\Meta\Helper\MetaTranslation;
 use Weline\Meta\Model\MetaLocal;
 use Weline\Meta\Model\Meta as MetaModel;
 use Weline\Meta\Model\MetaConfig;
+use Weline\Meta\Service\ParamDefinitionNormalizer;
 
 class File extends BackendController
 {
@@ -377,7 +378,7 @@ class File extends BackendController
         }
 
         // 从 meta 记录的 setting 字段中获取参数定义
-        $definitions = $meta['setting']['param'] ?? [];
+        $definitions = $this->normalizeParamDefinitions($meta['setting']['param'] ?? []);
         
         // 查询参数值（从 MetaConfig 表或 MetaTranslation 中获取）
         $values = [];
@@ -459,12 +460,17 @@ class File extends BackendController
             }
             $params[] = [
                 'name' => $name,
-                'label' => $definition['name'] ?? $name,
+                'label' => $definition['label'] ?? $definition['name'] ?? $name,
                 'description' => $definition['description'] ?? '',
                 'default' => $definition['default'] ?? null,
-                'input' => $definition['input'] ?? 'text',
+                'type' => $definition['type'] ?? 'string',
+                'ui_type' => $definition['ui_type'] ?? $definition['input'] ?? $definition['type'] ?? 'text',
+                'input' => $definition['input'] ?? $definition['ui_type'] ?? $definition['type'] ?? 'text',
                 'options' => $definition['options'] ?? [],
-                'translate' => !empty($definition['translate']) || !empty($definition['translatable']),
+                'required' => !empty($definition['required']),
+                'i18n' => !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']),
+                'translate' => !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']),
+                'translatable' => !empty($definition['i18n']) || !empty($definition['translate']) || !empty($definition['translatable']),
                 'value' => $values[$name] ?? ($definition['default'] ?? null),
                 'is_saved' => $savedParams[$name] ?? false, // 标记参数是否已保存
             ];
@@ -527,7 +533,7 @@ class File extends BackendController
             // 获取参数定义，判断哪些参数支持翻译
             $settingValue = $metaRecord->getData(MetaModel::schema_fields_SETTING);
             $setting = (!empty($settingValue) && is_string($settingValue)) ? (json_decode($settingValue, true) ?? []) : [];
-            $definitions = $setting['param'] ?? [];
+            $definitions = $this->normalizeParamDefinitions($setting['param'] ?? []);
             
             // 获取当前已保存的配置值（用于增量保存：只保存修改过的参数）
             /** @var \Weline\Meta\Model\MetaConfig $metaConfigModel */
@@ -679,7 +685,7 @@ class File extends BackendController
                 
                 $settingValue = $metaRecord->getData(MetaModel::schema_fields_SETTING);
                 $setting = (!empty($settingValue) && is_string($settingValue)) ? (json_decode($settingValue, true) ?? []) : [];
-                $definitions = $setting['param'] ?? [];
+                $definitions = $this->normalizeParamDefinitions($setting['param'] ?? []);
                 $definition = $definitions[$paramName] ?? null;
                 
                 if (!$definition) {
@@ -1113,6 +1119,17 @@ class File extends BackendController
         } catch (\Throwable $e) {
             return $this->fetchJson($this->error(__('保存翻译失败：') . $e->getMessage()));
         }
+    }
+
+    private function normalizeParamDefinitions(array $definitions): array
+    {
+        if (empty($definitions)) {
+            return [];
+        }
+
+        /** @var ParamDefinitionNormalizer $normalizer */
+        $normalizer = ObjectManager::getInstance(ParamDefinitionNormalizer::class);
+        return $normalizer->normalizeDefinitions($definitions);
     }
 
     private function guessNodeTitle(string $filePath, string $metaIdentify): string

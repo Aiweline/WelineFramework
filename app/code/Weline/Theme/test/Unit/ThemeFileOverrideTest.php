@@ -47,6 +47,22 @@ class ThemeFileOverrideTest extends TestCore
         }
     }
 
+    public function testWelineThemeModulePathResolvesToCurrentWorkspace(): void
+    {
+        $theme = new WelineTheme();
+        $theme->setData(WelineTheme::schema_fields_MODULE_NAME, 'Weline_Theme');
+        $theme->setData(
+            WelineTheme::schema_fields_PATH,
+            'E:\\WelineFramework\\DEV-workspace\\app\\code\\Weline\\Theme\\view\\theme'
+        );
+
+        $module = \Weline\Framework\App\Env::getInstance()->getModuleInfo('Weline_Theme');
+        $expectedPath = rtrim((string)($module['base_path'] ?? ''), '/\\')
+            . DS . 'view' . DS . 'theme' . DS;
+
+        $this->assertSame($expectedPath, $theme->getPath());
+    }
+
     public function testJsModuleFileOverrideMechanism(): void
     {
         $activeTheme = $this->themeModel->getActiveTheme();

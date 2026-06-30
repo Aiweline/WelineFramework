@@ -1,0 +1,16 @@
+﻿{
+    "marker":  "APP_MARKETPLACE_PM_AUTOMATION",
+    "status":  "running",
+    "activeRunId":  "run-20260609-124454-app-marketplace-pm",
+    "activeTaskPath":  "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-09\\2026-06-09-0444-app-marketplace-update-iteration-2",
+    "startedAt":  "2026-06-09T12:44:54+08:00",
+    "updatedAt":  "2026-06-09T12:44:54+08:00",
+    "lastCompletedAt":  null,
+    "lastSkippedAt":  null,
+    "lastResult":  "本轮已进入运行：验证上一轮客户端访问官网应用商城源 401 授权阻塞，并尝试恢复真实更新闭环。",
+    "nextPriority":  "验证并恢复客户端应用商城授权，复测 Weline_SampleModule 1.0.24 -\u003e 1.0.25 更新闭环。",
+    "evidence":  [
+                     "E:\\WelineFramework\\DEV-workspace\\dev\\ai\\codex\\tasks\\2026-06-09\\2026-06-09-0444-app-marketplace-update-iteration-2"
+                 ],
+    "skipReason":  null
+}

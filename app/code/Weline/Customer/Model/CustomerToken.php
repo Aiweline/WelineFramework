@@ -132,7 +132,7 @@ class CustomerToken extends Model
      */
     public function cleanExpiredTokens(): int
     {
-        return $this->builder()
+        return $this->reset()
             ->where(self::schema_fields_token_expire_time, time(), '<')
             ->delete();
     }

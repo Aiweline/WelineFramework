@@ -10,6 +10,7 @@ Primary source docs in repo:
 
 ## Must avoid
 
+- Batch replace or one-off bulk scripts rewriting multiple source files (see `dev/ai/global-constraints.md` §5.1)
 - Editing `generated/`
 - Using `alert()`, `confirm()`, `prompt()`
 - Hardcoding visible text

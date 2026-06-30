@@ -83,13 +83,33 @@ class SseTest extends PcController
             <p>流地址：<code>{$streamUrl}</code></p>
         </div>
         <div class="status" id="status">状态：就绪</div>
-        <button id="startBtn" onclick="startSSE()">开始测试</button>
-        <button id="stopBtn" onclick="stopSSE()" disabled>停止</button>
-        <button onclick="clearOutput()">清空输出</button>
+        <button id="startBtn" data-sse-test-action="start">开始测试</button>
+        <button id="stopBtn" data-sse-test-action="stop" disabled>停止</button>
+        <button data-sse-test-action="clear">清空输出</button>
         <div id="output"></div>
     </div>
     <script>
         let eventSource = null;
+
+        document.addEventListener('click', function(event) {
+            const trigger = event.target.closest('[data-sse-test-action]');
+            if (!trigger) {
+                return;
+            }
+
+            const action = trigger.dataset.sseTestAction;
+            if (action === 'start') {
+                startSSE();
+                return;
+            }
+            if (action === 'stop') {
+                stopSSE();
+                return;
+            }
+            if (action === 'clear') {
+                clearOutput();
+            }
+        });
         
         function startSSE() {
             const output = document.getElementById('output');

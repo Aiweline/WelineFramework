@@ -243,6 +243,11 @@ final class FpmStrategy implements SessionStrategyInterface
     {
         try {
             $session = SessionFactory::getInstance()->createSession();
+            // During Session::start(), initialize() runs before the framework session is marked started.
+            // Syncing back at that point re-enters start() and can recurse until memory is exhausted.
+            if (!$session->isStarted()) {
+                return;
+            }
             foreach ($data as $key => $value) {
                 $session->set($key, $value);
             }

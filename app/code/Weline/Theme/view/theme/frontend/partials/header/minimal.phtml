@@ -30,9 +30,9 @@ $baseUrl = $this->request->getBaseUrl();
         <div class="header-logo">
             <a href="/" title="<?= __('首页') ?>">
                 <?php if ($logo): ?>
-                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                    <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" class="minimal-header__logo-image" data-fallback-target=".logo-text" data-fallback-display="inline-block">
                 <?php else: ?>
-                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                    <img src="@static(Weline_Frontend::img/logo.png)" alt="<?= __('网站Logo') ?>" class="minimal-header__logo-image" data-fallback-target=".logo-text" data-fallback-display="inline-block">
                 <?php endif; ?>
                 <span class="logo-text" style="display: none;"><?= htmlspecialchars($logoText) ?></span>
             </a>
@@ -52,6 +52,64 @@ $baseUrl = $this->request->getBaseUrl();
                 </ul>
             </nav>
         <?php endif; ?>
+
+        <div class="minimal-header-actions">
+            <w:hook>header-language-switcher</w:hook>
+            <w:hook>header-currency-switcher</w:hook>
+            <w:hook>header-account</w:hook>
+        </div>
     </div>
 </header>
 
+<style>
+    .minimal-header .header-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        min-height: 64px;
+    }
+    .minimal-header .minimal-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-inline-start: auto;
+    }
+    .minimal-header .header-logo a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .minimal-header .header-logo img {
+        max-height: 40px;
+        width: auto;
+    }
+    @media (max-width: 720px) {
+        .minimal-header .header-container {
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .minimal-header .minimal-header-actions {
+            width: 100%;
+            justify-content: flex-start;
+            flex-wrap: wrap;
+        }
+    }
+</style>
+
+<script>
+(function() {
+    'use strict';
+
+    document.querySelectorAll('.minimal-header__logo-image[data-fallback-target]').forEach(function(image) {
+        image.addEventListener('error', function() {
+            var targetSelector = image.getAttribute('data-fallback-target') || '';
+            var fallback = targetSelector && image.parentNode ? image.parentNode.querySelector(targetSelector) : null;
+            image.style.display = 'none';
+            if (fallback) {
+                fallback.style.display = image.getAttribute('data-fallback-display') || 'inline-block';
+            }
+        });
+    });
+})();
+</script>

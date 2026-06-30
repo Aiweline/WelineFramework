@@ -13,7 +13,9 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Service;
 
+use Weline\Ai\Interface\AdapterModelBindingInterface;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
+use Weline\Ai\Model\AiModel;
 use Weline\Ai\Model\AiScenarioAdapter;
 use Weline\Framework\System\File\Scan;
 use Weline\Framework\App\Exception;
@@ -344,6 +346,7 @@ class AdapterScanner
             AiScenarioAdapter::schema_fields_CREATED_TIME => time(),
             AiScenarioAdapter::schema_fields_UPDATED_TIME => time()
         ];
+        $data = \array_merge($data, $this->buildAdapterModelBindingData($adapter));
 
         $newAdapter = new AiScenarioAdapter();
         $newAdapter->setData($data)->save();
@@ -374,14 +377,64 @@ class AdapterScanner
             AiScenarioAdapter::schema_fields_EXAMPLES => json_encode($adapter->getExamples()),
             AiScenarioAdapter::schema_fields_UPDATED_TIME => time()
         ];
+        $bindingData = $this->buildAdapterModelBindingData($adapter);
+        if ($bindingData !== []) {
+            if (
+                isset($bindingData[AiScenarioAdapter::schema_fields_DEFAULT_MODEL])
+                && \trim((string)$existingAdapter->getData(AiScenarioAdapter::schema_fields_DEFAULT_MODEL)) === ''
+            ) {
+                $updateData[AiScenarioAdapter::schema_fields_DEFAULT_MODEL] = $bindingData[AiScenarioAdapter::schema_fields_DEFAULT_MODEL];
+            }
+            if (
+                isset($bindingData[AiScenarioAdapter::schema_fields_MODEL_BINDINGS])
+                && \trim((string)$existingAdapter->getData(AiScenarioAdapter::schema_fields_MODEL_BINDINGS)) === ''
+            ) {
+                $updateData[AiScenarioAdapter::schema_fields_MODEL_BINDINGS] = $bindingData[AiScenarioAdapter::schema_fields_MODEL_BINDINGS];
+            }
+        }
 
         foreach ($updateData as $field => $value) {
             $existingAdapter->setData($field, $value);
         }
 
         $existingAdapter->save();
-        
+
         return true;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function buildAdapterModelBindingData(ScenarioAdapterInterface $adapter): array
+    {
+        if (!$adapter instanceof AdapterModelBindingInterface) {
+            return [];
+        }
+
+        $bindings = [];
+        foreach ($adapter->getDefaultModelBindings() as $modality => $modelCode) {
+            $modality = AiModel::normalizePrimaryModality((string)$modality);
+            $modelCode = \trim((string)$modelCode);
+            if ($modality !== '' && $modelCode !== '') {
+                $bindings[$modality] = $modelCode;
+            }
+        }
+
+        if ($bindings === []) {
+            return [];
+        }
+
+        $data = [
+            AiScenarioAdapter::schema_fields_MODEL_BINDINGS => \json_encode(
+                $bindings,
+                \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES
+            ),
+        ];
+        if (!empty($bindings[AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT])) {
+            $data[AiScenarioAdapter::schema_fields_DEFAULT_MODEL] = $bindings[AiModel::PRIMARY_MODALITY_TEXT_TO_TEXT];
+        }
+
+        return $data;
     }
 
     /**

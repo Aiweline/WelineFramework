@@ -1,0 +1,361 @@
+{
+  "schema_version": 1,
+  "module_name": "Weline_DbManager",
+  "i18n": {
+    "source_locale": "en_US",
+    "locales": {
+      "en_US": {
+        "display_name": "WLS Database Manager",
+        "description": "Provides database profile readout and guarded connection testing for WLS Panel managed projects."
+      },
+      "zh_Hans_CN": {
+        "display_name": "WLS Database Manager",
+        "description": "Provides database profile readout and guarded connection testing for WLS Panel managed projects."
+      }
+    }
+  },
+  "tags": [
+    {
+      "code": "module:wls",
+      "type": "module",
+      "primary": true,
+      "labels": {
+        "en_US": "WLS Panel Plugin",
+        "zh_Hans_CN": "WLS Panel Plugin"
+      }
+    },
+    {
+      "code": "custom:wls-database-manager",
+      "type": "custom",
+      "labels": {
+        "en_US": "WLS Database Manager",
+        "zh_Hans_CN": "WLS Database Manager"
+      }
+    },
+    {
+      "code": "category:server-tools",
+      "type": "category",
+      "labels": {
+        "en_US": "Server Tools",
+        "zh_Hans_CN": "Server Tools"
+      }
+    },
+    {
+      "code": "feature:database-profile",
+      "type": "feature",
+      "labels": {
+        "en_US": "Database Profile",
+        "zh_Hans_CN": "Database Profile"
+      }
+    },
+    {
+      "code": "capability:database-read",
+      "type": "capability",
+      "labels": {
+        "en_US": "Database Readout",
+        "zh_Hans_CN": "Database Readout"
+      }
+    },
+    {
+      "code": "capability:database-test",
+      "type": "capability",
+      "labels": {
+        "en_US": "Connection Test",
+        "zh_Hans_CN": "Connection Test"
+      }
+    },
+    {
+      "code": "capability:database-write",
+      "type": "capability",
+      "labels": {
+        "en_US": "Guarded Database Profile Write",
+        "zh_Hans_CN": "Guarded Database Profile Write"
+      }
+    },
+    {
+      "code": "capability:database-backup-dry-run",
+      "type": "capability",
+      "labels": {
+        "en_US": "Database Backup Dry Run",
+        "zh_Hans_CN": "Database Backup Dry Run"
+      }
+    },
+    {
+      "code": "capability:database-backup-execute",
+      "type": "capability",
+      "labels": {
+        "en_US": "Guarded Database Backup Execution",
+        "zh_Hans_CN": "Guarded Database Backup Execution"
+      }
+    },
+    {
+      "code": "capability:database-restore-execute",
+      "type": "capability",
+      "labels": {
+        "en_US": "Guarded Database Restore Execution",
+        "zh_Hans_CN": "Guarded Database Restore Execution"
+      }
+    },
+    {
+      "code": "capability:database-migration-dry-run",
+      "type": "capability",
+      "labels": {
+        "en_US": "Database Migration Dry Run",
+        "zh_Hans_CN": "Database Migration Dry Run"
+      }
+    },
+    {
+      "code": "capability:database-migration-preflight",
+      "type": "capability",
+      "labels": {
+        "en_US": "Database Migration Preflight",
+        "zh_Hans_CN": "Database Migration Preflight"
+      }
+    },
+    {
+      "code": "capability:database-migration-execute",
+      "type": "capability",
+      "labels": {
+        "en_US": "Guarded Database Migration Import",
+        "zh_Hans_CN": "Guarded Database Migration Import"
+      }
+    },
+    {
+      "code": "capability:database-sql-apply",
+      "type": "capability",
+      "labels": {
+        "en_US": "Guarded Database SQL Apply",
+        "zh_Hans_CN": "Guarded Database SQL Apply"
+      }
+    },
+    {
+      "code": "capability:database-health-probe",
+      "type": "capability",
+      "labels": {
+        "en_US": "Guarded Database Health Probe",
+        "zh_Hans_CN": "Guarded Database Health Probe"
+      }
+    },
+    {
+      "code": "capability:wls-reload-request",
+      "type": "capability",
+      "labels": {
+        "en_US": "WLS Reload Request",
+        "zh_Hans_CN": "WLS Reload Request"
+      }
+    },
+    {
+      "code": "system:true",
+      "type": "system",
+      "labels": {
+        "en_US": "System Module",
+        "zh_Hans_CN": "System Module"
+      }
+    }
+  ],
+  "surfaces": [
+    "backend"
+  ],
+  "capabilities": {
+    "database.profile": {
+      "label": {
+        "en_US": "Database Profiles",
+        "zh_Hans_CN": "Database Profiles"
+      },
+      "status": "guarded-write",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.test": {
+      "label": {
+        "en_US": "Connection Test",
+        "zh_Hans_CN": "Connection Test"
+      },
+      "status": "guarded",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "project.database_profile": {
+      "label": {
+        "en_US": "Project Database Context",
+        "zh_Hans_CN": "Project Database Context"
+      },
+      "status": "guarded-write",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "runtime.reload.request": {
+      "label": {
+        "en_US": "Runtime Reload Request",
+        "zh_Hans_CN": "Runtime Reload Request"
+      },
+      "status": "operator-selected",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.backup_dry_run": {
+      "label": {
+        "en_US": "Database Backup Dry Run",
+        "zh_Hans_CN": "Database Backup Dry Run"
+      },
+      "status": "dry-run",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.backup_execute": {
+      "label": {
+        "en_US": "Guarded Database Backup Execution",
+        "zh_Hans_CN": "Guarded Database Backup Execution"
+      },
+      "status": "guarded-dump-adapters",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.restore_execute": {
+      "label": {
+        "en_US": "Guarded Database Restore Execution",
+        "zh_Hans_CN": "Guarded Database Restore Execution"
+      },
+      "status": "guarded-restore-adapters",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.migration_dry_run": {
+      "label": {
+        "en_US": "Database Migration Dry Run",
+        "zh_Hans_CN": "Database Migration Dry Run"
+      },
+      "status": "dry-run",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.migration_preflight": {
+      "label": {
+        "en_US": "Database Migration Preflight",
+        "zh_Hans_CN": "Database Migration Preflight"
+      },
+      "status": "guarded-preflight",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.migration_execute": {
+      "label": {
+        "en_US": "Guarded Database Migration Import",
+        "zh_Hans_CN": "Guarded Database Migration Import"
+      },
+      "status": "guarded-mysql-import",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.sql_apply": {
+      "label": {
+        "en_US": "Guarded Database SQL Apply",
+        "zh_Hans_CN": "Guarded Database SQL Apply"
+      },
+      "status": "guarded-additive-ddl",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    },
+    "database.health_probe": {
+      "label": {
+        "en_US": "Guarded Database Health Probe",
+        "zh_Hans_CN": "Guarded Database Health Probe"
+      },
+      "status": "guarded-read-probe",
+      "backend_route": "weline_dbmanager/backend/wls-db-manager"
+    }
+  },
+  "wls_panel": {
+    "menu": [
+      {
+        "key": "database-profile",
+        "label": {
+          "en_US": "Databases",
+          "zh_Hans_CN": "Databases"
+        },
+        "description": {
+          "en_US": "Open database profiles and connection tests for WLS managed projects.",
+          "zh_Hans_CN": "Open database profiles and connection tests for WLS managed projects."
+        },
+        "group": "tools",
+        "order": 20,
+        "backend_route": "weline_dbmanager/backend/wls-db-manager",
+        "children": [
+          {
+            "key": "database-summary",
+            "label": {
+              "en_US": "Summary",
+              "zh_Hans_CN": "概览"
+            },
+            "order": 5,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/summary"
+          },
+          {
+            "key": "database-profiles",
+            "label": {
+              "en_US": "Profiles",
+              "zh_Hans_CN": "数据库档案"
+            },
+            "order": 10,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/profiles"
+          },
+          {
+            "key": "database-health",
+            "label": {
+              "en_US": "Health",
+              "zh_Hans_CN": "健康检查"
+            },
+            "order": 20,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/health"
+          },
+          {
+            "key": "database-project-profile",
+            "label": {
+              "en_US": "Project Profile",
+              "zh_Hans_CN": "项目档案"
+            },
+            "order": 30,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/project-profile"
+          },
+          {
+            "key": "database-lifecycle",
+            "label": {
+              "en_US": "Lifecycle",
+              "zh_Hans_CN": "生命周期"
+            },
+            "order": 40,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/lifecycle"
+          },
+          {
+            "key": "database-backup-plan",
+            "label": {
+              "en_US": "Backup Plan",
+              "zh_Hans_CN": "备份计划"
+            },
+            "order": 50,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/backup-plan"
+          },
+          {
+            "key": "database-env-apply",
+            "label": {
+              "en_US": "Env Apply",
+              "zh_Hans_CN": "Env 应用"
+            },
+            "order": 60,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/env-page"
+          },
+          {
+            "key": "database-slaves",
+            "label": {
+              "en_US": "Slaves",
+              "zh_Hans_CN": "从库"
+            },
+            "order": 70,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/slaves"
+          },
+          {
+            "key": "database-test",
+            "label": {
+              "en_US": "Test",
+              "zh_Hans_CN": "连接测试"
+            },
+            "order": 80,
+            "backend_route": "weline_dbmanager/backend/wls-db-manager/test-page"
+          }
+        ]
+      }
+    ]
+  },
+  "seo": {
+    "slug": "wls-database-manager"
+  }
+}

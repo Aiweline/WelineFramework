@@ -12,6 +12,9 @@ declare(strict_types=1);
 namespace Weline\Framework\Event;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Module\Service\ModuleScanService;
+use Weline\Framework\Registry\Service\RegistryProgress;
+use Weline\Framework\System\File\Scan;
 
 /**
  * 事件扫描服务
@@ -19,6 +22,15 @@ use Weline\Framework\App\Env;
  */
 class EventScanner
 {
+    private ModuleScanService $moduleScanService;
+
+    public function __construct($moduleScanService = null)
+    {
+        $this->moduleScanService = $moduleScanService instanceof ModuleScanService
+            ? $moduleScanService
+            : new ModuleScanService(new Scan());
+    }
+
     /**
      * 扫描所有模块的事件规约信息
      *
@@ -40,18 +52,36 @@ class EventScanner
     {
         $result = [];
         $modules = Env::getInstance()->getModuleList();
+        $totalModules = 0;
+        foreach ($modules as $module) {
+            $basePath = $module['base_path'] ?? '';
+            if (!empty($basePath) && ($module['status'] ?? false)) {
+                $totalModules++;
+            }
+        }
+        $moduleIndex = 0;
 
         foreach ($modules as $moduleName => $module) {
             $basePath = $module['base_path'] ?? '';
             if (empty($basePath) || !($module['status'] ?? false)) {
                 continue;
             }
+            $moduleIndex++;
+            RegistryProgress::module('Event scan module', $moduleIndex, $totalModules, (string)$moduleName, 'start');
 
             // 扫描模块的 event.php 规约文件
             $eventsConfig = $this->scanModuleEventConfig($moduleName, $basePath);
+            RegistryProgress::module(
+                'Event scan module',
+                $moduleIndex,
+                $totalModules,
+                (string)$moduleName,
+                sprintf('done event.php=%s events=%d', !empty($eventsConfig) ? 'yes' : 'no', count($eventsConfig ?? []))
+            );
             if (!empty($eventsConfig)) {
                 $result[$moduleName] = $eventsConfig;
             }
+            unset($eventsConfig);
         }
 
         return $result;
@@ -66,8 +96,8 @@ class EventScanner
      */
     private function scanModuleEventConfig(string $moduleName, string $basePath): ?array
     {
-        $eventFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'event.php';
-        if (!file_exists($eventFile)) {
+        $eventFile = $this->moduleScanService->resolveFile($basePath, 'event.php');
+        if ($eventFile === null) {
             return null;
         }
 
@@ -95,8 +125,8 @@ class EventScanner
 
             if (!empty($docFileName)) {
                 // 检查 doc/event/ 目录下的文档文件
-                $docFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'doc' . DIRECTORY_SEPARATOR . 'event' . DIRECTORY_SEPARATOR . $docFileName;
-                if (file_exists($docFile)) {
+                $docFile = $this->moduleScanService->resolveFile($basePath, 'doc/event/' . $docFileName);
+                if ($docFile !== null) {
                     $hasDoc = true;
                     $docPath = 'doc/event/' . $docFileName;
                 }
@@ -113,6 +143,7 @@ class EventScanner
             ];
         }
 
+        unset($config);
         return !empty($result) ? $result : null;
     }
 
@@ -126,22 +157,36 @@ class EventScanner
     {
         $result = [];
         $modules = Env::getInstance()->getModuleList();
+        $totalModules = count($moduleNames);
+        $moduleIndex = 0;
 
         foreach ($moduleNames as $moduleName) {
+            $moduleIndex++;
             if (!isset($modules[$moduleName])) {
+                RegistryProgress::module('Event scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip missing');
                 continue;
             }
             
             $module = $modules[$moduleName];
             $basePath = $module['base_path'] ?? '';
             if (empty($basePath) || !($module['status'] ?? false)) {
+                RegistryProgress::module('Event scan module', $moduleIndex, $totalModules, (string)$moduleName, 'skip inactive');
                 continue;
             }
 
+            RegistryProgress::module('Event scan module', $moduleIndex, $totalModules, (string)$moduleName, 'start');
             $eventsConfig = $this->scanModuleEventConfig($moduleName, $basePath);
+            RegistryProgress::module(
+                'Event scan module',
+                $moduleIndex,
+                $totalModules,
+                (string)$moduleName,
+                sprintf('done event.php=%s events=%d', !empty($eventsConfig) ? 'yes' : 'no', count($eventsConfig ?? []))
+            );
             if (!empty($eventsConfig)) {
                 $result[$moduleName] = $eventsConfig;
             }
+            unset($eventsConfig);
         }
 
         return $result;

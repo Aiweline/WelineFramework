@@ -10,6 +10,46 @@
     "description": "OpenAI official API service",
     "website": "https://openai.com",
     "documentation": "https://platform.openai.com/docs/models",
+    "account_setup_guide": {
+        "title": "OpenAI API 接入指南",
+        "summary": "用于 OpenAI 文本推理、视觉理解和图片生成。ChatGPT/Codex 订阅不等于 OpenAI API 额度，API 需要单独的 Platform 账号、API Key 和可用账单额度。",
+        "links": [
+            {
+                "label": "OpenAI Platform API Keys",
+                "url": "https://platform.openai.com/api-keys"
+            },
+            {
+                "label": "OpenAI Billing",
+                "url": "https://platform.openai.com/settings/organization/billing"
+            },
+            {
+                "label": "OpenAI API 文档",
+                "url": "https://platform.openai.com/docs"
+            }
+        ],
+        "steps": [
+            "打开 OpenAI Platform 并登录有 API 权限的账号。",
+            "进入 Billing 添加付款方式或确认已有可用额度。",
+            "进入 API Keys 页面创建 Secret Key，并复制完整密钥。",
+            "回到 Weline 后台 AI > 供应商账户，供应商选择 OpenAI。",
+            "账户名称建议填写 OpenAI Platform。",
+            "API密钥粘贴 OpenAI Platform 生成的 Secret Key。",
+            "API基础URL可留空；如需显式填写，使用 https://api.openai.com/v1。",
+            "保存后点击连接测试；测试通过后启用账户，并按需要设为默认账户。"
+        ],
+        "field_hints": {
+            "provider_code": "OpenAI",
+            "account_name": "OpenAI Platform",
+            "api_key": "粘贴 OpenAI Platform API Keys 页面生成的 Secret Key",
+            "base_url": "留空使用默认值，或填写 https://api.openai.com/v1",
+            "balance": "可填预计可用额度，仅用于后台排序/展示；不了解可先填 1",
+            "currency": "USD"
+        },
+        "notes": [
+            "如果连接测试返回 exceeded your current quota，需要处理 OpenAI Platform 的账单或额度，不是模型代码填错。",
+            "图片生成模型和文本模型分开配置；文生图适配器应选择 text2image 模型。"
+        ]
+    },
     "supported_features": {
         "chat": true,
         "completion": true,
@@ -50,7 +90,13 @@
             "input_price": 0.00,
             "output_price": 0.00,
             "primary_modality": "text2image",
-            "capabilities": ["image_generation", "image_output"],
+            "capabilities": ["image_generation", "image_output", "transparent_background"],
+            "config": {
+                "supports_transparent_background": true,
+                "transparent_background_parameter": "background",
+                "transparent_background_value": "transparent",
+                "transparent_output_format": "png"
+            },
             "is_active": 1,
             "is_default": 1
         },

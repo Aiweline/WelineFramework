@@ -62,6 +62,9 @@ class Import extends CommandAbstract
         if (isset($result['cleaned_duplicates']) && $result['cleaned_duplicates'] > 0) {
             $this->printer->warning(__('   清理重复: %{count} 个（重复导入的文档）', ['count' => $result['cleaned_duplicates']]));
         }
+        if (isset($result['cleaned_legacy_duplicates']) && $result['cleaned_legacy_duplicates'] > 0) {
+            $this->printer->warning('   Cleaned legacy duplicate imported documents: ' . $result['cleaned_legacy_duplicates']);
+        }
         if (isset($result['deleted']) && $result['deleted'] > 0) {
             $this->printer->warning(__('   删除文档: %{count} 个（不在文件中的文档）', ['count' => $result['deleted']]));
         }

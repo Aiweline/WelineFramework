@@ -230,6 +230,7 @@ class DataObject implements \ArrayAccess
     public function setObjectData(array $data): static
     {
         $this->_data = $data;
+        $this->_changed = [];
         return $this;
     }
 
@@ -271,6 +272,7 @@ class DataObject implements \ArrayAccess
     public function clearDataObject(): DataObject
     {
         $this->_data = [];
+        $this->_changed = [];
         return $this;
     }
 

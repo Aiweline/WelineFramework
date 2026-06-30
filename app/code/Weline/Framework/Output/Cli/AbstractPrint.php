@@ -506,8 +506,9 @@ COMMAND_LIST;
                 // Windows 下的替代方案：检查环境变量和流类型
                 $this->isTerminal = (
                     stream_isatty(STDOUT) || 
-                    (isset($_SERVER['TERM']) && $_SERVER['TERM'] !== 'dumb') ||
-                    (isset($_SERVER['ANSICON']) || isset($_SERVER['ConEmuANSI']))
+                    (($term = \getenv('TERM')) !== false && $term !== '' && $term !== 'dumb') ||
+                    \getenv('ANSICON') !== false ||
+                    \getenv('ConEmuANSI') !== false
                 );
             }
             
@@ -629,8 +630,9 @@ COMMAND_LIST;
         }
         
         // 尝试使用 COLUMNS 环境变量
-        if (isset($_SERVER['COLUMNS']) && is_numeric($_SERVER['COLUMNS'])) {
-            return (int)$_SERVER['COLUMNS'];
+        $columns = \getenv('COLUMNS');
+        if ($columns !== false && \is_numeric($columns)) {
+            return (int)$columns;
         }
         
         return 0;

@@ -29,6 +29,8 @@ class ApiUserRole extends Model
     public const schema_fields_user_id = 'user_id';
     #[Col(type: 'int', nullable: false, comment: '角色ID')]
     public const schema_fields_role_id = 'role_id';
+    #[Col(type: 'datetime', nullable: false, comment: 'Created at')]
+    public const schema_fields_created_at = 'created_at';
 
     public array $_unit_primary_keys = [self::schema_fields_ID];
     public array $_index_sort_keys = ['user_id', 'role_id'];
@@ -79,7 +81,7 @@ class ApiUserRole extends Model
     public function save_before()
     {
         if (!$this->getId()) {
-            $this->setData('created_at', date('Y-m-d H:i:s'));
+            $this->setData(self::schema_fields_created_at, date('Y-m-d H:i:s'));
         }
         parent::save_before();
     }

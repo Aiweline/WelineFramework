@@ -163,6 +163,28 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
         return $cores > 0 ? $cores : 4;
     }
 
+    protected function isSharedStateRuntimeManaged(ServiceContext $context, string $runtimeKey): bool
+    {
+        $runtime = $context->getConfig('wls.shared_state.runtime.' . $runtimeKey, []);
+        if (!\is_array($runtime)) {
+            return false;
+        }
+
+        if ((bool)($runtime['shared_service'] ?? false)
+            || (bool)($runtime['reuse_existing'] ?? false)
+            || (bool)($runtime['created_now'] ?? false)) {
+            return true;
+        }
+
+        $instanceName = \trim((string)($runtime['instance_name'] ?? ''));
+        if ($instanceName !== '' && (\str_starts_with($instanceName, 'shared-session-') || \str_starts_with($instanceName, 'shared-memory-'))) {
+            return true;
+        }
+
+        $processName = \trim((string)($runtime['process_name'] ?? ''));
+        return $processName !== '' && \str_contains($processName, '-shared-');
+    }
+
     /**
      * 获取进程归属类型。
      *

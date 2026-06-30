@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Service\Query;
 
 use Weline\Framework\Extends\ExtendsData;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\DefaultCrudProvider;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
@@ -20,6 +21,14 @@ class QueryProviderRegistry
     private array $deferredDefinitions = [];
 
     private bool $definitionsLoaded = false;
+
+    /** @var array<string, list<array<string, mixed>>> */
+    private static array $descriptorCache = [];
+
+    /** @var array<string, array<string, array<string, mixed>>> */
+    private static array $operationDescriptorCache = [];
+
+    private ?BinQueryDescriptorAttributeResolver $binQueryAttributeResolver = null;
 
     private function loadDefinitions(): void
     {
@@ -129,6 +138,8 @@ class QueryProviderRegistry
             return null;
         }
 
+        $this->registerRequestModuleFromSourceFile($sourceFile);
+
         try {
             $instance = ObjectManager::getInstance($className);
             return $instance instanceof QueryProviderInterface ? $instance : null;
@@ -136,6 +147,35 @@ class QueryProviderRegistry
             $this->logLoadFailure($className, $sourceFile, $e);
             return null;
         }
+    }
+
+    private function registerRequestModuleFromSourceFile(string $sourceFile): void
+    {
+        $moduleName = $this->resolveModuleNameFromSourceFile($sourceFile);
+        if ($moduleName === '') {
+            return;
+        }
+
+        try {
+            ObjectManager::getInstance(Request::class)->addModule($moduleName);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function resolveModuleNameFromSourceFile(string $sourceFile): string
+    {
+        $path = \str_replace('\\', '/', $sourceFile);
+        if (!\preg_match('~/app/code/([^/]+)/([^/]+)/~i', $path, $matches)) {
+            return '';
+        }
+
+        $vendor = \trim((string)($matches[1] ?? ''));
+        $module = \trim((string)($matches[2] ?? ''));
+        if ($vendor === '' || $module === '') {
+            return '';
+        }
+
+        return $vendor . '_' . $module;
     }
 
     private function logLoadFailure(string $className, string $sourceFile, \Throwable $e): void
@@ -249,10 +289,125 @@ class QueryProviderRegistry
 
     public function getAllDescriptors(): array
     {
-        $descriptors = [];
-        foreach ($this->getAllProviders() as $provider) {
-            $descriptors[] = $provider->getDescriptor();
+        $scope = $this->descriptorCacheScope();
+        if (isset(self::$descriptorCache[$scope])) {
+            return self::$descriptorCache[$scope];
         }
+
+        $descriptors = [];
+        $operationIndex = [];
+        foreach ($this->getAllProviders() as $provider) {
+            $descriptor = $this->mergeBinQueryAttributes($provider, $provider->getDescriptor());
+            if (!\is_array($descriptor)) {
+                continue;
+            }
+
+            $descriptors[] = $descriptor;
+            $providerName = (string)($descriptor['provider'] ?? $provider->getProviderName());
+            if ($providerName === '') {
+                continue;
+            }
+
+            foreach (($descriptor['operations'] ?? []) as $operationDescriptor) {
+                if (!\is_array($operationDescriptor)) {
+                    continue;
+                }
+                $operationName = (string)($operationDescriptor['name'] ?? '');
+                if ($operationName === '') {
+                    continue;
+                }
+                $operationIndex[$providerName][$operationName] = $operationDescriptor;
+            }
+        }
+
+        self::$descriptorCache[$scope] = $descriptors;
+        self::$operationDescriptorCache[$scope] = $operationIndex;
+
         return $descriptors;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getOperationDescriptor(string $providerName, string $operationName): ?array
+    {
+        if ($providerName === '' || $operationName === '') {
+            return null;
+        }
+
+        $scope = $this->descriptorCacheScope();
+        $cached = self::$operationDescriptorCache[$scope][$providerName][$operationName] ?? null;
+        if (\is_array($cached)) {
+            return $cached;
+        }
+
+        $provider = $this->getProvider($providerName);
+        if (!$provider instanceof QueryProviderInterface) {
+            return null;
+        }
+
+        $descriptor = $this->mergeBinQueryAttributes($provider, $provider->getDescriptor());
+        if (!\is_array($descriptor)) {
+            self::$operationDescriptorCache[$scope][$providerName] = [];
+            return null;
+        }
+
+        $resolvedProviderName = (string)($descriptor['provider'] ?? $provider->getProviderName());
+        if ($resolvedProviderName === '') {
+            $resolvedProviderName = $providerName;
+        }
+
+        $operationIndex = [];
+        foreach (($descriptor['operations'] ?? []) as $operationDescriptor) {
+            if (!\is_array($operationDescriptor)) {
+                continue;
+            }
+            $name = (string)($operationDescriptor['name'] ?? '');
+            if ($name === '') {
+                continue;
+            }
+            $operationIndex[$name] = $operationDescriptor;
+        }
+
+        self::$operationDescriptorCache[$scope][$resolvedProviderName] = $operationIndex;
+        if ($resolvedProviderName !== $providerName) {
+            self::$operationDescriptorCache[$scope][$providerName] = $operationIndex;
+        }
+
+        $descriptor = self::$operationDescriptorCache[$scope][$providerName][$operationName] ?? null;
+        return \is_array($descriptor) ? $descriptor : null;
+    }
+
+    public static function resetDescriptorCaches(): void
+    {
+        self::$descriptorCache = [];
+        self::$operationDescriptorCache = [];
+    }
+
+    private function descriptorCacheScope(): string
+    {
+        $language = \function_exists('w_env') ? (string)\w_env('user.lang', '') : '';
+        if ($language === '') {
+            $language = (string)($_COOKIE['WELINE_LANGUAGE'] ?? $_COOKIE['language'] ?? 'default');
+        }
+
+        return $language !== '' ? $language : 'default';
+    }
+
+    /**
+     * @param mixed $descriptor
+     * @return mixed
+     */
+    private function mergeBinQueryAttributes(QueryProviderInterface $provider, mixed $descriptor): mixed
+    {
+        if (!\is_array($descriptor)) {
+            return $descriptor;
+        }
+
+        if ($this->binQueryAttributeResolver === null) {
+            $this->binQueryAttributeResolver = new BinQueryDescriptorAttributeResolver();
+        }
+
+        return $this->binQueryAttributeResolver->merge($provider, $descriptor);
     }
 }

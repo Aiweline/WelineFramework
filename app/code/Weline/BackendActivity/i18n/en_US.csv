@@ -1,24 +1,24 @@
 ﻿"Unnamed Access","Unnamed Access"
-管理员访问日志,管理员访问日志
-管理员访问日志，协助管理员了解用户访问情况，帮助管理员快速定位问题。,管理员访问日志，协助管理员了解用户访问情况，帮助管理员快速定位问题。
+管理员访问日志,"Admin Access Log"
+管理员访问日志，协助管理员了解用户访问情况，帮助管理员快速定位问题。,"Admin access log to help administrators understand user access patterns and quickly locate issues."
 删除,Delete
-记录ID,记录ID
-请求ID,请求ID
+记录ID,"Record ID"
+请求ID,"Request ID"
 操作人,Operator
-操作名,操作名
-主机,主机
-路径,路径
-模块,模块
+操作名,"Operation name"
+主机,Host
+路径,Path
+模块,Module.
 URL,URL
-请求方式,请求方式
-请求参数,请求参数
-请求数据,请求数据
-IP地址,IP地址
-用户代理,用户代理
-响应代码,响应代码
-响应时间,响应时间
-请求时间,请求时间
+请求方式,"Request method"
+请求参数,"Request parameters"
+请求数据,"Request data"
+IP地址,"IP address"
+用户代理,"User agent"
+响应代码,"Response code"
+响应时间,"Response Time"
+请求时间,"Request time"
 操作,Operation
-复制成功,复制成功
-查看数据,查看数据
-查看日志数据,查看日志数据
+复制成功,"Copied successfully"
+查看数据,"View Data"
+查看日志数据,"View Log Data"

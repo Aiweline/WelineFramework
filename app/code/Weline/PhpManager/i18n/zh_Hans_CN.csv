@@ -1,0 +1,239 @@
+﻿"WLS PHP Manager","WLS PHP Manager"
+"Invalid request method.",无效的请求方法。
+"WLS reload was not completed.","WLS 重载未完成。"
+"Project PHP profile save failed.","项目 PHP Profile 保存失败。"
+"php.ini apply failed.","php.ini 应用失败。"
+"php.ini rollback failed.","php.ini 回滚失败。"
+"PHP extension operation failed.","PHP 扩展操作失败。"
+"Runtime PHP","运行态 PHP"
+Extensions,扩展
+Loaded,已加载
+"Project Profile","项目 Profile"
+Saved,已保存
+Inherited,继承
+Enabled,已启用
+Disabled,已禁用
+"Project PHP profile saved.","项目 PHP Profile 已保存。"
+"Project PHP profile saved and WLS reload was requested.","项目 PHP Profile 已保存，并已请求 WLS 重载。"
+"php.ini applied and backup created.","php.ini 已应用并创建备份。"
+"No php.ini changes were needed.","php.ini 无需变更。"
+"php.ini restored from backup.","php.ini 已从备份恢复。"
+"PHP extension operation completed and audit record was written.","PHP 扩展操作已完成，并已写入审计记录。"
+"No PHP extension changes were needed.","无需 PHP 扩展变更。"
+"PHP path fields contain unsafe characters.","PHP 路径字段包含不安全字符。"
+"PHP max execution time must be between 0 and 86400 seconds.","PHP 最大执行时间必须在 0 到 86400 秒之间。"
+"PHP timezone contains unsafe characters.","PHP 时区包含不安全字符。"
+"PHP list values may contain only letters, numbers, dot, dash, or underscore.","PHP 列表值只能包含字母、数字、点、横线或下划线。"
+"This adapter only supports the bundled Windows PHP runtime.","此适配器仅支持内置 Windows PHP 运行时。"
+"This extension is not in the WLS PHP Manager allowlist.","此扩展不在 WLS PHP 管理器白名单内。"
+"The bundled extension DLL was not found for the selected extension.","未找到所选扩展对应的内置 DLL。"
+"The extension already appears to be loaded or configured, so WLS will not add a duplicate extension line.","该扩展似乎已加载或已配置，因此 WLS 不会重复添加扩展行。"
+"Only extension lines created inside the WLS-managed block can be removed by this adapter.","此适配器只能移除 WLS 托管块内创建的扩展行。"
+Ready,就绪
+"Adapter Blocked",适配器已阻止
+"Guarded Adapter Ready",受控适配器已就绪
+"Guarded Adapter Blocked",受控适配器已阻止
+"Managed by WLS","由 WLS 托管"
+"Not Managed by WLS","未由 WLS 托管"
+"The guarded extension adapter is not ready.",受控扩展适配器尚未就绪。
+"The extension execution plan is incomplete.",扩展执行计划不完整。
+"Unable to read the target php.ini file.","无法读取目标 php.ini 文件。"
+"No php.ini extension changes were needed.","无需 php.ini 扩展变更。"
+"Unable to write the target php.ini file.","无法写入目标 php.ini 文件。"
+"The php.ini extension state could not be verified after writing.","写入后无法验证 php.ini 扩展状态。"
+"Extension line enabled in the WLS-managed php.ini block.","已在 WLS 托管 php.ini 块中启用扩展行。"
+"Extension line removed from the WLS-managed php.ini block.","已从 WLS 托管 php.ini 块中移除扩展行。"
+"Windows bundled PHP ini adapter","Windows 内置 PHP ini 适配器"
+"Waiting for Input",等待输入
+"Guarded Adapter Waiting",受控适配器等待中
+"Not Evaluated",未评估
+"The PHP binary does not exist.","PHP binary 不存在。"
+"The Windows adapter only supports php.exe.","Windows 适配器仅支持 php.exe。"
+"The Windows adapter only supports the bundled extend/server/php runtime.","Windows 适配器仅支持内置的 extend/server/php 运行时。"
+"The target php.ini file must exist and be readable/writable.","目标 php.ini 文件必须存在且可读写。"
+"Only .ini files can be managed by PHP Manager.","PHP 管理器只能管理 .ini 文件。"
+"The target php.ini path is outside the allowed PHP Manager roots.","目标 php.ini 路径不在 PHP 管理器允许的根目录内。"
+"Read target php.ini: %{1}","读取目标 php.ini：%{1}"
+"Create a PHP Manager backup before writing.","写入前创建 PHP 管理器备份。"
+"Add allowlisted line inside the WLS-managed extension block: %{1}","在 WLS 托管扩展块内添加白名单行：%{1}"
+"Remove only the matching line from the WLS-managed extension block: %{1}","仅从 WLS 托管扩展块中移除匹配行：%{1}"
+"Verify the WLS-managed extension block after writing.","写入后验证 WLS 托管扩展块。"
+"After reload, the target runtime should report extension_loaded(""%{1}"") as %{2}.","重载后，目标运行态的 extension_loaded(""%{1}"") 应为 %{2}。"
+"Record backup path, change count, runtime reload state, and verification state in PHP Manager audit.","在 PHP 管理器审计中记录备份路径、变更数、运行态重载状态和验证状态。"
+"Use Remove Extension for %{1} to disable the WLS-managed line again.","使用移除扩展 %{1} 再次禁用 WLS 托管行。"
+"Or restore the latest PHP Manager backup from the php.ini section.","或从 php.ini 区域恢复最新 PHP 管理器备份。"
+"Use Install Extension for %{1} to enable the WLS-managed line again.","使用安装扩展 %{1} 重新启用 WLS 托管行。"
+"Unable to create the PHP Manager backup directory.","无法创建 PHP 管理器备份目录。"
+"Unable to write the php.ini backup file.","无法写入 php.ini 备份文件。"
+"Unable to write the php.ini backup metadata.","无法写入 php.ini 备份元数据。"
+"Confirm the PHP extension operation before submitting.","提交前请确认 PHP 扩展操作。"
+"Type RUN_PHP_EXTENSION_ACTION to run the guarded extension operation.","输入 RUN_PHP_EXTENSION_ACTION 以运行受控扩展操作。"
+"PHP extension operation completed.","PHP 扩展操作已完成。"
+"Runtime reload skipped.",已跳过运行时重载。
+"Select a running WLS instance before requesting reload.","请求重载前请选择正在运行的 WLS 实例。"
+"WLS reload request failed.","WLS 重载请求失败。"
+"Select an extension action before previewing.",预览前请选择扩展动作。
+"Extension names may contain only letters, numbers, dot, dash, or underscore.",扩展名称只能包含字母、数字、点、横线或下划线。
+"Enter an extension name before previewing.",预览前请输入扩展名称。
+"The selected extension is already loaded in the current runtime.",所选扩展已在当前运行态加载。
+"The selected extension is not loaded in the current runtime.",所选扩展未在当前运行态加载。
+"Core PHP extensions cannot be removed by WLS PHP Manager.","WLS PHP 管理器不允许移除 PHP 核心扩展。"
+"This extension is listed in the selected Project Profile required extensions.","此扩展已列入所选项目 Profile 的必需扩展。"
+"Not Loaded",未加载
+"Required by Profile","Profile 必需"
+"Not Required by Profile","Profile 未要求"
+"Install Extension",安装扩展
+"Remove Extension",移除扩展
+"No Action Selected",未选择动作
+"Ready to Execute",可执行
+Blocked,已阻止
+"Extension Name",扩展名称
+Missing,缺失
+"Only safe extension identifiers are accepted.",只接受安全的扩展标识。
+"Runtime State",运行态状态
+"Project Profile Requirement","项目 Profile 要求"
+Required,必需
+"Not Required",非必需
+"Removing it may make the Project Profile unsatisfied.","移除后可能导致项目 Profile 不满足要求。"
+"No Project Profile dependency detected.","未检测到项目 Profile 依赖。"
+"Core Extension Guard",核心扩展保护
+Protected,受保护
+"Not Protected",未受保护
+"Core extensions are never removable from this panel.",此面板永远不允许移除核心扩展。
+"No core-extension block was triggered.",未触发核心扩展阻止。
+"Execution Adapter",执行适配器
+"Target php.ini","目标 php.ini"
+"Choose install or remove and enter an extension name to preview the lifecycle plan.",选择安装或移除并输入扩展名称后预览生命周期计划。
+install,安装
+remove,移除
+"Resolve the selected project PHP Profile and current runtime extension state.","解析所选项目 PHP Profile 与当前运行态扩展状态。"
+"Select the guarded bundled Windows PHP adapter when the runtime and php.ini path are allowlisted.","当运行态和 php.ini 路径在白名单内时，选择受控的内置 Windows PHP 适配器。"
+"Map the extension to an allowlisted %{1} operation.","将扩展映射到白名单 %{1} 操作。"
+"Create a php.ini backup, then update only the WLS-managed extension block.","先创建 php.ini 备份，然后只更新 WLS 托管扩展块。"
+"Require explicit operator phrase, checkbox confirmation, audit record, and optional WLS reload request.","要求操作员输入明确口令、勾选确认、写入审计记录，并可选择请求 WLS 重载。"
+"Save a Project PHP Profile before applying php.ini.","应用 php.ini 前请先保存项目 PHP Profile。"
+"Enable the Project PHP Profile before applying php.ini.","应用 php.ini 前请先启用项目 PHP Profile。"
+"No php.ini directives are configured in this Project PHP Profile.","当前项目 PHP Profile 未配置任何 php.ini 指令。"
+"Confirm the php.ini apply operation before submitting.","提交前请确认 php.ini 应用操作。"
+"Type APPLY_PHP_INI to apply php.ini changes.","输入 APPLY_PHP_INI 以应用 php.ini 变更。"
+"php.ini apply is not available.","php.ini 应用当前不可用。"
+"Unable to read php.ini before applying changes.","应用变更前无法读取 php.ini。"
+"Confirm the php.ini rollback operation before submitting.","提交前请确认 php.ini 回滚操作。"
+"Type ROLLBACK_PHP_INI to restore the selected backup.","输入 ROLLBACK_PHP_INI 以恢复所选备份。"
+"Unable to read the selected php.ini backup.","无法读取所选 php.ini 备份。"
+"No loaded php.ini path is available.","当前没有可用的已加载 php.ini 路径。"
+"The target php.ini file does not exist.","目标 php.ini 文件不存在。"
+"The target php.ini file must exist before apply.","应用前目标 php.ini 文件必须已存在。"
+"The target php.ini file must be readable and writable.","目标 php.ini 文件必须可读写。"
+"This slice can only manage bundled project php.ini files under extend/server/php or WLS PHP Manager sandbox paths.","当前切片只能管理 extend/server/php 下的项目内置 php.ini 或 WLS PHP 管理器沙箱路径。"
+"The selected php.ini backup is not readable.","所选 php.ini 备份不可读。"
+"The selected backup is outside the PHP Manager backup directory.","所选备份位于 PHP 管理器备份目录之外。"
+"The selected backup file is not a PHP Manager php.ini backup.","所选备份文件不是 PHP 管理器 php.ini 备份。"
+"The selected php.ini backup metadata is missing or invalid.","所选 php.ini 备份元数据缺失或无效。"
+"Panel Profile","面板 Profile"
+"Current Runtime",当前运行态
+"Confirm the PHP profile save before submitting.","提交前请确认 PHP Profile 保存操作。"
+"PHP Binary","PHP 可执行文件"
+"php.ini Path","php.ini 路径"
+"Memory Limit",内存限制
+"Max Execution Time",最大执行时间
+"Upload Max Filesize",最大上传文件
+"Post Max Size","POST 最大大小"
+Timezone,时区
+"Disabled Functions",禁用函数
+"Profile Aligned","Profile 已对齐"
+"Profile Override","Profile 覆盖"
+Satisfied,已满足
+"Missing Extension",扩展缺失
+"Required Extensions",必需扩展
+"Loaded: %{1}",已加载：%{1}
+Dark,深色
+Light,浅色
+"WLS Standalone Backend","WLS 独立后台"
+"PHP Manager","PHP 配置"
+"WLS PHP Manager navigation","WLS PHP 管理导航"
+Summary,总览
+Runtime,运行态
+Inheritance,继承
+php.ini,php.ini
+Audit,审计
+切换明暗色,切换明暗色
+"WLS Panel Plugin","WLS 面板插件"
+"PHP runtime readout, guarded project profile storage, reversible php.ini apply, and WLS reload controls for managed projects.","为托管项目提供 PHP 运行态读取、受保护的项目 Profile 存储、可回滚 php.ini 应用和 WLS 重载控制。"
+"WLS Panel","WLS 面板"
+"Project Admin",项目后台
+"Project Context",项目上下文
+"Safe project context is passed from the WLS Panel. Project paths are not exposed in plugin URLs.","WLS 面板会传入安全的项目上下文，插件 URL 不暴露项目路径。"
+Operation,操作
+"Project ID","项目 ID"
+Domain,域名
+"Project Type",项目类型
+"Current PHP Runtime","当前 PHP 运行态"
+"This is the PHP process currently serving the WLS Panel. Runtime changes require explicit php.ini apply and optional WLS reload.","这里显示当前承载 WLS 面板的 PHP 进程；运行态变更需要显式应用 php.ini，并可选择请求 WLS 重载。"
+Version,版本
+SAPI,SAPI
+"Loaded php.ini","已加载 php.ini"
+"Upload Max",上传上限
+"Post Max","POST 上限"
+"PHP Profile Inheritance Map","PHP 配置继承地图"
+"Compare current runtime values with the selected project Profile before applying php.ini or requesting WLS reload.","在应用 php.ini 或请求 WLS 重载前，对比当前运行态与所选项目 Profile 的取值。"
+"Total Checks",检查项
+Overrides,覆盖
+Attention,需关注
+Setting,配置项
+"Profile / Effective","Profile / 生效值"
+Profile:,Profile：
+"Project PHP Profile","项目 PHP Profile"
+"Save project-specific PHP configuration. The php.ini section previews exactly what will be written before apply.","保存项目专属 PHP 配置；php.ini 区域会在应用前准确预览将写入的内容。"
+"Runtime Action",运行时动作
+"Save only",仅保存
+"Request WLS reload","请求 WLS 重载"
+"Runtime Instance",运行实例
+"Enable this PHP Profile for the selected WLS project.","为所选 WLS 项目启用此 PHP Profile。"
+Description,说明
+"I understand this saves a project PHP profile and may request a WLS reload when selected.","我确认这会保存项目 PHP Profile，并在选择时请求 WLS 重载。"
+"Current source:",当前来源：
+"Save Project Profile","保存项目 Profile"
+"php.ini Apply Plan","php.ini 应用计划"
+"Apply writes only a WLS-managed directive block, creates a backup first, and can be rolled back from the latest PHP Manager backup.","应用时只写入 WLS 托管指令块，先创建备份，并可从最新 PHP 管理器备份回滚。"
+"Change Count",变更数
+"Managed Block",托管块
+Present,存在
+"Not Present",不存在
+"Latest Backup",最新备份
+"No php.ini directive changes are pending for this profile.","当前 Profile 没有待应用的 php.ini 指令变更。"
+Directive,指令
+Current,当前
+Profile,Profile
+"Apply only",仅应用
+"Apply and request WLS reload","应用并请求 WLS 重载"
+"Confirmation Phrase",确认口令
+"I understand PHP Manager will write the managed block to the selected php.ini after creating a backup.","我确认 PHP 管理器会先创建备份，再把托管块写入所选 php.ini。"
+"Apply php.ini","应用 php.ini"
+"Rollback Backup",回滚备份
+"Rollback only",仅回滚
+"Rollback and request WLS reload","回滚并请求 WLS 重载"
+"I understand PHP Manager will restore the selected php.ini backup.","我确认 PHP 管理器会恢复所选 php.ini 备份。"
+"Rollback php.ini","回滚 php.ini"
+"Extension Lifecycle Plan",扩展生命周期计划
+"Preview install or remove intent, then run only the guarded bundled Windows adapter when every path, DLL, and managed-block rule passes.","先预览安装或移除意图；只有路径、DLL 和托管块规则全部通过后，才运行受控的内置 Windows 适配器。"
+"Extension Action",扩展动作
+"Select Action",选择动作
+"Plan State",计划状态
+"Preview Extension Plan",预览扩展计划
+Action,动作
+Extension,扩展
+Execution,执行
+Adapter,适配器
+"Extension File",扩展文件
+"Allowlisted Operation Plan",白名单操作计划
+"Post Verification",执行后验证
+"Rollback Guidance",回滚指引
+"I understand PHP Manager will update only the WLS-managed extension block after creating a backup.","我确认 PHP 管理器会先创建备份，然后只更新 WLS 托管扩展块。"
+"Run Extension Action",执行扩展动作
+"Execution stays locked until the adapter reports ready.",适配器报告就绪前，执行保持锁定。
+"Loaded Extensions",已加载扩展
+"Recent Audit",最近审计
+"No PHP profile audit records yet.","暂无 PHP Profile 审计记录。"
+Marketplace,插件商城
+"Open WLS Marketplace","打开 WLS 插件商城"

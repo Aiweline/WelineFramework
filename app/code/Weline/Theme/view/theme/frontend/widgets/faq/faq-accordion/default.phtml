@@ -11,6 +11,7 @@
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["cms_page", "product"]}
+ * @widget.supports {["layout-contact-faq","layout-contact-content","layout-cms-content","layout-default-content","faq"]}
  * @widget.compatible {true}
  * 
  * @param title {default="常见问题",type="string",label="标题"}
@@ -23,6 +24,7 @@
 $title = $this->getData('title') ?? __('常见问题');
 $subtitle = $this->getData('subtitle') ?? '';
 $faqs = $this->getData('faqs') ?? [];
+$explicitFaqs = $faqs;
 $expandFirst = (bool)($this->getData('expand_first') ?? true);
 $allowMultiple = (bool)($this->getData('allow_multiple') ?? false);
 $searchEnabled = (bool)($this->getData('search_enabled') ?? false);
@@ -36,6 +38,14 @@ if (empty($faqs)) {
         ['question' => __('如何申请退换货？'), 'answer' => __('收到商品7天内，如有质量问题或其他原因需要退换，请联系客服申请退换货。')],
         ['question' => __('如何联系客服？'), 'answer' => __('您可以通过在线客服、客服电话或邮件联系我们，客服工作时间为每天9:00-21:00。')],
     ];
+}
+
+if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
+    $pageFaqs = $this->getData('faqs') ?? [];
+    if (!is_array($pageFaqs)) {
+        $pageFaqs = [];
+    }
+    $this->setData('faqs', array_values(array_merge($pageFaqs, $explicitFaqs)));
 }
 
 $widgetId = 'faq-accordion-' . uniqid();

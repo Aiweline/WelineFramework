@@ -78,7 +78,8 @@ class MasterProcess
     protected array $config = [];
     protected bool $running = true;
     protected bool $stopRequested = false;
-    protected bool $frontend = false;
+    /** Windows 可见窗口 / 子进程 --win（与守护进程/前台阻塞无关） */
+    protected bool $windowMode = false;
     protected int $controlPort = 0;
     protected string $sslCert = '';
     protected string $sslKey = '';
@@ -96,6 +97,7 @@ class MasterProcess
     protected ?ServiceOrchestrator $orchestrator = null;
     protected ?ServiceContext $context = null;
     private bool $deferredSslRetryTriggered = false;
+    private string $controlToken = '';
 
     /**
      * 启动完成后的回调（用于释放启动锁等）
@@ -192,21 +194,21 @@ class MasterProcess
         string $sslKey = '',
         bool $sslEnabled = false,
         int $httpRedirectPort = 0,
-        bool $frontend = false
+        bool $windowMode = false
     ): self {
         $this->instanceName = $instanceName;
         $this->config = $config;
         $this->sslCert = $sslCert;
         $this->sslKey = $sslKey;
         $this->sslEnabled = $sslEnabled;
-        $this->frontend = $frontend;
+        $this->windowMode = $windowMode;
         $this->logger->setProcessTag('Master@' . $instanceName);
 
         // 始终启用文件日志（后台模式也需要日志）
         $this->logger->setFileEnabled(LogConfig::isEnabled());
 
         // 前台模式或全量调试 (-log)：控制台输出；默认后台仅写文件
-        if (LogConfig::isVerboseWlsLog() && LogConfig::isStdoutEnabled($frontend, LogConfig::isDevMode())) {
+        if (LogConfig::isVerboseWlsLog() && LogConfig::isStdoutEnabled($windowMode, LogConfig::isDevMode())) {
             $this->logger->setStdoutEnabled(true);
         }
 
@@ -214,7 +216,8 @@ class MasterProcess
         $this->log(__('Master 初始化开始 (Orchestrator 模式)'));
         $this->log(__('  实例名称: %{1}', [$instanceName]));
         $this->log(__('  运行模式: %{1}', [$this->mode]));
-        $this->log(__('  前台模式: %{1}', [$frontend ? 'Yes' : 'No']));
+        $this->log(__('  守护进程: %{1}', [(bool) ($config['daemon'] ?? true) ? __('是') : __('否')]));
+        $this->log(__('  Windows 窗口模式: %{1}', [$windowMode ? __('是') : __('否')]));
 
         $port = (int) ($config['port'] ?? 80);
         $this->mainPort = $port;
@@ -231,7 +234,9 @@ class MasterProcess
      */
     public function run(): void
     {
+        $this->traceStartupPhase('master-run:enter');
         (new LongRunningPhpRuntime())->apply();
+        $this->traceStartupPhase('master-runtime:applied');
 
         // Master 不经 WlsRuntime::bootstrap()，须显式进入 WLS 模式，否则 Runtime::isWls() 为 false，
         // SchedulerWaitObserver 不注册 yield 定时器，runLoop 内延迟启动 Fiber 会永久挂起、子进程无法拉起。
@@ -241,6 +246,7 @@ class MasterProcess
         Runtime::resetModeCache();
 
         $this->applyProcessTitle();
+        $this->traceStartupPhase('master-process-title:after');
 
         // 当前 Master 进程 PID；finally 中 finalizeInstanceRuntimeAfterMasterExit() 需要此值，
         // 若 run() 早期 throw，getmypid() 仍能返回当前进程 PID（不会是 false，Master 必然在进程中运行）。
@@ -254,12 +260,16 @@ class MasterProcess
 
         try {
             // 注册 Master PID 到索引（用于快速检测 Master 是否退出）
+            $this->traceStartupPhase('master-register-pid:before');
             $this->registerMasterPid();
+            $this->traceStartupPhase('master-register-pid:after');
             $this->log(__('  已注册 Master PID'));
             $this->logger->flush(true);
 
-            // 标记/清理孤儿实例记录；保留实例 JSON 供后续控制与恢复使用。
+            // 标记/清理孤儿 endpoint；运行态恢复必须回到 Master IPC。
+            $this->traceStartupPhase('master-stale-cleanup:before');
             $this->cleanupStaleInstanceFiles();
+            $this->traceStartupPhase('master-stale-cleanup:after');
             $this->logger->flush(true);
 
             // 初始化控制端口：
@@ -278,6 +288,11 @@ class MasterProcess
                 $scanMax = 1;
             }
 
+            $this->traceStartupPhase('master-control-port-select:before', [
+                'configured_control_port' => $configuredControlPort,
+                'auto_assign' => $autoAssign,
+                'scan_max' => $scanMax,
+            ]);
             if ($autoAssign) {
                 $projectOffset = self::getProjectPortOffset();
                 $preferredBase = 20000 + $this->mainPort + $projectOffset;
@@ -323,6 +338,11 @@ class MasterProcess
                 $chosenFallback = $autoAssign && $i > 0;
                 break;
             }
+            $this->traceStartupPhase('master-control-port-select:after', [
+                'control_port' => $this->controlPort,
+                'preferred_base' => $preferredBase,
+                'fallback' => $chosenFallback,
+            ]);
 
             if ($this->controlPort <= 0) {
                 throw new \RuntimeException(
@@ -342,37 +362,64 @@ class MasterProcess
 
             // ========== 启动前清理：检查端口占用并清理僵尸进程 ==========
             $this->log(__('检查控制端口是否被占用...'));
+            $this->traceStartupPhase('master-preboot-cleanup:before', [
+                'control_port' => $this->controlPort,
+            ]);
             if (!MasterCleanupBootstrap::preBoot($this->instanceName, $this->controlPort)) {
                 throw new \RuntimeException(
                     "无法清理控制端口 {$this->controlPort}，该端口被其他进程占用。" .
                     "请确保没有其他 WLS 实例运行，或手动杀死占用该端口的进程。"
                 );
             }
-            
+            $this->traceStartupPhase('master-preboot-cleanup:after');
+
             // 清理陈旧的锁文件（Master 上次崩溃留下的）
+            $this->traceStartupPhase('master-lock-cleanup:before');
             MasterCleanupBootstrap::cleanupLockFiles($this->instanceName);
+            $this->traceStartupPhase('master-lock-cleanup:after');
 
             // 构建 ServiceContext
+            $this->traceStartupPhase('master-build-context:before');
             $this->context = $this->buildContext();
+            $this->traceStartupPhase('master-build-context:after', [
+                'epoch' => $this->context->epoch,
+                'control_port' => $this->context->controlPort,
+            ]);
 
             // 创建 Orchestrator
+            $this->traceStartupPhase('master-orchestrator-create:before');
             $this->orchestrator = new ServiceOrchestrator();
+            $this->traceStartupPhase('master-orchestrator-create:after');
+            $this->traceStartupPhase('master-load-providers:before');
             $this->orchestrator->loadProviders();
+            $this->traceStartupPhase('master-load-providers:after');
             $this->log(__('Master 启动阶段：Orchestrator providers 已加载'));
             $this->logger->flush(true);
 
             // 注册信号处理
+            $this->traceStartupPhase('master-signal-handlers:before');
             $this->registerSignalHandlers();
+            $this->traceStartupPhase('master-signal-handlers:after');
             $this->log(__('Master 启动阶段：信号处理器已注册'));
             $this->logger->flush(true);
 
             // 先拉起控制面并落盘 Master 信息，让后台启动确认不再被子服务启动阶段阻塞
+            $this->traceStartupPhase('master-control-plane:before');
             $this->orchestrator->bootstrapControlPlane($this->context);
             $this->context = $this->orchestrator->getContext() ?? $this->context;
             $this->controlPort = $this->context?->controlPort ?? $this->controlPort;
+            $this->traceStartupPhase('master-control-plane:after', [
+                'control_port' => $this->controlPort,
+            ]);
             $this->log(__('Master 启动阶段：控制面已启动'));
             $this->logger->flush(true);
+            $this->traceStartupPhase('master-save-info:before', [
+                'startup_phase' => 'bootstrapping',
+            ]);
             $this->saveMasterInfo('bootstrapping');
+            $this->traceStartupPhase('master-save-info:after', [
+                'startup_phase' => 'bootstrapping',
+            ]);
             $this->log(__('Master 启动阶段：bootstrapping 实例信息已写入'));
             $this->logger->flush(true);
 
@@ -384,6 +431,7 @@ class MasterProcess
             // 进入主循环；子服务在 Fiber 中拉起，等待期间仍可 poll 控制面 IPC（启动完成后再释放启动锁，方案 B）
             $this->log(__('Master 进入主循环，监控子进程...'));
             $this->logger->flush(true);
+            $this->traceStartupPhase('master-run-loop:before');
             $this->orchestrator->runLoopWithDeferredChildStartup($this->context, function (): void {
                 $this->releaseStartupLock();
             });
@@ -419,7 +467,7 @@ class MasterProcess
                 WlsLogger::debug_('[Master] IPC 关闭过程中出现错误: ' . $ipcError->getMessage());
             }
 
-            // 最后再注销 Master PID，并在保留实例 JSON 的前提下标记/清理运行记录。
+            // 最后再注销 Master PID，并标记/清理 endpoint 记录。
             try {
                 $this->unregisterMasterPid();
             } catch (\Throwable $indexCleanupError) {
@@ -455,7 +503,7 @@ class MasterProcess
             return;
         }
 
-        @\cli_set_process_title(self::getMasterProcessCliTitle($this->instanceName, $this->frontend));
+        @\cli_set_process_title(self::getMasterProcessCliTitle($this->instanceName, $this->windowMode));
     }
 
     /**
@@ -472,7 +520,7 @@ class MasterProcess
      * Master 退出后整理实例运行记录。
      *
      * 若子进程仍存活，则保留 instance.json，避免 stop/status 失去恢复线索。
-     * 若所有受管进程都已退出，则标记/清理当前运行记录；实例 JSON 仍保留。
+     * 若所有受管进程都已退出，则标记/清理当前 endpoint 记录。
      */
     private function finalizeInstanceRuntimeAfterMasterExit(int $masterPid): void
     {
@@ -495,14 +543,14 @@ class MasterProcess
      * 清理孤儿实例记录（启动时调用）
      *
      * 标记/清理 updated_at 超过 60 秒未更新的实例记录，
-     * 说明对应的 Master 进程已经死亡或崩溃；实例 JSON 文件保留供后续控制与恢复使用。
+     * 说明对应的 Master 进程已经死亡或崩溃；endpoint 文件只保留停止态诊断信息。
      */
     private function cleanupStaleInstanceFiles(): void
     {
         try {
             $cleaned = (new ServerInstanceManager())->cleanupStaleInstances();
             if ($cleaned > 0) {
-                $this->log(__('共清理 %{1} 个孤儿实例记录，实例 JSON 已保留', [$cleaned]));
+                $this->log(__('共清理 %{1} 个孤儿 endpoint 记录', [$cleaned]));
             }
         } catch (\Throwable $e) {
             $this->log(__('孤儿实例清理过程出错: %{1}', [$e->getMessage()]));
@@ -523,10 +571,13 @@ class MasterProcess
 
         $publicHostRaw = $this->config['public_host'] ?? null;
         $publicHost = \is_string($publicHostRaw) && $publicHostRaw !== '' ? $publicHostRaw : null;
+        if ($this->controlToken === '') {
+            $this->controlToken = self::generateControlToken();
+        }
 
         return new ServiceContext(
             instanceName: $this->instanceName,
-            epoch: 1,
+            epoch: $this->resolveNextMasterEpoch(),
             controlPort: $this->controlPort,
             masterPid: \getmypid(),
             host: $this->config['host'] ?? '127.0.0.1',
@@ -535,9 +586,10 @@ class MasterProcess
             sslCert: $this->sslCert,
             sslKey: $this->sslKey,
             mode: $this->mode,
-            daemon: !$this->frontend,
+            daemon: (bool) ($this->config['daemon'] ?? true),
             debug: (bool) ($this->config['debug'] ?? false),
-            frontend: $this->frontend,
+            controlToken: $this->controlToken,
+            windowMode: $this->windowMode,
             envConfig: $envConfig,
             httpRedirectPort: $this->httpRedirectPort,
             // 运行态配置：由 Start.php 传入，优先级高于 envConfig
@@ -547,6 +599,29 @@ class MasterProcess
             workerPort: $this->workerPort,
             publicHost: $publicHost,
         );
+    }
+
+    private static function generateControlToken(): string
+    {
+        return \bin2hex(\random_bytes(32));
+    }
+
+    private function resolveNextMasterEpoch(): int
+    {
+        $data = null;
+        $file = $this->getInstanceFile();
+        if (\is_file($file)) {
+            $raw = @\file_get_contents($file);
+            $decoded = \is_string($raw) && $raw !== '' ? \json_decode($raw, true) : null;
+            $data = \is_array($decoded) ? $decoded : null;
+        }
+
+        $lastEpoch = \max(
+            (int)($data['epoch'] ?? 0),
+            (int)($data['master_epoch'] ?? 0)
+        );
+
+        return \max(1, $lastEpoch + 1);
     }
 
     /**
@@ -567,6 +642,27 @@ class MasterProcess
                 $this->config['dispatcher_memory_limit'],
                 ServiceContext::normalizeMemoryLimit($wls['worker_memory_limit'] ?? '256M')
             );
+        }
+        if (isset($this->config['event_loop'])) {
+            if (!isset($wls['loop']) || !\is_array($wls['loop'])) {
+                $wls['loop'] = [];
+            }
+            $wls['loop']['driver'] = (string)$this->config['event_loop'];
+        }
+        if (isset($this->config['loop']) && \is_array($this->config['loop'])) {
+            $wls['loop'] = \array_merge(\is_array($wls['loop'] ?? null) ? $wls['loop'] : [], $this->config['loop']);
+        }
+        if (isset($this->config['supervisor']) && \is_array($this->config['supervisor'])) {
+            $wls['supervisor'] = \array_merge(\is_array($wls['supervisor'] ?? null) ? $wls['supervisor'] : [], $this->config['supervisor']);
+        }
+        if (isset($this->config['gateway']) && \is_array($this->config['gateway'])) {
+            $wls['gateway'] = \array_merge(\is_array($wls['gateway'] ?? null) ? $wls['gateway'] : [], $this->config['gateway']);
+        }
+        if (isset($this->config['runtime_strategy']) || isset($this->config['topology'])) {
+            $wls['runtime'] = \array_merge(\is_array($wls['runtime'] ?? null) ? $wls['runtime'] : [], [
+                'strategy' => (string)($this->config['runtime_strategy'] ?? ($wls['runtime']['strategy'] ?? 'auto')),
+                'topology' => (string)($this->config['topology'] ?? ($wls['runtime']['topology'] ?? 'auto')),
+            ]);
         }
 
         if ($wls !== []) {
@@ -772,7 +868,7 @@ class MasterProcess
         if ($this->orchestrator !== null) {
             $this->orchestrator->forceTerminateMasterAndChildren('repeat_signal:' . $signal);
         }
-        exit(2);
+        $this->running = false;
     }
 
     /**
@@ -788,7 +884,7 @@ class MasterProcess
         $this->orchestrator?->setMasterShutdownIntent(true);
         $this->running = false;
 
-        if ($this->frontend) {
+        if (!$this->isDaemonModeConfigured()) {
             self::ipcMsg("收到 {$signal}，已切换到统一停机流程", 'stop');
         }
 
@@ -803,7 +899,7 @@ class MasterProcess
             return;
         }
 
-        if ($this->frontend) {
+        if (!$this->isDaemonModeConfigured()) {
             self::ipcMsg("统一停机请求未入队，回退为本地停机流程（signal={$signal}）", 'error');
         }
 
@@ -882,25 +978,26 @@ class MasterProcess
             @\mkdir($dir, 0755, true);
         }
 
-        // 读取现有数据并合并，保留 Start.php 保存的配置
-        $existingData = [];
-        if (\is_file($instanceFile)) {
-            $content = @\file_get_contents($instanceFile);
-            if ($content !== false) {
-                $existingData = \json_decode($content, true) ?: [];
-            }
-        }
-
+        // Master data is merged under the instance lock below.
         // Master 进程的状态信息
         $masterData = [
+            'schema_version' => 2,
             'master_pid' => \getmypid(),
+            'pid' => \getmypid(),
             'master_enabled' => true,
             'master_started_at' => \date('Y-m-d H:i:s'),
             'master_mode' => $this->mode,
             'main_port' => $this->mainPort,
+            'port' => $this->mainPort,
             'control_port' => $this->controlPort,
+            'control_token' => $this->context?->controlToken ?? $this->controlToken,
+            'control_token_created_at' => \date('Y-m-d H:i:s'),
+            'epoch' => $this->context?->epoch ?? 0,
+            'master_epoch' => $this->context?->epoch ?? 0,
             'startup_phase' => $startupPhase,
+            'lifecycle_state' => $startupPhase === 'running' ? 'running' : 'starting',
             'instance_name' => $this->instanceName,
+            'name' => $this->instanceName,
             'orchestrator_mode' => true,
             'updated_at' => \time(),  // 心跳时间戳（用于检测 Master 是否存活）
         ];
@@ -914,11 +1011,102 @@ class MasterProcess
             $masterData['supervisor_endpoint'] = $controlServer->supervisorEndpointUri();
         }
 
-        $data = \array_merge($existingData, $masterData);
+        $mergeMasterData = static function (array $existingData) use ($masterData): array {
+            return self::normalizeMasterEndpointRecord($existingData, $masterData);
+        };
 
-        // 使用原子写入确保与Start.php的并发写入不产生竞态条件
-        // （Start.php的saveInstanceInfo()也使用了atomicWriteJsonStatic）
-        \Weline\Server\Service\ServerInstanceManager::atomicWriteJsonStatic($instanceFile, $data, 10);
+        // Use the same read-modify-write lock as Start.php and the orchestrator.
+        // This avoids overwriting runtime fields during Windows rename windows.
+        ServerInstanceManager::updateJsonFileAtomically($instanceFile, $mergeMasterData, 10);
+    }
+
+    /**
+     * Lightweight startup trace used only when explicitly enabled.
+     *
+     * @param array<string, mixed> $context
+     */
+    private function traceStartupPhase(string $phase, array $context = []): void
+    {
+        if ((string)\getenv('WLS_STARTUP_TRACE') !== '1') {
+            return;
+        }
+        if (!\defined('BP')) {
+            return;
+        }
+
+        $context['memory_mb'] = (int)\round(\memory_get_usage(true) / 1048576);
+        $payload = [
+            'ts' => \date('Y-m-d H:i:s'),
+            'pid' => (int)\getmypid(),
+            'instance' => $this->instanceName,
+            'phase' => $phase,
+            'context' => $context,
+        ];
+
+        $dir = BP . 'var' . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR;
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+
+        @\file_put_contents(
+            $dir . 'wls-startup-trace.log',
+            \json_encode($payload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE) . \PHP_EOL,
+            \FILE_APPEND | \LOCK_EX
+        );
+    }
+
+    /**
+     * Keep only launch metadata plus the Master IPC endpoint in the instance
+     * file. Service topology is not persisted here.
+     *
+     * @param array<string, mixed> $existingData
+     * @param array<string, mixed> $masterData
+     * @return array<string, mixed>
+     */
+    private static function normalizeMasterEndpointRecord(array $existingData, array $masterData): array
+    {
+        $allowedExistingFields = [
+            'name',
+            'instance_name',
+            'host',
+            'public_host',
+            'port',
+            'main_port',
+            'count',
+            'daemon',
+            'ssl_enabled',
+            'ssl_cert',
+            'ssl_key',
+            'dispatcher_enabled',
+            'worker_port',
+            'worker_base_port',
+            'gateway',
+            'http_redirect_port',
+            'started_by',
+            'started_at',
+            'started_timestamp',
+            'php_version',
+            'os',
+            'window_mode',
+            'frontend',
+            'control_token',
+            'control_token_created_at',
+            'epoch',
+            'master_epoch',
+            'startup_event_seq',
+            'startup_events',
+            'slot_generations',
+            'slot_generations_updated_at',
+        ];
+
+        $record = [];
+        foreach ($allowedExistingFields as $field) {
+            if (\array_key_exists($field, $existingData)) {
+                $record[$field] = $existingData[$field];
+            }
+        }
+
+        return \array_merge($record, $masterData);
     }
 
     /**
@@ -937,18 +1125,26 @@ class MasterProcess
         return self::buildScopedProcessName(self::MASTER_PROCESS_NAME_PREFIX, $instanceName);
     }
 
-    public static function getMasterProcessDisplayName(string $instanceName, bool $frontend = false): string
+    public static function getMasterProcessDisplayName(string $instanceName, bool $windowMode = false): string
     {
         $name = self::getMasterProcessName($instanceName);
 
-        return $frontend ? $name . '-frontend' : $name;
+        return $windowMode ? $name . '-win' : $name;
     }
 
-    public static function getMasterProcessCliTitle(string $instanceName, bool $frontend = false): string
+    public static function getMasterProcessCliTitle(string $instanceName, bool $windowMode = false): string
     {
         $title = 'weline-wls-master --name=' . self::getMasterProcessName($instanceName);
 
-        return $frontend ? $title . ' --frontend' : $title;
+        return $windowMode ? $title . ' --win' : $title;
+    }
+
+    /**
+     * 实例配置中的 daemon：false 表示阻塞前台 Master（--foreground）
+     */
+    private function isDaemonModeConfigured(): bool
+    {
+        return (bool) ($this->config['daemon'] ?? true);
     }
 
     /**
@@ -1031,7 +1227,7 @@ class MasterProcess
     /**
      * 获取实例的 Master 信息
      */
-    public static function getMasterInfo(string $instanceName = 'default'): ?array
+    public static function getMasterEndpoint(string $instanceName = 'default'): ?array
     {
         $file = Env::VAR_DIR . 'server' . DS . 'instances' . DS . $instanceName . '.json';
         if (!\is_file($file)) {
@@ -1042,9 +1238,17 @@ class MasterProcess
             return null;
         }
         $data = \json_decode($content, true);
-        if (!\is_array($data) || empty($data['master_enabled'])) {
+        if (!\is_array($data)) {
             return null;
         }
+
+        if (empty($data['master_enabled'])
+            || (int)($data['master_pid'] ?? 0) <= 0
+            || (int)($data['control_port'] ?? 0) <= 0
+        ) {
+            return null;
+        }
+
         return $data;
     }
 
@@ -1053,7 +1257,7 @@ class MasterProcess
      */
     public static function isMasterRunning(string $instanceName = 'default'): bool
     {
-        $info = self::getMasterInfo($instanceName);
+        $info = self::getMasterEndpoint($instanceName);
         if (!$info || empty($info['master_pid'])) {
             return false;
         }
@@ -1089,131 +1293,6 @@ class MasterProcess
     }
 
     /**
-     * 停机进度消息类型判定。
-     */
-    protected static function classifyStopProgressMessage(string $message): string
-    {
-        if (\str_contains($message, '✓')
-            || \str_contains($message, '已退出')
-            || \str_contains($message, '已断开')
-            || \str_contains($message, '排水完成')) {
-            return 'success';
-        }
-
-        if (\str_contains($message, '失败')
-            || \str_contains($message, '错误')
-            || \str_contains($message, '超时')) {
-            return 'error';
-        }
-
-        if (\str_contains($message, 'SHUTDOWN')
-            || \str_contains($message, '通知子进程退出')
-            || \str_contains($message, '强制')
-            || \str_contains($message, '校验子进程退出')
-            || \str_contains($message, 'Master 即将退出')
-            || \str_contains($message, 'Stopping')) {
-            return 'stop';
-        }
-
-        if (\str_contains($message, 'DRAIN')
-            || \str_contains($message, '排水')
-            || \str_contains($message, '等待排水')
-            || \str_contains($message, '阶段')) {
-            return 'drain';
-        }
-
-        return 'info';
-    }
-
-    /**
-     * 输出统一的 IPC 停机进度。
-     */
-    protected static function renderStopProgress(string $message): void
-    {
-        self::ipcMsg($message, self::classifyStopProgressMessage($message));
-    }
-
-    /**
-     * 信号停止时，自连本地控制端口并复用 IPC 停机流程。
-     */
-    private function stopWithProgressViaIpc(string $signal): bool
-    {
-        $server = $this->orchestrator?->getControlServer();
-        if ($server === null || $this->controlPort <= 0) {
-            return false;
-        }
-
-        $errno = 0;
-        $errstr = '';
-        $conn = @\stream_socket_client("tcp://127.0.0.1:{$this->controlPort}", $errno, $errstr, 3);
-        if (!$conn) {
-            return false;
-        }
-
-        $written = @\fwrite($conn, ControlMessage::command(
-            ControlMessage::ACTION_STOP,
-            '',
-            [
-                'stop_intent' => 'explicit',
-                'stop_source' => 'master:signal-bridge',
-                'stop_trace_id' => 'sig-stop-' . \getmypid() . '-' . \time(),
-            ]
-        ));
-        if ($written === false || $written === 0) {
-            @\fclose($conn);
-            return false;
-        }
-
-        \stream_set_blocking($conn, false);
-        \stream_set_timeout($conn, 0);
-
-        $deadline = \microtime(true) + 20.0;
-        $buffer = '';
-        $lastProgress = '';
-
-        if ($this->frontend) {
-            self::ipcMsg("收到 {$signal}，已切换到统一 IPC 停机流程", 'stop');
-        }
-
-        while (\microtime(true) < $deadline) {
-            $server->poll(0, 100000);
-
-            $chunk = @\fread($conn, 4096);
-            if ($chunk !== false && $chunk !== '') {
-                $buffer .= $chunk;
-                foreach (ControlMessage::extractMessages($buffer) as $msg) {
-                    if (($msg['type'] ?? '') !== ControlMessage::TYPE_COMMAND_RESULT) {
-                        continue;
-                    }
-
-                    $message = (string) ($msg['message'] ?? '');
-                    if ($message === '' || $message === $lastProgress) {
-                        continue;
-                    }
-
-                    if ($this->frontend) {
-                        self::renderStopProgress($message);
-                    }
-                    $lastProgress = $message;
-                }
-            }
-
-            if (\feof($conn)) {
-                @\fclose($conn);
-                return true;
-            }
-        }
-
-        @\fclose($conn);
-
-        if ($this->frontend) {
-            self::ipcMsg("等待本地 IPC 停机进度超时（signal={$signal}）", 'error');
-        }
-
-        return false;
-    }
-
-    /**
      * 通过 IPC 控制通道发送停止命令给 Master
      * 
      * @param string $instanceName 实例名称
@@ -1222,7 +1301,7 @@ class MasterProcess
      */
     public static function sendStopCommand(string $instanceName = 'default', bool $verbose = true): bool
     {
-        $info = self::getMasterInfo($instanceName);
+        $info = self::getMasterEndpoint($instanceName);
         if (!$info || empty($info['control_port'])) {
             if ($verbose) {
                 self::ipcMsg("无法获取实例 [{$instanceName}] 的控制端口信息", 'error');
@@ -1260,7 +1339,8 @@ class MasterProcess
                 'stop_intent' => 'explicit',
                 'stop_source' => 'master:send-stop-command',
                 'stop_trace_id' => 'send-stop-' . \getmypid() . '-' . \time(),
-            ]
+            ],
+            (string)($info['control_token'] ?? '')
         );
         $written = @\fwrite($conn, $stopMsg);
         
@@ -1428,9 +1508,8 @@ class MasterProcess
                 WlsLogger::info_($formatted);
         }
 
-        // 前台模式下，WlsLogger 已输出到控制台，无需再通过 printer 重复输出
-        // 后台模式下，通过 printer 输出（此时 Logger 只写文件）
-        if (!$this->frontend && $this->printer !== null) {
+        // 阻塞前台 Master：WlsLogger 已输出到控制台，无需再通过 printer 重复输出
+        if ($this->isDaemonModeConfigured() && $this->printer !== null) {
             $this->printer->note($formatted);
         }
     }
@@ -1602,6 +1681,20 @@ class MasterProcess
             $email = Env::get('admin_email', 'admin@' . $domain);
         }
         $forceAcme = $this->shouldForceAcmeOnPostStartup($sslService);
+        if (!$forceAcme) {
+            $certPath = \trim($this->sslCert !== '' ? $this->sslCert : (string) ($this->config['ssl_cert'] ?? ''));
+            $keyPath = \trim($this->sslKey !== '' ? $this->sslKey : (string) ($this->config['ssl_key'] ?? ''));
+            if ($this->canReusePostStartupCertificate($sslService, $domain, $certPath, $keyPath)) {
+                $this->log(__('跳过 SSL 启动后申请：%{1} 已有未过期证书。', [$domain]));
+                return;
+            }
+
+            $certDir = $sslService->getCertificateDir($domain);
+            if ($this->canReusePostStartupCertificate($sslService, $domain, $certDir . 'fullchain.pem', $certDir . 'privkey.pem')) {
+                $this->log(__('跳过 SSL 启动后申请：%{1} 已有未过期证书。', [$domain]));
+                return;
+            }
+        }
 
         $phpBinary = \defined('PHP_BINARY') ? (string) PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
@@ -1624,6 +1717,22 @@ class MasterProcess
         }
 
         $this->log(__('已触发 SSL 延迟重试：%{1}（后台进程 PID 未返回，可通过 ssl:auto list 查看结果）', [$domain]));
+    }
+
+    private function canReusePostStartupCertificate(
+        SslCertificateService $sslService,
+        string $domain,
+        string $certPath,
+        string $keyPath
+    ): bool {
+        $certPath = \trim($certPath);
+        $keyPath = \trim($keyPath);
+        if ($certPath === '' || $keyPath === '') {
+            return false;
+        }
+
+        return $sslService->canReuseConfiguredCertificate($certPath, $keyPath)
+            && $sslService->certificateMatchesHost($certPath, $domain);
     }
 
     private function shouldForceAcmeOnPostStartup(SslCertificateService $sslService): bool

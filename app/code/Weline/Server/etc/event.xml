@@ -39,6 +39,15 @@
                   sort="0"/>
     </event>
 
+    <!-- WLS 性能面板：开发/授权调试模式下记录请求 trace，并向普通 HTML 页面注入懒加载入口 -->
+    <event name="Weline_Framework::telemetry::request_collected">
+        <observer name="Weline_Server::wls_performance_panel"
+                  instance="Weline\Server\Observer\WlsPerformancePanelObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
+
     <!-- WLS 模式下接管缓存驱动：File => WlsMemoryCache -->
     <event name="Weline_Framework_Cache::driver_create_before">
         <observer name="Weline_Server::cache_driver_interceptor"

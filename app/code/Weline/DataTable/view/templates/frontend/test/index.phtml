@@ -11,7 +11,7 @@
     .dt-demo-status{min-height:24px;color:#0f5132}
 </style>
 
-<?= $frontend_api_bootstrap ?? '' ?>
+<?= $worker_bootstrap ?? '' ?>
 
 <div class="dt-demo-shell" data-demo-page="<?= $page_key ?>">
     <section class="dt-demo-hero">
@@ -20,8 +20,8 @@
             <p>Frontend-safe DataTable demos backed by explicit whitelist-only REST routes.</p>
         </div>
         <div class="dt-demo-buttons">
-            <button type="button" class="btn btn-primary" data-testid="demo-init" onclick="demoBootstrap('init-data')">Init Demo Data</button>
-            <button type="button" class="btn btn-outline-danger" data-testid="demo-clear" onclick="demoBootstrap('clear-data')">Clear Demo Data</button>
+            <button type="button" class="btn btn-primary" data-testid="demo-init" data-datatable-test-action="demo-bootstrap" data-demo-action="init-data">Init Demo Data</button>
+            <button type="button" class="btn btn-outline-danger" data-testid="demo-clear" data-datatable-test-action="demo-bootstrap" data-demo-action="clear-data">Clear Demo Data</button>
         </div>
         <div id="demo-status" class="dt-demo-status" data-testid="demo-status"></div>
     </section>
@@ -55,25 +55,41 @@
 </div>
 
 <script>
-    function demoApi(path) {
-        if (typeof window.api === 'function') {
-            return window.api('datatable/rest/v1/demo-table/' + path);
+    let demoApiPromise = null;
+
+    function getDemoApi() {
+        if (demoApiPromise) {
+            return demoApiPromise;
         }
-        return '/datatable/rest/v1/demo-table/' + path;
+        demoApiPromise = Promise.resolve().then(function () {
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                throw new Error('Weline.Api.resource is not available');
+            }
+            return window.Weline.Api.resource('datatable');
+        });
+        return demoApiPromise;
     }
 
     async function demoBootstrap(action) {
         const status = document.getElementById('demo-status');
         status.textContent = 'Working...';
         try {
-            const response = await fetch(demoApi(action), {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'}
-            });
-            const payload = await response.json();
+            const api = await getDemoApi();
+            const operation = action === 'init-data' ? 'initData' : 'clearData';
+            const payload = await api[operation]({}, {silent: true});
             status.textContent = payload.message || payload.msg || 'Done';
         } catch (error) {
             status.textContent = error.message || 'Request failed';
         }
     }
+
+    document.addEventListener('click', function (event) {
+        const trigger = event.target.closest('[data-datatable-test-action="demo-bootstrap"]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        demoBootstrap(trigger.getAttribute('data-demo-action') || '');
+    });
 </script>

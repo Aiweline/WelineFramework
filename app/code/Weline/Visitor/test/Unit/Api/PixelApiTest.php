@@ -76,8 +76,9 @@ class PixelApiTest extends TestCore
 
     public function testDataValidationAndSanitization(): void
     {
+        $longUrl = 'https://example.com/' . str_repeat('a', 400);
         $response = $this->post([
-            'url' => 'invalid-url',
+            'url' => $longUrl,
             'eventName' => 'click',
             'ip' => 'invalid-ip',
             'module' => str_repeat('a', 300),
@@ -87,9 +88,22 @@ class PixelApiTest extends TestCore
         $this->assertEquals(200, $response['code']);
 
         $pixel = ObjectManager::make(PixelModel::class)->load((int)$response['data']['pixel_id']);
-        $this->assertSame('', $pixel->getUrl());
-        $this->assertSame(255, strlen($pixel->getModule()));
+        $this->assertSame(substr($longUrl, 0, 255), $pixel->getUrl());
+        $this->assertSame(128, strlen($pixel->getModule()));
         $this->assertSame(0, $pixel->getValue());
+    }
+
+    public function testInvalidUrlIsDropped(): void
+    {
+        $response = $this->post([
+            'url' => 'invalid-url',
+            'eventName' => 'click',
+        ]);
+
+        $this->assertEquals(200, $response['code']);
+
+        $pixel = ObjectManager::make(PixelModel::class)->load((int)$response['data']['pixel_id']);
+        $this->assertSame('', $pixel->getUrl());
     }
 
     public function testWebsiteIdIdentification(): void

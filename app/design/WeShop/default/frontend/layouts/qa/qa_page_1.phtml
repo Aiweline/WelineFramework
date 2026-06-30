@@ -1,0 +1,36 @@
+<?php
+/**
+ * Layout: QA Page variant 1
+ */
+$meta = $this->getData('meta') ?? [];
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>seo::head</w:hook>
+</head>
+<body>
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <div class="relative flex min-h-screen w-full flex-col">
+        <div class="layout-container flex h-full grow flex-col">
+            <if condition="meta.showHeader">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default"/>
+            </if>
+            <main class="flex-1">
+                <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                <?= $this->getChildHtml('content') ?>
+                <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+            </main>
+            <if condition="meta.showFooter">
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+            </if>
+        </div>
+    </div>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

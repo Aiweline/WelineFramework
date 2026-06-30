@@ -9,6 +9,7 @@
  * @widget.area {frontend}
  * @widget.position {["sidebar"]}
  * @widget.page_layouts {["category", "search"]}
+ * @widget.supports {["layout-category-filters","layout-product-list-filters"]}
  * 
  * - 通过 Widget 引擎渲染：
  *   使用 w:widget type="sidebar" name="category-filters" 标签
@@ -48,7 +49,7 @@ if (!empty($filtersHtml) && is_string($filtersHtml)) {
 <div class="category-filter-mock">
     <div class="category-filter-header">
         <div class="category-filter-title"><lang>筛选条件</lang></div>
-        <a href="javascript:void(0)" class="category-filter-clear"><lang>清除全部</lang></a>
+        <a href="#" class="category-filter-clear"><lang>清除全部</lang></a>
     </div>
 
     <div class="category-filter-applied">
@@ -65,56 +66,68 @@ if (!empty($filtersHtml) && is_string($filtersHtml)) {
     <div class="category-filter-group">
         <div class="category-filter-group-title"><lang>价格区间</lang></div>
         <ul class="category-filter-list">
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>0 - 99 元</lang></span><span class="count">128</span></a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>100 - 299 元</lang></span><span class="count">86</span></a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>300 元以上</lang></span><span class="count">42</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>0 - 99 元</lang></span><span class="count">128</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>100 - 299 元</lang></span><span class="count">86</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>300 元以上</lang></span><span class="count">42</span></a></li>
         </ul>
     </div>
 
     <div class="category-filter-group">
         <div class="category-filter-group-title"><lang>配送方式</lang></div>
         <ul class="category-filter-list">
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>Prime 极速达</lang></span><span class="count">64</span></a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>免运费</lang></span><span class="count">97</span></a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>当日/次日达</lang></span><span class="count">23</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>Prime 极速达</lang></span><span class="count">64</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>免运费</lang></span><span class="count">97</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>当日/次日达</lang></span><span class="count">23</span></a></li>
         </ul>
     </div>
 
     <div class="category-filter-group">
         <div class="category-filter-group-title"><lang>品牌</lang></div>
         <ul class="category-filter-list">
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label">Brand A</span><span class="count">56</span></a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label">Brand B</span><span class="count">34</span></a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label">Brand C</span><span class="count">19</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label">Brand A</span><span class="count">56</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label">Brand B</span><span class="count">34</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label">Brand C</span><span class="count">19</span></a></li>
         </ul>
     </div>
     <div class="category-filter-group">
         <div class="category-filter-group-title"><lang>颜色</lang></div>
         <ul class="category-filter-list">
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>黑色</lang></span><span class="count">73</span></a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>白色</lang></span><span class="count">41</span></a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item"><span class="label"><lang>蓝色</lang></span><span class="count">27</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>黑色</lang></span><span class="count">73</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>白色</lang></span><span class="count">41</span></a></li>
+            <li><a href="#" class="category-filter-item"><span class="label"><lang>蓝色</lang></span><span class="count">27</span></a></li>
         </ul>
     </div>
 
     <div class="category-filter-group">
         <div class="category-filter-group-title"><lang>用户评分</lang></div>
         <ul class="category-filter-list">
-            <li><a href="javascript:void(0)" class="category-filter-item">
+            <li><a href="#" class="category-filter-item">
                 <span class="label"><span class="stars">★★★★★</span> <lang>及以上</lang></span>
                 <span class="count">12</span>
             </a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item">
+            <li><a href="#" class="category-filter-item">
                 <span class="label"><span class="stars">★★★★☆</span> <lang>及以上</lang></span>
                 <span class="count">48</span>
             </a></li>
-            <li><a href="javascript:void(0)" class="category-filter-item">
+            <li><a href="#" class="category-filter-item">
                 <span class="label"><span class="stars">★★★☆☆</span> <lang>及以上</lang></span>
                 <span class="count">96</span>
             </a></li>
         </ul>
     </div>
 </div>
+<script>
+(function () {
+    document.addEventListener('click', function (event) {
+        const filterAction = event.target.closest('.category-filter-mock .category-filter-clear, .category-filter-mock .category-filter-item');
+        if (!filterAction) {
+            return;
+        }
+
+        event.preventDefault();
+    });
+})();
+</script>
 <?php
     }
 }

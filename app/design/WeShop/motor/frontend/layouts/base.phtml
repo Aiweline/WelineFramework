@@ -5,11 +5,10 @@
  */
 ?>
 <!DOCTYPE html>
-<html class="light" lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="motor">
+<html class="light" lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-theme="motor">
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title><?= $this->getTitle() ?></title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -75,8 +74,16 @@
        ======================================== */
 
     /* 基础重置和全局样式 */
+    :root {
+        --motor-layout-content-max-width: var(--weline-layout-content-max-width, var(--weshop-container-max-width, 1440px));
+    }
+
     * {
         box-sizing: border-box;
+    }
+
+    html[data-theme="motor"] .max-w-7xl {
+        max-width: var(--motor-layout-content-max-width);
     }
 
     html {
@@ -86,11 +93,11 @@
     body {
         margin: 0;
         padding: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        font-size: 14px;
-        line-height: 1.5;
-        color: #111;
-        background-color: #fff;
+        font-family: var(--weline-layout-font-family, var(--weshop-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif));
+        font-size: var(--weline-layout-font-size-base, var(--font-size-base, var(--weshop-font-size-base, 1rem)));
+        line-height: var(--weline-layout-line-height-normal, var(--line-height-normal, var(--weshop-line-height-normal, 1.5)));
+        color: var(--weline-layout-text-primary, var(--color-text-primary, #111));
+        background-color: var(--weline-layout-surface-primary, var(--color-bg-primary, #fff));
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         min-height: 100vh;
@@ -99,37 +106,34 @@
     }
 
     /* 主内容区域 */
-    .main-content {
+    #main-content[data-layout="main_content"] {
         width: 100%;
-        max-width: 1400px;
-        margin: 0 auto;
         padding: 0;
-        background-color: #fff;
         flex: 1 0 auto;
         min-height: 0;
     }
 
     /* 响应式容器 */
     @media (max-width: 1400px) {
-        .main-content {
-            padding: 0 1rem;
+        #main-content[data-layout="main_content"] {
+            padding: 0;
         }
     }
 
     @media (max-width: 1024px) {
-        .main-content {
-            padding: 0 0.75rem;
+        #main-content[data-layout="main_content"] {
+            padding: 0;
         }
     }
 
     @media (max-width: 768px) {
-        .main-content {
-            padding: 0 0.5rem;
+        #main-content[data-layout="main_content"] {
+            padding: 0;
         }
     }
 
     /* 内容区域样式 */
-    .main-content > * {
+    #main-content[data-layout="main_content"] > * {
         width: 100%;
     }
 
@@ -140,13 +144,13 @@
 
     /* 链接样式 */
     a {
-        color: #007185;
+        color: var(--weline-layout-link-color, var(--color-link, #007185));
         text-decoration: none;
         transition: color 0.2s ease, text-decoration 0.2s ease;
     }
 
     a:hover {
-        color: #c45500;
+        color: var(--weline-layout-link-hover-color, var(--color-link-hover, #c45500));
         text-decoration: underline;
     }
 
@@ -198,8 +202,10 @@
         border-width: 0;
     }
     </style>
+    <w:hook>seo::head</w:hook>
 </head>
 <body class="font-display bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark">
+    <w:hook>seo::body</w:hook>
     <!-- Hook: body-start -->
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::body-start</w:hook>
@@ -307,5 +313,6 @@
     }
 })();
 </script>
+    <w:hook>seo::footer</w:hook>
 </body>
 </html>

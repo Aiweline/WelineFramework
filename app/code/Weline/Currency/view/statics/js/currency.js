@@ -15,36 +15,247 @@
         return;
     }
 
+    function isIgnorableSwitchQueryParam(key) {
+        key = String(key || '').toLowerCase().trim();
+        if (!key) {
+            return false;
+        }
+        if (['_', 'ai_perf', 'fbclid', 'gbraid', 'gclid', 'igshid', 'mc_cid', 'mc_eid', 'msclkid', 'wbraid', 'yclid'].includes(key)) {
+            return true;
+        }
+        return key.startsWith('utm_') || key.startsWith('mtm_') || key.startsWith('pk_');
+    }
+
+    function sanitizeSwitchSearch(search) {
+        const raw = String(search || '');
+        if (!raw || raw === '?') {
+            return '';
+        }
+
+        const params = new URLSearchParams(raw.charAt(0) === '?' ? raw.slice(1) : raw);
+        Array.from(params.keys()).forEach(key => {
+            if (isIgnorableSwitchQueryParam(key)) {
+                params.delete(key);
+            }
+        });
+
+        const query = params.toString();
+        return query ? '?' + query : '';
+    }
+
+    function readCookieValue(key) {
+        if (!key) {
+            return '';
+        }
+        if (typeof window.getCookie === 'function') {
+            const value = window.getCookie(key);
+            if (value) {
+                return value;
+            }
+        }
+        const match = document.cookie.match('(?:^|; )' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)');
+        return match ? decodeURIComponent(match[1]) : '';
+    }
+
+    function writeCookieValue(key, value, expiry = 365, options = {}) {
+        if (!key) {
+            return;
+        }
+        const normalizedOptions = Object.assign({ path: '/' }, options || {});
+        if (typeof window.setCookie === 'function') {
+            window.setCookie(key, value, expiry, normalizedOptions);
+            return;
+        }
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (expiry * 24 * 60 * 60 * 1000));
+        let cookieString = key + '=' + encodeURIComponent(value) + ';expires=' + expires.toUTCString();
+        Object.keys(normalizedOptions).forEach((optionKey) => {
+            cookieString += ';' + optionKey + '=' + normalizedOptions[optionKey];
+        });
+        document.cookie = cookieString;
+    }
+
+    function writeCurrencyPreference(currency) {
+        try {
+            if (window.localStorage) {
+                localStorage.setItem('weline_user_currency', currency);
+                localStorage.removeItem('api_doc_currency');
+                localStorage.removeItem('WELINE_USER_CURRENCY');
+            }
+        } catch (error) {
+            // localStorage can be unavailable in privacy modes.
+        }
+        writeCookieValue('WELINE_USER_CURRENCY', currency, 365);
+    }
+
     /**
      * 获取当前货币代码
      */
+    function isBackendLocalizedPath(pathParts) {
+        const config = (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+        if (config.area === 'backend' || (config.theme && config.theme.area === 'backend')) {
+            return true;
+        }
+        const backendKey = String((config.url && config.url.adminArea) || '');
+        if (backendKey && pathParts.some(part => String(part).toLowerCase() === backendKey.toLowerCase())) {
+            return true;
+        }
+        return document.documentElement
+            && document.documentElement.getAttribute('data-theme') === 'backend'
+            && pathParts.length > 0;
+    }
+
+    function getThemeConfig() {
+        return (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
+    }
+
+    function normalizeCurrencyCode(value) {
+        return String(value || '').trim().toUpperCase();
+    }
+
+    function isCurrencyCodeShape(value) {
+        return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    }
+
+    function addSupportedCurrencyCode(codes, value) {
+        if (value && typeof value === 'object') {
+            value = value.code || value.currency || value.currency_code || value.value || '';
+        }
+        const code = normalizeCurrencyCode(value);
+        if (isCurrencyCodeShape(code)) {
+            codes[code] = true;
+        }
+    }
+
+    function collectSupportedCurrencyCodes(codes, source) {
+        if (!source) {
+            return;
+        }
+        if (Array.isArray(source)) {
+            source.forEach(item => addSupportedCurrencyCode(codes, item));
+            return;
+        }
+        if (typeof source === 'object') {
+            Object.keys(source).forEach(key => {
+                addSupportedCurrencyCode(codes, key);
+                addSupportedCurrencyCode(codes, source[key]);
+            });
+            return;
+        }
+        String(source).split(/[,\s|]+/).forEach(code => addSupportedCurrencyCode(codes, code));
+    }
+
+    function getSupportedCurrencyCodes(config) {
+        const codes = Object.create(null);
+        const site = window.site || {};
+        [
+            config.availableCurrencies,
+            config.supportedCurrencies,
+            config.currencyCodes,
+            config.currencies,
+            config.site && config.site.availableCurrencies,
+            config.site && config.site.supportedCurrencies,
+            config.site && config.site.currencyCodes,
+            config.site && config.site.currencies,
+            site.availableCurrencies,
+            site.supportedCurrencies,
+            site.currencyCodes,
+            site.currencies
+        ].forEach(source => collectSupportedCurrencyCodes(codes, source));
+
+        document.querySelectorAll('[data-currency-switcher] [data-currency], [data-currency-switcher] [data-currency-option], [data-currency-switcher] .currency-option').forEach(option => {
+            addSupportedCurrencyCode(codes, option.getAttribute('data-currency') || option.getAttribute('data-currency-option') || option.dataset.currency);
+        });
+
+        addSupportedCurrencyCode(codes, config.defaultCurrency || (config.site && (config.site.defaultCurrency || config.site.default_currency)) || site.defaultCurrency || site.default_currency);
+        return codes;
+    }
+
+    function isSupportedCurrencyCode(value, config) {
+        const code = normalizeCurrencyCode(value);
+        if (!isCurrencyCodeShape(code)) {
+            return false;
+        }
+        return !!getSupportedCurrencyCodes(config || {})[code];
+    }
+
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function sameLang(a, b) {
+        const left = normalizeLangCode(a).toLowerCase();
+        const right = normalizeLangCode(b).toLowerCase();
+        return left !== '' && right !== '' && left === right;
+    }
+
+    function shouldOutputCurrency(currency, config) {
+        currency = normalizeCurrencyCode(currency);
+        const defaultCurrency = normalizeCurrencyCode(config.defaultCurrency || 'CNY');
+        return isSupportedCurrencyCode(currency, config) && currency !== defaultCurrency;
+    }
+
+    function shouldOutputLang(lang, config) {
+        lang = normalizeLangCode(lang);
+        const defaultLang = normalizeLangCode(config.defaultLang || config.defaultLanguage || config.i18n?.defaultLang || config.i18n?.defaultLanguage || 'zh_Hans_CN');
+        return lang !== '' && !sameLang(lang, defaultLang);
+    }
+
+    function buildCurrencyUrlFromPath(pathOnly, search, currency, lang) {
+        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const safeSearch = sanitizeSwitchSearch(search || '');
+        const config = getThemeConfig();
+        const pathParts = String(pathOnly || '/').split('/').filter(Boolean);
+        const filteredParts = pathParts.filter(part => !isSupportedCurrencyCode(part, config) && !langPattern.test(part));
+        const targetCurrency = normalizeCurrencyCode(currency);
+        const targetLang = normalizeLangCode(lang);
+        const outputParts = [];
+
+        if (isBackendLocalizedPath(pathParts) && filteredParts.length > 0) {
+            const prefix = filteredParts.shift();
+            outputParts.push(prefix);
+        }
+
+        if (shouldOutputCurrency(targetCurrency, config)) {
+            outputParts.push(targetCurrency);
+        }
+        if (shouldOutputLang(targetLang, config)) {
+            outputParts.push(targetLang);
+        }
+        if (filteredParts.length > 0) {
+            outputParts.push(...filteredParts);
+        }
+
+        return '/' + outputParts.join('/') + safeSearch;
+    }
+
     function getCurrentCurrency() {
-        // 从 Cookie 获取
-        if (typeof window.getCookie === 'function') {
-            const cookieCurrency = window.getCookie('WELINE_USER_CURRENCY');
-            if (cookieCurrency) {
-                return cookieCurrency.toUpperCase();
-            }
+        const config = getThemeConfig();
+        const cookieCurrency = readCookieValue('WELINE_USER_CURRENCY');
+        if (isSupportedCurrencyCode(cookieCurrency, config)) {
+            return cookieCurrency.toUpperCase();
         }
 
         // 从 URL 参数获取
         const urlParams = new URLSearchParams(window.location.search);
         const urlCurrency = urlParams.get('currency');
-        if (urlCurrency) {
+        if (isSupportedCurrencyCode(urlCurrency, config)) {
             return urlCurrency.toUpperCase();
         }
 
         // 从 URL 路径获取（如 /CNY/...）
         const pathParts = window.location.pathname.split('/').filter(Boolean);
         for (const part of pathParts) {
-            if (/^[A-Z]{3}$/.test(part)) {
+            if (isSupportedCurrencyCode(part, config)) {
                 return part.toUpperCase();
             }
         }
 
         // 从配置获取
-        const config = window.__WelineThemeConfig || {};
-        return (config.currentCurrency || (window.site && window.site.currency) || 'CNY').toUpperCase();
+        const fallbackCurrency = isSupportedCurrencyCode(config.currentCurrency, config)
+            ? config.currentCurrency
+            : (config.defaultCurrency || 'CNY');
+        return fallbackCurrency.toUpperCase();
     }
 
     /**
@@ -96,7 +307,7 @@
             }
 
             // 获取当前 URL 和货币配置
-            const currentPath = window.location.pathname + window.location.search;
+            const currentPath = window.location.pathname + sanitizeSwitchSearch(window.location.search || '');
             const config = window.__WelineThemeConfig || {};
             const availableCurrencies = config.availableCurrencies || [
                 { code: 'CNY', name: 'CNY (¥)' },
@@ -134,13 +345,8 @@
                     }
 
                     // 移除路径中的货币代码和语言代码
-                    const currencyPattern = /^[A-Z]{3}$/;
-                    const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-                    const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-                    const cleanPath = '/' + filteredParts.join('/');
-
                     // 构建新 URL：/[currency]/[lang]/path（保持语言）
-                    const currencyUrl = '/' + currencyCode + '/' + currentLang + cleanPath + (search ? '?' + search : '');
+                    const currencyUrl = buildCurrencyUrlFromPath(pathOnly, search ? '?' + search : '', currencyCode, currentLang);
                     option.setAttribute('href', currencyUrl);
                 }
             });
@@ -171,16 +377,13 @@
 
         // 次优先使用 urlWithCurrency 函数（来自 url-frontend 模块，会自动保持语言）
         if (typeof window.urlWithCurrency === 'function') {
-            const currentPath = window.location.pathname + window.location.search;
+            const currentPath = window.location.pathname + sanitizeSwitchSearch(window.location.search || '');
             const currencyUrl = window.urlWithCurrency(currentPath, currency);
 
             // 保存货币偏好到 localStorage
-            localStorage.setItem('weline_user_currency', currency);
+            writeCurrencyPreference(currency);
 
             // 保存货币偏好到 Cookie（如果 getCookie/setCookie 函数存在）
-            if (typeof window.setCookie === 'function') {
-                window.setCookie('WELINE_USER_CURRENCY', currency, 365); // 保存365天
-            }
 
             // 立即跳转到新 URL
             window.location.href = currencyUrl;
@@ -189,13 +392,10 @@
 
         // 降级方案：使用 inject_path（会自动保持语言）
         if (typeof window.inject_path === 'function') {
-            const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + window.location.search;
+            const currencyUrl = window.inject_path(window.location.pathname, currency, 'currency') + sanitizeSwitchSearch(window.location.search || '');
 
             // 保存货币偏好
-            localStorage.setItem('weline_user_currency', currency);
-            if (typeof window.setCookie === 'function') {
-                window.setCookie('WELINE_USER_CURRENCY', currency, 365);
-            }
+            writeCurrencyPreference(currency);
 
             // 立即跳转到新 URL
             window.location.href = currencyUrl;
@@ -220,19 +420,11 @@
         }
 
         // 移除路径中的货币代码和语言代码
-        const currencyPattern = /^[A-Z]{3}$/;
-        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-        const filteredParts = pathParts.filter(part => !currencyPattern.test(part) && !langPattern.test(part));
-        const cleanPath = '/' + filteredParts.join('/');
-
         // 构建新 URL：/[currency]/[lang]/path（保持语言）
-        const currencyUrl = '/' + currency + '/' + currentLang + cleanPath + window.location.search;
+        const currencyUrl = buildCurrencyUrlFromPath(currentPath, window.location.search || '', currency, currentLang);
 
         // 保存货币偏好
-        localStorage.setItem('weline_user_currency', currency);
-        if (typeof window.setCookie === 'function') {
-            window.setCookie('WELINE_USER_CURRENCY', currency, 365);
-        }
+        writeCurrencyPreference(currency);
 
         // 立即跳转到新 URL
         window.location.href = currencyUrl;

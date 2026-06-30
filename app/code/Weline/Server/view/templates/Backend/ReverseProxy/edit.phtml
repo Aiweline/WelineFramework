@@ -7,6 +7,7 @@ use Weline\Server\Model\ReverseProxy;
 $proxy = $this->getData('proxy');
 $isEdit = $proxy && $proxy->getData(ReverseProxy::schema_fields_ID);
 $proxyId = $isEdit ? $proxy->getData(ReverseProxy::schema_fields_ID) : 0;
+$jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
 ?>
 
 <div class="container-fluid">
@@ -94,10 +95,10 @@ $proxyId = $isEdit ? $proxy->getData(ReverseProxy::schema_fields_ID) : 0;
 
                         <!-- 按钮 -->
                         <div class="mb-3">
-                            <button type="button" class="btn btn-primary" onclick="saveProxy()">
+                            <button type="button" class="btn btn-primary" data-reverse-proxy-edit-action="save">
                                 <i class="bi bi-save"></i> <lang>保存</lang>
                             </button>
-                            <button type="button" class="btn btn-info" onclick="testConnection()">
+                            <button type="button" class="btn btn-info" data-reverse-proxy-edit-action="test-connection">
                                 <i class="bi bi-plug"></i> <lang>测试连接</lang>
                             </button>
                             <a href="<?php echo $this->getUrl('*/backend/reverse-proxy'); ?>" class="btn btn-secondary">
@@ -136,6 +137,56 @@ $proxyId = $isEdit ? $proxy->getData(ReverseProxy::schema_fields_ID) : 0;
 </div>
 
 <script>
+const reverseProxyEditUrls = <?= json_encode([
+    'save' => $this->getUrl('*/backend/reverse-proxy/save'),
+    'index' => $this->getUrl('*/backend/reverse-proxy'),
+    'testConnection' => $this->getUrl('*/backend/reverse-proxy/test-connection'),
+], $jsonForScriptFlags) ?>;
+const reverseProxyEditMessages = <?= json_encode([
+    'saveFailed' => (string)__('保存失败'),
+    'requestFailed' => (string)__('请求失败'),
+    'operationFailed' => (string)__('操作失败'),
+    'connectionSuccess' => (string)__('连接成功'),
+    'connectionFailed' => (string)__('连接失败'),
+    'backendRequired' => (string)__('请先填写后端主机和端口'),
+], $jsonForScriptFlags) ?>;
+
+document.addEventListener('click', function(event) {
+    const trigger = event.target.closest('[data-reverse-proxy-edit-action]');
+    if (!trigger) {
+        return;
+    }
+
+    if (trigger.dataset.reverseProxyEditAction === 'save') {
+        saveProxy();
+        return;
+    }
+    if (trigger.dataset.reverseProxyEditAction === 'test-connection') {
+        testConnection();
+    }
+});
+
+function showReverseProxyEditToast(type, message) {
+    const text = String(message || reverseProxyEditMessages.operationFailed);
+    if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+        window.BackendToast[type](text);
+        return;
+    }
+
+    const logger = type === 'error' ? 'error' : 'log';
+    if (window.console && typeof window.console[logger] === 'function') {
+        window.console[logger](text);
+    }
+}
+
+function requestReverseProxyEdit(url, body) {
+    return fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body || {})
+    }).then(res => res.json());
+}
+
 function saveProxy() {
     const form = document.getElementById('proxyForm');
     const formData = new FormData(form);
@@ -149,21 +200,16 @@ function saveProxy() {
         }
     });
 
-    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/save'); ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(res => res.json())
+    requestReverseProxyEdit(reverseProxyEditUrls.save, data)
     .then(data => {
         if (data.success) {
-            alert(data.message);
-            window.location.href = '<?php echo $this->getUrl('*/backend/reverse-proxy'); ?>';
+            showReverseProxyEditToast('success', data.message);
+            window.location.href = reverseProxyEditUrls.index;
         } else {
-            alert('<?php echo __('保存失败'); ?>: ' + data.message);
+            showReverseProxyEditToast('error', reverseProxyEditMessages.saveFailed + ': ' + (data.message || reverseProxyEditMessages.operationFailed));
         }
     })
-    .catch(err => alert('<?php echo __('请求失败'); ?>: ' + err));
+    .catch(err => showReverseProxyEditToast('error', reverseProxyEditMessages.requestFailed + ': ' + err));
 }
 
 function testConnection() {
@@ -172,22 +218,18 @@ function testConnection() {
     const ssl = document.getElementById('backend_ssl').checked;
 
     if (!host || !port) {
-        alert('<?php echo __('请先填写后端主机和端口'); ?>');
+        showReverseProxyEditToast('error', reverseProxyEditMessages.backendRequired);
         return;
     }
 
-    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/test-connection'); ?>', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({backend_host: host, backend_port: port, backend_ssl: ssl})
-    })
-    .then(res => res.json())
+    requestReverseProxyEdit(reverseProxyEditUrls.testConnection, {backend_host: host, backend_port: port, backend_ssl: ssl})
     .then(data => {
         if (data.success) {
-            alert('<?php echo __('连接成功'); ?> (' + data.latency_ms + 'ms)');
+            showReverseProxyEditToast('success', reverseProxyEditMessages.connectionSuccess + ' (' + data.latency_ms + 'ms)');
         } else {
-            alert('<?php echo __('连接失败'); ?>: ' + data.message);
+            showReverseProxyEditToast('error', reverseProxyEditMessages.connectionFailed + ': ' + (data.message || reverseProxyEditMessages.operationFailed));
         }
-    });
+    })
+    .catch(err => showReverseProxyEditToast('error', reverseProxyEditMessages.requestFailed + ': ' + err));
 }
 </script>

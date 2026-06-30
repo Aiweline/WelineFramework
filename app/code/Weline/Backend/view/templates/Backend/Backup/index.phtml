@@ -9,6 +9,13 @@
  * @var array $backups
  */
 $backups = $backups ?? [];
+$jsonJsLiteral = static function (mixed $value): string {
+    $json = \json_encode(
+        (string)$value,
+        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ) ?: '""';
+    return htmlspecialchars($json, ENT_QUOTES, 'UTF-8');
+};
 ?>
 <!-- 页面标题 -->
 <div class="row">
@@ -43,7 +50,7 @@ $backups = $backups ?? [];
             <div class="card-body">
                 <h4 class="card-title mb-4"><lang>创建备份</lang></h4>
                 
-                <form id="backupForm" onsubmit="WelineBackup.createBackup(event)">
+                <form id="backupForm">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -93,16 +100,21 @@ $backups = $backups ?? [];
                         </thead>
                         <tbody>
                             <?php foreach ($backups as $backup): ?>
+                            <?php $backupFilename = (string)($backup['filename'] ?? ''); ?>
                             <tr>
                                 <td><?= htmlspecialchars($backup['filename'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($backup['type'] ?? '-') ?></td>
                                 <td><?= $this->formatBytes($backup['size'] ?? 0) ?></td>
-                                <td><?= $backup['created_at'] ?? '-' ?></td>
+                                <td><?= htmlspecialchars((string)($backup['created_at'] ?? '-')) ?></td>
                                 <td>
-                                    <button type="button" class="btn btn-sm btn-primary" onclick="WelineBackup.downloadBackup('<?= $backup['filename'] ?? '' ?>')">
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                            data-backup-action="download"
+                                            data-backup-filename="<?= htmlspecialchars($backupFilename, ENT_QUOTES, 'UTF-8') ?>">
                                         <i class="mdi mdi-download me-1"></i><lang>下载</lang>
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-danger" onclick="WelineBackup.deleteBackup('<?= $backup['filename'] ?? '' ?>')">
+                                    <button type="button" class="btn btn-sm btn-danger"
+                                            data-backup-action="delete"
+                                            data-backup-filename="<?= htmlspecialchars($backupFilename, ENT_QUOTES, 'UTF-8') ?>">
                                         <i class="mdi mdi-delete me-1"></i><lang>删除</lang>
                                     </button>
                                 </td>
@@ -162,5 +174,28 @@ $backups = $backups ?? [];
             });
         }
     };
+
+    var backupForm = document.getElementById('backupForm');
+    if (backupForm) {
+        backupForm.addEventListener('submit', window.WelineBackup.createBackup);
+    }
+
+    document.addEventListener('click', function(event) {
+        var trigger = event.target.closest('[data-backup-action]');
+        if (!trigger) {
+            return;
+        }
+
+        event.preventDefault();
+        var filename = trigger.getAttribute('data-backup-filename') || '';
+        if (trigger.getAttribute('data-backup-action') === 'download') {
+            window.WelineBackup.downloadBackup(filename);
+            return;
+        }
+
+        if (trigger.getAttribute('data-backup-action') === 'delete') {
+            window.WelineBackup.deleteBackup(filename);
+        }
+    });
 })();
 </script>

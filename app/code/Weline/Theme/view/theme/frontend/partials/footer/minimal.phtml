@@ -16,7 +16,9 @@ foreach ($metaParams as $key => $value) {
     $this->setData("meta.{$key}", $value);
 }
 
-$copyright = $this->getData("meta.copyright") ?? __('© ' . date('Y') . ' Weline Framework. 保留所有权利');
+$copyright = \Weline\Theme\Helper\FooterCopyrightHelper::resolve(
+    $this->getData('meta.copyright') !== null ? (string) $this->getData('meta.copyright') : null
+);
 $class = $this->getData("meta.class") ?? '';
 ?>
 <footer class="weline-footer minimal-footer <?= htmlspecialchars($class) ?>">

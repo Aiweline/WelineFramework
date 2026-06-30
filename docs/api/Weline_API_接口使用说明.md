@@ -185,25 +185,21 @@ php bin/w route:list
 ## 6. JavaScript调用方式
 
 ### 6.1 在页面中的调用
-框架提供了 `window.api()` 辅助函数:
+站内浏览器前端业务 API 必须通过 `Weline.Api.resource()/graph()/stream()` 进入 worker；`window.api()` 只保留给 External REST API 或后台浏览器 API 的 URL 解析，不作为站内前端业务请求入口。
 
 **重要提示**：
-- `window.api(path)` 会根据当前页面类型（前端/后端）自动选择正确的 `api_host`
-- 前端页面：自动添加区域前缀、货币和语言前缀
-- 后端页面：自动添加后端API区域前缀
-- **路径参数需要包含完整的路由路径（包括 `/rest/v1/` 部分）**
-- **URL结构**: `[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]`
+- 站内浏览器业务请求：使用 `Weline.Api.resource()/graph()/stream()`，不使用 URL。
+- External REST API：可使用文档中给出的 REST 路径和 OAuth/API Token 认证。
+- 后台浏览器 API：仍按后台权限与 `api_admin` 区域处理。
+- `window.api(path)` 只保留给 External REST API 或后台浏览器 API 的 URL 解析。
+- cart、checkout、customer、account 等站内前端业务接口不得使用 direct REST URL。
 
 ```javascript
-// 前端API调用 (无需登录，带i18n)
-// 注意：path 参数需要包含完整的路由路径（不包括区域前缀、货币、语言）
-window.api('weline_api/rest/v1/auth/login')  
-// 生成: http://127.0.0.1:9981/api123/USD/en_US/weline_api/rest/v1/auth/login
-// 其中 api123、USD、en_US 会根据当前用户会话或网站配置自动添加
-
-// 前端API调用 (不带i18n)
-window.api('weline_api/rest/v1/auth/login')  
-// 生成: http://127.0.0.1:9981/api123/weline_api/rest/v1/auth/login
+// 站内前端业务 API
+const CartApi = await Weline.Api.resource('cart');
+await CartApi.add({ product_id, qty });
+await CartApi.options({ product_id });
+await CartApi.miniItems({ limit: 10 });
 
 // 后端API调用 (需要登录)
 // 注意：后端页面中，api_host 已包含 {api_admin} 前缀
@@ -211,29 +207,78 @@ window.api('weline_api/rest/v1/backend/auth/login')
 // 生成: http://127.0.0.1:9981/J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE/weline_api/rest/v1/backend/auth/login
 ```
 
-### 6.2 API调用参数
+### 6.2 站内前端 API 调用参数
 ```javascript
-// 通用API调用示例
-fetch(window.api('{模块router}/rest/v1/{控制器名}/{方法名}'), {
-    method: 'POST',  // 或 GET, PUT, DELETE
-    headers: {
-        'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-        param1: 'value1',
-        param2: 'value2'
-    })
-})
-.then(response => response.json())
-.then(data => {
-    console.log('响应数据:', data);
-})
-.catch(error => {
-    console.error('请求错误:', error);
+const CartApi = await Weline.Api.resource('cart', {
+    addItem: 'add',
+    getOptions: 'options'
+});
+
+await CartApi.addItem({ product_id, qty });
+```
+
+**注意**：`/api/framework/query-bin` 是 worker 协议实现细节，业务 JS 不得手写该 URL；第三方对接继续走 External REST API / OAuth App / Webhook / External Frontend Bridge。
+
+### 6.3 Frontend Worker Account API
+
+站内浏览器登录、注册、退出、找回密码、二次验证都属于 Frontend Worker API。主题、组件、业务 JS 不得直接请求 `/api/rest/*auth*`，也不得手写 `/api/framework/query-bin`。
+
+```javascript
+const AccountApi = await Weline.Api.resource('account');
+
+await AccountApi.login({
+    username: 'customer@example.com',
+    password: 'password123',
+    remember_duration: 2592000
+});
+
+await AccountApi.register({
+    firstname: 'Jane',
+    lastname: 'Doe',
+    email: 'customer@example.com',
+    password: 'password123',
+    confirm_password: 'password123',
+    agree_terms: true
+});
+
+await AccountApi.current();
+await AccountApi.logout();
+await AccountApi.requestPasswordReset({ email: 'customer@example.com' });
+await AccountApi.resetPassword({
+    token: 'reset-token',
+    password: 'newPassword123',
+    confirm_password: 'newPassword123'
+});
+await AccountApi.completeChallenge({
+    challenge_token: 'challenge-token',
+    code: '123456'
 });
 ```
 
-**注意**：`window.api()` 只返回URL字符串，需要使用 `fetch()` 或其他HTTP客户端发送请求。
+登录/注册表单如果业务自己传 `onError` 回调，错误由业务表单展示；没有传回调时由 `weline-api` 默认提示组件接管。
+
+```javascript
+const AccountApi = await Weline.Api.resource('account');
+await AccountApi.login(formPayload, {
+    onError(error) {
+        showFormError(error.message);
+    }
+});
+```
+
+External REST API、OAuth App、Webhook、External Frontend Bridge 继续使用 REST 文档和 token/OAuth 认证；它们不得复用站内 worker session token。
+
+### 6.4 Deprecated frontend REST business endpoints
+
+旧 cart 浏览器 REST 入口已标记 `deprecated/browser_direct=false`，直接请求会被服务端拒绝：
+
+| 旧入口 | 替代方式 |
+|---|---|
+| `/api/rest/v1/weshop/cart/add` | `Weline.Api.resource('cart').add()` |
+| `/api/rest/v1/weshop/cart/options` | `Weline.Api.resource('cart').options()` |
+| `/api/rest/v1/weshop/cart/mini-items` | `Weline.Api.resource('cart').miniItems()` |
+| `/api/rest/v1/weshop/cart/update` | `Weline.Api.resource('cart').update()` |
+| `/api/rest/v1/weshop/cart/remove` | `Weline.Api.resource('cart').remove()` |
 
 ## 7. 故障排查
 
@@ -285,11 +330,13 @@ php bin/w server:status
 php bin/w server:start
 
 # 测试前端API（带i18n）
+# External REST API only. Storefront browser login uses Weline.Api.resource('account').login().
 curl -X POST "http://127.0.0.1:9981/api123/USD/en_US/weline_api/rest/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"username": "test", "password": "123456"}'
 
 # 测试前端API（不带i18n）
+# External REST API only. Storefront browser login uses Weline.Api.resource('account').login().
 curl -X POST "http://127.0.0.1:9981/api123/weline_api/rest/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"username": "test", "password": "123456"}'

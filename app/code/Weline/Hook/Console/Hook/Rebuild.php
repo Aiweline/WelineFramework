@@ -14,6 +14,7 @@ namespace Weline\Hook\Console\Hook;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Hook\HookRegistry;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Registry\Service\RegistryProgress;
 
 class Rebuild extends CommandAbstract
 {
@@ -35,6 +36,9 @@ class Rebuild extends CommandAbstract
                     ? __('开始增量重建模块 %{1} 的钩子注册表...', [implode(', ', $moduleNames)])
                     : __('开始重建钩子注册表...')
             );
+
+            RegistryProgress::enable(true);
+            RegistryProgress::section('Hook rebuild command');
 
             /** @var HookRegistry $registry */
             $registry = ObjectManager::getInstance(HookRegistry::class);

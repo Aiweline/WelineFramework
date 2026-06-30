@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Queue\Console\Queue;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\Manager\ObjectManager;
@@ -23,6 +24,13 @@ use Weline\Queue\QueueInterface;
 
 class Run implements \Weline\Framework\Console\CommandInterface
 {
+    private const DEFAULT_WORKER_MEMORY_LIMIT = '512M';
+    private const DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS = [
+        'GuoLaiRen\PageBuilder\Queue\AiSitePlanQueue' => '512M',
+        'GuoLaiRen\PageBuilder\Queue\AiSiteBuildQueue' => '512M',
+        'GuoLaiRen\PageBuilder\Queue\AiSiteAssetQueue' => '512M',
+    ];
+
     private Printing $printing;
     private Queue $queue;
 
@@ -52,6 +60,28 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->success(__('正确示例：php bin/w queue:run --id=%{1}', $id));
             exit();
         }
+        $takeoverOnly = !empty($args['takeover-only']) || !empty($args['no-execute']);
+        if ($force && $takeoverOnly) {
+            $this->printing->note('Force takeover now returns after releasing the queue; execution remains owned by the system scheduler.');
+            $takeover = w_query('queue', 'takeover', [
+                'queue_id' => (int)$id,
+                'force' => true,
+                'owner' => 'system_scheduler',
+                'reason' => 'queue_run_takeover_only',
+                'mark_force_rebuild' => true,
+                'clear_output' => false,
+            ]);
+            $message = \is_array($takeover)
+                ? (string)($takeover['message'] ?? 'Queue takeover completed; waiting for system scheduler.')
+                : 'Queue takeover completed; waiting for system scheduler.';
+            if (!\is_array($takeover) || empty($takeover['success'])) {
+                $this->printing->error($message);
+                exit();
+            }
+            $this->printing->note($message);
+
+            return $message;
+        }
         $currentPid = (int)getmypid();
         $existingPid = (int)($queue->getPid() ?: 0);
         $existingStatus = \trim((string)$queue->getStatus());
@@ -71,6 +101,24 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 exit();
             }
             $this->printing->warning(__('强制模式：检测到队列 #%{1} 正在运行（pid=%{2}），将先终止旧任务再继续。', [$id, (string)($existingPid > 0 ? $existingPid : '-')]));
+            $takeover = w_query('queue', 'takeover', [
+                'queue_id' => (int)$id,
+                'force' => true,
+                'owner' => 'system_scheduler',
+                'reason' => 'queue_run_force_takeover',
+                'mark_force_rebuild' => true,
+                'clear_output' => false,
+            ]);
+            $message = \is_array($takeover)
+                ? (string)($takeover['message'] ?? 'Queue takeover completed; waiting for system scheduler.')
+                : 'Queue takeover completed; waiting for system scheduler.';
+            if (!\is_array($takeover) || empty($takeover['success'])) {
+                $this->printing->error($message);
+                exit();
+            }
+            $this->printing->note($message);
+
+            return $message;
             if ($existingPid > 0 && $existingPid !== $currentPid && Processer::isRunningByPid($existingPid)) {
                 $killed = (bool)Processer::killByPid($existingPid, true);
                 if (!$killed) {
@@ -94,6 +142,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
 
         # 获取执行者
         $type = $queue->getType();
+        $queueClass = \ltrim((string)$type->getData('class'), '\\');
+        $this->applyCliMemoryLimitForQueueClass($queueClass);
         if ($force) {
             $content = \json_decode((string)$queue->getContent(), true);
             if (\is_array($content)) {
@@ -108,7 +158,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             }
         }
         /**@var QueueInterface $queue_execute */
-        $queue_execute = ObjectManager::getInstance($type->getData('class'));
+        $queue_execute = ObjectManager::getInstance($queueClass);
         $validate_result = $queue_execute->validate($queue);
         if (is_bool($validate_result) and $validate_result) {
             $queue->setStatus($queue::status_running)
@@ -120,6 +170,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $result = $queue_execute->execute($queue);
                 // execute() 内常通过 w_query 等直接更新库里的 result；此处必须重新 load，否则会用过期内存覆盖掉过程日志
                 $queue = $this->newQueueModel()->load($id);
+                if ($this->shouldPreserveQueueStateAfterExecute($queue)) {
+                    $queue->setResult(\trim($queue->getResult() . PHP_EOL . $result))
+                        ->save();
+                    $this->printing->title(__('闃熷垪鎵ц璇︽儏') . ' queue_id=' . $id);
+                    $this->printing->note($queue->getResult());
+
+                    return $result;
+                }
                 $queue->setStatus($queue::status_done)
                     ->setPid(0)
                     ->setResult(\trim($queue->getResult() . PHP_EOL . $result))
@@ -149,6 +207,20 @@ class Run implements \Weline\Framework\Console\CommandInterface
         return $result;
     }
 
+    private function shouldPreserveQueueStateAfterExecute(Queue $queue): bool
+    {
+        $status = \trim((string)$queue->getStatus());
+        if ($status === '' || $queue->isFinished()) {
+            return false;
+        }
+
+        return \in_array($status, [
+            $queue::status_pending,
+            $queue::status_error,
+            $queue::status_stop,
+        ], true);
+    }
+
     /**
      * @inheritDoc
      */
@@ -172,6 +244,105 @@ class Run implements \Weline\Framework\Console\CommandInterface
         @\ini_set('max_execution_time', '0');
         @\set_time_limit(0);
         @\ignore_user_abort(true);
+    }
+
+    private function applyCliMemoryLimitForQueueClass(string $queueClass): void
+    {
+        if (\PHP_SAPI !== 'cli' || $queueClass === '') {
+            return;
+        }
+
+        $target = $this->resolveWorkerMemoryLimit($queueClass);
+        if (!$this->shouldRaiseMemoryLimit((string)\ini_get('memory_limit'), $target)) {
+            return;
+        }
+
+        @\ini_set('memory_limit', $target);
+    }
+
+    private function resolveWorkerMemoryLimit(string $queueClass): string
+    {
+        $configuredByClass = Env::get(
+            'queue.worker.memory_limit_by_class.' . $queueClass,
+            Env::get('queue.worker.memory_limit.' . $queueClass, null)
+        );
+        if ($configuredByClass !== null && $configuredByClass !== '') {
+            return $this->normalizeMemoryLimit(
+                $configuredByClass,
+                self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass] ?? self::DEFAULT_WORKER_MEMORY_LIMIT
+            );
+        }
+
+        if (isset(self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass])) {
+            return $this->normalizeMemoryLimit(
+                self::DEFAULT_WORKER_MEMORY_LIMIT_BY_CLASS[$queueClass],
+                self::DEFAULT_WORKER_MEMORY_LIMIT
+            );
+        }
+
+        return $this->normalizeMemoryLimit(
+            Env::get('queue.worker.memory_limit', Env::get('queue.cron.memory_limit', self::DEFAULT_WORKER_MEMORY_LIMIT)),
+            self::DEFAULT_WORKER_MEMORY_LIMIT
+        );
+    }
+
+    private function shouldRaiseMemoryLimit(string $current, string $target): bool
+    {
+        $currentBytes = $this->memoryLimitToBytes($current);
+        $targetBytes = $this->memoryLimitToBytes($target);
+        if ($targetBytes < 0) {
+            return $currentBytes >= 0;
+        }
+        if ($currentBytes < 0) {
+            return false;
+        }
+
+        return $targetBytes > $currentBytes;
+    }
+
+    private function memoryLimitToBytes(string $value): int
+    {
+        $value = \trim($value);
+        if ($value === '-1') {
+            return -1;
+        }
+        if ($value === '') {
+            return 0;
+        }
+
+        $unit = \strtoupper(\substr($value, -1));
+        $number = (float)$value;
+
+        return match ($unit) {
+            'G' => (int)($number * 1024 * 1024 * 1024),
+            'M' => (int)($number * 1024 * 1024),
+            'K' => (int)($number * 1024),
+            default => (int)$number,
+        };
+    }
+
+    private function normalizeMemoryLimit(mixed $value, string $default): string
+    {
+        if (\is_int($value) || \is_float($value)) {
+            $value = (string)(int)$value;
+        }
+
+        $value = \strtoupper(\trim((string)$value));
+        $default = \strtoupper(\trim($default)) ?: self::DEFAULT_WORKER_MEMORY_LIMIT;
+        if ($value === '') {
+            return $default;
+        }
+        if ($value === '-1') {
+            return '-1';
+        }
+        if (\preg_match('/^[1-9]\d*$/', $value)) {
+            return $value . 'M';
+        }
+        if (\preg_match('/^[1-9]\d*(?:K|M|G)$/', $value)) {
+            return $value;
+        }
+
+        return $default;
     }
 
     public function help(): array|string

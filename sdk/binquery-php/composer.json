@@ -1,0 +1,14 @@
+{
+  "name": "aiweline/binquery-php",
+  "description": "Official PHP client for Weline BinQuery.",
+  "type": "library",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Aiweline\\BinQuery\\": "src/"
+    }
+  },
+  "require": {
+    "php": ">=8.1"
+  }
+}

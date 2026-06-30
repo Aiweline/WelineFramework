@@ -20,10 +20,10 @@
  * @param trigger_value {default=5,type="number",label="触发值",description="延迟秒数或滚动百分比"}
  */
 
-$title = $this->getData('title') ?? __('订阅获取优惠');
-$description = $this->getData('description') ?? __('订阅我们的邮件，立即获得10%折扣码！');
+$title = __((string)($this->getData('title') ?: '订阅获取优惠'));
+$description = __((string)($this->getData('description') ?: '订阅我们的邮件，立即获得10%折扣码！'));
 $image = $this->getData('image') ?? '';
-$buttonText = $this->getData('button_text') ?? __('立即订阅');
+$buttonText = __((string)($this->getData('button_text') ?: '立即订阅'));
 $trigger = $this->getData('trigger') ?? 'delay';
 $delaySeconds = (int)($this->getData('delay_seconds') ?? 5);
 $scrollPercent = (int)($this->getData('scroll_percent') ?? 50);
@@ -31,12 +31,18 @@ $showOnce = (bool)($this->getData('show_once') ?? true);
 $cookieDays = (int)($this->getData('cookie_days') ?? 7);
 
 $widgetId = 'newsletter-popup-' . uniqid();
+$remixiconCssUrl = $this->fetchTagSource(
+    \Weline\Framework\View\Data\DataInterface::dir_type_STATICS,
+    'Weline_Theme::css/remixicon.css'
+);
 
 // 判断是否在编辑器预览模式（widget-preview请求）
 $isEditorPreview = $this->getData('_editor_preview') || 
                    ((string)\w_env_get('widget_preview', '') === '1') ||
                    strpos(\w_env_request_uri(), 'widget-preview') !== false;
 ?>
+
+<link rel="stylesheet" href="<?= htmlspecialchars($remixiconCssUrl) ?>" type="text/css" data-widget-asset="newsletter-popup-icons">
 
 <div class="widget-newsletter-popup <?= $isEditorPreview ? 'editor-preview-mode' : '' ?>" 
      id="<?= $widgetId ?>"
@@ -51,7 +57,9 @@ $isEditorPreview = $this->getData('_editor_preview') ||
     
     <div class="popup-container">
         <button class="popup-close" type="button" aria-label="<?= __('关闭') ?>">
-            <i class="ri-close-line"></i>
+            <svg class="popup-close-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+                <path fill="currentColor" d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7a1 1 0 0 0-1.41 1.41L10.59 12l-4.89 4.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4z"/>
+            </svg>
         </button>
         
         <div class="popup-content">
@@ -62,8 +70,10 @@ $isEditorPreview = $this->getData('_editor_preview') ||
             <?php endif; ?>
             
             <div class="popup-body">
-                <div class="popup-icon">
-                    <i class="ri-gift-2-line"></i>
+                <div class="popup-icon" aria-hidden="true">
+                    <svg class="popup-gift-icon" viewBox="0 0 24 24" width="28" height="28" focusable="false">
+                        <path fill="currentColor" d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8h16zm-8-7.5 1.09 2.18 2.41.35-1.75 1.7.41 2.4L12 9.82l-2.16 1.14.41-2.4-1.75-1.7 2.41-.35L12 4.5zM4 7h16v3H4V7zm2-3h12a1 1 0 0 1 .78 1.63l-1.22 1.53H6.44L5.22 5.63A1 1 0 0 1 6 4z"/>
+                    </svg>
                 </div>
                 
                 <?php if ($title): ?>
@@ -163,8 +173,17 @@ $isEditorPreview = $this->getData('_editor_preview') ||
     background: rgba(0,0,0,0.2);
 }
 
-.widget-newsletter-popup .popup-close i {
+.widget-newsletter-popup .popup-close i,
+.widget-newsletter-popup .popup-close-icon {
     font-size: 20px;
+    color: #555;
+    line-height: 1;
+    display: block;
+}
+
+.widget-newsletter-popup .popup-close:hover i,
+.widget-newsletter-popup .popup-close:hover .popup-close-icon {
+    color: #222;
 }
 
 .widget-newsletter-popup .popup-content {
@@ -198,9 +217,11 @@ $isEditorPreview = $this->getData('_editor_preview') ||
     margin: 0 auto 20px;
 }
 
-.widget-newsletter-popup .popup-icon i {
+.widget-newsletter-popup .popup-icon i,
+.widget-newsletter-popup .popup-gift-icon {
     font-size: 28px;
     color: #fff;
+    display: block;
 }
 
 .widget-newsletter-popup .popup-title {
@@ -337,7 +358,9 @@ $isEditorPreview = $this->getData('_editor_preview') ||
 }
 
 .widget-newsletter-popup.editor-preview-mode .popup-icon i,
-.widget-preview-canvas .widget-newsletter-popup .popup-icon i {
+.widget-newsletter-popup.editor-preview-mode .popup-gift-icon,
+.widget-preview-canvas .widget-newsletter-popup .popup-icon i,
+.widget-preview-canvas .widget-newsletter-popup .popup-gift-icon {
     font-size: 22px !important;
 }
 
