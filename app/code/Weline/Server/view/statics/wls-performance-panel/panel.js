@@ -11,6 +11,7 @@
     isLoading: false,
     error: "",
     requestId: "",
+    requestFilter: "all",
     summary: null,
     requests: [],
     detail: null,
@@ -25,6 +26,24 @@
     ["workers", "工作进程"],
     ["logs", "日志"]
   ];
+
+  var requestFilters = [
+    ["all", "全部"],
+    ["route", "路由"],
+    ["static", "静态资源"],
+    ["panel", "面板请求"],
+    ["api", "API/AJAX"],
+    ["fpc", "FPC 命中"],
+    ["slow", "慢请求"],
+    ["error", "错误"]
+  ];
+
+  var staticFilePattern = /\.(?:css|js|mjs|map|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot|wasm|json|xml|txt|pdf)(?:$|[?#])/i;
+  var slowRequestMs = 100;
+  var AGENT_CONTRACT_VERSION = "weline-wls-performance-console/v1";
+  var AGENT_COMMAND = "wls-performance-report";
+  var AGENT_REPORT_NODE_ID = "weline-wls-performance-report";
+  var sensitiveKeyPattern = /(?:^authorization$|^cookie$|password|passwd|pwd|secret|access[_-]?token|refresh[_-]?token|^token$|session[_-]?(?:id|value|token|data)|^sid$|api[_-]?key|nonce)/i;
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -185,6 +204,588 @@
     return result || null;
   }
 
+  function requestUri(row) {
+    return String((row && (row.uri || row.url || row.path)) || "");
+  }
+
+  function requestPath(row) {
+    var uri = requestUri(row);
+    if (!uri) {
+      return "";
+    }
+    try {
+      return new URL(uri, window.location.origin).pathname || uri;
+    } catch (error) {
+      return uri.split("?")[0].split("#")[0];
+    }
+  }
+
+  function isPanelRequest(row) {
+    return requestUri(row).toLowerCase().indexOf("wls-performance-panel") !== -1;
+  }
+
+  function isStaticRequest(row) {
+    var uri = requestUri(row);
+    var path = requestPath(row).toLowerCase();
+    if (!path) {
+      return false;
+    }
+    return (
+      path.indexOf("/static/") === 0 ||
+      path.indexOf("/media/") === 0 ||
+      path.indexOf("/pub/") === 0 ||
+      path.indexOf("/assets/") !== -1 ||
+      path.indexOf("/view/statics/") !== -1 ||
+      staticFilePattern.test(uri)
+    );
+  }
+
+  function isApiRequest(row) {
+    var path = requestPath(row).toLowerCase();
+    return (
+      path.indexOf("/api/") === 0 ||
+      path.indexOf("/rest/") === 0 ||
+      path.indexOf("/graphql") === 0 ||
+      path.indexOf("/framework/query-bin") !== -1 ||
+      path.indexOf("/query-bin") !== -1 ||
+      path.indexOf("/server/test/") === 0
+    );
+  }
+
+  function requestType(row) {
+    if (isPanelRequest(row)) {
+      return { key: "panel", label: "面板" };
+    }
+    if (isStaticRequest(row)) {
+      return { key: "static", label: "静态" };
+    }
+    if (isApiRequest(row)) {
+      return { key: "api", label: "API" };
+    }
+    return { key: "route", label: "路由" };
+  }
+
+  function requestTotalMs(row) {
+    var number = Number((row && (row.total_ms || row.duration_ms)) || 0);
+    return Number.isFinite(number) ? number : 0;
+  }
+
+  function requestFilterMatches(row, filter) {
+    var key = filter || "all";
+    if (key === "all") {
+      return true;
+    }
+    if (key === "fpc") {
+      return !!(row && row.fpc_hit);
+    }
+    if (key === "slow") {
+      return requestTotalMs(row) >= slowRequestMs;
+    }
+    if (key === "error") {
+      return Number((row && row.status) || 0) >= 400;
+    }
+    return requestType(row).key === key;
+  }
+
+  function requestFilterCounts() {
+    var counts = {};
+    requestFilters.forEach(function (filter) {
+      counts[filter[0]] = 0;
+    });
+    state.requests.forEach(function (row) {
+      requestFilters.forEach(function (filter) {
+        if (requestFilterMatches(row, filter[0])) {
+          counts[filter[0]] += 1;
+        }
+      });
+    });
+    return counts;
+  }
+
+  function filteredRequests() {
+    var filter = state.requestFilter || "all";
+    return state.requests.filter(function (row) {
+      return requestFilterMatches(row, filter);
+    });
+  }
+
+  function safeNumber(value) {
+    var number = Number(value || 0);
+    return Number.isFinite(number) ? number : 0;
+  }
+
+  function roundMs(value) {
+    return Math.round(safeNumber(value) * 100) / 100;
+  }
+
+  function percentile(values, ratio) {
+    var numbers = (values || [])
+      .map(safeNumber)
+      .filter(function (value) {
+        return Number.isFinite(value);
+      })
+      .sort(function (a, b) {
+        return a - b;
+      });
+    if (!numbers.length) {
+      return 0;
+    }
+    var index = Math.max(0, Math.min(numbers.length - 1, Math.ceil(numbers.length * ratio) - 1));
+    return numbers[index];
+  }
+
+  function scrubUri(uri) {
+    var raw = String(uri || "");
+    if (!raw) {
+      return "";
+    }
+    try {
+      var parsed = new URL(raw, window.location.origin);
+      parsed.searchParams.forEach(function (_value, key) {
+        if (sensitiveKeyPattern.test(key)) {
+          parsed.searchParams.set(key, "[redacted]");
+        }
+      });
+      return parsed.pathname + parsed.search + parsed.hash;
+    } catch (error) {
+      var parts = raw.split("?");
+      if (parts.length < 2) {
+        return raw;
+      }
+      var query = parts.slice(1).join("?");
+      var params = query
+        .split("&")
+        .map(function (pair) {
+          var index = pair.indexOf("=");
+          var key = index === -1 ? pair : pair.slice(0, index);
+          if (sensitiveKeyPattern.test(decodeURIComponent(key || ""))) {
+            return key + "=[redacted]";
+          }
+          return pair;
+        })
+        .join("&");
+      return parts[0] + "?" + params;
+    }
+  }
+
+  function sanitizeValue(value, depth) {
+    var currentDepth = depth || 0;
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      return value.length > 500 ? value.slice(0, 500) + "...[truncated]" : value;
+    }
+    if (currentDepth >= 5) {
+      return "[truncated]";
+    }
+    if (Array.isArray(value)) {
+      return value.slice(0, 200).map(function (item) {
+        return sanitizeValue(item, currentDepth + 1);
+      });
+    }
+    if (typeof value === "object") {
+      var result = {};
+      Object.keys(value).forEach(function (key) {
+        if (sensitiveKeyPattern.test(key)) {
+          result[key] = "[redacted]";
+          return;
+        }
+        result[key] = sanitizeValue(value[key], currentDepth + 1);
+      });
+      return result;
+    }
+    return String(value);
+  }
+
+  function sanitizeMeta(meta) {
+    var source = meta && typeof meta === "object" ? meta : {};
+    var result = {};
+    Object.keys(source).forEach(function (key) {
+      var value = source[key];
+      if (sensitiveKeyPattern.test(key)) {
+        return;
+      }
+      if (value === null || value === undefined) {
+        result[key] = value;
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        result[key] = value;
+      } else if (typeof value === "string") {
+        result[key] = value.length > 300 ? value.slice(0, 300) + "...[truncated]" : value;
+      }
+    });
+    return result;
+  }
+
+  function reportRequestRow(row) {
+    var type = requestType(row);
+    return {
+      request_id: String((row && row.request_id) || ""),
+      method: String((row && row.method) || ""),
+      uri: scrubUri(requestUri(row)),
+      path: requestPath(row),
+      type: type.key,
+      type_label: type.label,
+      status: Number((row && row.status) || 0) || null,
+      total_ms: roundMs(row && (row.total_ms || row.duration_ms)),
+      worker_id: (row && row.worker_id) || null,
+      worker_port: (row && row.worker_port) || null,
+      pid: (row && (row.pid || row.worker_pid)) || null,
+      fpc_hit: !!(row && row.fpc_hit),
+      fpc_source: (row && row.fpc_source) || null,
+      session_ms: roundMs(row && row.session_ms),
+      db_ms: roundMs(row && row.db_ms),
+      template_ms: roundMs(row && row.template_ms)
+    };
+  }
+
+  function summarizeRequestGroups(rows) {
+    var groups = {};
+    (rows || []).forEach(function (row) {
+      var type = requestType(row);
+      var key = type.key;
+      var total = requestTotalMs(row);
+      if (!groups[key]) {
+        groups[key] = {
+          key: key,
+          label: type.label,
+          count: 0,
+          total_ms: 0,
+          max_ms: 0,
+          values: [],
+          slow_count: 0,
+          error_count: 0,
+          fpc_hit_count: 0
+        };
+      }
+      groups[key].count += 1;
+      groups[key].total_ms += total;
+      groups[key].max_ms = Math.max(groups[key].max_ms, total);
+      groups[key].values.push(total);
+      if (total >= slowRequestMs) {
+        groups[key].slow_count += 1;
+      }
+      if (Number((row && row.status) || 0) >= 400) {
+        groups[key].error_count += 1;
+      }
+      if (row && row.fpc_hit) {
+        groups[key].fpc_hit_count += 1;
+      }
+    });
+    return Object.keys(groups)
+      .map(function (key) {
+        var group = groups[key];
+        return {
+          key: group.key,
+          label: group.label,
+          count: group.count,
+          avg_ms: roundMs(group.count ? group.total_ms / group.count : 0),
+          p95_ms: roundMs(percentile(group.values, 0.95)),
+          max_ms: roundMs(group.max_ms),
+          slow_count: group.slow_count,
+          error_count: group.error_count,
+          fpc_hit_count: group.fpc_hit_count
+        };
+      })
+      .sort(function (a, b) {
+        return b.count - a.count || b.max_ms - a.max_ms;
+      });
+  }
+
+  function summarizeRequestFilters(rows) {
+    var counts = {};
+    requestFilters.forEach(function (filter) {
+      counts[filter[0]] = 0;
+    });
+    (rows || []).forEach(function (row) {
+      requestFilters.forEach(function (filter) {
+        if (requestFilterMatches(row, filter[0])) {
+          counts[filter[0]] += 1;
+        }
+      });
+    });
+    return counts;
+  }
+
+  function summarizeWorkers(rows) {
+    var workers = {};
+    (rows || []).forEach(function (row) {
+      var key = [row.worker_id || "unknown", row.worker_port || "", row.pid || ""].join(":");
+      var total = requestTotalMs(row);
+      if (!workers[key]) {
+        workers[key] = {
+          worker_id: row.worker_id || "",
+          worker_port: row.worker_port || "",
+          pid: row.pid || row.worker_pid || "",
+          request_count: 0,
+          slow_count: 0,
+          error_count: 0,
+          total_ms: 0,
+          max_ms: 0
+        };
+      }
+      workers[key].request_count += 1;
+      workers[key].total_ms += total;
+      workers[key].max_ms = Math.max(workers[key].max_ms, total);
+      if (total >= slowRequestMs) {
+        workers[key].slow_count += 1;
+      }
+      if (Number(row.status || 0) >= 400) {
+        workers[key].error_count += 1;
+      }
+    });
+    return Object.keys(workers)
+      .map(function (key) {
+        var worker = workers[key];
+        worker.avg_ms = roundMs(worker.request_count ? worker.total_ms / worker.request_count : 0);
+        worker.total_ms = roundMs(worker.total_ms);
+        worker.max_ms = roundMs(worker.max_ms);
+        return worker;
+      })
+      .sort(function (a, b) {
+        return b.request_count - a.request_count || b.max_ms - a.max_ms;
+      });
+  }
+
+  function componentTotals(summary, detail) {
+    var totals = ((detail && detail.trace && detail.trace.category_totals) || (summary && summary.category_totals) || {});
+    return Object.keys(totals)
+      .map(function (key) {
+        return { category: key, total_ms: roundMs(totals[key]) };
+      })
+      .sort(function (a, b) {
+        return b.total_ms - a.total_ms;
+      });
+  }
+
+  function reportSpans(detail, limit) {
+    var trace = (detail && detail.trace) || {};
+    var spans = Array.isArray(trace.spans) ? trace.spans.slice() : [];
+    spans.sort(function (a, b) {
+      return safeNumber(b.duration_ms) - safeNumber(a.duration_ms);
+    });
+    return spans.slice(0, limit || 160).map(function (span) {
+      return {
+        id: span.id || null,
+        parent_id: span.parent_id || null,
+        category: span.category || "framework",
+        name: span.name || "",
+        start_ms: roundMs(span.start_ms),
+        duration_ms: roundMs(span.duration_ms),
+        meta: sanitizeMeta(span.meta)
+      };
+    });
+  }
+
+  function reportDetail(detail) {
+    if (!detail) {
+      return null;
+    }
+    var timing = detail.timing || {};
+    var runtime = detail.runtime || {};
+    var request = detail.request || {};
+    return {
+      request_id: detail.request_id || state.requestId || "",
+      total_ms: roundMs(detail.total_ms || timing.total_ms),
+      request: {
+        method: request.method || "",
+        uri: scrubUri(request.uri || ""),
+        path: scrubUri(request.path || request.uri || "")
+      },
+      runtime: sanitizeValue(runtime, 0),
+      fpc: sanitizeValue(detail.fpc || null, 0),
+      timing: sanitizeValue(timing, 0),
+      trace: {
+        span_count: ((detail.trace && detail.trace.spans) || []).length,
+        category_totals: sanitizeValue((detail.trace && detail.trace.category_totals) || {}, 0),
+        spans: reportSpans(detail, 160)
+      }
+    };
+  }
+
+  function topSlowRequests(rows, limit) {
+    return (rows || [])
+      .slice()
+      .sort(function (a, b) {
+        return requestTotalMs(b) - requestTotalMs(a);
+      })
+      .slice(0, limit || 10)
+      .map(reportRequestRow);
+  }
+
+  function buildActions(summary, rows, detail, services) {
+    var actions = [];
+    var groups = summarizeRequestGroups(rows);
+    var totals = componentTotals(summary, detail);
+    var slowest = topSlowRequests(rows, 1)[0];
+    var errorCount = safeNumber(summary && summary.error_count) || rows.filter(function (row) {
+      return Number(row.status || 0) >= 400;
+    }).length;
+
+    if (errorCount > 0) {
+      actions.push({
+        priority: "P0",
+        scope: "requests",
+        title: "HTTP errors detected",
+        detail: "Inspect error requests first; failures can dominate WLS latency and hide cache behavior."
+      });
+    }
+    if (slowest && slowest.total_ms >= 500) {
+      actions.push({
+        priority: "P1",
+        scope: "requests",
+        title: "Slow request above 500 ms",
+        detail: slowest.method + " " + slowest.uri + " took " + slowest.total_ms + " ms."
+      });
+    }
+    groups.forEach(function (group) {
+      if ((group.key === "static" || group.key === "panel") && group.p95_ms >= slowRequestMs) {
+        actions.push({
+          priority: group.key === "static" ? "P1" : "P2",
+          scope: group.key,
+          title: group.label + " request group is slow",
+          detail: "p95=" + group.p95_ms + " ms, slow=" + group.slow_count + "/" + group.count + "."
+        });
+      }
+    });
+    totals.slice(0, 3).forEach(function (item) {
+      if (item.total_ms >= 100) {
+        actions.push({
+          priority: item.category === "db" ? "P1" : "P2",
+          scope: "component",
+          title: item.category + " dominates trace time",
+          detail: "Aggregated " + item.total_ms + " ms in current window/request."
+        });
+      }
+    });
+    var safeServices = sanitizeValue(services || {}, 0);
+    if (JSON.stringify(safeServices).toLowerCase().indexOf("error") !== -1) {
+      actions.push({
+        priority: "P1",
+        scope: "services",
+        title: "Service status contains error text",
+        detail: "Inspect SessionServer and MemoryServer connection/pool state."
+      });
+    }
+    if (!actions.length) {
+      actions.push({
+        priority: "P3",
+        scope: "baseline",
+        title: "No immediate blocker in exported WLS sample",
+        detail: "Collect cold-start, hot-route, FPC-hit and static-resource samples before concluding."
+      });
+    }
+    return actions;
+  }
+
+  function buildAgentReport(summary, requests, detail, services, options) {
+    var rows = Array.isArray(requests) ? requests : [];
+    var reportDetailPayload = reportDetail(detail || null);
+    var safeSummary = sanitizeValue(summary || {}, 0);
+    if (safeSummary && safeSummary.slowest && safeSummary.slowest.uri) {
+      safeSummary.slowest.uri = scrubUri(safeSummary.slowest.uri);
+    }
+    return {
+      contractVersion: AGENT_CONTRACT_VERSION,
+      command: AGENT_COMMAND,
+      generatedAt: new Date().toISOString(),
+      page: {
+        url: scrubUri(window.location.href),
+        path: window.location.pathname,
+        host: window.location.host,
+        activeTab: state.activeTab,
+        requestFilter: state.requestFilter || "all",
+        selectedRequestId: (options && options.requestId) || state.requestId || ""
+      },
+      summary: safeSummary,
+      requests: {
+        total: rows.length,
+        filters: summarizeRequestFilters(rows),
+        groups: summarizeRequestGroups(rows),
+        rows: rows.slice(0, (options && options.limit) || 80).map(reportRequestRow)
+      },
+      selectedRequest: reportDetailPayload,
+      services: sanitizeValue(services || null, 0),
+      workers: summarizeWorkers(rows),
+      bottlenecks: {
+        slowRequests: topSlowRequests(rows, 10),
+        componentTotals: componentTotals(summary, detail).slice(0, 20)
+      },
+      actions: buildActions(summary || {}, rows, detail || null, services || null),
+      agentGuide: {
+        protocol: "Open the page, type wls, then run await window.__WELINE_WLS_PANEL__.publish({refresh:true}).",
+        reportSource: "window.__WELINE_WLS_PERFORMANCE_REPORT__ or script#weline-wls-performance-report",
+        interpretationOrder: ["actions(P0->P3)", "requests.groups", "bottlenecks.slowRequests", "selectedRequest.trace.spans", "services", "workers"],
+        privacy: "Sensitive URI params and span meta keys are redacted before export."
+      }
+    };
+  }
+
+  function snapshotReport(options) {
+    return buildAgentReport(state.summary, state.requests, state.detail, state.services, options || {});
+  }
+
+  function publishReport(report) {
+    window.__WELINE_WLS_PERFORMANCE_REPORT__ = report;
+    var node = document.getElementById(AGENT_REPORT_NODE_ID);
+    if (!node) {
+      node = document.createElement("script");
+      node.type = "application/json";
+      node.id = AGENT_REPORT_NODE_ID;
+      document.head.appendChild(node);
+    }
+    node.textContent = JSON.stringify(report);
+    window.dispatchEvent(new CustomEvent("weline-wls:performance-report", { detail: report }));
+    return report;
+  }
+
+  function captureReport(options) {
+    var opts = options || {};
+    if (opts.refresh === false) {
+      return Promise.resolve(snapshotReport(opts));
+    }
+    var limit = Math.max(1, Math.min(200, Number(opts.limit || 80) || 80));
+    var windowSec = Math.max(30, Math.min(3600, Number(opts.window_sec || opts.windowSec || 300) || 300));
+    var selected = opts.requestId || opts.request_id || state.requestId || "";
+    var loadedSummary = null;
+    var loadedRequests = [];
+    var loadedServices = null;
+    return call("wlsPerformanceSummary", { window_sec: windowSec })
+      .then(function (summary) {
+        loadedSummary = summary || null;
+        return call("wlsPerformanceRequests", { limit: limit });
+      })
+      .then(function (requests) {
+        loadedRequests = normalizeRequests(requests);
+        selected = selected || (loadedRequests[0] && loadedRequests[0].request_id) || "";
+        return call("wlsPerformanceServices", {});
+      })
+      .then(function (services) {
+        loadedServices = services || null;
+        if (!selected) {
+          return null;
+        }
+        return call("wlsPerformanceRequestDetail", { request_id: selected }).then(normalizeDetail);
+      })
+      .then(function (detail) {
+        if (opts.updateState !== false) {
+          state.summary = loadedSummary;
+          state.requests = loadedRequests;
+          state.services = loadedServices;
+          state.detail = detail || null;
+          state.requestId = selected || state.requestId;
+          render();
+        }
+        return buildAgentReport(loadedSummary, loadedRequests, detail || null, loadedServices, {
+          limit: limit,
+          requestId: selected
+        });
+      });
+  }
+
   function setLoading(flag) {
     state.isLoading = flag;
     render();
@@ -215,7 +816,7 @@
 
     state.error = "";
     setLoading(true);
-    call("wlsPerformanceSummary", { window_sec: 300 })
+    return call("wlsPerformanceSummary", { window_sec: 300 })
       .then(function (summary) {
         state.summary = summary || null;
         return call("wlsPerformanceRequests", { limit: 80 });
@@ -301,6 +902,9 @@
       clear();
     } else if (action === "tab") {
       state.activeTab = target.getAttribute("data-tab") || "overview";
+      render();
+    } else if (action === "request-filter") {
+      state.requestFilter = target.getAttribute("data-filter") || "all";
       render();
     } else if (action === "detail") {
       loadDetail(target.getAttribute("data-request-id") || "");
@@ -482,29 +1086,73 @@
     if (!state.requests.length) {
       return '<div class="wls-empty">还没有采集到请求。在 DEV 模式加载一个页面后，再输入 wls 打开面板。</div>';
     }
+    var rows = filteredRequests();
+    var counts = requestFilterCounts();
+    var activeFilter = state.requestFilter || "all";
     return (
       '<section class="wls-section"><div class="wls-section__header"><div class="wls-section__label">最近请求</div><span class="wls-pill">' +
+      rows.length +
+      " / " +
       state.requests.length +
       " 行</span></div>" +
+      renderRequestFilters(counts, activeFilter) +
+      (rows.length
+        ? (
       '<div class="wls-table-wrap"><table class="wls-table"><thead><tr>' +
       "<th>URI</th><th>状态</th><th>总耗时</th><th>工作进程</th><th>FPC</th><th>会话</th><th>DB</th><th>模板</th>" +
       "</tr></thead><tbody>" +
-      state.requests.map(renderRequestRow).join("") +
-      "</tbody></table></div></section>"
+          rows.map(renderRequestRow).join("") +
+          "</tbody></table></div>"
+        )
+        : '<div class="wls-empty">当前分组没有请求。</div>') +
+      "</section>"
+    );
+  }
+
+  function renderRequestFilters(counts, activeFilter) {
+    return (
+      '<div class="wls-request-filters" role="toolbar" aria-label="请求分组过滤">' +
+      requestFilters
+        .map(function (filter) {
+          var key = filter[0];
+          var label = filter[1];
+          return (
+            '<button type="button" class="wls-filter" data-action="request-filter" data-filter="' +
+            escapeHtml(key) +
+            '" aria-pressed="' +
+            (activeFilter === key ? "true" : "false") +
+            '">' +
+            '<span class="wls-filter__label">' +
+            escapeHtml(label) +
+            '</span><span class="wls-filter__count">' +
+            escapeHtml(counts[key] || 0) +
+            "</span></button>"
+          );
+        })
+        .join("") +
+      "</div>"
     );
   }
 
   function renderRequestRow(row) {
     var status = Number(row.status || 0);
     var statusClass = status >= 500 ? "wls-pill--danger" : status >= 400 ? "wls-pill--warn" : "wls-pill--ok";
+    var type = requestType(row);
     return (
       '<tr data-action="detail" data-request-id="' +
       escapeHtml(row.request_id || "") +
       '">' +
       '<td><div class="wls-uri">' +
+      '<span class="wls-request-type wls-request-type--' +
+      escapeHtml(type.key) +
+      '">' +
+      escapeHtml(type.label) +
+      "</span>" +
+      '<span class="wls-uri__text">' +
       escapeHtml(row.method || "") +
       " " +
-      escapeHtml(row.uri || "") +
+      escapeHtml(requestUri(row)) +
+      "</span>" +
       "</div></td>" +
       '<td><span class="wls-pill ' +
       statusClass +
@@ -679,8 +1327,29 @@
   window.__WELINE_WLS_PANEL__ = {
     open: open,
     close: close,
-    refresh: function () {
-      refresh(state.requestId);
+    refresh: function (options) {
+      return refresh((options && options.requestId) || state.requestId);
+    },
+    report: function (options) {
+      return captureReport(options || {});
+    },
+    exportReport: function (options) {
+      return captureReport(options || {});
+    },
+    publish: function (options) {
+      return captureReport(options || {}).then(publishReport);
+    },
+    snapshot: function (options) {
+      return snapshotReport(options || {});
+    },
+    publishSnapshot: function (options) {
+      return publishReport(snapshotReport(options || {}));
+    },
+    detail: function (requestId) {
+      return call("wlsPerformanceRequestDetail", { request_id: requestId || state.requestId }).then(function (detail) {
+        return reportDetail(normalizeDetail(detail));
+      });
     }
   };
+  window.__WELINE_WLS_PERFORMANCE__ = window.__WELINE_WLS_PANEL__;
 })(window, document);

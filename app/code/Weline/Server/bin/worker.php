@@ -3683,7 +3683,7 @@ function wlsPerformancePanelRequestLine(string $rawRequest): array
 
 function wlsRenderPerformancePanelBootstrap(string $requestId): string
 {
-    $assetVersion = '20260630-wls-performance-panel-json-2';
+    $assetVersion = '20260630-wls-performance-panel-console-1';
     $requestIdJson = wlsJsonString($requestId);
     $cssUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.css?v=' . $assetVersion);
     $jsUrl = wlsJsonString('/Weline/Server/view/statics/wls-performance-panel/panel.js?v=' . $assetVersion);
