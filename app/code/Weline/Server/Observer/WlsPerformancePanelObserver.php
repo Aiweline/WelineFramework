@@ -15,7 +15,7 @@ use Weline\Server\Service\WlsPerformanceTraceStore;
 class WlsPerformancePanelObserver implements ObserverInterface
 {
     private const DEFAULT_MAX_RESPONSE_BYTES = 1048576;
-    private const ASSET_VERSION = '20260630-wls-performance-panel-json-2';
+    private const ASSET_VERSION = '20260630-wls-performance-panel-console-1';
 
     public function __construct(
         private readonly Request $request,

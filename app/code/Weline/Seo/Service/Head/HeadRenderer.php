@@ -32,6 +32,9 @@ class HeadRenderer
         if ($slot === 'head' && $this->claimTemplateRender($template, '__weline_seo_head_rendered')) {
             return '';
         }
+        if ($slot === 'inspector') {
+            return $this->renderSeoInspectorBootstrap($template, 'inspector-slot');
+        }
 
         $context = $this->resolver->resolve($template, $options);
         $context['_template'] = $template;
@@ -224,7 +227,7 @@ class HeadRenderer
         ]));
     }
 
-    private function renderSeoInspectorBootstrap($template): string
+    private function renderSeoInspectorBootstrap($template, string $source = 'footer-slot'): string
     {
         if ($this->claimTemplateRender($template, '__weline_seo_inspector_bootstrap_rendered')) {
             return '';
@@ -232,9 +235,10 @@ class HeadRenderer
 
         $cssUrl = $this->jsonString($this->resolveStaticUrl($template, self::INSPECTOR_CSS_SOURCE));
         $jsUrl = $this->jsonString($this->resolveStaticUrl($template, self::INSPECTOR_JS_SOURCE));
+        $sourceAttribute = $this->escape($source);
 
         return <<<HTML
-<script data-no-extract="true" data-load-order="last" data-weline-seo-bootstrap="true" data-weline-seo-source="footer-slot">
+<script data-no-extract="true" data-load-order="last" data-weline-seo-bootstrap="true" data-weline-seo-source="{$sourceAttribute}">
 (function () {
   "use strict";
 
